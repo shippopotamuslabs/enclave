@@ -7,7 +7,6 @@ import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
-import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
@@ -37,7 +36,6 @@ class InitializeModelsUseCaseTest {
     private lateinit var mockModelRegistry: ModelRegistryPort
     private lateinit var mockModelDownloadOrchestrator: ModelDownloadOrchestratorPort
     private lateinit var mockModelConfigCache: com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
-    private lateinit var mockModelUrlProvider: ModelUrlProviderPort
     private lateinit var mockCheckModelsUseCase: CheckModelsUseCase
     private lateinit var mockLogPort: LoggingPort
 
@@ -56,7 +54,6 @@ class InitializeModelsUseCaseTest {
         mockModelRegistry = mockk(relaxed = true)
         mockModelDownloadOrchestrator = mockk(relaxed = true)
         mockModelConfigCache = mockk(relaxed = true)
-        mockModelUrlProvider = mockk(relaxed = true)
         mockCheckModelsUseCase = mockk(relaxed = true)
         mockLogPort = mockk(relaxed = true)
 
@@ -65,7 +62,6 @@ class InitializeModelsUseCaseTest {
             modelRegistry = mockModelRegistry,
             modelDownloadOrchestrator = mockModelDownloadOrchestrator,
             modelConfigCache = mockModelConfigCache,
-            modelUrlProvider = mockModelUrlProvider,
             checkModelsUseCase = mockCheckModelsUseCase,
             logPort = mockLogPort
         )

@@ -8,7 +8,6 @@ import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,7 +18,6 @@ import javax.inject.Singleton
 @Singleton
 class ModelFileScanner @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val modelRegistry: ModelRegistryPort,
     private val modelConfigCache: ModelConfigCachePort
 ) {
     companion object {
@@ -28,16 +26,17 @@ class ModelFileScanner @Inject constructor(
 
     /**
      * Scan the models directory and create it if it doesn't exist.
-     * Validates against ModelRegistry for MD5 and format changes.
-     * @param modelsToCheck List of ORIGINAL models from registry (before remote config update)
-     * @param newModels List of NEW models from remote config (for reference to detect config changes)
+     * Validates against cache (expected models) for MD5 and format changes.
+     *
+     * @param downloadedModels List of models actually downloaded (from registry)
+     * @param expectedModels List of models expected from remote config (from cache)
      */
     suspend fun scanAndCreateDirIfNotExist(
-        modelsToCheck: List<ModelConfiguration> = emptyList(),
-        newModels: List<ModelConfiguration> = emptyList()
+        downloadedModels: List<ModelConfiguration> = emptyList(),
+        expectedModels: List<ModelConfiguration> = emptyList()
     ): ModelScanResult = withContext(Dispatchers.IO) {
-        // Create a lookup for new models to detect config changes
-        val newModelsByType = newModels.associateBy { it.modelType }
+        // Create lookup map for downloaded models
+        val downloadedModelsByType = downloadedModels.associateBy { it.modelType }
 
         val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
 
@@ -46,7 +45,7 @@ class ModelFileScanner @Inject constructor(
             if (!created && !modelsDir.exists()) {
                 Log.e(TAG, "Failed to create models directory")
                 return@withContext ModelScanResult(
-                    missingModels = modelsToCheck,
+                    missingModels = expectedModels,
                     partialDownloads = emptyMap(),
                     allValid = false,
                     directoryError = true
@@ -58,10 +57,10 @@ class ModelFileScanner @Inject constructor(
         val partialDownloads = mutableMapOf<String, Long>()
         val invalidModels = mutableListOf<ModelConfiguration>()
 
-        for (model in modelsToCheck) {
-            // Get the local filename for this model (Option 2: save as-is)
-            val filename = model.metadata.localFileName
-            val modelType = model.modelType
+        // Iterate over expected models (what we want to have)
+        for (expectedModel in expectedModels) {
+            val filename = expectedModel.metadata.localFileName
+            val modelType = expectedModel.modelType
 
             val file = File(modelsDir, filename)
             val tempFile = File(modelsDir, "${filename}${ModelConfig.TEMP_EXTENSION}")
@@ -73,53 +72,50 @@ class ModelFileScanner @Inject constructor(
             val tempExists = tempFile.exists()
             val tempLength = if (tempExists) tempFile.length() else 0L
 
-            // Check if model is registered and validate against registry
-            val registeredModel = modelRegistry.getRegisteredModel(modelType)
+            // Get what's actually downloaded from registry
+            val downloadedModel = downloadedModelsByType[modelType]
 
-            // Detect if config changed by comparing new model against registered
-            // This is the key fix: detect when remote config differs from what was previously registered
-            val newModel = newModelsByType[modelType]
-            val configChanged = newModel?.let {
-                registeredModel != null && (
-                    registeredModel.metadata.md5 != it.metadata.md5 ||
-                    registeredModel.metadata.modelFileFormat != it.metadata.modelFileFormat
-                )
-            } ?: false
+            // Detect if config changed by comparing expected (remote) vs downloaded (registry)
+            val configChanged = downloadedModel != null && (
+                downloadedModel.metadata.md5 != expectedModel.metadata.md5 ||
+                downloadedModel.metadata.modelFileFormat != expectedModel.metadata.modelFileFormat
+            )
 
-            // Use the configChanged flag to invalidate existing files when config changed
-            val isValidByRegistry = !configChanged && (fileExists && registeredModel != null)
+            // Determine validity based on expected model
+            val isValidByExpected = !configChanged && fileExists
 
             when {
                 // File is valid: exists and config hasn't changed - trust MD5 validation
-                fileExists && isValidByRegistry && !configChanged -> {
+                fileExists && isValidByExpected -> {
                     Log.d(TAG, "Model $filename is valid (exists & config unchanged - MD5 will verify)")
                 }
-                // Partial download exists - check if we should trust it based on config
+                // Partial download exists - check against expected model from cache
                 tempExists && tempLength > 0 -> {
-                    val canTrustPartial = !configChanged && registeredModel != null &&
-                        registeredModel.metadata.md5 == model.metadata.md5 &&
-                        registeredModel.metadata.modelFileFormat == model.metadata.modelFileFormat
+                    // Trust partial if expected model MD5/format matches
+                    val canTrustPartial = !configChanged &&
+                        expectedModel.metadata.md5 == expectedModel.metadata.md5 &&
+                        expectedModel.metadata.modelFileFormat == expectedModel.metadata.modelFileFormat
                     if (canTrustPartial) {
-                        // Trust the partial file - it's from a previous download with matching MD5
+                        // Trust the partial file - it's from a previous download with matching expected MD5
                         // Track the partial download so UI can show resume progress
                         partialDownloads[filename] = tempLength
-                        Log.d(TAG, "Model $filename has valid partial download (trusted by registry)")
+                        Log.d(TAG, "Model $filename has valid partial download (trusted by expected config)")
                     } else {
                         // Not trusted - treat as missing, will re-download
-                        missingModels.add(model)
+                        missingModels.add(expectedModel)
                         Log.d(TAG, "Model $filename has untrusted partial download (config changed), will re-download")
                     }
                 }
                 // File exists but config changed
-                fileExists && !isValidByRegistry -> {
+                fileExists && !isValidByExpected -> {
                     // Handle format change - delete old format file
-                    handleFormatChangeForType(modelType, registeredModel, model.metadata.modelFileFormat, modelsDir)
-                    invalidModels.add(model)
+                    handleFormatChangeForType(modelType, downloadedModel, modelsDir)
+                    invalidModels.add(expectedModel)
                     Log.d(TAG, "Model $filename is invalid (config changed), will re-download")
                 }
                 // File doesn't exist
                 else -> {
-                    missingModels.add(model)
+                    missingModels.add(expectedModel)
                     Log.d(TAG, "Model $filename is missing (exists=$fileExists)")
                 }
             }
@@ -139,7 +135,6 @@ class ModelFileScanner @Inject constructor(
     private suspend fun handleFormatChangeForType(
         modelType: ModelType,
         registeredModel: ModelConfiguration?,
-        newFormat: ModelFileFormat,
         modelsDir: File
     ) {
         if (registeredModel == null) return

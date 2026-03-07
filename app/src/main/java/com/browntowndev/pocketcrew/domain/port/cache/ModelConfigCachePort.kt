@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 interface ModelConfigCachePort {
     val fullConfig: List<ModelConfiguration>
     suspend fun initialize()
+    suspend fun initializeWithRemoteConfig(remoteConfigs: List<ModelConfiguration>)
     fun isInitialized(): Boolean
     fun getMainConfig(): ModelConfiguration?
     fun getVisionConfig(): ModelConfiguration?

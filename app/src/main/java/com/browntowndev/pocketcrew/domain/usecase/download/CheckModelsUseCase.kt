@@ -31,19 +31,18 @@ class CheckModelsUseCase @Inject constructor(
     /**
      * Performs filesystem scan and eligibility check for the given models.
      *
-     * @param originalModels The list of ORIGINAL models from registry (before remote config update)
-     * @param newModels The list of NEW models from remote config
+     * @param downloadedModels The list of models that are actually downloaded (from registry)
+     * @param expectedModels The list of models expected from remote config (from cache)
      * @return DownloadModelsResult containing models that need downloading and scan result
      */
     suspend operator fun invoke(
-        originalModels: List<ModelConfiguration>,
-        newModels: List<ModelConfiguration>
+        downloadedModels: List<ModelConfiguration>,
+        expectedModels: List<ModelConfiguration>
     ): DownloadModelsResult {
-        // Scan filesystem for ALL models using ORIGINAL models from registry
-        // This ensures we detect partial downloads and compare against the OLD registry state
+        // Scan filesystem comparing what's downloaded vs what's expected
         val scan = fileScanner.scanAndCreateDirIfNotExist(
-            modelsToCheck = originalModels,
-            newModels = newModels
+            downloadedModels = downloadedModels,
+            expectedModels = expectedModels
         )
 
         // Handle directory creation error
@@ -53,11 +52,11 @@ class CheckModelsUseCase @Inject constructor(
         }
 
         // Use CheckModelEligibilityUseCase to determine which models need downloading
-        val missingModels = checkModelEligibilityUseCase.check(originalModels, newModels, scanResult = scan)
+        val missingModels = checkModelEligibilityUseCase.check(downloadedModels, expectedModels, scanResult = scan)
 
         // Log results
         if (missingModels.isEmpty()) {
-            logger.info(TAG, "All ${originalModels.size} models are ready")
+            logger.info(TAG, "All ${expectedModels.size} models are ready")
         } else {
             logger.info(TAG, "${missingModels.size} models need download: ${missingModels.map { it.metadata.displayName }}")
         }

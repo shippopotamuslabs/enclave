@@ -25,6 +25,10 @@ class ModelConfigCacheImpl @Inject constructor(
     @Volatile
     private var initialized = false
 
+    /**
+     * Initialize cache from registry (legacy method - used when no remote config is available).
+     * This loads what's actually downloaded from the registry.
+     */
     override suspend fun initialize() {
         mutex.withLock {
             if (initialized) return@withLock
@@ -39,7 +43,20 @@ class ModelConfigCacheImpl @Inject constructor(
             cache = loadedConfig
             initialized = true
         }
-        logPort.debug("ModelConfigCache", "Initialized: ${cache.values}")
+        logPort.debug("ModelConfigCache", "Initialized from registry: ${cache.values}")
+    }
+
+    /**
+     * Initialize cache directly with remote config.
+     * This is the preferred method - cache holds the expected remote configuration,
+     * not what's in the registry.
+     */
+    override suspend fun initializeWithRemoteConfig(remoteConfigs: List<ModelConfiguration>) {
+        mutex.withLock {
+            cache = remoteConfigs.associateBy { it.modelType }
+            initialized = true
+        }
+        logPort.debug("ModelConfigCache", "Initialized with remote config: ${cache.values}")
     }
 
     override fun isInitialized(): Boolean = initialized
