@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Pocket Crew</string>
+    <string name="mode_auto">Auto</string>
+    <string name="mode_fast">Fast</string>
+    <string name="mode_crew">Crew</string>
+</resources>

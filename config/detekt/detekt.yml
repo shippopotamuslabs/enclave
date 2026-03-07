@@ -1,0 +1,47 @@
+# Detekt configuration for Pocket Crew
+# Strict but pragmatic rule sets
+
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+config:
+  validation: true
+  warningsAsErrors: false
+
+# Enable main rule sets with relaxed thresholds for existing codebase
+potential-bugs:
+  active: true
+  excludes:
+    - '**/test/**'
+    - '**/androidTest/**'
+
+style:
+  active: true
+  excludes:
+    - '**/test/**'
+    - '**/androidTest/**'
+  MaxLineLength:
+    excludeCommentStatements: true
+
+complexity:
+  active: true
+  excludes:
+    - '**/test/**'
+    - '**/androidTest/**'
+  LongMethod:
+    threshold: 60
+  CyclomaticComplexMethod:
+    threshold: 20
+
+performance:
+  active: true
+
+naming:
+  active: true
+
+empty-blocks:
+  active: true
+
+exceptions:
+  active: true
