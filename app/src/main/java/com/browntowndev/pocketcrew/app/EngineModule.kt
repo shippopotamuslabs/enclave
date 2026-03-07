@@ -11,7 +11,9 @@ import com.browntowndev.pocketcrew.domain.port.inference.EnginePipelineOrchestra
 import com.browntowndev.pocketcrew.inference.ConversationManagerImpl
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.inference.LiteRtInferenceServiceImpl
+import com.browntowndev.pocketcrew.inference.LlamaInferenceServiceImpl
 import com.browntowndev.pocketcrew.inference.MediaPipeInferenceServiceImpl
+import com.browntowndev.pocketcrew.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.inference.PipelineOrchestratorImpl
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.google.ai.edge.litertlm.Backend
@@ -252,7 +254,8 @@ object EngineModule {
         @ApplicationContext context: Context,
         @MainModelEngine conversationManager: ConversationManagerPort,
         modelConfigCache: ModelConfigCachePort,
-        processThinkingTokens: ProcessThinkingTokensUseCase
+        processThinkingTokens: ProcessThinkingTokensUseCase,
+        llamaChatSessionManager: LlamaChatSessionManager
     ): LlmInferencePort {
         val config = modelConfigCache.getMainConfig()
         val filename = if (config != null) {
@@ -261,10 +264,23 @@ object EngineModule {
             "${ModelType.MAIN.name.lowercase()}.litertlm"
         }
         val modelPath = getModelPath(context, filename)
-        return if (filename.endsWith(".task")) {
-            MediaPipeInferenceServiceImpl(createLlmInference(context, modelPath))
-        } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+
+        return when {
+            filename.endsWith(".gguf") -> {
+                // Use llama.cpp implementation for GGUF models
+                val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+                service.configure(
+                    modelPath = modelPath,
+                    systemPrompt = config?.persona?.systemPrompt ?: "You are a helpful assistant."
+                )
+                service
+            }
+            filename.endsWith(".task") -> {
+                MediaPipeInferenceServiceImpl(createLlmInference(context, modelPath))
+            }
+            else -> {
+                LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+            }
         }
     }
 
@@ -272,30 +288,90 @@ object EngineModule {
     @Singleton
     @VisionModelEngine
     fun provideVisionInferenceService(
+        @ApplicationContext context: Context,
         @VisionModelEngine conversationManager: ConversationManagerPort,
-        processThinkingTokens: ProcessThinkingTokensUseCase
+        modelConfigCache: ModelConfigCachePort,
+        processThinkingTokens: ProcessThinkingTokensUseCase,
+        llamaChatSessionManager: LlamaChatSessionManager
     ): LlmInferencePort {
-        return LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+        val config = modelConfigCache.getVisionConfig()
+        val filename = if (config != null) {
+            getFilenameForFormat(ModelType.VISION, config.metadata.modelFileFormat)
+        } else {
+            "${ModelType.VISION.name.lowercase()}.litertlm"
+        }
+
+        return if (filename.endsWith(".gguf")) {
+            val modelPath = getModelPath(context, filename)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            service.configure(
+                modelPath = modelPath,
+                systemPrompt = config?.persona?.systemPrompt ?: "You are a helpful assistant."
+            )
+            service
+        } else {
+            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+        }
     }
 
     @Provides
     @Singleton
     @DraftModelEngine
     fun provideDraftInferenceService(
+        @ApplicationContext context: Context,
         @DraftModelEngine conversationManager: ConversationManagerPort,
-        processThinkingTokens: ProcessThinkingTokensUseCase
+        modelConfigCache: ModelConfigCachePort,
+        processThinkingTokens: ProcessThinkingTokensUseCase,
+        llamaChatSessionManager: LlamaChatSessionManager
     ): LlmInferencePort {
-        return LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+        val config = modelConfigCache.getDraftConfig()
+        val filename = if (config != null) {
+            getFilenameForFormat(ModelType.DRAFT, config.metadata.modelFileFormat)
+        } else {
+            "${ModelType.DRAFT.name.lowercase()}.litertlm"
+        }
+
+        return if (filename.endsWith(".gguf")) {
+            val modelPath = getModelPath(context, filename)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            service.configure(
+                modelPath = modelPath,
+                systemPrompt = config?.persona?.systemPrompt ?: "You are a helpful assistant."
+            )
+            service
+        } else {
+            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+        }
     }
 
     @Provides
     @Singleton
     @FastModelEngine
     fun provideFastInferenceService(
+        @ApplicationContext context: Context,
         @FastModelEngine conversationManager: ConversationManagerPort,
-        processThinkingTokens: ProcessThinkingTokensUseCase
+        modelConfigCache: ModelConfigCachePort,
+        processThinkingTokens: ProcessThinkingTokensUseCase,
+        llamaChatSessionManager: LlamaChatSessionManager
     ): LlmInferencePort {
-        return LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+        val config = modelConfigCache.getFastConfig()
+        val filename = if (config != null) {
+            getFilenameForFormat(ModelType.FAST, config.metadata.modelFileFormat)
+        } else {
+            "${ModelType.FAST.name.lowercase()}.litertlm"
+        }
+
+        return if (filename.endsWith(".gguf")) {
+            val modelPath = getModelPath(context, filename)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            service.configure(
+                modelPath = modelPath,
+                systemPrompt = config?.persona?.systemPrompt ?: "You are a helpful assistant."
+            )
+            service
+        } else {
+            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+        }
     }
 }
 

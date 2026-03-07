@@ -22,7 +22,6 @@ import javax.inject.Singleton
 
 @Singleton
 class ModelDownloadOrchestratorImpl @Inject constructor(
-    private val fileScanner: ModelFileScanner,
     private val sessionManager: DownloadSessionManager,
     private val validateConditions: ValidateDownloadConditionsUseCase,
     private val initializeFileProgress: InitializeFileProgressUseCase,
@@ -32,7 +31,6 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
     private val logger: LoggingPort,
     override val speedTracker: DownloadSpeedTrackerPort,
     private val modelConfigCache: ModelConfigCachePort,
-    private val modelUrlProvider: ModelUrlProviderPort
 ) : ModelDownloadOrchestratorPort {
     companion object {
         private const val TAG = "ModelDownloadOrchestrator"
