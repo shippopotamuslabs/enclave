@@ -131,7 +131,14 @@ class HttpFileDownloader @Inject constructor(
             if (targetFile.exists()) {
                 targetFile.delete()
             }
-            tempFile.renameTo(targetFile)
+            val renameSucceeded = tempFile.renameTo(targetFile)
+            if (!renameSucceeded) {
+                logger.error(TAG, "Failed to rename temp file to target for ${config.metadata.localFileName}")
+                // If rename fails, throw exception since we can't return a valid file
+                if (tempFile.exists()) {
+                    throw Exception("Failed to rename downloaded file to target location")
+                }
+            }
 
             FileDownloaderPort.DownloadResult(
                 file = targetFile,
@@ -208,7 +215,14 @@ class HttpFileDownloader @Inject constructor(
             if (targetFile.exists()) {
                 targetFile.delete()
             }
-            tempFile.renameTo(targetFile)
+            val renameSucceeded = tempFile.renameTo(targetFile)
+            if (!renameSucceeded) {
+                logger.error(TAG, "Failed to rename temp file to target for ${config.metadata.localFileName}")
+                // If rename fails, throw exception since we can't return a valid file
+                if (tempFile.exists()) {
+                    throw Exception("Failed to rename downloaded file to target location")
+                }
+            }
 
             FileDownloaderPort.DownloadResult(
                 file = targetFile,
