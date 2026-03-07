@@ -153,4 +153,64 @@ class DownloadStateManagerTest {
 
         assertEquals(10.5, stateFlow.value.currentSpeedMBs)
     }
+
+    // ============================================================================
+    // WiFi Blocked State Tests
+    // ============================================================================
+
+    @Test
+    fun updateState_setsWifiBlockedFlag() {
+        // When - wifiBlocked is set to true
+        stateManager.updateState { copy(wifiBlocked = true) }
+
+        // Then - wifiBlocked should be true
+        assertEquals(true, stateFlow.value.wifiBlocked)
+    }
+
+    @Test
+    fun updateState_clearsWifiBlockedFlag() {
+        // Given - wifiBlocked is true
+        stateFlow.value = stateFlow.value.copy(wifiBlocked = true)
+
+        // When - wifiBlocked is set to false
+        stateManager.updateState { copy(wifiBlocked = false) }
+
+        // Then - wifiBlocked should be false
+        assertEquals(false, stateFlow.value.wifiBlocked)
+    }
+
+    @Test
+    fun updateState_preservesOtherFields_whenUpdatingWifiBlocked() {
+        // Given - State with progress
+        stateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.5f,
+            modelsTotal = 3,
+            modelsComplete = 1,
+            wifiBlocked = false
+        )
+
+        // When - wifiBlocked is set to true
+        stateManager.updateState { copy(wifiBlocked = true) }
+
+        // Then - Other fields preserved
+        val state = stateFlow.value
+        assertEquals(DownloadStatus.DOWNLOADING, state.status)
+        assertEquals(0.5f, state.overallProgress)
+        assertEquals(3, state.modelsTotal)
+        assertEquals(1, state.modelsComplete)
+        assertEquals(true, state.wifiBlocked)
+    }
+
+    @Test
+    fun updateStatus_preservesWifiBlocked_whenChangingStatus() {
+        // Given - wifiBlocked is true
+        stateFlow.value = stateFlow.value.copy(wifiBlocked = true)
+
+        // When - status changes
+        stateManager.updateStatus(DownloadStatus.IDLE)
+
+        // Then - wifiBlocked preserved
+        assertEquals(true, stateFlow.value.wifiBlocked)
+    }
 }
