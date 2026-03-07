@@ -1266,5 +1266,218 @@ class DownloadViewModelTest {
         // Then - startDownloads is called (orchestrator handles idempotency)
         coVerify { mockOrchestrator.startDownloads(any(), any()) }
     }
+
+    // ============================================================================
+    // Network Change & Resume Scenarios
+    // ============================================================================
+
+    /**
+     * Scenario: Download running on WiFi, user disconnects and goes to mobile,
+     * then toggles OFF "only download on WiFi" to resume on mobile.
+     *
+     * This is the key real-world flow:
+     * 1. Start on WiFi with wifiOnly=true
+     * 2. WiFi disconnects, download stops (WorkManager UNMETERED constraint fails)
+     * 3. User toggles wifiOnly OFF
+     * 4. Resume should continue from where it left off
+     */
+    @Test
+    fun `resume after wifi to mobile switch with wifiOnly disabled`() = runTest {
+        // Given - Download was running on WiFi, paused due to network switch
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.PAUSED,
+            overallProgress = 0.5f,
+            modelsTotal = 2,
+            modelsComplete = 0,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 100_000_000,  // 50% - partial download
+                    totalBytes = 200_000_000,
+                    status = FileStatus.PAUSED,
+                    speedMBs = null
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Verify initial partial state
+        assertEquals(FileStatus.PAUSED, viewModel.fileProgressList.value[0].status)
+        assertEquals(100_000_000L, viewModel.fileProgressList.value[0].bytesDownloaded)
+
+        // User toggles OFF wifiOnly
+        viewModel.setWifiOnly(false)
+        assertFalse(viewModel.wifiOnly.value)
+
+        // User clicks "Download on Mobile" to resume
+        coEvery { mockOrchestrator.downloadOnMobileData() } returns Unit
+        viewModel.downloadOnMobileData()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - downloadOnMobileData should be called (this will use CONNECTED constraint)
+        coVerify { mockOrchestrator.downloadOnMobileData() }
+
+        // And state should transition to downloading
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.5f,
+            modelsTotal = 2,
+            modelsComplete = 0,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 100_000_000,  // Same progress - resumes from here
+                    totalBytes = 200_000_000,
+                    status = FileStatus.DOWNLOADING,
+                    speedMBs = 5.0
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Verify download resumed with same progress
+        assertEquals(DownloadStatus.DOWNLOADING, viewModel.downloadState.value.status)
+        assertEquals(100_000_000L, viewModel.fileProgressList.value[0].bytesDownloaded)
+    }
+
+    /**
+     * Scenario: Download fails due to network loss, then network returns
+     * WorkManager should auto-retry with exponential backoff
+     *
+     * Note: This tests the ViewModel state transitions, actual WorkManager retry
+     * is handled by the system
+     */
+    @Test
+    fun `download state transitions to error when network lost`() = runTest {
+        // Given - Download is running
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.3f,
+            modelsTotal = 2,
+            modelsComplete = 0
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // When - Network is lost (work goes to BLOCKED or fails)
+        // WorkManager handles the actual retry, we just track state
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.ERROR,
+            errorMessage = "Network connection lost"
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Then - Error state is reflected
+        val errorState = viewModel.downloadState.value
+        assertEquals(DownloadStatus.ERROR, errorState.status)
+        assertEquals("Network connection lost", errorState.errorMessage)
+    }
+
+    /**
+     * Scenario: User can retry after network loss
+     */
+    @Test
+    fun `can retry after network loss error`() = runTest {
+        // Given - Error state from network loss
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.ERROR,
+            errorMessage = "Network connection lost"
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // User retries
+        coEvery { mockOrchestrator.retryFailed() } returns Unit
+        viewModel.retryFailed()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - retry is called
+        coVerify { mockOrchestrator.retryFailed() }
+    }
+
+    /**
+     * Scenario: WiFi-only enabled, user is on mobile, connects to WiFi,
+     * then downloads should work with UNMETERED constraint
+     */
+    @Test
+    fun `download proceeds on wifi after connecting from mobile`() = runTest {
+        // Given - User was on mobile with wifiOnly=true (blocked)
+        // They now connect to WiFi
+        viewModel.setWifiOnly(true)  // WiFi-only is ON
+
+        // Foreground the app
+        viewModel.onAppForegrounded()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Mock orchestrator to allow (WiFi is now connected)
+        coEvery { mockOrchestrator.startDownloads(any(), wifiOnly = true) } returns true
+
+        // When - User starts downloads (now on WiFi)
+        viewModel.startDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - Downloads start with wifiOnly=true
+        coVerify { mockOrchestrator.startDownloads(any(), wifiOnly = true) }
+        assertFalse(viewModel.showWifiDialog.value)
+    }
+
+    /**
+     * Scenario: Partial download progress is preserved through pause/resume cycle
+     */
+    @Test
+    fun `partial download progress preserved through pause resume`() = runTest {
+        // Given - 75% downloaded
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.75f,
+            modelsTotal = 2,
+            modelsComplete = 1,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 150_000_000,
+                    totalBytes = 200_000_000,
+                    status = FileStatus.DOWNLOADING,
+                    speedMBs = 10.0
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // User pauses
+        coEvery { mockOrchestrator.pauseDownloads() } returns Unit
+        viewModel.pauseDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // State should show paused
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.PAUSED,
+            overallProgress = 0.75f,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 150_000_000,
+                    totalBytes = 200_000_000,
+                    status = FileStatus.PAUSED,
+                    speedMBs = null
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Verify progress preserved
+        assertEquals(0.75f, viewModel.downloadState.value.overallProgress)
+        assertEquals(150_000_000L, viewModel.fileProgressList.value[0].bytesDownloaded)
+
+        // User resumes
+        coEvery { mockOrchestrator.resumeDownloads() } returns Unit
+        viewModel.resumeDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Verify resume called
+        coVerify { mockOrchestrator.resumeDownloads() }
+    }
 }
 

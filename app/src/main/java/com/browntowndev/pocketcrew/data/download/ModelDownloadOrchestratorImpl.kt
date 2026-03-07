@@ -126,7 +126,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         val initResult = initializeFileProgress(scan, modelsToDownload, _downloadState.value.currentDownloads)
         stateManager.applyProgressInit(initResult)
 
-        workScheduler.enqueue(modelsToDownload, sessionId)
+        workScheduler.enqueue(modelsToDownload, sessionId, wifiOnly)
         stateManager.updateStatus(DownloadStatus.DOWNLOADING)
         return true
     }

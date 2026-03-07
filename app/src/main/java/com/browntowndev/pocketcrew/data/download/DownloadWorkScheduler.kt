@@ -29,9 +29,13 @@ class DownloadWorkScheduler @Inject constructor(
         private const val TAG = "DownloadWorkScheduler"
     }
 
-    fun enqueue(models: List<ModelConfiguration>, sessionId: String?) {
+    fun enqueue(models: List<ModelConfiguration>, sessionId: String?, wifiOnly: Boolean = true) {
+        // Use UNMETERED when wifiOnly is enabled (requires WiFi)
+        // Use CONNECTED when wifiOnly is disabled (allows mobile data)
+        val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
+
         val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.UNMETERED)
+            .setRequiredNetworkType(networkType)
             .setRequiresStorageNotLow(true)
             .build()
 
