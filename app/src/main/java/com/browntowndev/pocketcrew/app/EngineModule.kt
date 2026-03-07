@@ -14,6 +14,7 @@ import com.browntowndev.pocketcrew.inference.LiteRtInferenceServiceImpl
 import com.browntowndev.pocketcrew.inference.LlamaInferenceServiceImpl
 import com.browntowndev.pocketcrew.inference.MediaPipeInferenceServiceImpl
 import com.browntowndev.pocketcrew.inference.llama.LlamaChatSessionManager
+import com.browntowndev.pocketcrew.inference.llama.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.inference.PipelineOrchestratorImpl
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.google.ai.edge.litertlm.Backend
@@ -269,9 +270,16 @@ object EngineModule {
             filename.endsWith(".gguf") -> {
                 // Use llama.cpp implementation for GGUF models
                 val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+                val tunings = config?.tunings
                 service.configure(
                     modelPath = modelPath,
-                    systemPrompt = config?.persona?.systemPrompt ?: "You are a helpful assistant."
+                    systemPrompt = config?.persona?.systemPrompt ?: "You are a helpful assistant.",
+                    samplingConfig = LlamaSamplingConfig(
+                        temperature = tunings?.temperature?.toFloat() ?: 0.7f,
+                        topK = tunings?.topK ?: 40,
+                        topP = tunings?.topP?.toFloat() ?: 0.95f,
+                        maxTokens = tunings?.maxTokens ?: 512
+                    )
                 )
                 service
             }
@@ -304,9 +312,16 @@ object EngineModule {
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
             val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val tunings = config?.tunings
             service.configure(
                 modelPath = modelPath,
-                systemPrompt = config?.persona?.systemPrompt ?: "You are a helpful assistant."
+                systemPrompt = config?.persona?.systemPrompt ?: "You are a helpful assistant.",
+                samplingConfig = LlamaSamplingConfig(
+                    temperature = tunings?.temperature?.toFloat() ?: 0.7f,
+                    topK = tunings?.topK ?: 40,
+                    topP = tunings?.topP?.toFloat() ?: 0.95f,
+                    maxTokens = tunings?.maxTokens ?: 512
+                )
             )
             service
         } else {
@@ -334,9 +349,16 @@ object EngineModule {
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
             val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val tunings = config?.tunings
             service.configure(
                 modelPath = modelPath,
-                systemPrompt = config?.persona?.systemPrompt ?: "You are a helpful assistant."
+                systemPrompt = config?.persona?.systemPrompt ?: "You are a helpful assistant.",
+                samplingConfig = LlamaSamplingConfig(
+                    temperature = tunings?.temperature?.toFloat() ?: 0.7f,
+                    topK = tunings?.topK ?: 40,
+                    topP = tunings?.topP?.toFloat() ?: 0.95f,
+                    maxTokens = tunings?.maxTokens ?: 512
+                )
             )
             service
         } else {
@@ -364,9 +386,16 @@ object EngineModule {
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
             val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val tunings = config?.tunings
             service.configure(
                 modelPath = modelPath,
-                systemPrompt = config?.persona?.systemPrompt ?: "You are a helpful assistant."
+                systemPrompt = config?.persona?.systemPrompt ?: "You are a helpful assistant.",
+                samplingConfig = LlamaSamplingConfig(
+                    temperature = tunings?.temperature?.toFloat() ?: 0.7f,
+                    topK = tunings?.topK ?: 40,
+                    topP = tunings?.topP?.toFloat() ?: 0.95f,
+                    maxTokens = tunings?.maxTokens ?: 512
+                )
             )
             service
         } else {

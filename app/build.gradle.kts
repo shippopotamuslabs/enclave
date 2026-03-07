@@ -107,6 +107,7 @@ tasks.matching { it.name.startsWith("connected") && it.name.endsWith("AndroidTes
 }
 
 dependencies {
+    implementation(project(":llama-android"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)

@@ -24,3 +24,10 @@ app/release/app-release.aab
 .kilocode/
 
 mcp.config
+
+# llama-android build outputs
+llama-android/build/
+llama-android/.cxx/
+
+# Third-party dependencies
+third_party/

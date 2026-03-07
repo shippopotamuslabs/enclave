@@ -24,3 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Pocket Crew"
 include(":app")
+include(":llama-android")

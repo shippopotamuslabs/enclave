@@ -26,6 +26,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
     private var modelPath: String? = null
     private var systemPrompt: String = "You are a helpful assistant."
+    private var samplingConfig: LlamaSamplingConfig = LlamaSamplingConfig()
     private var isInitialized = false
 
     /**
@@ -39,6 +40,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
     ) {
         this.modelPath = modelPath
         this.systemPrompt = systemPrompt
+        this.samplingConfig = samplingConfig
     }
 
     override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
@@ -56,7 +58,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
                     sessionManager.initializeEngine(
                         LlamaModelConfig(
                             modelPath = path,
-                            systemPrompt = systemPrompt
+                            systemPrompt = systemPrompt,
+                            sampling = samplingConfig
                         )
                     )
                     sessionManager.startNewConversation()
