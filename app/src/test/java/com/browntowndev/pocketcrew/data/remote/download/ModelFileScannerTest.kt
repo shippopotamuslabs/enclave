@@ -2,14 +2,13 @@ package com.browntowndev.pocketcrew.data.remote.download
 
 import android.content.Context
 import android.util.Log
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelFile
 import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.data.download.ModelFileScanner
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
-import com.browntowndev.pocketcrew.domain.port.repository.RegisteredModel
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.mockk
@@ -26,7 +25,6 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.io.File
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ModelFileScannerTest {
@@ -108,17 +106,25 @@ class ModelFileScannerTest {
             modelConfigCache = mockModelConfigCache
         )
 
-        // Create a test model file
-        val testModel = ModelFile(
-            sizeBytes = 1024,
-            url = "https://example.com/model.bin",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "model.bin",
-            displayName = "Test Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        // Create a test model configuration
+        val testModel = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/name",
+                remoteFileName = "model.bin",
+                localFileName = "model.bin",
+                displayName = "Test Model",
+                md5 = "abc123",
+                sizeInBytes = 1024,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
         )
 
         val result = scannerWithMockedDir.scanAndCreateDirIfNotExist(listOf(testModel))
@@ -143,30 +149,48 @@ class ModelFileScannerTest {
         every { mockContext.getExternalFilesDir(null) } returns tempDir
 
         // Create a registered model with LITERTLM format (old format in registry)
-        val registeredModel = RegisteredModel(
-            remoteFilename = "main.litertlm",
+        val registeredModel = ModelConfiguration(
             modelType = ModelType.MAIN,
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "abc123def456",
-            sizeInBytes = 2048,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "abc123def456",
+                sizeInBytes = 2048,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         // Mock registry to return the old format model
         coEvery { mockModelRegistry.getRegisteredModel(ModelType.MAIN) } returns registeredModel
 
         // Create remote config with TASK format (new format)
-        val remoteModel = ModelFile(
-            sizeBytes = 2048,
-            url = "https://example.com/main.task",
-            md5 = "newmd5hash789",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.task",
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.TASK,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val remoteModel = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.task",
+                localFileName = "main.task",
+                displayName = "Main Model",
+                md5 = "newmd5hash789",
+                sizeInBytes = 2048,
+                modelFileFormat = ModelFileFormat.TASK
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         val scannerWithMockedRegistry = ModelFileScanner(
@@ -202,14 +226,24 @@ class ModelFileScannerTest {
 
         // Create a registered model with matching MD5
         val matchingMd5 = "abc123def456"
-        val registeredModel = RegisteredModel(
-            remoteFilename = "main.litertlm",
+        val registeredModel = ModelConfiguration(
             modelType = ModelType.MAIN,
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = matchingMd5,
-            sizeInBytes = 1000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = matchingMd5,
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         // Create fresh mock registry - just return registeredModel for MAIN type
@@ -221,16 +255,24 @@ class ModelFileScannerTest {
 
         // Create remote config with matching MD5 and format
         // Note: The sizeBytes doesn't need to match since there's no main file
-        val remoteModel = ModelFile(
-            sizeBytes = 1000,
-            url = "https://example.com/main.litertlm",
-            md5 = matchingMd5,
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val remoteModel = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = matchingMd5,
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         val scannerWithMockedRegistry = ModelFileScanner(
@@ -268,30 +310,48 @@ class ModelFileScannerTest {
         every { mockContext.getExternalFilesDir(null) } returns tempDir
 
         // Create a registered model with different MD5 (mismatch)
-        val registeredModel = RegisteredModel(
-            remoteFilename = "main.litertlm",
+        val registeredModel = ModelConfiguration(
             modelType = ModelType.MAIN,
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "oldmd5hash",
-            sizeInBytes = 1000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "oldmd5hash",
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         // Mock registry to return the registered model
         coEvery { mockModelRegistry.getRegisteredModel(ModelType.MAIN) } returns registeredModel
 
         // Create remote config with different MD5
-        val remoteModel = ModelFile(
-            sizeBytes = 1000,
-            url = "https://example.com/main.litertlm",
-            md5 = "newmd5hashdifferent",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val remoteModel = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "newmd5hashdifferent",
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         val scannerWithMockedRegistry = ModelFileScanner(
@@ -326,30 +386,48 @@ class ModelFileScannerTest {
         every { mockContext.getExternalFilesDir(null) } returns tempDir
 
         // Create a registered model with different MD5
-        val registeredModel = RegisteredModel(
-            remoteFilename = "main.litertlm",
+        val registeredModel = ModelConfiguration(
             modelType = ModelType.MAIN,
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "registrymd5",
-            sizeInBytes = 1000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "registrymd5",
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         // Mock registry to return the registered model
         coEvery { mockModelRegistry.getRegisteredModel(ModelType.MAIN) } returns registeredModel
 
         // Create remote config with different MD5
-        val remoteModel = ModelFile(
-            sizeBytes = 1000,
-            url = "https://example.com/main.litertlm",
-            md5 = "remotemd5different",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val remoteModel = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "remotemd5different",
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         val scannerWithMockedRegistry = ModelFileScanner(
@@ -384,16 +462,24 @@ class ModelFileScannerTest {
         every { mockContext.getExternalFilesDir(null) } returns tempDir
 
         // Create remote model with matching size
-        val remoteModel = ModelFile(
-            sizeBytes = expectedSize,
-            url = "https://example.com/main.litertlm",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val remoteModel = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "abc123",
+                sizeInBytes = expectedSize,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         // Mock registry to return null (no existing registration)
@@ -434,16 +520,24 @@ class ModelFileScannerTest {
         coEvery { mockModelRegistry.getRegisteredModel(ModelType.MAIN) } returns null
 
         // Create remote model
-        val remoteModel = ModelFile(
-            sizeBytes = 1000,
-            url = "https://example.com/main.litertlm",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val remoteModel = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "abc123",
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         val scannerWithMockedRegistry = ModelFileScanner(
@@ -490,30 +584,48 @@ class ModelFileScannerTest {
         every { mockContext.getExternalFilesDir(null) } returns tempDir
 
         // Create a registered model with LITERTLM format
-        val registeredModel = RegisteredModel(
-            remoteFilename = "main.litertlm",
+        val registeredModel = ModelConfiguration(
             modelType = ModelType.MAIN,
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "abc123",
-            sizeInBytes = 1000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "abc123",
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         // Mock registry to return the registered model
         coEvery { mockModelRegistry.getRegisteredModel(ModelType.MAIN) } returns registeredModel
 
         // Create remote config with TASK format (different from registry)
-        val remoteModel = ModelFile(
-            sizeBytes = 1000,
-            url = "https://example.com/main.task",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.task",
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.TASK,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val remoteModel = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.task",
+                localFileName = "main.task",
+                displayName = "Main Model",
+                md5 = "abc123",
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.TASK
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         val scannerWithMockedRegistry = ModelFileScanner(
@@ -552,43 +664,69 @@ class ModelFileScannerTest {
 
         // Registry has been pre-updated with NEW config (this is the key part of the bug fix)
         // The registry now has the NEW MD5
-        val registeredWithNewMd5 = RegisteredModel(
-            remoteFilename = "main.litertlm",
+        val registeredWithNewMd5 = ModelConfiguration(
             modelType = ModelType.MAIN,
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "newmd5hash",  // NEW MD5 in registry
-            sizeInBytes = 2000,  // NEW size in registry
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "newmd5hash",
+                sizeInBytes = 2000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         val testRegistry = mockk<ModelRegistryPort>()
         coEvery { testRegistry.getRegisteredModel(ModelType.MAIN) } returns registeredWithNewMd5
 
         // Original model (from before config update) has OLD MD5
-        val originalModel = ModelFile(
-            sizeBytes = 1000,  // OLD size
-            url = "https://example.com/main.litertlm",
-            md5 = "oldmd5hash",  // OLD MD5
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val originalModel = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "oldmd5hash",
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         // New model from remote config has NEW MD5
-        val newModel = ModelFile(
-            sizeBytes = 2000,  // NEW size
-            url = "https://example.com/main.litertlm",
-            md5 = "newmd5hash",  // NEW MD5
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val newModel = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "newmd5hash",
+                sizeInBytes = 2000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         val scannerWithMockedRegistry = ModelFileScanner(
@@ -633,43 +771,69 @@ class ModelFileScannerTest {
         every { testContext.getExternalFilesDir(null) } returns tempDir
 
         // Registry has been pre-updated with NEW format (TASK)
-        val registeredWithNewFormat = RegisteredModel(
-            remoteFilename = "main.task",  // NEW format
+        val registeredWithNewFormat = ModelConfiguration(
             modelType = ModelType.MAIN,
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.TASK,  // NEW format
-            md5 = "newmd5hash",
-            sizeInBytes = 2000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.task",
+                localFileName = "main.task",
+                displayName = "Main Model",
+                md5 = "newmd5hash",
+                sizeInBytes = 2000,
+                modelFileFormat = ModelFileFormat.TASK
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         val testRegistry = mockk<ModelRegistryPort>()
         coEvery { testRegistry.getRegisteredModel(ModelType.MAIN) } returns registeredWithNewFormat
 
         // Original model (from before config update) has OLD format
-        val originalModel = ModelFile(
-            sizeBytes = 1000,
-            url = "https://example.com/main.litertlm",
-            md5 = "oldmd5hash",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,  // OLD format
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val originalModel = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "oldmd5hash",
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         // New model from remote config has NEW format
-        val newModel = ModelFile(
-            sizeBytes = 2000,
-            url = "https://example.com/main.task",
-            md5 = "newmd5hash",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.task",
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.TASK,  // NEW format
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val newModel = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.task",
+                localFileName = "main.task",
+                displayName = "Main Model",
+                md5 = "newmd5hash",
+                sizeInBytes = 2000,
+                modelFileFormat = ModelFileFormat.TASK
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         val scannerWithMockedRegistry = ModelFileScanner(
@@ -712,14 +876,24 @@ class ModelFileScannerTest {
         every { testContext.getExternalFilesDir(null) } returns tempDir
 
         // Registry has the SAME config as remote
-        val registeredModel = RegisteredModel(
-            remoteFilename = "main.litertlm",
+        val registeredModel = ModelConfiguration(
             modelType = ModelType.MAIN,
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "samed5hash",  // Same MD5
-            sizeInBytes = expectedSize.toLong(),  // Same size
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "samed5hash",
+                sizeInBytes = expectedSize.toLong(),
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         val testRegistry = mockk<ModelRegistryPort>()
@@ -730,16 +904,24 @@ class ModelFileScannerTest {
         coEvery { testRegistry.getRegisteredModel(ModelType.FAST) } returns null
 
         // Both original and new have same MD5 and size
-        val model = ModelFile(
-            sizeBytes = expectedSize.toLong(),
-            url = "https://example.com/main.litertlm",
-            md5 = "samed5hash",  // Same MD5
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val model = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "samed5hash",
+                sizeInBytes = expectedSize.toLong(),
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
 
         val scannerWithMockedRegistry = ModelFileScanner(

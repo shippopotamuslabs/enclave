@@ -6,10 +6,10 @@ import androidx.work.workDataOf
 import com.browntowndev.pocketcrew.data.download.DownloadNotificationManager
 import com.browntowndev.pocketcrew.data.download.DownloadProgressTracker
 import com.browntowndev.pocketcrew.data.download.ModelDownloadWorker
-import com.browntowndev.pocketcrew.domain.model.DownloadWorkerModelFile
 import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
+import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.service.FileIntegrityValidator
 import io.mockk.every
@@ -31,6 +31,7 @@ class ModelDownloadWorkerTest {
     private lateinit var mockNotificationManager: DownloadNotificationManager
     private lateinit var mockProgressTracker: DownloadProgressTracker
     private lateinit var mockFileDownloader: FileDownloaderPort
+    private lateinit var mockModelUrlProvider: ModelUrlProviderPort
     private lateinit var worker: ModelDownloadWorker
 
     private val testSessionId = "test-session-123"
@@ -44,6 +45,7 @@ class ModelDownloadWorkerTest {
         mockNotificationManager = mockk(relaxed = true)
         mockProgressTracker = mockk(relaxed = true)
         mockFileDownloader = mockk(relaxed = true)
+        mockModelUrlProvider = mockk(relaxed = true)
 
         every { mockWorkerParams.runAttemptCount } returns 0
 
@@ -54,7 +56,8 @@ class ModelDownloadWorkerTest {
             logger = mockLogger,
             notificationManager = mockNotificationManager,
             progressTracker = mockProgressTracker,
-            fileDownloader = mockFileDownloader
+            fileDownloader = mockFileDownloader,
+            modelUrlProvider = mockModelUrlProvider
         )
     }
 
@@ -69,7 +72,7 @@ class ModelDownloadWorkerTest {
         }
 
         @Test
-        @DisplayName("All dependencies are properly injected including FileDownloaderPort")
+        @DisplayName("All dependencies are properly injected including FileDownloaderPort and ModelUrlProviderPort")
         fun allDependencies_areProperlyInjected() {
             assertNotNull(mockContext)
             assertNotNull(mockWorkerParams)
@@ -78,6 +81,7 @@ class ModelDownloadWorkerTest {
             assertNotNull(mockNotificationManager)
             assertNotNull(mockProgressTracker)
             assertNotNull(mockFileDownloader)
+            assertNotNull(mockModelUrlProvider)
         }
 
         @Test
@@ -93,6 +97,13 @@ class ModelDownloadWorkerTest {
             // Verify fileDownloader is set (this would fail if FileDownloaderPort was not added as dependency)
             assertNotNull(mockFileDownloader)
         }
+
+        @Test
+        @DisplayName("ModelUrlProviderPort is injected and accessible")
+        fun modelUrlProvider_isInjected() {
+            // Verify modelUrlProvider is set (this would fail if ModelUrlProviderPort was not added as dependency)
+            assertNotNull(mockModelUrlProvider)
+        }
     }
 
     @Nested
@@ -102,7 +113,8 @@ class ModelDownloadWorkerTest {
         @Test
         @DisplayName("Input data can be retrieved from worker parameters")
         fun inputData_canBeRetrieved() {
-            val modelData = "test.litertlm|1000|https://example.com/test.litertlm|abc123|MAIN|LITERTLM"
+            // New format: modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|md5|modelFileFormat|temperature|topK|topP|maxTokens|systemPrompt
+            val modelData = "MAIN|test-remote.gguf|test-local.gguf|Test Model|TheBloke/TestModel|1000|abc123|LITERTLM|0.0|40|0.95|2048|You are a helpful assistant"
             every { mockWorkerParams.inputData } returns workDataOf(
                 "model_files" to arrayOf(modelData),
                 "session_id" to testSessionId
@@ -136,7 +148,7 @@ class ModelDownloadWorkerTest {
             // The progress callback bug occurred when downloadFile was called without callback
 
             // Given - setup input data
-            val modelData = "test.litertlm|1000|https://example.com/test.litertlm|abc123|MAIN|LITERTLM"
+            val modelData = "MAIN|test-remote.gguf|test-local.gguf|Test Model|TheBloke/TestModel|1000|abc123|LITERTLM|0.0|40|0.95|2048|You are a helpful assistant"
             every { mockWorkerParams.inputData } returns workDataOf(
                 "model_files" to arrayOf(modelData),
                 "session_id" to testSessionId
@@ -150,12 +162,11 @@ class ModelDownloadWorkerTest {
         @Test
         @DisplayName("REGRESSION: ProgressCallback parameter must exist in FileDownloaderPort.downloadFile")
         fun regression_progressCallbackExists() {
-            // This test verifies that the 4-parameter downloadFile method exists
-            // If the progressCallback parameter was removed, this test catches that regression
-
+            // This test verifies that the downloadFile method has the correct signature
             // The method signature should be:
             // suspend fun downloadFile(
-            //     model: DownloadWorkerModelFile,
+            //     config: ModelConfiguration,
+            //     downloadUrl: String,
             //     targetDir: File,
             //     existingBytes: Long = 0,
             //     progressCallback: ProgressCallback? = null
@@ -163,6 +174,15 @@ class ModelDownloadWorkerTest {
 
             // Verify mock was created with relaxed = true which allows any method call
             assertNotNull(mockFileDownloader)
+        }
+
+        @Test
+        @DisplayName("REGRESSION: ModelUrlProviderPort must be in constructor")
+        fun regression_modelUrlProviderMustBeInjected() {
+            // This test verifies ModelUrlProviderPort is in the constructor
+            // If it were removed, this test would fail to compile
+
+            assertNotNull(mockModelUrlProvider)
         }
     }
 }

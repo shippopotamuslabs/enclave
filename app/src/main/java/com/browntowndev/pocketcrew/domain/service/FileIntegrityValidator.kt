@@ -1,10 +1,10 @@
 package com.browntowndev.pocketcrew.domain.service
 
-import com.browntowndev.pocketcrew.domain.port.HashingPort
+import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
 import com.browntowndev.pocketcrew.domain.model.WorkParserModelFile
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
-import com.browntowndev.pocketcrew.domain.port.repository.RegisteredModel
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -111,8 +111,8 @@ class FileIntegrityValidator @Inject constructor(
                 localFileName = filename,
                 sizeBytes = 0, // Not used in validation
                 modelTypes = listOf(config.modelType),
-                modelFileFormat = config.modelFileFormat,
-                md5 = config.md5
+                modelFileFormat = config.metadata.modelFileFormat,
+                md5 = config.metadata.md5
             )
         }
     }
@@ -120,7 +120,7 @@ class FileIntegrityValidator @Inject constructor(
     /**
      * Get the expected filename for a registered model config.
      */
-    private fun getFilenameForConfig(config: RegisteredModel): String {
-        return "${config.modelType.name.lowercase()}.${config.modelFileFormat.extension.removePrefix(".")}"
+    private fun getFilenameForConfig(config: ModelConfiguration): String {
+        return "${config.modelType.name.lowercase()}.${config.metadata.modelFileFormat.extension.removePrefix(".")}"
     }
 }

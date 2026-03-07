@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.data.download.remote
 
-import com.browntowndev.pocketcrew.domain.model.DownloadWorkerModelFile
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -23,32 +23,23 @@ class HttpFileDownloader @Inject constructor(
         private const val TAG = "HttpFileDownloader"
     }
 
-    // Data class to hold target and temp file pairs for multi-file downloads
-    private data class DownloadedFile(
-        val targetFile: File,
-        val tempFile: File
-    )
-
     override suspend fun downloadFile(
-        model: DownloadWorkerModelFile,
+        config: ModelConfiguration,
+        downloadUrl: String,
         targetDir: File,
         existingBytes: Long,
         progressCallback: FileDownloaderPort.ProgressCallback?
     ): FileDownloaderPort.DownloadResult = withContext(Dispatchers.IO) {
         // Log model info for debugging
-        logger.info(TAG, "[DOWNLOAD_START] url=${model.url}, sizeBytes=${model.sizeBytes}, existingBytes=$existingBytes filenames=${model.filenames}")
-        val downloadFiles = model.filenames.map { filename ->
-            DownloadedFile(
-                targetFile = File(targetDir, filename),
-                tempFile = File(targetDir, "$filename${ModelConfig.TEMP_EXTENSION}")
-            )
-        }
+        logger.info(TAG, "[DOWNLOAD_START] url=$downloadUrl, sizeBytes=${config.metadata.sizeInBytes}, existingBytes=$existingBytes filename=${config.metadata.localFileName}")
 
-        val targetFile = downloadFiles.first().targetFile
-        val tempFile = downloadFiles.first().tempFile
+        // Use localFileName for the target file (Option 2: save as-is)
+        val filename = config.metadata.localFileName
+        val targetFile = File(targetDir, filename)
+        val tempFile = File(targetDir, "$filename${ModelConfig.TEMP_EXTENSION}")
 
         val request = Request.Builder()
-            .url(model.url)
+            .url(downloadUrl)
             .apply {
                 if (existingBytes > 0) {
                     addHeader("Range", "bytes=$existingBytes-")
@@ -60,18 +51,18 @@ class HttpFileDownloader @Inject constructor(
             if (response.code == 416) {
                 logger.warning(
                     TAG,
-                    "HTTP 416 for ${model.filenames.first()}: Range not satisfiable. Deleting temp files and restarting."
+                    "HTTP 416 for $filename: Range not satisfiable. Deleting temp files and restarting."
                 )
                 tempFile.delete()
                 val retryRequest = Request.Builder()
-                    .url(model.url)
+                    .url(downloadUrl)
                     .build()
-                return@withContext downloadWithRetry(retryRequest, model, targetDir, progressCallback)
+                return@withContext downloadWithRetry(retryRequest, config, downloadUrl, targetDir, progressCallback)
             }
 
             if (!response.isSuccessful) {
                 val errorMsg = "HTTP ${response.code}: ${response.message}"
-                logger.error(TAG, "Download failed for ${model.filenames.first()}: $errorMsg")
+                logger.error(TAG, "Download failed for $filename: $errorMsg")
                 throw Exception(errorMsg)
             }
 
@@ -81,82 +72,71 @@ class HttpFileDownloader @Inject constructor(
             val body = response.body ?: run {
                 logger.error(
                     TAG,
-                    "Download failed for ${model.filenames.first()}: Empty response body"
+                    "Download failed for $filename: Empty response body"
                 )
                 throw Exception("Empty response body")
             }
 
             // Use Content-Length when no resume (existingBytes == 0)
             // Use Content-Range total when resuming (existingBytes > 0)
-            // Content-Range format: "bytes start-end/total" - split by "/" to get total
             val serverContentLength = response.header("Content-Length")?.toLongOrNull()
             val contentRange = response.header("Content-Range")
             val contentRangeTotal = contentRange?.split("/")?.lastOrNull()?.toLongOrNull()
-            
-            // If resuming (Content-Range present), use that total. Otherwise use Content-Length.
+
             val actualTotalSize = contentRangeTotal ?: serverContentLength ?: throw Exception("No Content-Length or Content-Range found")
             logger.info(TAG, "[SIZE] Server Content-Length: $serverContentLength bytes")
-            logger.info(TAG, "[SIZE] Server Content-Range: $contentRange")
-            logger.info(TAG, "[SIZE] Content-Range total (from /): $contentRangeTotal bytes")
             logger.info(TAG, "[SIZE] Using $actualTotalSize bytes for progress")
 
             var totalBytesRead = actualExistingBytes
-            
+
             // Use FileChannel with force(true) for atomic write+flush to disk
-            // This prevents temp file corruption when worker is killed (e.g., permission dialog)
-            val channels = downloadFiles.map { file ->
-                FileChannel.open(
-                    file.tempFile.toPath(),
-                    if (isResuming) StandardOpenOption.CREATE else StandardOpenOption.CREATE_NEW,
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.APPEND
-                )
-            }
-            
+            val channel = FileChannel.open(
+                tempFile.toPath(),
+                if (isResuming) StandardOpenOption.CREATE else StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE,
+                StandardOpenOption.APPEND
+            )
+
             try {
                 body.byteStream().use { inputStream ->
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
 
                     while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                        // Write the same data to all temp files simultaneously
                         val byteBuffer = ByteBuffer.wrap(buffer, 0, bytesRead)
-                        channels.forEach { it.write(byteBuffer.duplicate()) }
+                        channel.write(byteBuffer)
                         totalBytesRead += bytesRead
 
                         // Force write to physical disk (atomic write+flush)
-                        // This ensures data is persisted even if worker is killed
-                        channels.forEach { it.force(true) }
+                        channel.force(true)
 
                         // Report progress
-                        progressCallback?.onProgress(totalBytesRead, actualTotalSize.coerceAtLeast(model.sizeBytes))
+                        progressCallback?.onProgress(totalBytesRead, actualTotalSize.coerceAtLeast(config.metadata.sizeInBytes))
                     }
                 }
             } finally {
-                channels.forEach { it.close() }
+                channel.close()
             }
 
-            if (totalBytesRead != model.sizeBytes) {
-                logger.error(TAG, "[MISMATCHED FILE SIZE] Download failed for ${model.originalFileName}")
-                logger.error(TAG, "[MISMATCHED FILE SIZE] Config Size: ${model.sizeBytes}")
+            if (totalBytesRead != config.metadata.sizeInBytes) {
+                logger.error(TAG, "[MISMATCHED FILE SIZE] Download failed for ${config.metadata.localFileName}")
+                logger.error(TAG, "[MISMATCHED FILE SIZE] Config Size: ${config.metadata.sizeInBytes}")
                 logger.error(TAG, "[MISMATCHED FILE SIZE] Downloaded Size: $totalBytesRead")
                 throw Exception("Incomplete download")
             } else {
-                logger.info(TAG, "[COMPLETED DOWNLOAD] ${model.originalFileName}. Size: $totalBytesRead")
+                logger.info(TAG, "[COMPLETED DOWNLOAD] ${config.metadata.localFileName}. Size: $totalBytesRead")
             }
 
-            // Rename each temp file to target file
-            for (downloadFile in downloadFiles) {
-                if (downloadFile.targetFile.exists()) {
-                    downloadFile.targetFile.delete()
-                }
-                downloadFile.tempFile.renameTo(downloadFile.targetFile)
+            // Rename temp file to target file
+            if (targetFile.exists()) {
+                targetFile.delete()
             }
+            tempFile.renameTo(targetFile)
 
             FileDownloaderPort.DownloadResult(
                 file = targetFile,
                 bytesDownloaded = totalBytesRead,
-                totalBytes = actualTotalSize.coerceAtLeast(model.sizeBytes),
+                totalBytes = actualTotalSize.coerceAtLeast(config.metadata.sizeInBytes),
                 isResumed = isResuming
             )
         }
@@ -164,95 +144,71 @@ class HttpFileDownloader @Inject constructor(
 
     private suspend fun downloadWithRetry(
         request: Request,
-        model: DownloadWorkerModelFile,
+        config: ModelConfiguration,
+        downloadUrl: String,
         targetDir: File,
         progressCallback: FileDownloaderPort.ProgressCallback?
     ): FileDownloaderPort.DownloadResult = withContext(Dispatchers.IO) {
-        // Create target/temp file pairs for all filenames this model serves (like old code)
-        val downloadFiles = model.filenames.map { filename ->
-            DownloadedFile(
-                targetFile = File(targetDir, filename),
-                tempFile = File(targetDir, "$filename${ModelConfig.TEMP_EXTENSION}")
-            )
-        }
-
-        val targetFile = downloadFiles.first().targetFile
+        val filename = config.metadata.localFileName
+        val targetFile = File(targetDir, filename)
+        val tempFile = File(targetDir, "$filename${ModelConfig.TEMP_EXTENSION}")
 
         okHttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
                 val errorMsg = "HTTP ${response.code}: ${response.message}"
-                logger.error(TAG, "Download retry failed for ${model.filenames.first()}: $errorMsg")
+                logger.error(TAG, "Download retry failed for $filename: $errorMsg")
                 throw Exception(errorMsg)
             }
 
             val body = response.body ?: run {
                 logger.error(
                     TAG,
-                    "Download retry failed for ${model.filenames.first()}: Empty response body"
+                    "Download retry failed for $filename: Empty response body"
                 )
                 throw Exception("Empty response body")
             }
 
-            // Use Content-Length when no resume (existingBytes == 0)
-            // Use Content-Range total when resuming (existingBytes > 0)
             val serverContentLength = response.header("Content-Length")?.toLongOrNull()
             val contentRange = response.header("Content-Range")
-            
-            // Extract total from Content-Range (simpler: split by "/")
             val contentRangeTotal = contentRange?.split("/")?.lastOrNull()?.toLongOrNull()
-            
-            // If resuming (Content-Range present), use that total. Otherwise use Content-Length.
-            val actualTotalSize = contentRangeTotal ?: serverContentLength ?: model.sizeBytes
-            logger.info(TAG, "[SIZE] Non-resume path - Server Content-Length: $serverContentLength")
-            logger.info(TAG, "[SIZE] Non-resume path - Server Content-Range: $contentRange")
-            logger.info(TAG, "[SIZE] Non-resume path - Content-Range total: $contentRangeTotal")
+
+            val actualTotalSize = contentRangeTotal ?: serverContentLength ?: config.metadata.sizeInBytes
             logger.info(TAG, "[SIZE] Non-resume path - Using: $actualTotalSize")
 
             var totalBytesRead = 0L
-            
-            // Use FileChannel with force(true) for atomic write+flush to disk
-            // This prevents temp file corruption when worker is killed (e.g., permission dialog)
-            val channels = downloadFiles.map { file ->
-                FileChannel.open(
-                    file.tempFile.toPath(),
-                    StandardOpenOption.CREATE_NEW,
-                    StandardOpenOption.WRITE
-                )
-            }
-            
+
+            val channel = FileChannel.open(
+                tempFile.toPath(),
+                StandardOpenOption.CREATE_NEW,
+                StandardOpenOption.WRITE
+            )
+
             try {
                 body.byteStream().use { inputStream ->
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
 
                     while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                        // Write the same data to all temp files simultaneously
                         val byteBuffer = ByteBuffer.wrap(buffer, 0, bytesRead)
-                        channels.forEach { it.write(byteBuffer.duplicate()) }
+                        channel.write(byteBuffer)
                         totalBytesRead += bytesRead
 
-                        // Force write to physical disk (atomic write+flush)
-                        // This ensures data is persisted even if worker is killed
-                        channels.forEach { it.force(true) }
+                        // Force write to physical disk
+                        channel.force(true)
 
                         // Report progress
                         progressCallback?.onProgress(totalBytesRead, actualTotalSize)
                     }
                 }
             } finally {
-                channels.forEach { it.close() }
+                channel.close()
             }
 
-            // Skip size validation - rely 100% on MD5 verification for integrity
-            // Physical devices may add metadata/buffer bytes that cause size mismatches
-
-            // Rename each temp file to target file
-            for (downloadFile in downloadFiles) {
-                if (downloadFile.targetFile.exists()) {
-                    downloadFile.targetFile.delete()
-                }
-                downloadFile.tempFile.renameTo(downloadFile.targetFile)
+            // Rename temp file to target file
+            if (targetFile.exists()) {
+                targetFile.delete()
             }
+            tempFile.renameTo(targetFile)
 
             FileDownloaderPort.DownloadResult(
                 file = targetFile,

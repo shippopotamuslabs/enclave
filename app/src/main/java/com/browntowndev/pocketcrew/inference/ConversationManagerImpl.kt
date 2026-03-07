@@ -2,7 +2,7 @@ package com.browntowndev.pocketcrew.inference
 
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
-import com.browntowndev.pocketcrew.domain.port.repository.RegisteredModel
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
@@ -21,7 +21,7 @@ import javax.inject.Inject
  */
 class ConversationManagerImpl @Inject constructor(
     private val engine: Engine,
-    modelConfig: RegisteredModel? = null
+    modelConfig: ModelConfiguration? = null
 ) : ConversationManagerPort {
 
     private val defaultSystemPrompt = """
@@ -31,12 +31,12 @@ class ConversationManagerImpl @Inject constructor(
     """.trimIndent()
 
     private val conversationConfig = ConversationConfig(
-        systemInstruction = Contents.of(modelConfig?.systemPrompt ?: defaultSystemPrompt),
+        systemInstruction = Contents.of(modelConfig?.persona?.systemPrompt ?: defaultSystemPrompt),
 
         samplerConfig = SamplerConfig(
-            temperature = modelConfig?.temperature ?: 0.55,
-            topP = modelConfig?.topP ?: 0.92,
-            topK = modelConfig?.topK ?: 40
+            temperature = modelConfig?.tunings?.temperature ?: 0.55,
+            topP = modelConfig?.tunings?.topP ?: 0.92,
+            topK = modelConfig?.tunings?.topK ?: 40
         ),
 
         automaticToolCalling = false,

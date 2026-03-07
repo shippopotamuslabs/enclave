@@ -2,8 +2,6 @@ package com.browntowndev.pocketcrew.domain.port.download
 
 import androidx.work.WorkInfo
 import com.browntowndev.pocketcrew.domain.model.DownloadState
-import com.browntowndev.pocketcrew.domain.model.ModelFile
-import com.browntowndev.pocketcrew.domain.model.RemoteModelConfig
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import kotlinx.coroutines.flow.StateFlow
 

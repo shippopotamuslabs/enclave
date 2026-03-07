@@ -1,17 +1,16 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.mapper.ModelConfigMapper
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.ModelType
-import com.browntowndev.pocketcrew.domain.model.RemoteModelConfig
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
+import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
-import com.browntowndev.pocketcrew.domain.port.repository.RegisteredModel
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
 import io.mockk.every
@@ -38,7 +37,7 @@ class InitializeModelsUseCaseTest {
     private lateinit var mockModelRegistry: ModelRegistryPort
     private lateinit var mockModelDownloadOrchestrator: ModelDownloadOrchestratorPort
     private lateinit var mockModelConfigCache: com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
-    private lateinit var mockModelConfigMapper: ModelConfigMapper
+    private lateinit var mockModelUrlProvider: ModelUrlProviderPort
     private lateinit var mockCheckModelsUseCase: CheckModelsUseCase
     private lateinit var mockLogPort: LoggingPort
 
@@ -57,7 +56,7 @@ class InitializeModelsUseCaseTest {
         mockModelRegistry = mockk(relaxed = true)
         mockModelDownloadOrchestrator = mockk(relaxed = true)
         mockModelConfigCache = mockk(relaxed = true)
-        mockModelConfigMapper = mockk(relaxed = true)
+        mockModelUrlProvider = mockk(relaxed = true)
         mockCheckModelsUseCase = mockk(relaxed = true)
         mockLogPort = mockk(relaxed = true)
 
@@ -66,7 +65,7 @@ class InitializeModelsUseCaseTest {
             modelRegistry = mockModelRegistry,
             modelDownloadOrchestrator = mockModelDownloadOrchestrator,
             modelConfigCache = mockModelConfigCache,
-            modelConfigMapper = mockModelConfigMapper,
+            modelUrlProvider = mockModelUrlProvider,
             checkModelsUseCase = mockCheckModelsUseCase,
             logPort = mockLogPort
         )
@@ -91,7 +90,6 @@ class InitializeModelsUseCaseTest {
         )
 
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(emptyList())
-        every { mockModelConfigMapper.toModelFiles(any<List<RegisteredModel>>()) } returns emptyList()
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
 
         // When
@@ -104,16 +102,23 @@ class InitializeModelsUseCaseTest {
     @Test
     fun `invoke fetches remote config and returns models to download when needed`() = runTest {
         // Given - mock returns a model that needs downloading
-        val modelToDownload = com.browntowndev.pocketcrew.domain.model.ModelFile(
-            sizeBytes = 1024,
-            url = "https://example.com/model.bin",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "model.bin",
-            displayName = "Test Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val modelToDownload = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/model",
+                remoteFileName = "model.bin",
+                localFileName = "model.bin",
+                displayName = "Test Model",
+                md5 = "abc123",
+                sizeInBytes = 1024,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(
+                systemPrompt = "You are a helpful assistant."
+            )
         )
 
         val downloadResult = DownloadModelsResult(
@@ -126,7 +131,6 @@ class InitializeModelsUseCaseTest {
         )
 
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(emptyList())
-        every { mockModelConfigMapper.toModelFiles(any<List<RegisteredModel>>()) } returns emptyList()
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns downloadResult
 
         // When
@@ -134,7 +138,7 @@ class InitializeModelsUseCaseTest {
 
         // Then - should return the model that needs downloading
         assert(result.modelsToDownload.isNotEmpty())
-        assert(result.modelsToDownload.first().modelTypes.contains(ModelType.MAIN))
+        assert(result.modelsToDownload.first().modelType == ModelType.MAIN)
     }
 
     @Test
@@ -150,7 +154,6 @@ class InitializeModelsUseCaseTest {
         )
 
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(emptyList())
-        every { mockModelConfigMapper.toModelFiles(any<List<RegisteredModel>>()) } returns emptyList()
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns expectedResult
 
         // When
@@ -175,7 +178,6 @@ class InitializeModelsUseCaseTest {
         )
 
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.failure(Exception("Network error"))
-        every { mockModelConfigMapper.toModelFiles(any<List<RegisteredModel>>()) } returns emptyList()
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
 
         // When

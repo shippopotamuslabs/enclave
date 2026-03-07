@@ -22,3 +22,5 @@ app/release/app-release.aab
 /.kotlin
 
 .kilocode/
+
+mcp.config

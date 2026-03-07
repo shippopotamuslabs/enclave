@@ -82,8 +82,8 @@ class DownloadViewModelTest {
         // This allows tests to control the state by modifying _downloadStateFlow
         every { mockOrchestrator.downloadState } returns _downloadStateFlow.asStateFlow()
 
-        // Mock checkModels to avoid triggering actual work in init
-        coEvery { mockOrchestrator.checkModels(originalModels = any()) } returns mockModelsResult
+        // Mock initializeWithStartupResult to avoid triggering actual work in init
+        every { mockOrchestrator.initializeWithStartupResult(any()) } returns Unit
 
         viewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,

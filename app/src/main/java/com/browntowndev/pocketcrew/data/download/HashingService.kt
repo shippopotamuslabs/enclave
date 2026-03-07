@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.data.download
 
-import com.browntowndev.pocketcrew.domain.port.HashingPort
+import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import java.io.File
 import java.security.MessageDigest
 import java.util.Base64

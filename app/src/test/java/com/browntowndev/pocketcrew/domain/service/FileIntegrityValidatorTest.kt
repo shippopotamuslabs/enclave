@@ -1,13 +1,13 @@
 package com.browntowndev.pocketcrew.domain.service
 
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.model.WorkParserModelFile
-import com.browntowndev.pocketcrew.domain.port.HashingPort
 import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
+import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
-import com.browntowndev.pocketcrew.domain.port.repository.RegisteredModel
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
@@ -106,41 +106,81 @@ class FileIntegrityValidatorTest {
         every { mockModelConfigProvider.modelsDirectory } returns modelsDir
 
         // Setup cache configs
-        val visionConfig = RegisteredModel(
-            remoteFilename = "vision.litertlm",
+        val visionConfig = ModelConfiguration(
             modelType = ModelType.VISION,
-            displayName = "Vision Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "correctHash123456789012345678",
-            sizeInBytes = 1000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/vision",
+                remoteFileName = "vision.litertlm",
+                localFileName = "vision.litertlm",
+                displayName = "Vision Model",
+                md5 = "correctHash123456789012345678",
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
         )
-        val draftConfig = RegisteredModel(
-            remoteFilename = "draft.litertlm",
+        val draftConfig = ModelConfiguration(
             modelType = ModelType.DRAFT,
-            displayName = "Draft Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "correctHash123456789012345678",
-            sizeInBytes = 2000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/draft",
+                remoteFileName = "draft.litertlm",
+                localFileName = "draft.litertlm",
+                displayName = "Draft Model",
+                md5 = "correctHash123456789012345678",
+                sizeInBytes = 2000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a draft assistant.")
         )
-        val mainConfig = RegisteredModel(
-            remoteFilename = "main.litertlm",
+        val mainConfig = ModelConfiguration(
             modelType = ModelType.MAIN,
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "correctHash123456789012345678",
-            sizeInBytes = 3000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "correctHash123456789012345678",
+                sizeInBytes = 3000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
         )
-        val fastConfig = RegisteredModel(
-            remoteFilename = "fast.litertlm",
+        val fastConfig = ModelConfiguration(
             modelType = ModelType.FAST,
-            displayName = "Fast Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "correctHash123456789012345678",
-            sizeInBytes = 4000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/fast",
+                remoteFileName = "fast.litertlm",
+                localFileName = "fast.litertlm",
+                displayName = "Fast Model",
+                md5 = "correctHash123456789012345678",
+                sizeInBytes = 4000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a fast assistant.")
         )
 
         every { mockModelConfigCache.isInitialized() } returns true
@@ -171,41 +211,81 @@ class FileIntegrityValidatorTest {
         every { mockModelConfigProvider.modelsDirectory } returns modelsDir
 
         // Setup cache configs
-        val visionConfig = RegisteredModel(
-            remoteFilename = "vision.litertlm",
+        val visionConfig = ModelConfiguration(
             modelType = ModelType.VISION,
-            displayName = "Vision Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "d41d8cd98f00b204e9800998ecf8427e",
-            sizeInBytes = 1000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/vision",
+                remoteFileName = "vision.litertlm",
+                localFileName = "vision.litertlm",
+                displayName = "Vision Model",
+                md5 = "d41d8cd98f00b204e9800998ecf8427e",
+                sizeInBytes = 1000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
         )
-        val draftConfig = RegisteredModel(
-            remoteFilename = "draft.litertlm",
+        val draftConfig = ModelConfiguration(
             modelType = ModelType.DRAFT,
-            displayName = "Draft Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "d41d8cd98f00b204e9800998ecf8427e",
-            sizeInBytes = 2000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/draft",
+                remoteFileName = "draft.litertlm",
+                localFileName = "draft.litertlm",
+                displayName = "Draft Model",
+                md5 = "d41d8cd98f00b204e9800998ecf8427e",
+                sizeInBytes = 2000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a draft assistant.")
         )
-        val mainConfig = RegisteredModel(
-            remoteFilename = "main.litertlm",
+        val mainConfig = ModelConfiguration(
             modelType = ModelType.MAIN,
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "d41d8cd98f00b204e9800998ecf8427e",
-            sizeInBytes = 3000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.litertlm",
+                localFileName = "main.litertlm",
+                displayName = "Main Model",
+                md5 = "d41d8cd98f00b204e9800998ecf8427e",
+                sizeInBytes = 3000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
         )
-        val fastConfig = RegisteredModel(
-            remoteFilename = "fast.litertlm",
+        val fastConfig = ModelConfiguration(
             modelType = ModelType.FAST,
-            displayName = "Fast Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "d41d8cd98f00b204e9800998ecf8427e",
-            sizeInBytes = 4000,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/fast",
+                remoteFileName = "fast.litertlm",
+                localFileName = "fast.litertlm",
+                displayName = "Fast Model",
+                md5 = "d41d8cd98f00b204e9800998ecf8427e",
+                sizeInBytes = 4000,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a fast assistant.")
         )
 
         every { mockModelConfigCache.isInitialized() } returns true

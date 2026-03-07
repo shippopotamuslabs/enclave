@@ -1,9 +1,9 @@
 package com.browntowndev.pocketcrew.data.repository
 
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
-import com.browntowndev.pocketcrew.domain.port.repository.RegisteredModel
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -27,18 +27,24 @@ class ModelRegistryTest {
     @Test
     fun getRegisteredModel_returnsModel_whenRegistered() = runTest {
         // Given
-        val registeredModel = RegisteredModel(
-            remoteFilename = "main.bin",
+        val registeredModel = ModelConfiguration(
             modelType = ModelType.MAIN,
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "abc123",
-            sizeInBytes = 1024,
-            temperature = 0.0,
-            topK = 40,
-            topP = 0.95,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.bin",
+                localFileName = "main.bin",
+                displayName = "Main Model",
+                md5 = "abc123",
+                sizeInBytes = 1024,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
         )
 
         coEvery { mockRegistry.getRegisteredModel(ModelType.MAIN) } returns registeredModel
@@ -48,8 +54,8 @@ class ModelRegistryTest {
 
         // Then
         assertEquals(ModelType.MAIN, result?.modelType)
-        assertEquals("Main Model", result?.displayName)
-        assertEquals(ModelFileFormat.LITERTLM, result?.modelFileFormat)
+        assertEquals("Main Model", result?.metadata?.displayName)
+        assertEquals(ModelFileFormat.LITERTLM, result?.metadata?.modelFileFormat)
     }
 
     @Test
@@ -67,38 +73,34 @@ class ModelRegistryTest {
     @Test
     fun setRegisteredModel_callsRepository() = runTest {
         // Given
-        coEvery { mockRegistry.setRegisteredModel(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Unit
+        coEvery { mockRegistry.setRegisteredModel(any()) } returns Unit
 
-        // When
-        mockRegistry.setRegisteredModel(
-            remoteFilename = "main.bin",
+        val config = ModelConfiguration(
             modelType = ModelType.MAIN,
-            displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "abc123",
-            sizeInBytes = 1024,
-            temperature = 0.0,
-            topK = 40,
-            topP = 0.95,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
-        )
-
-        // Then
-        coVerify {
-            mockRegistry.setRegisteredModel(
-                remoteFilename = "main.bin",
-                modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/main",
+                remoteFileName = "main.bin",
+                localFileName = "main.bin",
                 displayName = "Main Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
                 md5 = "abc123",
                 sizeInBytes = 1024,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
                 temperature = 0.0,
                 topK = 40,
                 topP = 0.95,
-                maxTokens = 2048,
-                systemPrompt = "You are a helpful assistant."
-            )
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
+        )
+
+        // When
+        mockRegistry.setRegisteredModel(config)
+
+        // Then
+        coVerify {
+            mockRegistry.setRegisteredModel(config)
         }
     }
 
@@ -135,14 +137,24 @@ class ModelRegistryTest {
     @Test
     fun getRegisteredModel_handlesAllModelTypes() = runTest {
         // Given - test VISION
-        val visionModel = RegisteredModel(
-            remoteFilename = "vision.bin",
+        val visionModel = ModelConfiguration(
             modelType = ModelType.VISION,
-            displayName = "Vision Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "vision123",
-            sizeInBytes = 1024,
-            maxTokens = 2048
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/vision",
+                remoteFileName = "vision.bin",
+                localFileName = "vision.bin",
+                displayName = "Vision Model",
+                md5 = "vision123",
+                sizeInBytes = 1024,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
         )
 
         coEvery { mockRegistry.getRegisteredModel(ModelType.VISION) } returns visionModel
@@ -157,56 +169,58 @@ class ModelRegistryTest {
     @Test
     fun setRegisteredModel_handlesAllModelTypes() = runTest {
         // Given - test FAST
-        coEvery { mockRegistry.setRegisteredModel(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) } returns Unit
+        coEvery { mockRegistry.setRegisteredModel(any()) } returns Unit
 
-        // When
-        mockRegistry.setRegisteredModel(
-            remoteFilename = "fast.bin",
+        val config = ModelConfiguration(
             modelType = ModelType.FAST,
-            displayName = "Fast Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            md5 = "fast123",
-            sizeInBytes = 512,
-            temperature = 0.0,
-            topK = 40,
-            topP = 0.95,
-            maxTokens = 1024,
-            systemPrompt = null
-        )
-
-        // Then
-        coVerify {
-            mockRegistry.setRegisteredModel(
-                remoteFilename = "fast.bin",
-                modelType = ModelType.FAST,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/fast",
+                remoteFileName = "fast.bin",
+                localFileName = "fast.bin",
                 displayName = "Fast Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
                 md5 = "fast123",
                 sizeInBytes = 512,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
                 temperature = 0.0,
                 topK = 40,
                 topP = 0.95,
-                maxTokens = 1024,
-                systemPrompt = null
-            )
+                maxTokens = 1024
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "")
+        )
+
+        // When
+        mockRegistry.setRegisteredModel(config)
+
+        // Then
+        coVerify {
+            mockRegistry.setRegisteredModel(config)
         }
     }
 
     @Test
     fun getRegisteredModel_handlesDraftModel() = runTest {
         // Given
-        val draftModel = RegisteredModel(
-            remoteFilename = "draft.bin",
+        val draftModel = ModelConfiguration(
             modelType = ModelType.DRAFT,
-            displayName = "Draft Model",
-            modelFileFormat = ModelFileFormat.TASK,
-            md5 = "draft123",
-            sizeInBytes = 512,
-            temperature = 0.0,
-            topK = 40,
-            topP = 0.95,
-            maxTokens = 512,
-            systemPrompt = "You are a draft assistant."
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/draft",
+                remoteFileName = "draft.bin",
+                localFileName = "draft.bin",
+                displayName = "Draft Model",
+                md5 = "draft123",
+                sizeInBytes = 512,
+                modelFileFormat = ModelFileFormat.TASK
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 512
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a draft assistant.")
         )
 
         coEvery { mockRegistry.getRegisteredModel(ModelType.DRAFT) } returns draftModel
@@ -216,7 +230,6 @@ class ModelRegistryTest {
 
         // Then
         assertEquals(ModelType.DRAFT, result?.modelType)
-        assertEquals(ModelFileFormat.TASK, result?.modelFileFormat)
+        assertEquals(ModelFileFormat.TASK, result?.metadata?.modelFileFormat)
     }
 }
-

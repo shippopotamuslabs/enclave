@@ -1,8 +1,9 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import com.browntowndev.pocketcrew.data.download.ModelFileScanner
-import com.browntowndev.pocketcrew.domain.model.ModelFile
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
+import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import javax.inject.Inject
 
@@ -20,6 +21,7 @@ import javax.inject.Inject
 class CheckModelsUseCase @Inject constructor(
     private val fileScanner: ModelFileScanner,
     private val checkModelEligibilityUseCase: CheckModelEligibilityUseCase,
+    private val modelUrlProvider: ModelUrlProviderPort,
     private val logger: LoggingPort
 ) {
     companion object {
@@ -33,13 +35,15 @@ class CheckModelsUseCase @Inject constructor(
      * @param newModels The list of NEW models from remote config
      * @return DownloadModelsResult containing models that need downloading and scan result
      */
-    suspend operator fun invoke(originalModels: List<ModelFile>, newModels: List<ModelFile>): DownloadModelsResult {
+    suspend operator fun invoke(
+        originalModels: List<ModelConfiguration>,
+        newModels: List<ModelConfiguration>
+    ): DownloadModelsResult {
         // Scan filesystem for ALL models using ORIGINAL models from registry
         // This ensures we detect partial downloads and compare against the OLD registry state
-        // The bug was passing newModels which caused comparing new vs new
         val scan = fileScanner.scanAndCreateDirIfNotExist(
             modelsToCheck = originalModels,
-            newModels = newModels  // Pass new models separately for reference
+            newModels = newModels
         )
 
         // Handle directory creation error
@@ -49,15 +53,13 @@ class CheckModelsUseCase @Inject constructor(
         }
 
         // Use CheckModelEligibilityUseCase to determine which models need downloading
-        // Note: CheckModelEligibilityUseCase returns properly combined modelTypes
-        // (grouping by MD5 to handle multi-type models like DRAFT + VISION)
         val missingModels = checkModelEligibilityUseCase.check(originalModels, newModels, scanResult = scan)
 
         // Log results
         if (missingModels.isEmpty()) {
             logger.info(TAG, "All ${originalModels.size} models are ready")
         } else {
-            logger.info(TAG, "${missingModels.size} models need download: ${missingModels.map { it.originalFileName }}")
+            logger.info(TAG, "${missingModels.size} models need download: ${missingModels.map { it.metadata.displayName }}")
         }
 
         // Return both the scan result and models that need downloading

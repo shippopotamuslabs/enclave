@@ -1,13 +1,13 @@
 package com.browntowndev.pocketcrew.domain.port.cache
 
-import com.browntowndev.pocketcrew.domain.port.repository.RegisteredModel
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 
 interface ModelConfigCachePort {
-    val fullConfig: List<RegisteredModel>
+    val fullConfig: List<ModelConfiguration>
     suspend fun initialize()
     fun isInitialized(): Boolean
-    fun getMainConfig(): RegisteredModel?
-    fun getVisionConfig(): RegisteredModel?
-    fun getDraftConfig(): RegisteredModel?
-    fun getFastConfig(): RegisteredModel?
+    fun getMainConfig(): ModelConfiguration?
+    fun getVisionConfig(): ModelConfiguration?
+    fun getDraftConfig(): ModelConfiguration?
+    fun getFastConfig(): ModelConfiguration?
 }

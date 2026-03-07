@@ -1,9 +1,9 @@
 package com.browntowndev.pocketcrew.domain.model.download
 
-import com.browntowndev.pocketcrew.domain.model.ModelFile
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 
 data class DownloadCheckResult(
     val canStart: Boolean,
     val errorMessage: String?,
-    val missingModels: List<ModelFile>
+    val missingModels: List<ModelConfiguration>
 )

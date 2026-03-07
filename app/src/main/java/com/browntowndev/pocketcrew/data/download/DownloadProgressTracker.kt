@@ -3,9 +3,9 @@ package com.browntowndev.pocketcrew.data.download
 import androidx.work.Data
 import androidx.work.workDataOf
 import com.browntowndev.pocketcrew.domain.model.DownloadKey
-import com.browntowndev.pocketcrew.domain.model.DownloadWorkerModelFile
 import com.browntowndev.pocketcrew.domain.model.FileProgress
 import com.browntowndev.pocketcrew.domain.model.FileStatus
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.util.formatBytes
@@ -16,10 +16,10 @@ import java.util.Locale
  * This is moved from ModelDownloadWorker to enable centralized progress tracking.
  */
 data class FileDownloadState(
-    val data: DownloadWorkerModelFile,
+    val data: ModelConfiguration,
     val status: FileStatus = FileStatus.QUEUED,
     val bytesDownloaded: Long = 0L,
-    val totalBytes: Long = data.sizeBytes,
+    val totalBytes: Long = data.metadata.sizeInBytes,
     val error: String? = null
 )
 
@@ -57,13 +57,11 @@ class DownloadProgressTracker(
 
     /**
      * Initialize tracker with list of model files.
-     * Uses originalFileName as the tracking key.
+     * Uses remoteFileName as the tracking key.
      */
-    fun initialize(models: List<DownloadWorkerModelFile>) {
+    fun initialize(models: List<ModelConfiguration>) {
         val initialStates = models.associate { model ->
-            val trackingKey = checkNotNull(model.originalFileName) {
-                "originalFileName must not be null - this is a bug in model configuration"
-            }
+            val trackingKey = model.metadata.remoteFileName
             trackingKey to FileDownloadState(model)
         }
         fileStates = initialStates.toMutableMap()
@@ -71,19 +69,25 @@ class DownloadProgressTracker(
 
     /**
      * Update single file state using an update function.
-     * @param filename The tracking key (originalFileName) for the file
+     * @param filename The tracking key (remoteFileName) for the file
      * @param update Function that transforms the current FileDownloadState
      */
     fun updateFileState(filename: String, update: (FileDownloadState) -> FileDownloadState) {
         val currentState = fileStates[filename]
         val newState = update(currentState ?: FileDownloadState(
-            DownloadWorkerModelFile(
-                originalFileName = filename,
-                sizeBytes = 0L,
-                url = "",
-                md5 = null,
-                modelTypes = emptyList(),
-                modelFileFormat = ModelFileFormat.LITERTLM
+            ModelConfiguration(
+                modelType = com.browntowndev.pocketcrew.domain.model.ModelType.MAIN,
+                metadata = ModelConfiguration.Metadata(
+                    huggingFaceModelName = "",
+                    remoteFileName = filename,
+                    localFileName = filename,
+                    displayName = filename,
+                    md5 = "",
+                    sizeInBytes = 0L,
+                    modelFileFormat = ModelFileFormat.LITERTLM
+                ),
+                tunings = ModelConfiguration.Tunings(),
+                persona = ModelConfiguration.Persona(systemPrompt = "")
             )
         ))
         fileStates[filename] = newState
@@ -105,7 +109,7 @@ class DownloadProgressTracker(
             completedFiles.toFloat() / totalFiles.coerceAtLeast(1)
         }
 
-        val currentFile = fileStates.values.find { it.status == FileStatus.DOWNLOADING }?.data?.originalFileName ?: ""
+        val currentFile = fileStates.values.find { it.status == FileStatus.DOWNLOADING }?.data?.metadata?.remoteFileName ?: ""
 
         // Calculate AGGREGATE speed for the header (total speed across all files)
         val (currentSpeedMBps, etaSeconds) = speedTracker.calculateAggregateSpeedAndEta(
@@ -115,7 +119,7 @@ class DownloadProgressTracker(
 
         // Calculate PER-FILE speed for each file
         val filesProgress = fileStates.values.map { state ->
-            val filename = state.data.originalFileName ?: ""
+            val filename = state.data.metadata.remoteFileName
             val (fileSpeed, _) = if (state.status == FileStatus.DOWNLOADING) {
                 speedTracker.calculateSpeedAndEta(
                     filename,
@@ -127,7 +131,7 @@ class DownloadProgressTracker(
             }
             FileProgress(
                 filename = filename,
-                modelTypes = state.data.modelTypes,
+                modelTypes = listOf(state.data.modelType),
                 bytesDownloaded = state.bytesDownloaded,
                 totalBytes = state.totalBytes,
                 status = state.status,
@@ -211,13 +215,13 @@ class DownloadProgressTracker(
         val filesProgressMap = snapshot.filesProgress.associateBy { it.filename }
 
         val filesProgressArray = fileStates.values.map { state ->
-            val trackingFilename = state.data.originalFileName ?: ""
+            val trackingFilename = state.data.metadata.remoteFileName
             val fileSpeed = if (state.status == FileStatus.DOWNLOADING) {
                 filesProgressMap[trackingFilename]?.speedMBs ?: 0.0
             } else {
                 0.0
             }
-            val modelTypesStr = state.data.modelTypes.joinToString(",") { it.apiValue }
+            val modelTypesStr = listOf(state.data.modelType).joinToString(",") { it.apiValue }
             "$trackingFilename|${state.bytesDownloaded}|${state.totalBytes}|${state.status}|$fileSpeed|$modelTypesStr"
         }.toTypedArray()
 
@@ -293,5 +297,5 @@ class DownloadProgressTracker(
      * Get current downloading file name.
      */
     fun getCurrentDownloadingFile(): String? = fileStates.values
-        .find { it.status == FileStatus.DOWNLOADING }?.data?.originalFileName
+        .find { it.status == FileStatus.DOWNLOADING }?.data?.metadata?.remoteFileName
 }

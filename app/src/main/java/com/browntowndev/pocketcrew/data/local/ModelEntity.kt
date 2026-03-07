@@ -19,6 +19,9 @@ data class ModelEntity(
     @ColumnInfo(name = "remote_filename")
     val remoteFilename: String,
 
+    @ColumnInfo(name = "huggingface_model_name")
+    val huggingFaceModelName: String = "",
+
     @ColumnInfo(name = "display_name")
     val displayName: String,
 

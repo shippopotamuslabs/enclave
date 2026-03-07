@@ -20,6 +20,7 @@ import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
 data class RemoteModelConfig(
     val modelType: ModelType,
     val fileName: String,
+    val huggingFaceModelName: String = "", // Used for HuggingFace download URL
     val displayName: String,
     val md5: String,
     val sizeInBytes: Long = 0L,

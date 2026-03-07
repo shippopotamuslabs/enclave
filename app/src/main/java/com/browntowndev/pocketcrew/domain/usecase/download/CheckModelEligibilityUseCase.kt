@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
-import com.browntowndev.pocketcrew.domain.model.ModelFile
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import javax.inject.Inject
@@ -24,27 +24,26 @@ class CheckModelEligibilityUseCase @Inject constructor(
     /**
      * Determines which models need downloading based on registry, config changes, and file scan.
      *
+     * @param originalModels The list of ORIGINAL models from registry (before remote config update)
+     * @param newModels The list of NEW models from remote config
      * @param scanResult Result of scanning the filesystem for existing model files
-     * @return List of ModelFile that need downloading (not already available)
+     * @return List of ModelConfiguration that need downloading (not already available)
      */
     fun check(
-        originalModels: List<ModelFile>,
-        newModels: List<ModelFile>,
+        originalModels: List<ModelConfiguration>,
+        newModels: List<ModelConfiguration>,
         scanResult: ModelScanResult
-    ): List<ModelFile> {
+    ): List<ModelConfiguration> {
         // 1. Compare with registered models in database to detect ALL field changes
         val modelsToDownload = determineModelsNeedingDownload(originalModels, newModels)
         logger.debug(TAG, "Models to download: $modelsToDownload")
 
         // 2. Combine: need download if either config says so OR file is missing/invalid
         // Also include partial downloads (incomplete .tmp files from failed downloads)
-        // Match by checking if model has a file that could correspond to a partial download
-        // (the scanner already validated these partials match registry by MD5)
         val partialDownloadModels = scanResult.partialDownloads.keys.mapNotNull { filename ->
-            newModels.find { filename in it.filenames }
+            newModels.find { it.metadata.localFileName == filename }
         }
         logger.debug(TAG, "Partial downloads: $partialDownloadModels")
-
 
         // Check for invalid models from scan (format changes, MD5 mismatches)
         val invalidModels = scanResult.invalidModels
@@ -52,9 +51,9 @@ class CheckModelEligibilityUseCase @Inject constructor(
 
         // Add models that need re-download due to config changes
         val configChangedModels = modelsToDownload.filter { model ->
-            scanResult.missingModels.none { missing -> missing.filenames.any { fn -> fn in model.filenames } } &&
-                scanResult.partialDownloads.keys.none { it in model.filenames } &&
-                scanResult.invalidModels.none { invalid -> invalid.filenames.any { fn -> fn in model.filenames } }
+            scanResult.missingModels.none { missing -> missing.metadata.localFileName == model.metadata.localFileName } &&
+                scanResult.partialDownloads.keys.none { it == model.metadata.localFileName } &&
+                scanResult.invalidModels.none { invalid -> invalid.metadata.localFileName == model.metadata.localFileName }
         }
         logger.debug(TAG, "Config changed models: $configChangedModels")
 
@@ -64,12 +63,10 @@ class CheckModelEligibilityUseCase @Inject constructor(
         // Combine models with the same MD5 (multi-type models like DRAFT + VISION share the same file)
         // by merging their modelTypes into a single entry
         val combinedMissingModels = missingModels
-            .groupBy { it.md5 }
+            .groupBy { it.metadata.md5 }
             .map { (_, models) ->
-                require(models.distinctBy { it.originalFileName }.size == 1) { "Multiple filenames for same MD5" }
                 val firstModel = models.first()
-                val combinedModelTypes = models.flatMap { it.modelTypes }.distinct()
-                firstModel.copy(modelTypes = combinedModelTypes)
+                firstModel
             }
 
         return combinedMissingModels
@@ -80,23 +77,22 @@ class CheckModelEligibilityUseCase @Inject constructor(
      * Checks for unregistered models and config changes (displayName, MD5, format).
      */
     private fun determineModelsNeedingDownload(
-        originalModels: List<ModelFile>,
-        newModels: List<ModelFile>,
-    ): List<ModelFile> {
+        originalModels: List<ModelConfiguration>,
+        newModels: List<ModelConfiguration>,
+    ): List<ModelConfiguration> {
         if (originalModels.isEmpty()) return newModels
 
-        val modelsToDownload = mutableListOf<ModelFile>()
-        val originalModelsByMd5 = originalModels.associateBy { it.md5 }
+        val modelsToDownload = mutableListOf<ModelConfiguration>()
+        val originalModelsByMd5 = originalModels.associateBy { it.metadata.md5 }
 
-        // Check for unregistered models
-        for (model in originalModels) {
-            // Check if model file was updated
-            val registeredModel = originalModelsByMd5[model.md5]
-            val modelFileUpdated = model.anyDifferentModelsThan(registeredModel) ||
-                    !model.hasSameFormatAs(registeredModel)
+        // Check for unregistered models or config changes
+        for (model in newModels) {
+            val registeredModel = originalModelsByMd5[model.metadata.md5]
+            val modelFileUpdated = registeredModel == null ||
+                registeredModel.metadata.modelFileFormat != model.metadata.modelFileFormat
 
             if (modelFileUpdated) {
-                logger.debug(TAG, "[MODEL UPDATED] Model file updated: $model. Registered: $registeredModel")
+                logger.debug(TAG, "[MODEL UPDATED] Model file updated: ${model.metadata.displayName}. Registered: $registeredModel")
                 modelsToDownload.add(model)
             }
         }

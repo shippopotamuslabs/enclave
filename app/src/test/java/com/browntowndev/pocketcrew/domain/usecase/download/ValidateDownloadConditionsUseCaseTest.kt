@@ -2,7 +2,7 @@ package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
 import com.browntowndev.pocketcrew.data.repository.DeviceEnvironmentRepository
-import com.browntowndev.pocketcrew.domain.model.ModelFile
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.ModelType
 import io.mockk.MockKAnnotations
@@ -57,25 +57,37 @@ class ValidateDownloadConditionsUseCaseTest {
         assertEquals(null, result.errorMessage)
     }
 
+    private fun createModelConfig(modelType: ModelType, md5: String): ModelConfiguration {
+        return ModelConfiguration(
+            modelType = modelType,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/model",
+                remoteFileName = "${modelType.name.lowercase()}.litertlm",
+                localFileName = "${modelType.name.lowercase()}.litertlm",
+                displayName = "Test Model",
+                md5 = md5,
+                sizeInBytes = 1000000L,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.9,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(
+                systemPrompt = "You are helpful."
+            )
+        )
+    }
+
     @Test
     fun `invoke blocks download when wifiOnly enabled but not on WiFi`() {
         // Given
         every { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
 
-        val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
-        )
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = true)
@@ -91,19 +103,7 @@ class ValidateDownloadConditionsUseCaseTest {
         every { mockDeviceEnvironmentRepository.isWifiConnected() } returns true
         every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
 
-        val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
-        )
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = true)
@@ -119,19 +119,7 @@ class ValidateDownloadConditionsUseCaseTest {
         every { mockDeviceEnvironmentRepository.isWifiConnected() } returns true
         every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns false
 
-        val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
-        )
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = false)
@@ -147,19 +135,7 @@ class ValidateDownloadConditionsUseCaseTest {
         every { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
 
-        val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
-        )
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = false)
@@ -175,28 +151,8 @@ class ValidateDownloadConditionsUseCaseTest {
         every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
 
         val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            ),
-            ModelFile(
-                sizeBytes = 2000000L,
-                url = "https://example.com/model2.bin",
-                md5 = "def456",
-                modelTypes = listOf(ModelType.FAST),
-                originalFileName = "fast.litertlm",
-                displayName = "Fast Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
+            createModelConfig(ModelType.MAIN, "abc123"),
+            createModelConfig(ModelType.FAST, "def456")
         )
 
         // When
@@ -204,8 +160,8 @@ class ValidateDownloadConditionsUseCaseTest {
 
         // Then
         assertEquals(2, result.missingModels.size)
-        assertTrue(result.missingModels.any { it.md5 == "abc123" })
-        assertTrue(result.missingModels.any { it.md5 == "def456" })
+        assertTrue(result.missingModels.any { it.metadata.md5 == "abc123" })
+        assertTrue(result.missingModels.any { it.metadata.md5 == "def456" })
     }
 
     @Test
@@ -214,19 +170,7 @@ class ValidateDownloadConditionsUseCaseTest {
         every { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         // Storage check should not be called if WiFi check fails
 
-        val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
-        )
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = true)
@@ -241,19 +185,7 @@ class ValidateDownloadConditionsUseCaseTest {
         // Given - wifiOnly is false so we shouldn't care about wifi status
         every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
 
-        val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
-        )
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = false)

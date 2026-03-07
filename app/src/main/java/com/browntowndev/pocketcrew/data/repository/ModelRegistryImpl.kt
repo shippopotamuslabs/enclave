@@ -1,11 +1,10 @@
 package com.browntowndev.pocketcrew.data.repository
 
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
 import com.browntowndev.pocketcrew.data.local.ModelsDao
 import com.browntowndev.pocketcrew.data.local.ModelEntity
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
-import com.browntowndev.pocketcrew.domain.port.repository.RegisteredModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -16,38 +15,14 @@ class ModelRegistryImpl @Inject constructor(
     private val modelsDao: ModelsDao
 ) : ModelRegistryPort {
 
-    override suspend fun getRegisteredModel(modelType: ModelType): RegisteredModel? {
+    override suspend fun getRegisteredModel(modelType: ModelType): ModelConfiguration? {
         val entity = modelsDao.getModelEntity(modelType) ?: return null
-        return RegisteredModel(
-            remoteFilename = entity.remoteFilename,
-            modelType = ModelType.valueOf(entity.modelType.name),
-            displayName = entity.displayName,
-            modelFileFormat = entity.modelFileFormat,
-            md5 = entity.md5,
-            sizeInBytes = entity.sizeInBytes,
-            temperature = entity.temperature,
-            topK = entity.topK,
-            topP = entity.topP,
-            maxTokens = entity.maxTokens,
-            systemPrompt = entity.systemPrompt
-        )
+        return entityToModelConfiguration(entity)
     }
 
-    override suspend fun getRegisteredModels(): List<RegisteredModel> =
+    override suspend fun getRegisteredModels(): List<ModelConfiguration> =
         modelsDao.getAll().map { entity ->
-            RegisteredModel(
-                remoteFilename = entity.remoteFilename,
-                modelType = ModelType.valueOf(entity.modelType.name),
-                displayName = entity.displayName,
-                modelFileFormat = entity.modelFileFormat,
-                md5 = entity.md5,
-                sizeInBytes = entity.sizeInBytes,
-                temperature = entity.temperature,
-                topK = entity.topK,
-                topP = entity.topP,
-                maxTokens = entity.maxTokens,
-                systemPrompt = entity.systemPrompt
-            )
+            entityToModelConfiguration(entity)
         }
 
     override fun observeRegisteredModels(): Flow<Map<ModelType, String>> {
@@ -58,37 +33,50 @@ class ModelRegistryImpl @Inject constructor(
         }
     }
 
-    override suspend fun setRegisteredModel(
-        remoteFilename: String,
-        modelType: ModelType,
-        displayName: String,
-        modelFileFormat: ModelFileFormat,
-        md5: String,
-        sizeInBytes: Long,
-        temperature: Double,
-        topK: Int,
-        topP: Double,
-        maxTokens: Int,
-        systemPrompt: String?
-    ) {
+    override suspend fun setRegisteredModel(config: ModelConfiguration) {
         modelsDao.insertOrUpdate(
             ModelEntity(
-                remoteFilename = remoteFilename,
-                modelType = modelType,
-                displayName = displayName,
-                modelFileFormat = modelFileFormat,
-                md5 = md5,
-                sizeInBytes = sizeInBytes,
-                temperature = temperature,
-                topK = topK,
-                topP = topP,
-                maxTokens = maxTokens,
-                systemPrompt = systemPrompt
+                modelType = config.modelType,
+                remoteFilename = config.metadata.localFileName,
+                huggingFaceModelName = config.metadata.huggingFaceModelName,
+                displayName = config.metadata.displayName,
+                modelFileFormat = config.metadata.modelFileFormat,
+                md5 = config.metadata.md5,
+                sizeInBytes = config.metadata.sizeInBytes,
+                temperature = config.tunings.temperature,
+                topK = config.tunings.topK,
+                topP = config.tunings.topP,
+                maxTokens = config.tunings.maxTokens,
+                systemPrompt = config.persona.systemPrompt
             )
         )
     }
 
     override suspend fun clearAll() {
         modelsDao.deleteAll()
+    }
+
+    private fun entityToModelConfiguration(entity: ModelEntity): ModelConfiguration {
+        return ModelConfiguration(
+            modelType = entity.modelType,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = entity.huggingFaceModelName,
+                remoteFileName = entity.remoteFilename,
+                localFileName = entity.remoteFilename, // Save as-is
+                displayName = entity.displayName,
+                md5 = entity.md5,
+                sizeInBytes = entity.sizeInBytes,
+                modelFileFormat = entity.modelFileFormat
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = entity.temperature,
+                topK = entity.topK,
+                topP = entity.topP,
+                maxTokens = entity.maxTokens
+            ),
+            persona = ModelConfiguration.Persona(
+                systemPrompt = entity.systemPrompt ?: ""
+            )
+        )
     }
 }

@@ -1,16 +1,14 @@
 package com.browntowndev.pocketcrew.data.download
 
 import androidx.work.WorkInfo
-import com.browntowndev.pocketcrew.domain.mapper.ModelConfigMapper
 import com.browntowndev.pocketcrew.domain.model.DownloadState
 import com.browntowndev.pocketcrew.domain.model.DownloadStatus
-import com.browntowndev.pocketcrew.domain.model.ModelFile
-import com.browntowndev.pocketcrew.domain.model.RemoteModelConfig
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
-import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
+import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.usecase.download.CheckModelEligibilityUseCase
@@ -34,7 +32,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
     private val logger: LoggingPort,
     override val speedTracker: DownloadSpeedTrackerPort,
     private val modelConfigCache: ModelConfigCachePort,
-    private val modelConfigMapper: ModelConfigMapper
+    private val modelUrlProvider: ModelUrlProviderPort
 ) : ModelDownloadOrchestratorPort {
     companion object {
         private const val TAG = "ModelDownloadOrchestrator"
@@ -52,8 +50,8 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
     private var startupModelsResult: DownloadModelsResult? = null
 
     // Cached models to download
-    private val cachedAllModels: List<ModelFile> by lazy {
-        modelConfigMapper.toModelFiles(modelConfigCache.fullConfig)
+    private val cachedAllModels: List<ModelConfiguration> by lazy {
+        modelConfigCache.fullConfig
     }
 
     /**
@@ -169,27 +167,11 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
     private suspend fun updateModelRegistry() {
         // Update the registry with the successfully downloaded models (use cachedAllModels)
         for (model in cachedAllModels) {
-            val displayNameToStore = model.displayName ?: model.filenames.first()
-            // Register each modelType that this file serves
-            for (modelType in model.modelTypes) {
-                try {
-                    modelRegistry.setRegisteredModel(
-                        remoteFilename = model.originalFileName,
-                        modelType = modelType,
-                        displayName = displayNameToStore,
-                        modelFileFormat = model.modelFileFormat,
-                        md5 = model.md5,
-                        sizeInBytes = model.sizeBytes,
-                        temperature = model.temperature,
-                        topK = model.topK,
-                        topP = model.topP,
-                        maxTokens = model.maxTokens,
-                        systemPrompt = model.systemPrompt
-                    )
-                    logger.debug(TAG, "Updated registry: $modelType -> $displayNameToStore")
-                } catch (e: Exception) {
-                    logger.error(TAG, "Failed to update registry for $modelType: ${e.message}")
-                }
+            try {
+                modelRegistry.setRegisteredModel(model)
+                logger.debug(TAG, "Updated registry: ${model.modelType} -> ${model.metadata.displayName}")
+            } catch (e: Exception) {
+                logger.error(TAG, "Failed to update registry for ${model.modelType}: ${e.message}")
             }
         }
     }

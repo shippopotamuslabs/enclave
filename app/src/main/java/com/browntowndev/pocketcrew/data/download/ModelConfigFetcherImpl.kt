@@ -1,11 +1,11 @@
 package com.browntowndev.pocketcrew.data.download
 
 import android.util.Log
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.ModelFile
 import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.model.RemoteModelConfig
+import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,20 +17,22 @@ import javax.inject.Singleton
 
 @Singleton
 class ModelConfigFetcherImpl @Inject constructor(
-    private val okHttpClient: OkHttpClient
+    private val okHttpClient: OkHttpClient,
+    private val modelUrlProvider: ModelUrlProviderPort
 ) : ModelConfigFetcherPort {
+
     companion object {
         private const val TAG = "ModelConfigFetcher"
-        private const val CONFIG_URL = "${ModelConfig.R2_BUCKET_URL}/model_config.json"
     }
 
     /**
-     * Fetches model_config.json from R2 and parses it into RemoteModelConfig list.
+     * Fetches model_config.json from the config URL and parses it into ModelConfiguration list.
      */
-    override suspend fun fetchRemoteConfig(): Result<List<RemoteModelConfig>> = withContext(Dispatchers.IO) {
+    override suspend fun fetchRemoteConfig(): Result<List<ModelConfiguration>> = withContext(Dispatchers.IO) {
         try {
+            val configUrl = modelUrlProvider.getConfigUrl()
             val request = Request.Builder()
-                .url(CONFIG_URL)
+                .url(configUrl)
                 .build()
 
             okHttpClient.newCall(request).execute().use { response ->
@@ -66,7 +68,10 @@ class ModelConfigFetcherImpl @Inject constructor(
                 }
 
                 Log.i(TAG, "Fetched ${configs.size} model configs from server")
-                Result.success(configs)
+
+                // Convert to ModelConfiguration
+                val modelConfigs = toModelConfigurations(configs)
+                Result.success(modelConfigs)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch model config: ${e.message}", e)
@@ -82,10 +87,14 @@ class ModelConfigFetcherImpl @Inject constructor(
         } else {
             parseModelFileFormatFromFileName(fileName)
         }
-        
+
+        // Get HuggingFace model name - defaults to empty if not present (for backward compatibility)
+        val huggingFaceModelName = json.optString("huggingFaceModelName", "")
+
         return RemoteModelConfig(
             modelType = modelType,
             fileName = fileName,
+            huggingFaceModelName = huggingFaceModelName,
             displayName = json.getString("displayName"),
             md5 = json.getString("md5"),
             sizeInBytes = json.getLong("sizeInBytes"),
@@ -102,28 +111,31 @@ class ModelConfigFetcherImpl @Inject constructor(
         return when {
             fileName.endsWith(".task", ignoreCase = true) -> ModelFileFormat.TASK
             fileName.endsWith(".litertlm", ignoreCase = true) -> ModelFileFormat.LITERTLM
-            else -> ModelFileFormat.LITERTLM // Default to LITERTLM for unknown extensions
+            fileName.endsWith(".gguf", ignoreCase = true) -> ModelFileFormat.GGUF
+            else -> ModelFileFormat.LITERTLM
         }
     }
 
     private fun parseModelFileFormat(format: String): ModelFileFormat {
         return when (format.uppercase()) {
             "TASK" -> ModelFileFormat.TASK
+            "GGUF" -> ModelFileFormat.GGUF
             else -> ModelFileFormat.LITERTLM
         }
     }
 
     /**
-     * Converts RemoteModelConfig to list of ModelFile with standardized filenames.
-     * Downloads from original URL but saves as standardized name.
-     * The filename is computed from modelType + modelFileFormat.
-     * Detects duplicate files (same fileName) and merges them into a single ModelFile
-     * with multiple modelTypes. MD5 verification happens after download, not during grouping.
+     * Converts RemoteModelConfig list to ModelConfiguration list.
+     * Uses ModelUrlProvider to compute download URLs.
+     * Detects duplicate files (same fileName) and merges them into a single ModelConfiguration
+     * with multiple modelTypes.
+     *
+     * Note: The download URL is computed on-the-fly by ModelUrlProviderPort when needed,
+     * not stored in the model.
      */
-    override fun toModelFiles(configs: List<RemoteModelConfig>): List<ModelFile> {
+    override fun toModelConfigurations(configs: List<RemoteModelConfig>): List<ModelConfiguration> {
         // Group by md5 for true duplicates
         // - Same md5: deduplicated (one download, copies created)
-        // - Same md5 but DIFFERENT fileName treats them as same file (one download, copies created)
         val grouped = configs.groupBy { it.md5 }
 
         return grouped.map { (_, groupedConfigs) ->
@@ -131,19 +143,26 @@ class ModelConfigFetcherImpl @Inject constructor(
             val modelTypesList = groupedConfigs.map { it.modelType }
             Log.d(TAG, "Model Config File: ${firstConfig.fileName} Grouped model types: $modelTypesList")
 
-            ModelFile(
-                sizeBytes = firstConfig.sizeInBytes,
-                url = "${ModelConfig.R2_BUCKET_URL}/${firstConfig.fileName}",
-                md5 = firstConfig.md5,
-                modelTypes = modelTypesList,
-                originalFileName = firstConfig.fileName,
-                displayName = firstConfig.displayName,
-                modelFileFormat = firstConfig.modelFileFormat,
-                temperature = firstConfig.temperature,
-                topK = firstConfig.topK,
-                topP = firstConfig.topP,
-                maxTokens = firstConfig.maxTokens,
-                systemPrompt = firstConfig.systemPrompt
+            ModelConfiguration(
+                modelType = modelTypesList.first(), // Primary model type
+                metadata = ModelConfiguration.Metadata(
+                    huggingFaceModelName = firstConfig.huggingFaceModelName,
+                    remoteFileName = firstConfig.fileName,
+                    localFileName = firstConfig.fileName, // Option 2: save as-is
+                    displayName = firstConfig.displayName,
+                    md5 = firstConfig.md5,
+                    sizeInBytes = firstConfig.sizeInBytes,
+                    modelFileFormat = firstConfig.modelFileFormat
+                ),
+                tunings = ModelConfiguration.Tunings(
+                    temperature = firstConfig.temperature,
+                    topK = firstConfig.topK,
+                    topP = firstConfig.topP,
+                    maxTokens = firstConfig.maxTokens
+                ),
+                persona = ModelConfiguration.Persona(
+                    systemPrompt = firstConfig.systemPrompt
+                )
             )
         }
     }

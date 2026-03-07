@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.port.download
 
-import com.browntowndev.pocketcrew.domain.model.DownloadWorkerModelFile
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import java.io.File
 
 /**
@@ -35,14 +35,16 @@ interface FileDownloaderPort {
      * Download a file from the given URL to the target directory.
      * Supports resumable downloads via Range headers.
      *
-     * @param model The model file to download
+     * @param config The model configuration to download
+     * @param downloadUrl The computed download URL
      * @param targetDir The target directory for the download
      * @param existingBytes Bytes already downloaded (for resume support)
      * @param progressCallback Optional callback for progress updates during download
      * @return DownloadResult with download metadata
      */
     suspend fun downloadFile(
-        model: DownloadWorkerModelFile,
+        config: ModelConfiguration,
+        downloadUrl: String,
         targetDir: File,
         existingBytes: Long = 0,
         progressCallback: ProgressCallback? = null

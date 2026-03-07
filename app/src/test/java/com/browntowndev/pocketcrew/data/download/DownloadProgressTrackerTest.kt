@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.data.download
 
-import com.browntowndev.pocketcrew.domain.model.DownloadWorkerModelFile
 import com.browntowndev.pocketcrew.domain.model.FileStatus
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
@@ -191,14 +191,25 @@ class DownloadProgressTrackerTest {
         assertFalse(tracker.shouldLogTrace())
     }
 
-    private fun createModelFile(filename: String, sizeBytes: Long): DownloadWorkerModelFile {
-        return DownloadWorkerModelFile(
-            originalFileName = filename,
-            sizeBytes = sizeBytes,
-            url = "https://example.com/$filename",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            modelFileFormat = ModelFileFormat.LITERTLM
+    private fun createModelFile(filename: String, sizeBytes: Long): ModelConfiguration {
+        return ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/name",
+                remoteFileName = filename,
+                localFileName = filename,
+                displayName = "Test Model",
+                md5 = "abc123",
+                sizeInBytes = sizeBytes,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )
     }
 }

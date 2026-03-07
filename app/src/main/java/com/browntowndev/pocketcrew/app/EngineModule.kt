@@ -142,9 +142,9 @@ object EngineModule {
     ): Engine {
         val config = modelConfigCache.getMainConfig()
         val filename = if (config != null) {
-            getFilenameForFormat(ModelType.DRAFT, config.modelFileFormat)
+            getFilenameForFormat(ModelType.MAIN, config.metadata.modelFileFormat)
         } else {
-            "${ModelType.DRAFT.name.lowercase()}.litertlm"
+            "${ModelType.MAIN.name.lowercase()}.litertlm"
         }
         val modelPath = getModelPath(context, filename)
         return createEngine(modelPath)
@@ -159,7 +159,7 @@ object EngineModule {
     ): Engine {
         val config = modelConfigCache.getVisionConfig()
         val filename = if (config != null) {
-            getFilenameForFormat(ModelType.VISION, config.modelFileFormat)
+            getFilenameForFormat(ModelType.VISION, config.metadata.modelFileFormat)
         } else {
             "${ModelType.VISION.name.lowercase()}.litertlm"
         }
@@ -175,7 +175,7 @@ object EngineModule {
     ): Engine {
         val config = modelConfigCache.getDraftConfig()
         val filename = if (config != null) {
-            getFilenameForFormat(ModelType.DRAFT, config.modelFileFormat)
+            getFilenameForFormat(ModelType.DRAFT, config.metadata.modelFileFormat)
         } else {
             "${ModelType.DRAFT.name.lowercase()}.litertlm"
         }
@@ -191,7 +191,7 @@ object EngineModule {
     ): Engine {
         val config = modelConfigCache.getFastConfig()
         val filename = if (config != null) {
-            getFilenameForFormat(ModelType.FAST, config.modelFileFormat)
+            getFilenameForFormat(ModelType.FAST, config.metadata.modelFileFormat)
         } else {
             "${ModelType.FAST.name.lowercase()}.litertlm"
         }
@@ -240,7 +240,7 @@ object EngineModule {
         modelConfigCache: ModelConfigCachePort
     ): ConversationManagerPort {
         val config = modelConfigCache.getFastConfig()
-        Log.d(TAG, "Fast Config Sys Prompt: ${config?.systemPrompt}")
+        Log.d(TAG, "Fast Config Sys Prompt: ${config?.persona?.systemPrompt}")
         return ConversationManagerImpl(engine, config)
     }
 
@@ -256,7 +256,7 @@ object EngineModule {
     ): LlmInferencePort {
         val config = modelConfigCache.getMainConfig()
         val filename = if (config != null) {
-            getFilenameForFormat(ModelType.MAIN, config.modelFileFormat)
+            getFilenameForFormat(ModelType.MAIN, config.metadata.modelFileFormat)
         } else {
             "${ModelType.MAIN.name.lowercase()}.litertlm"
         }

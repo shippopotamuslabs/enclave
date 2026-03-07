@@ -8,12 +8,14 @@ import com.browntowndev.pocketcrew.data.download.DownloadNotificationManager
 import com.browntowndev.pocketcrew.data.download.ModelConfigFetcherImpl
 import com.browntowndev.pocketcrew.data.download.ModelDownloadOrchestratorImpl
 import com.browntowndev.pocketcrew.data.download.DownloadSpeedTracker
+import com.browntowndev.pocketcrew.data.download.remote.HuggingFaceModelUrlProvider
 import com.browntowndev.pocketcrew.data.repository.ModelConfigProviderImpl
 import com.browntowndev.pocketcrew.data.download.DownloadProgressTracker
 import com.browntowndev.pocketcrew.domain.model.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
+import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.util.formatBytes
@@ -103,4 +105,10 @@ abstract class DownloadPortModule {
     abstract fun bindModelDownloadOrchestratorPort(
         modelDownloadOrchestratorImpl: ModelDownloadOrchestratorImpl
     ): ModelDownloadOrchestratorPort
+
+    @Binds
+    @Singleton
+    abstract fun bindModelUrlProviderPort(
+        huggingFaceModelUrlProvider: HuggingFaceModelUrlProvider
+    ): ModelUrlProviderPort
 }

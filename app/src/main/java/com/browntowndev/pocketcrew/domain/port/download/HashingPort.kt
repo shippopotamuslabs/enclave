@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.domain.port
+package com.browntowndev.pocketcrew.domain.port.download
 
 import java.io.File
 

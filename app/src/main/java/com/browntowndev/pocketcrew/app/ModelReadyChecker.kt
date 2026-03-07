@@ -60,13 +60,13 @@ class ModelReadyChecker @Inject constructor(
         val fastConfig = modelConfigCache.getFastConfig()
         
         val requiredFiles = listOfNotNull(
-            visionConfig?.let { computeFilename(ModelType.VISION, it.modelFileFormat) } 
+            visionConfig?.let { computeFilename(ModelType.VISION, it.metadata.modelFileFormat) }
                 ?: "${ModelType.VISION.name.lowercase()}.litertlm",
-            draftConfig?.let { computeFilename(ModelType.DRAFT, it.modelFileFormat) }
+            draftConfig?.let { computeFilename(ModelType.DRAFT, it.metadata.modelFileFormat) }
                 ?: "${ModelType.DRAFT.name.lowercase()}.litertlm",
-            mainConfig?.let { computeFilename(ModelType.MAIN, it.modelFileFormat) }
+            mainConfig?.let { computeFilename(ModelType.MAIN, it.metadata.modelFileFormat) }
                 ?: "${ModelType.MAIN.name.lowercase()}.litertlm",
-            fastConfig?.let { computeFilename(ModelType.FAST, it.modelFileFormat) }
+            fastConfig?.let { computeFilename(ModelType.FAST, it.metadata.modelFileFormat) }
                 ?: "${ModelType.FAST.name.lowercase()}.litertlm"
         )
         
