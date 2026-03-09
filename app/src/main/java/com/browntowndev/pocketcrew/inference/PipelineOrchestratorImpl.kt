@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.inference
 
 import android.util.Log
+import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.port.inference.AgentRole
 import com.browntowndev.pocketcrew.domain.port.inference.EnginePipelineOrchestrator
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineEvent
@@ -10,14 +11,16 @@ import com.browntowndev.pocketcrew.app.DraftTwoModelEngine
 import com.browntowndev.pocketcrew.app.FastModelEngine
 import com.browntowndev.pocketcrew.app.MainModelEngine
 import com.browntowndev.pocketcrew.app.VisionModelEngine
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 class PipelineOrchestratorImpl @Inject constructor(
@@ -25,6 +28,7 @@ class PipelineOrchestratorImpl @Inject constructor(
     @param:DraftOneModelEngine private val draftOneServiceProvider: dagger.Lazy<LlmInferencePort>,
     @param:DraftTwoModelEngine private val draftTwoServiceProvider: dagger.Lazy<LlmInferencePort>,
     @param:VisionModelEngine private val visionServiceProvider: dagger.Lazy<LlmInferencePort>,
+    @param:FastModelEngine private val fastServiceProvider: dagger.Lazy<LlmInferencePort>,
     private val modelRegistry: ModelRegistryPort
 ) : EnginePipelineOrchestrator {
 
@@ -32,7 +36,7 @@ class PipelineOrchestratorImpl @Inject constructor(
         const val TAG = "PipelineOrchestrator"
     }
 
-    override fun processPrompt(prompt: String, hasImage: Boolean): Flow<PipelineEvent> = flow {
+    override fun processComplexPrompt(prompt: String, hasImage: Boolean): Flow<PipelineEvent> = flow {
         Log.d(TAG, "Processing prompt: $prompt")
 
         val startMs = System.currentTimeMillis()
@@ -51,7 +55,9 @@ class PipelineOrchestratorImpl @Inject constructor(
 
             // Draft 1: Creative/lateral thinking - divergent perspective
             // Load Draft One service only when needed
-            val draftOneService = draftOneServiceProvider.get()
+            val draftOneService = withContext(Dispatchers.IO) {
+                draftOneServiceProvider.get()
+            }
             try {
                 val draft1 = executeAgent(
                     service = draftOneService,
@@ -78,7 +84,10 @@ class PipelineOrchestratorImpl @Inject constructor(
 
                 // Draft 2: Analytical/convergent thinking - divergent perspective
                 // Load Draft Two service only when needed
-                val draftTwoService = draftTwoServiceProvider.get()
+                val draftTwoService = withContext(Dispatchers.IO) {
+                    draftTwoServiceProvider.get()
+                }
+
                 try {
                     val draft2 = executeAgent(
                         service = draftTwoService,
@@ -113,7 +122,10 @@ class PipelineOrchestratorImpl @Inject constructor(
 
                     // Main model gives its own answer first, then critiques all three (including its own)
                     // Load Main service only when needed
-                    val mainService = mainServiceProvider.get()
+                    val mainService = withContext(Dispatchers.IO) {
+                        mainServiceProvider.get()
+                    }
+
                     try {
                         val finalResponse = executeAgent(
                             service = mainService,
@@ -186,6 +198,65 @@ class PipelineOrchestratorImpl @Inject constructor(
             Log.d(TAG, "Pipeline error", e)
             throw e
         }
+    }
+
+    override fun processSimplePrompt(prompt: String): Flow<PipelineEvent> = flow {
+        Log.d(TAG, "Processing simple prompt: $prompt")
+
+        val startMs = System.currentTimeMillis()
+        val currentSteps = mutableListOf<String>()
+
+        val fastService = withContext(Dispatchers.IO) {
+            fastServiceProvider.get()
+        }
+        try {
+            fastService.sendPrompt(prompt, closeConversation = false).collect { event ->
+                when (event) {
+                    is InferenceEvent.Thinking -> {
+                        val latestStep = extractAndTruncateStep(event.chunk, maxWords = 10)
+                        if (latestStep.isNotBlank() && latestStep != currentSteps.lastOrNull()) {
+                            currentSteps.add(latestStep)
+                            emit(PipelineEvent.ReasoningChunk(AgentRole.FAST_MODEL, event.chunk, event.accumulatedThought))
+                            emit(PipelineEvent.PhaseUpdate(PipelinePhase.FAST_INFERENCE))
+                            emit(PipelineEvent.ReasoningChunk(AgentRole.FAST_MODEL, latestStep, currentSteps.joinToString(" -> ")))
+                        }
+                    }
+
+                    is InferenceEvent.PartialResponse -> {
+                        emit(PipelineEvent.TextChunk(AgentRole.FAST_MODEL, event.chunk, ""))
+                    }
+
+                    is InferenceEvent.Completed -> {
+                        val duration = ((System.currentTimeMillis() - startMs) / 1000).toInt()
+
+                        emit(
+                            PipelineEvent.Completed(
+                                finalResponse = event.finalResponse,
+                                allThinkingSteps = currentSteps,
+                                pipelineDurationSeconds = duration
+                            )
+                        )
+                    }
+
+                    is InferenceEvent.SafetyBlocked -> {
+                        emit(PipelineEvent.SafetyIntervention(event.reason, AgentRole.WATCHDOG))
+                    }
+
+                    is InferenceEvent.Error -> {
+                        emit(PipelineEvent.Error(event.cause))
+                    }
+                }
+            }
+        } finally {
+            try { fastService.closeSession() } catch (e: Exception) { }
+        }
+    }
+
+    private fun extractAndTruncateStep(chunk: String, maxWords: Int): String {
+        val words = chunk.trim().split(Regex("\\s+"))
+        return if (words.size <= maxWords) chunk.trim() else "${
+            words.take(maxWords).joinToString(" ")
+        }..."
     }
 
     override fun cancelPipeline() {
