@@ -533,7 +533,7 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
                 }
             }
         }
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: Token %d text: '%s'", n_generated_tokens, tokenBuffer);
+
         jstring tokenStr = env->NewStringUTF(tokenBuffer);
         env->CallVoidMethod(g_callback, onTokenMethod, tokenStr);
         env->DeleteLocalRef(tokenStr);
@@ -553,7 +553,6 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
         }
         auto tok_end = std::chrono::high_resolution_clock::now();
         double tok_ms = std::chrono::duration<double, std::milli>(tok_end - tok_start).count();
-        __android_log_print(ANDROID_LOG_DEBUG, "llama-jni", "Token %d: %.2f ms", n_generated_tokens, tok_ms);
 
         n_generated_tokens++;
     }

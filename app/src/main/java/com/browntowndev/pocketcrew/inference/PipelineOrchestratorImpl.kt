@@ -37,7 +37,7 @@ class PipelineOrchestratorImpl @Inject constructor(
     }
 
     override fun processComplexPrompt(prompt: String, hasImage: Boolean): Flow<PipelineEvent> = flow {
-        Log.d(TAG, "Processing prompt: $prompt")
+        Log.d(TAG, "Processing complex prompt: $prompt")
 
         val startMs = System.currentTimeMillis()
         val allThinkingSteps = mutableListOf<String>()
