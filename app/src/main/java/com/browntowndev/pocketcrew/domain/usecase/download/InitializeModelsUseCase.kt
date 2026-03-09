@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.ModelStatus
+import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -47,7 +47,12 @@ class InitializeModelsUseCase @Inject constructor(
         val remoteConfigResult = modelConfigFetcher.fetchRemoteConfig()
         val remoteConfigs = remoteConfigResult.getOrElse {
             Log.e(TAG, "Failed to fetch remote config: ${it.message}")
-            emptyList()
+
+            // If there are no current models, throw the error
+            if (currentModels.isEmpty()) throw it
+
+            // If config fetch error occurs, fallback to using current models
+            currentModels
         }
 
         logPort.debug(TAG, "Fetched ${remoteConfigs.size} remote configs")
