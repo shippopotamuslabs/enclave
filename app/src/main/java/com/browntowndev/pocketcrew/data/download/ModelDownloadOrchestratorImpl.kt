@@ -2,10 +2,10 @@ package com.browntowndev.pocketcrew.data.download
 
 import android.content.Context
 import androidx.work.WorkInfo
-import com.browntowndev.pocketcrew.domain.model.DownloadState
-import com.browntowndev.pocketcrew.domain.model.DownloadStatus
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.download.DownloadState
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
@@ -166,7 +166,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         val models = startupModelsResult?.modelsToDownload ?: return
         for (model in models) {
             try {
-                modelRegistry.setRegisteredModel(model, com.browntowndev.pocketcrew.domain.model.ModelStatus.CURRENT)
+                modelRegistry.setRegisteredModel(model, com.browntowndev.pocketcrew.domain.model.config.ModelStatus.CURRENT)
                 logger.debug(TAG, "Updated registry: ${model.modelType} -> ${model.metadata.displayName}")
             } catch (e: Exception) {
                 logger.error(TAG, "Failed to update registry for ${model.modelType}: ${e.message}")
