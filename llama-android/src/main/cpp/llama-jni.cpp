@@ -310,14 +310,37 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
 
     std::string promptStr = jstringToString(env, prompt);
 
-    // Initialize sampler chain - greedy only (like official example)
+    // Initialize sampler chain with config values (official llama.cpp sampler)
     g_sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
 
-    // Greedy sampler - always picks highest probability token
-    llama_sampler_chain_add(g_sampler, llama_sampler_init_greedy());
+    // Add temperature (default 0.7 if not set)
+    float temp = temperature > 0 ? temperature : 0.7f;
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(temp));
 
-    // Note: Repeat penalty removed - causing issues with special tokens
-    // Will implement repetition filtering in sampling loop instead
+    // Add top-k filtering (default 40 if not set)
+    int top_k = topK > 0 ? topK : 40;
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_top_k(top_k));
+
+    // Add top-p filtering (default 0.9 if not set)
+    float top_p_val = topP > 0 ? topP : 0.9f;
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(top_p_val, 1));
+
+    // Add mirostat v2 for thinking models (tau=5.0, eta=0.1 recommended)
+    uint32_t seed = static_cast<uint32_t>(time(nullptr));
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_mirostat_v2(seed, 5.0f, 0.1f));
+
+    // Add repetition penalties (last_n=512, repeat from config or default 1.28)
+    int repeat_last_n = 512;
+    float repeat_pen = repeatPenalty > 1.0f ? repeatPenalty : 1.28f;
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_penalties(repeat_last_n, repeat_pen, 0.0f, 0.0f));
+
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== SAMPLER CHAIN CONFIGURED ===");
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Temperature: %.2f", temp);
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Top-K: %d", top_k);
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Top-P: %.2f", top_p_val);
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Mirostat: v2 (tau=5.0, eta=0.1)");
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Repeat penalty: %.2f (last_n=%d)", repeat_pen, repeat_last_n);
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "===========================");
 
     g_generating = true;
 
@@ -472,91 +495,20 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
     const int vocab_size = llama_vocab_n_tokens(get_model_vocab());
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: EOS=%d, vocab_size=%d, n_prompt_tokens=%d", eos_token, vocab_size, n_prompt_tokens);
 
-    // Manual top-k sampling with SOFTMAX - use config values
-    const int TOP_K = topK > 0 ? topK : 40;
-    const float sampling_temp = temperature > 0 ? temperature : 0.7f;
-
-    // Track recent tokens for repetition penalty
-    std::vector<llama_token> recent_tokens;
-    const int REPEAT_PENALTY_N = 32;
-
+    // Generation loop using official llama.cpp sampler
     while (g_generating && n_generated_tokens < maxTokens) {
-        // Get logits
-        float* logits = llama_get_logits(g_ctx);
-        if (!logits) {
-            __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: No logits!");
-            break;
-        }
-
-        // Apply temperature to logits FIRST
-        for (int i = 0; i < vocab_size; i++) {
-            logits[i] /= sampling_temp;
-        }
-
-        // Apply repetition penalty to recently seen tokens
-        if (repeatPenalty > 1.0f) {
-            for (llama_token t : recent_tokens) {
-                if (t >= 0 && t < vocab_size) {
-                    logits[t] /= repeatPenalty;
-                }
-            }
-        }
-
-        // Compute softmax to get probabilities
-        float max_logit = logits[0];
-        for (int i = 1; i < vocab_size; i++) {
-            if (logits[i] > max_logit) max_logit = logits[i];
-        }
-
-        float sum = 0.0f;
-        for (int i = 0; i < vocab_size; i++) {
-            logits[i] = expf(logits[i] - max_logit);  // Subtract max for numerical stability
-            sum += logits[i];
-        }
-
-        // Normalize to get probabilities
-        for (int i = 0; i < vocab_size; i++) {
-            logits[i] /= sum;
-        }
-
-        // Now sample from top-k probabilities (cumulative distribution)
-        // First find top-k and their cumulative probabilities
-        std::vector<std::pair<int, float>> top_probs;  // token, probability
-        for (int i = 0; i < vocab_size; i++) {
-            top_probs.push_back({i, logits[i]});
-        }
-
-        // Sort by probability (highest first)
-        std::partial_sort(top_probs.begin(), top_probs.begin() + TOP_K, top_probs.end(),
-            [](const auto& a, const auto& b) { return a.second > b.second; });
-
-        // Compute cumulative distribution for top-k
-        float cum_sum = 0.0f;
-        for (int i = 0; i < TOP_K && i < (int)top_probs.size(); i++) {
-            cum_sum += top_probs[i].second;
-            top_probs[i].second = cum_sum;
-        }
-
-        // Sample: pick random value in [0, cum_sum)
-        float r = ((float)rand() / RAND_MAX) * cum_sum;
-
-        // Find which bin r falls into
-        llama_token token = top_probs[0].first;
-        for (int i = 0; i < TOP_K && i < (int)top_probs.size(); i++) {
-            if (r < top_probs[i].second) {
-                token = top_probs[i].first;
-                break;
-            }
-        }
-
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: Manual softmax top-%d sample: token=%d, prob=%.4f",
-            TOP_K, token, top_probs[0].second);
+        // Sample using official llama.cpp sampler chain
+        // idx=-1 means sample from the last token's logits
+        llama_token token = llama_sampler_sample(g_sampler, g_ctx, -1);
 
         // Check for EOS
         if (token == eos_token || token == llama_vocab_eot(get_model_vocab())) {
             __android_log_print(ANDROID_LOG_DEBUG, "llama-jni", "End of token (EOS/EOT) reached at token %d", n_generated_tokens);
             break;
         }
+
+        // Accept the token (updates sampler state for next iteration)
+        llama_sampler_accept(g_sampler, token);
 
         // Get token text - use llama_token_to_piece to convert token to string
         char tokenBuffer[64];
@@ -586,14 +538,8 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
         env->CallVoidMethod(g_callback, onTokenMethod, tokenStr);
         env->DeleteLocalRef(tokenStr);
 
-        // Accept the token
+        // Accept the token (updates sampler state for next iteration)
         llama_sampler_accept(g_sampler, token);
-
-        // Track for repetition penalty
-        recent_tokens.push_back(token);
-        if (recent_tokens.size() > REPEAT_PENALTY_N) {
-            recent_tokens.erase(recent_tokens.begin());
-        }
 
         // Evaluate token using reusable batch (like official example)
         auto tok_start = std::chrono::high_resolution_clock::now();
