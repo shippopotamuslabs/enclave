@@ -249,11 +249,12 @@ class PipelineEventTest {
     inner class PipelinePhaseTests {
         @Test
         fun `all pipeline phases are defined`() {
-            assertEquals(4, PipelinePhase.entries.size)
+            assertEquals(5, PipelinePhase.entries.size)
             assertNotNull(PipelinePhase.DRAFTING)
             assertNotNull(PipelinePhase.SYNTHESIS)
             assertNotNull(PipelinePhase.REFINEMENT)
             assertNotNull(PipelinePhase.SAFETY_CHECK)
+            assertNotNull(PipelinePhase.FAST_INFERENCE)
         }
     }
 
@@ -261,7 +262,7 @@ class PipelineEventTest {
     inner class AgentRoleTests {
         @Test
         fun `all agent roles are defined`() {
-            assertEquals(9, AgentRole.entries.size)
+            assertEquals(10, AgentRole.entries.size)
             assertNotNull(AgentRole.DRAFTER_ONE)
             assertNotNull(AgentRole.DRAFTER_TWO)
             assertNotNull(AgentRole.DRAFTER_THREE)
@@ -271,6 +272,7 @@ class PipelineEventTest {
             assertNotNull(AgentRole.FINAL_THINKER)
             assertNotNull(AgentRole.WATCHDOG)
             assertNotNull(AgentRole.SYSTEM)
+            assertNotNull(AgentRole.FAST_MODEL)
         }
     }
 }
@@ -294,11 +296,11 @@ class EnginePipelineOrchestratorTest {
             PipelineEvent.Completed("Hi there!", listOf("thought"), 2)
         )
 
-        every { mockOrchestrator.processPrompt(prompt, false) } returns flow {
+        every { mockOrchestrator.processComplexPrompt(prompt, false) } returns flow {
             events.forEach { emit(it) }
         }
 
-        val result = mockOrchestrator.processPrompt(prompt, false).toList()
+        val result = mockOrchestrator.processComplexPrompt(prompt, false).toList()
 
         assertEquals(4, result.size)
         assertTrue(result[0] is PipelineEvent.PhaseUpdate)
@@ -312,14 +314,14 @@ class EnginePipelineOrchestratorTest {
         val prompt = "Describe this image"
         val events = listOf(PipelineEvent.Completed("A cat", emptyList(), 1))
 
-        every { mockOrchestrator.processPrompt(prompt, true) } returns flow {
+        every { mockOrchestrator.processComplexPrompt(prompt, true) } returns flow {
             events.forEach { emit(it) }
         }
 
-        val result = mockOrchestrator.processPrompt(prompt, true).toList()
+        val result = mockOrchestrator.processComplexPrompt(prompt, true).toList()
 
         assertEquals(1, result.size)
-        verify { mockOrchestrator.processPrompt(prompt, true) }
+        verify { mockOrchestrator.processComplexPrompt(prompt, true) }
     }
 
     @Test
@@ -331,11 +333,11 @@ class EnginePipelineOrchestratorTest {
             PipelineEvent.Error(errorCause)
         )
 
-        every { mockOrchestrator.processPrompt(prompt, false) } returns flow {
+        every { mockOrchestrator.processComplexPrompt(prompt, false) } returns flow {
             events.forEach { emit(it) }
         }
 
-        val result = mockOrchestrator.processPrompt(prompt, false).toList()
+        val result = mockOrchestrator.processComplexPrompt(prompt, false).toList()
 
         assertEquals(2, result.size)
         assertTrue(result[1] is PipelineEvent.Error)
@@ -350,11 +352,11 @@ class EnginePipelineOrchestratorTest {
             PipelineEvent.SafetyIntervention("Content blocked by safety policy")
         )
 
-        every { mockOrchestrator.processPrompt(prompt, false) } returns flow {
+        every { mockOrchestrator.processComplexPrompt(prompt, false) } returns flow {
             events.forEach { emit(it) }
         }
 
-        val result = mockOrchestrator.processPrompt(prompt, false).toList()
+        val result = mockOrchestrator.processComplexPrompt(prompt, false).toList()
 
         assertEquals(2, result.size)
         assertTrue(result[1] is PipelineEvent.SafetyIntervention)

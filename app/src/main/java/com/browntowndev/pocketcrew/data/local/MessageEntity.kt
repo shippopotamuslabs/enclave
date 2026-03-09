@@ -5,7 +5,7 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.browntowndev.pocketcrew.domain.model.Role
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 
 @Entity(tableName = "message",
     foreignKeys = [ForeignKey(

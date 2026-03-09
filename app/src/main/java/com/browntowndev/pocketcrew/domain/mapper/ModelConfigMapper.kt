@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.mapper
 
-import com.browntowndev.pocketcrew.domain.model.ModelFile
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import javax.inject.Inject
 import javax.inject.Singleton
 

@@ -2,10 +2,10 @@ package com.browntowndev.pocketcrew.data.download
 
 import android.content.Context
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort

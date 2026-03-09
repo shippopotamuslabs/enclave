@@ -3,8 +3,8 @@ package com.browntowndev.pocketcrew.data.repository
 import android.util.Log
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.DownloadKey
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch

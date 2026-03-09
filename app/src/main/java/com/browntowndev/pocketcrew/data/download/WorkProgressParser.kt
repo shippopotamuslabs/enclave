@@ -2,11 +2,11 @@ package com.browntowndev.pocketcrew.data.download
 
 import android.util.Log
 import androidx.work.WorkInfo
-import com.browntowndev.pocketcrew.domain.model.FileProgress
-import com.browntowndev.pocketcrew.domain.model.FileStatus
-import com.browntowndev.pocketcrew.domain.model.DownloadStatus
-import com.browntowndev.pocketcrew.domain.model.DownloadKey
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.download.FileProgress
+import com.browntowndev.pocketcrew.domain.model.download.FileStatus
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton

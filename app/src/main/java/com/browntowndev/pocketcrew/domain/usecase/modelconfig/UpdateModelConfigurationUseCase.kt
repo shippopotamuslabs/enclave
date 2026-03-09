@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.modelconfig
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfigurationUi
-import com.browntowndev.pocketcrew.domain.model.toModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationUi
+import com.browntowndev.pocketcrew.domain.model.config.toModelConfiguration
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import javax.inject.Inject

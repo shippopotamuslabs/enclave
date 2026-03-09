@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.presentation.screen.settings
 
-import com.browntowndev.pocketcrew.domain.model.AppTheme
-import com.browntowndev.pocketcrew.domain.model.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 
 import androidx.compose.foundation.background
@@ -102,7 +102,7 @@ fun SettingsScreen(
     onNavigateToModelDownload: () -> Unit,
     // Model Configuration
     onShowModelConfigSheet: (Boolean) -> Unit,
-    onSelectModelType: (com.browntowndev.pocketcrew.domain.model.ModelType) -> Unit,
+    onSelectModelType: (com.browntowndev.pocketcrew.domain.model.inference.ModelType) -> Unit,
     onBackToModelList: () -> Unit,
     onHuggingFaceModelNameChange: (String) -> Unit,
     onTemperatureChange: (Double) -> Unit,
@@ -689,7 +689,7 @@ fun FeedbackBottomSheet(
 fun ModelConfigurationBottomSheet(
     uiState: SettingsUiState,
     onDismiss: () -> Unit,
-    onSelectModelType: (com.browntowndev.pocketcrew.domain.model.ModelType) -> Unit,
+    onSelectModelType: (com.browntowndev.pocketcrew.domain.model.inference.ModelType) -> Unit,
     onBackToModelList: () -> Unit,
     onHuggingFaceModelNameChange: (String) -> Unit,
     onTemperatureChange: (Double) -> Unit,

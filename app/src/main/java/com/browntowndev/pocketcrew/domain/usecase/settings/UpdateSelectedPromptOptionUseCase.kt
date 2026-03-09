@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
-import com.browntowndev.pocketcrew.domain.model.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import javax.inject.Inject
 

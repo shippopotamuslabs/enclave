@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.RemoteModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.RemoteModelConfig
 
 /**
  * Port for fetching and converting remote model configuration.

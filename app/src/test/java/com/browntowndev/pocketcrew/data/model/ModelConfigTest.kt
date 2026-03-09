@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.data.model
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test

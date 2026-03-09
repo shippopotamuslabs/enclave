@@ -2,9 +2,9 @@ package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
 import com.browntowndev.pocketcrew.data.repository.DeviceEnvironmentRepository
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.mockk
@@ -73,6 +73,7 @@ class ValidateDownloadConditionsUseCaseTest {
                 temperature = 0.7,
                 topK = 40,
                 topP = 0.9,
+                repetitionPenalty = 1.0,
                 maxTokens = 2048,
                 contextWindow = 2048
             ),

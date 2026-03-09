@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.data.repository
 
 import android.content.Context
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File

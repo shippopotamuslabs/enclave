@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.inference
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.AgentRole
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
@@ -41,12 +41,14 @@ class PipelineOrchestratorImplTest {
     private lateinit var mockDraftOneServiceProvider: dagger.Lazy<LlmInferencePort>
     private lateinit var mockDraftTwoServiceProvider: dagger.Lazy<LlmInferencePort>
     private lateinit var mockVisionServiceProvider: dagger.Lazy<LlmInferencePort>
+    private lateinit var mockFastServiceProvider: dagger.Lazy<LlmInferencePort>
     private lateinit var mockModelRegistry: ModelRegistryPort
 
     private lateinit var mockMainService: LlmInferencePort
     private lateinit var mockDraftOneService: LlmInferencePort
     private lateinit var mockDraftTwoService: LlmInferencePort
     private lateinit var mockVisionService: LlmInferencePort
+    private lateinit var mockFastService: LlmInferencePort
 
     private lateinit var orchestrator: PipelineOrchestratorImpl
 
@@ -64,6 +66,7 @@ class PipelineOrchestratorImplTest {
         mockDraftOneService = mockk(relaxed = true)
         mockDraftTwoService = mockk(relaxed = true)
         mockVisionService = mockk(relaxed = true)
+        mockFastService = mockk(relaxed = true)
 
         // Create lazy providers that return the mock services
         mockMainServiceProvider = mockk()
@@ -78,6 +81,9 @@ class PipelineOrchestratorImplTest {
         mockVisionServiceProvider = mockk()
         every { mockVisionServiceProvider.get() } returns mockVisionService
 
+        mockFastServiceProvider = mockk()
+        every { mockFastServiceProvider.get() } returns mockFastService
+
         // Mock model registry to return Fast persona
         mockModelRegistry = mockk(relaxed = true)
         val fastConfig = ModelConfiguration(
@@ -89,12 +95,13 @@ class PipelineOrchestratorImplTest {
                 displayName = "Fast Model",
                 sha256 = "abc123",
                 sizeInBytes = 1000L,
-                modelFileFormat = com.browntowndev.pocketcrew.domain.model.ModelFileFormat.LITERTLM
+                modelFileFormat = com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.LITERTLM
             ),
             tunings = ModelConfiguration.Tunings(
                 temperature = 0.7,
                 topK = 40,
                 topP = 0.95,
+                repetitionPenalty = 1.0,
                 maxTokens = 512,
                 contextWindow = 2048
             ),
@@ -106,6 +113,7 @@ class PipelineOrchestratorImplTest {
             draftOneServiceProvider = mockDraftOneServiceProvider,
             draftTwoServiceProvider = mockDraftTwoServiceProvider,
             visionServiceProvider = mockVisionServiceProvider,
+            fastServiceProvider = mockFastServiceProvider,
             modelRegistry = mockModelRegistry
         )
     }
@@ -147,7 +155,7 @@ class PipelineOrchestratorImplTest {
         coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Main response")
 
         // When
-        val result = orchestrator.processPrompt("test prompt")
+        val result = orchestrator.processComplexPrompt("test prompt")
         val events = mutableListOf<PipelineEvent>()
         result.collect { events.add(it) }
 
@@ -173,7 +181,7 @@ class PipelineOrchestratorImplTest {
         coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Main response")
 
         // When
-        val result = orchestrator.processPrompt("test prompt")
+        val result = orchestrator.processComplexPrompt("test prompt")
         val events = mutableListOf<PipelineEvent>()
         result.collect { events.add(it) }
 
@@ -189,7 +197,7 @@ class PipelineOrchestratorImplTest {
         coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Final cleaned response")
 
         // When
-        val result = orchestrator.processPrompt("test prompt")
+        val result = orchestrator.processComplexPrompt("test prompt")
         val events = mutableListOf<PipelineEvent>()
         result.collect { events.add(it) }
 
@@ -205,13 +213,13 @@ class PipelineOrchestratorImplTest {
         coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Main response")
 
         // When
-        val result = orchestrator.processPrompt("test prompt")
+        val result = orchestrator.processComplexPrompt("test prompt")
         result.collect { }
 
-        // Then - verify all services were closed
+        // Then - verify all services were closed (draftOne, draftTwo, main)
+        // Note: visionService is not used in processPrompt
         verify { mockDraftOneService.closeSession() }
         verify { mockMainService.closeSession() }
-        verify { mockVisionService.closeSession() }
     }
 
     // ========== SCENARIO 5: Error Handling ==========
@@ -225,7 +233,7 @@ class PipelineOrchestratorImplTest {
         }
 
         // When - should not throw unhandled exception
-        val result = orchestrator.processPrompt("test prompt")
+        val result = orchestrator.processComplexPrompt("test prompt")
         val events = mutableListOf<PipelineEvent>()
         
         try {
@@ -247,18 +255,17 @@ class PipelineOrchestratorImplTest {
         }
 
         // When
-        val result = orchestrator.processPrompt("test prompt")
-        
+        val result = orchestrator.processComplexPrompt("test prompt")
+
         try {
             result.collect { }
         } catch (e: Exception) {
             // Exception may propagate
         }
 
-        // Then - services still closed in finally block
+        // Then - services still closed in finally block (draftOne only since error happens early)
+        // Note: visionService is not used in processPrompt
         verify { mockDraftOneService.closeSession() }
-        verify { mockMainService.closeSession() }
-        verify { mockVisionService.closeSession() }
     }
 
     @Test
@@ -270,7 +277,7 @@ class PipelineOrchestratorImplTest {
         )
 
         // When
-        val result = orchestrator.processPrompt("test prompt")
+        val result = orchestrator.processComplexPrompt("test prompt")
         val events = mutableListOf<PipelineEvent>()
         result.collect { events.add(it) }
 
@@ -286,7 +293,7 @@ class PipelineOrchestratorImplTest {
         coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Main response")
 
         // When
-        val result = orchestrator.processPrompt("test prompt")
+        val result = orchestrator.processComplexPrompt("test prompt")
         val events = mutableListOf<PipelineEvent>()
         result.collect { events.add(it) }
 

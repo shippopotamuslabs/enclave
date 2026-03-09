@@ -2,9 +2,9 @@ package com.browntowndev.pocketcrew.data.repository
 
 import com.browntowndev.pocketcrew.data.local.ModelsDao
 import com.browntowndev.pocketcrew.data.local.ModelEntity
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.ModelStatus
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import kotlinx.coroutines.flow.Flow
@@ -174,6 +174,7 @@ class ModelRegistryImpl @Inject constructor(
                 temperature = entity.temperature,
                 topK = entity.topK,
                 topP = entity.topP,
+                repetitionPenalty = entity.repetitionPenalty,
                 maxTokens = entity.maxTokens,
                 contextWindow = entity.contextWindow
             ),

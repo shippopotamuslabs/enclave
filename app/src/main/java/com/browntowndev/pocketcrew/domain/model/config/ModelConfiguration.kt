@@ -1,4 +1,7 @@
-package com.browntowndev.pocketcrew.domain.model
+package com.browntowndev.pocketcrew.domain.model.config
+
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 /**
  * Unified model configuration that represents a downloaded model.
@@ -35,9 +38,10 @@ data class ModelConfiguration(
      * @property contextWindow LLM context window size in tokens
      */
     data class Tunings(
-        val temperature: Double = 0.0,
-        val topK: Int = 40,
-        val topP: Double = 0.95,
+        val temperature: Double,
+        val topK: Int,
+        val topP: Double,
+        val repetitionPenalty: Double,
         val maxTokens: Int,
         val contextWindow: Int
     )

@@ -1,11 +1,11 @@
 package com.browntowndev.pocketcrew.data.remote
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.DownloadState
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.DownloadStatus
-import com.browntowndev.pocketcrew.domain.model.ModelFile
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.download.DownloadState
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort

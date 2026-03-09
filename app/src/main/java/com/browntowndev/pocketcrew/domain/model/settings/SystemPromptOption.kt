@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.domain.model
+package com.browntowndev.pocketcrew.domain.model.settings
 
 enum class SystemPromptOption(val displayName: String, val stubPrompt: String) {
     CUSTOM("Custom", ""),

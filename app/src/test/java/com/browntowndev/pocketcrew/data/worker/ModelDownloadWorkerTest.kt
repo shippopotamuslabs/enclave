@@ -6,8 +6,8 @@ import androidx.work.workDataOf
 import com.browntowndev.pocketcrew.data.download.DownloadNotificationManager
 import com.browntowndev.pocketcrew.data.download.DownloadProgressTracker
 import com.browntowndev.pocketcrew.data.download.ModelDownloadWorker
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort

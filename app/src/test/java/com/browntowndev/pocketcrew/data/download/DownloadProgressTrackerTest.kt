@@ -1,9 +1,9 @@
 package com.browntowndev.pocketcrew.data.download
 
-import com.browntowndev.pocketcrew.domain.model.FileStatus
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.download.FileStatus
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import io.mockk.every
 import io.mockk.mockk
@@ -246,7 +246,8 @@ class DownloadProgressTrackerTest {
                 topK = 40,
                 topP = 0.95,
                 maxTokens = 2048,
-                contextWindow = 2048
+                contextWindow = 2048,
+                repetitionPenalty = 1.1
             ),
             persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
         )

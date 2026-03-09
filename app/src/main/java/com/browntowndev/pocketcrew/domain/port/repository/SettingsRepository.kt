@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
-import com.browntowndev.pocketcrew.domain.model.AppTheme
-import com.browntowndev.pocketcrew.domain.model.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import kotlinx.coroutines.flow.Flow
 
 /**

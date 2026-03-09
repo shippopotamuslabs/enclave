@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.data.download
 
-import com.browntowndev.pocketcrew.domain.model.DownloadState
-import com.browntowndev.pocketcrew.domain.model.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.download.DownloadState
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.usecase.download.FileProgressInitResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import kotlinx.coroutines.flow.MutableStateFlow

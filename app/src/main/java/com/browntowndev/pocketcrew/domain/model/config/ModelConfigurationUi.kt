@@ -1,4 +1,6 @@
-package com.browntowndev.pocketcrew.domain.model
+package com.browntowndev.pocketcrew.domain.model.config
+
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 /**
  * UI-friendly model configuration for the settings screen.
@@ -11,6 +13,7 @@ data class ModelConfigurationUi(
     val temperature: Double,
     val topK: Int,
     val topP: Double,
+    val repetitionPenalty: Double,
     val maxTokens: Int,
     val contextWindow: Int
 )
@@ -25,6 +28,7 @@ fun ModelConfiguration.toUi(): ModelConfigurationUi = ModelConfigurationUi(
     temperature = tunings.temperature,
     topK = tunings.topK,
     topP = tunings.topP,
+    repetitionPenalty = tunings.repetitionPenalty,
     maxTokens = tunings.maxTokens,
     contextWindow = tunings.contextWindow
 )
@@ -42,6 +46,7 @@ fun ModelConfigurationUi.toModelConfiguration(
         temperature = temperature,
         topK = topK,
         topP = topP,
+        repetitionPenalty = repetitionPenalty,
         maxTokens = maxTokens,
         contextWindow = contextWindow
     )

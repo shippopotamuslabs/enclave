@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import com.browntowndev.pocketcrew.data.download.ModelFileScanner
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort

@@ -1,10 +1,10 @@
 package com.browntowndev.pocketcrew.data.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
-import com.browntowndev.pocketcrew.domain.model.RemoteModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.RemoteModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import kotlinx.coroutines.Dispatchers
@@ -107,6 +107,7 @@ class ModelConfigFetcherImpl @Inject constructor(
             temperature = json.getDouble("temperature"),
             topK = json.getInt("topK"),
             topP = json.getDouble("topP"),
+            repetitionPenalty = json.getDouble("repetitionPenalty"),
             maxTokens = json.getInt("maxTokens"),
             contextWindow = json.getInt("contextWindow"),
             systemPrompt = json.getString("systemPrompt")
@@ -158,6 +159,7 @@ class ModelConfigFetcherImpl @Inject constructor(
                     temperature = config.temperature,
                     topK = config.topK,
                     topP = config.topP,
+                    repetitionPenalty = config.repetitionPenalty,
                     maxTokens = config.maxTokens,
                     contextWindow = config.contextWindow
                 ),

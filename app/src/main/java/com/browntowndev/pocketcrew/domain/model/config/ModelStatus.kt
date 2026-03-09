@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.domain.model
+package com.browntowndev.pocketcrew.domain.model.config
 
 /**
  * Enum representing the status of a model in the registry.

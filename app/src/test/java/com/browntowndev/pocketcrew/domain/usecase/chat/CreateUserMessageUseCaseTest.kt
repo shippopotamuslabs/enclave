@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.Message
-import com.browntowndev.pocketcrew.domain.model.Role
+import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider

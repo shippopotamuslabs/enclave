@@ -9,8 +9,8 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -40,7 +40,7 @@ class DownloadWorkScheduler @Inject constructor(
             .build()
 
         // Serialize ModelConfiguration to pipe-delimited string:
-        // modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|maxTokens|contextWindow|systemPrompt
+        // modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|repetitionPenalty|maxTokens|contextWindow|systemPrompt
         val inputData = models
             .map { config ->
                 listOf(
@@ -55,6 +55,7 @@ class DownloadWorkScheduler @Inject constructor(
                     config.tunings.temperature.toString(),
                     config.tunings.topK.toString(),
                     config.tunings.topP.toString(),
+                    config.tunings.repetitionPenalty.toString(),
                     config.tunings.maxTokens.toString(),
                     config.tunings.contextWindow.toString(),
                     config.persona.systemPrompt

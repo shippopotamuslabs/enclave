@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.ModelStatus
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.Flow
 
 /**

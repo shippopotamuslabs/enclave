@@ -1,6 +1,7 @@
-package com.browntowndev.pocketcrew.domain.model
+package com.browntowndev.pocketcrew.domain.model.config
 
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 /**
  * Represents model configuration fetched from remote server (model_config.json).
@@ -26,9 +27,10 @@ data class RemoteModelConfig(
     val sha256: String,
     val sizeInBytes: Long = 0L,
     val modelFileFormat: ModelFileFormat = ModelFileFormat.LITERTLM,
-    val temperature: Double = 0.0,
-    val topK: Int = 40,
-    val topP: Double = 0.95,
+    val temperature: Double,
+    val topK: Int,
+    val topP: Double,
+    val repetitionPenalty: Double,
     val maxTokens: Int,
     val contextWindow: Int,
     val systemPrompt: String

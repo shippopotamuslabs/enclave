@@ -11,6 +11,7 @@ fun PipelinePhase.toUiText(): String = when (this) {
     PipelinePhase.SYNTHESIS -> "Cross-evaluating concepts..."
     PipelinePhase.REFINEMENT -> "Executing final logic check..."
     PipelinePhase.SAFETY_CHECK -> "Verifying operational safety..."
+    PipelinePhase.FAST_INFERENCE -> "Processing..."
 }
 
 /**
@@ -26,6 +27,7 @@ fun AgentRole.toAlias(): String = when (this) {
     AgentRole.FINAL_THINKER -> "The Stoic"
     AgentRole.WATCHDOG -> "Nightwatchman"
     AgentRole.SYSTEM -> "Orchestrator"
+    AgentRole.FAST_MODEL -> "Fast Model"
 }
 
 /**

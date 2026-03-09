@@ -4,8 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import com.browntowndev.pocketcrew.domain.model.ModelStatus
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.Flow
 
 @Dao

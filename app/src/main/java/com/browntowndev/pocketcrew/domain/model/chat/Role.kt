@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.domain.model
+package com.browntowndev.pocketcrew.domain.model.chat
 
 /**
  * Represents the role of a message sender in a chat conversation.

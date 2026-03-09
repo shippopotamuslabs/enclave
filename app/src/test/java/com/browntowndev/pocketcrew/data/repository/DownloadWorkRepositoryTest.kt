@@ -3,7 +3,7 @@ package com.browntowndev.pocketcrew.data.repository
 import android.util.Log
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic

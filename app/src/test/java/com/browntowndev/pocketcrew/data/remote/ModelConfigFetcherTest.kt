@@ -1,9 +1,9 @@
 package com.browntowndev.pocketcrew.data.remote
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
-import com.browntowndev.pocketcrew.domain.model.RemoteModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.RemoteModelConfig
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -42,7 +42,8 @@ class ModelConfigFetcherTest {
                     topK = 40,
                     topP = 0.95,
                     maxTokens = 2048,
-                    contextWindow = 2048
+                    contextWindow = 2048,
+                    repetitionPenalty = 1.1
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
             )
@@ -89,6 +90,7 @@ class ModelConfigFetcherTest {
                 topP = 0.95,
                 maxTokens = 2048,
                 contextWindow = 2048,
+                repetitionPenalty = 1.1,
                 systemPrompt = "You are a helpful assistant."
             ),
             RemoteModelConfig(
@@ -104,6 +106,7 @@ class ModelConfigFetcherTest {
                 topP = 0.95,
                 maxTokens = 2048,
                 contextWindow = 2048,
+                repetitionPenalty = 1.1,
                 systemPrompt = "You are a vision assistant."
             )
         )
@@ -125,7 +128,8 @@ class ModelConfigFetcherTest {
                     topK = 40,
                     topP = 0.95,
                     maxTokens = 2048,
-                    contextWindow = 2048
+                    contextWindow = 2048,
+                    repetitionPenalty = 1.1,
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
             ),
@@ -145,7 +149,8 @@ class ModelConfigFetcherTest {
                     topK = 40,
                     topP = 0.95,
                     maxTokens = 2048,
-                    contextWindow = 2048
+                    contextWindow = 2048,
+                    repetitionPenalty = 1.1,
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
             )
@@ -182,6 +187,7 @@ class ModelConfigFetcherTest {
                     topK = 40,
                     topP = 0.95,
                     maxTokens = 2048,
+                    repetitionPenalty = 1.1,
                     contextWindow = 2048
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
@@ -202,6 +208,7 @@ class ModelConfigFetcherTest {
                     topK = 40,
                     topP = 0.95,
                     maxTokens = 2048,
+                    repetitionPenalty = 1.1,
                     contextWindow = 2048
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
@@ -222,6 +229,7 @@ class ModelConfigFetcherTest {
                     topK = 40,
                     topP = 0.95,
                     maxTokens = 1024,
+                    repetitionPenalty = 1.1,
                     contextWindow = 2048
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a fast assistant.")
@@ -242,6 +250,7 @@ class ModelConfigFetcherTest {
                     topK = 40,
                     topP = 0.95,
                     maxTokens = 512,
+                    repetitionPenalty = 1.1,
                     contextWindow = 2048
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a draft assistant.")
