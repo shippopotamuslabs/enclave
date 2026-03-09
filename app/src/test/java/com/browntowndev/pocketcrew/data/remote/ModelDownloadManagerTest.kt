@@ -5,8 +5,8 @@ import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
-import com.browntowndev.pocketcrew.domain.model.DownloadState
-import com.browntowndev.pocketcrew.domain.model.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.download.DownloadState
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

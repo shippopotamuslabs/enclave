@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.model.download
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 
 /**
  * Result of checkModels containing both the scan result and models that need downloading.

@@ -2,10 +2,10 @@ package com.browntowndev.pocketcrew.presentation.screen.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.browntowndev.pocketcrew.domain.model.AppTheme
-import com.browntowndev.pocketcrew.domain.model.ModelConfigurationUi
-import com.browntowndev.pocketcrew.domain.model.ModelType
-import com.browntowndev.pocketcrew.domain.model.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationUi
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetModelConfigurationsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.UpdateModelConfigurationUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase

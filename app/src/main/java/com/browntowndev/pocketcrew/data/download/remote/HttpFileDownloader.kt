@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.data.download.remote
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import kotlinx.coroutines.Dispatchers

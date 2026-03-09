@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.data.download.remote
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import javax.inject.Inject
 import javax.inject.Singleton

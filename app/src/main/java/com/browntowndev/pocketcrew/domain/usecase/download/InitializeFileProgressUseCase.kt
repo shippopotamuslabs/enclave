@@ -2,9 +2,9 @@ package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
-import com.browntowndev.pocketcrew.domain.model.FileProgress
-import com.browntowndev.pocketcrew.domain.model.FileStatus
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.download.FileProgress
+import com.browntowndev.pocketcrew.domain.model.download.FileStatus
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import javax.inject.Inject
 
 data class FileProgressInitResult(

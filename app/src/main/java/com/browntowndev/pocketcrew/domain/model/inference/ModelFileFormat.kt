@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.domain.model
+package com.browntowndev.pocketcrew.domain.model.inference
 
 /**
  * Enum representing the file format of the model.

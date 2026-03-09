@@ -7,11 +7,11 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import com.browntowndev.pocketcrew.domain.model.FileStatus
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.download.FileStatus
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -322,12 +322,13 @@ class ModelDownloadWorker @AssistedInject constructor(
                 temperature = parts[8].toDoubleOrNull() ?: 0.0,
                 topK = parts[9].toIntOrNull() ?: 40,
                 topP = parts[10].toDoubleOrNull() ?: 0.95,
-                maxTokens = parts[11].toIntOrNull() ?: 2048,
-                contextWindow = parts[12].toIntOrNull() ?: 32768
+                repetitionPenalty = parts[11].toDoubleOrNull() ?: 1.0,
+                maxTokens = parts[12].toIntOrNull() ?: 2048,
+                contextWindow = parts[13].toIntOrNull() ?: 32768
             )
 
             val persona = ModelConfiguration.Persona(
-                systemPrompt = parts.getOrNull(13) ?: ""
+                systemPrompt = parts.getOrNull(14) ?: ""
             )
 
             // DIAGNOSTIC: Log parsed data

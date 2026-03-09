@@ -2,13 +2,13 @@ package com.browntowndev.pocketcrew.data.remote.download
 
 import android.util.Log
 import androidx.work.WorkInfo
-import com.browntowndev.pocketcrew.domain.model.DownloadStatus
-import com.browntowndev.pocketcrew.domain.model.FileProgress
-import com.browntowndev.pocketcrew.domain.model.FileStatus
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.download.FileProgress
+import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.data.download.WorkProgressParser
 import com.browntowndev.pocketcrew.data.download.DownloadSessionManager
-import com.browntowndev.pocketcrew.domain.model.DownloadKey
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.impl.annotations.MockK

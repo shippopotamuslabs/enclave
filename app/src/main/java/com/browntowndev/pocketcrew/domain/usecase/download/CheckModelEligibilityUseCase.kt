@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import javax.inject.Inject

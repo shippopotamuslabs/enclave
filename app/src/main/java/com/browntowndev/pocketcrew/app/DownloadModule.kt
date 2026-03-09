@@ -10,7 +10,7 @@ import com.browntowndev.pocketcrew.data.download.DownloadSpeedTracker
 import com.browntowndev.pocketcrew.data.download.remote.HuggingFaceModelUrlProvider
 import com.browntowndev.pocketcrew.data.repository.ModelConfigProviderImpl
 import com.browntowndev.pocketcrew.data.download.DownloadProgressTracker
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort

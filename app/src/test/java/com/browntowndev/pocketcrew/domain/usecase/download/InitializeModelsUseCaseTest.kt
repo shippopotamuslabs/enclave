@@ -1,9 +1,9 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
@@ -107,6 +107,10 @@ class InitializeModelsUseCaseTest {
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
             tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                repetitionPenalty = 1.0,
                 maxTokens = 2048,
                 contextWindow = 2048
             ),

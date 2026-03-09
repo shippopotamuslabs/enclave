@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase
 
-import com.browntowndev.pocketcrew.domain.model.Chat
-import com.browntowndev.pocketcrew.domain.model.ThinkingData
+import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 
 /**

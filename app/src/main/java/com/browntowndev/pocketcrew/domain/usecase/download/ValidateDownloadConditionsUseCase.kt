@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.download.DownloadCheckResult
 import com.browntowndev.pocketcrew.data.repository.DeviceEnvironmentRepository
 import javax.inject.Inject

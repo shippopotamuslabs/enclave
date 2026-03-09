@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.domain.model
+package com.browntowndev.pocketcrew.domain.model.chat
 
 /**
  * Domain model representing a message within a chat conversation.

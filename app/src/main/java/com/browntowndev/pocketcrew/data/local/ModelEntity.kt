@@ -3,9 +3,9 @@ package com.browntowndev.pocketcrew.data.local
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelStatus
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 /**
  * Entity storing registered model metadata.
@@ -48,6 +48,9 @@ data class ModelEntity(
 
     @ColumnInfo(name = "top_p")
     val topP: Double = 0.95,
+
+    @ColumnInfo(name = "repetition_penalty")
+    val repetitionPenalty: Double = 1.0,
 
     @ColumnInfo(name = "max_tokens")
     val maxTokens: Int,

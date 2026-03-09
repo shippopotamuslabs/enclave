@@ -1,12 +1,12 @@
 package com.browntowndev.pocketcrew.presentation.screen.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.DownloadState
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.DownloadStatus
-import com.browntowndev.pocketcrew.domain.model.FileProgress
-import com.browntowndev.pocketcrew.domain.model.FileStatus
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.download.DownloadState
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.download.FileProgress
+import com.browntowndev.pocketcrew.domain.model.download.FileStatus
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
@@ -51,12 +51,13 @@ class DownloadViewModelTest {
                 displayName = displayName,
                 sha256 = "test123",
                 sizeInBytes = 1000L,
-                modelFileFormat = com.browntowndev.pocketcrew.domain.model.ModelFileFormat.LITERTLM
+                modelFileFormat = com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.LITERTLM
             ),
             tunings = ModelConfiguration.Tunings(
                 temperature = 0.7,
                 topK = 40,
                 topP = 0.95,
+                repetitionPenalty = 1.0,
                 maxTokens = 512,
                 contextWindow = 2048
             ),

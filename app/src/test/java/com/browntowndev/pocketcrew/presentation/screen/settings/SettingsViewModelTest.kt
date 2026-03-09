@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.presentation.screen.settings
 
-import com.browntowndev.pocketcrew.domain.model.AppTheme
-import com.browntowndev.pocketcrew.domain.model.ModelType
-import com.browntowndev.pocketcrew.domain.model.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetModelConfigurationsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.UpdateModelConfigurationUseCase
@@ -72,8 +72,8 @@ class SettingsViewModelTest {
         every { mockGetSettingsUseCase.invoke() } returns settingsFlow.asStateFlow()
 
         // Setup default mock behavior for getModelConfigurationsUseCase
-        every { mockGetModelConfigurationsUseCase.invoke() } returns MutableStateFlow<List<com.browntowndev.pocketcrew.domain.model.ModelConfigurationUi>>(emptyList()).asStateFlow()
-        every { mockGetModelConfigurationsUseCase.observeSingle(any()) } returns MutableStateFlow<com.browntowndev.pocketcrew.domain.model.ModelConfigurationUi?>(null).asStateFlow()
+        every { mockGetModelConfigurationsUseCase.invoke() } returns MutableStateFlow<List<com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationUi>>(emptyList()).asStateFlow()
+        every { mockGetModelConfigurationsUseCase.observeSingle(any()) } returns MutableStateFlow<com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationUi?>(null).asStateFlow()
 
         // Create ViewModel
         viewModel = SettingsViewModel(

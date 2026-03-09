@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase
 
-import com.browntowndev.pocketcrew.domain.model.Message
-import com.browntowndev.pocketcrew.domain.model.Role
+import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach

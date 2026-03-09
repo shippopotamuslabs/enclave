@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.data.repository
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -43,6 +43,7 @@ class ModelRegistryTest {
                 topK = 40,
                 topP = 0.95,
                 maxTokens = 2048,
+                repetitionPenalty = 1.1,
                 contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
@@ -92,6 +93,7 @@ class ModelRegistryTest {
                 topK = 40,
                 topP = 0.95,
                 maxTokens = 2048,
+                repetitionPenalty = 1.1,
                 contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
@@ -155,6 +157,7 @@ class ModelRegistryTest {
                 topK = 40,
                 topP = 0.95,
                 maxTokens = 2048,
+                repetitionPenalty = 1.1,
                 contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
@@ -190,6 +193,7 @@ class ModelRegistryTest {
                 topK = 40,
                 topP = 0.95,
                 maxTokens = 1024,
+                repetitionPenalty = 1.1,
                 contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(systemPrompt = "")
@@ -223,6 +227,7 @@ class ModelRegistryTest {
                 topK = 40,
                 topP = 0.95,
                 maxTokens = 512,
+                repetitionPenalty = 1.1,
                 contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(systemPrompt = "You are a draft assistant.")

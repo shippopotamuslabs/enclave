@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.port.download
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 
 /**
  * Port (interface) for providing model download URLs.

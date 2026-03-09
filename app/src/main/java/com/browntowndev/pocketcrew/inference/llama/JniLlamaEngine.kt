@@ -108,7 +108,6 @@ class JniLlamaEngine @Inject constructor(
             override fun onToken(token: String) {
                 if (isClosed) return
                 sb.append(token)
-                Log.d(TAG, "Token: $token")
                 trySend(GenerationEvent.Token(token))
             }
 

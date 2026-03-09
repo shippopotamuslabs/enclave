@@ -1,9 +1,9 @@
 package com.browntowndev.pocketcrew.presentation.screen.settings
 
-import com.browntowndev.pocketcrew.domain.model.AppTheme
-import com.browntowndev.pocketcrew.domain.model.ModelConfigurationUi
-import com.browntowndev.pocketcrew.domain.model.ModelType
-import com.browntowndev.pocketcrew.domain.model.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationUi
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 
 data class StoredMemory(
     val id: String,

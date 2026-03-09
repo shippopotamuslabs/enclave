@@ -1,6 +1,7 @@
-package com.browntowndev.pocketcrew.domain.model
+package com.browntowndev.pocketcrew.domain.model.download
 
 import androidx.compose.runtime.Immutable
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 /**
  * Status of an individual file download.

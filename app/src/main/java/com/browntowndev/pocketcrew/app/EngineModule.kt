@@ -2,10 +2,11 @@ package com.browntowndev.pocketcrew.app
 
 import android.content.Context
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.EnginePipelineOrchestrator
+import com.browntowndev.pocketcrew.domain.port.inference.RouterConfig
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.inference.ConversationManagerImpl
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
@@ -62,6 +63,10 @@ annotation class FastModelEngine
 object EngineModule {
 
     private const val TAG = "EngineModule"
+
+    @Provides
+    @Singleton
+    fun provideRouterConfig(): RouterConfig = RouterConfig()
 
     private fun getModelPath(context: Context, filename: String): String {
         val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)

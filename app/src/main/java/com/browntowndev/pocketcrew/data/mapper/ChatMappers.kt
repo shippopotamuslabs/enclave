@@ -2,8 +2,8 @@ package com.browntowndev.pocketcrew.data.mapper
 
 import com.browntowndev.pocketcrew.data.local.ChatEntity
 import com.browntowndev.pocketcrew.data.local.MessageEntity
-import com.browntowndev.pocketcrew.domain.model.Chat
-import com.browntowndev.pocketcrew.domain.model.Message
+import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.Message
 
 /**
  * Mappers for converting between domain models and Room entities.

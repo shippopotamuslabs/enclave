@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
-import com.browntowndev.pocketcrew.domain.model.Chat
-import com.browntowndev.pocketcrew.domain.model.ThinkingData
+import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 
 /**
  * Port (interface) for chat persistence.

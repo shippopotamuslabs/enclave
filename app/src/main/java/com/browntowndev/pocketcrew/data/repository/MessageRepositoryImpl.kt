@@ -3,7 +3,7 @@ package com.browntowndev.pocketcrew.data.repository
 import com.browntowndev.pocketcrew.data.local.MessageDao
 import com.browntowndev.pocketcrew.data.mapper.toDomain
 import com.browntowndev.pocketcrew.data.mapper.toEntity
-import com.browntowndev.pocketcrew.domain.model.Message
+import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import javax.inject.Inject
 import javax.inject.Singleton

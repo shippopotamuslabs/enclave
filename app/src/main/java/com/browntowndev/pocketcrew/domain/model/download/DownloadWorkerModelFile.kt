@@ -1,6 +1,7 @@
-package com.browntowndev.pocketcrew.domain.model
+package com.browntowndev.pocketcrew.domain.model.download
 
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 data class DownloadWorkerModelFile(
     val sizeBytes: Long,

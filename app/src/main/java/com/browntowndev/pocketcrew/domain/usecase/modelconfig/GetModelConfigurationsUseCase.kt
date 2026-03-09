@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.domain.usecase.modelconfig
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfigurationUi
-import com.browntowndev.pocketcrew.domain.model.ModelType
-import com.browntowndev.pocketcrew.domain.model.toUi
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationUi
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.toUi
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
