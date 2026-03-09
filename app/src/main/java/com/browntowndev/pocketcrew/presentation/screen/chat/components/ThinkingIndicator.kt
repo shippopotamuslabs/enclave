@@ -95,19 +95,23 @@ fun ThinkingIndicator(
             ) {
                 thinkingSteps.forEachIndexed { index, step ->
                     val isLatest = index == thinkingSteps.lastIndex
-                    Text(
-                        text = step,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp,
-                        ),
-                        color = if (isLatest) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        modifier = Modifier.padding(
-                            start = 4.dp,
-                            top = if (index == 0) 0.dp else 3.dp,
-                        ),
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = step,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                fontSize = 13.sp,
+                                lineHeight = 18.sp,
+                            ),
+                            color = if (isLatest) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.padding(
+                                start = 4.dp,
+                                top = if (index == 0) 0.dp else 3.dp,
+                            ),
+                        )
+                    }
                 }
             }
         }

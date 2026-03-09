@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.presentation.screen.download
 
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.DownloadState
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.FileProgress
 import com.browntowndev.pocketcrew.domain.model.FileStatus
@@ -10,6 +11,7 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.data.repository.DownloadWorkRepository
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.presentation.screen.download.DownloadViewModel.FileProgressUiModel
 import io.mockk.MockKAnnotations
 import io.mockk.mockkStatic
@@ -39,10 +41,34 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadViewModelTest {
 
+    private fun createTestConfig(modelType: ModelType, displayName: String): ModelConfiguration {
+        return ModelConfiguration(
+            modelType = modelType,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/model",
+                remoteFileName = "${modelType.name.lowercase()}.litertlm",
+                localFileName = "${modelType.name.lowercase()}.litertlm",
+                displayName = displayName,
+                sha256 = "test123",
+                sizeInBytes = 1000L,
+                modelFileFormat = com.browntowndev.pocketcrew.domain.model.ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 512,
+                contextWindow = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
+        )
+    }
+
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var mockOrchestrator: ModelDownloadOrchestratorPort
     private lateinit var mockDownloadWorkRepository: DownloadWorkRepository
+    private lateinit var mockModelRegistry: ModelRegistryPort
 
     // Mock DownloadModelsResult for tests
     private lateinit var mockModelsResult: DownloadModelsResult
@@ -67,6 +93,14 @@ class DownloadViewModelTest {
 
         mockOrchestrator = mockk(relaxed = true)
         mockDownloadWorkRepository = mockk(relaxed = true)
+        mockModelRegistry = mockk(relaxed = true)
+
+        // Mock getRegisteredModelSync to return configs with display names
+        every { mockModelRegistry.getRegisteredModelSync(ModelType.VISION) } returns createTestConfig(ModelType.VISION, "The Observer")
+        every { mockModelRegistry.getRegisteredModelSync(ModelType.DRAFT_ONE) } returns createTestConfig(ModelType.DRAFT_ONE, "The Brainstormer")
+        every { mockModelRegistry.getRegisteredModelSync(ModelType.DRAFT_TWO) } returns createTestConfig(ModelType.DRAFT_TWO, "The Sketcher")
+        every { mockModelRegistry.getRegisteredModelSync(ModelType.MAIN) } returns createTestConfig(ModelType.MAIN, "The Mastermind")
+        every { mockModelRegistry.getRegisteredModelSync(ModelType.FAST) } returns createTestConfig(ModelType.FAST, "The Sentinel")
 
         // Create mock DownloadModelsResult with empty models to download
         mockModelsResult = DownloadModelsResult(
@@ -88,6 +122,7 @@ class DownloadViewModelTest {
         viewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -309,6 +344,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -328,6 +364,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -347,6 +384,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -366,6 +404,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -385,6 +424,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -413,6 +453,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -436,6 +477,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -476,6 +518,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -530,6 +573,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -565,7 +609,7 @@ class DownloadViewModelTest {
             ),
             FileProgress(
                 filename = "draft.litertlm",
-                modelTypes = listOf(ModelType.DRAFT),
+                modelTypes = listOf(ModelType.DRAFT_TWO),
                 bytesDownloaded = 0,
                 totalBytes = 100_000_000,
                 status = FileStatus.QUEUED
@@ -587,6 +631,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -608,7 +653,7 @@ class DownloadViewModelTest {
         val downloadsWithMultipleModelTypes = listOf(
             FileProgress(
                 filename = "main.litertlm",
-                modelTypes = listOf(ModelType.MAIN, ModelType.DRAFT),
+                modelTypes = listOf(ModelType.MAIN, ModelType.DRAFT_TWO),
                 bytesDownloaded = 0,
                 totalBytes = 200_000_000,
                 status = FileStatus.QUEUED
@@ -623,6 +668,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -657,6 +703,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -689,6 +736,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )

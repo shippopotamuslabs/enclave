@@ -3,7 +3,11 @@ package com.browntowndev.pocketcrew.presentation.screen.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.AppTheme
+import com.browntowndev.pocketcrew.domain.model.ModelConfigurationUi
+import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.model.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetModelConfigurationsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.UpdateModelConfigurationUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateAllowMemoriesUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomizationEnabledUseCase
@@ -35,7 +39,11 @@ private data class TransientState(
     val showMemoriesSheet: Boolean = false,
     val memories: List<StoredMemory> = emptyList(),
     val showFeedbackSheet: Boolean = false,
-    val feedbackText: String = ""
+    val feedbackText: String = "",
+    // Model Configuration
+    val showModelConfigSheet: Boolean = false,
+    val selectedModelType: ModelType? = null,
+    val selectedModelConfig: ModelConfigurationUi? = null
 )
 
 @HiltViewModel
@@ -47,15 +55,28 @@ class SettingsViewModel @Inject constructor(
     private val updateCustomizationEnabledUseCase: UpdateCustomizationEnabledUseCase,
     private val updateSelectedPromptOptionUseCase: UpdateSelectedPromptOptionUseCase,
     private val updateCustomPromptTextUseCase: UpdateCustomPromptTextUseCase,
-    private val updateAllowMemoriesUseCase: UpdateAllowMemoriesUseCase
+    private val updateAllowMemoriesUseCase: UpdateAllowMemoriesUseCase,
+    private val getModelConfigurationsUseCase: GetModelConfigurationsUseCase,
+    private val updateModelConfigurationUseCase: UpdateModelConfigurationUseCase
 ) : ViewModel() {
 
     private val _transientState = MutableStateFlow(TransientState())
 
+    // Model configurations flow - follows 2026 Compose best practices
+    private val modelConfigsFlow = getModelConfigurationsUseCase()
+
     val uiState: StateFlow<SettingsUiState> = combine(
         getSettingsUseCase(),
+        modelConfigsFlow,
         _transientState,
-    ) { persistedSettings, transientState ->
+    ) { persistedSettings, modelConfigs, transientState ->
+        // Use transient state's selectedModelConfig if available (for editing),
+        // otherwise use the flow's selectedConfig (initial load)
+        val selectedConfig = transientState.selectedModelConfig
+            ?: transientState.selectedModelType?.let { type ->
+                modelConfigs.find { it.modelType == type }
+            }
+
         SettingsUiState(
             // Persisted settings from repository
             theme = persistedSettings.theme,
@@ -71,7 +92,14 @@ class SettingsViewModel @Inject constructor(
             showMemoriesSheet = transientState.showMemoriesSheet,
             showFeedbackSheet = transientState.showFeedbackSheet,
             feedbackText = transientState.feedbackText,
-            memories = transientState.memories
+            memories = transientState.memories,
+            // Model Configuration state
+            showModelConfigSheet = transientState.showModelConfigSheet,
+            modelConfigurations = modelConfigs,
+            selectedModelType = transientState.selectedModelType,
+            selectedModelConfig = selectedConfig,
+            // Available HuggingFace models (currently just the registered one)
+            availableHuggingFaceModels = modelConfigs.map { it.huggingFaceModelName }.distinct()
         )
     }.stateIn(
         scope = viewModelScope,
@@ -173,5 +201,55 @@ class SettingsViewModel @Inject constructor(
     fun onSubmitFeedback() {
         // Stub: Persist to DataStore - not implemented
         _transientState.update { it.copy(feedbackText = "", showFeedbackSheet = false) }
+    }
+
+    // Model Configuration
+    fun onShowModelConfigSheet(show: Boolean) {
+        _transientState.update { it.copy(showModelConfigSheet = show, selectedModelType = null) }
+    }
+
+    fun onSelectModelType(modelType: ModelType) {
+        _transientState.update {
+            it.copy(
+                selectedModelType = modelType,
+                selectedModelConfig = null // Will be derived from modelConfigs in combine
+            )
+        }
+    }
+
+    fun onBackToModelList() {
+        _transientState.update { it.copy(selectedModelType = null, selectedModelConfig = null) }
+    }
+
+    fun onHuggingFaceModelNameChange(modelName: String) {
+        val currentConfig = _transientState.value.selectedModelConfig ?: return
+        val updatedConfig = currentConfig.copy(huggingFaceModelName = modelName)
+        _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
+    }
+
+    fun onTemperatureChange(temperature: Double) {
+        val currentConfig = _transientState.value.selectedModelConfig ?: return
+        val updatedConfig = currentConfig.copy(temperature = temperature)
+        _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
+    }
+
+    fun onTopKChange(topK: Int) {
+        val currentConfig = _transientState.value.selectedModelConfig ?: return
+        val updatedConfig = currentConfig.copy(topK = topK)
+        _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
+    }
+
+    fun onTopPChange(topP: Double) {
+        val currentConfig = _transientState.value.selectedModelConfig ?: return
+        val updatedConfig = currentConfig.copy(topP = topP)
+        _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
+    }
+
+    fun onSaveModelConfig() {
+        val config = _transientState.value.selectedModelConfig ?: return
+        viewModelScope.launch {
+            updateModelConfigurationUseCase(config)
+        }
+        onBackToModelList()
     }
 }

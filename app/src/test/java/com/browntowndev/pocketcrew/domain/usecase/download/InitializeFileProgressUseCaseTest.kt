@@ -46,7 +46,7 @@ class InitializeFileProgressUseCaseTest {
                 remoteFileName = "main.litertlm",
                 localFileName = "main.litertlm",
                 displayName = "Main Model",
-                md5 = "abc123",
+                sha256 = "abc123",
                 sizeInBytes = 1000000L,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
@@ -54,7 +54,8 @@ class InitializeFileProgressUseCaseTest {
                 temperature = 0.7,
                 topK = 40,
                 topP = 0.9,
-                maxTokens = 2048
+                maxTokens = 2048,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(
                 systemPrompt = "You are a helpful assistant."
@@ -91,7 +92,7 @@ class InitializeFileProgressUseCaseTest {
                 remoteFileName = "main.litertlm",
                 localFileName = "main.litertlm",
                 displayName = "Main Model",
-                md5 = "abc123",
+                sha256 = "abc123",
                 sizeInBytes = 1000000L,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
@@ -99,7 +100,8 @@ class InitializeFileProgressUseCaseTest {
                 temperature = 0.7,
                 topK = 40,
                 topP = 0.9,
-                maxTokens = 2048
+                maxTokens = 2048,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(
                 systemPrompt = "You are a helpful assistant."
@@ -134,7 +136,7 @@ class InitializeFileProgressUseCaseTest {
                 remoteFileName = "main.litertlm",
                 localFileName = "main.litertlm",
                 displayName = "Main Model",
-                md5 = "abc123",
+                sha256 = "abc123",
                 sizeInBytes = 1000000L,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
@@ -142,7 +144,8 @@ class InitializeFileProgressUseCaseTest {
                 temperature = 0.7,
                 topK = 40,
                 topP = 0.9,
-                maxTokens = 2048
+                maxTokens = 2048,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(
                 systemPrompt = "You are a helpful assistant."
@@ -156,7 +159,7 @@ class InitializeFileProgressUseCaseTest {
                 remoteFileName = "vision.litertlm",
                 localFileName = "vision.litertlm",
                 displayName = "Vision Model",
-                md5 = "vision123",
+                sha256 = "vision123",
                 sizeInBytes = 2000000L,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
@@ -164,7 +167,8 @@ class InitializeFileProgressUseCaseTest {
                 temperature = 0.7,
                 topK = 40,
                 topP = 0.9,
-                maxTokens = 2048
+                maxTokens = 2048,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(
                 systemPrompt = "You are a vision assistant."
@@ -198,7 +202,7 @@ class InitializeFileProgressUseCaseTest {
                 remoteFileName = "main.litertlm",
                 localFileName = "main.litertlm",
                 displayName = "Main Model",
-                md5 = "abc123",
+                sha256 = "abc123",
                 sizeInBytes = 1000000L,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
@@ -206,7 +210,8 @@ class InitializeFileProgressUseCaseTest {
                 temperature = 0.7,
                 topK = 40,
                 topP = 0.9,
-                maxTokens = 2048
+                maxTokens = 2048,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(
                 systemPrompt = "You are a helpful assistant."
@@ -250,7 +255,7 @@ class InitializeFileProgressUseCaseTest {
                 remoteFileName = "shared.litertlm",
                 localFileName = "main.litertlm",
                 displayName = "Main Model",
-                md5 = "abc123",
+                sha256 = "abc123",
                 sizeInBytes = 1000000L,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
@@ -258,7 +263,8 @@ class InitializeFileProgressUseCaseTest {
                 temperature = 0.7,
                 topK = 40,
                 topP = 0.9,
-                maxTokens = 2048
+                maxTokens = 2048,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(
                 systemPrompt = "You are a helpful assistant."
@@ -272,7 +278,7 @@ class InitializeFileProgressUseCaseTest {
                 remoteFileName = "shared.litertlm",
                 localFileName = "fast.litertlm",
                 displayName = "Fast Model",
-                md5 = "abc123",
+                sha256 = "abc123",
                 sizeInBytes = 1000000L,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
@@ -280,7 +286,8 @@ class InitializeFileProgressUseCaseTest {
                 temperature = 0.7,
                 topK = 40,
                 topP = 0.9,
-                maxTokens = 2048
+                maxTokens = 2048,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(
                 systemPrompt = "You are a fast assistant."

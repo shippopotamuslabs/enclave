@@ -51,6 +51,14 @@ fun SettingsRoute(
             viewModel.onSubmitFeedback()
             onShowSnackbar("Feedback submitted. Thank you!", null)
         },
-        onNavigateToModelDownload = onNavigateToModelDownload
+        onNavigateToModelDownload = onNavigateToModelDownload,
+        onShowModelConfigSheet = viewModel::onShowModelConfigSheet,
+        onSelectModelType = viewModel::onSelectModelType,
+        onBackToModelList = viewModel::onBackToModelList,
+        onHuggingFaceModelNameChange = viewModel::onHuggingFaceModelNameChange,
+        onTemperatureChange = viewModel::onTemperatureChange,
+        onTopKChange = viewModel::onTopKChange,
+        onTopPChange = viewModel::onTopPChange,
+        onSaveModelConfig = viewModel::onSaveModelConfig
     )
 }

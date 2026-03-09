@@ -1,11 +1,12 @@
 package com.browntowndev.pocketcrew.data.download
 
+import android.content.Context
 import androidx.work.WorkInfo
 import com.browntowndev.pocketcrew.domain.model.DownloadState
 import com.browntowndev.pocketcrew.domain.model.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
-import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
@@ -14,14 +15,17 @@ import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.usecase.download.CheckModelEligibilityUseCase
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeFileProgressUseCase
 import com.browntowndev.pocketcrew.domain.usecase.download.ValidateDownloadConditionsUseCase
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class ModelDownloadOrchestratorImpl @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val sessionManager: DownloadSessionManager,
     private val validateConditions: ValidateDownloadConditionsUseCase,
     private val initializeFileProgress: InitializeFileProgressUseCase,
@@ -30,7 +34,6 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
     private val modelRegistry: ModelRegistryPort,
     private val logger: LoggingPort,
     override val speedTracker: DownloadSpeedTrackerPort,
-    private val modelConfigCache: ModelConfigCachePort,
 ) : ModelDownloadOrchestratorPort {
     companion object {
         private const val TAG = "ModelDownloadOrchestrator"
@@ -46,11 +49,6 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
 
     // Cached startup result from InitializeModelsUseCase
     private var startupModelsResult: DownloadModelsResult? = null
-
-    // Cached models to download
-    private val cachedAllModels: List<ModelConfiguration> by lazy {
-        modelConfigCache.fullConfig
-    }
 
     /**
      * Initialize the orchestrator with a pre-computed result from startup model check.
@@ -163,14 +161,57 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
     }
 
     private suspend fun updateModelRegistry() {
-        // Update the registry with the successfully downloaded models (use cachedAllModels)
-        for (model in cachedAllModels) {
+        // Update the registry with the successfully downloaded models
+        // Use models from startup result which contains all expected models
+        val models = startupModelsResult?.modelsToDownload ?: return
+        for (model in models) {
             try {
-                modelRegistry.setRegisteredModel(model)
+                modelRegistry.setRegisteredModel(model, com.browntowndev.pocketcrew.domain.model.ModelStatus.CURRENT)
                 logger.debug(TAG, "Updated registry: ${model.modelType} -> ${model.metadata.displayName}")
             } catch (e: Exception) {
                 logger.error(TAG, "Failed to update registry for ${model.modelType}: ${e.message}")
             }
+        }
+
+        // Clean up old files on filesystem that are not in current configurations
+        cleanupOrphanedModelFiles(models)
+
+        // Clear old entries after successful download
+        modelRegistry.clearOld()
+    }
+
+    /**
+     * Delete any model files on the filesystem that are not in the current model configurations.
+     * This handles cases where a model was removed from the remote config.
+     */
+    private fun cleanupOrphanedModelFiles(currentModels: List<ModelConfiguration>) {
+        val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+        if (!modelsDir.exists()) return
+
+        // Get filenames of current models
+        val currentFilenames = currentModels.map { it.metadata.localFileName }.toSet()
+
+        // Get all model files in the directory (excluding temp files)
+        val existingFiles = modelsDir.listFiles { file ->
+            file.isFile && !file.name.endsWith(ModelConfig.TEMP_EXTENSION)
+        } ?: return
+
+        // Delete any file that is not in the current configuration
+        var deletedCount = 0
+        for (file in existingFiles) {
+            if (file.name !in currentFilenames) {
+                val deleted = file.delete()
+                if (deleted) {
+                    deletedCount++
+                    logger.info(TAG, "Deleted orphaned model file: ${file.name}")
+                } else {
+                    logger.warning(TAG, "Failed to delete orphaned model file: ${file.name}")
+                }
+            }
+        }
+
+        if (deletedCount > 0) {
+            logger.info(TAG, "Cleaned up $deletedCount orphaned model file(s)")
         }
     }
 

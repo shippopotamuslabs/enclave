@@ -34,7 +34,7 @@ class ModelRegistryTest {
                 remoteFileName = "main.bin",
                 localFileName = "main.bin",
                 displayName = "Main Model",
-                md5 = "abc123",
+                sha256 = "abc123",
                 sizeInBytes = 1024,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
@@ -42,7 +42,8 @@ class ModelRegistryTest {
                 temperature = 0.0,
                 topK = 40,
                 topP = 0.95,
-                maxTokens = 2048
+                maxTokens = 2048,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
         )
@@ -82,7 +83,7 @@ class ModelRegistryTest {
                 remoteFileName = "main.bin",
                 localFileName = "main.bin",
                 displayName = "Main Model",
-                md5 = "abc123",
+                sha256 = "abc123",
                 sizeInBytes = 1024,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
@@ -90,7 +91,8 @@ class ModelRegistryTest {
                 temperature = 0.0,
                 topK = 40,
                 topP = 0.95,
-                maxTokens = 2048
+                maxTokens = 2048,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
         )
@@ -144,7 +146,7 @@ class ModelRegistryTest {
                 remoteFileName = "vision.bin",
                 localFileName = "vision.bin",
                 displayName = "Vision Model",
-                md5 = "vision123",
+                sha256 = "vision123",
                 sizeInBytes = 1024,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
@@ -152,7 +154,8 @@ class ModelRegistryTest {
                 temperature = 0.0,
                 topK = 40,
                 topP = 0.95,
-                maxTokens = 2048
+                maxTokens = 2048,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
         )
@@ -178,7 +181,7 @@ class ModelRegistryTest {
                 remoteFileName = "fast.bin",
                 localFileName = "fast.bin",
                 displayName = "Fast Model",
-                md5 = "fast123",
+                sha256 = "fast123",
                 sizeInBytes = 512,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
@@ -186,7 +189,8 @@ class ModelRegistryTest {
                 temperature = 0.0,
                 topK = 40,
                 topP = 0.95,
-                maxTokens = 1024
+                maxTokens = 1024,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(systemPrompt = "")
         )
@@ -204,13 +208,13 @@ class ModelRegistryTest {
     fun getRegisteredModel_handlesDraftModel() = runTest {
         // Given
         val draftModel = ModelConfiguration(
-            modelType = ModelType.DRAFT,
+            modelType = ModelType.DRAFT_ONE,
             metadata = ModelConfiguration.Metadata(
                 huggingFaceModelName = "model/draft",
                 remoteFileName = "draft.bin",
                 localFileName = "draft.bin",
                 displayName = "Draft Model",
-                md5 = "draft123",
+                sha256 = "draft123",
                 sizeInBytes = 512,
                 modelFileFormat = ModelFileFormat.TASK
             ),
@@ -218,18 +222,19 @@ class ModelRegistryTest {
                 temperature = 0.0,
                 topK = 40,
                 topP = 0.95,
-                maxTokens = 512
+                maxTokens = 512,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(systemPrompt = "You are a draft assistant.")
         )
 
-        coEvery { mockRegistry.getRegisteredModel(ModelType.DRAFT) } returns draftModel
+        coEvery { mockRegistry.getRegisteredModel(ModelType.DRAFT_ONE) } returns draftModel
 
         // When
-        val result = mockRegistry.getRegisteredModel(ModelType.DRAFT)
+        val result = mockRegistry.getRegisteredModel(ModelType.DRAFT_ONE)
 
         // Then
-        assertEquals(ModelType.DRAFT, result?.modelType)
+        assertEquals(ModelType.DRAFT_ONE, result?.modelType)
         assertEquals(ModelFileFormat.TASK, result?.metadata?.modelFileFormat)
     }
 }

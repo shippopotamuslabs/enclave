@@ -57,7 +57,7 @@ class ValidateDownloadConditionsUseCaseTest {
         assertEquals(null, result.errorMessage)
     }
 
-    private fun createModelConfig(modelType: ModelType, md5: String): ModelConfiguration {
+    private fun createModelConfig(modelType: ModelType, sha256: String): ModelConfiguration {
         return ModelConfiguration(
             modelType = modelType,
             metadata = ModelConfiguration.Metadata(
@@ -65,7 +65,7 @@ class ValidateDownloadConditionsUseCaseTest {
                 remoteFileName = "${modelType.name.lowercase()}.litertlm",
                 localFileName = "${modelType.name.lowercase()}.litertlm",
                 displayName = "Test Model",
-                md5 = md5,
+                sha256 = sha256,
                 sizeInBytes = 1000000L,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
@@ -73,7 +73,8 @@ class ValidateDownloadConditionsUseCaseTest {
                 temperature = 0.7,
                 topK = 40,
                 topP = 0.9,
-                maxTokens = 2048
+                maxTokens = 2048,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(
                 systemPrompt = "You are helpful."
@@ -160,8 +161,8 @@ class ValidateDownloadConditionsUseCaseTest {
 
         // Then
         assertEquals(2, result.missingModels.size)
-        assertTrue(result.missingModels.any { it.metadata.md5 == "abc123" })
-        assertTrue(result.missingModels.any { it.metadata.md5 == "def456" })
+        assertTrue(result.missingModels.any { it.metadata.sha256 == "abc123" })
+        assertTrue(result.missingModels.any { it.metadata.sha256 == "def456" })
     }
 
     @Test

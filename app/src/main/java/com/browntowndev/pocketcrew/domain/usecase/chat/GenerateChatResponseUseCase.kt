@@ -42,7 +42,7 @@ class GenerateChatResponseUseCase @Inject constructor(
 
             var requiresReasoning = false
 
-            fastModelService.sendPrompt(complexityPrompt, closeConversation = true).collect { event ->
+            /*fastModelService.sendPrompt(complexityPrompt, closeConversation = true).collect { event ->
                 when (event) {
                     is InferenceEvent.Thinking -> {
                         // Ignore thinking during complexity check
@@ -62,7 +62,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                         requiresReasoning = true
                     }
                 }
-            }
+            }*/
 
             // Step 2: Route based on complexity evaluation
             if (requiresReasoning) {

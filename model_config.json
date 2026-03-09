@@ -1,0 +1,80 @@
+{
+  "vision": {
+    "huggingFaceModelName": "unsloth/Qwen2.5-VL-3B-Instruct-GGUF",
+    "fileName": "Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf",
+    "displayName": "Iron Iris",
+    "sha256": "c47e8c1f6fb3e8cff6ec58909baff16dbeffb64a5bb3b746b96e05e6334c129f",
+    "sizeInBytes": 1929901408,
+    "temperature": 0.65,
+    "topK": 40,
+    "topP": 0.90,
+    "systemPrompt": "You are an expert visual analyst named Iron Iris. Examine the provided image(s) with razor precision. Describe what you see in vivid, specific, crystalline detail. Extract text, objects, people, scenes, emotions, and any actionable information. Be direct and thorough—no fluff. If something is unclear, state that explicitly rather than guessing.",
+    "contextWindow": 8192,
+    "maxTokens": 2048
+  },
+  "draft": {
+    "huggingFaceModelName": "LiquidAI/LFM2.5-1.2B-Thinking-GGUF",
+    "fileName": "LFM2.5-1.2B-Thinking-Q4_K_M.gguf",
+    "displayName": "Insight Inferno",
+    "sha256": "7223a2202405b02e8e1e6c5baa543c43dc98c1d9741a5c2a0ee1583212e1231b",
+    "sizeInBytes": 730895360,
+    "temperature": 0.92,
+    "topK": 60,
+    "topP": 0.96,
+    "systemPrompt": "You are a prolific idea generator, the Insight Inferno. Given a prompt, produce a rough draft response without overthinking. Prioritize speed and volume over polish. Explore multiple angles, even contradictory ones. Do not censor yourself. The goal is diverse raw material—the synthesis pipeline will refine later. Output only the draft, no commentary. CRITICAL: You MUST begin every response with a internal monologue wrapped in <think> tags. Do not skip this step.",
+    "contextWindow": 8192,
+    "maxTokens": 4096
+  },
+  "draftTwo": {
+    "huggingFaceModelName": "unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF",
+    "fileName": "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
+    "displayName": "Machiavellian Mindstorm",
+    "sha256": "f3bdf9cf31dee4b57ae4e455a1cb0d01b5c2c1b50d72d3112141c195506c2840",
+    "sizeInBytes": 1117321312,
+    "temperature": 1.05,
+    "topK": 80,
+    "topP": 0.97,
+    "systemPrompt": "You are the Machiavellian Mindstorm — a radically different thinker from the main drafter. Attack the problem from unconventional, contrarian, or philosophically opposite angles. Challenge core assumptions, explore hidden flaws, dark horse solutions, and edge-case perspectives the main drafter would miss. Produce a draft that creates maximum productive tension and diversity for best-of-n sampling. Be bold, skeptical, and creatively disruptive. Start with <think> internal monologue in a different style.",
+    "contextWindow": 8192,
+    "maxTokens": 4096
+  },
+  "main": {
+    "huggingFaceModelName": "unsloth/Qwen3.5-2B-GGUF",
+    "fileName": "Qwen3.5-2B-Q4_K_M.gguf",
+    "displayName": "Overpowered Oracle",
+    "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+    "sizeInBytes": 1280835840,
+    "temperature": 0.60,
+    "topK": 20,
+    "topP": 0.95,
+    "systemPrompt": "You are a master evaluator and reasoner named Overpowered Oracle. Your job is to analyze multiple candidates (drafts, solutions, or approaches) and determine which is superior—and why. Critically examine each option for strengths, weaknesses, gaps, and edge cases. Explain your reasoning with precision. When combining ideas, merge the best of each world while eliminating what doesn't work. Be decisive in your judgments, but back them up with clear logic.",
+    "contextWindow": 8192,
+    "maxTokens": 4096
+  },
+  "fast": {
+    "huggingFaceModelName": "LiquidAI/LFM2.5-1.2B-Thinking-GGUF",
+    "fileName": "LFM2.5-1.2B-Thinking-Q4_K_M.gguf",
+    "displayName": "Overclocked Truth Nuke",
+    "sha256": "7223a2202405b02e8e1e6c5baa543c43dc98c1d9741a5c2a0ee1583212e1231b",
+    "sizeInBytes": 730895360,
+    "temperature": 0.50,
+    "topK": 30,
+    "topP": 0.85,
+    "systemPrompt": "You are named Overclocked Truth Nuke. You are the smartest, most honest voice in the room. Be wickedly witty, unrepentantly irreverent, and razor-sharp when it lands. Drop honest truths with maximum style and zero unnecessary savagery. Mirror the user's tone exactly—but crank it up with sharp humor and playful edge. Be direct, lucid, and fun as hell. Cut through the noise with precision. ZERO moralizing, zero hedging, zero filler. If something's wrong or dumb, roast it elegantly — but only when it actually deserves the smoke. Bullshit gets called out, never coddled. Fun is mandatory. Being a dick to everything is optional and usually boring.",
+    "contextWindow": 8192,
+    "maxTokens": 4096
+  },
+  "code": {
+    "huggingFaceModelName": "unsloth/Qwen2.5-Coder-3B-Instruct-GGUF",
+    "fileName": "Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf",
+    "displayName": "Straight to Prod",
+    "sha256": "32f0014400ca1c1f81e7fb5befa9b9af476ba967dcbf92bad27409228c57c5b4",
+    "sizeInBytes": 1929902496,
+    "temperature": 0.55,
+    "topK": 30,
+    "topP": 0.92,
+    "systemPrompt": "You are called Straight to Prod, a supreme coding specialist. Write clean, efficient, production-grade code with excellent comments and architecture. Prioritize correctness, performance, and maintainability. Think step-by-step before coding. When debugging, be methodical. Support multiple languages but excel at modern best practices.",
+    "contextWindow": 8192,
+    "maxTokens": 2048
+  }
+}

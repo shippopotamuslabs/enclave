@@ -3,7 +3,6 @@ package com.browntowndev.pocketcrew.app
 import android.app.NotificationManager
 import android.content.Context
 import androidx.work.WorkManager
-import com.browntowndev.pocketcrew.data.download.ModelConfigCacheImpl
 import com.browntowndev.pocketcrew.data.download.DownloadNotificationManager
 import com.browntowndev.pocketcrew.data.download.ModelConfigFetcherImpl
 import com.browntowndev.pocketcrew.data.download.ModelDownloadOrchestratorImpl
@@ -12,7 +11,6 @@ import com.browntowndev.pocketcrew.data.download.remote.HuggingFaceModelUrlProvi
 import com.browntowndev.pocketcrew.data.repository.ModelConfigProviderImpl
 import com.browntowndev.pocketcrew.data.download.DownloadProgressTracker
 import com.browntowndev.pocketcrew.domain.model.ModelConfig
-import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
@@ -87,12 +85,6 @@ abstract class DownloadPortModule {
     abstract fun bindModelConfigFetcherPort(
         modelConfigFetcherImpl: ModelConfigFetcherImpl
     ): ModelConfigFetcherPort
-
-    @Binds
-    @Singleton
-    abstract fun bindModelConfigCachePort(
-        modelConfigCacheImpl: ModelConfigCacheImpl
-    ): ModelConfigCachePort
 
     @Binds
     @Singleton

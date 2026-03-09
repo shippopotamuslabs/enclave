@@ -11,7 +11,6 @@ import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.service.FileIntegrityValidator
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -26,7 +25,6 @@ class ModelDownloadWorkerTest {
 
     private lateinit var mockContext: Context
     private lateinit var mockWorkerParams: WorkerParameters
-    private lateinit var mockFileIntegrityValidator: FileIntegrityValidator
     private lateinit var mockLogger: LoggingPort
     private lateinit var mockNotificationManager: DownloadNotificationManager
     private lateinit var mockProgressTracker: DownloadProgressTracker
@@ -40,7 +38,6 @@ class ModelDownloadWorkerTest {
     fun setup() {
         mockContext = mockk(relaxed = true)
         mockWorkerParams = mockk(relaxed = true)
-        mockFileIntegrityValidator = mockk(relaxed = true)
         mockLogger = mockk(relaxed = true)
         mockNotificationManager = mockk(relaxed = true)
         mockProgressTracker = mockk(relaxed = true)
@@ -52,7 +49,6 @@ class ModelDownloadWorkerTest {
         worker = ModelDownloadWorker(
             context = mockContext,
             params = mockWorkerParams,
-            fileIntegrityValidator = mockFileIntegrityValidator,
             logger = mockLogger,
             notificationManager = mockNotificationManager,
             progressTracker = mockProgressTracker,
@@ -76,7 +72,6 @@ class ModelDownloadWorkerTest {
         fun allDependencies_areProperlyInjected() {
             assertNotNull(mockContext)
             assertNotNull(mockWorkerParams)
-            assertNotNull(mockFileIntegrityValidator)
             assertNotNull(mockLogger)
             assertNotNull(mockNotificationManager)
             assertNotNull(mockProgressTracker)
@@ -113,8 +108,8 @@ class ModelDownloadWorkerTest {
         @Test
         @DisplayName("Input data can be retrieved from worker parameters")
         fun inputData_canBeRetrieved() {
-            // New format: modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|md5|modelFileFormat|temperature|topK|topP|maxTokens|systemPrompt
-            val modelData = "MAIN|test-remote.gguf|test-local.gguf|Test Model|TheBloke/TestModel|1000|abc123|LITERTLM|0.0|40|0.95|2048|You are a helpful assistant"
+            // New format: modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|maxTokens|systemPrompt
+            val modelData = "MAIN|test-remote.gguf|test-local.gguf|Test Model|TheBloke/TestModel|1000|abc123def456|LITERTLM|0.0|40|0.95|2048|You are a helpful assistant"
             every { mockWorkerParams.inputData } returns workDataOf(
                 "model_files" to arrayOf(modelData),
                 "session_id" to testSessionId

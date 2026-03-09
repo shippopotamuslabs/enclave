@@ -1,9 +1,8 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
-import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
@@ -14,13 +13,12 @@ import javax.inject.Inject
 
 /**
  * Use case for initializing models at app startup.
- * Fetches remote config, initializes cache, and checks which models need to be downloaded.
+ * Fetches remote config, registers expected models in registry, and checks which models need to be downloaded.
  */
 class InitializeModelsUseCase @Inject constructor(
     private val modelConfigFetcher: ModelConfigFetcherPort,
     private val modelRegistry: ModelRegistryPort,
     private val modelDownloadOrchestrator: ModelDownloadOrchestratorPort,
-    private val modelConfigCache: ModelConfigCachePort,
     private val checkModelsUseCase: CheckModelsUseCase,
     private val logPort: LoggingPort
 ) {
@@ -41,9 +39,9 @@ class InitializeModelsUseCase @Inject constructor(
      * This allows passing scan results downstream to avoid duplicate scanning.
      */
     private suspend fun checkModelsResult(): DownloadModelsResult {
-        // Grab current models from registry (what's actually downloaded)
-        val currentModels = modelRegistry.getRegisteredModels()
-        logPort.debug(TAG, "Current downloaded models: $currentModels")
+        // Get models preferring OLD if it exists (for handling failed downloads)
+        val currentModels = modelRegistry.getModelsPreferringOld()
+        logPort.debug(TAG, "Current downloaded/fallback models: $currentModels")
 
         // Fetch remote config
         val remoteConfigResult = modelConfigFetcher.fetchRemoteConfig()
@@ -52,17 +50,20 @@ class InitializeModelsUseCase @Inject constructor(
             emptyList()
         }
 
-        // Initialize cache directly with remote config (not from registry)
-        // Cache holds the EXPECTED remote configuration
-        modelConfigCache.initializeWithRemoteConfig(remoteConfigs)
-        Log.d(TAG, "Model config cache initialized with remote config: ${modelConfigCache.fullConfig}")
+        logPort.debug(TAG, "Fetched ${remoteConfigs.size} remote configs")
 
         // Check if models are ready using CheckModelsUseCase
-        // Pass: registry models (what's downloaded) and cache models (what's expected)
+        // Pass remoteConfigs instead of registeredModels
         val modelsResult = checkModelsUseCase(
             downloadedModels = currentModels,
-            expectedModels = modelConfigCache.fullConfig
+            expectedModels = remoteConfigs
         )
+
+        // Now register each remote config in the registry with CURRENT status
+        remoteConfigs.forEach { config ->
+            modelRegistry.setRegisteredModel(config, ModelStatus.CURRENT)
+        }
+        logPort.debug(TAG, "Registered ${remoteConfigs.size} remote configs in registry")
 
         // Initialize the orchestrator with the startup result
         modelDownloadOrchestrator.initializeWithStartupResult(modelsResult)

@@ -43,7 +43,7 @@ class CheckModelEligibilityUseCaseTest {
 
     private fun createModelConfig(
         modelType: ModelType,
-        md5: String,
+        sha256: String,
         displayName: String,
         sizeInBytes: Long = 1000000L,
         modelFileFormat: ModelFileFormat = ModelFileFormat.LITERTLM,
@@ -58,7 +58,7 @@ class CheckModelEligibilityUseCaseTest {
                 remoteFileName = localFileName,
                 localFileName = localFileName,
                 displayName = displayName,
-                md5 = md5,
+                sha256 = sha256,
                 sizeInBytes = sizeInBytes,
                 modelFileFormat = modelFileFormat
             ),
@@ -66,7 +66,8 @@ class CheckModelEligibilityUseCaseTest {
                 temperature = 0.0,
                 topK = 40,
                 topP = 0.95,
-                maxTokens = maxTokens
+                maxTokens = maxTokens,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(
                 systemPrompt = systemPrompt
@@ -80,7 +81,7 @@ class CheckModelEligibilityUseCaseTest {
     fun `check returns models for missing files`() {
         val modelConfig = createModelConfig(
             modelType = ModelType.MAIN,
-            md5 = "abc123",
+            sha256 = "abc123",
             displayName = "Test Model",
             localFileName = "main.litertlm"
         )
@@ -117,13 +118,13 @@ class CheckModelEligibilityUseCaseTest {
     fun `check handles multiple missing models`() {
         val modelConfig1 = createModelConfig(
             modelType = ModelType.MAIN,
-            md5 = "abc123",
+            sha256 = "abc123",
             displayName = "Test Model 1",
             localFileName = "main1.litertlm"
         )
         val modelConfig2 = createModelConfig(
             modelType = ModelType.VISION,
-            md5 = "def456",
+            sha256 = "def456",
             displayName = "Test Model 2",
             localFileName = "vision.litertlm"
         )
@@ -144,7 +145,7 @@ class CheckModelEligibilityUseCaseTest {
     fun `check returns empty list when no missing partial or invalid`() {
         val modelConfig = createModelConfig(
             modelType = ModelType.MAIN,
-            md5 = "abc123",
+            sha256 = "abc123",
             displayName = "Test Model",
             localFileName = "main.litertlm"
         )
@@ -197,7 +198,7 @@ class CheckModelEligibilityUseCaseTest {
     fun `check includes models with partial downloads`() {
         val modelConfig = createModelConfig(
             modelType = ModelType.MAIN,
-            md5 = "abc123",
+            sha256 = "abc123",
             displayName = "Test Model",
             localFileName = "main.litertlm"
         )
@@ -211,20 +212,20 @@ class CheckModelEligibilityUseCaseTest {
 
         val result = useCase.check(listOf(modelConfig), listOf(modelConfig), scanResult)
 
-        assertTrue(result.any { it.metadata.md5 == "abc123" })
+        assertTrue(result.any { it.metadata.sha256 == "abc123" })
     }
 
     @Test
     fun `check handles multiple partial downloads`() {
         val mainModel = createModelConfig(
             modelType = ModelType.MAIN,
-            md5 = "main-md5",
+            sha256 = "main-md5",
             displayName = "Main Model",
             localFileName = "main.litertlm"
         )
         val visionModel = createModelConfig(
             modelType = ModelType.VISION,
-            md5 = "vision-md5",
+            sha256 = "vision-md5",
             displayName = "Vision Model",
             localFileName = "vision.litertlm"
         )
@@ -248,7 +249,7 @@ class CheckModelEligibilityUseCaseTest {
     fun `check includes invalid models due to format change`() {
         val originalModel = createModelConfig(
             modelType = ModelType.MAIN,
-            md5 = "abc123",
+            sha256 = "abc123",
             displayName = "Test Model",
             localFileName = "main.litertlm"
         )
@@ -269,20 +270,20 @@ class CheckModelEligibilityUseCaseTest {
 
         val result = useCase.check(listOf(originalModel), listOf(originalModel), scanResult)
 
-        assertTrue(result.any { it.metadata.md5 == "abc123" })
+        assertTrue(result.any { it.metadata.sha256 == "abc123" })
     }
 
     @Test
     fun `check includes models with MD5 mismatch`() {
         val modelConfig = createModelConfig(
             modelType = ModelType.MAIN,
-            md5 = "expected-md5",
+            sha256 = "expected-md5",
             displayName = "Test Model",
             localFileName = "main.litertlm"
         )
         val invalidModel = modelConfig.copy(
             metadata = modelConfig.metadata.copy(
-                md5 = "corrupted-md5"
+                sha256 = "corrupted-md5"
             )
         )
         val scanResult = ModelScanResult(
@@ -305,7 +306,7 @@ class CheckModelEligibilityUseCaseTest {
         // the model is in missingModels (which would trigger download).
         val newModel = createModelConfig(
             modelType = ModelType.MAIN,
-            md5 = "new-md5-changed",
+            sha256 = "new-md5-changed",
             displayName = "Updated Model",
             sizeInBytes = 2000000L,
             maxTokens = 4096,
@@ -323,14 +324,14 @@ class CheckModelEligibilityUseCaseTest {
 
         val result = useCase.check(listOf(newModel), listOf(newModel), scanResult)
 
-        assertTrue(result.any { it.metadata.md5 == "new-md5-changed" })
+        assertTrue(result.any { it.metadata.sha256 == "new-md5-changed" })
     }
 
     @Test
     fun `check returns empty when config unchanged and file valid`() {
         val modelConfig = createModelConfig(
             modelType = ModelType.MAIN,
-            md5 = "abc123",
+            sha256 = "abc123",
             displayName = "Test Model",
             localFileName = "main.litertlm"
         )
@@ -352,14 +353,14 @@ class CheckModelEligibilityUseCaseTest {
         // Models with same MD5 but different modelTypes - they share the same file
         // Use case groups them by MD5 (takes first model with that MD5)
         val draftModel = createModelConfig(
-            modelType = ModelType.DRAFT,
-            md5 = "shared-md5-abc123",
+            modelType = ModelType.DRAFT_ONE,
+            sha256 = "shared-md5-abc123",
             displayName = "Shared Model",
             localFileName = "shared.litertlm"
         )
         val visionModel = createModelConfig(
             modelType = ModelType.VISION,
-            md5 = "shared-md5-abc123",
+            sha256 = "shared-md5-abc123",
             displayName = "Shared Model",
             localFileName = "shared.litertlm"
         )
@@ -382,19 +383,19 @@ class CheckModelEligibilityUseCaseTest {
         // Three models with same MD5 and same filename - use case groups by MD5
         val mainModel = createModelConfig(
             modelType = ModelType.MAIN,
-            md5 = "triple-md5",
+            sha256 = "triple-md5",
             displayName = "Shared Model",
             localFileName = "shared.litertlm"
         )
         val draftModel = createModelConfig(
-            modelType = ModelType.DRAFT,
-            md5 = "triple-md5",
+            modelType = ModelType.DRAFT_ONE,
+            sha256 = "triple-md5",
             displayName = "Shared Model",
             localFileName = "shared.litertlm"
         )
         val fastModel = createModelConfig(
             modelType = ModelType.FAST,
-            md5 = "triple-md5",
+            sha256 = "triple-md5",
             displayName = "Shared Model",
             localFileName = "shared.litertlm"
         )
@@ -418,7 +419,7 @@ class CheckModelEligibilityUseCaseTest {
         // Test verifies behavior when model is in missingModels.
         val modelConfig = createModelConfig(
             modelType = ModelType.MAIN,
-            md5 = "abc123",
+            sha256 = "abc123",
             displayName = "Test Model",
             localFileName = "main.litertlm"
         )
@@ -442,7 +443,7 @@ class CheckModelEligibilityUseCaseTest {
         // Test verifies behavior when model is in missingModels.
         val modelConfig = createModelConfig(
             modelType = ModelType.MAIN,
-            md5 = "abc123",
+            sha256 = "abc123",
             displayName = "Test Model",
             localFileName = "main.litertlm"
         )

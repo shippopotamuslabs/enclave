@@ -21,7 +21,6 @@ import javax.inject.Inject
 class CheckModelsUseCase @Inject constructor(
     private val fileScanner: ModelFileScanner,
     private val checkModelEligibilityUseCase: CheckModelEligibilityUseCase,
-    private val modelUrlProvider: ModelUrlProviderPort,
     private val logger: LoggingPort
 ) {
     companion object {
@@ -47,8 +46,7 @@ class CheckModelsUseCase @Inject constructor(
 
         // Handle directory creation error
         if (scan.directoryError) {
-            logger.warning(TAG, "Failed to create models directory")
-            return DownloadModelsResult(modelsToDownload = emptyList(), scanResult = scan)
+            throw Exception("Failed to create models directory")
         }
 
         // Use CheckModelEligibilityUseCase to determine which models need downloading

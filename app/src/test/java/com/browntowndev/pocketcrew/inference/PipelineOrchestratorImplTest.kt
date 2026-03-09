@@ -1,11 +1,14 @@
 package com.browntowndev.pocketcrew.inference
 
 import android.util.Log
+import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.AgentRole
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineEvent
 import com.browntowndev.pocketcrew.domain.port.inference.PipelinePhase
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import dagger.Lazy
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
@@ -35,12 +38,14 @@ class PipelineOrchestratorImplTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var mockMainServiceProvider: dagger.Lazy<LlmInferencePort>
-    private lateinit var mockDraftServiceProvider: dagger.Lazy<LlmInferencePort>
+    private lateinit var mockDraftOneServiceProvider: dagger.Lazy<LlmInferencePort>
+    private lateinit var mockDraftTwoServiceProvider: dagger.Lazy<LlmInferencePort>
     private lateinit var mockVisionServiceProvider: dagger.Lazy<LlmInferencePort>
-    private lateinit var mockFastServiceProvider: dagger.Lazy<LlmInferencePort>
+    private lateinit var mockModelRegistry: ModelRegistryPort
 
     private lateinit var mockMainService: LlmInferencePort
-    private lateinit var mockDraftService: LlmInferencePort
+    private lateinit var mockDraftOneService: LlmInferencePort
+    private lateinit var mockDraftTwoService: LlmInferencePort
     private lateinit var mockVisionService: LlmInferencePort
 
     private lateinit var orchestrator: PipelineOrchestratorImpl
@@ -56,28 +61,52 @@ class PipelineOrchestratorImplTest {
 
         // Create mock services
         mockMainService = mockk(relaxed = true)
-        mockDraftService = mockk(relaxed = true)
+        mockDraftOneService = mockk(relaxed = true)
+        mockDraftTwoService = mockk(relaxed = true)
         mockVisionService = mockk(relaxed = true)
-        val mockFastService: LlmInferencePort = mockk(relaxed = true)
 
         // Create lazy providers that return the mock services
         mockMainServiceProvider = mockk()
         every { mockMainServiceProvider.get() } returns mockMainService
 
-        mockDraftServiceProvider = mockk()
-        every { mockDraftServiceProvider.get() } returns mockDraftService
+        mockDraftOneServiceProvider = mockk()
+        every { mockDraftOneServiceProvider.get() } returns mockDraftOneService
+
+        mockDraftTwoServiceProvider = mockk()
+        every { mockDraftTwoServiceProvider.get() } returns mockDraftTwoService
 
         mockVisionServiceProvider = mockk()
         every { mockVisionServiceProvider.get() } returns mockVisionService
 
-        mockFastServiceProvider = mockk()
-        every { mockFastServiceProvider.get() } returns mockFastService
-
+        // Mock model registry to return Fast persona
+        mockModelRegistry = mockk(relaxed = true)
+        val fastConfig = ModelConfiguration(
+            modelType = ModelType.FAST,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "model/fast",
+                remoteFileName = "fast.litertlm",
+                localFileName = "fast.litertlm",
+                displayName = "Fast Model",
+                sha256 = "abc123",
+                sizeInBytes = 1000L,
+                modelFileFormat = com.browntowndev.pocketcrew.domain.model.ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 512,
+                contextWindow = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a fast assistant.")
+        )
+        coEvery { mockModelRegistry.getRegisteredModel(ModelType.FAST) } returns fastConfig
         orchestrator = PipelineOrchestratorImpl(
             mainServiceProvider = mockMainServiceProvider,
-            draftServiceProvider = mockDraftServiceProvider,
+            draftOneServiceProvider = mockDraftOneServiceProvider,
+            draftTwoServiceProvider = mockDraftTwoServiceProvider,
             visionServiceProvider = mockVisionServiceProvider,
-            fastServiceProvider = mockFastServiceProvider
+            modelRegistry = mockModelRegistry
         )
     }
 
@@ -114,7 +143,7 @@ class PipelineOrchestratorImplTest {
     @Test
     fun `processPrompt completes all phases and emits Completed event`() = runTest {
         // Given - all services return valid responses
-        coEvery { mockDraftService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft response")
+        coEvery { mockDraftOneService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft response")
         coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Main response")
 
         // When
@@ -137,7 +166,7 @@ class PipelineOrchestratorImplTest {
     @Test
     fun `processPrompt emits reasoning chunks during drafting`() = runTest {
         // Given
-        coEvery { mockDraftService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow(
+        coEvery { mockDraftOneService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow(
             response = "Draft response",
             thinkingChunks = listOf("Thinking step 1", "Thinking step 2")
         )
@@ -156,7 +185,7 @@ class PipelineOrchestratorImplTest {
     @Test
     fun `processPrompt streams final output to UI`() = runTest {
         // Given
-        coEvery { mockDraftService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft response")
+        coEvery { mockDraftOneService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft response")
         coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Final cleaned response")
 
         // When
@@ -172,7 +201,7 @@ class PipelineOrchestratorImplTest {
     @Test
     fun `processPrompt closes all services in finally block`() = runTest {
         // Given
-        coEvery { mockDraftService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft response")
+        coEvery { mockDraftOneService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft response")
         coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Main response")
 
         // When
@@ -180,7 +209,7 @@ class PipelineOrchestratorImplTest {
         result.collect { }
 
         // Then - verify all services were closed
-        verify { mockDraftService.closeSession() }
+        verify { mockDraftOneService.closeSession() }
         verify { mockMainService.closeSession() }
         verify { mockVisionService.closeSession() }
     }
@@ -191,7 +220,7 @@ class PipelineOrchestratorImplTest {
     fun `processPrompt handles inference error gracefully`() = runTest {
         // Given - mock returns InferenceEvent.Error which causes the code to throw
         // The orchestrator catches this and handles it
-        coEvery { mockDraftService.sendPrompt(any(), closeConversation = true) } returns flow {
+        coEvery { mockDraftOneService.sendPrompt(any(), closeConversation = true) } returns flow {
             emit(InferenceEvent.Error(RuntimeException("Inference failed")))
         }
 
@@ -213,7 +242,7 @@ class PipelineOrchestratorImplTest {
     @Test
     fun `processPrompt closes services on error`() = runTest {
         // Given - draft service throws
-        coEvery { mockDraftService.sendPrompt(any(), closeConversation = true) } returns flow {
+        coEvery { mockDraftOneService.sendPrompt(any(), closeConversation = true) } returns flow {
             emit(InferenceEvent.Error(RuntimeException("Inference failed")))
         }
 
@@ -227,7 +256,7 @@ class PipelineOrchestratorImplTest {
         }
 
         // Then - services still closed in finally block
-        verify { mockDraftService.closeSession() }
+        verify { mockDraftOneService.closeSession() }
         verify { mockMainService.closeSession() }
         verify { mockVisionService.closeSession() }
     }
@@ -235,7 +264,7 @@ class PipelineOrchestratorImplTest {
     @Test
     fun `processPrompt emits SafetyIntervention when blocked`() = runTest {
         // Given - service returns safety blocked
-        coEvery { mockDraftService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow(
+        coEvery { mockDraftOneService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow(
             response = "",
             safetyBlocked = true
         )
@@ -253,7 +282,7 @@ class PipelineOrchestratorImplTest {
     @Test
     fun `processPrompt calculates pipeline duration`() = runTest {
         // Given
-        coEvery { mockDraftService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft response")
+        coEvery { mockDraftOneService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft response")
         coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Main response")
 
         // When

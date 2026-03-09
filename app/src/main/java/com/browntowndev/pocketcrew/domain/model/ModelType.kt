@@ -5,17 +5,22 @@ package com.browntowndev.pocketcrew.domain.model
  */
 enum class ModelType(val apiValue: String) {
     /**
-     * Vision model for image understanding (e.g., Gemma 3n).
+     * Vision model for image understanding (e.g., Qwen2.5-VL).
      */
     VISION("vision"),
 
     /**
-     * Draft model for fast initial generation (e.g., small distilled model).
+     * First draft model for fast initial generation (e.g., small distilled model).
      */
-    DRAFT("draft"),
+    DRAFT_ONE("draft_one"),
 
     /**
-     * Main model for final high-quality output (e.g., 7B model).
+     * Second draft model for fast initial generation.
+     */
+    DRAFT_TWO("draft_two"),
+
+    /**
+     * Main model for final high-quality output (e.g., Qwen3.5).
      */
     MAIN("main"),
 

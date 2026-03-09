@@ -1,8 +1,5 @@
 package com.browntowndev.pocketcrew.data.download.remote
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import io.mockk.MockKAnnotations
@@ -33,20 +30,11 @@ class HttpFileDownloaderTest {
     @TempDir
     lateinit var tempDir: File
 
-    private fun createTestConfig(sizeInBytes: Long): ModelConfiguration {
-        return ModelConfiguration(
-            modelType = ModelType.MAIN,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "test/model",
-                remoteFileName = "test-model.gguf",
-                localFileName = "test-model.gguf",
-                displayName = "Test Model",
-                md5 = "abc123",
-                sizeInBytes = sizeInBytes,
-                modelFileFormat = ModelFileFormat.GGUF
-            ),
-            tunings = ModelConfiguration.Tunings(),
-            persona = ModelConfiguration.Persona("You are a helpful assistant.")
+    private fun createTestConfig(sizeInBytes: Long): FileDownloaderPort.FileDownloadConfig {
+        return FileDownloaderPort.FileDownloadConfig(
+            filename = "test-model.gguf",
+            expectedSha256 = "abc123",
+            expectedSizeBytes = sizeInBytes
         )
     }
 

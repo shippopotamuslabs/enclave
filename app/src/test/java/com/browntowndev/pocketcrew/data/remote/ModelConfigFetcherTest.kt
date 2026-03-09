@@ -33,7 +33,7 @@ class ModelConfigFetcherTest {
                     remoteFileName = "main.bin",
                     localFileName = "main.bin",
                     displayName = "Main Model",
-                    md5 = "abc123",
+                    sha256 = "abc123",
                     sizeInBytes = 1000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
                 ),
@@ -41,7 +41,8 @@ class ModelConfigFetcherTest {
                     temperature = 0.0,
                     topK = 40,
                     topP = 0.95,
-                    maxTokens = 2048
+                    maxTokens = 2048,
+                    contextWindow = 2048
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
             )
@@ -80,13 +81,14 @@ class ModelConfigFetcherTest {
                 fileName = "main.bin",
                 huggingFaceModelName = "model/main",
                 displayName = "Main Model",
-                md5 = "abc123",
+                sha256 = "abc123",
                 sizeInBytes = 1000000L,
                 modelFileFormat = ModelFileFormat.LITERTLM,
                 temperature = 0.0,
                 topK = 40,
                 topP = 0.95,
                 maxTokens = 2048,
+                contextWindow = 2048,
                 systemPrompt = "You are a helpful assistant."
             ),
             RemoteModelConfig(
@@ -94,13 +96,14 @@ class ModelConfigFetcherTest {
                 fileName = "vision.bin",
                 huggingFaceModelName = "model/vision",
                 displayName = "Vision Model",
-                md5 = "def456",
+                sha256 = "def456",
                 sizeInBytes = 2000000L,
                 modelFileFormat = ModelFileFormat.LITERTLM,
                 temperature = 0.0,
                 topK = 40,
                 topP = 0.95,
                 maxTokens = 2048,
+                contextWindow = 2048,
                 systemPrompt = "You are a vision assistant."
             )
         )
@@ -113,7 +116,7 @@ class ModelConfigFetcherTest {
                     remoteFileName = "main.bin",
                     localFileName = "main.bin",
                     displayName = "Main Model",
-                    md5 = "abc123",
+                    sha256 = "abc123",
                     sizeInBytes = 1000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
                 ),
@@ -121,7 +124,8 @@ class ModelConfigFetcherTest {
                     temperature = 0.0,
                     topK = 40,
                     topP = 0.95,
-                    maxTokens = 2048
+                    maxTokens = 2048,
+                    contextWindow = 2048
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
             ),
@@ -132,7 +136,7 @@ class ModelConfigFetcherTest {
                     remoteFileName = "vision.bin",
                     localFileName = "vision.bin",
                     displayName = "Vision Model",
-                    md5 = "def456",
+                    sha256 = "def456",
                     sizeInBytes = 2000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
                 ),
@@ -140,7 +144,8 @@ class ModelConfigFetcherTest {
                     temperature = 0.0,
                     topK = 40,
                     topP = 0.95,
-                    maxTokens = 2048
+                    maxTokens = 2048,
+                    contextWindow = 2048
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
             )
@@ -168,7 +173,7 @@ class ModelConfigFetcherTest {
                     remoteFileName = "main.bin",
                     localFileName = "main.bin",
                     displayName = "Main Model",
-                    md5 = "abc123",
+                    sha256 = "abc123",
                     sizeInBytes = 1000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
                 ),
@@ -176,7 +181,8 @@ class ModelConfigFetcherTest {
                     temperature = 0.0,
                     topK = 40,
                     topP = 0.95,
-                    maxTokens = 2048
+                    maxTokens = 2048,
+                    contextWindow = 2048
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
             ),
@@ -187,7 +193,7 @@ class ModelConfigFetcherTest {
                     remoteFileName = "vision.bin",
                     localFileName = "vision.bin",
                     displayName = "Vision Model",
-                    md5 = "def456",
+                    sha256 = "def456",
                     sizeInBytes = 2000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
                 ),
@@ -195,7 +201,8 @@ class ModelConfigFetcherTest {
                     temperature = 0.0,
                     topK = 40,
                     topP = 0.95,
-                    maxTokens = 2048
+                    maxTokens = 2048,
+                    contextWindow = 2048
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
             ),
@@ -206,7 +213,7 @@ class ModelConfigFetcherTest {
                     remoteFileName = "fast.bin",
                     localFileName = "fast.bin",
                     displayName = "Fast Model",
-                    md5 = "ghi789",
+                    sha256 = "ghi789",
                     sizeInBytes = 500000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
                 ),
@@ -214,18 +221,19 @@ class ModelConfigFetcherTest {
                     temperature = 0.0,
                     topK = 40,
                     topP = 0.95,
-                    maxTokens = 1024
+                    maxTokens = 1024,
+                    contextWindow = 2048
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a fast assistant.")
             ),
             ModelConfiguration(
-                modelType = ModelType.DRAFT,
+                modelType = ModelType.DRAFT_ONE,
                 metadata = ModelConfiguration.Metadata(
                     huggingFaceModelName = "model/draft",
                     remoteFileName = "draft.bin",
                     localFileName = "draft.bin",
                     displayName = "Draft Model",
-                    md5 = "jkl012",
+                    sha256 = "jkl012",
                     sizeInBytes = 300000L,
                     modelFileFormat = ModelFileFormat.TASK
                 ),
@@ -233,7 +241,8 @@ class ModelConfigFetcherTest {
                     temperature = 0.0,
                     topK = 40,
                     topP = 0.95,
-                    maxTokens = 512
+                    maxTokens = 512,
+                    contextWindow = 2048
                 ),
                 persona = ModelConfiguration.Persona(systemPrompt = "You are a draft assistant.")
             )
@@ -251,6 +260,6 @@ class ModelConfigFetcherTest {
         assertTrue(configs.any { it.modelType == ModelType.MAIN })
         assertTrue(configs.any { it.modelType == ModelType.VISION })
         assertTrue(configs.any { it.modelType == ModelType.FAST })
-        assertTrue(configs.any { it.modelType == ModelType.DRAFT })
+        assertTrue(configs.any { it.modelType == ModelType.DRAFT_ONE })
     }
 }

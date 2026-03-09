@@ -35,7 +35,6 @@ class InitializeModelsUseCaseTest {
     private lateinit var mockModelConfigFetcher: ModelConfigFetcherPort
     private lateinit var mockModelRegistry: ModelRegistryPort
     private lateinit var mockModelDownloadOrchestrator: ModelDownloadOrchestratorPort
-    private lateinit var mockModelConfigCache: com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
     private lateinit var mockCheckModelsUseCase: CheckModelsUseCase
     private lateinit var mockLogPort: LoggingPort
 
@@ -53,7 +52,6 @@ class InitializeModelsUseCaseTest {
         mockModelConfigFetcher = mockk(relaxed = true)
         mockModelRegistry = mockk(relaxed = true)
         mockModelDownloadOrchestrator = mockk(relaxed = true)
-        mockModelConfigCache = mockk(relaxed = true)
         mockCheckModelsUseCase = mockk(relaxed = true)
         mockLogPort = mockk(relaxed = true)
 
@@ -61,7 +59,6 @@ class InitializeModelsUseCaseTest {
             modelConfigFetcher = mockModelConfigFetcher,
             modelRegistry = mockModelRegistry,
             modelDownloadOrchestrator = mockModelDownloadOrchestrator,
-            modelConfigCache = mockModelConfigCache,
             checkModelsUseCase = mockCheckModelsUseCase,
             logPort = mockLogPort
         )
@@ -105,12 +102,13 @@ class InitializeModelsUseCaseTest {
                 remoteFileName = "model.bin",
                 localFileName = "model.bin",
                 displayName = "Test Model",
-                md5 = "abc123",
+                sha256 = "abc123",
                 sizeInBytes = 1024,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
             tunings = ModelConfiguration.Tunings(
-                maxTokens = 2048
+                maxTokens = 2048,
+                contextWindow = 2048
             ),
             persona = ModelConfiguration.Persona(
                 systemPrompt = "You are a helpful assistant."

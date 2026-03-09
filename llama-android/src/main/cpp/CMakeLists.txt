@@ -19,6 +19,31 @@ set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 
+# DISABLED Vulkan for CPU-only mode on Pixel 8 Pro (Tensor G3)
+# Vulkan causes DeviceLostError on this device even with gpuLayers=0
+# To enable GPU acceleration, set GGML_VULKAN=ON and ensure stable Vulkan driver
+set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
+
+# Disable OpenCL - use only Vulkan to avoid backend conflicts on Tensor G3
+set(GGML_OPENCL OFF CACHE BOOL "" FORCE)
+
+# Disable other backends
+set(GGML_CUDA OFF CACHE BOOL "" FORCE)
+set(GGML_METAL OFF CACHE BOOL "" FORCE)
+
+# CRITICAL: Disable SVE for ggml - this must be set BEFORE add_subdirectory
+# Pixel 8 Pro / Tensor G3 crashes with SVE enabled due to incorrect vector length detection
+set(GGML_CPU_ARM_ENABLE_SVE OFF CACHE BOOL "" FORCE)
+
+# Configure Vulkan using external Khronos headers for NDK compatibility
+# This must be set BEFORE add_subdirectory for llama.cpp
+set(Vulkan_INCLUDE_DIR "/home/sean/Code/pocket-crew/third_party/Vulkan-Headers/include" CACHE PATH "Vulkan include directory")
+set(Vulkan_LIBRARY "/home/sean/Android/Sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/34/libvulkan.so" CACHE FILEPATH "Vulkan library")
+set(Vulkan_FOUND TRUE CACHE BOOL "" FORCE)
+
+# Add vulkan-shaders-gen to program search path for shader compilation
+list(APPEND CMAKE_PROGRAM_PATH "/home/sean/Code/pocket-crew/third_party/llama.cpp/build-host/bin")
+
 # Source directory for llama.cpp - relative path from this CMakeLists.txt to root
 set(LLAMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/llama.cpp)
 
@@ -43,6 +68,8 @@ target_link_libraries(llama-jni
     llama
     ggml
     log
+    vulkan
+    android
 )
 
 # Compiler options for optimization

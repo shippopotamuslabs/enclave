@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
 import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.ModelType
 import kotlinx.coroutines.flow.Flow
 
@@ -10,12 +11,28 @@ import kotlinx.coroutines.flow.Flow
  */
 interface ModelRegistryPort {
     /**
-     * Get registered model for a given type.
+     * Get registered model for a given type (suspend version).
      * Returns null if no model is registered for that type.
      */
     suspend fun getRegisteredModel(modelType: ModelType): ModelConfiguration?
 
+    /**
+     * Get registered model for a given type (non-suspend version).
+     * Uses internal cache - suitable for use in DI provider methods.
+     * Returns null if no model is registered for that type.
+     */
+    fun getRegisteredModelSync(modelType: ModelType): ModelConfiguration?
+
+    /**
+     * Get all registered models (suspend version).
+     */
     suspend fun getRegisteredModels(): List<ModelConfiguration>
+
+    /**
+     * Get all registered models (non-suspend version).
+     * Uses internal cache - suitable for use in DI provider methods.
+     */
+    fun getRegisteredModelsSync(): List<ModelConfiguration>
 
     /**
      * Get all registered models as a Flow for reactive updates.
@@ -23,14 +40,32 @@ interface ModelRegistryPort {
     fun observeRegisteredModels(): Flow<Map<ModelType, String>>
 
     /**
+     * Observe a single model's configuration as a Flow for reactive updates.
+     */
+    fun observeModel(modelType: ModelType): Flow<ModelConfiguration?>
+
+    /**
      * Update (or insert) the model for a given type with full config.
      * Called after a successful download.
      */
-    suspend fun setRegisteredModel(config: ModelConfiguration)
+    suspend fun setRegisteredModel(config: ModelConfiguration, status: ModelStatus = ModelStatus.CURRENT)
 
     /**
      * Clear all registered models.
      * Useful for factory reset or clean reinstall.
      */
     suspend fun clearAll()
+
+    /**
+     * Clear all OLD entries from the database.
+     * Called after successful download completion.
+     */
+    suspend fun clearOld()
+
+    /**
+     * Get models for all ModelTypes, preferring OLD if it exists, otherwise CURRENT.
+     * Used during initialization to handle failed downloads - if a download failed,
+     * the OLD entry should be used so the download is retried on restart.
+     */
+    suspend fun getModelsPreferringOld(): List<ModelConfiguration>
 }

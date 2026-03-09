@@ -7,5 +7,5 @@ class WorkParserModelFile(
     val modelTypes: List<ModelType>,
     val modelFileFormat: ModelFileFormat,
     val localFileName: String,
-    val md5: String? = null,
+    val sha256: String? = null,
 )

@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.domain.port.download
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfiguration
 import java.io.File
 
 /**
@@ -8,6 +7,15 @@ import java.io.File
  * This is implemented in the data layer to keep domain pure.
  */
 interface FileDownloaderPort {
+    /**
+     * Configuration for file download with integrity verification.
+     */
+    data class FileDownloadConfig(
+        val filename: String,
+        val expectedSha256: String,
+        val expectedSizeBytes: Long
+    )
+
     /**
      * Callback interface for download progress updates.
      */
@@ -35,7 +43,7 @@ interface FileDownloaderPort {
      * Download a file from the given URL to the target directory.
      * Supports resumable downloads via Range headers.
      *
-     * @param config The model configuration to download
+     * @param config The download configuration with filename and integrity info
      * @param downloadUrl The computed download URL
      * @param targetDir The target directory for the download
      * @param existingBytes Bytes already downloaded (for resume support)
@@ -43,7 +51,7 @@ interface FileDownloaderPort {
      * @return DownloadResult with download metadata
      */
     suspend fun downloadFile(
-        config: ModelConfiguration,
+        config: FileDownloadConfig,
         downloadUrl: String,
         targetDir: File,
         existingBytes: Long = 0,

@@ -52,9 +52,14 @@ class ModelConfigFetcherImpl @Inject constructor(
                     configs.add(parseModelConfig(vision, ModelType.VISION))
                 }
 
-                // Parse draft model
-                json.optJSONObject("draft")?.let { draft ->
-                    configs.add(parseModelConfig(draft, ModelType.DRAFT))
+                // Parse draft_one model
+                json.optJSONObject("draft")?.let { draftOne ->
+                    configs.add(parseModelConfig(draftOne, ModelType.DRAFT_ONE))
+                }
+
+                // Parse draft_two model
+                json.optJSONObject("draftTwo")?.let { draftTwo ->
+                    configs.add(parseModelConfig(draftTwo, ModelType.DRAFT_TWO))
                 }
 
                 // Parse main model
@@ -96,13 +101,14 @@ class ModelConfigFetcherImpl @Inject constructor(
             fileName = fileName,
             huggingFaceModelName = huggingFaceModelName,
             displayName = json.getString("displayName"),
-            md5 = json.getString("md5"),
+            sha256 = json.getString("sha256"),
             sizeInBytes = json.getLong("sizeInBytes"),
             modelFileFormat = modelFileFormat,
             temperature = json.getDouble("temperature"),
             topK = json.getInt("topK"),
             topP = json.getDouble("topP"),
             maxTokens = json.getInt("maxTokens"),
+            contextWindow = json.getInt("contextWindow"),
             systemPrompt = json.getString("systemPrompt")
         )
     }
@@ -127,41 +133,36 @@ class ModelConfigFetcherImpl @Inject constructor(
     /**
      * Converts RemoteModelConfig list to ModelConfiguration list.
      * Uses ModelUrlProvider to compute download URLs.
-     * Detects duplicate files (same fileName) and merges them into a single ModelConfiguration
-     * with multiple modelTypes.
      *
      * Note: The download URL is computed on-the-fly by ModelUrlProviderPort when needed,
      * not stored in the model.
+     * Grouping by SHA256 (for files shared across multiple model types) happens in
+     * DownloadProgressTracker, not here.
      */
     override fun toModelConfigurations(configs: List<RemoteModelConfig>): List<ModelConfiguration> {
-        // Group by md5 for true duplicates
-        // - Same md5: deduplicated (one download, copies created)
-        val grouped = configs.groupBy { it.md5 }
-
-        return grouped.map { (_, groupedConfigs) ->
-            val firstConfig = groupedConfigs.first()
-            val modelTypesList = groupedConfigs.map { it.modelType }
-            Log.d(TAG, "Model Config File: ${firstConfig.fileName} Grouped model types: $modelTypesList")
+        return configs.map { config ->
+            Log.d(TAG, "Model Config File: ${config.fileName}, modelType: ${config.modelType}")
 
             ModelConfiguration(
-                modelType = modelTypesList.first(), // Primary model type
+                modelType = config.modelType,
                 metadata = ModelConfiguration.Metadata(
-                    huggingFaceModelName = firstConfig.huggingFaceModelName,
-                    remoteFileName = firstConfig.fileName,
-                    localFileName = firstConfig.fileName, // Option 2: save as-is
-                    displayName = firstConfig.displayName,
-                    md5 = firstConfig.md5,
-                    sizeInBytes = firstConfig.sizeInBytes,
-                    modelFileFormat = firstConfig.modelFileFormat
+                    huggingFaceModelName = config.huggingFaceModelName,
+                    remoteFileName = config.fileName,
+                    localFileName = config.fileName,
+                    displayName = config.displayName,
+                    sha256 = config.sha256,
+                    sizeInBytes = config.sizeInBytes,
+                    modelFileFormat = config.modelFileFormat
                 ),
                 tunings = ModelConfiguration.Tunings(
-                    temperature = firstConfig.temperature,
-                    topK = firstConfig.topK,
-                    topP = firstConfig.topP,
-                    maxTokens = firstConfig.maxTokens
+                    temperature = config.temperature,
+                    topK = config.topK,
+                    topP = config.topP,
+                    maxTokens = config.maxTokens,
+                    contextWindow = config.contextWindow
                 ),
                 persona = ModelConfiguration.Persona(
-                    systemPrompt = firstConfig.systemPrompt
+                    systemPrompt = config.systemPrompt
                 )
             )
         }

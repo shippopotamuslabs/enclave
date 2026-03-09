@@ -4,26 +4,41 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import com.browntowndev.pocketcrew.domain.model.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.ModelType
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ModelsDao {
-    @Query("SELECT display_name FROM models WHERE model_type = :modelType")
+    @Query("SELECT display_name FROM models WHERE model_type = :modelType AND model_status = 'CURRENT'")
     suspend fun getDisplayName(modelType: ModelType): String?
 
-    @Query("SELECT * FROM models WHERE model_type = :modelType")
+    @Query("SELECT * FROM models WHERE model_type = :modelType AND model_status = 'CURRENT'")
     suspend fun getModelEntity(modelType: ModelType): ModelEntity?
 
-    @Query("SELECT * FROM models")
+    @Query("SELECT * FROM models WHERE model_status = 'CURRENT'")
     suspend fun getAll(): List<ModelEntity>
 
-
-    @Query("SELECT * FROM models")
+    @Query("SELECT * FROM models WHERE model_status = 'CURRENT'")
     fun observeAll(): Flow<List<ModelEntity>>
+
+    @Query("SELECT * FROM models WHERE model_type = :modelType AND model_status = 'CURRENT'")
+    fun observeModelEntity(modelType: ModelType): Flow<ModelEntity?>
+
+    @Query("SELECT * FROM models WHERE model_type = :modelType AND model_status = :modelStatus")
+    suspend fun getModelEntityByStatus(modelType: ModelType, modelStatus: ModelStatus): ModelEntity?
+
+    @Query("SELECT * FROM models WHERE model_status = 'OLD'")
+    suspend fun getAllOld(): List<ModelEntity>
+
+    @Query("SELECT * FROM models WHERE model_type = :modelType")
+    suspend fun getAllByModelType(modelType: ModelType): List<ModelEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(entity: ModelEntity)
+
+    @Query("DELETE FROM models WHERE model_status = 'OLD'")
+    suspend fun deleteAllOld()
 
     @Query("DELETE FROM models")
     suspend fun deleteAll()

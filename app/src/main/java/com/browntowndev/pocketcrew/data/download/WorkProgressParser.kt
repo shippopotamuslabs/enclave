@@ -7,8 +7,6 @@ import com.browntowndev.pocketcrew.domain.model.FileStatus
 import com.browntowndev.pocketcrew.domain.model.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.DownloadKey
 import com.browntowndev.pocketcrew.domain.model.ModelType
-import com.browntowndev.pocketcrew.domain.service.FileIntegrityValidator
-import kotlinx.coroutines.runBlocking
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -17,8 +15,7 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 
 @Singleton
 class WorkProgressParser @Inject constructor(
-    private val sessionManager: DownloadSessionManager,
-    private val fileIntegrityValidator: FileIntegrityValidator
+    private val sessionManager: DownloadSessionManager
 ) {
     companion object {
         private const val TAG = "WorkProgressParser"
@@ -141,20 +138,18 @@ class WorkProgressParser @Inject constructor(
             return null
         }
 
-        // Verify all model files using centralized validation in FileIntegrityValidator
-        // This gets expected files from cache and verifies size + MD5
-        val modelsVerified = runBlocking {
-            fileIntegrityValidator.verifyModelsExist().getOrElse { false }
-        }
-
-        return if (modelsVerified) {
-            DownloadProgressUpdate(status = DownloadStatus.READY, clearSession = true)
-        } else {
-            DownloadProgressUpdate(
-                status = DownloadStatus.ERROR,
-                errorMessage = "Download completed but files not found"
-            )
-        }
+        // SHA-256 validation is now done during streaming download in HttpFileDownloader.
+        // If the work succeeded, we can assume files are valid.
+        // Calculate final progress - all models complete
+        val totalModels = currentDownloads.size
+        return DownloadProgressUpdate(
+            status = DownloadStatus.READY,
+            overallProgress = 1.0f,
+            modelsComplete = totalModels,
+            modelsTotal = totalModels,
+            currentDownloads = currentDownloads,
+            clearSession = true
+        )
     }
 
     private fun parseFailed(

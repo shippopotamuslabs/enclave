@@ -11,7 +11,7 @@ class ModelTypeTest {
     @Test
     fun `ModelType has correct names`() {
         assertEquals("VISION", ModelType.VISION.name)
-        assertEquals("DRAFT", ModelType.DRAFT.name)
+        assertEquals("DRAFT", ModelType.DRAFT_ONE.name)
         assertEquals("MAIN", ModelType.MAIN.name)
     }
 

@@ -77,6 +77,45 @@ class DownloadNotificationManager(
         )
     }
 
+    /**
+     * Creates a ForegroundInfo for progress updates during download.
+     * This method encapsulates the notification update logic, computing progress from
+     * the snapshot and building the subText internally.
+     */
+    fun createForegroundInfoForSnapshot(
+        snapshot: ProgressSnapshot,
+        formatBytes: (Long) -> String,
+        formatEta: (Long) -> String,
+        cancelPendingIntent: PendingIntent
+    ): ForegroundInfo {
+        val speedString = if (snapshot.currentSpeedMBps > 0) {
+            String.format(java.util.Locale.US, "%.1f MB/s", snapshot.currentSpeedMBps)
+        } else ""
+
+        val etaString = formatEta(snapshot.etaSeconds)
+
+        val subText = buildString {
+            append(formatBytes(snapshot.totalBytesDownloaded))
+            append(" / ")
+            append(formatBytes(snapshot.totalSize))
+            if (speedString.isNotEmpty()) {
+                append(" • ")
+                append(speedString)
+            }
+            if (snapshot.etaSeconds >= 0) {
+                append(" • ETA: ")
+                append(etaString)
+            }
+        }
+
+        return createForegroundInfoForProgress(
+            progress = snapshot.overallProgress,
+            currentFile = snapshot.currentFile,
+            subText = subText,
+            cancelPendingIntent = cancelPendingIntent
+        )
+    }
+
     @Suppress("NotificationPermission")
     fun updateNotification(
         notificationId: Int,

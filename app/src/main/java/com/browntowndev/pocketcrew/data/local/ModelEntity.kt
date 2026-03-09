@@ -4,17 +4,23 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.ModelType
 
 /**
  * Entity storing registered model metadata.
- * Used to track which model is currently installed for each slot.
+ * Uses a composite primary key of ModelType and ModelStatus to track current and old versions.
  */
-@Entity(tableName = "models")
+@Entity(
+    tableName = "models",
+    primaryKeys = ["model_type", "model_status"]
+)
 data class ModelEntity(
-    @PrimaryKey
     @ColumnInfo(name = "model_type")
     val modelType: ModelType,
+
+    @ColumnInfo(name = "model_status")
+    val modelStatus: ModelStatus = ModelStatus.CURRENT,
 
     @ColumnInfo(name = "remote_filename")
     val remoteFilename: String,
@@ -28,8 +34,8 @@ data class ModelEntity(
     @ColumnInfo(name = "model_file_format")
     val modelFileFormat: ModelFileFormat,
 
-    @ColumnInfo(name = "md5")
-    val md5: String,
+    @ColumnInfo(name = "sha256")
+    val sha256: String,
 
     @ColumnInfo(name = "size_in_bytes")
     val sizeInBytes: Long = 0L,
@@ -45,6 +51,9 @@ data class ModelEntity(
 
     @ColumnInfo(name = "max_tokens")
     val maxTokens: Int,
+
+    @ColumnInfo(name = "context_window")
+    val contextWindow: Int,
 
     @ColumnInfo(name = "system_prompt")
     val systemPrompt: String? = null,

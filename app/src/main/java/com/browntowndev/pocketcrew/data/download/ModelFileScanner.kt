@@ -7,9 +7,13 @@ import com.browntowndev.pocketcrew.domain.model.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
-import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
+import com.browntowndev.pocketcrew.domain.port.download.HashingPort
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
@@ -18,7 +22,8 @@ import javax.inject.Singleton
 @Singleton
 class ModelFileScanner @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val modelConfigCache: ModelConfigCachePort
+    private val modelRegistry: ModelRegistryPort,
+    private val hashingPort: HashingPort
 ) {
     companion object {
         private const val TAG = "ModelFileScanner"
@@ -57,6 +62,9 @@ class ModelFileScanner @Inject constructor(
         val partialDownloads = mutableMapOf<String, Long>()
         val invalidModels = mutableListOf<ModelConfiguration>()
 
+        // Collect files that need SHA256 verification for concurrent processing
+        val filesToVerify = mutableListOf<Triple<ModelConfiguration, File, String>>()
+
         // Iterate over expected models (what we want to have)
         for (expectedModel in expectedModels) {
             val filename = expectedModel.metadata.localFileName
@@ -77,37 +85,31 @@ class ModelFileScanner @Inject constructor(
 
             // Detect if config changed by comparing expected (remote) vs downloaded (registry)
             val configChanged = downloadedModel != null && (
-                downloadedModel.metadata.md5 != expectedModel.metadata.md5 ||
+                downloadedModel.metadata.sha256 != expectedModel.metadata.sha256 ||
                 downloadedModel.metadata.modelFileFormat != expectedModel.metadata.modelFileFormat
             )
 
-            // Determine validity based on expected model
-            val isValidByExpected = !configChanged && fileExists
-
             when {
-                // File is valid: exists and config hasn't changed - trust MD5 validation
-                fileExists && isValidByExpected -> {
-                    Log.d(TAG, "Model $filename is valid (exists & config unchanged - MD5 will verify)")
+                // File exists and config hasn't changed - verify SHA256 to ensure file integrity
+                fileExists && !configChanged -> {
+                    // Add to list for concurrent SHA256 verification
+                    filesToVerify.add(Triple(expectedModel, file, expectedModel.metadata.sha256))
                 }
                 // Partial download exists - check against expected model from cache
                 tempExists && tempLength > 0 -> {
-                    // Trust partial if expected model MD5/format matches
-                    val canTrustPartial = !configChanged &&
-                        expectedModel.metadata.md5 == expectedModel.metadata.md5 &&
-                        expectedModel.metadata.modelFileFormat == expectedModel.metadata.modelFileFormat
-                    if (canTrustPartial) {
-                        // Trust the partial file - it's from a previous download with matching expected MD5
+                    // Trust partial if config hasn't changed
+                    if (!configChanged) {
                         // Track the partial download so UI can show resume progress
                         partialDownloads[filename] = tempLength
-                        Log.d(TAG, "Model $filename has valid partial download (trusted by expected config)")
+                        Log.d(TAG, "Model $filename has valid partial download (config unchanged)")
                     } else {
                         // Not trusted - treat as missing, will re-download
                         missingModels.add(expectedModel)
                         Log.d(TAG, "Model $filename has untrusted partial download (config changed), will re-download")
                     }
                 }
-                // File exists but config changed
-                fileExists && !isValidByExpected -> {
+                // File exists but config changed - need to re-download
+                fileExists && configChanged -> {
                     // Handle format change - delete old format file
                     handleFormatChangeForType(modelType, downloadedModel, modelsDir)
                     invalidModels.add(expectedModel)
@@ -116,7 +118,34 @@ class ModelFileScanner @Inject constructor(
                 // File doesn't exist
                 else -> {
                     missingModels.add(expectedModel)
-                    Log.d(TAG, "Model $filename is missing (exists=$fileExists)")
+                    Log.d(TAG, "Model $filename is missing")
+                }
+            }
+        }
+
+        // Process SHA256 verifications concurrently
+        if (filesToVerify.isNotEmpty()) {
+            filesToVerify.chunked(5).forEach { batch ->
+                // Launch concurrent async tasks for each file in batch
+                val deferredResults = batch.map { (model, file, expectedSha256) ->
+                    CoroutineScope(Dispatchers.IO).async {
+                        val actualSha256 = hashingPort.calculateSha256(file)
+                        Triple(model, expectedSha256, actualSha256)
+                    }
+                }
+
+                // Await all results in this batch
+                val results = deferredResults.awaitAll()
+
+                // Process results
+                results.forEach { (model, expectedSha256, actualSha256) ->
+                    val filename = model.metadata.localFileName
+                    if (actualSha256 == expectedSha256) {
+                        Log.d(TAG, "Model $filename is valid (SHA256 matches)")
+                    } else {
+                        Log.w(TAG, "Model $filename has SHA256 mismatch! Expected: $expectedSha256, Actual: $actualSha256. Will re-download.")
+                        invalidModels.add(model)
+                    }
                 }
             }
         }
@@ -170,7 +199,8 @@ class ModelFileScanner @Inject constructor(
         }
         return when (modelType) {
             ModelType.VISION -> "vision.$extension"
-            ModelType.DRAFT -> "draft.$extension"
+            ModelType.DRAFT_ONE -> "draft_one.$extension"
+            ModelType.DRAFT_TWO -> "draft_two.$extension"
             ModelType.MAIN -> "main.$extension"
             ModelType.FAST -> "fast.$extension"
         }
@@ -183,19 +213,22 @@ class ModelFileScanner @Inject constructor(
     suspend fun quickCheckModelsReady(): Boolean = withContext(Dispatchers.IO) {
         val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
 
-        // Get dynamic filenames from cache
-        val visionConfig = modelConfigCache.getVisionConfig()
-        val draftConfig = modelConfigCache.getDraftConfig()
-        val mainConfig = modelConfigCache.getMainConfig()
-        val fastConfig = modelConfigCache.getFastConfig()
+        // Get dynamic filenames from registry
+        val allConfigs = modelRegistry.getRegisteredModels()
+        val configsByType = allConfigs.associateBy { it.modelType }
 
         // Check for model files - use localFileName from config
         val requiredFiles = listOfNotNull(
-            visionConfig?.metadata?.localFileName,
-            draftConfig?.metadata?.localFileName,
-            mainConfig?.metadata?.localFileName,
-            fastConfig?.metadata?.localFileName
+            configsByType[ModelType.VISION]?.metadata?.localFileName,
+            configsByType[ModelType.DRAFT_ONE]?.metadata?.localFileName,
+            configsByType[ModelType.DRAFT_TWO]?.metadata?.localFileName,
+            configsByType[ModelType.MAIN]?.metadata?.localFileName,
+            configsByType[ModelType.FAST]?.metadata?.localFileName
         )
+
+        if (requiredFiles.isEmpty()) {
+            throw IllegalStateException("No models configured. This is a bug - models must be configured before quickCheckModelsReady is called.")
+        }
 
         // First check that all required files exist with content
         val allFilesExist = requiredFiles.all { filename ->

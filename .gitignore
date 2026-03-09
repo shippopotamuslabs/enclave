@@ -31,3 +31,5 @@ llama-android/.cxx/
 
 # Third-party dependencies
 third_party/
+
+bin/

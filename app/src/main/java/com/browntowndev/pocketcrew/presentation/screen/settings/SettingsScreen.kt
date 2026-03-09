@@ -17,10 +17,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -30,10 +37,14 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,11 +54,16 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,6 +100,15 @@ fun SettingsScreen(
     onFeedbackTextChange: (String) -> Unit,
     onSubmitFeedback: () -> Unit,
     onNavigateToModelDownload: () -> Unit,
+    // Model Configuration
+    onShowModelConfigSheet: (Boolean) -> Unit,
+    onSelectModelType: (com.browntowndev.pocketcrew.domain.model.ModelType) -> Unit,
+    onBackToModelList: () -> Unit,
+    onHuggingFaceModelNameChange: (String) -> Unit,
+    onTemperatureChange: (Double) -> Unit,
+    onTopKChange: (Int) -> Unit,
+    onTopPChange: (Double) -> Unit,
+    onSaveModelConfig: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -163,6 +188,15 @@ fun SettingsScreen(
                 )
             }
 
+            item { SectionHeader("Configuration") }
+            item {
+                SettingsClickableRow(
+                    icon = Icons.Default.Settings,
+                    title = "Model Configuration",
+                    onClick = { onShowModelConfigSheet(true) }
+                )
+            }
+
             item { SectionHeader("Information") }
             item {
                 SettingsClickableRow(
@@ -225,6 +259,20 @@ fun SettingsScreen(
                 onDismiss = { onShowFeedbackSheet(false) },
                 onFeedbackChange = onFeedbackTextChange,
                 onSubmit = onSubmitFeedback
+            )
+        }
+
+        if (uiState.showModelConfigSheet) {
+            ModelConfigurationBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowModelConfigSheet(false) },
+                onSelectModelType = onSelectModelType,
+                onBackToModelList = onBackToModelList,
+                onHuggingFaceModelNameChange = onHuggingFaceModelNameChange,
+                onTemperatureChange = onTemperatureChange,
+                onTopKChange = onTopKChange,
+                onTopPChange = onTopPChange,
+                onSave = onSaveModelConfig
             )
         }
     }
@@ -636,6 +684,210 @@ fun FeedbackBottomSheet(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ModelConfigurationBottomSheet(
+    uiState: SettingsUiState,
+    onDismiss: () -> Unit,
+    onSelectModelType: (com.browntowndev.pocketcrew.domain.model.ModelType) -> Unit,
+    onBackToModelList: () -> Unit,
+    onHuggingFaceModelNameChange: (String) -> Unit,
+    onTemperatureChange: (Double) -> Unit,
+    onTopKChange: (Int) -> Unit,
+    onTopPChange: (Double) -> Unit,
+    onSave: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val isSelectingModel = uiState.selectedModelType == null
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 32.dp)
+                .fillMaxWidth()
+        ) {
+            if (isSelectingModel) {
+                // Model list view
+                Text(
+                    text = "Model Configuration",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (uiState.modelConfigurations.isEmpty()) {
+                    Text(
+                        text = "No models configured. Download a model first.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(uiState.modelConfigurations) { config ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                    .clickable { onSelectModelType(config.modelType) }
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SmartToy,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = config.displayName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Model detail view
+                val config = uiState.selectedModelConfig
+                var huggingFaceDropdownExpanded by remember { mutableStateOf(false) }
+
+                // Header with back button
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    IconButton(onClick = onBackToModelList) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "Back to model list"
+                        )
+                    }
+                    Text(
+                        text = config?.displayName ?: "Model Configuration",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (config != null) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // HuggingFace Model Name Dropdown
+                        Text(
+                            text = "HuggingFace Model",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        ExposedDropdownMenuBox(
+                            expanded = huggingFaceDropdownExpanded,
+                            onExpandedChange = { huggingFaceDropdownExpanded = it }
+                        ) {
+                            OutlinedTextField(
+                                value = config.huggingFaceModelName,
+                                onValueChange = {},
+                                readOnly = true,
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = huggingFaceDropdownExpanded) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .menuAnchor(),
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            ExposedDropdownMenu(
+                                expanded = huggingFaceDropdownExpanded,
+                                onDismissRequest = { huggingFaceDropdownExpanded = false }
+                            ) {
+                                uiState.availableHuggingFaceModels.forEach { modelName ->
+                                    DropdownMenuItem(
+                                        text = { Text(modelName) },
+                                        onClick = {
+                                            onHuggingFaceModelNameChange(modelName)
+                                            huggingFaceDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Tunings Section
+                        Text(
+                            text = "Tunings",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        // Temperature
+                        Text(
+                            text = "Temperature: ${String.format("%.2f", config.temperature)}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Slider(
+                            value = config.temperature.toFloat(),
+                            onValueChange = { onTemperatureChange(it.toDouble()) },
+                            valueRange = 0f..2f,
+                            steps = 19
+                        )
+
+                        // Top K
+                        Text(
+                            text = "Top K: ${config.topK}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Slider(
+                            value = config.topK.toFloat(),
+                            onValueChange = { onTopKChange(it.toInt()) },
+                            valueRange = 1f..100f,
+                            steps = 98
+                        )
+
+                        // Top P
+                        Text(
+                            text = "Top P: ${String.format("%.2f", config.topP)}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Slider(
+                            value = config.topP.toFloat(),
+                            onValueChange = { onTopPChange(it.toDouble()) },
+                            valueRange = 0f..1f,
+                            steps = 19
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = onSave,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Save")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ==================== PREVIEWS ====================
 
 @Preview
@@ -668,7 +920,15 @@ fun PreviewSettingsScreenLight() {
             onShowFeedbackSheet = {},
             onFeedbackTextChange = {},
             onSubmitFeedback = {},
-            onNavigateToModelDownload = {}
+            onNavigateToModelDownload = {},
+            onShowModelConfigSheet = {},
+            onSelectModelType = {},
+            onBackToModelList = {},
+            onHuggingFaceModelNameChange = {},
+            onTemperatureChange = {},
+            onTopKChange = {},
+            onTopPChange = {},
+            onSaveModelConfig = {}
         )
     }
 }

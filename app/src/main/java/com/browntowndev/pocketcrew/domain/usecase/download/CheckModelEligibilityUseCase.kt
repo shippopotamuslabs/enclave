@@ -60,10 +60,10 @@ class CheckModelEligibilityUseCase @Inject constructor(
         // Combine missing, partial, and invalid models
         val missingModels = scanResult.missingModels + partialDownloadModels + invalidModels + configChangedModels
 
-        // Combine models with the same MD5 (multi-type models like DRAFT + VISION share the same file)
+        // Combine models with the same SHA256 (multi-type models like DRAFT_ONE + FAST share the same file)
         // by merging their modelTypes into a single entry
         val combinedMissingModels = missingModels
-            .groupBy { it.metadata.md5 }
+            .groupBy { it.metadata.sha256 }
             .map { (_, models) ->
                 val firstModel = models.first()
                 firstModel
@@ -74,7 +74,7 @@ class CheckModelEligibilityUseCase @Inject constructor(
 
     /**
      * Determines which models need downloading based on registry comparison.
-     * Checks for unregistered models and config changes (displayName, MD5, format).
+     * Checks for unregistered models and config changes (displayName, SHA256, format).
      */
     private fun determineModelsNeedingDownload(
         originalModels: List<ModelConfiguration>,
@@ -83,11 +83,11 @@ class CheckModelEligibilityUseCase @Inject constructor(
         if (originalModels.isEmpty()) return newModels
 
         val modelsToDownload = mutableListOf<ModelConfiguration>()
-        val originalModelsByMd5 = originalModels.associateBy { it.metadata.md5 }
+        val originalModelsBySha256 = originalModels.associateBy { it.metadata.sha256 }
 
         // Check for unregistered models or config changes
         for (model in newModels) {
-            val registeredModel = originalModelsByMd5[model.metadata.md5]
+            val registeredModel = originalModelsBySha256[model.metadata.sha256]
             val modelFileUpdated = registeredModel == null ||
                 registeredModel.metadata.modelFileFormat != model.metadata.modelFileFormat
 

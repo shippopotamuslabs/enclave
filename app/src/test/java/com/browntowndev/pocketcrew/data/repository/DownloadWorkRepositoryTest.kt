@@ -4,13 +4,13 @@ import android.util.Log
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.browntowndev.pocketcrew.domain.model.ModelConfig
-import com.google.common.util.concurrent.ListenableFuture
-import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.UUID
@@ -31,180 +31,111 @@ class DownloadWorkRepositoryTest {
         mockkStatic(Log::class)
         every { Log.d(any<String>(), any<String>()) } returns 0
         every { Log.e(any<String>(), any<String>()) } returns 0
+        every { Log.w(any<String>(), any<String>()) } returns 0
     }
 
-    /**
-     * Test that terminal states (SUCCEEDED, FAILED, CANCELLED) are emitted when WorkInfo
-     * transitions to those states.
-     * 
-     * BUG: The original polling loop exited without emitting the final state, causing
-     * the UI to never show completion status. This test verifies that the Flow emits
-     * terminal states after the work transitions from RUNNING.
-     * 
-     * This test simulates the polling mechanism and verifies that Phase 3 (emitting terminal
-     * state) is executed after the work completes.
-     */
+    private fun createMockWorkInfo(state: WorkInfo.State): WorkInfo {
+        return mockk {
+            every { id } returns workId
+            every { this@mockk.state } returns state
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun observeDownloadProgress_emitsWorkInfo_whenWorkRunning() = runBlocking {
+        // Arrange: Return a Flow that emits RUNNING state
+        val workInfoRunning = createMockWorkInfo(WorkInfo.State.RUNNING)
+
+        val mockFlow = kotlinx.coroutines.flow.flowOf(listOf(workInfoRunning))
+        every { mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG) } returns mockFlow
+
+        // Act
+        val result = repository.observeDownloadProgress(workId).first()
+
+        // Assert
+        assertEquals(WorkInfo.State.RUNNING, result?.state)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun observeDownloadProgress_emitsTerminalState_whenWorkSucceeds() = runBlocking {
-        // Arrange: Simulate work going from RUNNING -> SUCCEEDED
-        val workInfoRunning = createWorkInfo(WorkInfo.State.RUNNING)
-        val workInfoSucceeded = createWorkInfo(WorkInfo.State.SUCCEEDED)
+        // Arrange: Return a Flow that emits SUCCEEDED state
+        val workInfoSucceeded = createMockWorkInfo(WorkInfo.State.SUCCEEDED)
 
-        // Track call count to return different states on successive calls
-        val callCount = intArrayOf(0)
-        
-        every { mockWorkManager.getWorkInfoById(workId) } answers {
-            callCount[0]++
-            val mockFuture = mockk<ListenableFuture<WorkInfo?>>()
-            coEvery { mockFuture.get() } returns when {
-                callCount[0] == 1 -> workInfoRunning  // First call - initial work exists
-                callCount[0] <= 3 -> workInfoRunning // Phase 2 - still running
-                else -> workInfoSucceeded             // Phase 3 - terminal state
-            }
-            mockFuture
-        }
+        val mockFlow = kotlinx.coroutines.flow.flowOf(listOf(workInfoSucceeded))
+        every { mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG) } returns mockFlow
 
-        // Act: Collect all emissions from the Flow
-        val emissions = mutableListOf<WorkInfo>()
-        repository.observeDownloadProgress(workId).collect { workInfo ->
-            emissions.add(workInfo)
-            if (workInfo.state == WorkInfo.State.SUCCEEDED) {
-                return@collect
-            }
-        }
+        // Act
+        val result = repository.observeDownloadProgress(workId).first()
 
-        // Assert: Verify terminal state SUCCEEDED is emitted
-        // The bug would cause this to FAIL because the loop exited without emitting final state
-        assertTrue(
-            emissions.any { it.state == WorkInfo.State.SUCCEEDED },
-            "Expected SUCCEEDED state to be emitted but got: ${emissions.map { it.state }}"
-        )
-        assertTrue(
-            emissions.last().state == WorkInfo.State.SUCCEEDED,
-            "Expected last emission to be SUCCEEDED"
-        )
+        // Assert
+        assertEquals(WorkInfo.State.SUCCEEDED, result?.state)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun observeDownloadProgress_emitsTerminalState_whenWorkFails() = runBlocking {
-        // Arrange: Simulate work going from RUNNING -> FAILED
-        val workInfoRunning = createWorkInfo(WorkInfo.State.RUNNING)
-        val workInfoFailed = createWorkInfo(WorkInfo.State.FAILED)
+        // Arrange: Return a Flow that emits FAILED state
+        val workInfoFailed = createMockWorkInfo(WorkInfo.State.FAILED)
 
-        val callCount = intArrayOf(0)
-        every { mockWorkManager.getWorkInfoById(workId) } answers {
-            callCount[0]++
-            val mockFuture = mockk<ListenableFuture<WorkInfo?>>()
-            coEvery { mockFuture.get() } returns when {
-                callCount[0] == 1 -> workInfoRunning
-                callCount[0] <= 3 -> workInfoRunning
-                else -> workInfoFailed
-            }
-            mockFuture
-        }
+        val mockFlow = kotlinx.coroutines.flow.flowOf(listOf(workInfoFailed))
+        every { mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG) } returns mockFlow
 
         // Act
-        val emissions = mutableListOf<WorkInfo>()
-        repository.observeDownloadProgress(workId).collect { workInfo ->
-            emissions.add(workInfo)
-            if (workInfo.state == WorkInfo.State.FAILED) {
-                return@collect
-            }
-        }
+        val result = repository.observeDownloadProgress(workId).first()
 
         // Assert
-        assertTrue(
-            emissions.any { it.state == WorkInfo.State.FAILED },
-            "Expected FAILED state to be emitted but got: ${emissions.map { it.state }}"
-        )
-        assertTrue(
-            emissions.last().state == WorkInfo.State.FAILED,
-            "Expected last emission to be FAILED"
-        )
+        assertEquals(WorkInfo.State.FAILED, result?.state)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun observeDownloadProgress_filtersByWorkId() = runBlocking {
+        // Arrange: Return multiple work infos, only one matching our workId
+        val otherWorkId = UUID.randomUUID()
+        val workInfoRunning = createMockWorkInfo(WorkInfo.State.RUNNING)
+        val otherWorkInfo = mockk<WorkInfo> {
+            every { id } returns otherWorkId
+            every { this@mockk.state } returns WorkInfo.State.RUNNING
+        }
+
+        val mockFlow = kotlinx.coroutines.flow.flowOf(listOf(otherWorkInfo, workInfoRunning))
+        every { mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG) } returns mockFlow
+
+        // Act
+        val result = repository.observeDownloadProgress(workId).first()
+
+        // Assert - should find our workId
+        assertEquals(workId, result?.id)
     }
 
     @Test
-    fun observeDownloadProgress_emitsTerminalState_whenWorkCancelled() = runBlocking {
-        // Arrange: Simulate work going from RUNNING -> CANCELLED
-        val workInfoRunning = createWorkInfo(WorkInfo.State.RUNNING)
-        val workInfoCancelled = createWorkInfo(WorkInfo.State.CANCELLED)
-
-        val callCount = intArrayOf(0)
-        every { mockWorkManager.getWorkInfoById(workId) } answers {
-            callCount[0]++
-            val mockFuture = mockk<ListenableFuture<WorkInfo?>>()
-            coEvery { mockFuture.get() } returns when {
-                callCount[0] == 1 -> workInfoRunning
-                callCount[0] <= 3 -> workInfoRunning
-                else -> workInfoCancelled
-            }
-            mockFuture
-        }
+    fun getWorkId_returnsWorkId_whenWorkRunning() = runBlocking {
+        // Arrange
+        val workInfoRunning = createMockWorkInfo(WorkInfo.State.RUNNING)
+        every {
+            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
+        } returns listOf(workInfoRunning)
 
         // Act
-        val emissions = mutableListOf<WorkInfo>()
-        repository.observeDownloadProgress(workId).collect { workInfo ->
-            emissions.add(workInfo)
-            if (workInfo.state == WorkInfo.State.CANCELLED) {
-                return@collect
-            }
-        }
+        val result = repository.getWorkId()
 
         // Assert
-        assertTrue(
-            emissions.any { it.state == WorkInfo.State.CANCELLED },
-            "Expected CANCELLED state to be emitted but got: ${emissions.map { it.state }}"
-        )
-        assertTrue(
-            emissions.last().state == WorkInfo.State.CANCELLED,
-            "Expected last emission to be CANCELLED"
-        )
+        assertEquals(workId, result)
     }
 
     @Test
-    fun observeDownloadProgress_emitsRunningStateFirst() = runBlocking {
-        // Arrange: Work is already RUNNING
-        val workInfoRunning = createWorkInfo(WorkInfo.State.RUNNING)
-        val workInfoSucceeded = createWorkInfo(WorkInfo.State.SUCCEEDED)
-
-        val callCount = intArrayOf(0)
-        every { mockWorkManager.getWorkInfoById(workId) } answers {
-            callCount[0]++
-            val mockFuture = mockk<ListenableFuture<WorkInfo?>>()
-            coEvery { mockFuture.get() } returns when {
-                callCount[0] == 1 -> workInfoRunning
-                callCount[0] <= 3 -> workInfoRunning
-                else -> workInfoSucceeded
-            }
-            mockFuture
-        }
+    fun getWorkId_returnsNull_whenNoWorkRunning() = runBlocking {
+        // Arrange
+        every {
+            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
+        } returns emptyList()
 
         // Act
-        val emissions = mutableListOf<WorkInfo>()
-        repository.observeDownloadProgress(workId).collect { workInfo ->
-            emissions.add(workInfo)
-            if (workInfo.state == WorkInfo.State.SUCCEEDED) {
-                return@collect
-            }
-        }
+        val result = repository.getWorkId()
 
-        // Assert: First emission should be the RUNNING state
-        assertTrue(
-            emissions.first().state == WorkInfo.State.RUNNING,
-            "Expected first emission to be RUNNING but was: ${emissions.first().state}"
-        )
-    }
-
-    /**
-     * Helper to create a mock WorkInfo with the given state.
-     */
-    private fun createWorkInfo(state: WorkInfo.State): WorkInfo {
-        val workInfo = mockk<WorkInfo>()
-        every { workInfo.id } returns workId
-        every { workInfo.state } returns state
-        every { workInfo.progress } returns mockk(relaxed = true)
-        every { workInfo.outputData } returns mockk(relaxed = true)
-        return workInfo
+        // Assert
+        assertEquals(null, result)
     }
 }
-
