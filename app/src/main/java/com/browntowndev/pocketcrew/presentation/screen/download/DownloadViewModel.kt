@@ -4,15 +4,16 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
-import com.browntowndev.pocketcrew.domain.model.DownloadState
-import com.browntowndev.pocketcrew.domain.model.FileProgress
-import com.browntowndev.pocketcrew.domain.model.FileStatus
+import com.browntowndev.pocketcrew.domain.model.download.DownloadState
+import com.browntowndev.pocketcrew.domain.model.download.FileProgress
+import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.data.repository.DownloadWorkRepository
-import com.browntowndev.pocketcrew.domain.model.DownloadKey
-import com.browntowndev.pocketcrew.domain.model.ModelFile
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -36,6 +37,7 @@ import kotlinx.coroutines.launch
 class DownloadViewModel @AssistedInject constructor(
     private val modelDownloadOrchestrator: ModelDownloadOrchestratorPort,
     private val downloadWorkRepository: DownloadWorkRepository,
+    private val modelRegistry: ModelRegistryPort,
     @Assisted private val modelsResult: DownloadModelsResult,
     @Assisted private val initialErrorMessage: String?,
     @Assisted private val autoStartDownloads: Boolean = true,
@@ -44,6 +46,18 @@ class DownloadViewModel @AssistedInject constructor(
     companion object {
         private const val TAG = "DownloadViewModel"
         private const val THROTTLE_MS = 5000L
+    }
+
+    // Cache of display names loaded at init time
+    private var displayNameCache: Map<ModelType, String> = emptyMap()
+
+    init {
+        viewModelScope.launch {
+            displayNameCache = ModelType.entries.associateWith { modelType ->
+                modelRegistry.getRegisteredModelSync(modelType)?.metadata?.displayName
+                    ?: modelType.name.lowercase().replaceFirstChar { it.uppercase() }
+            }
+        }
     }
 
     @AssistedFactory
@@ -68,18 +82,15 @@ class DownloadViewModel @AssistedInject constructor(
             get() = if (totalBytes > 0) bytesDownloaded.toFloat() / totalBytes else 0f
     }
 
-    // Extension function to convert ModelType to anthropomorphized name
-    internal fun ModelType.toAnthropomorphizedName(): String = when (this) {
-        ModelType.VISION -> "The Observer"
-        ModelType.FAST -> "The Sentinel"
-        ModelType.DRAFT -> "The Sketcher"
-        ModelType.MAIN -> "The Mastermind"
+    // Get display name from cached registry values
+    private fun ModelType.toDisplayName(): String {
+        return displayNameCache[this] ?: this.name.lowercase().replaceFirstChar { it.uppercase() }
     }
 
-    // Convert FileProgress to UI model with anthropomorphized names
+    // Convert FileProgress to UI model with display names from ModelRegistry
     internal fun FileProgress.toUiModel(): FileProgressUiModel {
         val displayName = if (modelTypes.isNotEmpty()) {
-            val names = modelTypes.map { it.toAnthropomorphizedName() }
+            val names = modelTypes.map { it.toDisplayName() }
             if (names.size == 1) {
                 names.first()
             } else {
@@ -138,27 +149,29 @@ class DownloadViewModel @AssistedInject constructor(
     val showWifiDialog: StateFlow<Boolean> = _showWifiDialog.asStateFlow()
 
     init {
-        // Set initial error state if provided from app initialization failure
-        initialErrorMessage?.let { error ->
-            Log.d(TAG, "[TRACE] init: Setting initial error: $error")
-            modelDownloadOrchestrator.setError(error)
-        }
+        // If there's an initial error from app initialization, set it and skip download logic
+        // Don't try to download - let the user retry manually
+        if (initialErrorMessage != null) {
+            Log.d(TAG, "[TRACE] init: App initialization failed, setting error and skipping download")
+            modelDownloadOrchestrator.setError(initialErrorMessage)
+        } else {
+            viewModelScope.launch {
+                // Always observe work progress when on download screen
+                // This handles cases where checkModels() might have transient failures
+                // but downloads are triggered through other paths
+                observeWorkProgress()
 
-        viewModelScope.launch {
-            // Always observe work progress when on download screen
-            // This handles cases where checkModels() might have transient failures
-            // but downloads are triggered through other paths
-            observeWorkProgress()
-            
-            // Only auto-start downloads if explicitly enabled
-            // This allows UI layer to control when downloads start (e.g., after permission confirmation)
-            if (autoStartDownloads && modelsResult.modelsToDownload.isNotEmpty()) {
-                Log.d(TAG, "[TRACE] init: ${modelsResult.modelsToDownload.size} models to download (auto-start enabled)")
-                startDownloads()
-            } else if (modelsResult.modelsToDownload.isEmpty()) {
-                Log.d(TAG, "[TRACE] init: No models missing or config fetch failed")
-            } else {
-                Log.d(TAG, "[TRACE] init: ${modelsResult.modelsToDownload.size} models to download (auto-start disabled, waiting for UI trigger)")
+                // Only auto-start downloads if explicitly enabled
+                // This allows UI layer to control when downloads start (e.g., after permission confirmation)
+                val modelsToDownload = modelsResult.modelsToDownload
+                if (autoStartDownloads && modelsToDownload.isNotEmpty()) {
+                    Log.d(TAG, "[TRACE] init: ${modelsToDownload.size} models to download (auto-start enabled)")
+                    startDownloads()
+                } else if (modelsToDownload.isEmpty()) {
+                    Log.d(TAG, "[TRACE] init: No models missing")
+                } else {
+                    Log.d(TAG, "[TRACE] init: ${modelsToDownload.size} models to download (auto-start disabled, waiting for UI trigger)")
+                }
             }
         }
     }
@@ -169,8 +182,9 @@ class DownloadViewModel @AssistedInject constructor(
     fun checkModels() {
         Log.d(TAG, "Checking models...")
         viewModelScope.launch {
-            if (modelsResult.modelsToDownload.isNotEmpty()) {
-                Log.d(TAG, "${modelsResult.modelsToDownload.size} models missing, starting downloads")
+            val modelsToDownload = modelsResult.modelsToDownload
+            if (modelsToDownload.isNotEmpty()) {
+                Log.d(TAG, "${modelsToDownload.size} models missing, starting downloads")
                 // Start downloads
                 startDownloads()
             } else {
@@ -196,7 +210,7 @@ class DownloadViewModel @AssistedInject constructor(
                 Log.w(TAG, "App not in foreground - blocking download, will retry when foregrounded")
                 return@launch
             }
-            
+
             val started = modelDownloadOrchestrator.startDownloads(modelsResult = modelsResult, wifiOnly = _wifiOnly.value)
             if (!started) {
                 // Blocked by WiFi-only
@@ -335,6 +349,12 @@ class DownloadViewModel @AssistedInject constructor(
             // Step 2: Use the repository's Flow which handles waiting for work + progress
             downloadWorkRepository.observeDownloadProgress(workId)
                 .collect { workInfo ->
+                    // Handle null workInfo (work not found or error)
+                    if (workInfo == null) {
+                        Log.w(TAG, "[TRACE] observeWorkProgress: Work info is null, skipping update")
+                        return@collect
+                    }
+
                     // Throttle logging to prevent Logcat spam (every 5 seconds)
                     val currentTime = System.currentTimeMillis()
                     val shouldLog = currentTime - lastTraceLogTime >= THROTTLE_MS

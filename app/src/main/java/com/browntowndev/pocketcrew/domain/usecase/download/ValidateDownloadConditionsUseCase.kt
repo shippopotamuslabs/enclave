@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.ModelFile
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.download.DownloadCheckResult
 import com.browntowndev.pocketcrew.data.repository.DeviceEnvironmentRepository
 import javax.inject.Inject
@@ -14,7 +14,7 @@ class ValidateDownloadConditionsUseCase @Inject constructor(
     }
 
     operator fun invoke(
-        missingModels: List<ModelFile>,
+        missingModels: List<ModelConfiguration>,
         wifiOnly: Boolean
     ): DownloadCheckResult {
         if (missingModels.isEmpty()) {

@@ -1,11 +1,11 @@
 package com.browntowndev.pocketcrew.domain.model.download
 
-import com.browntowndev.pocketcrew.domain.model.ModelFile
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 
 data class ModelScanResult(
-    val missingModels: List<ModelFile>,
+    val missingModels: List<ModelConfiguration>,
     val partialDownloads: Map<String, Long>,
     val allValid: Boolean,
     val directoryError: Boolean = false,
-    val invalidModels: List<ModelFile> = emptyList()
+    val invalidModels: List<ModelConfiguration> = emptyList()
 )

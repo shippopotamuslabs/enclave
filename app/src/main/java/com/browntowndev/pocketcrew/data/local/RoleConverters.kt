@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.data.local
 
 import androidx.room.TypeConverter
-import com.browntowndev.pocketcrew.domain.model.Role
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 
 /**
  * Type converters for Room to convert Role enum to/from String.

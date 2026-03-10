@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.app
 
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

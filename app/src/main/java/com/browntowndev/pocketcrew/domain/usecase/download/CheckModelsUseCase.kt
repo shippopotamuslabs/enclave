@@ -1,8 +1,9 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import com.browntowndev.pocketcrew.data.download.ModelFileScanner
-import com.browntowndev.pocketcrew.domain.model.ModelFile
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
+import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import javax.inject.Inject
 
@@ -29,35 +30,33 @@ class CheckModelsUseCase @Inject constructor(
     /**
      * Performs filesystem scan and eligibility check for the given models.
      *
-     * @param originalModels The list of ORIGINAL models from registry (before remote config update)
-     * @param newModels The list of NEW models from remote config
+     * @param downloadedModels The list of models that are actually downloaded (from registry)
+     * @param expectedModels The list of models expected from remote config (from cache)
      * @return DownloadModelsResult containing models that need downloading and scan result
      */
-    suspend operator fun invoke(originalModels: List<ModelFile>, newModels: List<ModelFile>): DownloadModelsResult {
-        // Scan filesystem for ALL models using ORIGINAL models from registry
-        // This ensures we detect partial downloads and compare against the OLD registry state
-        // The bug was passing newModels which caused comparing new vs new
+    suspend operator fun invoke(
+        downloadedModels: List<ModelConfiguration>,
+        expectedModels: List<ModelConfiguration>
+    ): DownloadModelsResult {
+        // Scan filesystem comparing what's downloaded vs what's expected
         val scan = fileScanner.scanAndCreateDirIfNotExist(
-            modelsToCheck = originalModels,
-            newModels = newModels  // Pass new models separately for reference
+            downloadedModels = downloadedModels,
+            expectedModels = expectedModels
         )
 
         // Handle directory creation error
         if (scan.directoryError) {
-            logger.warning(TAG, "Failed to create models directory")
-            return DownloadModelsResult(modelsToDownload = emptyList(), scanResult = scan)
+            throw Exception("Failed to create models directory")
         }
 
         // Use CheckModelEligibilityUseCase to determine which models need downloading
-        // Note: CheckModelEligibilityUseCase returns properly combined modelTypes
-        // (grouping by MD5 to handle multi-type models like DRAFT + VISION)
-        val missingModels = checkModelEligibilityUseCase.check(originalModels, newModels, scanResult = scan)
+        val missingModels = checkModelEligibilityUseCase.check(downloadedModels, expectedModels, scanResult = scan)
 
         // Log results
         if (missingModels.isEmpty()) {
-            logger.info(TAG, "All ${originalModels.size} models are ready")
+            logger.info(TAG, "All ${expectedModels.size} models are ready")
         } else {
-            logger.info(TAG, "${missingModels.size} models need download: ${missingModels.map { it.originalFileName }}")
+            logger.info(TAG, "${missingModels.size} models need download: ${missingModels.map { it.metadata.displayName }}")
         }
 
         // Return both the scan result and models that need downloading

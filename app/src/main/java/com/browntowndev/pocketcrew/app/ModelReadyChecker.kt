@@ -2,13 +2,12 @@ package com.browntowndev.pocketcrew.app
 
 import android.content.Context
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.runBlocking
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -16,13 +15,13 @@ import javax.inject.Singleton
 /**
  * Checks if model files are ready using ModelDownloadOrchestrator.
  * This validates against both filesystem and ModelRegistry for full integrity checking.
- * 
+ *
  * Checks for standardized model files: vision.litertlm, draft.litertlm, main.litertlm
  */
 @Singleton
 class ModelReadyChecker @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val modelConfigCache: ModelConfigCachePort
+    private val modelRegistry: ModelRegistryPort
 ) {
     companion object {
         private const val TAG = "ModelReadyChecker"
@@ -52,24 +51,19 @@ class ModelReadyChecker @Inject constructor(
             Log.d(TAG, "Models directory does not exist")
             return false
         }
-        
-        // Get dynamic filenames from cache, or use fallback defaults
-        val visionConfig = modelConfigCache.getVisionConfig()
-        val draftConfig = modelConfigCache.getDraftConfig()
-        val mainConfig = modelConfigCache.getMainConfig()
-        val fastConfig = modelConfigCache.getFastConfig()
-        
+
+        // Get dynamic filenames from registry, or throw if not configured
+        val allConfigs = modelRegistry.getRegisteredModelsSync()
+        val configsByType = allConfigs.associateBy { it.modelType }
+
         val requiredFiles = listOfNotNull(
-            visionConfig?.let { computeFilename(ModelType.VISION, it.modelFileFormat) } 
-                ?: "${ModelType.VISION.name.lowercase()}.litertlm",
-            draftConfig?.let { computeFilename(ModelType.DRAFT, it.modelFileFormat) }
-                ?: "${ModelType.DRAFT.name.lowercase()}.litertlm",
-            mainConfig?.let { computeFilename(ModelType.MAIN, it.modelFileFormat) }
-                ?: "${ModelType.MAIN.name.lowercase()}.litertlm",
-            fastConfig?.let { computeFilename(ModelType.FAST, it.modelFileFormat) }
-                ?: "${ModelType.FAST.name.lowercase()}.litertlm"
+            configsByType[ModelType.VISION]?.let { computeFilename(ModelType.VISION, it.metadata.modelFileFormat) },
+            configsByType[ModelType.DRAFT_ONE]?.let { computeFilename(ModelType.DRAFT_ONE, it.metadata.modelFileFormat) },
+            configsByType[ModelType.DRAFT_TWO]?.let { computeFilename(ModelType.DRAFT_TWO, it.metadata.modelFileFormat) },
+            configsByType[ModelType.MAIN]?.let { computeFilename(ModelType.MAIN, it.metadata.modelFileFormat) },
+            configsByType[ModelType.FAST]?.let { computeFilename(ModelType.FAST, it.metadata.modelFileFormat) }
         )
-        
+
         for (filename in requiredFiles) {
             val file = File(modelsDir, filename)
             if (!file.exists() || file.length() == 0L) {
@@ -77,7 +71,7 @@ class ModelReadyChecker @Inject constructor(
                 return false
             }
         }
-        
+
         Log.d(TAG, "All models are ready (fast check)")
         return true
     }

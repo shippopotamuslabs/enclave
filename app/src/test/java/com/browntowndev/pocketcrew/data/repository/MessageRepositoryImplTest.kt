@@ -2,8 +2,8 @@ package com.browntowndev.pocketcrew.data.repository
 
 import com.browntowndev.pocketcrew.data.local.MessageDao
 import com.browntowndev.pocketcrew.data.local.MessageEntity
-import com.browntowndev.pocketcrew.domain.model.Message
-import com.browntowndev.pocketcrew.domain.model.Role
+import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk

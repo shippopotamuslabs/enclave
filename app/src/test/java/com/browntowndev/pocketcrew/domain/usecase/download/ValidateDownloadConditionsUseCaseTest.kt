@@ -2,9 +2,9 @@ package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
 import com.browntowndev.pocketcrew.data.repository.DeviceEnvironmentRepository
-import com.browntowndev.pocketcrew.domain.model.ModelFile
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.mockk
@@ -57,25 +57,39 @@ class ValidateDownloadConditionsUseCaseTest {
         assertEquals(null, result.errorMessage)
     }
 
+    private fun createModelConfig(modelType: ModelType, sha256: String): ModelConfiguration {
+        return ModelConfiguration(
+            modelType = modelType,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/model",
+                remoteFileName = "${modelType.name.lowercase()}.litertlm",
+                localFileName = "${modelType.name.lowercase()}.litertlm",
+                displayName = "Test Model",
+                sha256 = sha256,
+                sizeInBytes = 1000000L,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.9,
+                repetitionPenalty = 1.0,
+                maxTokens = 2048,
+                contextWindow = 2048
+            ),
+            persona = ModelConfiguration.Persona(
+                systemPrompt = "You are helpful."
+            )
+        )
+    }
+
     @Test
     fun `invoke blocks download when wifiOnly enabled but not on WiFi`() {
         // Given
         every { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
 
-        val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
-        )
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = true)
@@ -91,19 +105,7 @@ class ValidateDownloadConditionsUseCaseTest {
         every { mockDeviceEnvironmentRepository.isWifiConnected() } returns true
         every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
 
-        val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
-        )
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = true)
@@ -119,19 +121,7 @@ class ValidateDownloadConditionsUseCaseTest {
         every { mockDeviceEnvironmentRepository.isWifiConnected() } returns true
         every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns false
 
-        val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
-        )
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = false)
@@ -147,19 +137,7 @@ class ValidateDownloadConditionsUseCaseTest {
         every { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
 
-        val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
-        )
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = false)
@@ -175,28 +153,8 @@ class ValidateDownloadConditionsUseCaseTest {
         every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
 
         val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            ),
-            ModelFile(
-                sizeBytes = 2000000L,
-                url = "https://example.com/model2.bin",
-                md5 = "def456",
-                modelTypes = listOf(ModelType.FAST),
-                originalFileName = "fast.litertlm",
-                displayName = "Fast Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
+            createModelConfig(ModelType.MAIN, "abc123"),
+            createModelConfig(ModelType.FAST, "def456")
         )
 
         // When
@@ -204,8 +162,8 @@ class ValidateDownloadConditionsUseCaseTest {
 
         // Then
         assertEquals(2, result.missingModels.size)
-        assertTrue(result.missingModels.any { it.md5 == "abc123" })
-        assertTrue(result.missingModels.any { it.md5 == "def456" })
+        assertTrue(result.missingModels.any { it.metadata.sha256 == "abc123" })
+        assertTrue(result.missingModels.any { it.metadata.sha256 == "def456" })
     }
 
     @Test
@@ -214,19 +172,7 @@ class ValidateDownloadConditionsUseCaseTest {
         every { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         // Storage check should not be called if WiFi check fails
 
-        val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
-        )
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = true)
@@ -241,19 +187,7 @@ class ValidateDownloadConditionsUseCaseTest {
         // Given - wifiOnly is false so we shouldn't care about wifi status
         every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
 
-        val missingModels = listOf(
-            ModelFile(
-                sizeBytes = 1000000L,
-                url = "https://example.com/model.bin",
-                md5 = "abc123",
-                modelTypes = listOf(ModelType.MAIN),
-                originalFileName = "main.litertlm",
-                displayName = "Test Model",
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                maxTokens = 2048,
-                systemPrompt = "You are helpful."
-            )
-        )
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = false)
@@ -261,5 +195,94 @@ class ValidateDownloadConditionsUseCaseTest {
         // Then
         assertTrue(result.canStart)
         verify { mockDeviceEnvironmentRepository.hasRequiredStorage() }
+    }
+
+    // ============================================================================
+    // Network Loss Scenarios
+    // ============================================================================
+
+    /**
+     * Scenario: Complete network loss (no WiFi, no mobile)
+     * When there's no network at all, downloads should be blocked
+     * regardless of wifiOnly setting
+     */
+    @Test
+    fun `invoke blocks when no network available at all`() {
+        // Given - no network connection
+        every { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
+        every { mockDeviceEnvironmentRepository.isNetworkAvailable() } returns false
+        every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
+
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+
+        // When - wifiOnly=true but no network
+        val result = useCase(missingModels, wifiOnly = true)
+
+        // Then - should block due to WiFi requirement
+        assertFalse(result.canStart)
+        assertTrue(result.errorMessage?.contains("WiFi") == true)
+    }
+
+    /**
+     * Scenario: Mobile data available but wifiOnly=true
+     * Downloads should be blocked (WiFi-only mode)
+     */
+    @Test
+    fun `invoke blocks mobile data when wifiOnly is true`() {
+        // Given - mobile data connected but not WiFi
+        every { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
+        // isNetworkAvailable returns true for mobile
+        every { mockDeviceEnvironmentRepository.isNetworkAvailable() } returns true
+        every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
+
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+
+        // When - wifiOnly=true
+        val result = useCase(missingModels, wifiOnly = true)
+
+        // Then - should block because not on WiFi
+        assertFalse(result.canStart)
+        assertTrue(result.errorMessage?.contains("WiFi") == true)
+    }
+
+    /**
+     * Scenario: Network available, wifiOnly=false
+     * Downloads should proceed (even on mobile)
+     */
+    @Test
+    fun `invoke allows download when network available and wifiOnly is false`() {
+        // Given - mobile network available
+        every { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
+        every { mockDeviceEnvironmentRepository.isNetworkAvailable() } returns true
+        every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns true
+
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+
+        // When - wifiOnly=false (user allowed mobile)
+        val result = useCase(missingModels, wifiOnly = false)
+
+        // Then - should allow
+        assertTrue(result.canStart)
+    }
+
+    /**
+     * Scenario: wifiOnly=false but still need storage check
+     * Even with network available, storage must be checked
+     */
+    @Test
+    fun `invoke checks storage even when network is available with wifiOnly false`() {
+        // Given - network available but no storage
+        every { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
+        every { mockDeviceEnvironmentRepository.isNetworkAvailable() } returns true
+        every { mockDeviceEnvironmentRepository.hasRequiredStorage() } returns false
+
+        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+
+        // When - wifiOnly=false
+        val result = useCase(missingModels, wifiOnly = false)
+
+        // Then - should block due to storage
+        assertFalse(result.canStart)
+        assertTrue(result.errorMessage?.contains("storage") == true)
     }
 }

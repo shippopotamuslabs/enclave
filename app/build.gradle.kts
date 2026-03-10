@@ -107,6 +107,8 @@ tasks.matching { it.name.startsWith("connected") && it.name.endsWith("AndroidTes
 }
 
 dependencies {
+    // Using custom llama-android (llama.cpp with Vulkan)
+    implementation(project(":llama-android"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)

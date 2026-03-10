@@ -7,14 +7,14 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import com.browntowndev.pocketcrew.domain.model.DownloadWorkerModelFile
-import com.browntowndev.pocketcrew.domain.model.FileStatus
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.download.FileStatus
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
+import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.service.FileIntegrityValidator
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
@@ -32,17 +32,17 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * WorkManager worker for downloading model files.
  * Delegates to extracted components for notification handling and progress tracking.
- * File integrity validation is centralized in FileIntegrityValidator.verifyModelsExist().
+ * SHA-256 integrity validation is performed during streaming download in HttpFileDownloader.
  */
 @HiltWorker
 class ModelDownloadWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val fileIntegrityValidator: FileIntegrityValidator,
     private val logger: LoggingPort,
     private val notificationManager: DownloadNotificationManager,
     private val progressTracker: DownloadProgressTracker,
-    private val fileDownloader: FileDownloaderPort
+    private val fileDownloader: FileDownloaderPort,
+    private val modelUrlProvider: ModelUrlProviderPort
 ) : CoroutineWorker(context, params) {
 
     companion object {
@@ -100,12 +100,12 @@ class ModelDownloadWorker @AssistedInject constructor(
             }
         }
 
-        logger.info(TAG, "Starting download of ${models.size} models: ${models.joinToString { checkNotNull(it.originalFileName) { "originalFileName must not be null - this is a bug in model configuration" } }}")
+        logger.info(TAG, "Starting download of ${models.size} models: ${models.joinToString { it.metadata.remoteFileName }}")
 
         // Initialize progress tracker with models
         progressTracker.initialize(models)
 
-        val totalSize = models.sumOf { it.sizeBytes }
+        val totalSize = models.sumOf { it.metadata.sizeInBytes }
         val totalFiles = models.size
 
         return try {
@@ -118,20 +118,20 @@ class ModelDownloadWorker @AssistedInject constructor(
                         try {
                             downloadFile(model)
                             completedCount.incrementAndGet()
-                            logger.debug(TAG, "Successfully downloaded ${model.filenames.first()}")
+                            logger.debug(TAG, "Successfully downloaded ${model.metadata.localFileName}")
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
                             failedCount.incrementAndGet()
-                            logger.error(TAG, "Failed to download ${model.filenames.first()}: ${e.message}", e)
+                            logger.error(TAG, "Failed to download ${model.metadata.localFileName}: ${e.message}", e)
 
                             val errorMessage = when (e) {
                                 is SocketException -> "Connection reset: ${e.message}"
                                 is SocketTimeoutException -> "Download timed out: ${e.message}"
                                 else -> e.message
                             }
-                            // Use tracking key (originalFileName) for state updates
-                            val trackingKey = checkNotNull(model.originalFileName) { "originalFileName must not be null - this is a bug in model configuration" }
+                            // Use tracking key (SHA256) for state updates
+                            val trackingKey = model.metadata.sha256
                             progressTracker.updateFileState(trackingKey) {
                                 it.copy(status = FileStatus.FAILED, error = errorMessage)
                             }
@@ -166,21 +166,6 @@ class ModelDownloadWorker @AssistedInject constructor(
                 // Read session ID from input (needed for both success and failure paths)
                 val sessionId = inputData.getString(DownloadWorkScheduler.KEY_SESSION_ID)
 
-                // Verify all downloaded files - centralized validation in FileIntegrityValidator
-                fileIntegrityValidator.verifyModelsExist().fold(
-                    onSuccess = {
-                        logger.info(TAG, "File integrity verification passed for all models")
-                    },
-                    onFailure = {
-                        logger.error(TAG, "File integrity verification failed for all models: ${it.message}")
-
-                        return Result.failure(workDataOf(
-                            "error_message" to "Download completed but files verification failed. Error: ${it.message}",
-                            DownloadWorkScheduler.KEY_SESSION_ID to sessionId
-                        ))
-                    }
-                )
-
                 if (sessionId != null) {
                     Result.success(workDataOf(DownloadWorkScheduler.KEY_SESSION_ID to sessionId))
                 } else {
@@ -196,19 +181,22 @@ class ModelDownloadWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun downloadFile(model: DownloadWorkerModelFile): Result {
+    private suspend fun downloadFile(model: ModelConfiguration): Result {
         val targetDir = File(applicationContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
         if (!targetDir.exists()) targetDir.mkdirs()
 
-        // Log the actual URL being used
-        logger.info(TAG, "[DOWNLOAD] Starting download: url=${model.url}, originalFileName=${model.originalFileName}, filenames=${model.filenames}")
+        // Get the download URL using the ModelUrlProviderPort
+        val downloadUrl = modelUrlProvider.getModelDownloadUrl(model)
 
-        // Use tracking key for state updates
-        val trackingKey = checkNotNull(model.originalFileName) { "originalFileName must not be null - this is a bug in model configuration" }
+        // Use tracking key (SHA256) for state updates
+        val trackingKey = model.metadata.sha256
+
+        // Log the actual URL being used
+        logger.info(TAG, "[DOWNLOAD] Starting download: url=$downloadUrl, remoteFileName=${model.metadata.remoteFileName}, localFileName=${model.metadata.localFileName}")
 
         // Check if target file already exists - will verify with MD5 later
         // Skip size validation - rely 100% on MD5 verification for integrity
-        val targetFile = File(targetDir, model.filenames.first())
+        val targetFile = File(targetDir, model.metadata.localFileName)
         if (targetFile.exists()) {
             progressTracker.updateFileState(trackingKey) {
                 it.copy(
@@ -230,14 +218,22 @@ class ModelDownloadWorker @AssistedInject constructor(
         setProgress(progressTracker.serializeToWorkData())
 
         // Get existing bytes for resume support
-        val tempFile = File(targetDir, "${model.filenames.first()}${ModelConfig.TEMP_EXTENSION}")
+        val tempFile = File(targetDir, "${model.metadata.localFileName}${ModelConfig.TEMP_EXTENSION}")
         val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
 
         try {
+            // Create download config with just the fields needed for generic file downloading
+            val downloadConfig = FileDownloaderPort.FileDownloadConfig(
+                filename = model.metadata.localFileName,
+                expectedSha256 = model.metadata.sha256,
+                expectedSizeBytes = model.metadata.sizeInBytes
+            )
+
             // Delegate download to FileDownloaderPort with progress callback
-            // File integrity (size + MD5) validation is done centrally in verifyModelsExist() after all downloads
+            // SHA-256 validation is done during streaming in HttpFileDownloader
             val downloadResult = fileDownloader.downloadFile(
-                model = model,
+                config = downloadConfig,
+                downloadUrl = downloadUrl,
                 targetDir = targetDir,
                 existingBytes = existingBytes,
                 progressCallback = object : FileDownloaderPort.ProgressCallback {
@@ -246,18 +242,21 @@ class ModelDownloadWorker @AssistedInject constructor(
                         progressTracker.updateFileState(trackingKey) {
                             it.copy(
                                 bytesDownloaded = bytesDownloaded,
-                                totalBytes = totalBytes.coerceAtLeast(model.sizeBytes),
+                                totalBytes = totalBytes.coerceAtLeast(model.metadata.sizeInBytes),
                                 status = FileStatus.DOWNLOADING
                             )
                         }
 
-                        // Push progress to WorkManager (throttled by shouldUpdateProgress)
+                        // Push progress to WorkManager and update notification (throttled by shouldUpdateProgress)
                         // Use runBlocking with tracking because this callback is not a suspend function
                         if (progressTracker.shouldUpdateProgress()) {
                             pendingProgressUpdates.incrementAndGet()
                             try {
                                 runBlocking {
                                     setProgress(progressTracker.serializeToWorkData())
+
+                                    // Update foreground notification during download
+                                    updateNotificationForeground()
                                 }
                                 progressTracker.markProgressUpdated()
                             } finally {
@@ -287,35 +286,59 @@ class ModelDownloadWorker @AssistedInject constructor(
         }
     }
 
-    private fun parseModelData(data: String): DownloadWorkerModelFile? {
+    private fun parseModelData(data: String): ModelConfiguration? {
+        // Expected format:
+        // modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|maxTokens|contextWindow|systemPrompt
+        // Note: 13 parts is legacy (contextWindow is optional, defaults to 32768)
         val parts = data.split("|")
-        if (parts.size < 5) return null
+        if (parts.size < 13) {
+            logger.warning(TAG, "Invalid model data format: expected at least 13 parts, got ${parts.size}")
+            return null
+        }
 
         return try {
-            val originalFileName = parts[0]
-            val modelTypesStr = parts[4]
-            val modelTypes = if (modelTypesStr.isNotEmpty()) {
-                modelTypesStr.split(",").map { ModelType.valueOf(it) }
-            } else {
-                listOf(ModelType.fromApiValue(originalFileName.substringBefore(".")))
-            }
-            val modelFileFormat = try {
-                ModelFileFormat.valueOf(parts[5])
+            val modelType = try {
+                ModelType.valueOf(parts[0])
             } catch (e: Exception) {
-                ModelFileFormat.LITERTLM
+                logger.error(TAG, "Invalid model type: ${parts[0]}")
+                return null
             }
-            val md5Value = parts.getOrNull(3)?.takeIf { it.isNotEmpty() }
-            
-            // DIAGNOSTIC: Log MD5 and filename info
-            logger.info(TAG, "[DIAGNOSTIC] parseModelData: originalFileName=$originalFileName, md5=$md5Value, modelTypes=$modelTypes, modelFileFormat=$modelFileFormat")
-            
-            DownloadWorkerModelFile(
-                sizeBytes = parts[1].toLong(),
-                url = parts[2],
-                md5 = md5Value,
-                modelTypes = modelTypes,
-                originalFileName = originalFileName,
-                modelFileFormat = modelFileFormat,
+
+            val metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = parts[4],
+                remoteFileName = parts[1],
+                localFileName = parts[2],
+                displayName = parts[3],
+                sha256 = parts[6],
+                sizeInBytes = parts[5].toLongOrNull() ?: 0L,
+                modelFileFormat = try {
+                    ModelFileFormat.valueOf(parts[7])
+                } catch (e: Exception) {
+                    ModelFileFormat.LITERTLM
+                }
+            )
+
+            val tunings = ModelConfiguration.Tunings(
+                temperature = parts[8].toDoubleOrNull() ?: 0.0,
+                topK = parts[9].toIntOrNull() ?: 40,
+                topP = parts[10].toDoubleOrNull() ?: 0.95,
+                repetitionPenalty = parts[11].toDoubleOrNull() ?: 1.0,
+                maxTokens = parts[12].toIntOrNull() ?: 2048,
+                contextWindow = parts[13].toIntOrNull() ?: 32768
+            )
+
+            val persona = ModelConfiguration.Persona(
+                systemPrompt = parts.getOrNull(14) ?: ""
+            )
+
+            // DIAGNOSTIC: Log parsed data
+            logger.info(TAG, "[DIAGNOSTIC] parseModelData: modelType=$modelType, remoteFileName=${metadata.remoteFileName}, sha256=${metadata.sha256}, size=${metadata.sizeInBytes}")
+
+            ModelConfiguration(
+                modelType = modelType,
+                metadata = metadata,
+                tunings = tunings,
+                persona = persona
             )
         } catch (e: Exception) {
             logger.error(TAG, "Failed to parse model data: ${e.message}", e)
@@ -332,19 +355,7 @@ class ModelDownloadWorker @AssistedInject constructor(
         if (progressTracker.shouldUpdateProgress()) {
             setProgress(progressTracker.serializeToWorkData())
             progressTracker.markProgressUpdated()
-
-            // Update foreground notification - must use setForegroundAsync() to update
-            // a notification that was initially set with setForeground()
-            val snapshot = progressTracker.computeOverallProgress()
-            val cancelIntent = WorkManager.getInstance(applicationContext)
-                .createCancelPendingIntent(id)
-            val foregroundInfo = notificationManager.createForegroundInfoForProgress(
-                progress = snapshot.overallProgress,
-                currentFile = snapshot.currentFile,
-                subText = progressTracker.buildSubText(),
-                cancelPendingIntent = cancelIntent
-            )
-            setForegroundAsync(foregroundInfo)
+            updateNotificationForeground()
         }
     }
 
@@ -357,8 +368,15 @@ class ModelDownloadWorker @AssistedInject constructor(
             progressTracker.markProgressUpdated()
         }
 
-        // Update foreground notification - must use setForegroundAsync() to update
-        // a notification that was initially set with setForeground()
+        updateNotificationForeground()
+    }
+
+    /**
+     * Updates the foreground notification with current progress.
+     * Must use setForegroundAsync() to update a notification that was initially set with setForeground().
+     */
+    private suspend fun updateNotificationForeground() {
+        val snapshot = progressTracker.computeOverallProgress()
         val cancelIntent = WorkManager.getInstance(applicationContext)
             .createCancelPendingIntent(id)
         val foregroundInfo = notificationManager.createForegroundInfoForProgress(

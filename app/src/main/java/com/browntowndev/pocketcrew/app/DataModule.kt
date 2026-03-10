@@ -16,7 +16,7 @@ import com.browntowndev.pocketcrew.data.repository.MessageRepositoryImpl
 import com.browntowndev.pocketcrew.data.repository.ModelRegistryImpl
 import com.browntowndev.pocketcrew.data.repository.RoomTransactionProvider
 import com.browntowndev.pocketcrew.data.repository.SettingsRepositoryImpl
-import com.browntowndev.pocketcrew.domain.port.HashingPort
+import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository

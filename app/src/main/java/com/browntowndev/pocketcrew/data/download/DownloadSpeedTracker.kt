@@ -122,7 +122,7 @@ class DownloadSpeedTracker @Inject constructor() : DownloadSpeedTrackerPort {
         return when {
             seconds < 0 -> "Calculating..."
             seconds < 60 -> "< 1 min"
-            seconds < 3600 -> "${seconds / 60} min"
+            seconds <  3600 -> "${seconds / 60} min"
             else -> "${seconds / 3600.0} hours"
         }
     }

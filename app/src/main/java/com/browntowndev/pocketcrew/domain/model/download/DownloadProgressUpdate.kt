@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.model.download
 
-import com.browntowndev.pocketcrew.domain.model.DownloadStatus
-import com.browntowndev.pocketcrew.domain.model.FileProgress
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 
 data class DownloadProgressUpdate(
     val status: DownloadStatus,

@@ -1,11 +1,11 @@
 package com.browntowndev.pocketcrew.data.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.ModelFile
-import com.browntowndev.pocketcrew.domain.model.ModelType
-import com.browntowndev.pocketcrew.domain.model.RemoteModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.RemoteModelConfig
+import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,20 +17,23 @@ import javax.inject.Singleton
 
 @Singleton
 class ModelConfigFetcherImpl @Inject constructor(
-    private val okHttpClient: OkHttpClient
+    private val okHttpClient: OkHttpClient,
+    private val modelUrlProvider: ModelUrlProviderPort
 ) : ModelConfigFetcherPort {
+
     companion object {
         private const val TAG = "ModelConfigFetcher"
-        private const val CONFIG_URL = "${ModelConfig.R2_BUCKET_URL}/model_config.json"
     }
 
     /**
-     * Fetches model_config.json from R2 and parses it into RemoteModelConfig list.
+     * Fetches model_config.json from the config URL and parses it into ModelConfiguration list.
      */
-    override suspend fun fetchRemoteConfig(): Result<List<RemoteModelConfig>> = withContext(Dispatchers.IO) {
+    override suspend fun fetchRemoteConfig(): Result<List<ModelConfiguration>> = withContext(Dispatchers.IO) {
         try {
+            val configUrl = modelUrlProvider.getConfigUrl()
+            Log.i(TAG, "Fetching config from URL: $configUrl")
             val request = Request.Builder()
-                .url(CONFIG_URL)
+                .url(configUrl)
                 .build()
 
             okHttpClient.newCall(request).execute().use { response ->
@@ -50,9 +53,14 @@ class ModelConfigFetcherImpl @Inject constructor(
                     configs.add(parseModelConfig(vision, ModelType.VISION))
                 }
 
-                // Parse draft model
-                json.optJSONObject("draft")?.let { draft ->
-                    configs.add(parseModelConfig(draft, ModelType.DRAFT))
+                // Parse draft_one model
+                json.optJSONObject("draft")?.let { draftOne ->
+                    configs.add(parseModelConfig(draftOne, ModelType.DRAFT_ONE))
+                }
+
+                // Parse draft_two model
+                json.optJSONObject("draftTwo")?.let { draftTwo ->
+                    configs.add(parseModelConfig(draftTwo, ModelType.DRAFT_TWO))
                 }
 
                 // Parse main model
@@ -66,7 +74,10 @@ class ModelConfigFetcherImpl @Inject constructor(
                 }
 
                 Log.i(TAG, "Fetched ${configs.size} model configs from server")
-                Result.success(configs)
+
+                // Convert to ModelConfiguration
+                val modelConfigs = toModelConfigurations(configs)
+                Result.success(modelConfigs)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to fetch model config: ${e.message}", e)
@@ -82,19 +93,26 @@ class ModelConfigFetcherImpl @Inject constructor(
         } else {
             parseModelFileFormatFromFileName(fileName)
         }
-        
+
+        // Get HuggingFace model name - defaults to empty if not present (for backward compatibility)
+        val huggingFaceModelName = json.optString("huggingFaceModelName", "")
+
         return RemoteModelConfig(
             modelType = modelType,
             fileName = fileName,
+            huggingFaceModelName = huggingFaceModelName,
             displayName = json.getString("displayName"),
-            md5 = json.getString("md5"),
+            sha256 = json.getString("sha256"),
             sizeInBytes = json.getLong("sizeInBytes"),
             modelFileFormat = modelFileFormat,
             temperature = json.getDouble("temperature"),
             topK = json.getInt("topK"),
             topP = json.getDouble("topP"),
+            repetitionPenalty = json.getDouble("repetitionPenalty"),
             maxTokens = json.getInt("maxTokens"),
-            systemPrompt = json.getString("systemPrompt")
+            contextWindow = json.getInt("contextWindow"),
+            systemPrompt = json.getString("systemPrompt"),
+            thinkingEnabled = json.optBoolean("thinkingEnabled", false)
         )
     }
 
@@ -102,48 +120,55 @@ class ModelConfigFetcherImpl @Inject constructor(
         return when {
             fileName.endsWith(".task", ignoreCase = true) -> ModelFileFormat.TASK
             fileName.endsWith(".litertlm", ignoreCase = true) -> ModelFileFormat.LITERTLM
-            else -> ModelFileFormat.LITERTLM // Default to LITERTLM for unknown extensions
+            fileName.endsWith(".gguf", ignoreCase = true) -> ModelFileFormat.GGUF
+            else -> ModelFileFormat.LITERTLM
         }
     }
 
     private fun parseModelFileFormat(format: String): ModelFileFormat {
         return when (format.uppercase()) {
             "TASK" -> ModelFileFormat.TASK
+            "GGUF" -> ModelFileFormat.GGUF
             else -> ModelFileFormat.LITERTLM
         }
     }
 
     /**
-     * Converts RemoteModelConfig to list of ModelFile with standardized filenames.
-     * Downloads from original URL but saves as standardized name.
-     * The filename is computed from modelType + modelFileFormat.
-     * Detects duplicate files (same fileName) and merges them into a single ModelFile
-     * with multiple modelTypes. MD5 verification happens after download, not during grouping.
+     * Converts RemoteModelConfig list to ModelConfiguration list.
+     * Uses ModelUrlProvider to compute download URLs.
+     *
+     * Note: The download URL is computed on-the-fly by ModelUrlProviderPort when needed,
+     * not stored in the model.
+     * Grouping by SHA256 (for files shared across multiple model types) happens in
+     * DownloadProgressTracker, not here.
      */
-    override fun toModelFiles(configs: List<RemoteModelConfig>): List<ModelFile> {
-        // Group by md5 for true duplicates
-        // - Same md5: deduplicated (one download, copies created)
-        // - Same md5 but DIFFERENT fileName treats them as same file (one download, copies created)
-        val grouped = configs.groupBy { it.md5 }
+    override fun toModelConfigurations(configs: List<RemoteModelConfig>): List<ModelConfiguration> {
+        return configs.map { config ->
+            Log.d(TAG, "Model Config File: ${config.fileName}, modelType: ${config.modelType}")
 
-        return grouped.map { (_, groupedConfigs) ->
-            val firstConfig = groupedConfigs.first()
-            val modelTypesList = groupedConfigs.map { it.modelType }
-            Log.d(TAG, "Model Config File: ${firstConfig.fileName} Grouped model types: $modelTypesList")
-
-            ModelFile(
-                sizeBytes = firstConfig.sizeInBytes,
-                url = "${ModelConfig.R2_BUCKET_URL}/${firstConfig.fileName}",
-                md5 = firstConfig.md5,
-                modelTypes = modelTypesList,
-                originalFileName = firstConfig.fileName,
-                displayName = firstConfig.displayName,
-                modelFileFormat = firstConfig.modelFileFormat,
-                temperature = firstConfig.temperature,
-                topK = firstConfig.topK,
-                topP = firstConfig.topP,
-                maxTokens = firstConfig.maxTokens,
-                systemPrompt = firstConfig.systemPrompt
+            ModelConfiguration(
+                modelType = config.modelType,
+                metadata = ModelConfiguration.Metadata(
+                    huggingFaceModelName = config.huggingFaceModelName,
+                    remoteFileName = config.fileName,
+                    localFileName = config.fileName,
+                    displayName = config.displayName,
+                    sha256 = config.sha256,
+                    sizeInBytes = config.sizeInBytes,
+                    modelFileFormat = config.modelFileFormat
+                ),
+                tunings = ModelConfiguration.Tunings(
+                    temperature = config.temperature,
+                    topK = config.topK,
+                    topP = config.topP,
+                    repetitionPenalty = config.repetitionPenalty,
+                    maxTokens = config.maxTokens,
+                    contextWindow = config.contextWindow,
+                    thinkingEnabled = config.thinkingEnabled
+                ),
+                persona = ModelConfiguration.Persona(
+                    systemPrompt = config.systemPrompt
+                )
             )
         }
     }

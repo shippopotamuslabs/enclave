@@ -37,20 +37,15 @@ fun MessageList(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
         ) {
-            // In reverseLayout, item index 0 appears at the bottom of the visual list.
-            // ThinkingIndicator goes here so it sits just above where the response will stream in.
-            if (isThinking) {
-                item(key = "thinking") {
-                    ThinkingIndicator(thinkingSteps = thinkingSteps)
-                }
-            }
-
             items(
                 count = messages.size,
                 key = { index: Int -> "msg_${messages[messages.size - 1 - index].id}" },
             ) { index: Int ->
                 val message = messages[messages.size - 1 - index]
                 if (message.role == MessageRole.User) {
+                    if (isThinking) {
+                        ThinkingIndicator(thinkingSteps = thinkingSteps)
+                    }
                     MessageBubble(message = message)
                 } else {
                     AssistantResponse(message = message)

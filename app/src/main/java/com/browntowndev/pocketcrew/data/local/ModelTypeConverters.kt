@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.data.local
 
 import androidx.room.TypeConverter
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 /**
  * Type converters for Room to convert ModelType and ModelFileFormat enums to/from String.

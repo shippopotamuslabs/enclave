@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
@@ -32,13 +33,17 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                 buffer = state.buffer
                 isThinking = state.isThinking
 
-                if (state.textToEmit.isNotEmpty()) {
-                    if (isThinking) {
-                        accumulatedThought.append(state.textToEmit)
-                        emit(InferenceEvent.Thinking(state.textToEmit, accumulatedThought.toString()))
-                    } else {
-                        accumulatedText.append(state.textToEmit)
-                        emit(InferenceEvent.PartialResponse(state.textToEmit))
+                // Process each emitted segment with its proper type
+                state.emittedSegments.forEach { segment ->
+                    when (segment.kind) {
+                        SegmentKind.THINKING -> {
+                            accumulatedThought.append(segment.text)
+                            emit(InferenceEvent.Thinking(segment.text, accumulatedThought.toString()))
+                        }
+                        SegmentKind.VISIBLE -> {
+                            accumulatedText.append(segment.text)
+                            emit(InferenceEvent.PartialResponse(segment.text))
+                        }
                     }
                 }
             }

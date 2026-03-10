@@ -4,8 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
+import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.repository.RegisteredModel
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeModelsUseCase
 import com.browntowndev.pocketcrew.presentation.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -46,13 +46,21 @@ class MainViewModel @Inject constructor(
 
                 _startupState.update { AppStartupState.Ready(modelsResult) }
             } catch (e: Exception) {
-                logPort.error("MainViewModel", "Critical failure during app initialization", e)
-                // Fallback: direct to download screen to allow recovery/re-sync
-                _startupState.update { 
+                logPort.error("MainViewModel", "Critical failure during app initialization: ${e.message}", e)
+                // Fallback: direct to download screen with error to allow recovery/re-sync
+                // Return an empty modelsResult so DownloadViewModel can still function
+                _startupState.update {
                     AppStartupState.Ready(
-                        modelsResult = null,
-                        errorMessage = e.message
-                    ) 
+                        modelsResult = DownloadModelsResult(
+                            modelsToDownload = emptyList(),
+                            scanResult = ModelScanResult(
+                                missingModels = emptyList(),
+                                partialDownloads = emptyMap(),
+                                allValid = false
+                            )
+                        ),
+                        errorMessage = "Failed to initialize models"
+                    )
                 }
             }
         }
