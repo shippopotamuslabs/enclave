@@ -1,6 +1,9 @@
 package com.browntowndev.pocketcrew.inference.worker
 
 import android.content.Context
+import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
+import com.browntowndev.pocketcrew.inference.WorkManagerPipelineExecutor
+import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -20,4 +23,15 @@ object InferenceWorkerModule {
     ): InferenceNotificationManager {
         return InferenceNotificationManager(context, notificationManager)
     }
+}
+
+@Module
+@InstallIn(SingletonComponent::class)
+abstract class InferenceExecutorModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindPipelineExecutor(
+        workManagerPipelineExecutor: WorkManagerPipelineExecutor
+    ): PipelineExecutorPort
 }
