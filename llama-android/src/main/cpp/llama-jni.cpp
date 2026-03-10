@@ -10,6 +10,7 @@
 #include <vector>
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 #include <chrono>
 #include <android/log.h>
 
@@ -40,7 +41,8 @@ static inline void llama_batch_add(
 static llama_model* g_model = nullptr;
 static llama_context* g_ctx = nullptr;
 static llama_sampler* g_sampler = nullptr;
-static llama_batch* g_batch = nullptr;  // Reusable batch like official example
+static llama_batch* g_batch = nullptr;  // Points to s_batch
+static llama_batch s_batch;  // The actual static batch - needs to be at file scope for unload to access
 static std::atomic<bool> g_generating(false);
 static std::mutex g_mutex;
 
@@ -65,6 +67,16 @@ static std::string jstringToString(JNIEnv* env, jstring jstr) {
     std::string str(chars);
     env->ReleaseStringUTFChars(jstr, chars);
     return str;
+}
+
+// Fallback prompt builder when no chat template is available
+static std::string buildRawPrompt(const std::vector<llama_chat_message>& messages) {
+    std::string prompt;
+    for (const auto& msg : messages) {
+        prompt += std::string(msg.role) + ": " + std::string(msg.content) + "\n";
+    }
+    prompt += "ASSISTANT:";
+    return prompt;
 }
 
 // Helper to get callback method
@@ -178,12 +190,10 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEFAULT params: n_ctx=%d, n_batch=%d, n_ubatch=%d, n_threads=%d, n_threads_batch=%d",
         cparams.n_ctx, cparams.n_batch, cparams.n_ubatch, cparams.n_threads, cparams.n_threads_batch);
 
-    // Cap context size at 2048 for stability (matching official llama.android example)
-    // Large contexts can cause memory issues on mobile devices
-    int cappedContextSize = contextSize > 2048 ? 2048 : contextSize;
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Context size: requested=%d, using=%d", contextSize, cappedContextSize);
+    // Use the full context size from config
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Context size: requested=%d, using=%d", contextSize, contextSize);
 
-    cparams.n_ctx = cappedContextSize;
+    cparams.n_ctx = contextSize;
 
     // Use at least 4 threads for reasonable CPU performance
     // Single thread is extremely slow on mobile
@@ -191,10 +201,10 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
     cparams.n_threads = actualThreads;
     cparams.n_threads_batch = actualThreads;
 
-    // Set n_batch and n_ubatch to match for stability
-    // Having n_batch > n_ubatch can cause issues
-    cparams.n_batch = 512;   // Match default n_ubatch
-    cparams.n_ubatch = 512;
+    // Use batch size from config parameter
+    int actualBatchSize = (batchSize > 0) ? batchSize : 512;
+    cparams.n_batch = actualBatchSize;
+    cparams.n_ubatch = actualBatchSize;
 
     cparams.offload_kqv = (actualGpuLayers > 0);  // Use GPU only if GPU layers configured
     cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;  // Disable for CPU mode stability
@@ -211,17 +221,28 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
     g_ctx = llama_init_from_model(g_model, cparams);
     if (!g_ctx) {
         __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "FAILED to create context");
-        llama_free_model(g_model);
+        llama_model_free(g_model);
         g_model = nullptr;
         return JNI_FALSE;
     }
 
     // Create reusable batch (like official example)
     // Note: llama_batch_init returns llama_batch, not pointer
-    static llama_batch s_batch;  // Static to persist
-    s_batch = llama_batch_init(512, 0, 1);
+    // CRITICAL: If batch was previously used, free it first to avoid memory issues
+    // (This handles the case where we're reloading a model after unload)
+    if (s_batch.token != nullptr) {
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Freeing previous batch before reinit, was n_tokens=%d", s_batch.n_tokens);
+        llama_batch_free(s_batch);
+        // Reset to zero state
+        s_batch = {};
+    }
+    // Initialize batch with capacity matching n_batch (2048) for stability
+    // This avoids mismatch between batch capacity and n_batch
+    // Note: Large prompts are now chunked automatically in nativeStartCompletion
+    s_batch = llama_batch_init(2048, 0, 1);
     g_batch = &s_batch;
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Created reusable batch");
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Created reusable batch, n_tokens=%d, token=%p, logits=%p",
+        s_batch.n_tokens, (void*)s_batch.token, (void*)s_batch.logits);
 
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== CONTEXT CREATED SUCCESSFULLY ===");
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "==========================");
@@ -236,24 +257,43 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeUnloadMode
 ) {
     std::lock_guard<std::mutex> lock(g_mutex);
 
-    // Stop any ongoing generation
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== UNLOAD MODEL START ===");
+
+    // Stop any ongoing generation first
     if (g_generating.exchange(false)) {
-        // Generation will be stopped by llama_decode returning
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Stopping generation before unload");
+    }
+
+    // CRITICAL: Clean up callback BEFORE freeing model/context
+    // The callback holds a GlobalRef to the Kotlin callback object
+    // If we free the model first, we may have dangling references
+    if (g_callback) {
+        env->DeleteGlobalRef(g_callback);
+        g_callback = nullptr;
+        g_callbackEnv = nullptr;
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Cleaned up callback reference");
     }
 
     if (g_sampler) {
         llama_sampler_free(g_sampler);
         g_sampler = nullptr;
     }
+
+    // Batch cleanup: only call llama_batch_free, do NOT delete the pointer
+    // because g_batch points to a static variable (s_batch)
     if (g_batch) {
         llama_batch_free(*g_batch);
-        delete g_batch;
         g_batch = nullptr;
+        // CRITICAL: Also reset s_batch to prevent double-free on next load
+        s_batch = {};
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Batch freed and static s_batch reset");
     }
+
     if (g_ctx) {
         llama_free(g_ctx);
         g_ctx = nullptr;
     }
+
     if (g_model) {
         llama_model_free(g_model);
         g_model = nullptr;
@@ -269,22 +309,27 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeClearKvCac
 ) {
     std::lock_guard<std::mutex> lock(g_mutex);
     // Note: llama_kv_cache_clear has been removed in the new API.
-    // The KV cache is automatically managed. If you need to clear it,
-    // you would need to unload and reload the model or use context reset.
-    // For now, this is a no-op.
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache clear - no-op (API removed)");
+    // Reset the sampler to clear any accumulated state (penalties, etc.)
+    if (g_sampler) {
+        llama_sampler_reset(g_sampler);
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache clear - sampler reset");
+    } else {
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache clear - no sampler to reset");
+    }
 }
 
 JNIEXPORT void JNICALL
 Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompletion(
     JNIEnv* env,
     jobject /* this */,
-    jstring prompt,
+    jobjectArray roles,  // Array of role strings
+    jobjectArray contents,  // Array of content strings
     jfloat temperature,
     jint topK,
     jfloat topP,
     jint maxTokens,
     jfloat repeatPenalty,
+    jint reasoningBudget,
     jobject callback
 ) {
     // Store callback globally
@@ -308,38 +353,95 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
         return;
     }
 
-    std::string promptStr = jstringToString(env, prompt);
+    // Parse chat messages from Java arrays (roles and contents)
+    std::vector<llama_chat_message> chat_messages;
+    jsize num_messages = env->GetArrayLength(roles);
 
-    // Initialize sampler chain with config values (official llama.cpp sampler)
+    for (jsize i = 0; i < num_messages; i++) {
+        jstring roleStr = (jstring)env->GetObjectArrayElement(roles, i);
+        jstring contentStr = (jstring)env->GetObjectArrayElement(contents, i);
+
+        std::string role = jstringToString(env, roleStr);
+        std::string content = jstringToString(env, contentStr);
+
+        // llama_chat_message takes ownership of the C strings
+        char* roleCStr = new char[role.length() + 1];
+        strcpy(roleCStr, role.c_str());
+        char* contentCStr = new char[content.length() + 1];
+        strcpy(contentCStr, content.c_str());
+
+        chat_messages.push_back({roleCStr, contentCStr});
+
+        env->DeleteLocalRef(roleStr);
+        env->DeleteLocalRef(contentStr);
+    }
+
+    // Get chat template from model - llama.cpp reads from GGUF metadata automatically
+    const char* tmpl = llama_model_chat_template(g_model, nullptr);
+    std::string promptStr;
+
+    if (tmpl != nullptr) {
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Using chat template from model: %s", tmpl);
+
+        // First call to get required buffer size
+        int32_t len = llama_chat_apply_template(tmpl, chat_messages.data(), chat_messages.size(), true, nullptr, 0);
+        if (len < 0) {
+            __android_log_print(ANDROID_LOG_WARN, "llama-jni", "llama_chat_apply_template failed (%d), falling back to raw prompt", len);
+            // Fall back to building prompt manually
+            promptStr = buildRawPrompt(chat_messages);
+        } else {
+            promptStr.resize(len);
+            len = llama_chat_apply_template(tmpl, chat_messages.data(), chat_messages.size(), true, promptStr.data(), len);
+            if (len < 0) {
+                __android_log_print(ANDROID_LOG_WARN, "llama-jni", "llama_chat_apply_template (fill) failed (%d), falling back", len);
+                promptStr = buildRawPrompt(chat_messages);
+            }
+        }
+    } else {
+        // No template in model - fall back to raw prompt building
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "No chat template in model, using raw prompt format");
+        promptStr = buildRawPrompt(chat_messages);
+    }
+
+    // Free chat message strings
+    for (auto& msg : chat_messages) {
+        delete[] msg.role;
+        delete[] msg.content;
+    }
+
+    // Initialize full sampler chain with all sampling parameters
     g_sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
 
     // Add temperature (default 0.7 if not set)
     float temp = temperature > 0 ? temperature : 0.7f;
     llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(temp));
 
-    // Add top-k filtering (default 40 if not set)
-    int top_k = topK > 0 ? topK : 40;
-    llama_sampler_chain_add(g_sampler, llama_sampler_init_top_k(top_k));
+    // Add top_k sampling (default 40 if > 0, otherwise no top_k)
+    if (topK > 0) {
+        llama_sampler_chain_add(g_sampler, llama_sampler_init_top_k(topK));
+    }
 
-    // Add top-p filtering (default 0.9 if not set)
-    float top_p_val = topP > 0 ? topP : 0.9f;
-    llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(top_p_val, 1));
+    // Add top_p nucleus sampling (default 0.9 if > 0, otherwise no top_p)
+    // Note: This API requires min_keep parameter (use 1 for minimum tokens)
+    if (topP > 0) {
+        llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(topP, 1));
+    }
 
-    // Add mirostat v2 for thinking models (tau=5.0, eta=0.1 recommended)
-    uint32_t seed = static_cast<uint32_t>(time(nullptr));
-    llama_sampler_chain_add(g_sampler, llama_sampler_init_mirostat_v2(seed, 5.0f, 0.1f));
+    // Add repeat penalty for token repetition (default 1.1 if > 0)
+    // Note: Using llama_sampler_init_penalties which takes (last_n, repeat, freq, present)
+    if (repeatPenalty > 0) {
+        // penalty_last_n = 64, penalty_repeat = repeatPenalty, freq = 0, present = 0
+        llama_sampler_chain_add(g_sampler, llama_sampler_init_penalties(64, repeatPenalty, 0.0f, 0.0f));
+    }
 
-    // Add repetition penalties (last_n=512, repeat from config or default 1.28)
-    int repeat_last_n = 512;
-    float repeat_pen = repeatPenalty > 1.0f ? repeatPenalty : 1.28f;
-    llama_sampler_chain_add(g_sampler, llama_sampler_init_penalties(repeat_last_n, repeat_pen, 0.0f, 0.0f));
+    // Add greedy as head sampler for final selection
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_greedy());
 
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== SAMPLER CHAIN CONFIGURED ===");
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Temperature: %.2f", temp);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Top-K: %d", top_k);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Top-P: %.2f", top_p_val);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Mirostat: v2 (tau=5.0, eta=0.1)");
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Repeat penalty: %.2f (last_n=%d)", repeat_pen, repeat_last_n);
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Top-K: %d", topK);
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Top-P: %.2f", topP);
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Repeat penalty: %.2f", repeatPenalty);
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "===========================");
 
     g_generating = true;
@@ -364,14 +466,12 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
         return;
     }
 
-    // Get BOS token
-    llama_token bos_token = llama_vocab_bos(get_model_vocab());
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "BOS token: %d", bos_token);
-
     // Tokenize prompt - first call to get required buffer size
-    // Note: using add_bos=true to add beginning-of-sequence token
-    std::vector<llama_token> tokens(4096);
-    const int required_tokens = llama_tokenize(get_model_vocab(), promptStr.c_str(), promptStr.size(), tokens.data(), 4096, true, true);
+    // FIXED: For chat-templated prompts, the template already added special tokens (including BOS if needed)
+    // So we set add_bos=false to avoid double-adding BOS
+    // Use 8192 token buffer to handle large synthesis prompts
+    std::vector<llama_token> tokens(8192);
+    const int required_tokens = llama_tokenize(get_model_vocab(), promptStr.c_str(), promptStr.size(), tokens.data(), 8192, false, true);
     if (required_tokens <= 0) {
         g_generating = false;
         std::string errorMsg = "Failed to tokenize prompt: required_tokens=" + std::to_string(required_tokens);
@@ -403,63 +503,54 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
     // Log timing info
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Evaluating prompt: %d tokens", n_prompt_tokens);
 
-    // Debug: verify tokens vector
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: tokens size=%zu", tokens.size());
-
-    // Evaluate prompt using llama_batch_get_one (API available in this version)
+    // Evaluate prompt
     auto prompt_start = std::chrono::high_resolution_clock::now();
 
-    // Pre-decode validation - check model and context state
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: Pre-decode validation");
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: g_model=%p, g_ctx=%p", (void*)g_model, (void*)g_ctx);
-
-    if (g_model) {
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: model n_vocab=%d, n_ctx_train=%d",
-            llama_vocab_n_tokens(get_model_vocab()), llama_model_n_ctx_train(g_model));
-    }
-
-    // Check context state size (this validates the context is properly initialized)
-    size_t ctx_state_size = llama_state_get_size(g_ctx);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: context state size=%zu", ctx_state_size);
-
-    // Use the reusable batch - clear it first (like official example)
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: Using reusable batch for prompt eval");
+    // Clear batch and validate
     llama_batch_clear(*g_batch);
 
-    // Add all prompt tokens using llama_batch_add (like official example)
-    for (int i = 0; i < n_prompt_tokens; i++) {
-        llama_batch_add(*g_batch, tokens[i], i, { 0 }, false);
+    // DEFENSIVE: Check batch validity
+    if (!g_batch || !g_batch->token || !g_batch->logits) {
+        __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: Batch is invalid before prompt eval!");
+        g_generating = false;
+        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Batch is invalid - model may not be properly loaded");
+        return;
     }
-    // Only the last token gets logits
-    g_batch->logits[g_batch->n_tokens - 1] = true;
 
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: Added %d tokens to batch", g_batch->n_tokens);
+    // Get the actual batch capacity from context
+    const int n_batch = llama_n_batch(g_ctx);
 
-    // Debug context info
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: ctx=%p, n_ctx=%d", (void*)g_ctx, llama_n_ctx(g_ctx));
+    // Process prompt tokens in chunks - llama.cpp requires batch size <= n_batch
+    int processed_tokens = 0;
+    while (processed_tokens < n_prompt_tokens) {
+        llama_batch_clear(*g_batch);
 
-    // Call llama_decode with the batch
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: About to call llama_decode...");
-    int decode_result = llama_decode(g_ctx, *g_batch);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "llama_decode returned %d", decode_result);
+        // Calculate how many tokens in this chunk
+        int chunk_size = std::min(n_batch, n_prompt_tokens - processed_tokens);
 
-    // Debug: check the logits after prompt eval
-    float* logits = llama_get_logits(g_ctx);
-    if (logits) {
-        // Find the top token
-        int top_token = 0;
-        float top_score = logits[0];
-        for (int i = 1; i < n_vocab; i++) {
-            if (logits[i] > top_score) {
-                top_score = logits[i];
-                top_token = i;
+        // Add chunk of tokens to batch
+        for (int i = 0; i < chunk_size; i++) {
+            // Position continues from where we left off
+            llama_batch_add(*g_batch, tokens[processed_tokens + i], processed_tokens + i, { 0 }, false);
+        }
+
+        // Only the last token of the entire prompt gets logits
+        if (processed_tokens + chunk_size == n_prompt_tokens) {
+            if (g_batch->logits) {
+                g_batch->logits[g_batch->n_tokens - 1] = true;
             }
         }
-        const char* top_token_text = llama_vocab_get_text(get_model_vocab(), top_token);
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: Top token after prompt: id=%d, score=%.2f, text='%s'",
-            top_token, top_score, top_token_text);
-    } else {
-        __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "DEBUG: logits is NULL!");
+
+        // Call llama_decode with this chunk
+        int decode_result = llama_decode(g_ctx, *g_batch);
+        if (decode_result != 0) {
+            __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: llama_decode failed at token %d, result=%d", processed_tokens, decode_result);
+            g_generating = false;
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode prompt chunk");
+            return;
+        }
+
+        processed_tokens += chunk_size;
     }
 
     auto prompt_end = std::chrono::high_resolution_clock::now();
@@ -467,36 +558,34 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Prompt evaluation took %.2f ms (%.2f ms/token)",
         prompt_ms, prompt_ms / n_prompt_tokens);
 
-    if (decode_result != 0) {
-        g_generating = false;
-        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode prompt");
-        return;
-    }
-
     // Keep the batch for reuse in generation loop
 
     // Sample and generate tokens
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== GENERATING TOKENS ===");
 
     // Verify sampler is valid
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: sampler=%p", (void*)g_sampler);
     if (!g_sampler) {
         __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: sampler is NULL!");
         g_generating = false;
         env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Sampler is NULL");
         return;
     }
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: Sampler is valid");
 
     auto gen_start = std::chrono::high_resolution_clock::now();
 
     // Get special tokens and vocab
     llama_token eos_token = llama_vocab_eos(get_model_vocab());
     const int vocab_size = llama_vocab_n_tokens(get_model_vocab());
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEBUG: EOS=%d, vocab_size=%d, n_prompt_tokens=%d", eos_token, vocab_size, n_prompt_tokens);
 
     // Generation loop using official llama.cpp sampler
     while (g_generating && n_generated_tokens < maxTokens) {
+        // Verify logits are available before sampling
+        float* logits = llama_get_logits(g_ctx);
+        if (!logits) {
+            __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: No logits available before sampling!");
+            break;
+        }
+
         // Sample using official llama.cpp sampler chain
         // idx=-1 means sample from the last token's logits
         llama_token token = llama_sampler_sample(g_sampler, g_ctx, -1);
@@ -510,9 +599,14 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
         // Accept the token (updates sampler state for next iteration)
         llama_sampler_accept(g_sampler, token);
 
+        // FIXED: Calculate position BEFORE incrementing n_generated_tokens
+        // The first generated token goes at position n_prompt_tokens (not n_prompt_tokens + 1)
+        int32_t current_pos = n_prompt_tokens + n_generated_tokens;
+
         // Get token text - use llama_token_to_piece to convert token to string
-        char tokenBuffer[64];
-        int tokenLen = llama_token_to_piece(get_model_vocab(), token, tokenBuffer, sizeof(tokenBuffer), 0, false);
+        // FIXED: Use larger buffer (256 bytes) to handle any token
+        char tokenBuffer[256];
+        int tokenLen = llama_token_to_piece(get_model_vocab(), token, tokenBuffer, sizeof(tokenBuffer) - 1, 0, false);
         if (tokenLen > 0) {
             tokenBuffer[tokenLen] = '\0';
             // Replace BPE word-start marker (U+2581 = ▁) with space
@@ -538,23 +632,46 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
         env->CallVoidMethod(g_callback, onTokenMethod, tokenStr);
         env->DeleteLocalRef(tokenStr);
 
-        // Accept the token (updates sampler state for next iteration)
-        llama_sampler_accept(g_sampler, token);
+        // Log first generated token for debugging
+        if (n_generated_tokens == 0) {
+            const char* first_token_text = llama_vocab_get_text(get_model_vocab(), token);
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "FIRST TOKEN: id=%d, text='%s', pos=%d",
+                token, first_token_text ? first_token_text : "(null)", current_pos);
+            if (first_token_text && strstr(first_token_text, "<think>") != nullptr) {
+                __android_log_print(ANDROID_LOG_INFO, "llama-jni", "THINK START TOKEN DETECTED!");
+            }
+        }
 
-        // Evaluate token using reusable batch (like official example)
-        auto tok_start = std::chrono::high_resolution_clock::now();
+        // Create a fresh batch for each token
         llama_batch_clear(*g_batch);
-        // Position is sequential: prompt tokens are at 0..n_prompt_tokens-1
-        // First generated token is at position n_prompt_tokens
-        llama_batch_add(*g_batch, token, n_prompt_tokens + n_generated_tokens, { 0 }, true);
 
-        if (llama_decode(g_ctx, *g_batch) != 0) {
+        // DEFENSIVE: Verify batch is valid before use
+        if (!g_batch || !g_batch->token || !g_batch->logits) {
+            __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: Batch is invalid in generation loop!");
             break;
         }
-        auto tok_end = std::chrono::high_resolution_clock::now();
-        double tok_ms = std::chrono::duration<double, std::milli>(tok_end - tok_start).count();
 
+        // Add the token to batch at the correct position
+        llama_batch_add(*g_batch, token, current_pos, { 0 }, true);
+
+        // Verify context is still valid
+        if (!g_ctx) {
+            __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: Context is null!");
+            break;
+        }
+
+        // FIXED: Decode BEFORE incrementing the counter
+        int decode_result = llama_decode(g_ctx, *g_batch);
+        if (decode_result != 0) {
+            __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: llama_decode failed with code %d at pos %d", decode_result, current_pos);
+            break;
+        }
+
+        // FIXED: Increment counter AFTER successful decode
         n_generated_tokens++;
+        if (n_generated_tokens % 100 == 0) {
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Generated %d tokens so far...", n_generated_tokens);
+        }
     }
     auto gen_end = std::chrono::high_resolution_clock::now();
     double gen_ms = std::chrono::duration<double, std::milli>(gen_end - gen_start).count();
