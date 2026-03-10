@@ -17,7 +17,7 @@ import javax.inject.Singleton
 class HuggingFaceModelUrlProvider @Inject constructor() : ModelUrlProviderPort {
 
     companion object {
-        private const val R2_BUCKET_URL = "https://pub-83e071f6f35749ed990eeb3058fc863d.r2.dev"
+        private const val R2_BUCKET_URL = "https://config.pocketcrew.app"
         private const val HF_BASE_URL = "https://huggingface.co"
     }
 
