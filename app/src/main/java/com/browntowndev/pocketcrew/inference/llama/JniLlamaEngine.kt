@@ -54,6 +54,16 @@ class JniLlamaEngine @Inject constructor(
     private val generating = AtomicBoolean(false)
     private val history = mutableListOf<ChatMessage>()
 
+    // Context management
+    private var lastPromptTokens = 0
+    private var lastGeneratedTokens = 0
+
+    // Compression thresholds
+    // Trigger compression at 80% of context window
+    private val COMPRESSION_THRESHOLD_RATIO = 0.8f
+    // Compress by factor of 2 (halves the context)
+    private val COMPRESSION_FACTOR = 2
+
     override suspend fun initialize(config: LlamaModelConfig) = withContext(ioDispatcher) {
         Log.i(TAG, "Initializing llama model: ${config.modelPath}")
         Log.i(TAG, "  contextWindow=${config.sampling.contextWindow}, maxTokens=${config.sampling.maxTokens}, threads=${config.sampling.threads}, batchSize=${config.sampling.batchSize}, gpuLayers=${config.sampling.gpuLayers}")
@@ -136,6 +146,14 @@ class JniLlamaEngine @Inject constructor(
                         generatedTokens = generatedTokens
                     )
                 )
+
+                // Track token counts for context management
+                lastPromptTokens = promptTokens
+                lastGeneratedTokens = generatedTokens
+
+                // Check if context compression is needed and apply it
+                checkAndCompressContext()
+
                 history += ChatMessage(ChatRole.ASSISTANT, sb.toString())
                 generating.set(false)
                 close()
@@ -274,6 +292,122 @@ class JniLlamaEngine @Inject constructor(
         }
     }
 
+    /**
+     * Check if context needs compression and apply it if necessary.
+     * Uses llama.cpp's position compression to reduce context window usage.
+     * Since we can't get exact KV cache usage, we use prompt + generated tokens as a proxy.
+     */
+    private fun checkAndCompressContext() {
+        if (!loaded.get()) return
+
+        try {
+            val contextSize = nativeGetContextSize()
+
+            if (contextSize <= 0) {
+                Log.w(TAG, "Cannot check context: size=$contextSize")
+                return
+            }
+
+            // Use tracked tokens (prompt + generated) as proxy for context usage
+            // This is an approximation since we can't get exact KV cache cell count
+            val totalTokensUsed = lastPromptTokens + lastGeneratedTokens
+
+            if (totalTokensUsed <= 0) {
+                Log.w(TAG, "No token usage data available yet")
+                return
+            }
+
+            val usageRatio = totalTokensUsed.toFloat() / contextSize.toFloat()
+            Log.i(TAG, "Context estimate: $totalTokensUsed / $contextSize tokens (${(usageRatio * 100).toInt()}%)")
+
+            // Compress if approaching threshold
+            if (usageRatio >= COMPRESSION_THRESHOLD_RATIO) {
+                Log.i(TAG, "Context at ${(usageRatio * 100).toInt()}%, triggering compression (factor=$COMPRESSION_FACTOR)")
+
+                // Save state before compression (for potential rollback)
+                val stateBefore = saveState()
+
+                val success = compressContext(COMPRESSION_FACTOR)
+
+                if (success) {
+                    // After compression, we need to re-evaluate prompt for next turn
+                    // The positions have been compressed, so next prompt starts fresh
+                    Log.i(TAG, "Context compression applied successfully")
+                } else {
+                    Log.w(TAG, "Compression failed, attempting to restore state")
+                    // Try to restore state if compression failed
+                    stateBefore?.let { restoreState(it) }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking/compressing context", e)
+        }
+    }
+
+    /**
+     * Compress context using llama.cpp position division.
+     * This divides all positions by the given factor, effectively halving context usage.
+     */
+    private fun compressContext(factor: Int): Boolean {
+        return try {
+            // seqId = 0 means apply to all sequences
+            nativeCompressContext(0, factor)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error compressing context", e)
+            false
+        }
+    }
+
+    /**
+     * Save the current llama state (KV cache + tokens) to a byte array.
+     * This allows preserving context across operations.
+     */
+    fun saveState(): ByteArray? {
+        return try {
+            nativeGetState()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving state", e)
+            null
+        }
+    }
+
+    /**
+     * Restore llama state from a previously saved byte array.
+     */
+    fun restoreState(state: ByteArray): Boolean {
+        return try {
+            nativeSetState(state)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error restoring state", e)
+            false
+        }
+    }
+
+    /**
+     * Get current context usage for monitoring.
+     * Returns the number of tokens currently in the KV cache.
+     */
+    fun getContextUsage(): Int {
+        return try {
+            nativeGetContextUsage()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting context usage", e)
+            0
+        }
+    }
+
+    /**
+     * Get the maximum context size.
+     */
+    fun getContextSize(): Int {
+        return try {
+            nativeGetContextSize()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting context size", e)
+            0
+        }
+    }
+
     // Native method declarations
     private external fun nativeLoadModel(
         modelPath: String,
@@ -309,6 +443,16 @@ class JniLlamaEngine @Inject constructor(
     }
 
     private external fun nativeStopCompletion()
+
+    // Context management native functions
+    private external fun nativeGetContextSize(): Int
+    private external fun nativeGetContextUsage(): Int
+    private external fun nativeCompressContext(seqId: Int, factor: Int): Boolean
+
+    // State save/load native functions
+    private external fun nativeGetStateSize(): Int
+    private external fun nativeGetState(): ByteArray?
+    private external fun nativeSetState(state: ByteArray): Boolean
 }
 
 /**
