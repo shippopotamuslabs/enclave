@@ -1,0 +1,197 @@
+package com.browntowndev.pocketcrew.domain.usecase.chat
+
+import javax.inject.Inject
+
+/**
+ * Use case for buffering thinking text into discrete steps.
+ *
+ * Groups incoming sentences into cohesive chunks (2-4 sentences) before emitting
+ * as a single thought. Uses sentence boundary detection and transition
+ * word detection to create natural reasoning boundaries.
+ *
+ * This produces progressive, polished thinking steps similar to production AI apps.
+ */
+class BufferThinkingStepsUseCase @Inject constructor(
+    private val sentenceDetector: SentenceBoundaryDetector
+) {
+
+    companion object {
+        private val TRANSITION_STARTERS = setOf(
+            "first", "next", "then", "however", "therefore", "thus",
+            "additionally", "finally", "moreover", "so", "now", "step",
+            "but", "also", "furthermore", "meanwhile", "otherwise",
+            "consequently", "hence", "instead", "yet", "rather",
+            // Observed in reasoning traces (o1-preview, Claude extended thinking)
+            "alternatively", "wait", "given", "suppose", "this seems",
+            "upon"
+        )
+
+        private val COMMON_INTROS_LOWER = setOf(
+            "okay", "alright", "let me think", "well", "so", "alright so",
+            // Observed in reasoning traces (o1-preview, Claude extended thinking)
+            "the user is asking me to", "i need to", "we are given",
+            "hm", "actually"
+        )
+
+        private const val MIN_SENTENCES_PER_CHUNK = 2
+        private const val SOFT_MAX_WORDS_PER_CHUNK = 80
+        private const val HARD_MAX_CHARS_BEFORE_FORCE = 500
+    }
+
+    private val buffer = StringBuilder(1024)
+    private val currentChunkSentences = mutableListOf<String>()
+    private var strippedIntro = false
+
+    /**
+     * Processes incoming thinking text and returns any completed thoughts.
+     * May return multiple thoughts if several chunks completed.
+     *
+     * @param incomingText new text chunk from the inference stream
+     * @return list of completed thought strings (can be empty)
+     */
+    operator fun invoke(incomingText: String): List<String> {
+        if (incomingText.isBlank()) return emptyList()
+
+        buffer.append(incomingText)
+        return processBuffer()
+    }
+
+    private fun processBuffer(): List<String> {
+        val emitted = mutableListOf<String>()
+        val text = buffer.toString()
+
+        // Use the injected sentence detector to find boundaries
+        val boundaries = sentenceDetector.findBoundaries(text)
+
+        // Handle case where no sentence boundaries found but we have too much text
+        if (boundaries.isEmpty()) {
+            if (buffer.length > HARD_MAX_CHARS_BEFORE_FORCE) {
+                val content = buffer.toString().trim()
+                if (content.isNotBlank()) {
+                    emitted.add(content)
+                    buffer.clear()
+                }
+            }
+            return emitted
+        }
+
+        var hadCompleteSentence = false
+
+        for ((start, end) in boundaries) {
+            // Extract the sentence
+            val sentence = text.substring(start, end).trim()
+
+            if (sentence.isNotBlank()) {
+                val cleaned = clean(sentence)
+                if (cleaned.isNotBlank()) {
+                    currentChunkSentences.add(cleaned)
+                    hadCompleteSentence = true
+
+                    // Check if we should emit
+                    if (shouldEmitChunk()) {
+                        val thought = currentChunkSentences.joinToString(" ")
+                        emitted.add(thought)
+                        currentChunkSentences.clear()
+                    }
+                }
+            }
+        }
+
+        // Keep unprocessed portion (incomplete last sentence) in buffer
+        // or clear buffer if all text was processed
+        val lastBoundaryEnd = boundaries.lastOrNull()?.second ?: 0
+        if (lastBoundaryEnd > 0) {
+            if (lastBoundaryEnd >= text.length) {
+                // All text was processed - clear the buffer
+                buffer.clear()
+            } else if (lastBoundaryEnd < text.length) {
+                // Partial text processed - keep the rest
+                buffer.delete(0, lastBoundaryEnd)
+            }
+        }
+
+        // Emit any remaining sentences if we've completed at least one sentence
+        if (currentChunkSentences.isNotEmpty() && hadCompleteSentence) {
+            val thought = currentChunkSentences.joinToString(" ")
+            emitted.add(thought)
+            currentChunkSentences.clear()
+        }
+
+        // Safety: force emit very long pending content with no complete sentences
+        if (buffer.length > HARD_MAX_CHARS_BEFORE_FORCE && currentChunkSentences.isEmpty()) {
+            val content = buffer.toString().trim()
+            if (content.isNotBlank()) {
+                emitted.add(content)
+                buffer.clear()
+            }
+        }
+
+        return emitted
+    }
+
+    private fun shouldEmitChunk(): Boolean {
+        if (currentChunkSentences.isEmpty()) return false
+
+        val wordCount = currentChunkSentences.sumOf { it.split(Regex("\\s+")).size }
+
+        return when {
+            currentChunkSentences.size >= 4 -> true  // Too greedy - emit
+            currentChunkSentences.size >= MIN_SENTENCES_PER_CHUNK -> true  // Minimum reached - emit
+            wordCount >= SOFT_MAX_WORDS_PER_CHUNK -> true  // Enough words - emit
+            isTransitionStart(currentChunkSentences.last()) -> true  // Transition word - emit
+            else -> false
+        }
+    }
+
+    private fun clean(sentence: String): String {
+        var text = sentence.trim()
+
+        // Note: Intro stripping is disabled to preserve full first sentence
+        // This keeps the original thinking text intact for the user to see
+        if (!strippedIntro) {
+            // Currently disabled - uncomment if you want to strip intros
+            // val lower = text.lowercase()
+            // for (intro in COMMON_INTROS_LOWER) {
+            //     if (lower.startsWith(intro)) {
+            //         text = text.drop(intro.length)
+            //             .dropWhile { it == ',' || it == '.' || it.isWhitespace() }
+            //         break
+            //     }
+            // }
+            strippedIntro = true
+        }
+
+        return text.trim()
+    }
+
+    private fun isTransitionStart(sentence: String): Boolean {
+        val firstWord = sentence.split(Regex("\\s+")).firstOrNull()?.lowercase() ?: return false
+        return firstWord in TRANSITION_STARTERS || Regex("^\\d+[.)]").containsMatchIn(sentence.lowercase())
+    }
+
+    /**
+     * Flushes any remaining text in the buffer as a final thought.
+     * Call this when thinking is complete.
+     *
+     * @return a thought string with remaining text, or null if buffer is empty
+     */
+    fun flush(): String? {
+        if (currentChunkSentences.isEmpty() && buffer.isBlank()) return null
+
+        val remaining = (currentChunkSentences.joinToString(" ") + " " + buffer.toString().trim())
+            .trim()
+            .ifBlank { null }
+
+        reset()
+        return remaining
+    }
+
+    /**
+     * Resets the buffer. Call this when starting a new thinking session.
+     */
+    fun reset() {
+        buffer.clear()
+        currentChunkSentences.clear()
+        strippedIntro = false
+    }
+}
