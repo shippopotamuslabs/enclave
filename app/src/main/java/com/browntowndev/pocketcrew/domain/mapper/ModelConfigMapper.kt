@@ -5,7 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private const val MODEL_BASE_URL = "https://pub-83e071f6f35749ed990eeb3058fc863d.r2.dev"
+private const val MODEL_BASE_URL = "https://config.pocketcrew.app"
 
 /**
  * Mapper to convert between model configuration types and ModelFile.

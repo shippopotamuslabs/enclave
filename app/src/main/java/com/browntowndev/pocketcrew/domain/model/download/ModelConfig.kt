@@ -6,7 +6,7 @@ package com.browntowndev.pocketcrew.domain.model.download
  */
 object ModelConfig {
     // Cloudflare R2 bucket URL - using public R2.dev URL from dashboard
-    const val R2_BUCKET_URL = "https://pub-83e071f6f35749ed990eeb3058fc863d.r2.dev"
+    const val R2_BUCKET_URL = "https://config.pocketcrew.app"
 
     // Storage requirements
     const val REQUIRED_FREE_SPACE_BYTES = 15L * 1024 * 1024 * 1024 // 15 GB

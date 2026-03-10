@@ -14,8 +14,8 @@ import javax.inject.Singleton
 class R2ModelUrlProvider @Inject constructor() : ModelUrlProviderPort {
 
     companion object {
-        // Cloudflare R2 bucket URL
-        private const val R2_BUCKET_URL = "https://pub-83e071f6f35749ed990eeb3058fc863d.r2.dev"
+        // Cloudflare R2 bucket URL - using custom domain
+        private const val R2_BUCKET_URL = "https://config.pocketcrew.app"
     }
 
     override fun getConfigUrl(): String = "$R2_BUCKET_URL/model_config.json"
