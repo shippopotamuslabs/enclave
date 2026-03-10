@@ -36,6 +36,7 @@ data class ModelConfiguration(
      * LLM generation parameters.
      * @property maxTokens Maximum tokens to generate
      * @property contextWindow LLM context window size in tokens
+     * @property thinkingEnabled Whether to enable thinking/reasoning mode (llama.cpp extraction)
      */
     data class Tunings(
         val temperature: Double,
@@ -43,7 +44,8 @@ data class ModelConfiguration(
         val topP: Double,
         val repetitionPenalty: Double,
         val maxTokens: Int,
-        val contextWindow: Int
+        val contextWindow: Int,
+        val thinkingEnabled: Boolean = false
     )
 
     /**

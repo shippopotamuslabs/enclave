@@ -66,6 +66,7 @@ class InitializeModelsUseCase @Inject constructor(
 
         // Now register each remote config in the registry with CURRENT status
         remoteConfigs.forEach { config ->
+            Log.d(TAG, "Registering ${config.modelType}: thinkingEnabled=${config.tunings.thinkingEnabled}")
             modelRegistry.setRegisteredModel(config, ModelStatus.CURRENT)
         }
         logPort.debug(TAG, "Registered ${remoteConfigs.size} remote configs in registry")

@@ -108,6 +108,7 @@ class ModelRegistryImpl @Inject constructor(
         }
 
         // Insert or update the new model with the specified status
+        logger.debug("ModelRegistry", "Saving model ${config.modelType} with thinkingEnabled=${config.tunings.thinkingEnabled}")
         modelsDao.insertOrUpdate(
             ModelEntity(
                 modelType = config.modelType,
@@ -123,6 +124,7 @@ class ModelRegistryImpl @Inject constructor(
                 topP = config.tunings.topP,
                 maxTokens = config.tunings.maxTokens,
                 contextWindow = config.tunings.contextWindow,
+                thinkingEnabled = config.tunings.thinkingEnabled,
                 systemPrompt = config.persona.systemPrompt
             )
         )
@@ -176,7 +178,8 @@ class ModelRegistryImpl @Inject constructor(
                 topP = entity.topP,
                 repetitionPenalty = entity.repetitionPenalty,
                 maxTokens = entity.maxTokens,
-                contextWindow = entity.contextWindow
+                contextWindow = entity.contextWindow,
+                thinkingEnabled = entity.thinkingEnabled
             ),
             persona = ModelConfiguration.Persona(
                 systemPrompt = entity.systemPrompt ?: ""
