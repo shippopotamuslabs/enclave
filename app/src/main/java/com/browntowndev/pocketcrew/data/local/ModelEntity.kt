@@ -58,6 +58,9 @@ data class ModelEntity(
     @ColumnInfo(name = "context_window")
     val contextWindow: Int,
 
+    @ColumnInfo(name = "thinking_enabled")
+    val thinkingEnabled: Boolean = false,
+
     @ColumnInfo(name = "system_prompt")
     val systemPrompt: String? = null,
 
