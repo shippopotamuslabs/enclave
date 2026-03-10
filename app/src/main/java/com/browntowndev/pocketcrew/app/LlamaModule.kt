@@ -25,13 +25,15 @@ object LlamaDispatchersModule {
 
 /**
  * Hilt module for llama.cpp engine and session manager.
+ *
+ * NOTE: Engine and session manager are NOT singletons - each pipeline step gets its own
+ * isolated instance to prevent state conflicts between pipeline stages.
  */
 @Module
 @InstallIn(SingletonComponent::class)
 object LlamaEngineModule {
 
     @Provides
-    @Singleton
     fun provideLlamaEngine(
         ioDispatcher: CoroutineDispatcher
     ): LlamaEnginePort {
@@ -39,7 +41,6 @@ object LlamaEngineModule {
     }
 
     @Provides
-    @Singleton
     fun provideLlamaChatSessionManager(
         engine: LlamaEnginePort
     ): LlamaChatSessionManager {
