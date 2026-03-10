@@ -308,7 +308,7 @@ object EngineModule {
         return when {
             filename.endsWith(".gguf") -> {
                 // Use llama.cpp implementation for GGUF models
-                val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+                val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
                 val tunings = config.tunings
                 val gpuConfig = GpuConfig.forDevice(context)
 
@@ -353,7 +353,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context)
 
@@ -394,7 +394,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context)
 
@@ -435,7 +435,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context)
 
@@ -476,7 +476,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context)
 
@@ -525,7 +525,7 @@ object EngineModule {
         val modelPath = getModelPath(context, filename)
 
         return if (filename.endsWith(".gguf")) {
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = mainConfig.tunings
             val gpuConfig = GpuConfig.forDevice(context)
 
