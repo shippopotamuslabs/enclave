@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase
 
-import com.browntowndev.pocketcrew.domain.model.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateSelectedPromptOptionUseCase
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach

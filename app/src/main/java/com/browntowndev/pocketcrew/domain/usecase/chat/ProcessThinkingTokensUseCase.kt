@@ -1,34 +1,40 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import javax.inject.Inject
+import kotlin.math.max
 
 /**
- * Use case for processing streaming text chunks and detecting thinking tokens.
+ * Streaming parser for mixed visible assistant text and hidden thinking text.
  *
- * This handles the chunk-by-chunk processing of LLM output, detecting
- * "<think>" and "</think>" tokens to determine whether content is reasoning
- * or final response.
+ * Supports:
+ * 1) Interleaved visible text + <think>...</think> blocks
+ * 2) Standard "all thinking first, then answer" flows
+ * 3) Tokens split across chunk boundaries
  *
- * It also handles split tokens - when a token like "<think>" is split
- * across multiple chunks (e.g., "<" then "think>").
+ * Example:
+ *   "Hello <thi" + "nk>reasoning</th" + "ink> world"
+ *
+ * Output:
+ *   VISIBLE("Hello ")
+ *   THINKING("reasoning")
+ *   VISIBLE(" world")
  */
 class ProcessThinkingTokensUseCase @Inject constructor() {
 
     companion object {
         private const val START_TOKEN = "<think>"
         private const val END_TOKEN = "</think>"
+        private val TOKENS = listOf(START_TOKEN, END_TOKEN)
     }
 
     /**
-     * Process a chunk of text and update the thinking state.
+     * Processes a newly arrived chunk.
      *
-     * @param currentBuffer The current buffer of pending text (may be empty)
-     * @param newChunk The new chunk from the stream
-     * @param isThinking Whether we're currently in thinking mode
-     * @return Triple of (isThinking, textToEmit, newBuffer)
-     *   - isThinking: Updated thinking state
-     *   - textToEmit: Text that should be emitted as either thinking or response
-     *   - newBuffer: Updated buffer for next iteration
+     * @param currentBuffer leftover partial-token buffer from the previous call
+     * @param newChunk new streamed text chunk
+     * @param isThinking whether parser is currently inside a <think> block
+     *
+     * @return updated parser state plus typed emitted segments
      */
     operator fun invoke(
         currentBuffer: String,
@@ -36,40 +42,34 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
         isThinking: Boolean
     ): ThinkingState {
         var buffer = currentBuffer + newChunk
-        val textToEmit = StringBuilder()
         var thinking = isThinking
+        val emitted = mutableListOf<EmittedSegment>()
 
-        // Process until no more complete tokens in buffer
         while (buffer.isNotEmpty()) {
+            // Find the earliest token occurrence (regardless of current thinking state)
             val startIdx = buffer.indexOf(START_TOKEN)
             val endIdx = buffer.indexOf(END_TOKEN)
 
             when {
-                // Both tokens present - process first
+                // Both tokens present - process the first one found
                 startIdx >= 0 && endIdx >= 0 -> {
                     if (startIdx < endIdx) {
-                        // Start token first
+                        // Start token comes first
                         if (startIdx > 0) {
-                            textToEmit.append(buffer.substring(0, startIdx))
+                            emitted += EmittedSegment(
+                                kind = if (thinking) SegmentKind.THINKING else SegmentKind.VISIBLE,
+                                text = buffer.substring(0, startIdx)
+                            )
                         }
                         thinking = true
-                        val afterStart = buffer.substring(startIdx + START_TOKEN.length)
-
-                        if (afterStart.startsWith(END_TOKEN)) {
-                            // Both tokens back-to-back
-                            val afterEnd = afterStart.substring(END_TOKEN.length)
-                            thinking = false
-                            if (afterEnd.isNotEmpty()) {
-                                textToEmit.append(afterEnd)
-                            }
-                            buffer = ""
-                        } else {
-                            buffer = afterStart
-                        }
+                        buffer = buffer.substring(startIdx + START_TOKEN.length)
                     } else {
-                        // End token first
+                        // End token comes first
                         if (endIdx > 0) {
-                            textToEmit.append(buffer.substring(0, endIdx))
+                            emitted += EmittedSegment(
+                                kind = if (thinking) SegmentKind.THINKING else SegmentKind.VISIBLE,
+                                text = buffer.substring(0, endIdx)
+                            )
                         }
                         thinking = false
                         buffer = buffer.substring(endIdx + END_TOKEN.length)
@@ -78,7 +78,10 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
                 // Only start token
                 startIdx >= 0 -> {
                     if (startIdx > 0) {
-                        textToEmit.append(buffer.substring(0, startIdx))
+                        emitted += EmittedSegment(
+                            kind = if (thinking) SegmentKind.THINKING else SegmentKind.VISIBLE,
+                            text = buffer.substring(0, startIdx)
+                        )
                     }
                     thinking = true
                     buffer = buffer.substring(startIdx + START_TOKEN.length)
@@ -86,21 +89,28 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
                 // Only end token
                 endIdx >= 0 -> {
                     if (endIdx > 0) {
-                        textToEmit.append(buffer.substring(0, endIdx))
+                        emitted += EmittedSegment(
+                            kind = if (thinking) SegmentKind.THINKING else SegmentKind.VISIBLE,
+                            text = buffer.substring(0, endIdx)
+                        )
                     }
                     thinking = false
                     buffer = buffer.substring(endIdx + END_TOKEN.length)
                 }
-                // No complete tokens - buffer if looks like partial token
+                // No complete tokens - check for partial tokens
                 else -> {
-                    if (buffer.startsWith("<")) {
-                        // Partial token - keep buffering
-                        // This handles cases like "<t" + "hink>" = "<think>" which isn't "<think>"
-                        // but could become a valid token with more characters
-                        break
+                    val suffixToKeep = longestPossibleTokenPrefixSuffix(buffer)
+
+                    val safeEmitLength = buffer.length - suffixToKeep.length
+                    if (safeEmitLength > 0) {
+                        emitted += EmittedSegment(
+                            kind = if (thinking) SegmentKind.THINKING else SegmentKind.VISIBLE,
+                            text = buffer.substring(0, safeEmitLength)
+                        )
+                        buffer = buffer.substring(safeEmitLength)
                     } else {
-                        textToEmit.append(buffer)
-                        buffer = ""
+                        // Entire buffer could still become a token prefix, so hold it.
+                        break
                     }
                 }
             }
@@ -108,14 +118,90 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
 
         return ThinkingState(
             isThinking = thinking,
-            textToEmit = textToEmit.toString(),
-            buffer = buffer
+            buffer = buffer,
+            emittedSegments = emitted.mergeAdjacent()
         )
+    }
+
+    /**
+     * Finds the longest suffix of [text] that could be the prefix of either token.
+     *
+     * Examples:
+     * - "abc<th"     -> "<th"
+     * - "xyz</thi"   -> "</thi"
+     * - "hello"      -> ""
+     */
+    private fun longestPossibleTokenPrefixSuffix(text: String): String {
+        val maxTokenLength = TOKENS.maxOf { it.length }
+        val start = max(0, text.length - maxTokenLength + 1)
+
+        for (i in start until text.length) {
+            val suffix = text.substring(i)
+            if (TOKENS.any { token -> token.startsWith(suffix) }) {
+                return suffix
+            }
+        }
+        return ""
+    }
+
+    /**
+     * Merge consecutive segments of the same kind to reduce noisy downstream handling.
+     */
+    private fun List<EmittedSegment>.mergeAdjacent(): List<EmittedSegment> {
+        if (isEmpty()) return emptyList()
+
+        val merged = mutableListOf<EmittedSegment>()
+        var current = first()
+
+        for (i in 1 until size) {
+            val next = this[i]
+            current = if (current.kind == next.kind) {
+                current.copy(text = current.text + next.text)
+            } else {
+                merged += current
+                next
+            }
+        }
+
+        merged += current
+        return merged
     }
 
     data class ThinkingState(
         val isThinking: Boolean,
-        val textToEmit: String,
-        val buffer: String
+        val buffer: String,
+        val emittedSegments: List<EmittedSegment>
+    ) {
+        /**
+         * Convenience accessors if the caller wants split channels.
+         */
+        val visibleTextToEmit: String
+            get() = emittedSegments
+                .asSequence()
+                .filter { it.kind == SegmentKind.VISIBLE }
+                .joinToString(separator = "") { it.text }
+
+        val thinkingTextToEmit: String
+            get() = emittedSegments
+                .asSequence()
+                .filter { it.kind == SegmentKind.THINKING }
+                .joinToString(separator = "") { it.text }
+
+        /**
+         * Kept for easier migration, but ambiguous for mixed-mode output.
+         * Prefer visibleTextToEmit / thinkingTextToEmit / emittedSegments.
+         */
+        val textToEmit: String
+            get() = emittedSegments.joinToString(separator = "") { it.text }
+    }
+
+    data class EmittedSegment(
+        val kind: SegmentKind,
+        val text: String
     )
+
+    enum class SegmentKind {
+        VISIBLE,
+        THINKING
+    }
 }

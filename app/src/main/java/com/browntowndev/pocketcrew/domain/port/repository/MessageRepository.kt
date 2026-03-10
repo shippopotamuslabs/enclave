@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
-import com.browntowndev.pocketcrew.domain.model.Message
+import com.browntowndev.pocketcrew.domain.model.chat.Message
 
 /**
  * Port (interface) for message persistence.

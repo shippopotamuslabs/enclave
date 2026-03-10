@@ -1,15 +1,17 @@
 package com.browntowndev.pocketcrew.presentation.screen.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.DownloadState
-import com.browntowndev.pocketcrew.domain.model.DownloadStatus
-import com.browntowndev.pocketcrew.domain.model.FileProgress
-import com.browntowndev.pocketcrew.domain.model.FileStatus
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.download.DownloadState
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.download.FileProgress
+import com.browntowndev.pocketcrew.domain.model.download.FileStatus
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.data.repository.DownloadWorkRepository
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.presentation.screen.download.DownloadViewModel.FileProgressUiModel
 import io.mockk.MockKAnnotations
 import io.mockk.mockkStatic
@@ -39,10 +41,35 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class DownloadViewModelTest {
 
+    private fun createTestConfig(modelType: ModelType, displayName: String): ModelConfiguration {
+        return ModelConfiguration(
+            modelType = modelType,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/model",
+                remoteFileName = "${modelType.name.lowercase()}.litertlm",
+                localFileName = "${modelType.name.lowercase()}.litertlm",
+                displayName = displayName,
+                sha256 = "test123",
+                sizeInBytes = 1000L,
+                modelFileFormat = com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.95,
+                repetitionPenalty = 1.0,
+                maxTokens = 512,
+                contextWindow = 2048
+            ),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
+        )
+    }
+
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var mockOrchestrator: ModelDownloadOrchestratorPort
     private lateinit var mockDownloadWorkRepository: DownloadWorkRepository
+    private lateinit var mockModelRegistry: ModelRegistryPort
 
     // Mock DownloadModelsResult for tests
     private lateinit var mockModelsResult: DownloadModelsResult
@@ -67,6 +94,14 @@ class DownloadViewModelTest {
 
         mockOrchestrator = mockk(relaxed = true)
         mockDownloadWorkRepository = mockk(relaxed = true)
+        mockModelRegistry = mockk(relaxed = true)
+
+        // Mock getRegisteredModelSync to return configs with display names
+        every { mockModelRegistry.getRegisteredModelSync(ModelType.VISION) } returns createTestConfig(ModelType.VISION, "The Observer")
+        every { mockModelRegistry.getRegisteredModelSync(ModelType.DRAFT_ONE) } returns createTestConfig(ModelType.DRAFT_ONE, "The Brainstormer")
+        every { mockModelRegistry.getRegisteredModelSync(ModelType.DRAFT_TWO) } returns createTestConfig(ModelType.DRAFT_TWO, "The Sketcher")
+        every { mockModelRegistry.getRegisteredModelSync(ModelType.MAIN) } returns createTestConfig(ModelType.MAIN, "The Mastermind")
+        every { mockModelRegistry.getRegisteredModelSync(ModelType.FAST) } returns createTestConfig(ModelType.FAST, "The Sentinel")
 
         // Create mock DownloadModelsResult with empty models to download
         mockModelsResult = DownloadModelsResult(
@@ -82,12 +117,13 @@ class DownloadViewModelTest {
         // This allows tests to control the state by modifying _downloadStateFlow
         every { mockOrchestrator.downloadState } returns _downloadStateFlow.asStateFlow()
 
-        // Mock checkModels to avoid triggering actual work in init
-        coEvery { mockOrchestrator.checkModels(originalModels = any()) } returns mockModelsResult
+        // Mock initializeWithStartupResult to avoid triggering actual work in init
+        every { mockOrchestrator.initializeWithStartupResult(any()) } returns Unit
 
         viewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -309,6 +345,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -328,6 +365,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -347,6 +385,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -366,6 +405,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -385,6 +425,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -413,6 +454,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -436,6 +478,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -476,6 +519,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -530,6 +574,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -565,7 +610,7 @@ class DownloadViewModelTest {
             ),
             FileProgress(
                 filename = "draft.litertlm",
-                modelTypes = listOf(ModelType.DRAFT),
+                modelTypes = listOf(ModelType.DRAFT_TWO),
                 bytesDownloaded = 0,
                 totalBytes = 100_000_000,
                 status = FileStatus.QUEUED
@@ -587,6 +632,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -608,7 +654,7 @@ class DownloadViewModelTest {
         val downloadsWithMultipleModelTypes = listOf(
             FileProgress(
                 filename = "main.litertlm",
-                modelTypes = listOf(ModelType.MAIN, ModelType.DRAFT),
+                modelTypes = listOf(ModelType.MAIN, ModelType.DRAFT_TWO),
                 bytesDownloaded = 0,
                 totalBytes = 200_000_000,
                 status = FileStatus.QUEUED
@@ -623,6 +669,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -657,6 +704,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -689,6 +737,7 @@ class DownloadViewModelTest {
         val testViewModel = DownloadViewModel(
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
+            modelRegistry = mockModelRegistry,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -775,13 +824,709 @@ class DownloadViewModelTest {
         // Given - mock returns empty list (models already present)
         // Note: DownloadViewModel.checkModels() does not call orchestrator.checkModels()
         // It checks if modelsToDownload is not empty and calls startDownloads()
-        
+
         // When - checkModels is called on the ViewModel
         viewModel.checkModels()
         testDispatcher.scheduler.advanceUntilIdle()
 
         // Then - with empty modelsToDownload, nothing happens
         coVerify(exactly = 0) { mockOrchestrator.startDownloads(any()) }
+    }
+
+    // ============================================================================
+    // WiFi Toggle Tests - Download Flow Scenarios
+    // ============================================================================
+
+    /**
+     * Scenario 1: User toggles OFF "only download on WiFi" after it was initially ON
+     * and they are on mobile data.
+     *
+     * Expected: Downloads should proceed (wifiOnly=false bypasses WiFi check)
+     */
+    @Test
+    fun `toggle wifiOnly OFF while on mobile - downloads proceed`() = runTest {
+        // Given - wifiOnly is ON by default
+        assertTrue(viewModel.wifiOnly.value)
+
+        // Simulate being on mobile by having startDownloads return false (WiFi blocked)
+        coEvery { mockOrchestrator.startDownloads(any(), wifiOnly = true) } returns false
+
+        // Foreground the app
+        viewModel.onAppForegrounded()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // When - User tries to start downloads - should be blocked due to WiFi-only
+        viewModel.startDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Verify it was blocked
+        coVerify { mockOrchestrator.startDownloads(any(), wifiOnly = true) }
+        assertTrue(viewModel.showWifiDialog.value)
+
+        // Now user toggles OFF wifiOnly
+        viewModel.setWifiOnly(false)
+        assertFalse(viewModel.wifiOnly.value)
+
+        // User clicks "Download on Mobile" button
+        coEvery { mockOrchestrator.downloadOnMobileData() } returns Unit
+        viewModel.downloadOnMobileData()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - downloadOnMobileData should be called, which sets wifiOnly=false and starts downloads
+        coVerify { mockOrchestrator.downloadOnMobileData() }
+    }
+
+    /**
+     * Scenario 2: User toggles ON "only download on WiFi" after it was OFF
+     * and they are NOT on WiFi.
+     *
+     * Expected: Downloads should be blocked, WiFi dialog should show
+     */
+    @Test
+    fun `toggle wifiOnly ON while NOT on WiFi - shows WiFi dialog`() = runTest {
+        // Given - wifiOnly is initially OFF (user had disabled it)
+        viewModel.setWifiOnly(false)
+        assertFalse(viewModel.wifiOnly.value)
+
+        // User toggles WiFi-only ON while on mobile
+        viewModel.setWifiOnly(true)
+        assertTrue(viewModel.wifiOnly.value)
+
+        // Foreground the app
+        viewModel.onAppForegrounded()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Mock orchestrator to block due to WiFi
+        coEvery { mockOrchestrator.startDownloads(any(), wifiOnly = true) } returns false
+
+        // When - User tries to start downloads
+        viewModel.startDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - Should be blocked and show WiFi dialog
+        coVerify { mockOrchestrator.startDownloads(any(), wifiOnly = true) }
+        assertTrue(viewModel.showWifiDialog.value)
+    }
+
+    /**
+     * Scenario 3: User toggles ON "only download on WiFi" while ON WiFi
+     *
+     * Expected: Downloads should proceed normally
+     */
+    @Test
+    fun `toggle wifiOnly ON while ON WiFi - downloads proceed normally`() = runTest {
+        // Given - wifiOnly is initially OFF
+        viewModel.setWifiOnly(false)
+        assertFalse(viewModel.wifiOnly.value)
+
+        // User toggles WiFi-only ON while on WiFi
+        viewModel.setWifiOnly(true)
+        assertTrue(viewModel.wifiOnly.value)
+
+        // Foreground the app
+        viewModel.onAppForegrounded()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Mock orchestrator to allow download
+        coEvery { mockOrchestrator.startDownloads(any(), wifiOnly = true) } returns true
+
+        // When - User starts downloads
+        viewModel.startDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - Downloads should proceed
+        coVerify { mockOrchestrator.startDownloads(any(), wifiOnly = true) }
+        assertFalse(viewModel.showWifiDialog.value)
+    }
+
+    /**
+     * Scenario 4: Happy path - WiFi connected, WiFi-only enabled
+     *
+     * Expected: Downloads proceed without showing WiFi dialog
+     */
+    @Test
+    fun `happy path - WiFi connected with WiFi-only - downloads proceed`() = runTest {
+        // Given - WiFi-only is ON by default
+        assertTrue(viewModel.wifiOnly.value)
+
+        // Foreground the app
+        viewModel.onAppForegrounded()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Mock orchestrator to allow download
+        coEvery { mockOrchestrator.startDownloads(any(), wifiOnly = true) } returns true
+
+        // When - User starts downloads
+        viewModel.startDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - Downloads should proceed without WiFi dialog
+        coVerify { mockOrchestrator.startDownloads(any(), wifiOnly = true) }
+        assertFalse(viewModel.showWifiDialog.value)
+    }
+
+    /**
+     * Scenario 5: ViewModel properly updates downloadState at each step
+     *
+     * Expected: StateFlow reflects orchestrator state changes
+     */
+    @Test
+    fun `downloadState updates from orchestrator during download flow`() = runTest {
+        // Given - initial state
+        val initialState = viewModel.downloadState.value
+        assertEquals(DownloadStatus.CHECKING, initialState.status)
+
+        // When - orchestrator emits DOWNLOADING state
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.25f,
+            modelsTotal = 3,
+            modelsComplete = 0
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Then - ViewModel reflects the state
+        val downloadingState = viewModel.downloadState.value
+        assertEquals(DownloadStatus.DOWNLOADING, downloadingState.status)
+        assertEquals(0.25f, downloadingState.overallProgress)
+        assertEquals(3, downloadingState.modelsTotal)
+
+        // When - orchestrator emits progress update
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.5f,
+            modelsTotal = 3,
+            modelsComplete = 1,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 100_000_000,
+                    totalBytes = 200_000_000,
+                    status = FileStatus.DOWNLOADING,
+                    speedMBs = 10.0
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Then - ViewModel reflects progress
+        val progressState = viewModel.downloadState.value
+        assertEquals(0.5f, progressState.overallProgress)
+        assertEquals(1, progressState.modelsComplete)
+
+        // When - orchestrator emits COMPLETED state
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.READY,
+            overallProgress = 1.0f,
+            modelsTotal = 3,
+            modelsComplete = 3
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Then - ViewModel reflects completed
+        val completedState = viewModel.downloadState.value
+        assertEquals(DownloadStatus.READY, completedState.status)
+        assertEquals(1.0f, completedState.overallProgress)
+    }
+
+    /**
+     * Scenario 6: fileProgressList properly updates during download
+     *
+     * Expected: Each file progress update is reflected in UI model
+     */
+    @Test
+    fun `fileProgressList updates with live download progress`() = runTest {
+        // Given - no downloads initially
+        assertTrue(viewModel.fileProgressList.value.isEmpty())
+
+        // When - download starts with one file
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 50_000_000,
+                    totalBytes = 200_000_000,
+                    status = FileStatus.DOWNLOADING,
+                    speedMBs = 10.0
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Then - fileProgressList reflects progress
+        val progressList = viewModel.fileProgressList.value
+        assertEquals(1, progressList.size)
+        assertEquals("main.litertlm", progressList[0].filename)
+        assertEquals(0.25f, progressList[0].progress)
+        assertEquals(10.0, progressList[0].speedMBs)
+
+        // When - download progresses
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 150_000_000,
+                    totalBytes = 200_000_000,
+                    status = FileStatus.DOWNLOADING,
+                    speedMBs = 15.0
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Then - progress updated
+        val updatedList = viewModel.fileProgressList.value
+        assertEquals(0.75f, updatedList[0].progress)
+        assertEquals(15.0, updatedList[0].speedMBs)
+
+        // When - download completes
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.READY,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 200_000_000,
+                    totalBytes = 200_000_000,
+                    status = FileStatus.COMPLETE,
+                    speedMBs = null
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Then - completed status reflected
+        val completedList = viewModel.fileProgressList.value
+        assertEquals(FileStatus.COMPLETE, completedList[0].status)
+    }
+
+    /**
+     * Scenario 7: Resume download of partially downloaded files
+     *
+     * Expected: Resume works and continues from where it left off
+     */
+    @Test
+    fun `resume downloads continues from partial progress`() = runTest {
+        // Given - download was paused with partial progress
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.PAUSED,
+            overallProgress = 0.5f,
+            modelsTotal = 2,
+            modelsComplete = 0,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 100_000_000,
+                    totalBytes = 200_000_000,
+                    status = FileStatus.PAUSED,
+                    speedMBs = null
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // When - User resumes downloads
+        coEvery { mockOrchestrator.resumeDownloads() } returns Unit
+        viewModel.resumeDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - orchestrator.resumeDownloads() is called
+        coVerify { mockOrchestrator.resumeDownloads() }
+
+        // And state should transition to downloading
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.5f,
+            modelsTotal = 2,
+            modelsComplete = 0,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 100_000_000,
+                    totalBytes = 200_000_000,
+                    status = FileStatus.DOWNLOADING,
+                    speedMBs = 10.0
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        assertEquals(DownloadStatus.DOWNLOADING, viewModel.downloadState.value.status)
+    }
+
+    /**
+     * Scenario 8: Cancel downloads and restart
+     *
+     * Expected: Cancel clears state, can restart fresh
+     */
+    @Test
+    fun `cancel downloads clears state and can restart`() = runTest {
+        // Given - downloading state
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.3f,
+            modelsTotal = 2,
+            modelsComplete = 0
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // When - User cancels
+        coEvery { mockOrchestrator.cancelDownloads() } returns Unit
+        viewModel.cancelDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - orchestrator.cancelDownloads() is called
+        coVerify { mockOrchestrator.cancelDownloads() }
+
+        // And state is reset (orchestrator would set to IDLE)
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.IDLE,
+            overallProgress = 0f,
+            modelsTotal = 0,
+            modelsComplete = 0
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // When - User restarts downloads
+        coEvery { mockOrchestrator.startDownloads(any(), any()) } returns true
+        viewModel.onAppForegrounded()
+        viewModel.startDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - Downloads restart
+        coVerify { mockOrchestrator.startDownloads(any(), any()) }
+    }
+
+    /**
+     * Scenario 9: Download fails with error
+     *
+     * Expected: Error state is properly reflected
+     */
+    @Test
+    fun `download error updates state correctly`() = runTest {
+        // Given - downloading state
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.5f
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // When - Download fails
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.ERROR,
+            errorMessage = "Network connection lost"
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Then - Error state reflected
+        val errorState = viewModel.downloadState.value
+        assertEquals(DownloadStatus.ERROR, errorState.status)
+        assertEquals("Network connection lost", errorState.errorMessage)
+
+        // When - User retries
+        coEvery { mockOrchestrator.retryFailed() } returns Unit
+        viewModel.retryFailed()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - retry is called
+        coVerify { mockOrchestrator.retryFailed() }
+    }
+
+    /**
+     * Scenario 10: Dismiss WiFi dialog
+     *
+     * Expected: Dialog is dismissed, no action taken
+     */
+    @Test
+    fun `dismiss WiFi dialog clears dialog state`() = runTest {
+        // Given - WiFi dialog is showing
+        _downloadStateFlow.value = DownloadState(status = DownloadStatus.IDLE, wifiBlocked = true)
+        viewModel.dismissWifiDialog()
+
+        // Then - Dialog is dismissed
+        assertFalse(viewModel.showWifiDialog.value)
+
+        // When - User starts downloads again (should still be blocked)
+        coEvery { mockOrchestrator.startDownloads(any(), wifiOnly = true) } returns false
+        viewModel.onAppForegrounded()
+        viewModel.startDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - Dialog shows again
+        assertTrue(viewModel.showWifiDialog.value)
+    }
+
+    /**
+     * Edge Case: Multiple rapid state changes
+     *
+     * Expected: Each state change is reflected correctly
+     */
+    @Test
+    fun `handles rapid state changes without missing updates`() = runTest {
+        // Given - Initial state
+        assertEquals(DownloadStatus.CHECKING, viewModel.downloadState.value.status)
+
+        // When - Rapid state changes
+        _downloadStateFlow.value = DownloadState(status = DownloadStatus.IDLE)
+        testDispatcher.scheduler.runCurrent()
+
+        _downloadStateFlow.value = DownloadState(status = DownloadStatus.DOWNLOADING, overallProgress = 0.1f)
+        testDispatcher.scheduler.runCurrent()
+
+        _downloadStateFlow.value = DownloadState(status = DownloadStatus.DOWNLOADING, overallProgress = 0.5f)
+        testDispatcher.scheduler.runCurrent()
+
+        _downloadStateFlow.value = DownloadState(status = DownloadStatus.DOWNLOADING, overallProgress = 0.9f)
+        testDispatcher.scheduler.runCurrent()
+
+        // Then - Final state is correct
+        assertEquals(DownloadStatus.DOWNLOADING, viewModel.downloadState.value.status)
+        assertEquals(0.9f, viewModel.downloadState.value.overallProgress)
+    }
+
+    /**
+     * Edge Case: Start downloads when already downloading
+     *
+     * Expected: Does not cause duplicate downloads
+     */
+    @Test
+    fun `starting downloads while already downloading does not duplicate`() = runTest {
+        // Given - Already downloading
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.5f
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        viewModel.onAppForegrounded()
+
+        // When - User clicks start again
+        coEvery { mockOrchestrator.startDownloads(any(), any()) } returns true
+        viewModel.startDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - startDownloads is called (orchestrator handles idempotency)
+        coVerify { mockOrchestrator.startDownloads(any(), any()) }
+    }
+
+    // ============================================================================
+    // Network Change & Resume Scenarios
+    // ============================================================================
+
+    /**
+     * Scenario: Download running on WiFi, user disconnects and goes to mobile,
+     * then toggles OFF "only download on WiFi" to resume on mobile.
+     *
+     * This is the key real-world flow:
+     * 1. Start on WiFi with wifiOnly=true
+     * 2. WiFi disconnects, download stops (WorkManager UNMETERED constraint fails)
+     * 3. User toggles wifiOnly OFF
+     * 4. Resume should continue from where it left off
+     */
+    @Test
+    fun `resume after wifi to mobile switch with wifiOnly disabled`() = runTest {
+        // Given - Download was running on WiFi, paused due to network switch
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.PAUSED,
+            overallProgress = 0.5f,
+            modelsTotal = 2,
+            modelsComplete = 0,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 100_000_000,  // 50% - partial download
+                    totalBytes = 200_000_000,
+                    status = FileStatus.PAUSED,
+                    speedMBs = null
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Verify initial partial state
+        assertEquals(FileStatus.PAUSED, viewModel.fileProgressList.value[0].status)
+        assertEquals(100_000_000L, viewModel.fileProgressList.value[0].bytesDownloaded)
+
+        // User toggles OFF wifiOnly
+        viewModel.setWifiOnly(false)
+        assertFalse(viewModel.wifiOnly.value)
+
+        // User clicks "Download on Mobile" to resume
+        coEvery { mockOrchestrator.downloadOnMobileData() } returns Unit
+        viewModel.downloadOnMobileData()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - downloadOnMobileData should be called (this will use CONNECTED constraint)
+        coVerify { mockOrchestrator.downloadOnMobileData() }
+
+        // And state should transition to downloading
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.5f,
+            modelsTotal = 2,
+            modelsComplete = 0,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 100_000_000,  // Same progress - resumes from here
+                    totalBytes = 200_000_000,
+                    status = FileStatus.DOWNLOADING,
+                    speedMBs = 5.0
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Verify download resumed with same progress
+        assertEquals(DownloadStatus.DOWNLOADING, viewModel.downloadState.value.status)
+        assertEquals(100_000_000L, viewModel.fileProgressList.value[0].bytesDownloaded)
+    }
+
+    /**
+     * Scenario: Download fails due to network loss, then network returns
+     * WorkManager should auto-retry with exponential backoff
+     *
+     * Note: This tests the ViewModel state transitions, actual WorkManager retry
+     * is handled by the system
+     */
+    @Test
+    fun `download state transitions to error when network lost`() = runTest {
+        // Given - Download is running
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.3f,
+            modelsTotal = 2,
+            modelsComplete = 0
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // When - Network is lost (work goes to BLOCKED or fails)
+        // WorkManager handles the actual retry, we just track state
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.ERROR,
+            errorMessage = "Network connection lost"
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Then - Error state is reflected
+        val errorState = viewModel.downloadState.value
+        assertEquals(DownloadStatus.ERROR, errorState.status)
+        assertEquals("Network connection lost", errorState.errorMessage)
+    }
+
+    /**
+     * Scenario: User can retry after network loss
+     */
+    @Test
+    fun `can retry after network loss error`() = runTest {
+        // Given - Error state from network loss
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.ERROR,
+            errorMessage = "Network connection lost"
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // User retries
+        coEvery { mockOrchestrator.retryFailed() } returns Unit
+        viewModel.retryFailed()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - retry is called
+        coVerify { mockOrchestrator.retryFailed() }
+    }
+
+    /**
+     * Scenario: WiFi-only enabled, user is on mobile, connects to WiFi,
+     * then downloads should work with UNMETERED constraint
+     */
+    @Test
+    fun `download proceeds on wifi after connecting from mobile`() = runTest {
+        // Given - User was on mobile with wifiOnly=true (blocked)
+        // They now connect to WiFi
+        viewModel.setWifiOnly(true)  // WiFi-only is ON
+
+        // Foreground the app
+        viewModel.onAppForegrounded()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Mock orchestrator to allow (WiFi is now connected)
+        coEvery { mockOrchestrator.startDownloads(any(), wifiOnly = true) } returns true
+
+        // When - User starts downloads (now on WiFi)
+        viewModel.startDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then - Downloads start with wifiOnly=true
+        coVerify { mockOrchestrator.startDownloads(any(), wifiOnly = true) }
+        assertFalse(viewModel.showWifiDialog.value)
+    }
+
+    /**
+     * Scenario: Partial download progress is preserved through pause/resume cycle
+     */
+    @Test
+    fun `partial download progress preserved through pause resume`() = runTest {
+        // Given - 75% downloaded
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 0.75f,
+            modelsTotal = 2,
+            modelsComplete = 1,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 150_000_000,
+                    totalBytes = 200_000_000,
+                    status = FileStatus.DOWNLOADING,
+                    speedMBs = 10.0
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // User pauses
+        coEvery { mockOrchestrator.pauseDownloads() } returns Unit
+        viewModel.pauseDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // State should show paused
+        _downloadStateFlow.value = DownloadState(
+            status = DownloadStatus.PAUSED,
+            overallProgress = 0.75f,
+            currentDownloads = listOf(
+                FileProgress(
+                    filename = "main.litertlm",
+                    modelTypes = listOf(ModelType.MAIN),
+                    bytesDownloaded = 150_000_000,
+                    totalBytes = 200_000_000,
+                    status = FileStatus.PAUSED,
+                    speedMBs = null
+                )
+            )
+        )
+        testDispatcher.scheduler.runCurrent()
+
+        // Verify progress preserved
+        assertEquals(0.75f, viewModel.downloadState.value.overallProgress)
+        assertEquals(150_000_000L, viewModel.fileProgressList.value[0].bytesDownloaded)
+
+        // User resumes
+        coEvery { mockOrchestrator.resumeDownloads() } returns Unit
+        viewModel.resumeDownloads()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Verify resume called
+        coVerify { mockOrchestrator.resumeDownloads() }
     }
 }
 

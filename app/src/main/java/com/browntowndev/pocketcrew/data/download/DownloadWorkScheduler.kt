@@ -9,8 +9,8 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.browntowndev.pocketcrew.domain.model.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.ModelFile
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,14 +29,38 @@ class DownloadWorkScheduler @Inject constructor(
         private const val TAG = "DownloadWorkScheduler"
     }
 
-    fun enqueue(models: List<ModelFile>, sessionId: String?) {
+    fun enqueue(models: List<ModelConfiguration>, sessionId: String?, wifiOnly: Boolean = true) {
+        // Use UNMETERED when wifiOnly is enabled (requires WiFi)
+        // Use CONNECTED when wifiOnly is disabled (allows mobile data)
+        val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
+
         val constraints = Constraints.Builder()
-            .setRequiredNetworkType(NetworkType.UNMETERED)
+            .setRequiredNetworkType(networkType)
             .setRequiresStorageNotLow(true)
             .build()
 
+        // Serialize ModelConfiguration to pipe-delimited string:
+        // modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|repetitionPenalty|maxTokens|contextWindow|systemPrompt
         val inputData = models
-            .map { "${it.originalFileName}|${it.sizeBytes}|${it.url}|${it.md5 ?: ""}|${it.modelTypes.joinToString(",")}|${it.modelFileFormat.name}" }
+            .map { config ->
+                listOf(
+                    config.modelType.name,
+                    config.metadata.remoteFileName,
+                    config.metadata.localFileName,
+                    config.metadata.displayName,
+                    config.metadata.huggingFaceModelName,
+                    config.metadata.sizeInBytes.toString(),
+                    config.metadata.sha256,
+                    config.metadata.modelFileFormat.name,
+                    config.tunings.temperature.toString(),
+                    config.tunings.topK.toString(),
+                    config.tunings.topP.toString(),
+                    config.tunings.repetitionPenalty.toString(),
+                    config.tunings.maxTokens.toString(),
+                    config.tunings.contextWindow.toString(),
+                    config.persona.systemPrompt
+                ).joinToString("|")
+            }
             .toTypedArray()
 
         val workRequest = OneTimeWorkRequestBuilder<ModelDownloadWorker>()

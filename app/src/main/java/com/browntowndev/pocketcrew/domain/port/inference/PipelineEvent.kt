@@ -7,7 +7,8 @@ enum class PipelinePhase {
     DRAFTING,
     SYNTHESIS,
     REFINEMENT,
-    SAFETY_CHECK
+    SAFETY_CHECK,
+    FAST_INFERENCE
 }
 
 /**
@@ -21,8 +22,10 @@ enum class AgentRole {
     SYNTHESIZER_ONE,
     SYNTHESIZER_TWO,
     FINAL_THINKER,
+    FINAL_SYNTHESIZER,
     WATCHDOG,
-    SYSTEM
+    SYSTEM,
+    FAST_MODEL
 }
 
 /**

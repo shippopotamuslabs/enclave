@@ -3,8 +3,8 @@ package com.browntowndev.pocketcrew.data.repository
 import com.browntowndev.pocketcrew.data.local.ChatDao
 import com.browntowndev.pocketcrew.data.local.MessageDao
 import com.browntowndev.pocketcrew.data.mapper.toEntity
-import com.browntowndev.pocketcrew.domain.model.Chat
-import com.browntowndev.pocketcrew.domain.model.ThinkingData
+import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import javax.inject.Inject
 import javax.inject.Singleton

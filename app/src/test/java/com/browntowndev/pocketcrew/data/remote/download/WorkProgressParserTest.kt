@@ -2,14 +2,13 @@ package com.browntowndev.pocketcrew.data.remote.download
 
 import android.util.Log
 import androidx.work.WorkInfo
-import com.browntowndev.pocketcrew.domain.model.DownloadStatus
-import com.browntowndev.pocketcrew.domain.model.FileProgress
-import com.browntowndev.pocketcrew.domain.model.FileStatus
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.download.FileProgress
+import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.data.download.WorkProgressParser
 import com.browntowndev.pocketcrew.data.download.DownloadSessionManager
-import com.browntowndev.pocketcrew.domain.model.DownloadKey
-import com.browntowndev.pocketcrew.domain.model.ModelType
-import com.browntowndev.pocketcrew.domain.service.FileIntegrityValidator
+import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.impl.annotations.MockK
@@ -31,9 +30,6 @@ class WorkProgressParserTest {
     @MockK
     private lateinit var mockSessionManager: DownloadSessionManager
 
-    @MockK
-    private lateinit var mockFileIntegrityValidator: FileIntegrityValidator
-
     private lateinit var parser: WorkProgressParser
 
     @Before
@@ -43,7 +39,7 @@ class WorkProgressParserTest {
         every { Log.d(any<String>(), any<String>()) } returns 0
         every { Log.w(any<String>(), any<String>()) } returns 0
 
-        parser = WorkProgressParser(mockSessionManager, mockFileIntegrityValidator)
+        parser = WorkProgressParser(mockSessionManager)
     }
 
     @Test
@@ -81,7 +77,7 @@ class WorkProgressParserTest {
         assertEquals("main.litertlm", result.filename)
         assertEquals(2, result.modelTypes.size)
         assertTrue(result.modelTypes.contains(ModelType.MAIN))
-        assertTrue(result.modelTypes.contains(ModelType.DRAFT))
+        assertTrue(result.modelTypes.contains(ModelType.DRAFT_ONE))
     }
 
     @Test
@@ -99,7 +95,7 @@ class WorkProgressParserTest {
         assertTrue(result.modelTypes.contains(ModelType.FAST))
         assertTrue(result.modelTypes.contains(ModelType.VISION))
         assertTrue(result.modelTypes.contains(ModelType.MAIN))
-        assertTrue(result.modelTypes.contains(ModelType.DRAFT))
+        assertTrue(result.modelTypes.contains(ModelType.DRAFT_ONE))
     }
 
     @Test
@@ -215,7 +211,7 @@ class WorkProgressParserTest {
 
         // Then - each should parse to correct ModelType
         assertEquals(listOf(ModelType.VISION), parser.parseFileProgress(visionString)?.modelTypes)
-        assertEquals(listOf(ModelType.DRAFT), parser.parseFileProgress(draftString)?.modelTypes)
+        assertEquals(listOf(ModelType.DRAFT_ONE), parser.parseFileProgress(draftString)?.modelTypes)
         assertEquals(listOf(ModelType.MAIN), parser.parseFileProgress(mainString)?.modelTypes)
         assertEquals(listOf(ModelType.FAST), parser.parseFileProgress(fastString)?.modelTypes)
     }
@@ -225,7 +221,7 @@ class WorkProgressParserTest {
         // Given - current downloads with multi-type model (DRAFT + VISION)
         val multiTypeDownload = FileProgress(
             filename = "vision.litertlm",
-            modelTypes = listOf(ModelType.DRAFT, ModelType.VISION),
+            modelTypes = listOf(ModelType.DRAFT_ONE, ModelType.VISION),
             bytesDownloaded = 0,
             totalBytes = 100_000_000,
             status = FileStatus.QUEUED,
@@ -260,7 +256,7 @@ class WorkProgressParserTest {
         assertNotNull(visionFileProgress)
         
         // BUG FIX VERIFICATION: Should have BOTH modelTypes, not just one
-        assertTrue(visionFileProgress!!.modelTypes.contains(ModelType.DRAFT))
+        assertTrue(visionFileProgress!!.modelTypes.contains(ModelType.DRAFT_ONE))
         assertTrue(visionFileProgress.modelTypes.contains(ModelType.VISION))
         assertEquals(2, visionFileProgress.modelTypes.size)
     }
@@ -270,7 +266,7 @@ class WorkProgressParserTest {
         // Given - download entry with multiple modelTypes (DRAFT and VISION)
         val multiTypeDownload = FileProgress(
             filename = "draft.litertlm",
-            modelTypes = listOf(ModelType.DRAFT, ModelType.VISION),
+            modelTypes = listOf(ModelType.DRAFT_ONE, ModelType.VISION),
             bytesDownloaded = 0,
             totalBytes = 100_000_000,
             status = FileStatus.QUEUED,
@@ -305,7 +301,7 @@ class WorkProgressParserTest {
         assertNotNull(visionFileProgress)
         
         // BUG FIX VERIFICATION: Should have BOTH DRAFT and VISION from the matched download
-        assertTrue(visionFileProgress!!.modelTypes.contains(ModelType.DRAFT))
+        assertTrue(visionFileProgress!!.modelTypes.contains(ModelType.DRAFT_ONE))
         assertTrue(visionFileProgress.modelTypes.contains(ModelType.VISION))
     }
 
@@ -340,7 +336,7 @@ class WorkProgressParserTest {
         assertNotNull(draftFileProgress)
         
         // Should derive DRAFT from filename "draft.litertlm"
-        assertEquals(listOf(ModelType.DRAFT), draftFileProgress!!.modelTypes)
+        assertEquals(listOf(ModelType.DRAFT_ONE), draftFileProgress!!.modelTypes)
     }
 
     @Test
@@ -386,7 +382,7 @@ class WorkProgressParserTest {
     // ===== parseSucceeded tests =====
 
     @Test
-    fun `parseSucceeded returns ready status when verification passes`() {
+    fun `parseSucceeded returns ready status when work succeeds`() {
         // Given: WorkInfo with SUCCEEDED state
         val workInfo = mockk<WorkInfo> {
             every { state } returns WorkInfo.State.SUCCEEDED
@@ -397,7 +393,8 @@ class WorkProgressParserTest {
 
         every { mockSessionManager.isSessionStale("current-session-id") } returns false
 
-        // And: FileIntegrityValidator returns true
+        // SHA-256 validation is now done in HttpFileDownloader during streaming
+        // When work succeeds, we assume files are valid
         val currentDownloads = listOf(
             FileProgress(
                 filename = "main.litertlm",
@@ -408,10 +405,6 @@ class WorkProgressParserTest {
                 speedMBs = null
             )
         )
-
-        io.mockk.coEvery {
-            mockFileIntegrityValidator.verifyModelsExist(any())
-        } returns Result.success(true)
 
         // When: Parse
         val result = parser.parse(workInfo, currentDownloads)
@@ -419,42 +412,6 @@ class WorkProgressParserTest {
         // Then: Return READY status with clearSession=true
         assertNotNull(result)
         assertEquals(DownloadStatus.READY, result!!.status)
-    }
-
-    @Test
-    fun `parseSucceeded returns error when verification fails`() {
-        // Given: WorkInfo with SUCCEEDED state
-        val workInfo = mockk<WorkInfo> {
-            every { state } returns WorkInfo.State.SUCCEEDED
-            every { outputData } returns mockk {
-                every { getString(any()) } returns "current-session-id"
-            }
-        }
-
-        every { mockSessionManager.isSessionStale("current-session-id") } returns false
-
-        val currentDownloads = listOf(
-            FileProgress(
-                filename = "main.litertlm",
-                modelTypes = listOf(ModelType.MAIN),
-                bytesDownloaded = 1000000L,
-                totalBytes = 1000000L,
-                status = FileStatus.COMPLETE,
-                speedMBs = null
-            )
-        )
-
-        io.mockk.coEvery {
-            mockFileIntegrityValidator.verifyModelsExist(any())
-        } returns Result.failure(Exception("Verification failed"))
-
-        // When: Parse
-        val result = parser.parse(workInfo, currentDownloads)
-
-        // Then: Return ERROR status
-        assertNotNull(result)
-        assertEquals(DownloadStatus.ERROR, result!!.status)
-        assertTrue(result.errorMessage?.contains("not found") == true)
     }
 
     @Test
@@ -736,43 +693,6 @@ class WorkProgressParserTest {
         assertNotNull(result!!.currentDownloads)
         assertEquals(1, result.currentDownloads!!.size)
         assertEquals("valid.litertlm", result.currentDownloads!!.first().filename)
-    }
-
-    @Test
-    fun `parseSucceeded handles verification failure with models not found`() {
-        // Given: WorkInfo with SUCCEEDED state
-        val workInfo = mockk<WorkInfo> {
-            every { state } returns WorkInfo.State.SUCCEEDED
-            every { outputData } returns mockk {
-                every { getString(any()) } returns "current-session-id"
-            }
-        }
-
-        every { mockSessionManager.isSessionStale("current-session-id") } returns false
-
-        val currentDownloads = listOf(
-            FileProgress(
-                filename = "main.litertlm",
-                modelTypes = listOf(ModelType.MAIN),
-                bytesDownloaded = 1000000L,
-                totalBytes = 1000000L,
-                status = FileStatus.COMPLETE,
-                speedMBs = null
-            )
-        )
-
-        // And: FileIntegrityValidator returns failure (models not found)
-        io.mockk.coEvery {
-            mockFileIntegrityValidator.verifyModelsExist(any())
-        } returns Result.failure(Exception("Models not found on device"))
-
-        // When: Parse
-        val result = parser.parse(workInfo, currentDownloads)
-
-        // Then: Return ERROR status with error message
-        assertNotNull(result)
-        assertEquals(DownloadStatus.ERROR, result!!.status)
-        assertTrue(result.errorMessage?.contains("not found") == true)
     }
 }
 

@@ -2,7 +2,7 @@ package com.browntowndev.pocketcrew.presentation.screen.chat
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.browntowndev.pocketcrew.domain.model.Message
+import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
@@ -108,7 +108,7 @@ class ChatViewModel @Inject constructor(
                 id = -1L, // Signal to create new chat if needed
                 chatId = -1L,
                 content = userMessageContent,
-                role = com.browntowndev.pocketcrew.domain.model.Role.USER
+                role = com.browntowndev.pocketcrew.domain.model.chat.Role.USER
             )
 
             viewModelScope.launch {

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "d577ed87d34cdac39010a054f058c316",
+    "identityHash": "b8c6e9d37cf20330f0f6fc8e352e695c",
     "entities": [
       {
         "tableName": "chat",
@@ -187,7 +187,7 @@
       },
       {
         "tableName": "models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`model_type` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `display_name` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `md5` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_k` INTEGER NOT NULL, `top_p` REAL NOT NULL, `max_tokens` INTEGER NOT NULL, `system_prompt` TEXT, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`model_type`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`model_type` TEXT NOT NULL, `model_status` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `display_name` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_k` INTEGER NOT NULL, `top_p` REAL NOT NULL, `repetition_penalty` REAL NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `system_prompt` TEXT, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`model_type`, `model_status`))",
         "fields": [
           {
             "fieldPath": "modelType",
@@ -196,8 +196,20 @@
             "notNull": true
           },
           {
+            "fieldPath": "modelStatus",
+            "columnName": "model_status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
             "fieldPath": "remoteFilename",
             "columnName": "remote_filename",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "huggingFaceModelName",
+            "columnName": "huggingface_model_name",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -214,8 +226,8 @@
             "notNull": true
           },
           {
-            "fieldPath": "md5",
-            "columnName": "md5",
+            "fieldPath": "sha256",
+            "columnName": "sha256",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -244,8 +256,26 @@
             "notNull": true
           },
           {
+            "fieldPath": "repetitionPenalty",
+            "columnName": "repetition_penalty",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
             "fieldPath": "maxTokens",
             "columnName": "max_tokens",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "contextWindow",
+            "columnName": "context_window",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "thinkingEnabled",
+            "columnName": "thinking_enabled",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -264,14 +294,15 @@
         "primaryKey": {
           "autoGenerate": false,
           "columnNames": [
-            "model_type"
+            "model_type",
+            "model_status"
           ]
         }
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd577ed87d34cdac39010a054f058c316')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b8c6e9d37cf20330f0f6fc8e352e695c')"
     ]
   }
 }

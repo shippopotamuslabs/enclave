@@ -1,8 +1,11 @@
 package com.browntowndev.pocketcrew.presentation.screen.settings
 
-import com.browntowndev.pocketcrew.domain.model.AppTheme
-import com.browntowndev.pocketcrew.domain.model.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetModelConfigurationsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.UpdateModelConfigurationUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateAllowMemoriesUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomizationEnabledUseCase
@@ -18,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -42,6 +46,8 @@ class SettingsViewModelTest {
     private lateinit var mockUpdateSelectedPromptOptionUseCase: UpdateSelectedPromptOptionUseCase
     private lateinit var mockUpdateCustomPromptTextUseCase: UpdateCustomPromptTextUseCase
     private lateinit var mockUpdateAllowMemoriesUseCase: UpdateAllowMemoriesUseCase
+    private lateinit var mockGetModelConfigurationsUseCase: GetModelConfigurationsUseCase
+    private lateinit var mockUpdateModelConfigurationUseCase: UpdateModelConfigurationUseCase
 
     private lateinit var viewModel: SettingsViewModel
 
@@ -58,10 +64,16 @@ class SettingsViewModelTest {
         mockUpdateSelectedPromptOptionUseCase = mockk(relaxed = true)
         mockUpdateCustomPromptTextUseCase = mockk(relaxed = true)
         mockUpdateAllowMemoriesUseCase = mockk(relaxed = true)
+        mockGetModelConfigurationsUseCase = mockk()
+        mockUpdateModelConfigurationUseCase = mockk(relaxed = true)
 
         // Setup default mock behavior for getSettingsUseCase
         val settingsFlow = MutableStateFlow(SettingsData())
         every { mockGetSettingsUseCase.invoke() } returns settingsFlow.asStateFlow()
+
+        // Setup default mock behavior for getModelConfigurationsUseCase
+        every { mockGetModelConfigurationsUseCase.invoke() } returns MutableStateFlow<List<com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationUi>>(emptyList()).asStateFlow()
+        every { mockGetModelConfigurationsUseCase.observeSingle(any()) } returns MutableStateFlow<com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationUi?>(null).asStateFlow()
 
         // Create ViewModel
         viewModel = SettingsViewModel(
@@ -72,7 +84,9 @@ class SettingsViewModelTest {
             updateCustomizationEnabledUseCase = mockUpdateCustomizationEnabledUseCase,
             updateSelectedPromptOptionUseCase = mockUpdateSelectedPromptOptionUseCase,
             updateCustomPromptTextUseCase = mockUpdateCustomPromptTextUseCase,
-            updateAllowMemoriesUseCase = mockUpdateAllowMemoriesUseCase
+            updateAllowMemoriesUseCase = mockUpdateAllowMemoriesUseCase,
+            getModelConfigurationsUseCase = mockGetModelConfigurationsUseCase,
+            updateModelConfigurationUseCase = mockUpdateModelConfigurationUseCase
         )
 
         // Advance dispatcher to let init block complete

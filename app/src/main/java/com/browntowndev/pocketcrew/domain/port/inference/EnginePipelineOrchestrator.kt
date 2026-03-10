@@ -15,7 +15,15 @@ interface EnginePipelineOrchestrator {
      * @param hasImage Whether an image payload is attached (triggers the Vision model).
      * @return A stream of [PipelineEvent]s to be consumed directly by the UI state holders.
      */
-    fun processPrompt(prompt: String, hasImage: Boolean = false): Flow<PipelineEvent>
+    fun processComplexPrompt(prompt: String, hasImage: Boolean = false): Flow<PipelineEvent>
+
+    /**
+     * Executes a simple/fast inference for non-complex prompts.
+     * Uses the fast model directly without the full multi-agent pipeline.
+     * @param prompt The raw user text input.
+     * @return A stream of [PipelineEvent]s to be consumed directly by the UI state holders.
+     */
+    fun processSimplePrompt(prompt: String): Flow<PipelineEvent>
 
     /**
      * Immediately interrupts the active pipeline.

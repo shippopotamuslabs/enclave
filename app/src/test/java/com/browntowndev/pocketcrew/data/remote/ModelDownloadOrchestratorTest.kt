@@ -1,12 +1,11 @@
 package com.browntowndev.pocketcrew.data.remote
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.DownloadState
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.DownloadStatus
-import com.browntowndev.pocketcrew.domain.model.ModelFile
-import com.browntowndev.pocketcrew.domain.model.ModelType
-import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
+import com.browntowndev.pocketcrew.domain.model.download.DownloadState
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
@@ -35,7 +34,6 @@ class ModelDownloadOrchestratorTest {
 
     private lateinit var mockModelConfigFetcher: ModelConfigFetcherPort
     private lateinit var mockModelRegistry: ModelRegistryPort
-    private lateinit var mockModelConfigCache: ModelConfigCachePort
     private lateinit var mockDownloadSpeedTracker: DownloadSpeedTrackerPort
 
     @BeforeEach
@@ -49,7 +47,6 @@ class ModelDownloadOrchestratorTest {
 
         mockModelConfigFetcher = mockk(relaxed = true)
         mockModelRegistry = mockk<ModelRegistryPort>(relaxed = true)
-        mockModelConfigCache = mockk(relaxed = true)
         mockDownloadSpeedTracker = mockk(relaxed = true)
     }
 
@@ -75,7 +72,7 @@ class ModelDownloadOrchestratorTest {
         val modelFile = ModelFile(
             sizeBytes = 100L,
             url = "https://example.com/model.bin",
-            md5 = "abc123",
+            sha256 = "abc123",
             modelTypes = listOf(ModelType.MAIN),
             originalFileName = "model.bin",
             displayName = "Test Model",

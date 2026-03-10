@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.domain.model
+package com.browntowndev.pocketcrew.domain.model.download
 
 import com.browntowndev.pocketcrew.util.TestFixtures
 import org.junit.jupiter.api.Assertions.assertEquals

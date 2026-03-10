@@ -1,17 +1,15 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.mapper.ModelConfigMapper
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
-import com.browntowndev.pocketcrew.domain.model.RemoteModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
-import com.browntowndev.pocketcrew.domain.port.repository.RegisteredModel
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
 import io.mockk.every
@@ -37,8 +35,6 @@ class InitializeModelsUseCaseTest {
     private lateinit var mockModelConfigFetcher: ModelConfigFetcherPort
     private lateinit var mockModelRegistry: ModelRegistryPort
     private lateinit var mockModelDownloadOrchestrator: ModelDownloadOrchestratorPort
-    private lateinit var mockModelConfigCache: com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
-    private lateinit var mockModelConfigMapper: ModelConfigMapper
     private lateinit var mockCheckModelsUseCase: CheckModelsUseCase
     private lateinit var mockLogPort: LoggingPort
 
@@ -56,8 +52,6 @@ class InitializeModelsUseCaseTest {
         mockModelConfigFetcher = mockk(relaxed = true)
         mockModelRegistry = mockk(relaxed = true)
         mockModelDownloadOrchestrator = mockk(relaxed = true)
-        mockModelConfigCache = mockk(relaxed = true)
-        mockModelConfigMapper = mockk(relaxed = true)
         mockCheckModelsUseCase = mockk(relaxed = true)
         mockLogPort = mockk(relaxed = true)
 
@@ -65,8 +59,6 @@ class InitializeModelsUseCaseTest {
             modelConfigFetcher = mockModelConfigFetcher,
             modelRegistry = mockModelRegistry,
             modelDownloadOrchestrator = mockModelDownloadOrchestrator,
-            modelConfigCache = mockModelConfigCache,
-            modelConfigMapper = mockModelConfigMapper,
             checkModelsUseCase = mockCheckModelsUseCase,
             logPort = mockLogPort
         )
@@ -91,7 +83,6 @@ class InitializeModelsUseCaseTest {
         )
 
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(emptyList())
-        every { mockModelConfigMapper.toModelFiles(any<List<RegisteredModel>>()) } returns emptyList()
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
 
         // When
@@ -104,16 +95,28 @@ class InitializeModelsUseCaseTest {
     @Test
     fun `invoke fetches remote config and returns models to download when needed`() = runTest {
         // Given - mock returns a model that needs downloading
-        val modelToDownload = com.browntowndev.pocketcrew.domain.model.ModelFile(
-            sizeBytes = 1024,
-            url = "https://example.com/model.bin",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "model.bin",
-            displayName = "Test Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are a helpful assistant."
+        val modelToDownload = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/model",
+                remoteFileName = "model.bin",
+                localFileName = "model.bin",
+                displayName = "Test Model",
+                sha256 = "abc123",
+                sizeInBytes = 1024,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                repetitionPenalty = 1.0,
+                maxTokens = 2048,
+                contextWindow = 2048
+            ),
+            persona = ModelConfiguration.Persona(
+                systemPrompt = "You are a helpful assistant."
+            )
         )
 
         val downloadResult = DownloadModelsResult(
@@ -126,7 +129,6 @@ class InitializeModelsUseCaseTest {
         )
 
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(emptyList())
-        every { mockModelConfigMapper.toModelFiles(any<List<RegisteredModel>>()) } returns emptyList()
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns downloadResult
 
         // When
@@ -134,7 +136,7 @@ class InitializeModelsUseCaseTest {
 
         // Then - should return the model that needs downloading
         assert(result.modelsToDownload.isNotEmpty())
-        assert(result.modelsToDownload.first().modelTypes.contains(ModelType.MAIN))
+        assert(result.modelsToDownload.first().modelType == ModelType.MAIN)
     }
 
     @Test
@@ -150,7 +152,6 @@ class InitializeModelsUseCaseTest {
         )
 
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(emptyList())
-        every { mockModelConfigMapper.toModelFiles(any<List<RegisteredModel>>()) } returns emptyList()
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns expectedResult
 
         // When
@@ -164,7 +165,8 @@ class InitializeModelsUseCaseTest {
 
     @Test
     fun `invoke handles remote config fetch failure gracefully`() = runTest {
-        // Given - fetch fails but we should still return empty result
+        // Given - fetch fails but we have existing models in registry
+        // Should gracefully fallback to existing models
         val emptyResult = DownloadModelsResult(
             modelsToDownload = emptyList(),
             scanResult = ModelScanResult(
@@ -174,14 +176,41 @@ class InitializeModelsUseCaseTest {
             )
         )
 
+        // Mock existing models in registry (this triggers the fallback path)
+        val existingModels = listOf(
+            ModelConfiguration(
+                modelType = ModelType.FAST,
+                metadata = ModelConfiguration.Metadata(
+                    huggingFaceModelName = "existing/model",
+                    remoteFileName = "existing.bin",
+                    localFileName = "existing.bin",
+                    displayName = "Existing Model",
+                    sha256 = "existing123",
+                    sizeInBytes = 1024,
+                    modelFileFormat = ModelFileFormat.LITERTLM
+                ),
+                tunings = ModelConfiguration.Tunings(
+                    temperature = 0.0,
+                    topK = 40,
+                    topP = 0.95,
+                    repetitionPenalty = 1.0,
+                    maxTokens = 2048,
+                    contextWindow = 2048
+                ),
+                persona = ModelConfiguration.Persona(
+                    systemPrompt = "You are a helpful assistant."
+                )
+            )
+        )
+        // getModelsPreferringOld is a suspend function
+        coEvery { mockModelRegistry.getModelsPreferringOld() } returns existingModels
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.failure(Exception("Network error"))
-        every { mockModelConfigMapper.toModelFiles(any<List<RegisteredModel>>()) } returns emptyList()
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
 
         // When
         val result = useCase.invoke()
 
-        // Then - should still return empty (graceful degradation)
+        // Then - should still return empty (graceful degradation using existing models)
         assert(result.modelsToDownload.isEmpty())
     }
 }

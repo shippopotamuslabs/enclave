@@ -1,12 +1,14 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.ModelFile
-import com.browntowndev.pocketcrew.domain.model.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import io.mockk.MockKAnnotations
 import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import org.junit.jupiter.api.AfterEach
@@ -18,6 +20,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 class CheckModelEligibilityUseCaseTest {
 
     private lateinit var useCase: CheckModelEligibilityUseCase
+    private lateinit var mockLogger: LoggingPort
 
     @BeforeEach
     fun setup() {
@@ -29,7 +32,8 @@ class CheckModelEligibilityUseCaseTest {
         every { Log.w(any<String>(), any<String>()) } returns 0
         every { Log.v(any<String>(), any<String>()) } returns 0
 
-        useCase = CheckModelEligibilityUseCase()
+        mockLogger = mockk(relaxed = true)
+        useCase = CheckModelEligibilityUseCase(mockLogger)
     }
 
     @AfterEach
@@ -37,30 +41,60 @@ class CheckModelEligibilityUseCaseTest {
         unmockkStatic(Log::class)
     }
 
+    private fun createModelConfig(
+        modelType: ModelType,
+        sha256: String,
+        displayName: String,
+        sizeInBytes: Long = 1000000L,
+        modelFileFormat: ModelFileFormat = ModelFileFormat.LITERTLM,
+        maxTokens: Int = 2048,
+        systemPrompt: String = "You are helpful.",
+        localFileName: String = "model.litertlm"
+    ): ModelConfiguration {
+        return ModelConfiguration(
+            modelType = modelType,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/model",
+                remoteFileName = localFileName,
+                localFileName = localFileName,
+                displayName = displayName,
+                sha256 = sha256,
+                sizeInBytes = sizeInBytes,
+                modelFileFormat = modelFileFormat
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                repetitionPenalty = 1.0,
+                maxTokens = maxTokens,
+                contextWindow = 2048
+            ),
+            persona = ModelConfiguration.Persona(
+                systemPrompt = systemPrompt
+            )
+        )
+    }
+
     // ========== ORIGINAL TESTS ==========
 
     @Test
     fun `check returns models for missing files`() {
-        val modelFile = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/model.bin",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
+        val modelConfig = createModelConfig(
+            modelType = ModelType.MAIN,
+            sha256 = "abc123",
             displayName = "Test Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "main.litertlm"
         )
         val scanResult = ModelScanResult(
-            missingModels = listOf(modelFile),
+            missingModels = listOf(modelConfig),
             partialDownloads = emptyMap(),
             invalidModels = emptyList(),
             allValid = false,
             directoryError = false
         )
 
-        val result = useCase.check(listOf(modelFile), listOf(modelFile), scanResult)
+        val result = useCase.check(listOf(modelConfig), listOf(modelConfig), scanResult)
 
         assertTrue(result.isNotEmpty())
         assertEquals(1, result.size)
@@ -83,53 +117,38 @@ class CheckModelEligibilityUseCaseTest {
 
     @Test
     fun `check handles multiple missing models`() {
-        val modelFile1 = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/model1.bin",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main1.litertlm",
+        val modelConfig1 = createModelConfig(
+            modelType = ModelType.MAIN,
+            sha256 = "abc123",
             displayName = "Test Model 1",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "main1.litertlm"
         )
-        val modelFile2 = ModelFile(
-            sizeBytes = 2000000L,
-            url = "https://example.com/model2.bin",
-            md5 = "def456",
-            modelTypes = listOf(ModelType.VISION),
-            originalFileName = "vision.litertlm",
+        val modelConfig2 = createModelConfig(
+            modelType = ModelType.VISION,
+            sha256 = "def456",
             displayName = "Test Model 2",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "vision.litertlm"
         )
         val scanResult = ModelScanResult(
-            missingModels = listOf(modelFile1, modelFile2),
+            missingModels = listOf(modelConfig1, modelConfig2),
             partialDownloads = emptyMap(),
             invalidModels = emptyList(),
             allValid = false,
             directoryError = false
         )
 
-        val result = useCase.check(listOf(modelFile1, modelFile2), listOf(modelFile1, modelFile2), scanResult)
+        val result = useCase.check(listOf(modelConfig1, modelConfig2), listOf(modelConfig1, modelConfig2), scanResult)
 
         assertTrue(result.isNotEmpty())
     }
 
     @Test
     fun `check returns empty list when no missing partial or invalid`() {
-        val modelFile = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/model.bin",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
+        val modelConfig = createModelConfig(
+            modelType = ModelType.MAIN,
+            sha256 = "abc123",
             displayName = "Test Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "main.litertlm"
         )
         val scanResult = ModelScanResult(
             missingModels = emptyList(),
@@ -139,7 +158,7 @@ class CheckModelEligibilityUseCaseTest {
             directoryError = false
         )
 
-        val result = useCase.check(listOf(modelFile), listOf(modelFile), scanResult)
+        val result = useCase.check(listOf(modelConfig), listOf(modelConfig), scanResult)
 
         assertTrue(result.isEmpty())
     }
@@ -178,16 +197,11 @@ class CheckModelEligibilityUseCaseTest {
 
     @Test
     fun `check includes models with partial downloads`() {
-        val modelFile = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/model.bin",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
+        val modelConfig = createModelConfig(
+            modelType = ModelType.MAIN,
+            sha256 = "abc123",
             displayName = "Test Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "main.litertlm"
         )
         val scanResult = ModelScanResult(
             missingModels = emptyList(),
@@ -197,34 +211,24 @@ class CheckModelEligibilityUseCaseTest {
             directoryError = false
         )
 
-        val result = useCase.check(listOf(modelFile), listOf(modelFile), scanResult)
+        val result = useCase.check(listOf(modelConfig), listOf(modelConfig), scanResult)
 
-        assertTrue(result.any { it.md5 == "abc123" })
+        assertTrue(result.any { it.metadata.sha256 == "abc123" })
     }
 
     @Test
     fun `check handles multiple partial downloads`() {
-        val mainModel = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/main.bin",
-            md5 = "main-md5",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
+        val mainModel = createModelConfig(
+            modelType = ModelType.MAIN,
+            sha256 = "main-md5",
             displayName = "Main Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "main.litertlm"
         )
-        val visionModel = ModelFile(
-            sizeBytes = 2000000L,
-            url = "https://example.com/vision.bin",
-            md5 = "vision-md5",
-            modelTypes = listOf(ModelType.VISION),
-            originalFileName = "vision.litertlm",
+        val visionModel = createModelConfig(
+            modelType = ModelType.VISION,
+            sha256 = "vision-md5",
             displayName = "Vision Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 4096,
-            systemPrompt = "You are helpful."
+            localFileName = "vision.litertlm"
         )
         val scanResult = ModelScanResult(
             missingModels = emptyList(),
@@ -244,55 +248,54 @@ class CheckModelEligibilityUseCaseTest {
 
     @Test
     fun `check includes invalid models due to format change`() {
-        val originalModel = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/model.bin",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
+        val originalModel = createModelConfig(
+            modelType = ModelType.MAIN,
+            sha256 = "abc123",
             displayName = "Test Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "main.litertlm"
+        )
+
+        val invalidModel = originalModel.copy(
+            metadata = originalModel.metadata.copy(
+                modelFileFormat = ModelFileFormat.TASK
+            )
         )
 
         val scanResult = ModelScanResult(
             missingModels = emptyList(),
             partialDownloads = emptyMap(),
-            invalidModels = listOf(originalModel.copy(
-                modelFileFormat = ModelFileFormat.TASK
-            )),
+            invalidModels = listOf(invalidModel),
             allValid = false,
             directoryError = false
         )
 
         val result = useCase.check(listOf(originalModel), listOf(originalModel), scanResult)
 
-        assertTrue(result.any { it.md5 == "abc123" })
+        assertTrue(result.any { it.metadata.sha256 == "abc123" })
     }
 
     @Test
     fun `check includes models with MD5 mismatch`() {
-        val modelFile = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/model.bin",
-            md5 = "expected-md5",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
+        val modelConfig = createModelConfig(
+            modelType = ModelType.MAIN,
+            sha256 = "expected-md5",
             displayName = "Test Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "main.litertlm"
+        )
+        val invalidModel = modelConfig.copy(
+            metadata = modelConfig.metadata.copy(
+                sha256 = "corrupted-md5"
+            )
         )
         val scanResult = ModelScanResult(
             missingModels = emptyList(),
             partialDownloads = emptyMap(),
-            invalidModels = listOf(modelFile.copy(md5 = "corrupted-md5")),
+            invalidModels = listOf(invalidModel),
             allValid = false,
             directoryError = false
         )
 
-        val result = useCase.check(listOf(modelFile), listOf(modelFile), scanResult)
+        val result = useCase.check(listOf(modelConfig), listOf(modelConfig), scanResult)
 
         assertTrue(result.isNotEmpty())
     }
@@ -302,16 +305,14 @@ class CheckModelEligibilityUseCaseTest {
         // Note: The use case compares models within the same list, so it can't truly detect
         // config changes between old and new states. This test verifies behavior when
         // the model is in missingModels (which would trigger download).
-        val newModel = ModelFile(
-            sizeBytes = 2000000L,
-            url = "https://example.com/model-new.bin",
-            md5 = "new-md5-changed",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
+        val newModel = createModelConfig(
+            modelType = ModelType.MAIN,
+            sha256 = "new-md5-changed",
             displayName = "Updated Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
+            sizeInBytes = 2000000L,
             maxTokens = 4096,
-            systemPrompt = "You are more helpful."
+            systemPrompt = "You are more helpful.",
+            localFileName = "main.litertlm"
         )
         // Model in missingModels triggers download
         val scanResult = ModelScanResult(
@@ -324,21 +325,16 @@ class CheckModelEligibilityUseCaseTest {
 
         val result = useCase.check(listOf(newModel), listOf(newModel), scanResult)
 
-        assertTrue(result.any { it.md5 == "new-md5-changed" })
+        assertTrue(result.any { it.metadata.sha256 == "new-md5-changed" })
     }
 
     @Test
     fun `check returns empty when config unchanged and file valid`() {
-        val modelFile = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/model.bin",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
+        val modelConfig = createModelConfig(
+            modelType = ModelType.MAIN,
+            sha256 = "abc123",
             displayName = "Test Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "main.litertlm"
         )
         val scanResult = ModelScanResult(
             missingModels = emptyList(),
@@ -348,36 +344,26 @@ class CheckModelEligibilityUseCaseTest {
             directoryError = false
         )
 
-        val result = useCase.check(listOf(modelFile), listOf(modelFile), scanResult)
+        val result = useCase.check(listOf(modelConfig), listOf(modelConfig), scanResult)
 
         assertTrue(result.isEmpty())
     }
 
     @Test
-    fun `check merges models with same MD5 but different types`() {
+    fun `check groups models with same MD5`() {
         // Models with same MD5 but different modelTypes - they share the same file
-        // Use case merges them by combining modelTypes
-        val draftModel = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/model.bin",
-            md5 = "shared-md5-abc123",
-            modelTypes = listOf(ModelType.DRAFT),
-            originalFileName = "shared.litertlm",
+        // Use case groups them by MD5 (takes first model with that MD5)
+        val draftModel = createModelConfig(
+            modelType = ModelType.DRAFT_ONE,
+            sha256 = "shared-md5-abc123",
             displayName = "Shared Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "shared.litertlm"
         )
-        val visionModel = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/model.bin",
-            md5 = "shared-md5-abc123",
-            modelTypes = listOf(ModelType.VISION),
-            originalFileName = "shared.litertlm",
+        val visionModel = createModelConfig(
+            modelType = ModelType.VISION,
+            sha256 = "shared-md5-abc123",
             displayName = "Shared Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "shared.litertlm"
         )
         val scanResult = ModelScanResult(
             missingModels = listOf(draftModel, visionModel),
@@ -389,28 +375,31 @@ class CheckModelEligibilityUseCaseTest {
 
         val result = useCase.check(listOf(draftModel, visionModel), listOf(draftModel, visionModel), scanResult)
 
+        // Use case groups by MD5, so only one entry should exist
         assertEquals(1, result.size)
-        assertEquals(2, result.first().modelTypes.size)
-        assertTrue(result.first().modelTypes.contains(ModelType.DRAFT))
-        assertTrue(result.first().modelTypes.contains(ModelType.VISION))
     }
 
     @Test
-    fun `check merges three model types with same MD5`() {
-        // Three models with same MD5 and same filename - use case merges their modelTypes
-        val mainModel = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/model.bin",
-            md5 = "triple-md5",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "shared.litertlm",
+    fun `check groups three model types with same MD5`() {
+        // Three models with same MD5 and same filename - use case groups by MD5
+        val mainModel = createModelConfig(
+            modelType = ModelType.MAIN,
+            sha256 = "triple-md5",
             displayName = "Shared Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "shared.litertlm"
         )
-        val draftModel = mainModel.copy(modelTypes = listOf(ModelType.DRAFT))
-        val fastModel = mainModel.copy(modelTypes = listOf(ModelType.FAST))
+        val draftModel = createModelConfig(
+            modelType = ModelType.DRAFT_ONE,
+            sha256 = "triple-md5",
+            displayName = "Shared Model",
+            localFileName = "shared.litertlm"
+        )
+        val fastModel = createModelConfig(
+            modelType = ModelType.FAST,
+            sha256 = "triple-md5",
+            displayName = "Shared Model",
+            localFileName = "shared.litertlm"
+        )
         val scanResult = ModelScanResult(
             missingModels = listOf(mainModel, draftModel, fastModel),
             partialDownloads = emptyMap(),
@@ -421,35 +410,30 @@ class CheckModelEligibilityUseCaseTest {
 
         val result = useCase.check(listOf(mainModel, draftModel, fastModel), listOf(mainModel, draftModel, fastModel), scanResult)
 
+        // Use case groups by MD5, so only one entry should exist
         assertEquals(1, result.size)
-        assertEquals(3, result.first().modelTypes.size)
     }
 
     @Test
     fun `check detects when modelTypes are added`() {
         // The use case can't detect type changes without comparing to previous state.
         // Test verifies behavior when model is in missingModels.
-        val modelFile = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/model.bin",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN, ModelType.DRAFT),
-            originalFileName = "main.litertlm",
+        val modelConfig = createModelConfig(
+            modelType = ModelType.MAIN,
+            sha256 = "abc123",
             displayName = "Test Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "main.litertlm"
         )
         // Model in missingModels triggers download
         val scanResult = ModelScanResult(
-            missingModels = listOf(modelFile),
+            missingModels = listOf(modelConfig),
             partialDownloads = emptyMap(),
             invalidModels = emptyList(),
             allValid = true,
             directoryError = false
         )
 
-        val result = useCase.check(listOf(modelFile), listOf(modelFile), scanResult)
+        val result = useCase.check(listOf(modelConfig), listOf(modelConfig), scanResult)
 
         assertTrue(result.isNotEmpty())
     }
@@ -458,27 +442,22 @@ class CheckModelEligibilityUseCaseTest {
     fun `check detects when modelTypes are removed`() {
         // The use case can't detect type removal without comparing to previous state.
         // Test verifies behavior when model is in missingModels.
-        val modelFile = ModelFile(
-            sizeBytes = 1000000L,
-            url = "https://example.com/model.bin",
-            md5 = "abc123",
-            modelTypes = listOf(ModelType.MAIN),
-            originalFileName = "main.litertlm",
+        val modelConfig = createModelConfig(
+            modelType = ModelType.MAIN,
+            sha256 = "abc123",
             displayName = "Test Model",
-            modelFileFormat = ModelFileFormat.LITERTLM,
-            maxTokens = 2048,
-            systemPrompt = "You are helpful."
+            localFileName = "main.litertlm"
         )
         // Model in missingModels triggers download
         val scanResult = ModelScanResult(
-            missingModels = listOf(modelFile),
+            missingModels = listOf(modelConfig),
             partialDownloads = emptyMap(),
             invalidModels = emptyList(),
             allValid = true,
             directoryError = false
         )
 
-        val result = useCase.check(listOf(modelFile), listOf(modelFile), scanResult)
+        val result = useCase.check(listOf(modelConfig), listOf(modelConfig), scanResult)
 
         assertTrue(result.isNotEmpty())
     }

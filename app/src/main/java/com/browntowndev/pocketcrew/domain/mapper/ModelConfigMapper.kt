@@ -1,12 +1,11 @@
 package com.browntowndev.pocketcrew.domain.mapper
 
-import com.browntowndev.pocketcrew.domain.model.ModelFile
-import com.browntowndev.pocketcrew.domain.port.cache.ModelConfigCachePort
-import com.browntowndev.pocketcrew.domain.port.repository.RegisteredModel
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import javax.inject.Inject
 import javax.inject.Singleton
 
-private const val MODEL_BASE_URL = "https://pub-83e071f6f35749ed990eeb3058fc863d.r2.dev"
+private const val MODEL_BASE_URL = "https://config.pocketcrew.app"
 
 /**
  * Mapper to convert between model configuration types and ModelFile.
@@ -15,27 +14,27 @@ private const val MODEL_BASE_URL = "https://pub-83e071f6f35749ed990eeb3058fc863d
 @Singleton
 class ModelConfigMapper @Inject constructor() {
     /**
-         * Converts a collection of RegisteredModel to a list of ModelFile.
-         * Groups by MD5 to collect all modelTypes shared by the same remote file.
+         * Converts a collection of ModelConfiguration to a list of ModelFile.
+         * Groups by SHA256 to collect all modelTypes shared by the same remote file.
          */
-    fun toModelFiles(registeredModels: Collection<RegisteredModel>): List<ModelFile> {
+    fun toModelFiles(registeredModels: Collection<ModelConfiguration>): List<ModelFile> {
         return registeredModels
-            .groupBy { it.md5 }
-            .map { (md5, models) ->
+            .groupBy { it.metadata.sha256 }
+            .map { (sha256, models) ->
                 val first = models.first()
                 ModelFile(
-                    sizeBytes = first.sizeInBytes,
-                    url = "$MODEL_BASE_URL/${first.remoteFilename}",
-                    md5 = md5,
+                    sizeBytes = first.metadata.sizeInBytes,
+                    url = "$MODEL_BASE_URL/${first.metadata.remoteFileName}",
+                    sha256 = sha256,
                     modelTypes = models.map { it.modelType }.distinct(),
-                    originalFileName = first.remoteFilename,
-                    displayName = first.displayName,
-                    modelFileFormat = first.modelFileFormat,
-                    temperature = first.temperature,
-                    topK = first.topK,
-                    topP = first.topP,
-                    maxTokens = first.maxTokens,
-                    systemPrompt = first.systemPrompt ?: ""
+                    originalFileName = first.metadata.remoteFileName,
+                    displayName = first.metadata.displayName,
+                    modelFileFormat = first.metadata.modelFileFormat,
+                    temperature = first.tunings.temperature,
+                    topK = first.tunings.topK,
+                    topP = first.tunings.topP,
+                    maxTokens = first.tunings.maxTokens,
+                    systemPrompt = first.persona.systemPrompt
                 )
             }
     }
