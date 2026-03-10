@@ -378,6 +378,22 @@ class HeuristicPromptComplexityInterpreterTest {
     }
 
     @Test
+    fun `analyze handles good morning greeting`() {
+        val prompt = "Hello, good morning. How are you?"
+        val result = interpreter.analyze(prompt)
+        // Should be at most MEDIUM
+        assertTrue(result.ordinal <= ComplexityLevel.MEDIUM.ordinal, "Got $result for simple greeting")
+    }
+
+    @Test
+    fun `analyze handles hello how are you`() {
+        val prompt = "Hello how are you?"
+        val result = interpreter.analyze(prompt)
+        // Should be SIMPLE
+        assertEquals(ComplexityLevel.SIMPLE, result, "Expected SIMPLE for short greeting")
+    }
+
+    @Test
     fun `analyze handles short question`() {
         val result = interpreter.analyze("What's the weather?")
         assertTrue(result.ordinal <= ComplexityLevel.MEDIUM.ordinal)

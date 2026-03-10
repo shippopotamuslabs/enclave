@@ -1,14 +1,12 @@
 package com.browntowndev.pocketcrew.inference
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.AgentRole
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineEvent
 import com.browntowndev.pocketcrew.domain.port.inference.PipelinePhase
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import kotlinx.coroutines.flow.Flow
 import dagger.Lazy
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
@@ -42,13 +40,14 @@ class PipelineOrchestratorImplTest {
     private lateinit var mockDraftTwoServiceProvider: dagger.Lazy<LlmInferencePort>
     private lateinit var mockVisionServiceProvider: dagger.Lazy<LlmInferencePort>
     private lateinit var mockFastServiceProvider: dagger.Lazy<LlmInferencePort>
-    private lateinit var mockModelRegistry: ModelRegistryPort
+    private lateinit var mockFinalSynthesizerServiceProvider: dagger.Lazy<LlmInferencePort>
 
     private lateinit var mockMainService: LlmInferencePort
     private lateinit var mockDraftOneService: LlmInferencePort
     private lateinit var mockDraftTwoService: LlmInferencePort
     private lateinit var mockVisionService: LlmInferencePort
     private lateinit var mockFastService: LlmInferencePort
+    private lateinit var mockFinalSynthesizerService: LlmInferencePort
 
     private lateinit var orchestrator: PipelineOrchestratorImpl
 
@@ -67,6 +66,7 @@ class PipelineOrchestratorImplTest {
         mockDraftTwoService = mockk(relaxed = true)
         mockVisionService = mockk(relaxed = true)
         mockFastService = mockk(relaxed = true)
+        mockFinalSynthesizerService = mockk(relaxed = true)
 
         // Create lazy providers that return the mock services
         mockMainServiceProvider = mockk()
@@ -84,37 +84,16 @@ class PipelineOrchestratorImplTest {
         mockFastServiceProvider = mockk()
         every { mockFastServiceProvider.get() } returns mockFastService
 
-        // Mock model registry to return Fast persona
-        mockModelRegistry = mockk(relaxed = true)
-        val fastConfig = ModelConfiguration(
-            modelType = ModelType.FAST,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "model/fast",
-                remoteFileName = "fast.litertlm",
-                localFileName = "fast.litertlm",
-                displayName = "Fast Model",
-                sha256 = "abc123",
-                sizeInBytes = 1000L,
-                modelFileFormat = com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.LITERTLM
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.7,
-                topK = 40,
-                topP = 0.95,
-                repetitionPenalty = 1.0,
-                maxTokens = 512,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(systemPrompt = "You are a fast assistant.")
-        )
-        coEvery { mockModelRegistry.getRegisteredModel(ModelType.FAST) } returns fastConfig
+        mockFinalSynthesizerServiceProvider = mockk()
+        every { mockFinalSynthesizerServiceProvider.get() } returns mockFinalSynthesizerService
+
         orchestrator = PipelineOrchestratorImpl(
             mainServiceProvider = mockMainServiceProvider,
             draftOneServiceProvider = mockDraftOneServiceProvider,
             draftTwoServiceProvider = mockDraftTwoServiceProvider,
             visionServiceProvider = mockVisionServiceProvider,
             fastServiceProvider = mockFastServiceProvider,
-            modelRegistry = mockModelRegistry
+            finalSynthesizerServiceProvider = mockFinalSynthesizerServiceProvider
         )
     }
 
@@ -152,7 +131,9 @@ class PipelineOrchestratorImplTest {
     fun `processPrompt completes all phases and emits Completed event`() = runTest {
         // Given - all services return valid responses
         coEvery { mockDraftOneService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft response")
+        coEvery { mockDraftTwoService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft 2 response")
         coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Main response")
+        coEvery { mockFinalSynthesizerService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Final response")
 
         // When
         val result = orchestrator.processComplexPrompt("test prompt")
@@ -178,7 +159,9 @@ class PipelineOrchestratorImplTest {
             response = "Draft response",
             thinkingChunks = listOf("Thinking step 1", "Thinking step 2")
         )
+        coEvery { mockDraftTwoService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft 2 response")
         coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Main response")
+        coEvery { mockFinalSynthesizerService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Final response")
 
         // When
         val result = orchestrator.processComplexPrompt("test prompt")
@@ -194,7 +177,9 @@ class PipelineOrchestratorImplTest {
     fun `processPrompt streams final output to UI`() = runTest {
         // Given
         coEvery { mockDraftOneService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft response")
-        coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Final cleaned response")
+        coEvery { mockDraftTwoService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft 2 response")
+        coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Main response")
+        coEvery { mockFinalSynthesizerService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Final cleaned response")
 
         // When
         val result = orchestrator.processComplexPrompt("test prompt")
@@ -210,16 +195,20 @@ class PipelineOrchestratorImplTest {
     fun `processPrompt closes all services in finally block`() = runTest {
         // Given
         coEvery { mockDraftOneService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft response")
+        coEvery { mockDraftTwoService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Draft 2 response")
         coEvery { mockMainService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Main response")
+        coEvery { mockFinalSynthesizerService.sendPrompt(any(), closeConversation = true) } returns createMockInferenceFlow("Final response")
 
         // When
         val result = orchestrator.processComplexPrompt("test prompt")
         result.collect { }
 
-        // Then - verify all services were closed (draftOne, draftTwo, main)
+        // Then - verify all services were closed (draftOne, draftTwo, main, finalSynthesizer)
         // Note: visionService is not used in processPrompt
         verify { mockDraftOneService.closeSession() }
+        verify { mockDraftTwoService.closeSession() }
         verify { mockMainService.closeSession() }
+        verify { mockFinalSynthesizerService.closeSession() }
     }
 
     // ========== SCENARIO 5: Error Handling ==========
