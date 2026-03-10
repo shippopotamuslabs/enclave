@@ -31,6 +31,7 @@ class ModelConfigFetcherImpl @Inject constructor(
     override suspend fun fetchRemoteConfig(): Result<List<ModelConfiguration>> = withContext(Dispatchers.IO) {
         try {
             val configUrl = modelUrlProvider.getConfigUrl()
+            Log.i(TAG, "Fetching config from URL: $configUrl")
             val request = Request.Builder()
                 .url(configUrl)
                 .build()
@@ -110,7 +111,8 @@ class ModelConfigFetcherImpl @Inject constructor(
             repetitionPenalty = json.getDouble("repetitionPenalty"),
             maxTokens = json.getInt("maxTokens"),
             contextWindow = json.getInt("contextWindow"),
-            systemPrompt = json.getString("systemPrompt")
+            systemPrompt = json.getString("systemPrompt"),
+            thinkingEnabled = json.optBoolean("thinkingEnabled", false)
         )
     }
 
@@ -161,7 +163,8 @@ class ModelConfigFetcherImpl @Inject constructor(
                     topP = config.topP,
                     repetitionPenalty = config.repetitionPenalty,
                     maxTokens = config.maxTokens,
-                    contextWindow = config.contextWindow
+                    contextWindow = config.contextWindow,
+                    thinkingEnabled = config.thinkingEnabled
                 ),
                 persona = ModelConfiguration.Persona(
                     systemPrompt = config.systemPrompt

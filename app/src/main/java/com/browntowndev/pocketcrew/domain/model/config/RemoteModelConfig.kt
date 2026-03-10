@@ -15,9 +15,11 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
  * @property temperature Sampling temperature for LLM generation
  * @property topK Top-k sampling parameter
  * @property topP Top-p (nucleus) sampling parameter
+ * @property repetitionPenalty Repetition penalty for sampling
  * @property maxTokens Maximum tokens to generate
  * @property contextWindow LLM context window size in tokens (for llama.cpp)
  * @property systemPrompt Optional system prompt to prepend to conversations
+ * @property thinkingEnabled Whether to enable thinking/reasoning mode for this model (llama.cpp extraction)
  */
 data class RemoteModelConfig(
     val modelType: ModelType,
@@ -33,5 +35,6 @@ data class RemoteModelConfig(
     val repetitionPenalty: Double,
     val maxTokens: Int,
     val contextWindow: Int,
-    val systemPrompt: String
+    val systemPrompt: String,
+    val thinkingEnabled: Boolean = false
 )
