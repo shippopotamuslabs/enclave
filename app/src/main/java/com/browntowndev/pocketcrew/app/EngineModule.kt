@@ -5,8 +5,6 @@ import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
-import com.browntowndev.pocketcrew.domain.port.inference.EnginePipelineOrchestrator
-import com.browntowndev.pocketcrew.domain.port.inference.RouterConfig
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.inference.ConversationManagerImpl
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
@@ -16,7 +14,6 @@ import com.browntowndev.pocketcrew.inference.MediaPipeInferenceServiceImpl
 import com.browntowndev.pocketcrew.inference.llama.GpuConfig
 import com.browntowndev.pocketcrew.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.inference.llama.LlamaSamplingConfig
-import com.browntowndev.pocketcrew.inference.PipelineOrchestratorImpl
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Engine
@@ -68,10 +65,6 @@ annotation class FinalSynthesizerModelEngine
 object EngineModule {
 
     private const val TAG = "EngineModule"
-
-    @Provides
-    @Singleton
-    fun provideRouterConfig(): RouterConfig = RouterConfig()
 
     private fun getModelPath(context: Context, filename: String): String {
         val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
@@ -315,7 +308,7 @@ object EngineModule {
         return when {
             filename.endsWith(".gguf") -> {
                 // Use llama.cpp implementation for GGUF models
-                val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+                val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
                 val tunings = config.tunings
                 val gpuConfig = GpuConfig.forDevice(context)
 
@@ -360,7 +353,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context)
 
@@ -401,7 +394,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context)
 
@@ -442,7 +435,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context)
 
@@ -483,7 +476,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context)
 
@@ -532,7 +525,7 @@ object EngineModule {
         val modelPath = getModelPath(context, filename)
 
         return if (filename.endsWith(".gguf")) {
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = mainConfig.tunings
             val gpuConfig = GpuConfig.forDevice(context)
 
@@ -578,14 +571,4 @@ Follow any user-configured standing instructions provided in the USER_SYSTEM_PRO
 USER_SYSTEM_PROMPT: $fastSystemPrompt
         """.trimIndent()
     }
-}
-
-@Module
-@InstallIn(SingletonComponent::class)
-abstract class EnginePipelineModule {
-    @Binds
-    @Singleton
-    abstract fun bindEnginePipelineOrchestrator(
-        impl: PipelineOrchestratorImpl
-    ): EnginePipelineOrchestrator
 }
