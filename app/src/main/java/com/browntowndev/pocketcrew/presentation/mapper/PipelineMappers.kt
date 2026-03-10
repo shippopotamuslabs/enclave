@@ -25,6 +25,7 @@ fun AgentRole.toAlias(): String = when (this) {
     AgentRole.SYNTHESIZER_ONE -> "The Analyst"
     AgentRole.SYNTHESIZER_TWO -> "The Pragmatist"
     AgentRole.FINAL_THINKER -> "The Stoic"
+    AgentRole.FINAL_SYNTHESIZER -> "The Editor"
     AgentRole.WATCHDOG -> "Nightwatchman"
     AgentRole.SYSTEM -> "Orchestrator"
     AgentRole.FAST_MODEL -> "Fast Model"
