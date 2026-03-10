@@ -37,9 +37,13 @@ class HeuristicPromptComplexityInterpreter @Inject constructor(
 
     companion object {
         // Thresholds for tier determination
-        private const val SIMPLE_THRESHOLD = 25
-        private const val MEDIUM_THRESHOLD = 50
-        private const val COMPLEX_THRESHOLD = 75
+        // SIMPLE: < 20 - basic greetings, simple questions
+        // MEDIUM: 20-40 - moderate complexity
+        // COMPLEX: 40-65 - significant reasoning needed
+        // REASONING: > 65 - deep analysis, multi-step
+        private const val SIMPLE_THRESHOLD = 20
+        private const val MEDIUM_THRESHOLD = 40
+        private const val COMPLEX_THRESHOLD = 65
     }
 
     // Pre-compiled regex patterns for maximum performance
@@ -73,8 +77,8 @@ class HeuristicPromptComplexityInterpreter @Inject constructor(
     )
 
     private val complexQuestionPattern = Pattern.compile(
-        "\\b(what if|prove that|design a|create a|explain why|explain how|what happens|how does|" +
-                "why is|why would|should we|should i|would it|can we|is it possible|" +
+        "\\b(what if|prove that|design a|create a|explain why|explain how|what happens|" +
+                "how does|why is|why would|should we|should i|would it|can we|is it possible|" +
                 "what are the implications|what would happen if|how would|" +
                 "explain the relationship|what is the difference between|define|describe|elaborate)",
         Pattern.CASE_INSENSITIVE
@@ -273,6 +277,8 @@ class HeuristicPromptComplexityInterpreter @Inject constructor(
     }
 
     private fun scoreLengthAndDensity(charCount: Int, wordCount: Int): Int {
+        // Don't score length for short prompts - they're naturally short, not complex
+        if (charCount < 50) return 0
         return when {
             charCount > 2000 -> 100
             charCount > 1000 -> 80
@@ -380,7 +386,8 @@ class HeuristicPromptComplexityInterpreter @Inject constructor(
     }
 
     private fun scoreEntropyDiversity(prompt: String, wordCount: Int): Int {
-        if (wordCount < 5) return 0
+        // Don't score entropy for very short prompts - they're naturally diverse but not complex
+        if (wordCount < 7) return 0
         val uniqueWords = prompt.lowercase()
             .split(Regex("[\\s\\p{Punct}]+"))
             .filter { it.length > 2 }
