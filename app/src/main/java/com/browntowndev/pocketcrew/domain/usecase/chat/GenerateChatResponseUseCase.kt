@@ -1,41 +1,71 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
+import com.browntowndev.pocketcrew.app.DraftOneModelEngine
 import com.browntowndev.pocketcrew.app.FastModelEngine
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
+import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+import com.browntowndev.pocketcrew.presentation.screen.chat.Mode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.onCompletion
 
 
 import javax.inject.Inject
 
 /**
- * Use case for generating chat responses using the Fast model.
- * This is used for Fast mode in the UI.
- * Crew mode is handled by InferencePipelineWorker.
+ * Use case for generating chat responses.
+ * Routes to the appropriate service based on the selected mode:
+ * - FAST: Uses Fast model for quick single-model responses
+ * - THINKING: Uses Draft One model for reasoning responses
+ * - CREW: Uses PipelineExecutorPort for multi-model pipeline
  */
 class GenerateChatResponseUseCase @Inject constructor(
     @FastModelEngine private val fastModelService: LlmInferencePort,
-    private val chatRepository: ChatRepository
+    @DraftOneModelEngine private val draftOneModelService: LlmInferencePort,
+    private val pipelineExecutor: PipelineExecutorPort,
+    private val chatRepository: ChatRepository,
+    private val bufferThinkingSteps: BufferThinkingStepsUseCase
 ) {
     companion object {
         private const val TAG = "GenerateChatResponse"
     }
 
-    operator fun invoke(prompt: String, messageId: String): Flow<MessageGenerationState> = flow {
+    operator fun invoke(prompt: String, messageId: String, mode: Mode): Flow<MessageGenerationState> {
+        return when (mode) {
+            Mode.FAST -> generateWithService(prompt, messageId, fastModelService)
+            Mode.THINKING -> generateWithService(prompt, messageId, draftOneModelService)
+            Mode.CREW -> pipelineExecutor.executePipeline(
+                chatId = messageId.replace("_assistant", "_chat"),
+                userMessage = prompt,
+                assistantMessageId = messageId
+            )
+        }
+    }
+
+    private fun generateWithService(
+        prompt: String,
+        messageId: String,
+        service: LlmInferencePort
+    ): Flow<MessageGenerationState> = flow {
         val startTime = System.currentTimeMillis()
         val currentSteps = mutableListOf<String>()
+        bufferThinkingSteps.reset()
 
-        fastModelService.sendPrompt(prompt, closeConversation = false).collect { event ->
+        service.sendPrompt(prompt, closeConversation = false).collect { event ->
             when (event) {
                 is InferenceEvent.Thinking -> {
-                    val latestStep = extractAndTruncateStep(event.chunk, maxWords = 10)
-                    if (latestStep.isNotBlank() && latestStep != currentSteps.lastOrNull()) {
-                        currentSteps.add(latestStep)
+                    val newThoughts = bufferThinkingSteps(event.chunk)
+                    for (thought in newThoughts) {
+                        if (thought != currentSteps.lastOrNull()) {
+                            currentSteps.add(thought)
+                        }
+                    }
+                    if (newThoughts.isNotEmpty()) {
                         emit(MessageGenerationState.ThinkingLive(currentSteps.toList()))
                     }
                 }
@@ -45,6 +75,12 @@ class GenerateChatResponseUseCase @Inject constructor(
                 }
 
                 is InferenceEvent.Completed -> {
+                    // Flush any remaining buffered words
+                    val finalStep = bufferThinkingSteps.flush()
+                    if (finalStep != null && finalStep != currentSteps.lastOrNull()) {
+                        currentSteps.add(finalStep)
+                    }
+
                     val duration = ((System.currentTimeMillis() - startTime) / 1000).toInt()
 
                     val thinkingData = if (currentSteps.isNotEmpty()) {
@@ -74,13 +110,6 @@ class GenerateChatResponseUseCase @Inject constructor(
             }
         }
     }.flowOn(Dispatchers.Default)
-
-    private fun extractAndTruncateStep(chunk: String, maxWords: Int): String {
-        val words = chunk.trim().split(Regex("\\s+"))
-        return if (words.size <= maxWords) chunk.trim() else "${
-            words.take(maxWords).joinToString(" ")
-        }..."
-    }
 }
 
 sealed interface MessageGenerationState {
