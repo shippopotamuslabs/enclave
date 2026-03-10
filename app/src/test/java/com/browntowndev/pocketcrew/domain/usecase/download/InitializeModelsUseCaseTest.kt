@@ -165,7 +165,8 @@ class InitializeModelsUseCaseTest {
 
     @Test
     fun `invoke handles remote config fetch failure gracefully`() = runTest {
-        // Given - fetch fails but we should still return empty result
+        // Given - fetch fails but we have existing models in registry
+        // Should gracefully fallback to existing models
         val emptyResult = DownloadModelsResult(
             modelsToDownload = emptyList(),
             scanResult = ModelScanResult(
@@ -175,13 +176,41 @@ class InitializeModelsUseCaseTest {
             )
         )
 
+        // Mock existing models in registry (this triggers the fallback path)
+        val existingModels = listOf(
+            ModelConfiguration(
+                modelType = ModelType.FAST,
+                metadata = ModelConfiguration.Metadata(
+                    huggingFaceModelName = "existing/model",
+                    remoteFileName = "existing.bin",
+                    localFileName = "existing.bin",
+                    displayName = "Existing Model",
+                    sha256 = "existing123",
+                    sizeInBytes = 1024,
+                    modelFileFormat = ModelFileFormat.LITERTLM
+                ),
+                tunings = ModelConfiguration.Tunings(
+                    temperature = 0.0,
+                    topK = 40,
+                    topP = 0.95,
+                    repetitionPenalty = 1.0,
+                    maxTokens = 2048,
+                    contextWindow = 2048
+                ),
+                persona = ModelConfiguration.Persona(
+                    systemPrompt = "You are a helpful assistant."
+                )
+            )
+        )
+        // getModelsPreferringOld is a suspend function
+        coEvery { mockModelRegistry.getModelsPreferringOld() } returns existingModels
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.failure(Exception("Network error"))
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
 
         // When
         val result = useCase.invoke()
 
-        // Then - should still return empty (graceful degradation)
+        // Then - should still return empty (graceful degradation using existing models)
         assert(result.modelsToDownload.isEmpty())
     }
 }

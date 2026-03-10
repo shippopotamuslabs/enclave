@@ -262,7 +262,7 @@ class PipelineEventTest {
     inner class AgentRoleTests {
         @Test
         fun `all agent roles are defined`() {
-            assertEquals(10, AgentRole.entries.size)
+            assertEquals(11, AgentRole.entries.size)
             assertNotNull(AgentRole.DRAFTER_ONE)
             assertNotNull(AgentRole.DRAFTER_TWO)
             assertNotNull(AgentRole.DRAFTER_THREE)
@@ -270,6 +270,7 @@ class PipelineEventTest {
             assertNotNull(AgentRole.SYNTHESIZER_ONE)
             assertNotNull(AgentRole.SYNTHESIZER_TWO)
             assertNotNull(AgentRole.FINAL_THINKER)
+            assertNotNull(AgentRole.FINAL_SYNTHESIZER)
             assertNotNull(AgentRole.WATCHDOG)
             assertNotNull(AgentRole.SYSTEM)
             assertNotNull(AgentRole.FAST_MODEL)
