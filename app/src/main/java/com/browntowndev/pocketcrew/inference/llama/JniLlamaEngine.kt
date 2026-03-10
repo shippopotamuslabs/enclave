@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -28,6 +29,14 @@ class JniLlamaEngine @Inject constructor(
 
     companion object {
         private const val TAG = "JniLlamaEngine"
+
+        // Timeout for generation - thinking models may need significantly longer
+        // 15 minutes for thinking models, 15 minutes for regular (Qwen is slow at ~6 tokens/sec)
+        private const val GENERATION_TIMEOUT_SECONDS_THINKING = 900L
+        private const val GENERATION_TIMEOUT_SECONDS_REGULAR = 900L
+
+        // Timeout for unload - need longer to let ongoing generation finish
+        private const val UNLOAD_TIMEOUT_SECONDS = 30L
 
         init {
             System.loadLibrary("llama-jni")
@@ -97,8 +106,13 @@ class JniLlamaEngine @Inject constructor(
         check(generating.compareAndSet(false, true)) { "Generation already in progress" }
 
         val cfg = requireNotNull(currentConfig) { "Missing config" }
-        val prompt = buildChatPrompt(history)
-        Log.i(TAG, "Generation config: temp=${cfg.sampling.temperature}, topK=${cfg.sampling.topK}, topP=${cfg.sampling.topP}, maxTokens=${cfg.sampling.maxTokens}")
+        // Pass chat messages to native - let llama.cpp handle chat template formatting
+        val roles = history.map { it.toNativeMessage().first }.toTypedArray()
+        val contents = history.map { it.toNativeMessage().second }.toTypedArray()
+        Log.i(
+            TAG,
+            "Generation config: temp=${cfg.sampling.temperature}, topK=${cfg.sampling.topK}, topP=${cfg.sampling.topP}, maxTokens=${cfg.sampling.maxTokens}"
+        )
 
         // Thread-safe callback that proxies to the callbackFlow on the proper thread
         val callback = object : NativeTokenCallback {
@@ -139,28 +153,36 @@ class JniLlamaEngine @Inject constructor(
         // Run native llama operation on dedicated single thread to ensure thread safety
         // llama.cpp is NOT thread-safe and requires all operations on the same thread
         try {
-            /*val future = llamaExecutor.submit {
+            // Convert thinkingEnabled to llama.cpp reasoning_budget:
+            // 0 = thinking enabled, -1 = unlimited
+            val reasoningBudget = if (cfg.sampling.thinkingEnabled) 0 else 0
+            Log.i(TAG, "Starting completion with reasoning_budget=$reasoningBudget")
+
+            // Use longer timeout for thinking models
+            val timeoutSeconds = if (cfg.sampling.thinkingEnabled) {
+                GENERATION_TIMEOUT_SECONDS_THINKING
+            } else {
+                GENERATION_TIMEOUT_SECONDS_REGULAR
+            }
+            Log.i(TAG, "Generation timeout: $timeoutSeconds seconds")
+
+            // Submit to llama executor thread to ensure all llama operations run on the same thread
+            val future = llamaExecutor.submit<Unit> {
                 nativeStartCompletion(
-                    prompt = prompt,
+                    roles = roles,
+                    contents = contents,
                     temperature = cfg.sampling.temperature,
                     topK = cfg.sampling.topK,
                     topP = cfg.sampling.topP,
                     maxTokens = cfg.sampling.maxTokens,
                     repeatPenalty = cfg.sampling.repeatPenalty,
+                    reasoningBudget = reasoningBudget,
                     callback = callback
                 )
             }
-            // Wait for completion (blocking on the callbackFlow's thread is OK since we're in a flow)
-            future.get(60, TimeUnit.SECONDS)*/
-            nativeStartCompletion(
-                prompt = prompt,
-                temperature = cfg.sampling.temperature,
-                topK = cfg.sampling.topK,
-                topP = cfg.sampling.topP,
-                maxTokens = cfg.sampling.maxTokens,
-                repeatPenalty = cfg.sampling.repeatPenalty,
-                callback = callback
-            )
+            // Wait for completion - blocking here is OK since we're in a flow and the callback
+            // will stream tokens back via trySend()
+            future.get(timeoutSeconds, TimeUnit.SECONDS)
         } catch (e: Exception) {
             Log.e(TAG, "Error during generation", e)
             trySend(GenerationEvent.Error(e))
@@ -169,19 +191,21 @@ class JniLlamaEngine @Inject constructor(
         }
 
         awaitClose {
-            if (generating.get()) {
-                // Stop on the llama thread
-                llamaExecutor.submit {
-                    nativeStopCompletion()
-                }
-                generating.set(false)
+            // Always try to stop - it's safe to call even if generation already completed
+            // This ensures we don't have a race between completion and cleanup
+            llamaExecutor.submit {
+                nativeStopCompletion()
             }
+            generating.set(false)
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
     override suspend fun stopGeneration() = withContext(ioDispatcher) {
         if (generating.compareAndSet(true, false)) {
-            nativeStopCompletion()
+            // Must call on llama thread for thread safety
+            llamaExecutor.submit {
+                nativeStopCompletion()
+            }
         }
     }
 
@@ -192,15 +216,28 @@ class JniLlamaEngine @Inject constructor(
             ChatRole.SYSTEM,
             systemPrompt ?: currentConfig?.systemPrompt ?: "You are a helpful assistant."
         )
-        nativeClearKvCache()
+        // Must call on llama thread for thread safety
+        llamaExecutor.submit<Unit> {
+            nativeClearKvCache()
+        }.get(10, TimeUnit.SECONDS)
     }
 
     override suspend fun unload(): Unit = withContext(ioDispatcher) {
-        // Run on llama thread for thread safety
+        // First, stop any ongoing generation to unblock the llama thread
+        // This sets g_generating = false in native code, allowing the loop to exit
+        llamaExecutor.submit {
+            nativeStopCompletion()
+            Unit
+        }.get(10, TimeUnit.SECONDS)
+
+        // Give the native thread a moment to exit the generation loop
+        kotlinx.coroutines.delay(500)
+
+        // Now unload the model with longer timeout
         llamaExecutor.submit {
             unloadInternal()
             Unit
-        }.get(10, TimeUnit.SECONDS)
+        }.get(UNLOAD_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     }
 
     override fun isLoaded(): Boolean = loaded.get()
@@ -251,14 +288,25 @@ class JniLlamaEngine @Inject constructor(
     private external fun nativeClearKvCache()
 
     private external fun nativeStartCompletion(
-        prompt: String,
+        roles: Array<String>,
+        contents: Array<String>,
         temperature: Float,
         topK: Int,
         topP: Float,
         maxTokens: Int,
         repeatPenalty: Float,
+        reasoningBudget: Int,  // -1 = unlimited, 0 = disabled
         callback: NativeTokenCallback
     )
+
+    private fun ChatMessage.toNativeMessage(): Pair<String, String> {
+        val roleStr = when (role) {
+            ChatRole.SYSTEM -> "system"
+            ChatRole.USER -> "user"
+            ChatRole.ASSISTANT -> "assistant"
+        }
+        return roleStr to content
+    }
 
     private external fun nativeStopCompletion()
 }
