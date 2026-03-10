@@ -427,21 +427,24 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
         llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(topP, 1));
     }
 
-    // Add repeat penalty for token repetition (default 1.1 if > 0)
-    // Note: Using llama_sampler_init_penalties which takes (last_n, repeat, freq, present)
-    if (repeatPenalty > 0) {
-        // penalty_last_n = 64, penalty_repeat = repeatPenalty, freq = 0, present = 0
-        llama_sampler_chain_add(g_sampler, llama_sampler_init_penalties(64, repeatPenalty, 0.0f, 0.0f));
-    }
+    // Add min_p to filter low-probability tail tokens (helps prevent repetition)
+    // 0.05 is a good default - filters tokens below 5% of top token probability
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_min_p(0.05f, 1));
 
-    // Add greedy as head sampler for final selection
+    // Add repeat penalty for token repetition with stronger frequency/presence penalties
+    // Using (last_n=128, repeat, freq=0.02, present=0.05) for better repetition prevention
+    float rp = (repeatPenalty > 0) ? repeatPenalty : 1.10f;
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_penalties(128, rp, 0.02f, 0.05f));
+
+    // Add greedy for final token selection
     llama_sampler_chain_add(g_sampler, llama_sampler_init_greedy());
 
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== SAMPLER CHAIN CONFIGURED ===");
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Temperature: %.2f", temp);
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Top-K: %d", topK);
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Top-P: %.2f", topP);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Repeat penalty: %.2f", repeatPenalty);
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Repeat penalty: %.2f", rp);
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Min-P: 0.05");
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "===========================");
 
     g_generating = true;
@@ -481,6 +484,7 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
 
     const int n_prompt_tokens = required_tokens;
     int n_generated_tokens = 0;
+    std::string accumulated_output;  // For early stop pattern detection
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Prompt tokens: %d", n_prompt_tokens);
     // Debug: print first few tokens
     for (int i = 0; i < std::min(5, n_prompt_tokens); i++) {
@@ -631,6 +635,24 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
         jstring tokenStr = env->NewStringUTF(tokenBuffer);
         env->CallVoidMethod(g_callback, onTokenMethod, tokenStr);
         env->DeleteLocalRef(tokenStr);
+
+        // Early stop pattern detection - check for trailing punctuation repetition
+        // This helps prevent " ???", " ??", "?!", etc. at the end of responses
+        accumulated_output += tokenBuffer;
+        if (accumulated_output.size() > 48) {
+            accumulated_output = accumulated_output.substr(accumulated_output.size() - 48);
+        }
+        // Detect common trailing garbage patterns
+        if (accumulated_output.size() >= 4) {
+            std::string tail = accumulated_output.substr(std::max(0, (int)accumulated_output.size() - 8));
+            if (tail.find("???") != std::string::npos ||
+                tail.find(" ??") != std::string::npos ||
+                tail.find("?!") != std::string::npos ||
+                tail.find("..") != std::string::npos) {
+                __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Early stop: trailing punctuation pattern detected");
+                break;
+            }
+        }
 
         // Log first generated token for debugging
         if (n_generated_tokens == 0) {
