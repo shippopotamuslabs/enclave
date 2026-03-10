@@ -41,7 +41,11 @@ class InitializeModelsUseCase @Inject constructor(
     private suspend fun checkModelsResult(): DownloadModelsResult {
         // Get models preferring OLD if it exists (for handling failed downloads)
         val currentModels = modelRegistry.getModelsPreferringOld()
-        logPort.debug(TAG, "Current downloaded/fallback models: $currentModels")
+        logPort.debug(TAG, "Current downloaded/fallback models: ${
+            currentModels.map { cfg -> 
+                cfg.copy(persona = cfg.persona.copy(systemPrompt = if (cfg.persona.systemPrompt.isNotEmpty()) "TRUNCATED FOR LOGS" else "EMPTY")) 
+            }
+        }")
 
         // Fetch remote config
         val remoteConfigResult = modelConfigFetcher.fetchRemoteConfig()
@@ -65,11 +69,10 @@ class InitializeModelsUseCase @Inject constructor(
         )
 
         // Now register each remote config in the registry with CURRENT status
-        remoteConfigs.forEach { config ->
-            Log.d(TAG, "Registering ${config.modelType}: thinkingEnabled=${config.tunings.thinkingEnabled}")
-            modelRegistry.setRegisteredModel(config, ModelStatus.CURRENT)
+        currentModels.forEach { config ->
+            modelRegistry.setRegisteredModel(config, status = ModelStatus.CURRENT)
         }
-        logPort.debug(TAG, "Registered ${remoteConfigs.size} remote configs in registry")
+        logPort.debug(TAG, "Registered ${currentModels.size} remote configs in registry")
 
         // Initialize the orchestrator with the startup result
         modelDownloadOrchestrator.initializeWithStartupResult(modelsResult)

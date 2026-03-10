@@ -11,8 +11,8 @@ enum class Mode(
     @param:StringRes val displayNameRes: Int,
     @param:DrawableRes val iconRes: Int,
 ) {
-    AUTO(R.string.mode_auto, R.drawable.automation),
     FAST(R.string.mode_fast, R.drawable.bolt),
+    THINKING(R.string.mode_thinking, R.drawable.cognition),
     CREW(R.string.mode_crew, R.drawable.merge);
 
     fun getDisplayName(context: Context): String = context.getString(displayNameRes)
@@ -46,12 +46,14 @@ data class ChatMessage(
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val inputText: String = "",
-    val selectedMode: Mode = Mode.AUTO,
+    val selectedMode: Mode = Mode.FAST,
     val isInputExpanded: Boolean = false,
     /** True while the model is actively thinking — drives the live [ThinkingIndicator]. */
     val isThinking: Boolean = false,
     /** Live steps for the in-progress generation — NOT persisted on messages. */
     val thinkingSteps: List<String> = emptyList(),
+    /** Shows the "Use the Crew" popup after Fast mode response */
+    val showUseTheCrewPopup: Boolean = false,
     val showShield: Boolean = false,
     val shieldReason: String = "",
     val hapticPress: Boolean = true,
