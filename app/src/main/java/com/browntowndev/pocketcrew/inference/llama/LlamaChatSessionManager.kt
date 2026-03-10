@@ -9,7 +9,6 @@ import javax.inject.Singleton
  * Manages the lifecycle of llama.cpp chat sessions.
  * Keeps conversation state separate from raw engine lifecycle.
  */
-@Singleton
 class LlamaChatSessionManager @Inject constructor(
     private val engine: LlamaEnginePort
 ) {
