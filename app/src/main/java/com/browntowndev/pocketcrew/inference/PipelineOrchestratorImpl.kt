@@ -1,7 +1,6 @@
 package com.browntowndev.pocketcrew.inference
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.port.inference.AgentRole
 import com.browntowndev.pocketcrew.domain.port.inference.EnginePipelineOrchestrator
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineEvent
@@ -9,11 +8,10 @@ import com.browntowndev.pocketcrew.domain.port.inference.PipelinePhase
 import com.browntowndev.pocketcrew.app.DraftOneModelEngine
 import com.browntowndev.pocketcrew.app.DraftTwoModelEngine
 import com.browntowndev.pocketcrew.app.FastModelEngine
+import com.browntowndev.pocketcrew.app.FinalSynthesizerModelEngine
 import com.browntowndev.pocketcrew.app.MainModelEngine
 import com.browntowndev.pocketcrew.app.VisionModelEngine
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -29,11 +27,25 @@ class PipelineOrchestratorImpl @Inject constructor(
     @param:DraftTwoModelEngine private val draftTwoServiceProvider: dagger.Lazy<LlmInferencePort>,
     @param:VisionModelEngine private val visionServiceProvider: dagger.Lazy<LlmInferencePort>,
     @param:FastModelEngine private val fastServiceProvider: dagger.Lazy<LlmInferencePort>,
-    private val modelRegistry: ModelRegistryPort
+    @param:FinalSynthesizerModelEngine private val finalSynthesizerServiceProvider: dagger.Lazy<LlmInferencePort>
 ) : EnginePipelineOrchestrator {
 
     companion object {
         const val TAG = "PipelineOrchestrator"
+    }
+
+    /**
+     * State machine for the complex prompt pipeline.
+     * Each state represents a pipeline phase with its service lifecycle.
+     */
+    private sealed class PipelineState {
+        data object Idle : PipelineState()
+        data class DraftOne(val prompt: String) : PipelineState()
+        data class DraftTwo(val prompt: String, val draft1: String) : PipelineState()
+        data class MainSynthesis(val prompt: String, val draft1: String, val draft2: String) : PipelineState()
+        data class FinalSynthesis(val prompt: String, val candidateAnswer: String) : PipelineState()
+        data class Completed(val finalResponse: String, val durationSeconds: Int) : PipelineState()
+        data class Error(val cause: Throwable) : PipelineState()
     }
 
     override fun processComplexPrompt(prompt: String, hasImage: Boolean): Flow<PipelineEvent> = flow {
@@ -42,163 +54,154 @@ class PipelineOrchestratorImpl @Inject constructor(
         val startMs = System.currentTimeMillis()
         val allThinkingSteps = mutableListOf<String>()
 
-        // Get Fast model's persona for the critique phase
-        val fastConfig = modelRegistry.getRegisteredModel(ModelType.FAST)
-        val fastPersona = fastConfig?.persona?.systemPrompt ?: "You are a helpful assistant."
-        Log.d(TAG, "Fast persona: $fastPersona")
+        // Initialize pipeline state
+        var state: PipelineState = PipelineState.DraftOne(prompt)
 
         try {
-            // ==========================================
-            // PHASE 1: DRAFTING (2 Divergent Drafts)
-            // ==========================================
+            // State transition: DRAFT_ONE -> DRAFT_TWO
             emitPhase(PipelinePhase.DRAFTING, allThinkingSteps)
+            val draft1 = runStep(
+                serviceProvider = draftOneServiceProvider,
+                agent = AgentRole.DRAFTER_ONE,
+                prompt = buildCreativeDraftPrompt(prompt),
+                stepName = "Draft 1"
+            )
+            state = PipelineState.DraftTwo(prompt, draft1)
 
-            // Draft 1: Creative/lateral thinking - divergent perspective
-            // Load Draft One service only when needed
-            val draftOneService = withContext(Dispatchers.IO) {
-                draftOneServiceProvider.get()
-            }
-            try {
-                val draft1 = executeAgent(
-                    service = draftOneService,
-                    agent = AgentRole.DRAFTER_ONE,
-                    prompt = """
-                        SYSTEM: You are highly creative and divergent. Think wildly outside the box.
-                        Brainstorm a broad, lateral-thinking response to this prompt. Explore unconventional angles,
-                        unexpected connections, and creative possibilities that others might miss.
-                        Consider metaphors, analogies, and perspectives from entirely different domains.
+            // State transition: DRAFT_TWO -> MAIN_SYNTHESIS
+            val draft2 = runStep(
+                serviceProvider = draftTwoServiceProvider,
+                agent = AgentRole.DRAFTER_TWO,
+                prompt = buildAnalyticalDraftPrompt(prompt),
+                stepName = "Draft 2"
+            )
+            state = PipelineState.MainSynthesis(prompt, draft1, draft2)
 
-                        Original prompt: $prompt
+            // State transition: MAIN_SYNTHESIS -> FINAL_SYNTHESIS
+            emitPhase(PipelinePhase.SYNTHESIS, allThinkingSteps)
+            val candidateAnswer = runStep(
+                serviceProvider = mainServiceProvider,
+                agent = AgentRole.FINAL_THINKER,
+                prompt = buildMainSynthesisPrompt(prompt, draft1, draft2),
+                stepName = "Main Synthesis"
+            )
+            state = PipelineState.FinalSynthesis(prompt, candidateAnswer)
 
-                        Provide your most creative, imaginative response.
-                    """.trimIndent()
+            // State transition: FINAL_SYNTHESIS -> COMPLETED
+            emitPhase(PipelinePhase.REFINEMENT, allThinkingSteps)
+            val finalResponse = runStep(
+                serviceProvider = finalSynthesizerServiceProvider,
+                agent = AgentRole.FINAL_SYNTHESIZER,
+                prompt = buildFinalReviewPrompt(prompt, candidateAnswer),
+                stepName = "Final Synthesis",
+                isFinalOutput = true
+            )
+
+            val totalSeconds = ((System.currentTimeMillis() - startMs) / 1000).toInt()
+            Log.d(TAG, "Pipeline finished in $totalSeconds seconds")
+
+            emit(
+                PipelineEvent.Completed(
+                    finalResponse = finalResponse,
+                    allThinkingSteps = allThinkingSteps,
+                    pipelineDurationSeconds = totalSeconds
                 )
-                Log.d(TAG, "Draft 1 (Creative): $draft1")
-
-                // Unload Draft One from RAM immediately after use
-                draftOneService.closeSession()
-
-                // ==========================================
-                // PHASE 2: DRAFTING - Second Draft
-                // ==========================================
-
-                // Draft 2: Analytical/convergent thinking - divergent perspective
-                // Load Draft Two service only when needed
-                val draftTwoService = withContext(Dispatchers.IO) {
-                    draftTwoServiceProvider.get()
-                }
-
-                try {
-                    val draft2 = executeAgent(
-                        service = draftTwoService,
-                        agent = AgentRole.DRAFTER_TWO,
-                        prompt = """
-                            SYSTEM: You are strictly analytical and convergent. Think with precision and depth.
-                            Provide a rigorous, structured, logical response to this prompt. Break down the problem
-                            into its components, analyze each carefully, and build a methodical argument.
-
-                            Focus on factual accuracy, logical coherence, and thorough reasoning.
-                            Consider edge cases and potential counterarguments.
-
-                            Original prompt: $prompt
-
-                            Provide your most analytical, well-reasoned response.
-                        """.trimIndent()
-                    )
-                    Log.d(TAG, "Draft 2 (Analytical): $draft2")
-
-                    // Unload Draft Two from RAM immediately after use
-                    draftTwoService.closeSession()
-
-                    // ==========================================
-                    // PHASE 2: MAIN MODEL RESPONSE + CRITIQUE
-                    // ==========================================
-                    emitPhase(PipelinePhase.SYNTHESIS, allThinkingSteps)
-
-                    // ==========================================
-                    // PHASE 3: FINAL OUTPUT
-                    // ==========================================
-                    emitPhase(PipelinePhase.REFINEMENT, allThinkingSteps)
-
-                    // Main model gives its own answer first, then critiques all three (including its own)
-                    // Load Main service only when needed
-                    val mainService = withContext(Dispatchers.IO) {
-                        mainServiceProvider.get()
-                    }
-
-                    try {
-                        val finalResponse = executeAgent(
-                            service = mainService,
-                            agent = AgentRole.FINAL_THINKER,
-                            prompt = """
-                                You need to answer the user's prompt AND evaluate other responses as a critic.
-
-                                ORIGINAL PROMPT: $prompt
-
-                                YOUR OWN ANSWER (Internal):
-                                First, provide your own direct answer to the above prompt. This is your independent response.
-
-                                ---
-
-                                CRITIQUE PHASE:
-                                Now critically evaluate the following two drafts from different angles:
-
-                                DRAFT 1 (Creative/Lateral):
-                                $draft1
-
-                                DRAFT 2 (Analytical/Convergent):
-                                $draft2
-
-                                For EACH draft, analyze:
-                                1. Logical fallacies present (straw man, false dilemma, ad hominem, circular reasoning, etc.)
-                                2. Missing premises or unstated assumptions
-                                3. Incorrect reasoning or flawed logic
-                                4. Mistaken claims or factual errors
-                                5. Overclaims (making statements too broad or absolute)
-                                6. Underclaims (failing to acknowledge nuances or limitations)
-                                7. Missing counterarguments or alternative perspectives
-
-                                Then, synthesize your own answer with the best elements from both drafts,
-                                while addressing the weaknesses you identified. Maintain your logical rigor
-                                while adapting your tone to match the persona: $fastPersona
-
-                                Preserve all factual accuracy and logical reasoning - only adapt the communication style.
-                            """.trimIndent(),
-                            isFinalOutput = true
-                        )
-                        Log.d(TAG, "Final Response: $finalResponse")
-
-                        // Pipeline Finished
-                        val totalSeconds = ((System.currentTimeMillis() - startMs) / 1000).toInt()
-                        Log.d(TAG, "Pipeline finished in $totalSeconds seconds")
-                        emit(
-                            PipelineEvent.Completed(
-                                finalResponse = finalResponse,
-                                allThinkingSteps = allThinkingSteps,
-                                pipelineDurationSeconds = totalSeconds
-                            )
-                        )
-                    } finally {
-                        // Ensure Main service is unloaded
-                        try { mainService.closeSession() } catch (e: Exception) { }
-                    }
-                } finally {
-                    // Ensure Draft Two is unloaded if an error occurs
-                    try { draftTwoService.closeSession() } catch (e: Exception) { }
-                }
-            } finally {
-                // Ensure Draft One is unloaded if an error occurs
-                try { draftOneService.closeSession() } catch (e: Exception) { }
-            }
+            )
+            state = PipelineState.Completed(finalResponse, totalSeconds)
 
         } catch (e: CancellationException) {
             Log.i(TAG, "Pipeline cancelled")
+            state = PipelineState.Error(e)
             throw e
         } catch (e: Exception) {
             Log.d(TAG, "Pipeline error", e)
+            state = PipelineState.Error(e)
             throw e
         }
     }
+
+    /**
+     * Executes a single pipeline step with proper service lifecycle management.
+     * Loads the service, runs the agent, and ensures cleanup in all cases.
+     */
+    private suspend fun FlowCollector<PipelineEvent>.runStep(
+        serviceProvider: dagger.Lazy<LlmInferencePort>,
+        agent: AgentRole,
+        prompt: String,
+        stepName: String,
+        isFinalOutput: Boolean = false
+    ): String {
+        val service = withContext(Dispatchers.IO) {
+            serviceProvider.get()
+        }
+        return try {
+            val result = executeAgent(
+                service = service,
+                agent = agent,
+                prompt = prompt,
+                isFinalOutput = isFinalOutput
+            )
+            Log.d(TAG, "$stepName complete: ${result.take(100)}...")
+            result
+        } finally {
+            try {
+                service.closeSession()
+                Log.d(TAG, "$stepName service closed")
+            } catch (e: Exception) {
+                Log.w(TAG, "Error closing $stepName service", e)
+            }
+        }
+    }
+
+    // Prompt builders - clean, focused task descriptions
+    private fun buildCreativeDraftPrompt(userPrompt: String): String = """
+TASK: COMPLEX_DRAFT_CREATIVE
+
+USER_PROMPT:
+$userPrompt
+
+OUTPUT_CONTRACT:
+Produce a creative, divergent draft.
+Prioritize breadth, novelty, unusual angles, metaphors, and lateral thinking.
+Return a usable draft, not just brainstorming fragments.
+    """.trimIndent()
+
+    private fun buildAnalyticalDraftPrompt(userPrompt: String): String = """
+TASK: COMPLEX_DRAFT_ANALYTICAL
+
+USER_PROMPT:
+$userPrompt
+
+OUTPUT_CONTRACT:
+Produce a rigorous draft.
+Be structured, careful, logically explicit, and sensitive to edge cases.
+Return a usable draft, not just notes.
+    """.trimIndent()
+
+    private fun buildMainSynthesisPrompt(userPrompt: String, draft1: String, draft2: String): String = """
+TASK: COMPLEX_SYNTHESIZE
+
+ORIGINAL_USER_PROMPT:
+$userPrompt
+
+DRAFT_1:
+$draft1
+
+DRAFT_2:
+$draft2
+
+OUTPUT_CONTRACT:
+First evaluate the drafts critically.
+Identify strengths, weaknesses, blind spots, false moves, and missing considerations.
+Then synthesize the best candidate answer.
+This is not necessarily the final user-facing answer; it is the strongest candidate for final review.
+    """.trimIndent()
+
+    private fun buildFinalReviewPrompt(userPrompt: String, candidateAnswer: String): String = """
+TASK: FINAL_REVIEW_AND_REPLY
+ORIGINAL_USER_PROMPT: $userPrompt
+CANDIDATE_ANSWER: $candidateAnswer
+    """.trimIndent()
 
     override fun processSimplePrompt(prompt: String): Flow<PipelineEvent> = flow {
         Log.d(TAG, "Processing simple prompt: $prompt")
