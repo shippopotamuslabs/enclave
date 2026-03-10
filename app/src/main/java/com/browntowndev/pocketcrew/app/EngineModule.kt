@@ -58,6 +58,11 @@ annotation class DraftTwoModelEngine
 @Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER)
 annotation class FastModelEngine
 
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER)
+annotation class FinalSynthesizerModelEngine
+
 @Module
 @InstallIn(SingletonComponent::class)
 object EngineModule {
@@ -208,6 +213,20 @@ object EngineModule {
         return Engine(EngineConfig(getModelPath(context, filename)))
     }
 
+    @Provides
+    @Singleton
+    @FinalSynthesizerModelEngine
+    fun provideFinalSynthesizerModelEngine(
+        @ApplicationContext context: Context,
+        modelRegistry: ModelRegistryPort
+    ): Engine {
+        // Uses the same model as MAIN for final synthesis
+        val config = modelRegistry.getRegisteredModelSync(ModelType.MAIN)
+            ?: throw IllegalStateException("No model registered for ${ModelType.MAIN}. Please download a model first.")
+        val filename = config.metadata.localFileName
+        return Engine(EngineConfig(getModelPath(context, filename)))
+    }
+
     // Qualified ConversationManager providers - each is bound to a specific Engine
     @Provides
     @Singleton
@@ -265,6 +284,18 @@ object EngineModule {
         return ConversationManagerImpl(engine, config)
     }
 
+    @Provides
+    @Singleton
+    @FinalSynthesizerModelEngine
+    fun provideFinalSynthesizerConversationManager(
+        @FinalSynthesizerModelEngine engine: Engine,
+        modelRegistry: ModelRegistryPort
+    ): ConversationManagerPort {
+        // Uses the same model config as MAIN for final synthesis
+        val config = modelRegistry.getRegisteredModelSync(ModelType.MAIN)
+        return ConversationManagerImpl(engine, config)
+    }
+
     // LlmInferencePort providers - inject qualified ConversationManager
     @Provides
     @Singleton
@@ -299,7 +330,7 @@ object EngineModule {
                         contextWindow = tunings.contextWindow,
                         threads = 4,
                         batchSize = 256,
-                        gpuLayers = gpuConfig.gpuLayers
+                        gpuLayers = gpuConfig.gpuLayers,
                     )
                 )
                 service
@@ -344,7 +375,8 @@ object EngineModule {
                     contextWindow = tunings.contextWindow,
                     threads = 4,
                     batchSize = 256,
-                    gpuLayers = gpuConfig.gpuLayers
+                    gpuLayers = gpuConfig.gpuLayers,
+                    thinkingEnabled = tunings.thinkingEnabled
                 )
             )
             service
@@ -384,7 +416,8 @@ object EngineModule {
                     contextWindow = tunings.contextWindow,
                     threads = 4,
                     batchSize = 256,
-                    gpuLayers = gpuConfig.gpuLayers
+                    gpuLayers = gpuConfig.gpuLayers,
+                    thinkingEnabled = tunings.thinkingEnabled
                 )
             )
             service
@@ -424,7 +457,8 @@ object EngineModule {
                     contextWindow = tunings.contextWindow,
                     threads = 4,
                     batchSize = 256,
-                    gpuLayers = gpuConfig.gpuLayers
+                    gpuLayers = gpuConfig.gpuLayers,
+                    thinkingEnabled = tunings.thinkingEnabled
                 )
             )
             service
@@ -464,13 +498,85 @@ object EngineModule {
                     contextWindow = tunings.contextWindow,
                     threads = 4,
                     batchSize = 256,
-                    gpuLayers = gpuConfig.gpuLayers
+                    gpuLayers = gpuConfig.gpuLayers,
+                    thinkingEnabled = tunings.thinkingEnabled
                 )
             )
             service
         } else {
             LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
         }
+    }
+
+    @Provides
+    @Singleton
+    @FinalSynthesizerModelEngine
+    fun provideFinalSynthesizerInferenceService(
+        @ApplicationContext context: Context,
+        @FinalSynthesizerModelEngine conversationManager: ConversationManagerPort,
+        modelRegistry: ModelRegistryPort,
+        processThinkingTokens: ProcessThinkingTokensUseCase,
+        llamaChatSessionManager: LlamaChatSessionManager
+    ): LlmInferencePort {
+        // Uses the same model as MAIN but with final review system prompt
+        val mainConfig = modelRegistry.getRegisteredModelSync(ModelType.MAIN)
+            ?: throw IllegalStateException("No model registered for ${ModelType.MAIN}. Please download a model first.")
+
+        // Get FAST model's system prompt for final synthesizer persona
+        val fastConfig = modelRegistry.getRegisteredModelSync(ModelType.FAST)
+        val fastSystemPrompt = fastConfig?.persona?.systemPrompt ?: "You are a helpful assistant."
+
+        val finalSynthesizerSystemPrompt = buildFinalSynthesizerSystemPrompt(fastSystemPrompt)
+
+        val filename = mainConfig.metadata.localFileName
+        val modelPath = getModelPath(context, filename)
+
+        return if (filename.endsWith(".gguf")) {
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager)
+            val tunings = mainConfig.tunings
+            val gpuConfig = GpuConfig.forDevice(context)
+
+            service.configure(
+                modelPath = modelPath,
+                systemPrompt = finalSynthesizerSystemPrompt,
+                samplingConfig = LlamaSamplingConfig(
+                    temperature = tunings.temperature.toFloat(),
+                    topK = tunings.topK,
+                    topP = tunings.topP.toFloat(),
+                    maxTokens = tunings.maxTokens,
+                    contextWindow = tunings.contextWindow,
+                    threads = 4,
+                    batchSize = 256,
+                    gpuLayers = gpuConfig.gpuLayers,
+                    thinkingEnabled = tunings.thinkingEnabled
+                )
+            )
+            service
+        } else {
+            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+        }
+    }
+
+    /**
+     * Builds the system prompt for the final synthesizer.
+     * This is the final review pass that produces the user-facing answer.
+     * Custom user prompts are injected via the orchestrator prompt.
+     */
+    private fun buildFinalSynthesizerSystemPrompt(fastSystemPrompt: String): String {
+        return """
+You are the final reply model in a multi-stage reasoning pipeline.
+
+When you receive TASK: FINAL_REVIEW_AND_REPLY, your job is to:
+1. Read the ORIGINAL_USER_PROMPT.
+2. Critically evaluate the CANDIDATE_ANSWER.
+3. Preserve what is strong.
+4. Fix what is weak, unclear, verbose, inaccurate, or poorly matched to the user's request.
+5. Produce the final answer for the user.
+
+Do not merely paraphrase the CANDIDATE_ANSWER. Improve it where needed.
+Follow any user-configured standing instructions provided in the USER_SYSTEM_PROMPT unless they conflict with the explicit task above.
+USER_SYSTEM_PROMPT: $fastSystemPrompt
+        """.trimIndent()
     }
 }
 
