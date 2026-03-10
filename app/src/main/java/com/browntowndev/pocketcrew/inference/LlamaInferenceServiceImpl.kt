@@ -3,13 +3,15 @@ package com.browntowndev.pocketcrew.inference
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
+import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
 import com.browntowndev.pocketcrew.inference.llama.GenerationEvent
 import com.browntowndev.pocketcrew.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.inference.llama.LlamaModelConfig
 import com.browntowndev.pocketcrew.inference.llama.LlamaSamplingConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
@@ -18,7 +20,8 @@ import javax.inject.Inject
  * Bridges the llama.cpp GenerationEvent to the domain's InferenceEvent.
  */
 class LlamaInferenceServiceImpl @Inject constructor(
-    private val sessionManager: LlamaChatSessionManager
+    private val sessionManager: LlamaChatSessionManager,
+    private val processThinkingTokens: ProcessThinkingTokensUseCase,
 ) : LlmInferencePort {
 
     companion object {
@@ -44,28 +47,32 @@ class LlamaInferenceServiceImpl @Inject constructor(
         this.samplingConfig = samplingConfig
     }
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
+    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = flow {
         val path = modelPath
         if (path == null) {
-            return kotlinx.coroutines.flow.flow {
-                emit(InferenceEvent.Error(IllegalStateException("Model not configured. Call configure() first.")))
-            }
+            emit(InferenceEvent.Error(IllegalStateException("Model not configured. Call configure() first.")))
+            return@flow
         }
 
-        return kotlinx.coroutines.flow.flow {
-            // Initialize engine if not yet done
-            if (!isInitialized) {
-                sessionManager.initializeEngine(
-                    LlamaModelConfig(
-                        modelPath = path,
-                        systemPrompt = systemPrompt,
-                        sampling = samplingConfig
-                    )
+        // Initialize engine if not yet done
+        if (!isInitialized) {
+            sessionManager.initializeEngine(
+                LlamaModelConfig(
+                    modelPath = path,
+                    systemPrompt = systemPrompt,
+                    sampling = samplingConfig
                 )
-                sessionManager.startNewConversation()
-                isInitialized = true
-            }
+            )
+            sessionManager.startNewConversation()
+            isInitialized = true
+        }
 
+        var isThinking = false
+        val accumulatedThought = StringBuilder()
+        val accumulatedText = StringBuilder()
+        var buffer = ""
+
+        try {
             // Send user message
             sessionManager.sendUserMessage(prompt)
 
@@ -73,14 +80,41 @@ class LlamaInferenceServiceImpl @Inject constructor(
             sessionManager.streamAssistantResponse().collect { event ->
                 when (event) {
                     is GenerationEvent.Token -> {
-                        // Emit as partial response for streaming
-                        emit(InferenceEvent.PartialResponse(event.text))
+                        // Process thinking tokens to separate thinking vs answering states
+                        val state = processThinkingTokens(buffer, event.text, isThinking)
+                        buffer = state.buffer
+                        isThinking = state.isThinking
+
+                        // Process each emitted segment with its proper type
+                        state.emittedSegments.forEach { segment ->
+                            when (segment.kind) {
+                                SegmentKind.THINKING -> {
+                                    accumulatedThought.append(segment.text)
+                                    emit(InferenceEvent.Thinking(segment.text, accumulatedThought.toString()))
+                                }
+                                SegmentKind.VISIBLE -> {
+                                    accumulatedText.append(segment.text)
+                                    emit(InferenceEvent.PartialResponse(segment.text))
+                                }
+                            }
+                        }
                     }
                     is GenerationEvent.Completed -> {
+                        // Handle remaining buffer
+                        if (buffer.isNotEmpty()) {
+                            if (isThinking) {
+                                accumulatedThought.append(buffer)
+                                emit(InferenceEvent.Thinking(buffer, accumulatedThought.toString()))
+                            } else {
+                                accumulatedText.append(buffer)
+                                emit(InferenceEvent.PartialResponse(buffer))
+                            }
+                        }
+
                         // Emit completed with the full response
                         emit(InferenceEvent.Completed(
-                            finalResponse = event.fullText,
-                            rawFullThought = null
+                            finalResponse = accumulatedText.toString(),
+                            rawFullThought = accumulatedThought.toString().takeIf { it.isNotEmpty() }
                         ))
                     }
                     is GenerationEvent.Error -> {
@@ -93,7 +127,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             if (closeConversation) {
                 sessionManager.clearConversation()
             }
-        }.catch { e ->
+        } catch (e: Exception) {
             Log.e(TAG, "Error during inference", e)
             emit(InferenceEvent.Error(e))
         }
