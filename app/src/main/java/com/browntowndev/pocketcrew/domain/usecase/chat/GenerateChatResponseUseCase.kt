@@ -1,23 +1,25 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
-import com.browntowndev.pocketcrew.domain.port.inference.ComplexityLevel
-import com.browntowndev.pocketcrew.domain.port.inference.EnginePipelineOrchestrator
-import com.browntowndev.pocketcrew.domain.port.inference.HeuristicPromptComplexityInterpreter
-import com.browntowndev.pocketcrew.domain.port.inference.PipelineEvent
+import com.browntowndev.pocketcrew.app.FastModelEngine
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
+import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
+import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.withContext
 
 
 import javax.inject.Inject
 
+/**
+ * Use case for generating chat responses using the Fast model.
+ * This is used for Fast mode in the UI.
+ * Crew mode is handled by InferencePipelineWorker.
+ */
 class GenerateChatResponseUseCase @Inject constructor(
-    private val complexityInterpreter: HeuristicPromptComplexityInterpreter,
-    private val thinkingPipelineOrchestrator: EnginePipelineOrchestrator,
+    @FastModelEngine private val fastModelService: LlmInferencePort,
     private val chatRepository: ChatRepository
 ) {
     companion object {
@@ -28,63 +30,46 @@ class GenerateChatResponseUseCase @Inject constructor(
         val startTime = System.currentTimeMillis()
         val currentSteps = mutableListOf<String>()
 
-        // Step 1: Evaluate complexity using heuristic interpreter
-        val complexityLevel = complexityInterpreter.analyze(prompt)
-
-        // Step 2: Route based on complexity evaluation
-        val pipelineFlow = if (complexityLevel == ComplexityLevel.SIMPLE) {
-            // Use fast/simple path for simple prompts
-            thinkingPipelineOrchestrator.processSimplePrompt(prompt)
-        } else {
-            // Use full pipeline for medium, complex, and reasoning prompts
-            thinkingPipelineOrchestrator.processComplexPrompt(prompt)
-        }
-
-        pipelineFlow.collect { pipelineEvent ->
-            when (pipelineEvent) {
-                is PipelineEvent.PhaseUpdate -> {
-                    currentSteps.add(pipelineEvent.phase.name)
-                    emit(MessageGenerationState.ThinkingLive(currentSteps.toList()))
-                }
-
-                is PipelineEvent.ReasoningChunk -> {
-                    val latestStep = extractAndTruncateStep(pipelineEvent.chunk, maxWords = 10)
+        fastModelService.sendPrompt(prompt, closeConversation = false).collect { event ->
+            when (event) {
+                is InferenceEvent.Thinking -> {
+                    val latestStep = extractAndTruncateStep(event.chunk, maxWords = 10)
                     if (latestStep.isNotBlank() && latestStep != currentSteps.lastOrNull()) {
                         currentSteps.add(latestStep)
+                        emit(MessageGenerationState.ThinkingLive(currentSteps.toList()))
                     }
-                    emit(MessageGenerationState.ThinkingLive(currentSteps.toList()))
                 }
 
-                is PipelineEvent.TextChunk -> {
-                    emit(MessageGenerationState.GeneratingText(pipelineEvent.chunk))
+                is InferenceEvent.PartialResponse -> {
+                    emit(MessageGenerationState.GeneratingText(event.chunk))
                 }
 
-                is PipelineEvent.SafetyIntervention -> {
-                    emit(MessageGenerationState.Blocked(pipelineEvent.reason))
-                }
-
-                is PipelineEvent.Completed -> {
+                is InferenceEvent.Completed -> {
                     val duration = ((System.currentTimeMillis() - startTime) / 1000).toInt()
 
-                    val finalThinkingData = if (pipelineEvent.allThinkingSteps.isNotEmpty()) {
+                    val thinkingData = if (currentSteps.isNotEmpty()) {
                         ThinkingData(
                             durationSeconds = duration,
-                            steps = pipelineEvent.allThinkingSteps,
-                            rawFullThought = pipelineEvent.allThinkingSteps.joinToString(" -> ")
+                            steps = currentSteps,
+                            rawFullThought = currentSteps.joinToString(" -> ")
                         )
                     } else null
 
                     chatRepository.saveAssistantMessage(
                         messageId = messageId,
-                        content = pipelineEvent.finalResponse,
-                        thinkingData = finalThinkingData
+                        content = event.finalResponse,
+                        thinkingData = thinkingData
                     )
 
                     emit(MessageGenerationState.Finished)
                 }
 
-                is PipelineEvent.Error -> {
-                    emit(MessageGenerationState.Failed(pipelineEvent.cause))
+                is InferenceEvent.SafetyBlocked -> {
+                    emit(MessageGenerationState.Blocked(event.reason))
+                }
+
+                is InferenceEvent.Error -> {
+                    emit(MessageGenerationState.Failed(event.cause))
                 }
             }
         }

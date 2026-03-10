@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.InputBar
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.MessageList
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.ShieldOverlay
+import com.browntowndev.pocketcrew.presentation.screen.chat.components.UseTheCrewPopup
 import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 
 @Composable
@@ -30,6 +31,8 @@ fun ChatScreen(
     onExpandToggle: () -> Unit,
     onAttach: () -> Unit,
     onShieldTap: () -> Unit,
+    onUseTheCrew: () -> Unit,
+    onDismissUseTheCrew: () -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -68,6 +71,13 @@ fun ChatScreen(
                 }
             }
 
+            // "Use the Crew" popup - appears after Fast response
+            UseTheCrewPopup(
+                visible = uiState.showUseTheCrewPopup,
+                onUseTheCrew = onUseTheCrew,
+                onDismiss = onDismissUseTheCrew,
+            )
+
             // InputBar — pinned above keyboard
             InputBar(
                 modifier = Modifier.fillMaxWidth(),
@@ -100,6 +110,8 @@ private fun PreviewChatScreenLight() {
             onExpandToggle = {},
             onAttach = {},
             onShieldTap = {},
+            onUseTheCrew = {},
+            onDismissUseTheCrew = {},
         )
     }
 }
@@ -140,6 +152,8 @@ private fun PreviewChatScreenWithMessages() {
             onExpandToggle = {},
             onAttach = {},
             onShieldTap = {},
+            onUseTheCrew = {},
+            onDismissUseTheCrew = {},
         )
     }
 }
@@ -162,6 +176,8 @@ private fun PreviewChatScreenThinking() {
             onExpandToggle = {},
             onAttach = {},
             onShieldTap = {},
+            onUseTheCrew = {},
+            onDismissUseTheCrew = {},
         )
     }
 }
@@ -183,6 +199,8 @@ private fun PreviewChatScreenShield() {
             onExpandToggle = {},
             onAttach = {},
             onShieldTap = {},
+            onUseTheCrew = {},
+            onDismissUseTheCrew = {},
         )
     }
 }
@@ -204,6 +222,8 @@ private fun PreviewChatScreenExpandedInput() {
             onExpandToggle = {},
             onAttach = {},
             onShieldTap = {},
+            onUseTheCrew = {},
+            onDismissUseTheCrew = {},
         )
     }
 }

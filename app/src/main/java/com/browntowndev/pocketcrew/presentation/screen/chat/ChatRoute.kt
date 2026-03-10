@@ -25,5 +25,7 @@ fun ChatRoute(
         onShieldTap = {
             onShowSnackbar("Procedural harm blocked – ${uiState.shieldReason}", null)
         },
+        onUseTheCrew = viewModel::onUseTheCrewTapped,
+        onDismissUseTheCrew = viewModel::onDismissUseTheCrewPopup,
     )
 }

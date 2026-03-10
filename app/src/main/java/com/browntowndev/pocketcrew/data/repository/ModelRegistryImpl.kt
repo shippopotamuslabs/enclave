@@ -101,7 +101,7 @@ class ModelRegistryImpl @Inject constructor(
 
         // If we're setting a new CURRENT and there was an existing CURRENT, update it to OLD
         if (status == ModelStatus.CURRENT && existingCurrent != null) {
-            modelsDao.insertOrUpdate(
+            modelsDao.upsert(
                 existingCurrent.copy(modelStatus = ModelStatus.OLD)
             )
             logger.debug("ModelRegistry", "Marked existing model as OLD: ${existingCurrent.displayName}")
@@ -109,7 +109,7 @@ class ModelRegistryImpl @Inject constructor(
 
         // Insert or update the new model with the specified status
         logger.debug("ModelRegistry", "Saving model ${config.modelType} with thinkingEnabled=${config.tunings.thinkingEnabled}")
-        modelsDao.insertOrUpdate(
+        modelsDao.upsert(
             ModelEntity(
                 modelType = config.modelType,
                 modelStatus = status,
@@ -125,7 +125,8 @@ class ModelRegistryImpl @Inject constructor(
                 maxTokens = config.tunings.maxTokens,
                 contextWindow = config.tunings.contextWindow,
                 thinkingEnabled = config.tunings.thinkingEnabled,
-                systemPrompt = config.persona.systemPrompt
+                systemPrompt = config.persona.systemPrompt,
+                repetitionPenalty = config.tunings.repetitionPenalty
             )
         )
         // Update cache after DB update
