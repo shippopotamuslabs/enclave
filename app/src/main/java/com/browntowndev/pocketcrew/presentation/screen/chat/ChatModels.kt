@@ -12,6 +12,7 @@ enum class Mode(
     @param:DrawableRes val iconRes: Int,
 ) {
     FAST(R.string.mode_fast, R.drawable.bolt),
+    THINKING(R.string.mode_thinking, R.drawable.cognition),
     CREW(R.string.mode_crew, R.drawable.merge);
 
     fun getDisplayName(context: Context): String = context.getString(displayNameRes)

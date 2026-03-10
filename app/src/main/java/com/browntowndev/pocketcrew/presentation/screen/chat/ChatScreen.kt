@@ -84,6 +84,7 @@ fun ChatScreen(
                 inputText = uiState.inputText,
                 selectedMode = uiState.selectedMode,
                 isExpanded = uiState.isInputExpanded,
+                isThinking = uiState.isThinking,
                 onInputChange = onInputChange,
                 onModeChange = onModeChange,
                 onSend = onSendMessage,
