@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">Pocket Crew</string>
-    <string name="mode_auto">Auto</string>
     <string name="mode_fast">Fast</string>
     <string name="mode_crew">Crew</string>
+    <string name="use_the_crew">Use the Crew</string>
+    <string name="use_the_crew_subtitle">Get a better response</string>
 </resources>

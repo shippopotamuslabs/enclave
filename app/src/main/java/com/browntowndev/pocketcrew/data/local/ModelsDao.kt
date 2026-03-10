@@ -1,9 +1,8 @@
 package com.browntowndev.pocketcrew.data.local
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.Flow
@@ -34,8 +33,8 @@ interface ModelsDao {
     @Query("SELECT * FROM models WHERE model_type = :modelType")
     suspend fun getAllByModelType(modelType: ModelType): List<ModelEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertOrUpdate(entity: ModelEntity)
+    @Upsert
+    suspend fun upsert(entity: ModelEntity)
 
     @Query("DELETE FROM models WHERE model_status = 'OLD'")
     suspend fun deleteAllOld()

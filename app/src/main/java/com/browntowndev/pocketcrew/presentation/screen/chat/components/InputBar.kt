@@ -239,7 +239,7 @@ fun PreviewInputBar() {
     PocketCrewTheme {
         InputBar(
             inputText = "",
-            selectedMode = Mode.AUTO,
+            selectedMode = Mode.FAST,
             isExpanded = false,
             onInputChange = {},
             onModeChange = {},
