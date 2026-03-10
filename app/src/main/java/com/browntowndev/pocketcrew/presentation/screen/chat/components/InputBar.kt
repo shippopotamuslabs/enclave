@@ -2,12 +2,16 @@ package com.browntowndev.pocketcrew.presentation.screen.chat.components
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,7 +39,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -55,6 +63,7 @@ fun InputBar(
     inputText: String,
     selectedMode: Mode,
     isExpanded: Boolean,
+    isThinking: Boolean,
     onInputChange: (String) -> Unit,
     onModeChange: (Mode) -> Unit,
     onSend: (String) -> Unit,
@@ -65,26 +74,49 @@ fun InputBar(
     var modeExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
 
     var textFieldValue by remember { mutableStateOf(TextFieldValue(inputText)) }
+
+    // Track previous inputText to detect when it becomes empty (message sent)
+    var previousInputText by remember { mutableStateOf(inputText) }
 
     LaunchedEffect(inputText) {
         if (textFieldValue.text != inputText) {
             textFieldValue = TextFieldValue(inputText)
         }
+        // Clear focus when inputText becomes empty (after sending)
+        if (previousInputText.isNotEmpty() && inputText.isEmpty()) {
+            focusManager.clearFocus()
+        }
+        previousInputText = inputText
     }
 
-    val maxLines = if (isExpanded) 5 else 1
-    val currentLineCount = textFieldValue.text.lines().size.coerceAtLeast(1)
-    val showExpandIcon = isExpanded && currentLineCount >= 3
-    val imeAction = if (maxLines == 1) ImeAction.Send else ImeAction.Default
+    // Auto-expand: when text exceeds ~60 chars OR has newlines, show expand icon and auto-expand
+    val hasNewline = textFieldValue.text.contains('\n')
+    val isLongText = textFieldValue.text.length > 60
+    val showExpandIcon = hasNewline || isLongText
+
+    // Request focus when expanded
+    LaunchedEffect(isExpanded) {
+        if (isExpanded) {
+            focusManager.clearFocus()
+            focusRequester.requestFocus()
+        }
+    }
+
+    // When expanded: unlimited. When collapsed: auto-grow up to 5 lines
+    val maxLines = if (isExpanded) Int.MAX_VALUE else 5
+    // Always use Enter key - send button handles sending, prevents accidental sends during thinking
+    val imeAction = ImeAction.Default
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
+            .then(if (isExpanded) Modifier.fillMaxHeight(0.9f) else Modifier.heightIn(min = 56.dp))
             .padding(horizontal = 16.dp)
             .animateContentSize()
-            .clickable { focusRequester.requestFocus() },
+            .then(if (!isExpanded) Modifier.clickable { focusRequester.requestFocus() } else Modifier),
         shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 2.dp
@@ -92,65 +124,126 @@ fun InputBar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .then(if (isExpanded) Modifier.fillMaxHeight() else Modifier)
                 .padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalArrangement = when {
+                isExpanded -> Arrangement.SpaceBetween
+                else -> Arrangement.spacedBy(6.dp)
+            }
         ) {
-            // ── Expandable Text Area (full width, top-aligned) ──
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp)   // ← restored exactly to your preferred 16.dp
-            ) {
-                BasicTextField(
-                    value = textFieldValue,
-                    onValueChange = { newValue ->
-                        textFieldValue = newValue
-                        onInputChange(newValue.text)
-                    },
-                    textStyle = TextStyle(
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 16.sp,
-                        lineHeight = 22.sp
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    maxLines = maxLines,
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Sentences,
-                        imeAction = imeAction
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onSend = { if (textFieldValue.text.isNotBlank()) onSend(textFieldValue.text) }
-                    ),
-                    decorationBox = { innerTextField ->
-                        Box {
-                            if (textFieldValue.text.isEmpty()) {
-                                Text(
-                                    text = "Prompt the Pocket Crew",
-                                    style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            innerTextField()
-                        }
-                    },
+            // Expanded: use a Box wrapper that fills remaining space and handles clicks
+            if (isExpanded) {
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .focusRequester(focusRequester)
-                )
-
-                // Expand/collapse icon — tucked deep into the top-right corner
-                if (showExpandIcon) {
-                    IconButton(
-                        onClick = onExpandToggle,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(top = 0.dp, end = 0.dp)
+                        .weight(1f)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            focusManager.clearFocus()
+                            focusRequester.requestFocus()
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top
                     ) {
-                        Icon(
-                            painter = painterResource(R.drawable.collapse_content),
-                            contentDescription = "Collapse input",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        // Text field
+                        BasicTextField(
+                            value = textFieldValue,
+                            onValueChange = { newValue ->
+                                textFieldValue = newValue
+                                onInputChange(newValue.text)
+                            },
+                            textStyle = TextStyle(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 16.sp,
+                                lineHeight = 22.sp
+                            ),
+                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                            maxLines = maxLines,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Sentences,
+                                imeAction = imeAction
+                            ),
+                            decorationBox = { innerTextField ->
+                                Box(modifier = Modifier.padding(start = 16.dp, top = 10.dp)) {
+                                    if (textFieldValue.text.isEmpty()) {
+                                        Text(
+                                            text = "Prompt the Pocket Crew",
+                                            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .focusRequester(focusRequester)
                         )
+
+                        // Collapse icon
+                        IconButton(onClick = onExpandToggle) {
+                            Icon(
+                                painter = painterResource(R.drawable.collapse_content),
+                                contentDescription = "Collapse input",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            } else {
+                // Collapsed: simple Row layout
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    // Text field
+                    BasicTextField(
+                        value = textFieldValue,
+                        onValueChange = { newValue ->
+                            textFieldValue = newValue
+                            onInputChange(newValue.text)
+                        },
+                        textStyle = TextStyle(
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = 16.sp,
+                            lineHeight = 22.sp
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        maxLines = maxLines,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                            imeAction = imeAction
+                        ),
+                        decorationBox = { innerTextField ->
+                            Box(modifier = Modifier.padding(start = 16.dp, top = 10.dp)) {
+                                if (textFieldValue.text.isEmpty()) {
+                                    Text(
+                                        text = "Prompt the Pocket Crew",
+                                        style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequester)
+                    )
+
+                    // Expand icon (if applicable)
+                    if (showExpandIcon) {
+                        IconButton(onClick = onExpandToggle) {
+                            Icon(
+                                painter = painterResource(R.drawable.expand_content),
+                                contentDescription = "Expand input",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -214,16 +307,24 @@ fun InputBar(
 
                 // Send
                 IconButton(
-                    onClick = { onSend(textFieldValue.text) },
-                    enabled = textFieldValue.text.isNotBlank()
+                    onClick = {
+                        if (textFieldValue.text.isNotBlank() && !isThinking) {
+                            val textToSend = textFieldValue.text
+                            onSend(textToSend) // Send FIRST while inputText still has value
+                            textFieldValue = TextFieldValue("") // Clear locally
+                            onInputChange("") // Clear parent state - LaunchedEffect will handle focus
+                        }
+                    },
+                    enabled = textFieldValue.text.isNotBlank() && !isThinking
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send message",
-                        tint = if (textFieldValue.text.isNotBlank())
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = when {
+                            isThinking -> MaterialTheme.colorScheme.onSurfaceVariant
+                            textFieldValue.text.isNotBlank() -> MaterialTheme.colorScheme.primary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                     )
                 }
             }
@@ -241,6 +342,7 @@ fun PreviewInputBar() {
             inputText = "",
             selectedMode = Mode.FAST,
             isExpanded = false,
+            isThinking = false,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
@@ -262,6 +364,7 @@ fun PreviewInputBarExpanded() {
             """.trimIndent(),
             selectedMode = Mode.CREW,
             isExpanded = true,
+            isThinking = false,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
@@ -279,6 +382,43 @@ fun PreviewInputBarSingleLine() {
             inputText = "Single line message",
             selectedMode = Mode.FAST,
             isExpanded = false,
+            isThinking = false,
+            onInputChange = {},
+            onModeChange = {},
+            onSend = {},
+            onExpandToggle = {},
+            onAttach = {}
+        )
+    }
+}
+
+@Preview
+@Composable
+fun PreviewInputBarThinking() {
+    PocketCrewTheme {
+        InputBar(
+            inputText = "Message while thinking",
+            selectedMode = Mode.FAST,
+            isExpanded = false,
+            isThinking = true,
+            onInputChange = {},
+            onModeChange = {},
+            onSend = {},
+            onExpandToggle = {},
+            onAttach = {}
+        )
+    }
+}
+
+@Preview
+@Composable
+fun PreviewInputBarThinkingMode() {
+    PocketCrewTheme {
+        InputBar(
+            inputText = "Tell me about quantum physics",
+            selectedMode = Mode.THINKING,
+            isExpanded = false,
+            isThinking = false,
             onInputChange = {},
             onModeChange = {},
             onSend = {},

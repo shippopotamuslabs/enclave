@@ -35,15 +35,21 @@ fun MessageList(
             modifier = modifier,
             reverseLayout = true,
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(horizontal = 5.dp, vertical = 16.dp),
         ) {
             items(
                 count = messages.size,
                 key = { index: Int -> "msg_${messages[messages.size - 1 - index].id}" },
             ) { index: Int ->
                 val message = messages[messages.size - 1 - index]
+                // Show ThinkingIndicator on the most recent User message when thinking is active.
+                // The most recent User message is the one right before the assistant's placeholder.
+                // Check if this User message has any Assistant messages after it (lower index).
+                // Show indicator only if there are Assistant messages AFTER this User message (newer in the list)
+                val hasAssistantAfter = messages.drop(messages.size - index).any { it.role == MessageRole.Assistant }
+                val showIndicator = message.role == MessageRole.User && isThinking && hasAssistantAfter
                 if (message.role == MessageRole.User) {
-                    if (isThinking) {
+                    if (showIndicator) {
                         ThinkingIndicator(thinkingSteps = thinkingSteps)
                     }
                     MessageBubble(message = message)

@@ -106,10 +106,12 @@ fun ThinkingIndicator(
                             ),
                             color = if (isLatest) MaterialTheme.colorScheme.onSurface
                             else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.padding(
-                                start = 4.dp,
-                                top = if (index == 0) 0.dp else 3.dp,
-                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(
+                                    start = 4.dp,
+                                    top = if (index == 0) 0.dp else 3.dp,
+                                ),
                         )
                     }
                 }
