@@ -87,6 +87,9 @@ fun InputBar(
         }
         // Clear focus when inputText becomes empty (after sending)
         if (previousInputText.isNotEmpty() && inputText.isEmpty()) {
+            if (isExpanded) {
+                onExpandToggle()
+            }
             focusManager.clearFocus()
         }
         previousInputText = inputText

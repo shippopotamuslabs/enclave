@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.browntowndev.pocketcrew.presentation.screen.chat.ResponseState
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.InputBar
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.MessageList
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.ShieldOverlay
@@ -39,7 +40,7 @@ fun ChatScreen(
             ChatTopBar(
                 onMenuClick = onNavigateToHistory,
                 onNewChatClick = onNewChat,
-                isThinking = uiState.isThinking,
+                isThinking = uiState.responseState != ResponseState.NONE,
             )
         },
         contentWindowInsets = WindowInsets(0),
@@ -56,8 +57,10 @@ fun ChatScreen(
                 MessageList(
                     modifier = Modifier.fillMaxSize(),
                     messages = uiState.messages,
-                    isThinking = uiState.isThinking,
+                    responseState = uiState.responseState,
                     thinkingSteps = uiState.thinkingSteps,
+                    thinkingStartTime = uiState.thinkingStartTime,
+                    thinkingModelDisplayName = uiState.thinkingModelDisplayName,
                 )
 
                 if (uiState.showShield) {
@@ -84,7 +87,7 @@ fun ChatScreen(
                 inputText = uiState.inputText,
                 selectedMode = uiState.selectedMode,
                 isExpanded = uiState.isInputExpanded,
-                isThinking = uiState.isThinking,
+                isThinking = uiState.responseState != ResponseState.NONE,
                 onInputChange = onInputChange,
                 onModeChange = onModeChange,
                 onSend = onSendMessage,
@@ -143,7 +146,7 @@ private fun PreviewChatScreenWithMessages() {
                 inputText = "Hello, how are you?",
                 selectedMode = Mode.FAST,
                 isInputExpanded = false,
-                isThinking = false,
+                responseState = ResponseState.NONE,
             ),
             onNavigateToHistory = {},
             onNewChat = {},
@@ -166,7 +169,7 @@ private fun PreviewChatScreenThinking() {
         ChatScreen(
             uiState = ChatUiState(
                 messages = fakeLongMessages.takeLast(1),
-                isThinking = true,
+                responseState = ResponseState.THINKING,
                 thinkingSteps = listOf("Analyzing query...", "Refining response..."),
             ),
             onNavigateToHistory = {},

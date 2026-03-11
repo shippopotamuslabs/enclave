@@ -19,16 +19,21 @@ import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.R
 import com.browntowndev.pocketcrew.presentation.screen.chat.ChatMessage
 import com.browntowndev.pocketcrew.presentation.screen.chat.MessageRole
+import com.browntowndev.pocketcrew.presentation.screen.chat.ResponseState
 import com.browntowndev.pocketcrew.presentation.screen.chat.fakeLongMessages
 import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 
 @Composable
 fun MessageList(
     messages: List<ChatMessage>,
-    isThinking: Boolean,
+    responseState: ResponseState,
     thinkingSteps: List<String>,
+    thinkingStartTime: Long,
+    thinkingModelDisplayName: String,
     modifier: Modifier = Modifier,
 ) {
+    val isThinking = responseState != ResponseState.NONE
+
     if (messages.isEmpty() && !isThinking) {
         EmptyState(modifier = modifier)
     } else {
@@ -48,17 +53,34 @@ fun MessageList(
                 key = { index: Int -> "msg_${messages[messages.size - 1 - index].id}" },
             ) { index: Int ->
                 val message = messages[messages.size - 1 - index]
-                // Show ThinkingIndicator ONLY on the most recent User message when thinking is active.
+                // Show indicator ONLY on the most recent User message when response is active.
                 val isMostRecentUserMessage = message.role == MessageRole.User &&
                     messages.indexOf(message) == mostRecentUserIndex
                 val showIndicator = isMostRecentUserMessage && isThinking
                 if (message.role == MessageRole.User) {
                     if (showIndicator) {
-                        ExperimentalThinkingIndicator(thinkingSteps = thinkingSteps)
+                        when (responseState) {
+                            ResponseState.THINKING -> {
+                                ThinkingIndicator(
+                                    thinkingSteps = thinkingSteps,
+                                    thinkingStartTime = thinkingStartTime,
+                                    modelDisplayName = thinkingModelDisplayName,
+                                )
+                            }
+                            ResponseState.PROCESSING -> {
+                                ProcessingIndicator()
+                            }
+                            ResponseState.NONE -> {
+                                // No indicator
+                            }
+                        }
                     }
                     MessageBubble(message = message)
                 } else {
-                    AssistantResponse(message = message)
+                    AssistantResponse(
+                        message = message,
+                        modelDisplayName = thinkingModelDisplayName
+                    )
                 }
             }
         }
@@ -95,7 +117,7 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 @Composable
 private fun PreviewMessageListEmpty() {
     PocketCrewTheme {
-        MessageList(emptyList(), false, emptyList())
+        MessageList(emptyList(), ResponseState.NONE, emptyList(), 0L, "")
     }
 }
 
@@ -103,7 +125,7 @@ private fun PreviewMessageListEmpty() {
 @Composable
 private fun PreviewMessageListLong() {
     PocketCrewTheme(darkTheme = true) {
-        MessageList(fakeLongMessages, false, emptyList())
+        MessageList(fakeLongMessages, ResponseState.NONE, emptyList(), 0L, "")
     }
 }
 
@@ -113,8 +135,10 @@ private fun PreviewMessageListThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             fakeLongMessages,
-            true,
-            listOf("Agent A: Drafting direct answer...", "Agent B: Skeptical critique..."),
+            ResponseState.THINKING,
+            listOf("Drafting direct answer...", "Skeptical critique..."),
+            System.currentTimeMillis() - 5000,
+            "The Sentinel",
         )
     }
 }
@@ -123,7 +147,7 @@ private fun PreviewMessageListThinking() {
 @Composable
 private fun PreviewMessageListThinkingEmpty() {
     PocketCrewTheme(darkTheme = true) {
-        MessageList(emptyList(), true, listOf("Analyzing query..."))
+        MessageList(emptyList(), ResponseState.THINKING, listOf("Analyzing query..."), System.currentTimeMillis() - 3000, "The Brainstormer")
     }
 }
 
@@ -141,8 +165,10 @@ private fun PreviewMessageListMultipleUsersThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             messages,
-            true,
-            listOf("Analyzing...", "Drafting response...")
+            ResponseState.THINKING,
+            listOf("Analyzing...", "Drafting response..."),
+            System.currentTimeMillis() - 10000,
+            "The Mastermind",
         )
     }
 }
