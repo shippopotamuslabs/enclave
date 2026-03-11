@@ -128,6 +128,7 @@ dependencies {
     implementation(libs.androidx.compose.animation)
     // litert-gpu removed - not available in 2.x series
     implementation(libs.identity.doctypes.jvm)
+    implementation(libs.androidx.compose.foundation)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.work)

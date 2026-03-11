@@ -36,7 +36,8 @@ data class ThinkingData(
 )
 
 data class ChatMessage(
-    val id: String,
+    val id: Long,
+    val chatId: Long,
     val role: MessageRole,
     val content: String,
     val formattedTimestamp: String,
@@ -62,7 +63,8 @@ data class ChatUiState(
 
 val fakeLongMessages = listOf(
     ChatMessage(
-        id = "1",
+        id = 1,
+        chatId = 1L,
         role = MessageRole.Assistant,
         content = "Here's a Kotlin example that demonstrates the pattern:\n\n" +
             "```kotlin\n" +
@@ -94,13 +96,15 @@ val fakeLongMessages = listOf(
         ),
     ),
     ChatMessage(
-        id = "2",
+        id = 2,
+        chatId = 1L,
         role = MessageRole.User,
         content = "Tell me a joke.",
         formattedTimestamp = "10:28 AM",
     ),
     ChatMessage(
-        id = "3",
+        id = 3,
+        chatId = 1L,
         role = MessageRole.Assistant,
         content = "Why did the AI go to therapy? It had too many unresolved tokens!",
         formattedTimestamp = "10:28 AM",
@@ -110,13 +114,15 @@ val fakeLongMessages = listOf(
         ),
     ),
     ChatMessage(
-        id = "4",
+        id = 4,
+        chatId = 1L,
         role = MessageRole.User,
         content = "What is Jetpack Compose?",
         formattedTimestamp = "10:27 AM",
     ),
     ChatMessage(
-        id = "5",
+        id = 5,
+        chatId = 1L,
         role = MessageRole.Assistant,
         content = "Jetpack Compose is Android's modern toolkit for building native UI. It replaces XML layouts with declarative Kotlin code.",
         formattedTimestamp = "10:26 AM",

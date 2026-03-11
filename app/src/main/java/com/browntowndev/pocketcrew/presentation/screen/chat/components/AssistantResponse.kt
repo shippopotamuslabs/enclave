@@ -359,7 +359,7 @@ private fun FencedCodeBlock(
 private fun PreviewAssistantPlainText() {
     PocketCrewTheme(darkTheme = true) {
         AssistantResponse(
-            ChatMessage("1", MessageRole.Assistant, "Hello from assistant!", "10:30 AM"),
+            ChatMessage(id = 1L, chatId = 1L, role = MessageRole.Assistant, content = "Hello from assistant!", formattedTimestamp = "10:30 AM"),
         )
     }
 }
@@ -370,7 +370,8 @@ private fun PreviewAssistantWithThinking() {
     PocketCrewTheme(darkTheme = true) {
         AssistantResponse(
             ChatMessage(
-                id = "2",
+                id = 2L,
+                chatId = 1L,
                 role = MessageRole.Assistant,
                 content = "Here is my well-considered answer after deep analysis.",
                 formattedTimestamp = "10:31 AM",
@@ -394,7 +395,8 @@ private fun PreviewAssistantQuickThinking() {
     PocketCrewTheme(darkTheme = true) {
         AssistantResponse(
             ChatMessage(
-                id = "3",
+                id = 3L,
+                chatId = 1L,
                 role = MessageRole.Assistant,
                 content = "Quick answer — no deep thinking needed.",
                 formattedTimestamp = "10:32 AM",
@@ -413,7 +415,8 @@ private fun PreviewAssistantWithKotlinCode() {
     PocketCrewTheme(darkTheme = true) {
         AssistantResponse(
             ChatMessage(
-                id = "4",
+                id = 4L,
+                chatId = 1L,
                 role = MessageRole.Assistant,
                 content = "Here's a Kotlin example:\n\n" +
                     "```kotlin\n" +
@@ -441,7 +444,8 @@ private fun PreviewAssistantWithJson() {
     PocketCrewTheme(darkTheme = true) {
         AssistantResponse(
             ChatMessage(
-                id = "5",
+                id = 5L,
+                chatId = 1L,
                 role = MessageRole.Assistant,
                 content = "The API returns the following JSON:\n\n" +
                     "```json\n" +
@@ -467,7 +471,8 @@ private fun PreviewAssistantMultipleBlocks() {
     PocketCrewTheme(darkTheme = true) {
         AssistantResponse(
             ChatMessage(
-                id = "6",
+                id = 6L,
+                chatId = 1L,
                 role = MessageRole.Assistant,
                 content = "Here's the XML layout:\n\n" +
                     "```xml\n" +
@@ -496,7 +501,8 @@ private fun PreviewAssistantNoThinking() {
     PocketCrewTheme(darkTheme = true) {
         AssistantResponse(
             ChatMessage(
-                id = "7",
+                id = 7L,
+                chatId = 1L,
                 role = MessageRole.Assistant,
                 content = "A response with no thinking data at all — quick mode.",
                 formattedTimestamp = "10:36 AM",
@@ -512,13 +518,14 @@ private fun PreviewAssistantComplexMarkdown() {
     PocketCrewTheme(darkTheme = true) {
         AssistantResponse(
             ChatMessage(
-                id = "8",
+                id = 8L,
+                chatId = 1L,
                 role = MessageRole.Assistant,
                 content = """Here is your markdown code block:
                     ```markdown
 # Using the Sum Function
 
-Here's how to use the **`sum`** function with *`Int`* parameters. 
+Here's how to use the **`sum`** function with *`Int`* parameters.
 
 You can call `sum(a = 5, b = 3)` or use default values like `sum()`.
 
@@ -543,7 +550,8 @@ private fun PreviewAssistantMixedInlineAndFenced() {
     PocketCrewTheme(darkTheme = true) {
         AssistantResponse(
             ChatMessage(
-                id = "9",
+                id = 9L,
+                chatId = 1L,
                 role = MessageRole.Assistant,
                 content = "To iterate, use a `for` loop:\n\n" +
                     "```kotlin\n" +
@@ -565,7 +573,8 @@ private fun PreviewAssistantInlineCodeEdgeCases() {
     PocketCrewTheme(darkTheme = true) {
         AssistantResponse(
             ChatMessage(
-                id = "10",
+                id = 10L,
+                chatId = 1L,
                 role = MessageRole.Assistant,
                 content = "Use `null` checks with `?.` or `?:`. For example: `value?.length ?: 0`. " +
                     "Inline code at start: `println(\"hello\")` is the basic output. " +
