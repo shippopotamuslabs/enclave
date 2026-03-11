@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.presentation.screen.chat
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase
@@ -40,6 +41,7 @@ class ChatViewModelTest {
     private lateinit var mockSettingsUseCases: SettingsUseCases
     private lateinit var mockCreateUserMessageUseCase: CreateUserMessageUseCase
     private lateinit var mockContext: Context
+    private lateinit var mockSavedStateHandle: SavedStateHandle
     private lateinit var viewModel: ChatViewModel
 
     @Before
@@ -49,14 +51,17 @@ class ChatViewModelTest {
         mockCreateUserMessageUseCase = mockk(relaxed = true)
         mockChatUseCases = mockk(relaxed = true) {
             every { processPrompt } returns mockCreateUserMessageUseCase
-            coEvery { generateChatResponse(any(), any(), any()) } returns emptyFlow()
+            coEvery { generateChatResponse(any(), any(), any(), any(), any()) } returns emptyFlow()
         }
         mockSettingsUseCases = mockk(relaxed = true) {
             every { getSettings() } returns MutableStateFlow(SettingsData())
         }
         mockContext = mockk(relaxed = true)
+        mockSavedStateHandle = mockk(relaxed = true) {
+            every { get<Long>("chatId") } returns null
+        }
 
-        viewModel = ChatViewModel(mockContext, mockSettingsUseCases, mockChatUseCases)
+        viewModel = ChatViewModel(mockContext, mockSettingsUseCases, mockChatUseCases, mockSavedStateHandle)
     }
 
     @After
@@ -102,13 +107,14 @@ class ChatViewModelTest {
     @Test
     fun `ChatMessage has correct structure`() {
         val message = ChatMessage(
-            id = "test123",
+            id = 1L,
+            chatId = 1L,
             role = MessageRole.User,
             content = "Hello",
             formattedTimestamp = "Now"
         )
 
-        assertEquals("test123", message.id)
+        assertEquals(1L, message.id)
         assertEquals(MessageRole.User, message.role)
         assertEquals("Hello", message.content)
         assertEquals("Now", message.formattedTimestamp)
@@ -133,7 +139,8 @@ class ChatViewModelTest {
         )
 
         val message = ChatMessage(
-            id = "test123",
+            id = 1L,
+            chatId = 1L,
             role = MessageRole.Assistant,
             content = "Response",
             formattedTimestamp = "Now",
@@ -157,7 +164,7 @@ class ChatViewModelTest {
         // Given: generateChatResponse returns a flow with ThinkingLive
         val thinkingSteps = listOf("Analyzing query...", "Drafting response...")
         coEvery {
-            mockChatUseCases.generateChatResponse(any(), any(), any())
+            mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
         } returns flowOf(
             MessageGenerationState.ThinkingLive(thinkingSteps)
         )
@@ -176,7 +183,7 @@ class ChatViewModelTest {
     fun `Finished sets isThinking to false and clears thinkingSteps`() = runTest {
         // Given: generateChatResponse returns a flow with ThinkingLive then Finished
         coEvery {
-            mockChatUseCases.generateChatResponse(any(), any(), any())
+            mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
         } returns flowOf(
             MessageGenerationState.ThinkingLive(listOf("Thinking...")),
             MessageGenerationState.Finished
@@ -196,7 +203,7 @@ class ChatViewModelTest {
     fun `GeneratingText does not change isThinking state`() = runTest {
         // Given: generateChatResponse returns a flow with ThinkingLive then GeneratingText
         coEvery {
-            mockChatUseCases.generateChatResponse(any(), any(), any())
+            mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
         } returns flowOf(
             MessageGenerationState.ThinkingLive(listOf("Thinking...")),
             MessageGenerationState.GeneratingText("Hello")
@@ -215,7 +222,7 @@ class ChatViewModelTest {
     fun `Blocked sets isThinking to false`() = runTest {
         // Given: generateChatResponse returns a flow with Blocked
         coEvery {
-            mockChatUseCases.generateChatResponse(any(), any(), any())
+            mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
         } returns flowOf(
             MessageGenerationState.Blocked("Safety check failed")
         )
@@ -233,7 +240,7 @@ class ChatViewModelTest {
     fun `Failed sets isThinking to false`() = runTest {
         // Given: generateChatResponse returns a flow with Failed
         coEvery {
-            mockChatUseCases.generateChatResponse(any(), any(), any())
+            mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
         } returns flowOf(
             MessageGenerationState.Failed(Exception("Test error"))
         )
@@ -251,7 +258,7 @@ class ChatViewModelTest {
     fun `onSendMessage adds user and placeholder assistant messages`() = runTest {
         // Given: generateChatResponse returns empty flow
         coEvery {
-            mockChatUseCases.generateChatResponse(any(), any(), any())
+            mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
         } returns emptyFlow()
 
         // When: onSendMessage is called
@@ -269,7 +276,7 @@ class ChatViewModelTest {
     fun `isThinking is true immediately after onSendMessage`() = runTest {
         // Given: generateChatResponse returns empty flow (immediate completion)
         coEvery {
-            mockChatUseCases.generateChatResponse(any(), any(), any())
+            mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
         } returns emptyFlow()
 
         // When: onSendMessage is called
@@ -284,69 +291,104 @@ class ChatViewModelTest {
     // ===== MessageList Visibility Logic Tests =====
 
     @Test
-    fun `showIndicator is true when user message has assistant after it`() {
-        // Messages: [User(msg2), Assistant(msg1)] - msg2 has assistant after it
+    fun `showIndicator is true ONLY for the most recent user message`() {
+        // Messages: [Assistant(5), User(4), Assistant(3), User(2), User(1)]
+        // Only User(1) should show indicator when thinking
         val messages = listOf(
-            ChatMessage("1", MessageRole.Assistant, "Response", "Now"),
-            ChatMessage("2", MessageRole.User, "Hello", "Now")
+            ChatMessage(id = 5L, chatId = 1L, role = MessageRole.Assistant, content = "Response 1", formattedTimestamp = "Now"),
+            ChatMessage(id = 4L, chatId = 1L, role = MessageRole.User, content = "Q1", formattedTimestamp = "Now"),
+            ChatMessage(id = 3L, chatId = 1L, role = MessageRole.Assistant, content = "Response 2", formattedTimestamp = "Now"),
+            ChatMessage(id = 2L, chatId = 1L, role = MessageRole.User, content = "Q2", formattedTimestamp = "Now"),
+            ChatMessage(id = 1L, chatId = 1L, role = MessageRole.User, content = "Q3 (most recent)", formattedTimestamp = "Now")
         )
 
-        // For the user message at index 1 (display order reversed), hasAssistantAfter should be true
-        val index = 1 // User message at position 1 in the list
-        val message = messages[index]
-        val hasAssistantAfter = messages.drop(messages.size - index).any { it.role == MessageRole.Assistant }
-        val showIndicator = message.role == MessageRole.User && true && hasAssistantAfter
+        // Most recent user message is at index 4
+        val mostRecentUserIndex = messages.indexOfLast { it.role == MessageRole.User }
+        assertEquals(4, mostRecentUserIndex)
 
-        assertTrue("Indicator should show when User message has Assistant after it", showIndicator)
+        // Test each message position in LazyColumn reverse order
+        for (i in messages.indices) {
+            val message = messages[messages.size - 1 - i]
+            val isMostRecentUser = message.role == MessageRole.User &&
+                messages.indexOf(message) == mostRecentUserIndex
+            val isThinking = true
+
+            if (message.id == 1L) {
+                assertTrue("Most recent user message should show indicator",
+                    isMostRecentUser && isThinking)
+            } else if (message.role == MessageRole.User) {
+                assertFalse("Older user messages should not show indicator",
+                    isMostRecentUser && isThinking)
+            }
+        }
     }
 
     @Test
     fun `showIndicator is false when user message has no assistant after it`() {
-        // Messages: [User(msg1)] - msg1 has no assistant after it
+        // Single user message - no indicator
         val messages = listOf(
-            ChatMessage("1", MessageRole.User, "Hello", "Now")
+            ChatMessage(id = 1L, chatId = 1L, role = MessageRole.User, content = "Hello", formattedTimestamp = "Now")
         )
 
-        // For the only user message, hasAssistantAfter should be false
-        val index = 0
-        val message = messages[index]
-        val hasAssistantAfter = messages.drop(messages.size - index).any { it.role == MessageRole.Assistant }
-        val showIndicator = message.role == MessageRole.User && true && hasAssistantAfter
+        val mostRecentUserIndex = messages.indexOfLast { it.role == MessageRole.User }
+        val message = messages[0]
+        val isMostRecentUserMessage = message.role == MessageRole.User &&
+            messages.indexOf(message) == mostRecentUserIndex
+        val showIndicator = isMostRecentUserMessage && true
 
-        assertFalse("Indicator should not show when there is no Assistant message after", showIndicator)
+        assertFalse("Indicator should not show with single user message only", showIndicator)
     }
 
     @Test
     fun `showIndicator is false for assistant messages`() {
-        // Messages: [User(msg2), Assistant(msg1)]
+        // Messages: [Assistant(msg1)]
         val messages = listOf(
-            ChatMessage("1", MessageRole.Assistant, "Response", "Now"),
-            ChatMessage("2", MessageRole.User, "Hello", "Now")
+            ChatMessage(id = 1L, chatId = 1L, role = MessageRole.Assistant, content = "Response", formattedTimestamp = "Now")
         )
 
-        // For assistant message at index 0, showIndicator should be false regardless
-        val index = 0
-        val message = messages[index]
-        val hasAssistantAfter = messages.drop(messages.size - index).any { it.role == MessageRole.Assistant }
-        val showIndicator = message.role == MessageRole.User && true && hasAssistantAfter
+        val mostRecentUserIndex = messages.indexOfLast { it.role == MessageRole.User }
+        val message = messages[0]
+        val isMostRecentUserMessage = message.role == MessageRole.User &&
+            messages.indexOf(message) == mostRecentUserIndex
+        val showIndicator = isMostRecentUserMessage && true
 
         assertFalse("Indicator should not show for Assistant messages", showIndicator)
     }
 
     @Test
     fun `showIndicator is false when isThinking is false`() {
-        // Even with User message and Assistant after, if not thinking, no indicator
+        // Even with most recent user message, if not thinking, no indicator
         val messages = listOf(
-            ChatMessage("1", MessageRole.Assistant, "Response", "Now"),
-            ChatMessage("2", MessageRole.User, "Hello", "Now")
+            ChatMessage(id = 2L, chatId = 1L, role = MessageRole.User, content = "Hello", formattedTimestamp = "Now"),
+            ChatMessage(id = 1L, chatId = 1L, role = MessageRole.Assistant, content = "Response", formattedTimestamp = "Now")
         )
 
-        val index = 1
-        val message = messages[index]
-        val hasAssistantAfter = messages.drop(messages.size - index).any { it.role == MessageRole.Assistant }
+        val mostRecentUserIndex = messages.indexOfLast { it.role == MessageRole.User }
+        val message = messages[1] // User message
+        val isMostRecentUserMessage = message.role == MessageRole.User &&
+            messages.indexOf(message) == mostRecentUserIndex
         val isThinking = false
-        val showIndicator = message.role == MessageRole.User && isThinking && hasAssistantAfter
+        val showIndicator = isMostRecentUserMessage && isThinking
 
         assertFalse("Indicator should not show when isThinking is false", showIndicator)
+    }
+
+    @Test
+    fun `showIndicator shows for single user message with assistant after`() {
+        // Messages: [User(msg2), Assistant(msg1)] - shows indicator
+        val messages = listOf(
+            ChatMessage(id = 2L, chatId = 1L, role = MessageRole.User, content = "Hello", formattedTimestamp = "Now"),
+            ChatMessage(id = 1L, chatId = 1L, role = MessageRole.Assistant, content = "Response", formattedTimestamp = "Now")
+        )
+
+        val mostRecentUserIndex = messages.indexOfLast { it.role == MessageRole.User }
+        assertEquals(0, mostRecentUserIndex)
+
+        val message = messages[0] // Most recent user message
+        val isMostRecentUserMessage = message.role == MessageRole.User &&
+            messages.indexOf(message) == mostRecentUserIndex
+        val showIndicator = isMostRecentUserMessage && true
+
+        assertTrue("Indicator should show for most recent user message with assistant after", showIndicator)
     }
 }

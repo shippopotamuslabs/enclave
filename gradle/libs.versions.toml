@@ -29,6 +29,7 @@ androidx-core-splashscreen = "1.2.0"
 tasks-genai = "0.10.32"             # latest stable as of Feb 28 2026
 workVersion = "2.11.1"
 identityDoctypesJvm = "202411.1"
+foundation = "1.10.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -73,6 +74,7 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttpVersion" }
 # litert-gpu removed - not available in 2.x series, unused in project
 identity-doctypes-jvm = { group = "com.android.identity", name = "identity-doctypes-jvm", version.ref = "identityDoctypesJvm" }
+androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

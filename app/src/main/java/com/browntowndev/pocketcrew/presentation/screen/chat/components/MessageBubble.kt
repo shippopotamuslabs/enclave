@@ -178,7 +178,7 @@ fun MessageBubble(
 private fun PreviewMessageBubbleUser() {
     PocketCrewTheme {
         MessageBubble(
-            ChatMessage("1", MessageRole.User, "Hello!", "10:30 AM"),
+            ChatMessage(id = 1L, chatId = 1L, role = MessageRole.User, content = "Hello!", formattedTimestamp = "10:30 AM"),
         )
     }
 }
@@ -189,16 +189,17 @@ private fun PreviewMessageBubbleCode() {
     PocketCrewTheme {
         MessageBubble(
             ChatMessage(
-                "3",
-                MessageRole.User,
-                """
+                id = 3L,
+                chatId = 1L,
+                role = MessageRole.User,
+                content = """
 ```
 fun main() {
   println("Hello")
 }
 ```
                 """.trimIndent(),
-                "10:32 AM",
+                formattedTimestamp = "10:32 AM",
             ),
         )
     }
@@ -210,10 +211,11 @@ private fun PreviewMessageBubbleLong() {
     PocketCrewTheme {
         MessageBubble(
             ChatMessage(
-                "4",
-                MessageRole.User,
-                "This is a longer message that spans multiple lines to verify layout behavior and make sure the action buttons align properly beneath the bubble.",
-                "10:33 AM",
+                id = 4L,
+                chatId = 1L,
+                role = MessageRole.User,
+                content = "This is a longer message that spans multiple lines to verify layout behavior and make sure the action buttons align properly beneath the bubble.",
+                formattedTimestamp = "10:33 AM",
             ),
         )
     }

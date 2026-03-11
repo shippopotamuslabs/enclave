@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.presentation.screen.chat
 
 import android.content.Context
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.chat.Message
@@ -31,7 +32,9 @@ private data class ChatBaseState(
     val isThinking: Boolean = false,
     val thinkingSteps: List<String> = emptyList(),
     val showUseTheCrewPopup: Boolean = false,
-    val pendingUpgradeMessageId: String? = null,
+    val pendingUpgradeMessageId: Long? = null,
+    // Track the current chat ID after sending messages to continue the conversation
+    val currentChatId: Long? = null,
 )
 
 @HiltViewModel
@@ -39,7 +42,15 @@ class ChatViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val settingsUseCases: SettingsUseCases,
     private val chatUseCases: ChatUseCases,
+    private val savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
+
+    /**
+     * Optional chat ID for continuing an existing conversation.
+     * Can be passed via navigation or set programmatically.
+     */
+    val initialChatId: Long?
+        get() = savedStateHandle.get<Long>("chatId")
 
     private val _baseState = MutableStateFlow(ChatBaseState())
 
@@ -77,57 +88,71 @@ class ChatViewModel @Inject constructor(
     }
 
     fun onSendMessage() {
-        val currentState = uiState.value
+        val currentState = _baseState.value
         if (currentState.inputText.isNotBlank()) {
             val userMessageContent = currentState.inputText
 
-            // Generate unique IDs using timestamp + counter to prevent duplicate keys
-            val timestamp = System.currentTimeMillis()
-            val userMessageId = "${timestamp}_user"
-            val assistantMessageId = "${timestamp}_assistant"
-            val chatId = "${timestamp}_chat"
-
-            val userMessage = ChatMessage(
-                id = userMessageId,
-                role = MessageRole.User,
-                content = userMessageContent,
-                formattedTimestamp = "Now",
-            )
-
-            // Placeholder assistant message that will be updated with streaming content
-            val placeholderAssistantMessage = ChatMessage(
-                id = assistantMessageId,
-                role = MessageRole.Assistant,
-                content = "",
-                formattedTimestamp = "Now",
-            )
-
-            _baseState.update {
-                it.copy(
-                    messages = it.messages + userMessage + placeholderAssistantMessage,
-                    inputText = "",
-                    isThinking = true,
-                    thinkingSteps = emptyList(),
-                )
-            }
+            // Determine the chat ID: prefer currentChatId (from previous messages),
+            // then initialChatId (from navigation), otherwise 0 to create new chat
+            val chatIdForMessage = currentState.currentChatId ?: initialChatId ?: 0L
 
             // Create domain message for persistence
+            // The processPrompt call will create real DB entries and return real IDs
+            // Use id = 0 to trigger Room's autoGenerate = true (0 is the default that triggers auto-generation)
             val domainMessage = Message(
-                id = -1L, // Signal to create new chat if needed
-                chatId = -1L,
+                id = 0L,
+                chatId = chatIdForMessage,
                 content = userMessageContent,
                 role = com.browntowndev.pocketcrew.domain.model.chat.Role.USER
             )
 
             viewModelScope.launch {
                 // Step 1: Save user message (creates new chat if needed)
-                chatUseCases.processPrompt(domainMessage)
+                // Also creates placeholder assistant message, returns assistant message ID and chat ID
+                val promptResult = chatUseCases.processPrompt(domainMessage)
 
-                // Use mode to route to appropriate service
-                chatUseCases.generateChatResponse(userMessageContent, assistantMessageId, currentState.selectedMode)
-                    .collect { generationState ->
-                        handleGenerationState(generationState, assistantMessageId, chatId)
-                    }
+                // Now add messages to UI with real IDs from the database
+                val userMessage = ChatMessage(
+                    id = promptResult.userMessageId,
+                    chatId = promptResult.chatId,
+                    role = MessageRole.User,
+                    content = userMessageContent,
+                    formattedTimestamp = "Now",
+                )
+
+                val assistantMessage = ChatMessage(
+                    id = promptResult.assistantMessageId,
+                    chatId = promptResult.chatId,
+                    role = MessageRole.Assistant,
+                    content = "",
+                    formattedTimestamp = "Now",
+                )
+
+                _baseState.update {
+                    it.copy(
+                        messages = it.messages + userMessage + assistantMessage,
+                        inputText = "",
+                        isThinking = true,
+                        thinkingSteps = emptyList(),
+                        // Update currentChatId to continue this conversation
+                        currentChatId = promptResult.chatId,
+                    )
+                }
+
+                // Use mode to route to appropriate service, passing IDs for persistence and history rehydration
+                chatUseCases.generateChatResponse(
+                    prompt = userMessageContent,
+                    userMessageId = promptResult.userMessageId,
+                    assistantMessageId = promptResult.assistantMessageId,
+                    chatId = promptResult.chatId,
+                    mode = currentState.selectedMode
+                ).collect { generationState ->
+                    handleGenerationState(
+                        generationState,
+                        promptResult.assistantMessageId,
+                        promptResult.chatId
+                    )
+                }
             }
         }
     }
@@ -137,8 +162,8 @@ class ChatViewModel @Inject constructor(
      */
     private fun handleGenerationState(
         generationState: MessageGenerationState,
-        assistantMessageId: String,
-        chatId: String
+        assistantMessageId: Long,
+        chatId: Long
     ) {
         when (generationState) {
             is MessageGenerationState.ThinkingLive -> {
@@ -237,12 +262,9 @@ class ChatViewModel @Inject constructor(
             // Find the Fast response message
             val fastMessage = currentState.messages.find { it.id == pendingMessageId }
             if (fastMessage != null) {
-                val chatId = "${System.currentTimeMillis()}_upgrade"
-                val userMessage = currentState.messages
-                    .filter { it.role == MessageRole.User }
-                    .lastOrNull()
-                    ?.content
-                    ?: ""
+                val userMessagePair = currentState.messages.lastOrNull { it.role == MessageRole.User }
+                val userMessageContent = userMessagePair?.content ?: ""
+                val userMessageId = userMessagePair?.id ?: 0L
 
                 _baseState.update {
                     it.copy(
@@ -253,12 +275,17 @@ class ChatViewModel @Inject constructor(
                     )
                 }
 
-                // Start Crew Mode via use case
+                // Start Crew Mode - use the real chat ID from the message
                 viewModelScope.launch {
-                    chatUseCases.generateChatResponse(userMessage, pendingMessageId, Mode.CREW)
-                        .collect { generationState ->
-                            handleGenerationState(generationState, pendingMessageId, chatId)
-                        }
+                    chatUseCases.generateChatResponse(
+                        prompt = userMessageContent,
+                        userMessageId = userMessageId,
+                        assistantMessageId = pendingMessageId,
+                        chatId = fastMessage.chatId,
+                        mode = Mode.CREW
+                    ).collect { generationState ->
+                        handleGenerationState(generationState, pendingMessageId, fastMessage.chatId)
+                    }
                 }
             }
         }
