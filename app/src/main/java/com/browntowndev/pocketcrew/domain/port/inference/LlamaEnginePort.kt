@@ -28,6 +28,14 @@ interface LlamaEnginePort {
     suspend fun appendMessage(message: ChatMessage)
 
     /**
+     * Replace the entire conversation history with the given messages.
+     * Clears existing history and sets up new messages starting with system prompt.
+     *
+     * @param messages List of messages to set as history (excluding system prompt)
+     */
+    suspend fun setHistory(messages: List<ChatMessage>)
+
+    /**
      * Start text generation based on conversation history.
      * Returns a flow of GenerationEvent for streaming tokens.
      */

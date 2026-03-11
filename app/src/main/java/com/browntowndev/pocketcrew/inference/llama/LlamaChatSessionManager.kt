@@ -34,6 +34,16 @@ class LlamaChatSessionManager @Inject constructor(
     }
 
     /**
+     * Replace the entire conversation history with the given messages.
+     * Used for rehydrating context from database on new session.
+     *
+     * @param messages List of messages to set as history (excluding system prompt)
+     */
+    suspend fun setHistory(messages: List<ChatMessage>) {
+        engine.setHistory(messages)
+    }
+
+    /**
      * Stream the assistant's response.
      */
     fun streamAssistantResponse(): Flow<GenerationEvent> {

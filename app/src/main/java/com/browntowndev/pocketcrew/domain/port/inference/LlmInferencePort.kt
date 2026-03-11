@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.port.inference
 
+import com.browntowndev.pocketcrew.inference.llama.ChatMessage
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -13,6 +14,14 @@ interface LlmInferencePort {
      * @param closeConversation Whether to close the conversation after sending the prompt.
      */
     fun sendPrompt(prompt: String, closeConversation: Boolean = false): Flow<InferenceEvent>
+
+    /**
+     * Replaces the entire conversation history with the given messages.
+     * Used for rehydrating context from database on new session.
+     *
+     * @param messages List of messages to set as history (excluding system prompt)
+     */
+    suspend fun setHistory(messages: List<ChatMessage>)
 
     /**
      * Closes the underlying session and releases resources. Both the engine
