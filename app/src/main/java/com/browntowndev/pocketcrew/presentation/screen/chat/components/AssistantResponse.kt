@@ -1,13 +1,6 @@
 package com.browntowndev.pocketcrew.presentation.screen.chat.components
 
 import android.content.ClipData
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -23,8 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,7 +29,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.painterResource
@@ -46,7 +36,6 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -104,14 +93,19 @@ private fun parseContent(raw: String): List<ContentSegment> {
 @Composable
 fun AssistantResponse(
     message: ChatMessage,
+    modelDisplayName: String = "",
     modifier: Modifier = Modifier,
 ) {
     val segments = remember(message.content) { parseContent(message.content) }
+    var showThinkingDetails by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxWidth()) {
         // "Thought for Xs" collapsible header — only for messages with thinking data
         if (message.thinkingData != null) {
-            ThoughtForHeader(thinkingData = message.thinkingData)
+            ThoughtForHeader(
+                thinkingData = message.thinkingData,
+                onViewFullThinking = { showThinkingDetails = true }
+            )
         }
 
         // Response content
@@ -135,9 +129,20 @@ fun AssistantResponse(
                 .align(Alignment.End),
         )
     }
+
+    // Bottom sheet for thinking details
+    if (message.thinkingData != null) {
+        ThinkingDetailsBottomSheet(
+            isVisible = showThinkingDetails,
+            thinkingSteps = message.thinkingData.steps,
+            thinkingDurationSeconds = message.thinkingData.durationSeconds,
+            modelDisplayName = message.thinkingData.modelDisplayName,
+            onDismiss = { showThinkingDetails = false }
+        )
+    }
 }
 
-// ── "Thought for Xs" collapsible header ──
+// ── "Thought for Xs" header that opens bottom sheet ──
 
 private fun formatThinkingDuration(seconds: Int): String = when {
     seconds < 60 -> "${seconds}s"
@@ -147,91 +152,34 @@ private fun formatThinkingDuration(seconds: Int): String = when {
 @Composable
 private fun ThoughtForHeader(
     thinkingData: ThinkingData,
+    onViewFullThinking: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     val durationText = formatThinkingDuration(thinkingData.durationSeconds)
 
-    // Animate rotation: 0 degrees (right) to -90 degrees (up)
-    val rotation by animateFloatAsState(
-        targetValue = if (expanded) -90f else 0f,
-        label = "thought_header_arrow_rotation",
-    )
-
-    Column(
+    // Header row: cognition + "Thought for Xs" — clickable to open bottom sheet
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
             .fillMaxWidth()
+            .clickable { onViewFullThinking() }
             .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 4.dp)
-            .animateContentSize(),
     ) {
-        // Header row: cognition + "Thought for Xs" — clickable
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.clickable { expanded = !expanded },
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.cognition),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier.size(16.dp),
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = "Thought for $durationText",
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 13.sp,
-                ),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.width(6.dp))
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .size(16.dp)
-                    .rotate(rotation),
-            )
-        }
-
-        // Expandable chain-of-thought summary
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut(),
-        ) {
-            Column(
-                modifier = Modifier.padding(start = 22.dp, top = 4.dp, bottom = 4.dp),
-            ) {
-                thinkingData.steps.forEach { step ->
-                    Text(
-                        text = step,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 12.sp,
-                            lineHeight = 16.sp,
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(vertical = 1.dp),
-                    )
-                }
-
-                // "View details" link — will eventually open bottom sheet
-                Text(
-                    text = "View full thinking",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 12.sp,
-                    ),
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .padding(top = 4.dp)
-                        .clickable { /* TODO: open bottom sheet with full chain-of-thought */ },
-                )
-            }
-        }
+        Icon(
+            painter = painterResource(R.drawable.cognition),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp),
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = "Thought for $durationText",
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 15.sp,
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
