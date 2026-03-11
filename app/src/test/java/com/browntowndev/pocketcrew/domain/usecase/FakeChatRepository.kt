@@ -13,7 +13,7 @@ class FakeChatRepository : ChatRepository {
     private val createdChats = mutableListOf<Chat>()
     private var nextChatId = 1L
     var shouldThrowOnCreateChat = false
-    private val savedAssistantMessages = mutableListOf<Pair<String, String>>()
+    private val savedAssistantMessages = mutableListOf<Pair<Long, String>>()
 
     override suspend fun createChat(chat: Chat): Long {
         if (shouldThrowOnCreateChat) {
@@ -25,7 +25,7 @@ class FakeChatRepository : ChatRepository {
     }
 
     override suspend fun saveAssistantMessage(
-        messageId: String,
+        messageId: Long,
         content: String,
         thinkingData: ThinkingData?
     ) {

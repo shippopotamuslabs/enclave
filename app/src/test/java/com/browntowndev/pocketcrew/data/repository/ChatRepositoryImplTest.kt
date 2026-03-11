@@ -65,7 +65,7 @@ class ChatRepositoryImplTest {
 
     @Test
     fun `saveAssistantMessage updates message content with thinking data`() = runTest {
-        val messageId = "123"
+        val messageId = 123L
         val content = "This is the assistant response"
         val thinkingData = ThinkingData(
             durationSeconds = 10,
@@ -88,7 +88,7 @@ class ChatRepositoryImplTest {
 
     @Test
     fun `saveAssistantMessage updates message content without thinking data`() = runTest {
-        val messageId = "456"
+        val messageId = 456L
         val content = "Simple response"
 
         repository.saveAssistantMessage(messageId, content, null)
@@ -106,24 +106,34 @@ class ChatRepositoryImplTest {
 
     @Test
     fun `saveAssistantMessage handles non-numeric messageId gracefully`() = runTest {
-        val messageId = "not-a-number"
+        // This test is no longer applicable since messageId is now Long type
+        // Invalid Long values would be a compile-time error, not runtime
+        val messageId = 0L
         val content = "Response content"
 
-        // When messageId cannot be converted to Long, the function returns early
         repository.saveAssistantMessage(messageId, content, null)
 
-        // verify that updateMessageContent is NOT called for invalid messageId
-        coVerify(exactly = 0) { messageDao.updateMessageContent(any(), any(), any(), any(), any()) }
+        // verify that updateMessageContent is called with the valid Long id
+        coVerify {
+            messageDao.updateMessageContent(
+                id = 0L,
+                content = content,
+                thinkingDuration = null,
+                thinkingSteps = null,
+                thinkingRaw = null
+            )
+        }
     }
 
     @Test
     fun `saveAssistantMessage does not throw on invalid messageId`() = runTest {
-        val invalidMessageId = "abc123"
+        // This test is no longer applicable since messageId is now Long type
+        // Invalid Long values would be a compile-time error, not runtime
+        val messageId = 0L
         val content = "Test content"
 
-        // Function should return early without throwing when messageId is invalid
-        // This should not throw any exception
-        repository.saveAssistantMessage(invalidMessageId, content, null)
+        // Function should not throw any exception
+        repository.saveAssistantMessage(messageId, content, null)
     }
 
     @Test

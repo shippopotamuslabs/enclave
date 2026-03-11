@@ -43,4 +43,7 @@ abstract class MessageDao {
         thinkingSteps: String?,
         thinkingRaw: String?
     )
+
+    @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY id ASC")
+    abstract suspend fun getMessagesByChatId(chatId: Long): List<MessageEntity>
 }
