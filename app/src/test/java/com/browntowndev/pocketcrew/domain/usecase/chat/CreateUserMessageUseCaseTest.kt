@@ -88,8 +88,8 @@ class CreateUserMessageUseCaseTest {
     fun `invoke creates new chat when message id is negative one`() = runTest {
         // Given
         val message = Message(
-            id = -1L, // New chat indicator
-            chatId = -1L,
+            id = 0L, // New chat indicator (0 triggers auto-generation)
+            chatId = 0L,
             content = "Hello world test message",
             role = Role.USER
         )
@@ -107,8 +107,8 @@ class CreateUserMessageUseCaseTest {
     fun `invoke generates chat name from first five words`() = runTest {
         // Given
         val message = Message(
-            id = -1L,
-            chatId = -1L,
+            id = 0L,
+            chatId = 0L,
             content = "One two three four five six seven eight", // 8 words
             role = Role.USER
         )
@@ -126,8 +126,8 @@ class CreateUserMessageUseCaseTest {
     fun `invoke handles short message content`() = runTest {
         // Given
         val message = Message(
-            id = -1L,
-            chatId = -1L,
+            id = 0L,
+            chatId = 0L,
             content = "Hi", // Only 1 word
             role = Role.USER
         )
@@ -145,8 +145,8 @@ class CreateUserMessageUseCaseTest {
     fun `invoke updates message chatId when creating new chat`() = runTest {
         // Given
         val message = Message(
-            id = -1L,
-            chatId = -1L,
+            id = 0L,
+            chatId = 0L,
             content = "Test message",
             role = Role.USER
         )
@@ -166,8 +166,8 @@ class CreateUserMessageUseCaseTest {
     fun `invoke creates unpinned chat`() = runTest {
         // Given
         val message = Message(
-            id = -1L,
-            chatId = -1L,
+            id = 0L,
+            chatId = 0L,
             content = "Test",
             role = Role.USER
         )

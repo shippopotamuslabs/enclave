@@ -6,13 +6,17 @@ import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
+import com.browntowndev.pocketcrew.inference.llama.ChatMessage
+import com.browntowndev.pocketcrew.inference.llama.ChatRole
 import com.browntowndev.pocketcrew.presentation.screen.chat.Mode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.withContext
 
 
 import javax.inject.Inject
@@ -23,38 +27,88 @@ import javax.inject.Inject
  * - FAST: Uses Fast model for quick single-model responses
  * - THINKING: Uses Draft One model for reasoning responses
  * - CREW: Uses PipelineExecutorPort for multi-model pipeline
+ *
+ * IMPORTANT: This use case performs history rehydration from the database
+ * to maintain conversation context across app restarts or model unloads.
  */
 class GenerateChatResponseUseCase @Inject constructor(
     @FastModelEngine private val fastModelService: LlmInferencePort,
     @DraftOneModelEngine private val draftOneModelService: LlmInferencePort,
     private val pipelineExecutor: PipelineExecutorPort,
     private val chatRepository: ChatRepository,
-    private val bufferThinkingSteps: BufferThinkingStepsUseCase
+    private val messageRepository: MessageRepository,
+    private val bufferThinkingSteps: BufferThinkingStepsUseCase,
+    private val loggingPort: LoggingPort,
 ) {
     companion object {
         private const val TAG = "GenerateChatResponse"
     }
 
-    operator fun invoke(prompt: String, messageId: String, mode: Mode): Flow<MessageGenerationState> {
+    operator fun invoke(prompt: String, userMessageId: Long, assistantMessageId: Long, chatId: Long, mode: Mode): Flow<MessageGenerationState> {
         return when (mode) {
-            Mode.FAST -> generateWithService(prompt, messageId, fastModelService)
-            Mode.THINKING -> generateWithService(prompt, messageId, draftOneModelService)
+            Mode.FAST -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, fastModelService)
+            Mode.THINKING -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, draftOneModelService)
             Mode.CREW -> pipelineExecutor.executePipeline(
-                chatId = messageId.replace("_assistant", "_chat"),
+                chatId = chatId.toString(),
                 userMessage = prompt,
-                assistantMessageId = messageId
+                assistantMessageId = assistantMessageId.toString()
             )
+        }
+    }
+
+    /**
+     * Rehydrates conversation history from database.
+     * Loads recent messages for the chat and sets them in the inference service.
+     * Filters out:
+     * - Empty placeholder messages
+     * - The current user message being sent (not historical yet)
+     * - The assistant placeholder message being generated (empty content)
+     *
+     * @param chatId The chat ID to load history from
+     * @param userMessageId The ID of the user message being sent (excluded from history)
+     * @param assistantMessageId The ID of the assistant message being generated (excluded from history)
+     * @param service The inference service to set history in
+     */
+    private suspend fun rehydrateHistory(chatId: Long, userMessageId: Long, assistantMessageId: Long, service: LlmInferencePort) {
+        val messages = messageRepository.getMessagesForChat(chatId)
+            .filter { it.content.isNotBlank() } // Exclude empty placeholder messages
+            .filter { it.id != userMessageId } // Exclude the user message being sent (not historical yet)
+            .filter { it.id != assistantMessageId } // Exclude assistant placeholder (not historical yet)
+        val chatMessages = messages.map { message ->
+            ChatMessage(
+                role = ChatRole.fromDomainRole(message.role),
+                content = message.content
+            )
+        }
+        service.setHistory(chatMessages)
+        loggingPort.debug(TAG, message = "Rehydrated ${chatMessages.size} messages")
+        chatMessages.forEach { message ->
+            loggingPort.debug(TAG, message = "Rehydrated message: role=${message.role}")
+            loggingPort.debug(TAG, message = "Rehydrated message: content=${message.content}")
         }
     }
 
     private fun generateWithService(
         prompt: String,
-        messageId: String,
+        userMessageId: Long,
+        assistantMessageId: Long,
+        chatId: Long,
         service: LlmInferencePort
     ): Flow<MessageGenerationState> = flow {
         val startTime = System.currentTimeMillis()
         val currentSteps = mutableListOf<String>()
         bufferThinkingSteps.reset()
+
+        // REHYDRATION PHASE: Load conversation history from database
+        // This ensures context is preserved across app restarts or model unloads
+        try {
+            withContext(Dispatchers.IO) {
+                rehydrateHistory(chatId, userMessageId, assistantMessageId, service)
+            }
+        } catch (e: Exception) {
+            android.util.Log.w(TAG, "Failed to rehydrate history: ${e.message}")
+            // Continue without rehydration - the service will start with fresh context
+        }
 
         service.sendPrompt(prompt, closeConversation = false).collect { event ->
             when (event) {
@@ -92,7 +146,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                     } else null
 
                     chatRepository.saveAssistantMessage(
-                        messageId = messageId,
+                        messageId = assistantMessageId,
                         content = event.finalResponse,
                         thinkingData = thinkingData
                     )

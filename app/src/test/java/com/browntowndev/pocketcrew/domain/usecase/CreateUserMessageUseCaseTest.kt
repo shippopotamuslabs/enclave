@@ -20,6 +20,10 @@ class CreateUserMessageUseCaseTest {
         fakeTransactionProvider = FakeTransactionProvider()
         fakeMessageRepository = FakeMessageRepository()
         fakeChatRepository = FakeChatRepository()
+        // Reset fakes to ensure clean state
+        fakeTransactionProvider.reset()
+        fakeMessageRepository.reset()
+        fakeChatRepository.reset()
         createUserMessageUseCase = CreateUserMessageUseCase(
             transactionProvider = fakeTransactionProvider,
             messageRepository = fakeMessageRepository,
@@ -40,9 +44,9 @@ class CreateUserMessageUseCaseTest {
         // When
         createUserMessageUseCase(message)
 
-        // Then
+        // Then - verify both user message and assistant placeholder were saved
         fakeTransactionProvider.verifyTransactionCalled(1)
-        fakeMessageRepository.verifySaveMessageCalled(1)
+        fakeMessageRepository.verifySaveMessageCalled(2) // Now saves user + assistant placeholder
         fakeMessageRepository.verifyMessageSaved(message)
     }
 
@@ -118,11 +122,11 @@ class CreateUserMessageUseCaseTest {
 
     @Test
     fun `invoke creates chat and updates message when id is negative`() = runTest {
-        // Given - A message with id=-1 indicates it hasn't been assigned a valid chat ID
+        // Given - A message with chatId=-1 indicates it hasn't been assigned a valid chat ID
         // This should now create a new chat and update the message's chatId
         val orphanMessage = Message(
-            id = -1,
-            chatId = 1,
+            id = 0,
+            chatId = 0L,
             content = "Orphan message without chat",
             role = Role.USER
         )
@@ -135,7 +139,7 @@ class CreateUserMessageUseCaseTest {
         fakeChatRepository.verifyChatName("Orphan message without chat")
 
         // And verify message was saved with updated chatId
-        fakeMessageRepository.verifySaveMessageCalled(1)
+        fakeMessageRepository.verifySaveMessageCalled(2)
         val savedMessage = fakeMessageRepository.getSavedMessages().first()
         assertEquals(1L, savedMessage.chatId, "Message should have the new chat ID")
     }
@@ -144,8 +148,8 @@ class CreateUserMessageUseCaseTest {
     fun `invoke generates correct chat name with more than 5 words`() = runTest {
         // Given - Message with more than 5 words
         val longMessage = Message(
-            id = -1,
-            chatId = 1,
+            id = 0,
+            chatId = 0L,
             content = "This is a very long message with more than five words in it",
             role = Role.USER
         )
@@ -161,8 +165,8 @@ class CreateUserMessageUseCaseTest {
     fun `invoke generates correct chat name with fewer than 5 words`() = runTest {
         // Given - Message with fewer than 5 words
         val shortMessage = Message(
-            id = -1,
-            chatId = 1,
+            id = 0,
+            chatId = 0L,
             content = "Hello world",
             role = Role.USER
         )
@@ -188,7 +192,7 @@ class CreateUserMessageUseCaseTest {
         createUserMessageUseCase(messageWithAutoId)
 
         // Then
-        fakeMessageRepository.verifySaveMessageCalled(1)
+        fakeMessageRepository.verifySaveMessageCalled(2)
         // Chat should NOT be created for id=0 (only for id=-1)
         fakeChatRepository.verifyChatCreated(0)
     }
