@@ -28,7 +28,7 @@ interface ChatRepository {
      * @param thinkingData Optional thinking data for reasoning models
      */
     suspend fun saveAssistantMessage(
-        messageId: String,
+        messageId: Long,
         content: String,
         thinkingData: ThinkingData? = null
     )

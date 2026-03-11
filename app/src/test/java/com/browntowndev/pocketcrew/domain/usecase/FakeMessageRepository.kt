@@ -12,17 +12,29 @@ class FakeMessageRepository : MessageRepository {
 
     private val savedMessages = mutableListOf<Message>()
     private var getMessageByIdResult: Message? = null
+    private var getMessagesForChatResult: List<Message> = emptyList()
+    private var nextMessageId = 1L
 
     // Methods to simulate errors
     var shouldThrowOnSaveMessage = false
 
-    override suspend fun saveMessage(message: Message) {
+    override suspend fun saveMessage(message: Message): Long {
         if (shouldThrowOnSaveMessage) throw RuntimeException("Simulated error on saveMessage")
         savedMessages.add(message)
+        val id = nextMessageId++
+        return id
     }
 
     override suspend fun getMessageById(id: Long): Message? {
         return getMessageByIdResult
+    }
+
+    override suspend fun getMessagesForChat(chatId: Long): List<Message> {
+        return getMessagesForChatResult
+    }
+
+    fun setMessagesForChat(messages: List<Message>) {
+        getMessagesForChatResult = messages
     }
 
     fun getSavedMessages(): List<Message> = savedMessages.toList()
@@ -42,6 +54,7 @@ class FakeMessageRepository : MessageRepository {
         savedMessages.clear()
         shouldThrowOnSaveMessage = false
         getMessageByIdResult = null
+        getMessagesForChatResult = emptyList()
     }
 }
 

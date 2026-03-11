@@ -33,10 +33,11 @@ class MessageRepositoryImpl @Inject constructor(
      * wrap them in runInTransaction.
      *
      * @param message The message to save
+     * @return The ID of the saved message
      */
-    override suspend fun saveMessage(message: Message) {
+    override suspend fun saveMessage(message: Message): Long {
         val entity = message.toEntity()
-        messageDao.insertMessageWithSearch(entity)
+        return messageDao.insertMessageWithSearch(entity)
     }
 
     /**
@@ -47,5 +48,15 @@ class MessageRepositoryImpl @Inject constructor(
      */
     override suspend fun getMessageById(id: Long): Message? {
         return messageDao.getMessageById(id)?.toDomain()
+    }
+
+    /**
+     * Retrieves all messages for a specific chat, ordered by ID ascending.
+     *
+     * @param chatId The chat ID
+     * @return List of messages in chronological order
+     */
+    override suspend fun getMessagesForChat(chatId: Long): List<Message> {
+        return messageDao.getMessagesByChatId(chatId).map { it.toDomain() }
     }
 }

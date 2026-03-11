@@ -43,13 +43,12 @@ class ChatRepositoryImpl @Inject constructor(
      * @param thinkingData Optional thinking data for reasoning models
      */
     override suspend fun saveAssistantMessage(
-        messageId: String,
+        messageId: Long,
         content: String,
         thinkingData: ThinkingData?
     ) {
-        val id = messageId.toLongOrNull() ?: return
         messageDao.updateMessageContent(
-            id = id,
+            id = messageId,
             content = content,
             thinkingDuration = thinkingData?.durationSeconds,
             thinkingSteps = thinkingData?.steps?.joinToString("\n"),

@@ -17,8 +17,9 @@ interface MessageRepository {
      * This also handles updating the FTS search index.
      *
      * @param message The message to save
+     * @return The ID of the saved message
      */
-    suspend fun saveMessage(message: Message)
+    suspend fun saveMessage(message: Message): Long
 
     /**
      * Retrieves a message by its ID.
@@ -27,4 +28,12 @@ interface MessageRepository {
      * @return The message if found, null otherwise
      */
     suspend fun getMessageById(id: Long): Message?
+
+    /**
+     * Retrieves all messages for a specific chat, ordered by ID ascending.
+     *
+     * @param chatId The chat ID
+     * @return List of messages in chronological order
+     */
+    suspend fun getMessagesForChat(chatId: Long): List<Message>
 }
