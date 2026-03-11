@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.presentation.screen.chat
 import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MessageGenerationState
@@ -42,6 +43,7 @@ class ChatViewModelTest {
     private lateinit var mockCreateUserMessageUseCase: CreateUserMessageUseCase
     private lateinit var mockContext: Context
     private lateinit var mockSavedStateHandle: SavedStateHandle
+    private lateinit var mockModelRegistry: ModelRegistryPort
     private lateinit var viewModel: ChatViewModel
 
     @Before
@@ -60,8 +62,9 @@ class ChatViewModelTest {
         mockSavedStateHandle = mockk(relaxed = true) {
             every { get<Long>("chatId") } returns null
         }
+        mockModelRegistry = mockk(relaxed = true)
 
-        viewModel = ChatViewModel(mockContext, mockSettingsUseCases, mockChatUseCases, mockSavedStateHandle)
+        viewModel = ChatViewModel(mockContext, mockSettingsUseCases, mockChatUseCases, mockSavedStateHandle, mockModelRegistry)
     }
 
     @After
@@ -99,8 +102,9 @@ class ChatViewModelTest {
         assertEquals(Mode.FAST, state.selectedMode)
         assertEquals("", state.inputText)
         assertEquals(false, state.isInputExpanded)
-        assertEquals(false, state.isThinking)
+        assertEquals(ResponseState.NONE, state.responseState)
         assertEquals(emptyList<String>(), state.thinkingSteps)
+        assertEquals(0L, state.thinkingStartTime)
         assertEquals(false, state.showUseTheCrewPopup)
     }
 
@@ -157,10 +161,18 @@ class ChatViewModelTest {
         assertEquals(MessageRole.Assistant, MessageRole.valueOf("Assistant"))
     }
 
+    @Test
+    fun `ResponseState enum has correct entries`() {
+        assertEquals(3, ResponseState.entries.size)
+        assertEquals(ResponseState.NONE, ResponseState.valueOf("NONE"))
+        assertEquals(ResponseState.PROCESSING, ResponseState.valueOf("PROCESSING"))
+        assertEquals(ResponseState.THINKING, ResponseState.valueOf("THINKING"))
+    }
+
     // ===== ThinkingIndicator State Tests =====
 
     @Test
-    fun `ThinkingLive sets isThinking to true and updates thinkingSteps`() = runTest {
+    fun `ThinkingLive sets responseState to THINKING and updates thinkingSteps`() = runTest {
         // Given: generateChatResponse returns a flow with ThinkingLive
         val thinkingSteps = listOf("Analyzing query...", "Drafting response...")
         coEvery {
@@ -173,14 +185,14 @@ class ChatViewModelTest {
         viewModel.onSendMessage()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then: isThinking should be true and thinkingSteps should be updated
+        // Then: responseState should be THINKING and thinkingSteps should be updated
         val state = viewModel.uiState.value
-        assertTrue("isThinking should be true after ThinkingLive", state.isThinking)
+        assertEquals("responseState should be THINKING after ThinkingLive", ResponseState.THINKING, state.responseState)
         assertEquals(thinkingSteps, state.thinkingSteps)
     }
 
     @Test
-    fun `Finished sets isThinking to false and clears thinkingSteps`() = runTest {
+    fun `Finished sets responseState to NONE and clears thinkingSteps`() = runTest {
         // Given: generateChatResponse returns a flow with ThinkingLive then Finished
         coEvery {
             mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
@@ -193,14 +205,14 @@ class ChatViewModelTest {
         viewModel.onSendMessage()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then: isThinking should be false and thinkingSteps should be empty
+        // Then: responseState should be NONE and thinkingSteps should be empty
         val state = viewModel.uiState.value
-        assertFalse("isThinking should be false after Finished", state.isThinking)
+        assertEquals("responseState should be NONE after Finished", ResponseState.NONE, state.responseState)
         assertTrue("thinkingSteps should be empty after Finished", state.thinkingSteps.isEmpty())
     }
 
     @Test
-    fun `GeneratingText does not change isThinking state`() = runTest {
+    fun `GeneratingText keeps THINKING state`() = runTest {
         // Given: generateChatResponse returns a flow with ThinkingLive then GeneratingText
         coEvery {
             mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
@@ -213,13 +225,13 @@ class ChatViewModelTest {
         viewModel.onSendMessage()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then: isThinking should still be true (from ThinkingLive)
+        // Then: responseState should still be THINKING (from ThinkingLive)
         val state = viewModel.uiState.value
-        assertTrue("isThinking should remain true during GeneratingText", state.isThinking)
+        assertEquals("responseState should remain THINKING during GeneratingText", ResponseState.THINKING, state.responseState)
     }
 
     @Test
-    fun `Blocked sets isThinking to false`() = runTest {
+    fun `Blocked sets responseState to NONE`() = runTest {
         // Given: generateChatResponse returns a flow with Blocked
         coEvery {
             mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
@@ -231,13 +243,13 @@ class ChatViewModelTest {
         viewModel.onSendMessage()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then: isThinking should be false
+        // Then: responseState should be NONE
         val state = viewModel.uiState.value
-        assertFalse("isThinking should be false after Blocked", state.isThinking)
+        assertEquals("responseState should be NONE after Blocked", ResponseState.NONE, state.responseState)
     }
 
     @Test
-    fun `Failed sets isThinking to false`() = runTest {
+    fun `Failed sets responseState to NONE`() = runTest {
         // Given: generateChatResponse returns a flow with Failed
         coEvery {
             mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
@@ -249,9 +261,9 @@ class ChatViewModelTest {
         viewModel.onSendMessage()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then: isThinking should be false
+        // Then: responseState should be NONE
         val state = viewModel.uiState.value
-        assertFalse("isThinking should be false after Failed", state.isThinking)
+        assertEquals("responseState should be NONE after Failed", ResponseState.NONE, state.responseState)
     }
 
     @Test
@@ -273,7 +285,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `isThinking is true immediately after onSendMessage`() = runTest {
+    fun `responseState is PROCESSING immediately after onSendMessage`() = runTest {
         // Given: generateChatResponse returns empty flow (immediate completion)
         coEvery {
             mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
@@ -283,9 +295,9 @@ class ChatViewModelTest {
         viewModel.onSendMessage()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then: isThinking should be true from onSendMessage setting it
+        // Then: responseState should be PROCESSING from onSendMessage setting it
         val state = viewModel.uiState.value
-        assertTrue("isThinking should be true immediately after sending message", state.isThinking)
+        assertEquals("responseState should be PROCESSING immediately after sending message", ResponseState.PROCESSING, state.responseState)
     }
 
     // ===== MessageList Visibility Logic Tests =====
