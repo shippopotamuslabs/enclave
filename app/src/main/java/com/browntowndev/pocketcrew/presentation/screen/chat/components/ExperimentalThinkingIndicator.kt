@@ -281,7 +281,7 @@ private fun PreviewTheme(content: @Composable () -> Unit) {
 @Composable
 fun ThinkingIndicator_EmptyPreview() {
     PreviewTheme {
-        ThinkingIndicator(
+        ExperimentalThinkingIndicator(
             thinkingSteps = emptyList(),
             modifier = Modifier.padding(16.dp)
         )
@@ -292,7 +292,7 @@ fun ThinkingIndicator_EmptyPreview() {
 @Composable
 fun ThinkingIndicator_SingleStepPreview() {
     PreviewTheme {
-        ThinkingIndicator(
+        ExperimentalThinkingIndicator(
             thinkingSteps = listOf(
                 "Harper: Initializing search strategy for deep dive analysis."
             ),
@@ -305,7 +305,7 @@ fun ThinkingIndicator_SingleStepPreview() {
 @Composable
 fun ThinkingIndicator_MultipleStepsPreview() {
     PreviewTheme {
-        ThinkingIndicator(
+        ExperimentalThinkingIndicator(
             thinkingSteps = listOf(
                 "Lucas: Planning task execution and parallel searches.",
                 "Harper: Executing web_search for latest documentation.",
