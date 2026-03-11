@@ -203,6 +203,7 @@ class ModelFileScanner @Inject constructor(
             ModelType.DRAFT_TWO -> "draft_two.$extension"
             ModelType.MAIN -> "main.$extension"
             ModelType.FAST -> "fast.$extension"
+            ModelType.THINKING -> "thinking.$extension"
         }
     }
 
@@ -223,7 +224,8 @@ class ModelFileScanner @Inject constructor(
             configsByType[ModelType.DRAFT_ONE]?.metadata?.localFileName,
             configsByType[ModelType.DRAFT_TWO]?.metadata?.localFileName,
             configsByType[ModelType.MAIN]?.metadata?.localFileName,
-            configsByType[ModelType.FAST]?.metadata?.localFileName
+            configsByType[ModelType.FAST]?.metadata?.localFileName,
+            configsByType[ModelType.THINKING]?.metadata?.localFileName
         )
 
         if (requiredFiles.isEmpty()) {

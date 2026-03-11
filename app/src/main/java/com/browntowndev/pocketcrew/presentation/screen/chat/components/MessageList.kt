@@ -54,7 +54,7 @@ fun MessageList(
                 val showIndicator = isMostRecentUserMessage && isThinking
                 if (message.role == MessageRole.User) {
                     if (showIndicator) {
-                        ThinkingIndicator(thinkingSteps = thinkingSteps)
+                        ExperimentalThinkingIndicator(thinkingSteps = thinkingSteps)
                     }
                     MessageBubble(message = message)
                 } else {

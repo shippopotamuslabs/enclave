@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Assertions.*
 class GenerateChatResponseUseCaseTest {
 
     private lateinit var fastModelService: LlmInferencePort
-    private lateinit var draftOneModelService: LlmInferencePort
+    private lateinit var thinkingModelService: LlmInferencePort
     private lateinit var chatRepository: ChatRepository
     private lateinit var messageRepository: MessageRepository
     private lateinit var bufferThinkingSteps: BufferThinkingStepsUseCase
@@ -36,7 +36,7 @@ class GenerateChatResponseUseCaseTest {
     @BeforeEach
     fun setup() {
         fastModelService = mockk(relaxed = true)
-        draftOneModelService = mockk(relaxed = true)
+        thinkingModelService = mockk(relaxed = true)
         chatRepository = mockk(relaxed = true)
         messageRepository = mockk(relaxed = true)
         bufferThinkingSteps = mockk(relaxed = true)
@@ -44,7 +44,7 @@ class GenerateChatResponseUseCaseTest {
 
         useCase = GenerateChatResponseUseCase(
             fastModelService = fastModelService,
-            draftOneModelService = draftOneModelService,
+            thinkingModelService = thinkingModelService,
             chatRepository = mockk(relaxed = true),
             pipelineExecutor = mockk(relaxed = true),
             messageRepository = messageRepository,
@@ -205,17 +205,17 @@ class GenerateChatResponseUseCaseTest {
             Message(id = 3, chatId = chatId, content = "Another user", role = Role.USER)
         )
         coEvery { messageRepository.getMessagesForChat(chatId) } returns messages
-        coEvery { draftOneModelService.setHistory(any()) } returns Unit
-        coEvery { draftOneModelService.sendPrompt(any(), any()) } returns flowOf(
+        coEvery { thinkingModelService.setHistory(any()) } returns Unit
+        coEvery { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Completed("Response", null)
         )
 
-        // When - use THINKING mode to test draftOneModelService
+        // When - use THINKING mode to test thinkingModelService
         useCase.invoke("Prompt", 50L, 100L, 1L, Mode.THINKING).collect { }
 
         // Then
         val historySlot = slot<List<ChatMessage>>()
-        coVerify { draftOneModelService.setHistory(capture(historySlot)) }
+        coVerify { thinkingModelService.setHistory(capture(historySlot)) }
 
         val history = historySlot.captured
         assertEquals(ChatRole.USER, history[0].role)
@@ -298,26 +298,26 @@ class GenerateChatResponseUseCaseTest {
         // Then - fastModelService used
         coVerify { fastModelService.setHistory(any()) }
         coVerify { fastModelService.sendPrompt(any(), any()) }
-        coVerify(exactly = 0) { draftOneModelService.setHistory(any()) }
+        coVerify(exactly = 0) { thinkingModelService.setHistory(any()) }
     }
 
     @Test
-    fun `rehydration uses draftOneModelService for THINKING mode`() = runTest {
+    fun `rehydration uses thinkingModelService for THINKING mode`() = runTest {
         // Given
         val messageId = "1_assistant"
         val messages = listOf(Message(id = 1, chatId = 1, content = "Hello", role = Role.USER))
         coEvery { messageRepository.getMessagesForChat(1) } returns messages
-        coEvery { draftOneModelService.setHistory(any()) } returns Unit
-        coEvery { draftOneModelService.sendPrompt(any(), any()) } returns flowOf(
+        coEvery { thinkingModelService.setHistory(any()) } returns Unit
+        coEvery { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Completed("Thinking response", null)
         )
 
         // When
         useCase.invoke("Prompt", 50L, 100L, 1L, Mode.THINKING).collect { }
 
-        // Then - draftOneModelService used
-        coVerify { draftOneModelService.setHistory(any()) }
-        coVerify { draftOneModelService.sendPrompt(any(), any()) }
+        // Then - thinkingModelService used
+        coVerify { thinkingModelService.setHistory(any()) }
+        coVerify { thinkingModelService.sendPrompt(any(), any()) }
         coVerify(exactly = 0) { fastModelService.setHistory(any()) }
     }
 
