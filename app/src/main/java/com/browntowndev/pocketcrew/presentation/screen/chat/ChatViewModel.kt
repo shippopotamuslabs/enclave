@@ -5,6 +5,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
@@ -29,8 +31,11 @@ private data class ChatBaseState(
     val inputText: String = "",
     val selectedMode: Mode = Mode.FAST,
     val isInputExpanded: Boolean = false,
-    val isThinking: Boolean = false,
+    val responseState: ResponseState = ResponseState.NONE,
     val thinkingSteps: List<String> = emptyList(),
+    val thinkingStartTime: Long = 0L,
+    val thinkingEndTime: Long = 0L,  // Time when thinking ended (before text generation)
+    val thinkingModelDisplayName: String = "",
     val showUseTheCrewPopup: Boolean = false,
     val pendingUpgradeMessageId: Long? = null,
     // Track the current chat ID after sending messages to continue the conversation
@@ -43,6 +48,7 @@ class ChatViewModel @Inject constructor(
     private val settingsUseCases: SettingsUseCases,
     private val chatUseCases: ChatUseCases,
     private val savedStateHandle: SavedStateHandle,
+    private val modelRegistry: ModelRegistryPort,
 ) : ViewModel() {
 
     /**
@@ -51,6 +57,18 @@ class ChatViewModel @Inject constructor(
      */
     val initialChatId: Long?
         get() = savedStateHandle.get<Long>("chatId")
+
+    /**
+     * Gets the display name of the model for the given mode.
+     */
+    private fun getModelDisplayName(mode: Mode): String {
+        val modelType = when (mode) {
+            Mode.FAST -> ModelType.FAST
+            Mode.THINKING -> ModelType.THINKING
+            Mode.CREW -> ModelType.MAIN // Crew uses MAIN model for primary generation
+        }
+        return modelRegistry.getRegisteredModelSync(modelType)?.metadata?.displayName ?: ""
+    }
 
     private val _baseState = MutableStateFlow(ChatBaseState())
 
@@ -63,8 +81,10 @@ class ChatViewModel @Inject constructor(
             inputText = base.inputText,
             selectedMode = base.selectedMode,
             isInputExpanded = base.isInputExpanded,
-            isThinking = base.isThinking,
+            responseState = base.responseState,
             thinkingSteps = base.thinkingSteps,
+            thinkingStartTime = base.thinkingStartTime,
+            thinkingModelDisplayName = base.thinkingModelDisplayName,
             showUseTheCrewPopup = base.showUseTheCrewPopup,
             hapticPress = settings.hapticPress,
             hapticResponse = settings.hapticResponse,
@@ -132,8 +152,11 @@ class ChatViewModel @Inject constructor(
                     it.copy(
                         messages = it.messages + userMessage + assistantMessage,
                         inputText = "",
-                        isThinking = true,
+                        responseState = ResponseState.PROCESSING,
                         thinkingSteps = emptyList(),
+                        thinkingStartTime = 0L,
+                        thinkingEndTime = 0L,
+                        thinkingModelDisplayName = getModelDisplayName(currentState.selectedMode),
                         // Update currentChatId to continue this conversation
                         currentChatId = promptResult.chatId,
                     )
@@ -169,42 +192,110 @@ class ChatViewModel @Inject constructor(
             is MessageGenerationState.ThinkingLive -> {
                 _baseState.update {
                     it.copy(
-                        isThinking = true,
-                        thinkingSteps = generationState.steps
+                        responseState = ResponseState.THINKING,
+                        thinkingSteps = generationState.steps,
+                        // Record start time when thinking begins
+                        thinkingStartTime = if (it.thinkingStartTime == 0L) System.currentTimeMillis() else it.thinkingStartTime
                     )
                 }
             }
             is MessageGenerationState.GeneratingText -> {
+                val currentThinkingStartTime = _baseState.value.thinkingStartTime
+                val currentThinkingSteps = _baseState.value.thinkingSteps
+                val currentModelDisplayName = _baseState.value.thinkingModelDisplayName
+
                 _baseState.update { base ->
+                    // Record thinking end time when text generation starts
+                    val now = System.currentTimeMillis()
+
+                    // Calculate thinking duration and create thinkingData if there were thinking steps
+                    val thinkingData = if (currentThinkingStartTime > 0 && currentThinkingSteps.isNotEmpty()) {
+                        val durationSeconds = ((now - currentThinkingStartTime) / 1000).toInt()
+                        ThinkingData(
+                            durationSeconds = durationSeconds,
+                            steps = currentThinkingSteps,
+                            modelDisplayName = currentModelDisplayName
+                        )
+                    } else {
+                        null
+                    }
+
                     val updatedMessages = base.messages.map { msg ->
                         if (msg.id == assistantMessageId) {
-                            msg.copy(content = msg.content + generationState.textDelta)
+                            // Attach thinkingData when text generation starts so "Thought for" appears
+                            msg.copy(
+                                content = msg.content + generationState.textDelta,
+                                thinkingData = thinkingData ?: msg.thinkingData
+                            )
                         } else {
                             msg
                         }
                     }
-                    base.copy(messages = updatedMessages)
+                    // Set to NONE when text generation starts - the "Thought for Xs" indicator
+                    // will now appear on the message itself via thinkingData
+                    base.copy(
+                        messages = updatedMessages,
+                        responseState = ResponseState.NONE,
+                        thinkingEndTime = now,  // Mark when thinking ended
+                    )
                 }
             }
             is MessageGenerationState.Finished -> {
                 val assistantMsg = _baseState.value.messages.find { it.id == assistantMessageId }
+                val currentThinkingStartTime = _baseState.value.thinkingStartTime
+                val currentThinkingEndTime = _baseState.value.thinkingEndTime
+                val currentThinkingSteps = _baseState.value.thinkingSteps
+                val currentModelDisplayName = _baseState.value.thinkingModelDisplayName
 
                 _baseState.update { base ->
                     if (assistantMsg?.content.isNullOrEmpty()) {
                         // No content generated - remove orphan placeholder
                         base.copy(
                             messages = base.messages.filter { it.id != assistantMessageId },
-                            isThinking = false,
+                            responseState = ResponseState.NONE,
                             thinkingSteps = emptyList(),
+                            thinkingStartTime = 0L,
+                            thinkingEndTime = 0L,
+                            thinkingModelDisplayName = "",
                         )
                     } else {
-                        // Show "Use the Crew" popup for Fast responses
+                        // Use thinkingData that was already set when GeneratingText started
+                        // (which captures only thinking time, not generation time)
+                        val existingThinkingData = assistantMsg.thinkingData
+
+                        // Only create new thinkingData if it wasn't already set
+                        val thinkingData = existingThinkingData ?: if (currentThinkingStartTime > 0 && currentThinkingSteps.isNotEmpty()) {
+                            val endTime = if (currentThinkingEndTime > 0) currentThinkingEndTime else System.currentTimeMillis()
+                            val durationSeconds = ((endTime - currentThinkingStartTime) / 1000).toInt()
+                            ThinkingData(
+                                durationSeconds = durationSeconds,
+                                steps = currentThinkingSteps,
+                                modelDisplayName = currentModelDisplayName
+                            )
+                        } else {
+                            null
+                        }
+
+                        // Update the assistant message with thinkingData (if any)
+                        val updatedMessages = base.messages.map { msg ->
+                            if (msg.id == assistantMessageId) {
+                                msg.copy(thinkingData = thinkingData)
+                            } else {
+                                msg
+                            }
+                        }
+
+                        // Show "Use the Crew" popup for Fast responses (no thinking steps)
                         val updatedBase = base.copy(
-                            isThinking = false,
+                            messages = updatedMessages,
+                            responseState = ResponseState.NONE,
                             thinkingSteps = emptyList(),
+                            thinkingStartTime = 0L,
+                        thinkingEndTime = 0L,
+                            thinkingModelDisplayName = "",
                         )
 
-                        // Only show popup if we haven't shown it recently
+                        // Only show popup if we haven't shown it recently and this was a Fast mode response
                         if (!base.showUseTheCrewPopup && base.selectedMode == Mode.FAST) {
                             updatedBase.copy(
                                 showUseTheCrewPopup = true,
@@ -227,8 +318,11 @@ class ChatViewModel @Inject constructor(
                     }
                     base.copy(
                         messages = updatedMessages,
-                        isThinking = false,
+                        responseState = ResponseState.NONE,
                         thinkingSteps = emptyList(),
+                        thinkingStartTime = 0L,
+                        thinkingEndTime = 0L,
+                        thinkingModelDisplayName = "",
                     )
                 }
             }
@@ -243,8 +337,11 @@ class ChatViewModel @Inject constructor(
                     }
                     base.copy(
                         messages = updatedMessages,
-                        isThinking = false,
+                        responseState = ResponseState.NONE,
                         thinkingSteps = emptyList(),
+                        thinkingStartTime = 0L,
+                        thinkingEndTime = 0L,
+                        thinkingModelDisplayName = "",
                     )
                 }
             }
@@ -270,8 +367,11 @@ class ChatViewModel @Inject constructor(
                     it.copy(
                         showUseTheCrewPopup = false,
                         pendingUpgradeMessageId = null,
-                        isThinking = true,
+                        responseState = ResponseState.PROCESSING,
                         thinkingSteps = emptyList(),
+                        thinkingStartTime = 0L,
+                        thinkingEndTime = 0L,
+                        thinkingModelDisplayName = getModelDisplayName(Mode.CREW),
                     )
                 }
 
