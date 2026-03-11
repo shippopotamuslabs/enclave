@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
+import com.browntowndev.pocketcrew.inference.llama.ChatMessage
 import com.browntowndev.pocketcrew.inference.llama.GenerationEvent
 import com.browntowndev.pocketcrew.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.inference.llama.LlamaModelConfig
@@ -156,5 +157,25 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 Log.w(TAG, "Error clearing conversation", e)
             }
         }
+    }
+
+    override suspend fun setHistory(messages: List<ChatMessage>) {
+        // Ensure the engine is initialized before setting history
+        if (!isInitialized) {
+            val path = modelPath
+            if (path != null) {
+                sessionManager.initializeEngine(
+                    LlamaModelConfig(
+                        modelPath = path,
+                        systemPrompt = systemPrompt,
+                        sampling = samplingConfig
+                    )
+                )
+                isInitialized = true
+            } else {
+                throw IllegalStateException("Model not configured. Call configure() first.")
+            }
+        }
+        sessionManager.setHistory(messages)
     }
 }

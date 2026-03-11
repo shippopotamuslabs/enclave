@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.inference
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
+import com.browntowndev.pocketcrew.inference.llama.ChatMessage
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession
 import kotlinx.coroutines.channels.awaitClose
@@ -112,6 +113,12 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "Error closing session only", e)
         }
+    }
+
+    override suspend fun setHistory(messages: List<ChatMessage>) {
+        // MediaPipe manages its own conversation history within the session
+        // This is a no-op for now - MediaPipe may have different persistence needs
+        Log.d(TAG, "setHistory called with ${messages.size} messages - not implemented for MediaPipe")
     }
 
     override fun closeSession() {

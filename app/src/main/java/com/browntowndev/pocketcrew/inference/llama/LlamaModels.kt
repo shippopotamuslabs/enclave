@@ -1,12 +1,25 @@
 package com.browntowndev.pocketcrew.inference.llama
 
+import com.browntowndev.pocketcrew.domain.model.chat.Role
+
 /**
  * Represents the role of a message in a chat conversation.
  */
 enum class ChatRole {
     SYSTEM,
     USER,
-    ASSISTANT
+    ASSISTANT;
+
+    companion object {
+        /**
+         * Converts domain Role to inference ChatRole.
+         */
+        fun fromDomainRole(role: Role): ChatRole = when (role) {
+            Role.SYSTEM -> SYSTEM
+            Role.USER -> USER
+            Role.ASSISTANT -> ASSISTANT
+        }
+    }
 }
 
 /**

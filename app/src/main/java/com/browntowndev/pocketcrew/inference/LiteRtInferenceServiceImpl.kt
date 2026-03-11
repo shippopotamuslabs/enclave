@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
+import com.browntowndev.pocketcrew.inference.llama.ChatMessage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
@@ -78,5 +79,11 @@ class LiteRtInferenceServiceImpl @Inject constructor(
     override fun closeSession() {
         conversationManager.closeConversation()
         conversationManager.closeEngine()
+    }
+
+    override suspend fun setHistory(messages: List<ChatMessage>) {
+        // LiteRT uses ConversationManager which handles its own history
+        // This is a no-op for now - LiteRT may have different persistence needs
+        Log.d(TAG, "setHistory called with ${messages.size} messages - not implemented for LiteRT")
     }
 }

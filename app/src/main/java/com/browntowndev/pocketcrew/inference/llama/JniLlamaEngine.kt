@@ -110,6 +110,16 @@ class JniLlamaEngine @Inject constructor(
         history += message
     }
 
+    override suspend fun setHistory(messages: List<ChatMessage>) = withContext(ioDispatcher) {
+        check(loaded.get()) { "Engine not initialized" }
+        history.clear()
+        // Add system prompt first
+        val systemPrompt = currentConfig?.systemPrompt ?: "You are a helpful assistant."
+        history += ChatMessage(ChatRole.SYSTEM, systemPrompt)
+        // Add all the provided messages
+        history += messages
+    }
+
     override fun generate(): Flow<GenerationEvent> = callbackFlow {
         Log.i(TAG, "Starting generation...")
         check(loaded.get()) { "Engine not initialized" }
@@ -271,25 +281,6 @@ class JniLlamaEngine @Inject constructor(
         currentConfig = null
         loaded.set(false)
         generating.set(false)
-    }
-
-    private fun buildChatPrompt(messages: List<ChatMessage>): String {
-        // Prompt format with newlines preserved - important for model structure
-        return buildString {
-            for (message in messages) {
-                // Preserve the content as-is, just clean up excess whitespace
-                val content = message.content
-                    .replace("\r\n", "\n")
-                    .replace("\r", "\n")
-                    .trim()
-                when (message.role) {
-                    ChatRole.SYSTEM -> append("SYSTEM: $content\n")
-                    ChatRole.USER -> append("USER: $content\n")
-                    ChatRole.ASSISTANT -> append("ASSISTANT: $content\n")
-                }
-            }
-            append("ASSISTANT:")
-        }
     }
 
     /**
