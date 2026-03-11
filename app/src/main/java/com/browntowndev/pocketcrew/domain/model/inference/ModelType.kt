@@ -27,7 +27,12 @@ enum class ModelType(val apiValue: String) {
     /**
      * Fast model for immediate, non-thinking, responses
      */
-    FAST("fast");
+    FAST("fast"),
+
+    /**
+     * Thinking model for reasoning tasks with extended context.
+     */
+    THINKING("thinking");
 
     companion object {
         /**

@@ -58,6 +58,11 @@ annotation class FastModelEngine
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
 @Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER)
+annotation class ThinkingModelEngine
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER)
 annotation class FinalSynthesizerModelEngine
 
 @Module
@@ -208,6 +213,19 @@ object EngineModule {
 
     @Provides
     @Singleton
+    @ThinkingModelEngine
+    fun provideThinkingModelEngine(
+        @ApplicationContext context: Context,
+        modelRegistry: ModelRegistryPort
+    ): Engine {
+        val config = modelRegistry.getRegisteredModelSync(ModelType.THINKING)
+            ?: throw IllegalStateException("No model registered for ${ModelType.THINKING}. Please download a model first.")
+        val filename = config.metadata.localFileName
+        return Engine(EngineConfig(getModelPath(context, filename)))
+    }
+
+    @Provides
+    @Singleton
     @FinalSynthesizerModelEngine
     fun provideFinalSynthesizerModelEngine(
         @ApplicationContext context: Context,
@@ -274,6 +292,17 @@ object EngineModule {
     ): ConversationManagerPort {
         val config = modelRegistry.getRegisteredModelSync(ModelType.FAST)
         Log.d(TAG, "Fast Config Sys Prompt: ${config?.persona?.systemPrompt}")
+        return ConversationManagerImpl(engine, config)
+    }
+
+    @Provides
+    @Singleton
+    @ThinkingModelEngine
+    fun provideThinkingConversationManager(
+        @ThinkingModelEngine engine: Engine,
+        modelRegistry: ModelRegistryPort
+    ): ConversationManagerPort {
+        val config = modelRegistry.getRegisteredModelSync(ModelType.THINKING)
         return ConversationManagerImpl(engine, config)
     }
 
@@ -472,6 +501,47 @@ object EngineModule {
     ): LlmInferencePort {
         val config = modelRegistry.getRegisteredModelSync(ModelType.FAST)
             ?: throw IllegalStateException("No model registered for ${ModelType.FAST}. Please download a model first.")
+        val filename = config.metadata.localFileName
+
+        return if (filename.endsWith(".gguf")) {
+            val modelPath = getModelPath(context, filename)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
+            val tunings = config.tunings
+            val gpuConfig = GpuConfig.forDevice(context)
+
+            service.configure(
+                modelPath = modelPath,
+                systemPrompt = config.persona.systemPrompt,
+                samplingConfig = LlamaSamplingConfig(
+                    temperature = tunings.temperature.toFloat(),
+                    topK = tunings.topK,
+                    topP = tunings.topP.toFloat(),
+                    maxTokens = tunings.maxTokens,
+                    contextWindow = tunings.contextWindow,
+                    threads = 4,
+                    batchSize = 256,
+                    gpuLayers = gpuConfig.gpuLayers,
+                    thinkingEnabled = tunings.thinkingEnabled
+                )
+            )
+            service
+        } else {
+            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+        }
+    }
+
+    @Provides
+    @Singleton
+    @ThinkingModelEngine
+    fun provideThinkingInferenceService(
+        @ApplicationContext context: Context,
+        @ThinkingModelEngine conversationManager: ConversationManagerPort,
+        modelRegistry: ModelRegistryPort,
+        processThinkingTokens: ProcessThinkingTokensUseCase,
+        llamaChatSessionManager: LlamaChatSessionManager
+    ): LlmInferencePort {
+        val config = modelRegistry.getRegisteredModelSync(ModelType.THINKING)
+            ?: throw IllegalStateException("No model registered for ${ModelType.THINKING}. Please download a model first.")
         val filename = config.metadata.localFileName
 
         return if (filename.endsWith(".gguf")) {

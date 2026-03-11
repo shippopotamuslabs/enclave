@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
-import com.browntowndev.pocketcrew.app.DraftOneModelEngine
 import com.browntowndev.pocketcrew.app.FastModelEngine
+import com.browntowndev.pocketcrew.app.ThinkingModelEngine
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
@@ -33,7 +33,7 @@ import javax.inject.Inject
  */
 class GenerateChatResponseUseCase @Inject constructor(
     @FastModelEngine private val fastModelService: LlmInferencePort,
-    @DraftOneModelEngine private val draftOneModelService: LlmInferencePort,
+    @ThinkingModelEngine private val thinkingModelService: LlmInferencePort,
     private val pipelineExecutor: PipelineExecutorPort,
     private val chatRepository: ChatRepository,
     private val messageRepository: MessageRepository,
@@ -47,7 +47,7 @@ class GenerateChatResponseUseCase @Inject constructor(
     operator fun invoke(prompt: String, userMessageId: Long, assistantMessageId: Long, chatId: Long, mode: Mode): Flow<MessageGenerationState> {
         return when (mode) {
             Mode.FAST -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, fastModelService)
-            Mode.THINKING -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, draftOneModelService)
+            Mode.THINKING -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, thinkingModelService)
             Mode.CREW -> pipelineExecutor.executePipeline(
                 chatId = chatId.toString(),
                 userMessage = prompt,

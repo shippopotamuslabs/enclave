@@ -73,6 +73,11 @@ class ModelConfigFetcherImpl @Inject constructor(
                     configs.add(parseModelConfig(fast, ModelType.FAST))
                 }
 
+                // Parse thinking model
+                json.optJSONObject("thinking")?.let { thinking ->
+                    configs.add(parseModelConfig(thinking, ModelType.THINKING))
+                }
+
                 Log.i(TAG, "Fetched ${configs.size} model configs from server")
 
                 // Convert to ModelConfiguration

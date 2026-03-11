@@ -69,10 +69,10 @@ class InitializeModelsUseCase @Inject constructor(
         )
 
         // Now register each remote config in the registry with CURRENT status
-        currentModels.forEach { config ->
+        remoteConfigs.forEach { config ->
             modelRegistry.setRegisteredModel(config, status = ModelStatus.CURRENT)
         }
-        logPort.debug(TAG, "Registered ${currentModels.size} remote configs in registry")
+        logPort.debug(TAG, "Registered ${remoteConfigs.size} remote configs in registry")
 
         // Initialize the orchestrator with the startup result
         modelDownloadOrchestrator.initializeWithStartupResult(modelsResult)
