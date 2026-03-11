@@ -129,7 +129,7 @@ object EngineModule {
             Log.i(TAG, "Attempting GPU backend for LiteRT Engine.")
             val config = EngineConfig(
                 modelPath,
-                backend = Backend.GPU,
+                backend = Backend.GPU()
             )
             Engine(config).also {
                 Log.i(TAG, "GPU Delegate supported! Using GPU backend for LiteRT Engine.")
@@ -138,7 +138,7 @@ object EngineModule {
             Log.i(TAG, "GPU not supported, falling back to CPU: ${e.message}")
             val config = EngineConfig(
                 modelPath,
-                backend = Backend.CPU,
+                backend = Backend.CPU()
             )
             Engine(config)
         }
