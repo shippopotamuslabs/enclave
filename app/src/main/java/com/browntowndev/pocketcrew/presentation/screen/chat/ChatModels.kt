@@ -26,6 +26,18 @@ enum class MessageRole {
 }
 
 /**
+ * Represents the current state of the AI response generation.
+ */
+enum class ResponseState {
+    /** No active response generation */
+    NONE,
+    /** Generating text (no thinking) */
+    PROCESSING,
+    /** Model is thinking (has thinkingSteps) */
+    THINKING,
+}
+
+/**
  * Thinking metadata attached to a completed assistant message.
  * Persists on the message so users can review chain-of-thought
  * for any historical response in the conversation.
@@ -33,6 +45,7 @@ enum class MessageRole {
 data class ThinkingData(
     val durationSeconds: Int,
     val steps: List<String>,
+    val modelDisplayName: String = "",
 )
 
 data class ChatMessage(
@@ -49,10 +62,14 @@ data class ChatUiState(
     val inputText: String = "",
     val selectedMode: Mode = Mode.FAST,
     val isInputExpanded: Boolean = false,
-    /** True while the model is actively thinking — drives the live [ThinkingIndicator]. */
-    val isThinking: Boolean = false,
+    /** Current state of the AI response generation. */
+    val responseState: ResponseState = ResponseState.NONE,
     /** Live steps for the in-progress generation — NOT persisted on messages. */
     val thinkingSteps: List<String> = emptyList(),
+    /** Timestamp when thinking started, used to calculate elapsed thinking time. */
+    val thinkingStartTime: Long = 0L,
+    /** Display name of the model currently thinking (from ModelConfiguration). */
+    val thinkingModelDisplayName: String = "",
     /** Shows the "Use the Crew" popup after Fast mode response */
     val showUseTheCrewPopup: Boolean = false,
     val showShield: Boolean = false,
