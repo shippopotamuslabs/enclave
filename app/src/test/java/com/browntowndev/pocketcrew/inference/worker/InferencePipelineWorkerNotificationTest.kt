@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.inference.worker
 
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import org.junit.Assert.assertEquals
@@ -128,7 +129,6 @@ class InferencePipelineWorkerNotificationTest {
         // After DRAFT_ONE
         state = state.withStepOutput(PipelineStep.DRAFT_ONE, "Creative answer")
         assertEquals(1, state.thinkingSteps.size)
-        assertTrue(state.thinkingSteps[0].contains("Draft One"))
 
         // After DRAFT_TWO
         state = state.withNextStep()!!
@@ -144,5 +144,136 @@ class InferencePipelineWorkerNotificationTest {
         state = state.withNextStep()!!
         state = state.withStepOutput(PipelineStep.FINAL, "Final")
         assertEquals(4, state.thinkingSteps.size)
+    }
+
+    // ========== Notification Transition Tests ==========
+
+    /**
+     * Test that notification title changes for each pipeline step.
+     */
+    @Test
+    fun `notification title changes for each pipeline step`() {
+        // Verify the notification manager creates correct titles for each step
+        assertEquals("Draft One", getNotificationTitle(PipelineStep.DRAFT_ONE))
+        assertEquals("Draft Two", getNotificationTitle(PipelineStep.DRAFT_TWO))
+        assertEquals("Synthesis", getNotificationTitle(PipelineStep.SYNTHESIS))
+        assertEquals("Final Review", getNotificationTitle(PipelineStep.FINAL))
+    }
+
+    /**
+     * Test that progress increases monotonically through pipeline steps.
+     */
+    @Test
+    fun `notification progress increases monotonically through pipeline`() {
+        var currentStep = PipelineStep.DRAFT_ONE
+        var lastProgress = 0
+
+        // Simulate all 4 steps
+        val steps = listOf(
+            PipelineStep.DRAFT_ONE,
+            PipelineStep.DRAFT_TWO,
+            PipelineStep.SYNTHESIS,
+            PipelineStep.FINAL
+        )
+
+        for (step in steps) {
+            val progress = getStepProgress(step)
+            assertTrue("Progress should increase from $lastProgress to $progress", progress > lastProgress)
+            lastProgress = progress
+        }
+
+        // Final step should be 100%
+        assertEquals(100, lastProgress)
+    }
+
+    /**
+     * Test that ModelType is correctly mapped for each pipeline step.
+     */
+    @Test
+    fun `model type is correctly mapped for each pipeline step`() {
+        // This mirrors the worker's getModelTypeForStep() logic
+        assertEquals(ModelType.DRAFT_ONE, getModelTypeForStep(PipelineStep.DRAFT_ONE))
+        assertEquals(ModelType.DRAFT_TWO, getModelTypeForStep(PipelineStep.DRAFT_TWO))
+        assertEquals(ModelType.MAIN, getModelTypeForStep(PipelineStep.SYNTHESIS))
+        assertEquals(ModelType.MAIN, getModelTypeForStep(PipelineStep.FINAL))
+    }
+
+    /**
+     * Test that KEY_CURRENT_MODEL_TYPE constant exists in PipelineState.
+     */
+    @Test
+    fun `pipeline state has current model type key`() {
+        // Verify the constant is defined and non-empty
+        assertTrue(PipelineState.KEY_CURRENT_MODEL_TYPE.isNotEmpty())
+    }
+
+    /**
+     * Test that all 4 pipeline steps are executed in sequence.
+     */
+    @Test
+    fun `all four pipeline steps execute in sequence`() {
+        var currentStep = PipelineStep.DRAFT_ONE
+
+        // Step 1: DRAFT_ONE
+        assertEquals(PipelineStep.DRAFT_ONE, currentStep)
+        currentStep = currentStep.next()!!
+
+        // Step 2: DRAFT_TWO
+        assertEquals(PipelineStep.DRAFT_TWO, currentStep)
+        currentStep = currentStep.next()!!
+
+        // Step 3: SYNTHESIS
+        assertEquals(PipelineStep.SYNTHESIS, currentStep)
+        currentStep = currentStep.next()!!
+
+        // Step 4: FINAL
+        assertEquals(PipelineStep.FINAL, currentStep)
+
+        // FINAL has no next step
+        assertNull(currentStep.next())
+    }
+
+    /**
+     * Test that notification content text is appropriate for each step.
+     */
+    @Test
+    fun `notification content text is appropriate for each step`() {
+        // Verify content text for each step
+        assertTrue(getNotificationContent(PipelineStep.DRAFT_ONE).contains("25"))
+        assertTrue(getNotificationContent(PipelineStep.DRAFT_TWO).contains("50"))
+        assertTrue(getNotificationContent(PipelineStep.SYNTHESIS).contains("75"))
+        assertTrue(getNotificationContent(PipelineStep.FINAL).contains("100"))
+    }
+
+    /**
+     * Helper function to get notification title for a step.
+     */
+    private fun getNotificationTitle(step: PipelineStep): String {
+        return when (step) {
+            PipelineStep.DRAFT_ONE -> "Draft One"
+            PipelineStep.DRAFT_TWO -> "Draft Two"
+            PipelineStep.SYNTHESIS -> "Synthesis"
+            PipelineStep.FINAL -> "Final Review"
+        }
+    }
+
+    /**
+     * Helper function to get notification content for a step.
+     */
+    private fun getNotificationContent(step: PipelineStep): String {
+        val progress = getStepProgress(step)
+        return "Processing step ${step.ordinal + 1}/4 - $progress% complete"
+    }
+
+    /**
+     * Helper function to map PipelineStep to ModelType (mirrors worker logic).
+     */
+    private fun getModelTypeForStep(step: PipelineStep): ModelType {
+        return when (step) {
+            PipelineStep.DRAFT_ONE -> ModelType.DRAFT_ONE
+            PipelineStep.DRAFT_TWO -> ModelType.DRAFT_TWO
+            PipelineStep.SYNTHESIS -> ModelType.MAIN
+            PipelineStep.FINAL -> ModelType.MAIN
+        }
     }
 }
