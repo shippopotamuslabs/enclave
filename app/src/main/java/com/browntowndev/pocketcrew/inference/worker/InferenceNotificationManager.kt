@@ -26,6 +26,7 @@ class InferenceNotificationManager(
         const val CHANNEL_ID = "crew_inference_channel"
         const val COMPLETION_CHANNEL_ID = "crew_completion_channel"
         const val KEY_STATE_JSON = "pipeline_state_json"
+        const val ACTION_CANCEL = "com.browntowndev.pocketcrew.ACTION_CANCEL_INFERENCE"
     }
 
     fun createNotificationChannel() {
@@ -101,6 +102,37 @@ class InferenceNotificationManager(
             notification,
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
         )
+    }
+
+    /**
+     * Updates the foreground notification directly via NotificationManager.
+     * This is more reliable than setForegroundAsync for updates.
+     */
+    fun updateNotificationProgress(
+        currentStep: PipelineStep,
+        hasMoreSteps: Boolean
+    ) {
+        val cancelIntent = PendingIntent.getBroadcast(
+            context,
+            0,
+            Intent(ACTION_CANCEL),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = createProgressNotification(
+            currentStep = currentStep,
+            progress = when (currentStep) {
+                PipelineStep.DRAFT_ONE -> 25
+                PipelineStep.DRAFT_TWO -> 50
+                PipelineStep.SYNTHESIS -> 75
+                PipelineStep.FINAL -> 100
+            },
+            hasMoreSteps = hasMoreSteps,
+            cancelPendingIntent = cancelIntent
+        )
+
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
     private fun createProgressNotification(
