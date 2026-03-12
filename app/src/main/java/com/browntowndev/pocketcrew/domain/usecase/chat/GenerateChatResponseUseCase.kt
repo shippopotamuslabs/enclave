@@ -11,6 +11,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.inference.llama.ChatMessage
 import com.browntowndev.pocketcrew.inference.llama.ChatRole
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.presentation.screen.chat.Mode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -46,8 +47,8 @@ class GenerateChatResponseUseCase @Inject constructor(
 
     operator fun invoke(prompt: String, userMessageId: Long, assistantMessageId: Long, chatId: Long, mode: Mode): Flow<MessageGenerationState> {
         return when (mode) {
-            Mode.FAST -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, fastModelService)
-            Mode.THINKING -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, thinkingModelService)
+            Mode.FAST -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, fastModelService, ModelType.FAST)
+            Mode.THINKING -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, thinkingModelService, ModelType.THINKING)
             Mode.CREW -> pipelineExecutor.executePipeline(
                 chatId = chatId.toString(),
                 userMessage = prompt,
@@ -93,7 +94,8 @@ class GenerateChatResponseUseCase @Inject constructor(
         userMessageId: Long,
         assistantMessageId: Long,
         chatId: Long,
-        service: LlmInferencePort
+        service: LlmInferencePort,
+        modelType: ModelType
     ): Flow<MessageGenerationState> = flow {
         val startTime = System.currentTimeMillis()
         val currentSteps = mutableListOf<String>()
@@ -120,7 +122,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                         }
                     }
                     if (newThoughts.isNotEmpty()) {
-                        emit(MessageGenerationState.ThinkingLive(currentSteps.toList()))
+                        emit(MessageGenerationState.ThinkingLive(currentSteps.toList(), modelType))
                     }
                 }
 
@@ -167,7 +169,7 @@ class GenerateChatResponseUseCase @Inject constructor(
 }
 
 sealed interface MessageGenerationState {
-    data class ThinkingLive(val steps: List<String>) : MessageGenerationState
+    data class ThinkingLive(val steps: List<String>, val modelType: ModelType) : MessageGenerationState
     data class GeneratingText(val textDelta: String) : MessageGenerationState
     object Finished : MessageGenerationState
     data class Blocked(val reason: String) : MessageGenerationState

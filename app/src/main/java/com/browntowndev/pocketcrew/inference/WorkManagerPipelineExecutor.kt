@@ -6,6 +6,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.BufferThinkingStepsUseCase
@@ -24,7 +25,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class WorkManagerPipelineExecutor @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val bufferThinkingSteps: BufferThinkingStepsUseCase
 ) : PipelineExecutorPort {
 
@@ -77,6 +78,14 @@ class WorkManagerPipelineExecutor @Inject constructor(
                 WorkInfo.State.RUNNING -> {
                     val thinkingChunk = workInfo.progress.getString(PipelineState.KEY_THINKING_CHUNK)
                     val stepOutput = workInfo.progress.getString(PipelineState.KEY_STEP_OUTPUT)
+                    val modelTypeName = workInfo.progress.getString(PipelineState.KEY_CURRENT_MODEL_TYPE)
+                    val modelType = modelTypeName?.let {
+                        try {
+                            ModelType.valueOf(it)
+                        } catch (e: Exception) {
+                            ModelType.MAIN
+                        }
+                    } ?: ModelType.MAIN
 
                     if (stepOutput != null) {
                         emit(MessageGenerationState.GeneratingText(stepOutput))
@@ -90,7 +99,7 @@ class WorkManagerPipelineExecutor @Inject constructor(
                             }
                         }
                         if (newThoughts.isNotEmpty()) {
-                            emit(MessageGenerationState.ThinkingLive(currentSteps.toList()))
+                            emit(MessageGenerationState.ThinkingLive(currentSteps.toList(), modelType))
                         }
                     }
                 }
