@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.presentation.screen.chat
 import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase
@@ -178,7 +179,7 @@ class ChatViewModelTest {
         coEvery {
             mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
         } returns flowOf(
-            MessageGenerationState.ThinkingLive(thinkingSteps)
+            MessageGenerationState.ThinkingLive(thinkingSteps, ModelType.FAST)
         )
 
         // When: onSendMessage is called
@@ -192,12 +193,115 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `ThinkingLive with FAST modelType sets thinkingModelDisplayName from registry`() = runTest {
+        // Given: model registry returns display name for FAST model
+        val fastModelDisplayName = "Quick Response Model"
+        every {
+            mockModelRegistry.getRegisteredModelSync(ModelType.FAST)
+        } returns mockk {
+            every { metadata } returns mockk {
+                every { displayName } returns fastModelDisplayName
+            }
+        }
+
+        coEvery {
+            mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
+        } returns flowOf(
+            MessageGenerationState.ThinkingLive(listOf("Thinking..."), ModelType.FAST)
+        )
+
+        // When: onSendMessage is called
+        viewModel.onSendMessage()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then: thinkingModelDisplayName should be set from registry
+        val state = viewModel.uiState.value
+        assertEquals(fastModelDisplayName, state.thinkingModelDisplayName)
+    }
+
+    @Test
+    fun `ThinkingLive with THINKING modelType sets thinkingModelDisplayName from registry`() = runTest {
+        // Given: model registry returns display name for THINKING model
+        val thinkingModelDisplayName = "Deep Reasoning Model"
+        every {
+            mockModelRegistry.getRegisteredModelSync(ModelType.THINKING)
+        } returns mockk {
+            every { metadata } returns mockk {
+                every { displayName } returns thinkingModelDisplayName
+            }
+        }
+
+        coEvery {
+            mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
+        } returns flowOf(
+            MessageGenerationState.ThinkingLive(listOf("Reasoning..."), ModelType.THINKING)
+        )
+
+        // When: onSendMessage is called
+        viewModel.onSendMessage()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then: thinkingModelDisplayName should be set from registry
+        val state = viewModel.uiState.value
+        assertEquals(thinkingModelDisplayName, state.thinkingModelDisplayName)
+    }
+
+    @Test
+    fun `ThinkingLive with MAIN modelType sets thinkingModelDisplayName from registry`() = runTest {
+        // Given: model registry returns display name for MAIN model
+        val mainModelDisplayName = "Main Synthesis Model"
+        every {
+            mockModelRegistry.getRegisteredModelSync(ModelType.MAIN)
+        } returns mockk {
+            every { metadata } returns mockk {
+                every { displayName } returns mainModelDisplayName
+            }
+        }
+
+        coEvery {
+            mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
+        } returns flowOf(
+            MessageGenerationState.ThinkingLive(listOf("Synthesizing..."), ModelType.MAIN)
+        )
+
+        // When: onSendMessage is called
+        viewModel.onSendMessage()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then: thinkingModelDisplayName should be set from registry
+        val state = viewModel.uiState.value
+        assertEquals(mainModelDisplayName, state.thinkingModelDisplayName)
+    }
+
+    @Test
+    fun `ThinkingLive falls back to empty string when model not registered`() = runTest {
+        // Given: model registry returns null for the model type
+        every {
+            mockModelRegistry.getRegisteredModelSync(ModelType.FAST)
+        } returns null
+
+        coEvery {
+            mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
+        } returns flowOf(
+            MessageGenerationState.ThinkingLive(listOf("Thinking..."), ModelType.FAST)
+        )
+
+        // When: onSendMessage is called
+        viewModel.onSendMessage()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then: thinkingModelDisplayName should be empty
+        val state = viewModel.uiState.value
+        assertEquals("", state.thinkingModelDisplayName)
+    }
+
+    @Test
     fun `Finished sets responseState to NONE and clears thinkingSteps`() = runTest {
         // Given: generateChatResponse returns a flow with ThinkingLive then Finished
         coEvery {
             mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
         } returns flowOf(
-            MessageGenerationState.ThinkingLive(listOf("Thinking...")),
+            MessageGenerationState.ThinkingLive(listOf("Thinking..."), ModelType.FAST),
             MessageGenerationState.Finished
         )
 
@@ -217,7 +321,7 @@ class ChatViewModelTest {
         coEvery {
             mockChatUseCases.generateChatResponse(any(), any(), any(), any(), any())
         } returns flowOf(
-            MessageGenerationState.ThinkingLive(listOf("Thinking...")),
+            MessageGenerationState.ThinkingLive(listOf("Thinking..."), ModelType.FAST),
             MessageGenerationState.GeneratingText("Hello")
         )
 

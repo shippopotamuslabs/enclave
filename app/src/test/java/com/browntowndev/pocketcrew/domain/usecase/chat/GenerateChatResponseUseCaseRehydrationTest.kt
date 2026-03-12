@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -319,6 +320,80 @@ class GenerateChatResponseUseCaseTest {
         coVerify { thinkingModelService.setHistory(any()) }
         coVerify { thinkingModelService.sendPrompt(any(), any()) }
         coVerify(exactly = 0) { fastModelService.setHistory(any()) }
+    }
+
+    // ========== ModelType in ThinkingLive Tests ==========
+
+    @Test
+    fun `ThinkingLive emits ModelType_FAST for FAST mode`() = runTest {
+        // Given
+        coEvery { messageRepository.getMessagesForChat(1) } returns emptyList()
+        coEvery { fastModelService.setHistory(any()) } returns Unit
+        coEvery { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+            InferenceEvent.Thinking("Thinking...", "Thinking..."),
+            InferenceEvent.Completed("Response", null)
+        )
+        // Mock bufferThinkingSteps to return non-empty list so ThinkingLive is emitted
+        coEvery { bufferThinkingSteps.invoke(any()) } returns listOf("Thinking...")
+
+        // When
+        val states = mutableListOf<MessageGenerationState>()
+        useCase.invoke("Prompt", 50L, 100L, 1L, Mode.FAST).collect { state ->
+            states.add(state)
+        }
+
+        // Then - ThinkingLive should contain ModelType.FAST
+        val thinkingLive = states.filterIsInstance<MessageGenerationState.ThinkingLive>().firstOrNull()
+        assertNotNull(thinkingLive, "Should emit ThinkingLive")
+        assertEquals(ModelType.FAST, thinkingLive!!.modelType, "ThinkingLive should contain ModelType.FAST")
+    }
+
+    @Test
+    fun `ThinkingLive emits ModelType_THINKING for THINKING mode`() = runTest {
+        // Given
+        coEvery { messageRepository.getMessagesForChat(1) } returns emptyList()
+        coEvery { thinkingModelService.setHistory(any()) } returns Unit
+        coEvery { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
+            InferenceEvent.Thinking("Reasoning...", "Reasoning..."),
+            InferenceEvent.Completed("Response", null)
+        )
+        // Mock bufferThinkingSteps to return non-empty list so ThinkingLive is emitted
+        coEvery { bufferThinkingSteps.invoke(any()) } returns listOf("Reasoning...")
+
+        // When
+        val states = mutableListOf<MessageGenerationState>()
+        useCase.invoke("Prompt", 50L, 100L, 1L, Mode.THINKING).collect { state ->
+            states.add(state)
+        }
+
+        // Then - ThinkingLive should contain ModelType.THINKING
+        val thinkingLive = states.filterIsInstance<MessageGenerationState.ThinkingLive>().firstOrNull()
+        assertNotNull(thinkingLive, "Should emit ThinkingLive")
+        assertEquals(ModelType.THINKING, thinkingLive!!.modelType, "ThinkingLive should contain ModelType.THINKING")
+    }
+
+    @Test
+    fun `ThinkingLive contains correct thinking steps from inference events`() = runTest {
+        // Given
+        coEvery { messageRepository.getMessagesForChat(1) } returns emptyList()
+        coEvery { fastModelService.setHistory(any()) } returns Unit
+        coEvery { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+            InferenceEvent.Thinking("First thought. Second thought.", "First thought. Second thought."),
+            InferenceEvent.Completed("Final response", null)
+        )
+        coEvery { bufferThinkingSteps(any()) } returns listOf("First thought.", "Second thought.")
+        coEvery { bufferThinkingSteps.flush() } returns null
+
+        // When
+        val states = mutableListOf<MessageGenerationState>()
+        useCase.invoke("Prompt", 50L, 100L, 1L, Mode.FAST).collect { state ->
+            states.add(state)
+        }
+
+        // Then
+        val thinkingLive = states.filterIsInstance<MessageGenerationState.ThinkingLive>().firstOrNull()
+        assertNotNull(thinkingLive)
+        assertTrue(thinkingLive!!.steps.isNotEmpty())
     }
 
     // ========== Content Preservation Tests ==========

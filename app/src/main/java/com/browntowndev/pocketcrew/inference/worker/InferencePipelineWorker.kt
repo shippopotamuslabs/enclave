@@ -11,6 +11,7 @@ import com.browntowndev.pocketcrew.app.DraftOneModelEngine
 import com.browntowndev.pocketcrew.app.DraftTwoModelEngine
 import com.browntowndev.pocketcrew.app.FinalSynthesizerModelEngine
 import com.browntowndev.pocketcrew.app.MainModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
@@ -21,14 +22,14 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
 
 /**
- * WorkManager worker for executing a single step in the Crew Mode pipeline.
- * Each worker execution processes one PipelineStep (DRAFT_ONE, DRAFT_TWO, SYNTHESIS, or FINAL).
+ * WorkManager worker for executing the full Crew Mode pipeline.
+ * Runs all pipeline steps sequentially in a single worker with persistent foreground notification.
  *
  * The worker:
- * 1. Runs as a foreground service with progress notifications
- * 2. Executes the inference for the current step
- * 3. Emits thinking chunks via OutputData for real-time UI updates
- * 4. Returns success with updated state (or next step ready to run)
+ * 1. Runs as a foreground service for the entire pipeline (persistent notification)
+ * 2. Executes all 4 steps: DRAFT_ONE -> DRAFT_TWO -> SYNTHESIS -> FINAL
+ * 3. Emits thinking chunks via setProgressAsync() for real-time UI updates
+ * 4. Returns success with final response when complete
  * 5. Returns retry on failure
  */
 @HiltWorker
@@ -67,12 +68,12 @@ class InferencePipelineWorker @AssistedInject constructor(
             return Result.failure(workDataOf("error" to "Invalid pipeline state"))
         }
 
-        logger.info(TAG, "Executing step: ${state.currentStep.name} for chat: ${state.chatId}")
+        logger.info(TAG, "Starting full pipeline for chat: ${state.chatId}")
 
         // Create notification channel
         notificationManager.createNotificationChannel()
 
-        // Set as foreground service with progress notification
+        // Set foreground service with persistent notification for entire pipeline
         try {
             val cancelIntent = WorkManager.getInstance(applicationContext)
                 .createCancelPendingIntent(id)
@@ -82,38 +83,70 @@ class InferencePipelineWorker @AssistedInject constructor(
             )
             setForeground(foregroundInfo)
         } catch (e: ForegroundServiceStartNotAllowedException) {
-            logger.warning(TAG, "Foreground not allowed, returning retry: ${e.message}")
+            logger.warning(TAG, "Foreground not allowed: ${e.message}")
             return Result.retry()
         }
 
-        // Execute the current step
+        // Execute all pipeline steps sequentially
         return try {
-            val result = executeStep(state)
+            // Make state mutable so we can update it as we progress through steps
+            var currentState = state
 
-            // Check if this is the final step
-            if (state.currentStep == PipelineStep.FINAL) {
-                // Final step complete - return success with final response
-                logger.info(TAG, "Pipeline complete for chat: ${state.chatId}")
-                Result.success(workDataOf(
-                    PipelineState.KEY_FINAL_RESPONSE to result.output,
-                    PipelineState.KEY_DURATION_SECONDS to state.durationSeconds(),
-                    PipelineState.KEY_ALL_THINKING_STEPS_JSON to result.allThinkingStepsJson
-                ))
-            } else {
-                // More steps to go - return success with next step state
-                val nextState = state.withStepOutput(state.currentStep, result.output)
-                    .withNextStep()
+            // Get all services upfront (as Lazy to avoid loading until needed)
+            val draftOneServiceProvider = { draftOneServiceProvider.get() }
+            val draftTwoServiceProvider = { draftTwoServiceProvider.get() }
+            val synthesisServiceProvider = { mainServiceProvider.get() }
+            val finalServiceProvider = { finalSynthesizerServiceProvider.get() }
 
-                if (nextState != null) {
-                    Result.success(workDataOf(
-                        InferenceNotificationManager.KEY_STATE_JSON to nextState.toJson(),
-                        PipelineState.KEY_STEP_OUTPUT to result.output,
-                        PipelineState.KEY_THINKING_CHUNK to result.thinkingChunk
+            // Map steps to services
+            val stepServices = mapOf(
+                PipelineStep.DRAFT_ONE to draftOneServiceProvider,
+                PipelineStep.DRAFT_TWO to draftTwoServiceProvider,
+                PipelineStep.SYNTHESIS to synthesisServiceProvider,
+                PipelineStep.FINAL to finalServiceProvider
+            )
+
+            // Run through all steps
+            val allThinkingSteps = mutableListOf<String>()
+            var currentStep = currentState.currentStep
+
+            while (true) {
+                logger.info(TAG, "Executing step: ${currentStep.name}")
+
+                val serviceGetter = stepServices[currentStep]
+                    ?: throw IllegalStateException("No service for step: $currentStep")
+
+                val service = serviceGetter()
+                    ?: throw IllegalStateException("Service not available for step: $currentStep")
+
+                val prompt = buildPromptForStep(currentState)
+                val result = executeStepForPipeline(service, prompt, currentStep)
+
+                // Store output
+                currentState = currentState.withStepOutput(currentStep, result.output)
+                allThinkingSteps.addAll(result.thinkingSteps)
+
+                // Update notification for this step
+                val hasMoreSteps = currentStep.next() != null
+                updateNotification(currentStep, hasMoreSteps)
+
+                // Check if this was the final step
+                if (currentStep == PipelineStep.FINAL) {
+                    logger.info(TAG, "Pipeline complete for chat: ${currentState.chatId}")
+
+                    return Result.success(workDataOf(
+                        PipelineState.KEY_FINAL_RESPONSE to result.output,
+                        PipelineState.KEY_DURATION_SECONDS to currentState.durationSeconds(),
+                        PipelineState.KEY_ALL_THINKING_STEPS_JSON to allThinkingSteps.joinToString("|||")
                     ))
-                } else {
-                    Result.failure(workDataOf("error" to "Next step is null but not final step"))
                 }
+
+                // Move to next step
+                currentState = currentState.withNextStep() ?: break
+                currentStep = currentState.currentStep
             }
+
+            Result.failure(workDataOf("error" to "Pipeline ended unexpectedly"))
         } catch (e: CancellationException) {
             logger.info(TAG, "Pipeline cancelled for chat: ${state.chatId}")
             // Save partial state for potential resume
@@ -135,38 +168,37 @@ class InferencePipelineWorker @AssistedInject constructor(
     }
 
     /**
-     * Executes a single pipeline step.
+     * Executes a single step for the pipeline (closes session after each step to free memory).
      */
-    private suspend fun executeStep(state: PipelineState): StepResult {
-        val service = getServiceForStep(state.currentStep)
-        val prompt = buildPromptForStep(state)
-
+    private suspend fun executeStepForPipeline(
+        service: LlmInferencePort,
+        prompt: String,
+        step: PipelineStep
+    ): StepResult {
         var output = ""
         var thinkingChunk = ""
-        val allThinkingSteps = state.thinkingSteps.toMutableList()
+        val thinkingSteps = mutableListOf<String>()
 
         try {
-            service.sendPrompt(prompt, closeConversation = true).collect { event ->
+            service.sendPrompt(prompt, closeConversation = false).collect { event ->
                 when (event) {
                     is InferenceEvent.Thinking -> {
                         thinkingChunk = event.chunk
-                        // Emit thinking chunk for real-time UI update
+                        // Emit progress for UI including current model's ModelType
                         setProgressAsync(workDataOf(
-                            PipelineState.KEY_THINKING_CHUNK to thinkingChunk
+                            PipelineState.KEY_THINKING_CHUNK to thinkingChunk,
+                            PipelineState.KEY_CURRENT_MODEL_TYPE to getModelTypeForStep(step).name
                         ))
                     }
                     is InferenceEvent.PartialResponse -> {
                         // Only collect text for final output step
-                        if (state.currentStep == PipelineStep.FINAL) {
+                        if (step == PipelineStep.FINAL) {
                             output += event.chunk
                         }
                     }
                     is InferenceEvent.Completed -> {
                         output = event.finalResponse
-                        allThinkingSteps.add("${state.currentStep.displayName()}: ${output.take(100)}...")
-
-                        // Update notification with progress
-                        updateNotification(state.currentStep, state.currentStep.next() != null)
+                        thinkingSteps.add(output.take(100))
                     }
                     is InferenceEvent.SafetyBlocked -> {
                         throw SecurityException("Content blocked: ${event.reason}")
@@ -187,20 +219,8 @@ class InferencePipelineWorker @AssistedInject constructor(
         return StepResult(
             output = output,
             thinkingChunk = thinkingChunk,
-            allThinkingStepsJson = allThinkingSteps.joinToString("|||")
+            thinkingSteps = thinkingSteps
         )
-    }
-
-    /**
-     * Gets the appropriate inference service for the given step.
-     */
-    private fun getServiceForStep(step: PipelineStep): LlmInferencePort {
-        return when (step) {
-            PipelineStep.DRAFT_ONE -> draftOneServiceProvider.get()
-            PipelineStep.DRAFT_TWO -> draftTwoServiceProvider.get()
-            PipelineStep.SYNTHESIS -> mainServiceProvider.get()
-            PipelineStep.FINAL -> finalSynthesizerServiceProvider.get()
-        }
     }
 
     /**
@@ -288,11 +308,23 @@ CANDIDATE_ANSWER: $candidateAnswer
     }
 
     /**
+     * Maps a PipelineStep to its corresponding ModelType.
+     */
+    private fun getModelTypeForStep(step: PipelineStep): ModelType {
+        return when (step) {
+            PipelineStep.DRAFT_ONE -> ModelType.DRAFT_ONE
+            PipelineStep.DRAFT_TWO -> ModelType.DRAFT_TWO
+            PipelineStep.SYNTHESIS -> ModelType.MAIN
+            PipelineStep.FINAL -> ModelType.MAIN // Uses MAIN model via FinalSynthesizer
+        }
+    }
+
+    /**
      * Result of executing a single step.
      */
     private data class StepResult(
         val output: String,
         val thinkingChunk: String,
-        val allThinkingStepsJson: String
+        val thinkingSteps: List<String>
     )
 }

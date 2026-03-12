@@ -45,7 +45,7 @@ private data class ChatBaseState(
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val settingsUseCases: SettingsUseCases,
+    settingsUseCases: SettingsUseCases,
     private val chatUseCases: ChatUseCases,
     private val savedStateHandle: SavedStateHandle,
     private val modelRegistry: ModelRegistryPort,
@@ -65,8 +65,15 @@ class ChatViewModel @Inject constructor(
         val modelType = when (mode) {
             Mode.FAST -> ModelType.FAST
             Mode.THINKING -> ModelType.THINKING
-            Mode.CREW -> ModelType.MAIN // Crew uses MAIN model for primary generation
+            Mode.CREW -> ModelType.DRAFT_ONE // First drafter name it begins with
         }
+        return modelRegistry.getRegisteredModelSync(modelType)?.metadata?.displayName ?: ""
+    }
+
+    /**
+     * Gets the display name of the model for the given ModelType.
+     */
+    private fun getModelDisplayName(modelType: ModelType): String {
         return modelRegistry.getRegisteredModelSync(modelType)?.metadata?.displayName ?: ""
     }
 
@@ -173,7 +180,6 @@ class ChatViewModel @Inject constructor(
                     handleGenerationState(
                         generationState,
                         promptResult.assistantMessageId,
-                        promptResult.chatId
                     )
                 }
             }
@@ -186,14 +192,15 @@ class ChatViewModel @Inject constructor(
     private fun handleGenerationState(
         generationState: MessageGenerationState,
         assistantMessageId: Long,
-        chatId: Long
     ) {
         when (generationState) {
             is MessageGenerationState.ThinkingLive -> {
+                val modelDisplayName = getModelDisplayName(generationState.modelType)
                 _baseState.update {
                     it.copy(
                         responseState = ResponseState.THINKING,
                         thinkingSteps = generationState.steps,
+                        thinkingModelDisplayName = modelDisplayName,
                         // Record start time when thinking begins
                         thinkingStartTime = if (it.thinkingStartTime == 0L) System.currentTimeMillis() else it.thinkingStartTime
                     )
@@ -291,7 +298,7 @@ class ChatViewModel @Inject constructor(
                             responseState = ResponseState.NONE,
                             thinkingSteps = emptyList(),
                             thinkingStartTime = 0L,
-                        thinkingEndTime = 0L,
+                            thinkingEndTime = 0L,
                             thinkingModelDisplayName = "",
                         )
 
@@ -371,7 +378,8 @@ class ChatViewModel @Inject constructor(
                         thinkingSteps = emptyList(),
                         thinkingStartTime = 0L,
                         thinkingEndTime = 0L,
-                        thinkingModelDisplayName = getModelDisplayName(Mode.CREW),
+                        // Initial model is DRAFT_ONE - will be updated via ThinkingLive.modelType
+                        thinkingModelDisplayName = getModelDisplayName(ModelType.DRAFT_ONE),
                     )
                 }
 
@@ -384,7 +392,7 @@ class ChatViewModel @Inject constructor(
                         chatId = fastMessage.chatId,
                         mode = Mode.CREW
                     ).collect { generationState ->
-                        handleGenerationState(generationState, pendingMessageId, fastMessage.chatId)
+                        handleGenerationState(generationState, pendingMessageId)
                     }
                 }
             }
