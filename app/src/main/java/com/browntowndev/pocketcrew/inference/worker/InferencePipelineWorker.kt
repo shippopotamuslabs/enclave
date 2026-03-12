@@ -295,16 +295,13 @@ CANDIDATE_ANSWER: $candidateAnswer
 
     /**
      * Updates the foreground notification with current progress.
+     * Uses NotificationManager.notify directly for reliable updates.
      */
     private suspend fun updateNotification(currentStep: PipelineStep, hasMoreSteps: Boolean) {
-        val cancelIntent = WorkManager.getInstance(applicationContext)
-            .createCancelPendingIntent(id)
-        val foregroundInfo = notificationManager.createForegroundInfoForStep(
+        notificationManager.updateNotificationProgress(
             currentStep = currentStep,
-            hasMoreSteps = hasMoreSteps,
-            cancelPendingIntent = cancelIntent
+            hasMoreSteps = hasMoreSteps
         )
-        setForegroundAsync(foregroundInfo)
     }
 
     /**
