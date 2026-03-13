@@ -9,6 +9,12 @@ import javax.inject.Inject
  * as a single thought. Uses sentence boundary detection and transition
  * word detection to create natural reasoning boundaries.
  *
+ * Hybrid structural + semantic priority chunking:
+ * - Structural patterns (highest priority): markdown headers, numbered steps, bullets,
+ *   paragraph breaks, colon-terminated short lines - force emit if chunk exists
+ * - Semantic patterns (secondary): reflection phrases ("Wait," "Actually,"),
+ *   verification phrases ("Let me verify,"), planning intros
+ *
  * This produces progressive, polished thinking steps similar to production AI apps.
  */
 class BufferThinkingStepsUseCase @Inject constructor(
@@ -36,6 +42,27 @@ class BufferThinkingStepsUseCase @Inject constructor(
         private const val MIN_SENTENCES_PER_CHUNK = 2
         private const val SOFT_MAX_WORDS_PER_CHUNK = 80
         private const val HARD_MAX_CHARS_BEFORE_FORCE = 500
+
+        // Structural patterns (highest priority - force emit if chunk exists)
+        private val MARKDOWN_HEADER = Regex("""\*\*[A-Za-z][A-Za-z ]+\*\*:""")
+        private val NUMBERED_STEP = Regex("""\d+[\.\)]\s""")
+        private val BULLET_POINT = Regex("""^[\-\*\+]\s""", RegexOption.MULTILINE)
+        private val PARAGRAPH_BREAK = Regex("""\n\n+""")
+        private val COLON_TERMINATED_SHORT = Regex("""^.{1,120}:\s*$""", RegexOption.MULTILINE)
+
+        // Semantic/reflection patterns (secondary triggers)
+        private val REFLECTION_STARTERS = Regex(
+            """\b(Wait|Actually|Hold on|Let's pause|On second thought|Hmm|Correction|Rethink this)\b""",
+            RegexOption.IGNORE_CASE
+        )
+        private val VERIFICATION_PHRASES = Regex(
+            """\b(Let me verify|Double-check|To confirm|Upon re-evaluation|Edge cases|All in all|Let me check)\b""",
+            RegexOption.IGNORE_CASE
+        )
+        private val PLANNING_INTROS = Regex(
+            """\b(Let's break this down|First, let's understand)\b""",
+            RegexOption.IGNORE_CASE
+        )
     }
 
     private val buffer = StringBuilder(1024)
@@ -59,6 +86,14 @@ class BufferThinkingStepsUseCase @Inject constructor(
     private fun processBuffer(): List<String> {
         val emitted = mutableListOf<String>()
         val text = buffer.toString()
+
+        // Check for structural break points in accumulated content
+        // If we have content and detect a strong break, emit before continuing
+        if (currentChunkSentences.isNotEmpty() && isStrongBreakPoint(text)) {
+            val thought = currentChunkSentences.joinToString(" ")
+            emitted.add(thought)
+            currentChunkSentences.clear()
+        }
 
         // Use the injected sentence detector to find boundaries
         val boundaries = sentenceDetector.findBoundaries(text)
@@ -133,12 +168,14 @@ class BufferThinkingStepsUseCase @Inject constructor(
         if (currentChunkSentences.isEmpty()) return false
 
         val wordCount = currentChunkSentences.sumOf { it.split(Regex("\\s+")).size }
+        val combinedText = currentChunkSentences.joinToString(" ")
 
         return when {
             currentChunkSentences.size >= 4 -> true  // Too greedy - emit
             currentChunkSentences.size >= MIN_SENTENCES_PER_CHUNK -> true  // Minimum reached - emit
             wordCount >= SOFT_MAX_WORDS_PER_CHUNK -> true  // Enough words - emit
             isTransitionStart(currentChunkSentences.last()) -> true  // Transition word - emit
+            isStrongBreakPoint(combinedText) -> true  // Structural/semantic break point - emit
             else -> false
         }
     }
@@ -167,6 +204,30 @@ class BufferThinkingStepsUseCase @Inject constructor(
     private fun isTransitionStart(sentence: String): Boolean {
         val firstWord = sentence.split(Regex("\\s+")).firstOrNull()?.lowercase() ?: return false
         return firstWord in TRANSITION_STARTERS || Regex("^\\d+[.)]").containsMatchIn(sentence.lowercase())
+    }
+
+    /**
+     * Checks if the text contains structural or semantic break points that should trigger
+     * a new chunk emission.
+     *
+     * Priority order:
+     * 1. Structural (force emit if chunk exists): markdown headers, numbered steps, bullets, paragraph breaks
+     * 2. Semantic (secondary triggers): reflection starters, verification phrases, planning intros
+     */
+    private fun isStrongBreakPoint(text: String): Boolean {
+        // Check for structural breaks first (highest priority)
+        if (currentChunkSentences.isNotEmpty()) {
+            if (MARKDOWN_HEADER.containsMatchIn(text)) return true
+            if (NUMBERED_STEP.containsMatchIn(text)) return true
+            if (BULLET_POINT.containsMatchIn(text)) return true
+            if (PARAGRAPH_BREAK.containsMatchIn(text)) return true
+            if (COLON_TERMINATED_SHORT.containsMatchIn(text)) return true
+        }
+        // Check semantic/reflection triggers
+        if (REFLECTION_STARTERS.containsMatchIn(text)) return true
+        if (VERIFICATION_PHRASES.containsMatchIn(text)) return true
+        if (PLANNING_INTROS.containsMatchIn(text)) return true
+        return false
     }
 
     /**
