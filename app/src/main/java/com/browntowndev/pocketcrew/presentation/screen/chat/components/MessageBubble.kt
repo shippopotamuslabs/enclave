@@ -86,7 +86,7 @@ fun MessageBubble(
                     bottomStart = 20.dp,
                     bottomEnd = 4.dp,
                 ),
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     SelectionContainer(modifier = Modifier.fillMaxWidth()) {

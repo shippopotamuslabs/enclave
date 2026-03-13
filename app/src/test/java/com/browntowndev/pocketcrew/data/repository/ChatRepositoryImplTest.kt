@@ -68,7 +68,7 @@ class ChatRepositoryImplTest {
         val messageId = 123L
         val content = "This is the assistant response"
         val thinkingData = ThinkingData(
-            durationSeconds = 10,
+            thinkingDurationSeconds = 10,
             steps = listOf("Step 1", "Step 2", "Step 3"),
             rawFullThought = "Full reasoning chain"
         )
@@ -79,7 +79,7 @@ class ChatRepositoryImplTest {
             messageDao.updateMessageContent(
                 id = 123L,
                 content = content,
-                thinkingDuration = thinkingData.durationSeconds,
+                thinkingDuration = thinkingData.thinkingDurationSeconds,
                 thinkingSteps = "Step 1\nStep 2\nStep 3",
                 thinkingRaw = thinkingData.rawFullThought
             )

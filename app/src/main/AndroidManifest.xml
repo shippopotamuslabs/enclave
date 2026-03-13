@@ -4,7 +4,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
@@ -29,7 +29,18 @@
             </intent-filter>
         </activity>
 
-        <!-- WorkManager foreground service for Android 14+ (SDK 34+) -->
+        <!-- Custom Inference Service with specialUse foreground type -->
+        <!-- specialUse has no quota limits (unlike dataSync which has 6-hour limit on Android 15+) -->
+        <service
+            android:name=".inference.service.InferenceService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="on-device AI inference for generating chat responses"/>
+        </service>
+
+        <!-- WorkManager foreground service for Android 14+ (SDK 34+) - kept for WorkManager internal use -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"
@@ -43,7 +54,7 @@
             tools:node="merge">
             <meta-data
                 android:name="androidx.work.WorkManagerInitializer"
-                android:value="androidx.startup"
+                value="androidx.startup"
                 tools:node="remove" />
         </provider>
     </application>

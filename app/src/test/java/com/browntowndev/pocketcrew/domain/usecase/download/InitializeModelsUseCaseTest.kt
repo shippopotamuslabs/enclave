@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
@@ -12,6 +13,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -212,5 +214,179 @@ class InitializeModelsUseCaseTest {
 
         // Then - should still return empty (graceful degradation using existing models)
         assert(result.modelsToDownload.isEmpty())
+    }
+
+    @Test
+    fun `invoke does NOT mark existing config as OLD when SHA256 is unchanged but tunings changed`() = runTest {
+        // Given - remote config has same SHA256 but different temperature (tuning change only)
+        val existingConfig = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/model",
+                remoteFileName = "model.bin",
+                localFileName = "model.bin",
+                displayName = "Test Model",
+                sha256 = "sameSha256", // Same SHA256
+                sizeInBytes = 1024,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                repetitionPenalty = 1.0,
+                maxTokens = 2048,
+                contextWindow = 2048
+            ),
+            persona = ModelConfiguration.Persona(
+                systemPrompt = "You are a helpful assistant."
+            )
+        )
+
+        val remoteConfig = existingConfig.copy(
+            tunings = existingConfig.tunings.copy(temperature = 0.5) // Different tuning
+        )
+
+        val emptyResult = DownloadModelsResult(
+            modelsToDownload = emptyList(), // Same SHA256, so no download needed
+            scanResult = ModelScanResult(
+                missingModels = emptyList(),
+                partialDownloads = emptyMap(),
+                allValid = true
+            )
+        )
+
+        // Registry has existing CURRENT config
+        coEvery { mockModelRegistry.getModelsPreferringOld() } returns listOf(existingConfig)
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(remoteConfig))
+        coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
+
+        // When
+        useCase.invoke()
+
+        // Then - setRegisteredModel is called with markExistingAsOld=false
+        // because SHA256 is unchanged - the file is still valid
+        coVerify(exactly = 1) {
+            mockModelRegistry.setRegisteredModel(remoteConfig, ModelStatus.CURRENT, markExistingAsOld = false)
+        }
+    }
+
+    @Test
+    fun `invoke calls setRegisteredModel for remote config regardless of SHA256 changes`() = runTest {
+        // Given - remote config has different SHA256 (new model file)
+        val existingConfig = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/model",
+                remoteFileName = "old-model.bin",
+                localFileName = "old-model.bin",
+                displayName = "Old Model",
+                sha256 = "oldSha256",
+                sizeInBytes = 1024,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                repetitionPenalty = 1.0,
+                maxTokens = 2048,
+                contextWindow = 2048
+            ),
+            persona = ModelConfiguration.Persona(
+                systemPrompt = "You are a helpful assistant."
+            )
+        )
+
+        val remoteConfig = existingConfig.copy(
+            metadata = existingConfig.metadata.copy(
+                sha256 = "newSha256", // Different SHA256 = new file
+                localFileName = "new-model.bin",
+                remoteFileName = "new-model.bin"
+            )
+        )
+
+        val downloadResult = DownloadModelsResult(
+            modelsToDownload = listOf(remoteConfig), // New SHA256 = needs download
+            scanResult = ModelScanResult(
+                missingModels = listOf(remoteConfig),
+                partialDownloads = emptyMap(),
+                allValid = false
+            )
+        )
+
+        // Registry has existing CURRENT config
+        coEvery { mockModelRegistry.getModelsPreferringOld() } returns listOf(existingConfig)
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(remoteConfig))
+        coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns downloadResult
+
+        // When
+        useCase.invoke()
+
+        // Then - setRegisteredModel is called with the new config
+        // The repository internally handles marking the old one as OLD
+        coVerify(exactly = 1) {
+            mockModelRegistry.setRegisteredModel(remoteConfig, ModelStatus.CURRENT)
+        }
+    }
+
+    /**
+     * VERIFIED FIX:
+     * When SHA256 is unchanged but tunings change, the use case now correctly
+     * passes markExistingAsOld=false to prevent creating an OLD entry.
+     * This prevents the file cleanup logic from deleting valid model files.
+     */
+    @Test
+    fun `FIXED - when SHA256 unchanged, markExistingAsOld is false to prevent file deletion`() = runTest {
+        // Given - same SHA256 but different temperature
+        val existingConfig = ModelConfiguration(
+            modelType = ModelType.MAIN,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/model",
+                remoteFileName = "model.bin",
+                localFileName = "model.bin",
+                displayName = "Test Model",
+                sha256 = "sameSha256",
+                sizeInBytes = 1024,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(
+                temperature = 0.0,
+                topK = 40,
+                topP = 0.95,
+                repetitionPenalty = 1.0,
+                maxTokens = 2048,
+                contextWindow = 2048
+            ),
+            persona = ModelConfiguration.Persona(
+                systemPrompt = "You are a helpful assistant."
+            )
+        )
+
+        val remoteConfig = existingConfig.copy(
+            tunings = existingConfig.tunings.copy(temperature = 0.7) // Tunings changed
+        )
+
+        val emptyResult = DownloadModelsResult(
+            modelsToDownload = emptyList(),
+            scanResult = ModelScanResult(
+                missingModels = emptyList(),
+                partialDownloads = emptyMap(),
+                allValid = true
+            )
+        )
+
+        // Registry has existing CURRENT config
+        coEvery { mockModelRegistry.getModelsPreferringOld() } returns listOf(existingConfig)
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(remoteConfig))
+        coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
+
+        // When - invoke the use case
+        useCase.invoke()
+
+        // Verify: markExistingAsOld should be false because SHA256 is unchanged
+        coVerify(exactly = 1) {
+            mockModelRegistry.setRegisteredModel(remoteConfig, ModelStatus.CURRENT, markExistingAsOld = false)
+        }
     }
 }

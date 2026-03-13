@@ -1,30 +1,18 @@
 package com.browntowndev.pocketcrew.inference.worker
 
-import android.content.Context
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
-import com.browntowndev.pocketcrew.inference.WorkManagerPipelineExecutor
+import com.browntowndev.pocketcrew.inference.InferenceServicePipelineExecutor
 import dagger.Binds
 import dagger.Module
-import dagger.Provides
 import dagger.hilt.InstallIn
-import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
-@Module
-@InstallIn(SingletonComponent::class)
-object InferenceWorkerModule {
-
-    @Provides
-    @Singleton
-    fun provideInferenceNotificationManager(
-        @ApplicationContext context: Context,
-        notificationManager: android.app.NotificationManager
-    ): InferenceNotificationManager {
-        return InferenceNotificationManager(context, notificationManager)
-    }
-}
-
+/**
+ * Module for binding inference pipeline executor.
+ * Uses InferenceServicePipelineExecutor which runs the Crew pipeline
+ * via a custom foreground Service with specialUse type (no quota limits).
+ */
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class InferenceExecutorModule {
@@ -32,6 +20,6 @@ abstract class InferenceExecutorModule {
     @Binds
     @Singleton
     abstract fun bindPipelineExecutor(
-        workManagerPipelineExecutor: WorkManagerPipelineExecutor
+        inferenceServicePipelineExecutor: InferenceServicePipelineExecutor
     ): PipelineExecutorPort
 }

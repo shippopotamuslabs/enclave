@@ -194,4 +194,12 @@ class BufferThinkingStepsUseCase @Inject constructor(
         currentChunkSentences.clear()
         strippedIntro = false
     }
+
+    /**
+     * Gets the current buffered steps without resetting.
+     * Used for capturing thinking steps at step completion.
+     */
+    fun getBufferedSteps(): List<String> {
+        return currentChunkSentences.toList()
+    }
 }

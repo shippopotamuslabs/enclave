@@ -9,17 +9,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,7 +49,12 @@ import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.R
 import com.browntowndev.pocketcrew.presentation.screen.chat.ChatMessage
 import com.browntowndev.pocketcrew.presentation.screen.chat.MessageRole
+import com.browntowndev.pocketcrew.presentation.screen.chat.ResponseState
+import com.browntowndev.pocketcrew.presentation.screen.chat.StepCompletionData
 import com.browntowndev.pocketcrew.presentation.screen.chat.ThinkingData
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.presentation.screen.chat.components.ProcessingIndicator
+import com.browntowndev.pocketcrew.presentation.screen.chat.components.ThinkingIndicator
 import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 import kotlinx.coroutines.launch
 
@@ -90,18 +101,57 @@ private fun parseContent(raw: String): List<ContentSegment> {
 
 // ── Main composable ──
 
+/**
+ * Determines if a message is in Crew mode based on completed steps.
+ * Returns true if there are completed steps (indicating Crew mode pipeline).
+ */
+private fun isCrewMode(message: ChatMessage): Boolean {
+    return message.completedSteps?.isNotEmpty() == true
+}
+
 @Composable
 fun AssistantResponse(
     message: ChatMessage,
     modelDisplayName: String = "",
+    // Thinking state for Crew mode live indicator below completed steps
+    thinkingSteps: List<String> = emptyList(),
+    thinkingStartTime: Long = 0L,
+    responseState: ResponseState = ResponseState.NONE,
     modifier: Modifier = Modifier,
+) {
+    // Explicit mode detection - determines which rendering path to use
+    val crewMode = isCrewMode(message)
+
+    if (crewMode) {
+        CrewAssistantContent(
+            message = message,
+            modelDisplayName = modelDisplayName,
+            thinkingSteps = thinkingSteps,
+            thinkingStartTime = thinkingStartTime,
+            responseState = responseState,
+            modifier = modifier
+        )
+    } else {
+        NormalAssistantContent(
+            message = message,
+            modifier = modifier
+        )
+    }
+}
+
+// ── Normal Mode (Fast/Thinking) Composable ──
+
+@Composable
+private fun NormalAssistantContent(
+    message: ChatMessage,
+    modifier: Modifier = Modifier
 ) {
     val segments = remember(message.content) { parseContent(message.content) }
     var showThinkingDetails by remember { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // "Thought for Xs" collapsible header — only for messages with thinking data
-        if (message.thinkingData != null) {
+        // "Thought for Xs" collapsible header — only for messages with thinking data AND thinking steps
+        if (message.thinkingData != null && message.thinkingData.steps.isNotEmpty()) {
             ThoughtForHeader(
                 thinkingData = message.thinkingData,
                 onViewFullThinking = { showThinkingDetails = true }
@@ -130,14 +180,125 @@ fun AssistantResponse(
         )
     }
 
-    // Bottom sheet for thinking details
-    if (message.thinkingData != null) {
+    // Bottom sheet for thinking details — only if there are thinking steps
+    if (message.thinkingData != null && message.thinkingData.steps.isNotEmpty()) {
         ThinkingDetailsBottomSheet(
             isVisible = showThinkingDetails,
             thinkingSteps = message.thinkingData.steps,
-            thinkingDurationSeconds = message.thinkingData.durationSeconds,
+            thinkingDurationSeconds = message.thinkingData.thinkingDurationSeconds,
             modelDisplayName = message.thinkingData.modelDisplayName,
             onDismiss = { showThinkingDetails = false }
+        )
+    }
+}
+
+// ── Crew Mode Composable ──
+
+@Composable
+private fun CrewAssistantContent(
+    message: ChatMessage,
+    modelDisplayName: String,
+    thinkingSteps: List<String>,
+    thinkingStartTime: Long,
+    responseState: ResponseState,
+    modifier: Modifier = Modifier
+) {
+    val segments = remember(message.content) { parseContent(message.content) }
+    var selectedStepForThinkingDetails by remember { mutableStateOf<StepCompletionData?>(null) }
+    var selectedStepForCompletionDetails by remember { mutableStateOf<StepCompletionData?>(null) }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        // Interleave "Thought For" indicators with completed steps
+        // For each step in order: "Thought For Xs" → "✓ Step Completed!"
+        message.completedSteps?.forEach { step ->
+            // Show "Thought For" for THIS step if it has thinking
+            if (step.thinkingSteps.isNotEmpty()) {
+                ThoughtForHeader(
+                    thinkingData = ThinkingData(
+                        thinkingDurationSeconds = step.thinkingDurationSeconds,
+                        steps = step.thinkingSteps,
+                        modelDisplayName = step.modelDisplayName
+                    ),
+                    onViewFullThinking = { selectedStepForThinkingDetails = step }
+                )
+            }
+
+            // Show "✓ Step Completed!" for THIS step (except FINAL)
+            if (step.stepType != PipelineStep.FINAL) {
+                CompletedStepRow(
+                    stepName = step.stepName,
+                    onClick = { selectedStepForCompletionDetails = step }
+                )
+            }
+        }
+
+        // Live indicator below completed steps while next step is running
+        // This shows "Thinking..." during Draft Two, Draft Three, etc.
+        // Or "Processing..." when in PROCESSING state
+        // Or "Generating..." when in GENERATING state (text generation for non-final steps)
+        when (responseState) {
+            ResponseState.THINKING -> {
+                if (thinkingSteps.isNotEmpty() && thinkingStartTime > 0) {
+                    ThinkingIndicator(
+                        thinkingSteps = thinkingSteps,
+                        thinkingStartTime = thinkingStartTime,
+                        modelDisplayName = modelDisplayName,
+                    )
+                }
+            }
+            ResponseState.PROCESSING -> {
+                // Show Processing indicator during initial processing (before thinking begins)
+                ProcessingIndicator()
+            }
+            ResponseState.GENERATING -> {
+                // Show generating indicator for Crew mode non-final steps
+                // Styled like Thinking indicator (orb + shimmer text)
+                GeneratingIndicator()
+            }
+            ResponseState.NONE -> {
+                // No indicator
+            }
+        }
+
+        // Response content
+        segments.forEach { segment ->
+            when (segment) {
+                is ContentSegment.TextSegment -> TextBlock(segment.text)
+                is ContentSegment.CodeBlock -> FencedCodeBlock(
+                    language = segment.language,
+                    code = segment.code,
+                )
+            }
+        }
+
+        // Timestamp
+        Text(
+            text = message.formattedTimestamp,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 12.dp)
+                .align(Alignment.End),
+        )
+    }
+
+    // Bottom sheet for thinking details — from a specific step
+    if (selectedStepForThinkingDetails != null) {
+        ThinkingDetailsBottomSheet(
+            isVisible = selectedStepForThinkingDetails != null,
+            thinkingSteps = selectedStepForThinkingDetails!!.thinkingSteps,
+            thinkingDurationSeconds = selectedStepForThinkingDetails!!.thinkingDurationSeconds,
+            modelDisplayName = selectedStepForThinkingDetails!!.modelDisplayName,
+            onDismiss = { selectedStepForThinkingDetails = null }
+        )
+    }
+
+    // Bottom sheet for step completion details (output)
+    if (selectedStepForCompletionDetails != null) {
+        StepCompletionBottomSheet(
+            isVisible = true,
+            stepCompletion = selectedStepForCompletionDetails!!,
+            onDismiss = { selectedStepForCompletionDetails = null }
         )
     }
 }
@@ -155,7 +316,7 @@ private fun ThoughtForHeader(
     onViewFullThinking: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val durationText = formatThinkingDuration(thinkingData.durationSeconds)
+    val durationText = formatThinkingDuration(thinkingData.thinkingDurationSeconds)
 
     // Header row: cognition + "Thought for Xs" — clickable to open bottom sheet
     Row(
@@ -180,6 +341,137 @@ private fun ThoughtForHeader(
             ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+// ── Completed Steps header for Crew mode ──
+
+@Composable
+private fun CompletedStepsHeader(
+    completedSteps: List<StepCompletionData>,
+    onStepClick: (StepCompletionData) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // Filter out FINAL step - its output is already displayed as the chat response
+    val visibleSteps = completedSteps.filter { it.stepType != PipelineStep.FINAL }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp)
+    ) {
+        visibleSteps.forEach { step ->
+            CompletedStepRow(
+                stepName = step.stepName,
+                onClick = { onStepClick(step) }
+            )
+        }
+    }
+}
+
+// ── Single completed step row (used for interleaved rendering) ──
+
+@Composable
+private fun CompletedStepRow(
+    stepName: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 4.dp)
+    ) {
+        Text(
+            text = "✓",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = "$stepName Completed!",
+            style = MaterialTheme.typography.titleSmall.copy(
+                fontWeight = FontWeight.Medium,
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+// ── Bottom sheet for step completion details ──
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StepCompletionBottomSheet(
+    isVisible: Boolean,
+    stepCompletion: StepCompletionData,
+    onDismiss: () -> Unit,
+) {
+    if (isVisible) {
+        val sheetState = rememberModalBottomSheetState()
+
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            containerColor = MaterialTheme.colorScheme.surface,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight()
+                    .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Header with step name
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "✓",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "${stepCompletion.stepName} Output",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 18.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Step output content
+                SelectionContainer {
+                    Text(
+                        text = stepCompletion.stepOutput,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Duration info
+                Text(
+                    text = "Duration: ${formatThinkingDuration(stepCompletion.thinkingDurationSeconds)}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
     }
 }
 
@@ -324,7 +616,7 @@ private fun PreviewAssistantWithThinking() {
                 content = "Here is my well-considered answer after deep analysis.",
                 formattedTimestamp = "10:31 AM",
                 thinkingData = ThinkingData(
-                    durationSeconds = 14,
+                    thinkingDurationSeconds = 14,
                     steps = listOf(
                         "Agent A: Drafting direct answer with examples...",
                         "Agent B: Generating skeptical counterarguments...",
@@ -349,7 +641,7 @@ private fun PreviewAssistantQuickThinking() {
                 content = "Quick answer — no deep thinking needed.",
                 formattedTimestamp = "10:32 AM",
                 thinkingData = ThinkingData(
-                    durationSeconds = 2,
+                    thinkingDurationSeconds = 2,
                     steps = listOf("Quick mode — single-pass generation"),
                 ),
             ),
@@ -375,7 +667,7 @@ private fun PreviewAssistantWithKotlinCode() {
                     "This function takes a name and returns a greeting.",
                 formattedTimestamp = "10:33 AM",
                 thinkingData = ThinkingData(
-                    durationSeconds = 8,
+                    thinkingDurationSeconds = 8,
                     steps = listOf(
                         "Generating Kotlin example with idiomatic patterns...",
                         "Verifying code compiles and output is correct...",

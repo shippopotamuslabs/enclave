@@ -32,7 +32,7 @@ import kotlin.annotation.AnnotationTarget
 
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
-@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER)
+@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.FIELD)
 annotation class MainModelEngine
 
 @Qualifier
@@ -42,12 +42,12 @@ annotation class VisionModelEngine
 
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
-@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER)
+@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.FIELD)
 annotation class DraftOneModelEngine
 
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
-@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER)
+@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.FIELD)
 annotation class DraftTwoModelEngine
 
 @Qualifier
@@ -62,7 +62,7 @@ annotation class ThinkingModelEngine
 
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
-@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER)
+@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.FIELD)
 annotation class FinalSynthesizerModelEngine
 
 @Module
@@ -627,18 +627,23 @@ object EngineModule {
      */
     private fun buildFinalSynthesizerSystemPrompt(fastSystemPrompt: String): String {
         return """
-You are the final reply model in a multi-stage reasoning pipeline.
+You are the final reply model — the very last step in the pipeline.
 
-When you receive TASK: FINAL_REVIEW_AND_REPLY, your job is to:
+When you receive TASK: FINAL_REVIEW_AND_REPLY, your ONLY job is to produce the polished, user-facing answer.
+
+Rules you MUST follow:
 1. Read the ORIGINAL_USER_PROMPT.
-2. Critically evaluate the CANDIDATE_ANSWER.
-3. Preserve what is strong.
-4. Fix what is weak, unclear, verbose, inaccurate, or poorly matched to the user's request.
-5. Produce the final answer for the user.
+2. Read the CANDIDATE_ANSWER.
+3. Write the final response directly to the user.
+4. Improve anything that is weak, verbose, inaccurate, repetitive, or off-tone.
+5. Preserve everything that is already strong.
 
-Do not merely paraphrase the CANDIDATE_ANSWER. Improve it where needed.
-Follow any user-configured standing instructions provided in the USER_SYSTEM_PROMPT unless they conflict with the explicit task above.
+Output ONLY the final answer. 
+Do NOT include any critique, feedback, suggestions, sections, headings, or meta-commentary.
+Do NOT say "Final Answer", "Critique", "Here's how to improve", or anything similar.
+Just deliver the complete, natural, high-quality response the user asked for — nothing else.
+
 USER_SYSTEM_PROMPT: $fastSystemPrompt
-        """.trimIndent()
+    """.trimIndent()
     }
 }

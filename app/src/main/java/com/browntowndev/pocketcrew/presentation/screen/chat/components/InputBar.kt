@@ -64,6 +64,7 @@ fun InputBar(
     selectedMode: Mode,
     isExpanded: Boolean,
     isThinking: Boolean,
+    isGlobalInferenceBlocked: Boolean = false,
     onInputChange: (String) -> Unit,
     onModeChange: (Mode) -> Unit,
     onSend: (String) -> Unit,
@@ -117,7 +118,7 @@ fun InputBar(
         modifier = modifier
             .fillMaxWidth()
             .then(if (isExpanded) Modifier.fillMaxHeight(0.9f) else Modifier.heightIn(min = 56.dp))
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 8.dp)
             .animateContentSize()
             .then(if (!isExpanded) Modifier.clickable { focusRequester.requestFocus() } else Modifier),
         shape = RoundedCornerShape(28.dp),
@@ -309,22 +310,23 @@ fun InputBar(
                 }
 
                 // Send
+                val isSendDisabled = isThinking || isGlobalInferenceBlocked
                 IconButton(
                     onClick = {
-                        if (textFieldValue.text.isNotBlank() && !isThinking) {
+                        if (textFieldValue.text.isNotBlank() && !isSendDisabled) {
                             val textToSend = textFieldValue.text
                             onSend(textToSend) // Send FIRST while inputText still has value
                             textFieldValue = TextFieldValue("") // Clear locally
                             onInputChange("") // Clear parent state - LaunchedEffect will handle focus
                         }
                     },
-                    enabled = textFieldValue.text.isNotBlank() && !isThinking
+                    enabled = textFieldValue.text.isNotBlank() && !isSendDisabled
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send message",
                         tint = when {
-                            isThinking -> MaterialTheme.colorScheme.onSurfaceVariant
+                            isSendDisabled -> MaterialTheme.colorScheme.onSurfaceVariant
                             textFieldValue.text.isNotBlank() -> MaterialTheme.colorScheme.primary
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         }

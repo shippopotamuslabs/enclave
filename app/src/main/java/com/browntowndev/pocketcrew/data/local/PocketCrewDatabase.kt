@@ -7,7 +7,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [ChatEntity::class, MessageEntity::class, MessageSearch::class, ModelEntity::class],
+    entities = [ChatEntity::class, MessageEntity::class, MessageSearch::class, ModelEntity::class, StepCompletionEntity::class],
     version = 1,
     exportSchema = true
 )

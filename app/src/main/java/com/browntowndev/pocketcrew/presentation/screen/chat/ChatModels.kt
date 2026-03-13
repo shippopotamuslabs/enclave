@@ -2,6 +2,8 @@ package com.browntowndev.pocketcrew.presentation.screen.chat
 
 import android.content.Context
 import com.browntowndev.pocketcrew.R
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
@@ -31,10 +33,12 @@ enum class MessageRole {
 enum class ResponseState {
     /** No active response generation */
     NONE,
-    /** Generating text (no thinking) */
+    /** Generating text (no thinking) - shows orb */
     PROCESSING,
-    /** Model is thinking (has thinkingSteps) */
+    /** Model is thinking (has thinkingSteps) - shows animated thinking indicator */
     THINKING,
+    /** Crew mode: generating text for non-thinking step (shows "Generating..." indicator) */
+    GENERATING,
 }
 
 /**
@@ -43,10 +47,70 @@ enum class ResponseState {
  * for any historical response in the conversation.
  */
 data class ThinkingData(
-    val durationSeconds: Int,
+    val thinkingDurationSeconds: Int,
     val steps: List<String>,
     val modelDisplayName: String = "",
 )
+
+/**
+ * Step completion data for Crew mode.
+ * Tracks each step's output and metadata for display in the UI.
+ * stepName is derived from stepType.displayName().
+ * modelDisplayName should be populated from ModelRegistry in the ViewModel.
+ */
+data class StepCompletionData(
+    val stepOutput: String,
+    val thinkingDurationSeconds: Int,                    // Thinking time only (for "Thought For Xs")
+    val totalDurationSeconds: Int = 0,         // Total time (for BottomSheet)
+    val thinkingSteps: List<String>,
+    val stepType: PipelineStep,
+    val modelType: ModelType,
+    val modelDisplayName: String
+) {
+    /**
+     * Human-readable step name derived from stepType.
+     */
+    val stepName: String
+        get() = stepType.displayName()
+
+    companion object {
+        /**
+         * Creates StepCompletionData from domain model.
+         */
+        fun fromDomain(
+            domainData: com.browntowndev.pocketcrew.domain.port.repository.StepCompletionData,
+            modelDisplayName: String
+        ): StepCompletionData {
+            return StepCompletionData(
+                stepOutput = domainData.stepOutput,
+                thinkingDurationSeconds = domainData.thinkingDurationSeconds,
+                totalDurationSeconds = domainData.totalDurationSeconds,
+                thinkingSteps = domainData.thinkingSteps,
+                stepType = domainData.stepType,
+                modelType = domainData.modelType,
+                modelDisplayName = modelDisplayName
+            )
+        }
+
+        /**
+         * Creates StepCompletionData from MessageGenerationState.StepCompleted.
+         */
+        fun fromMessageGenerationState(
+            state: com.browntowndev.pocketcrew.domain.usecase.chat.MessageGenerationState.StepCompleted,
+            modelDisplayName: String
+        ): StepCompletionData {
+            return StepCompletionData(
+                stepOutput = state.stepOutput,
+                thinkingDurationSeconds = state.thinkingDurationSeconds,
+                totalDurationSeconds = state.totalDurationSeconds,
+                thinkingSteps = state.thinkingSteps,
+                stepType = state.stepType,
+                modelType = state.modelType,
+                modelDisplayName = modelDisplayName
+            )
+        }
+    }
+}
 
 data class ChatMessage(
     val id: Long,
@@ -55,6 +119,7 @@ data class ChatMessage(
     val content: String,
     val formattedTimestamp: String,
     val thinkingData: ThinkingData? = null,
+    val completedSteps: List<StepCompletionData>? = null,
 )
 
 data class ChatUiState(
@@ -76,6 +141,8 @@ data class ChatUiState(
     val shieldReason: String = "",
     val hapticPress: Boolean = true,
     val hapticResponse: Boolean = true,
+    /** Global lock - true when any on-device inference is in progress */
+    val isGlobalInferenceBlocked: Boolean = false,
 )
 
 val fakeLongMessages = listOf(
@@ -103,7 +170,7 @@ val fakeLongMessages = listOf(
             "Let me know if you'd like me to extend this.",
         formattedTimestamp = "10:29 AM",
         thinkingData = ThinkingData(
-            durationSeconds = 14,
+            thinkingDurationSeconds = 14,
             steps = listOf(
                 "Agent A: Drafting direct Kotlin example with greeting function...",
                 "Agent B: Adding JSON config representation for completeness...",
@@ -126,7 +193,7 @@ val fakeLongMessages = listOf(
         content = "Why did the AI go to therapy? It had too many unresolved tokens!",
         formattedTimestamp = "10:28 AM",
         thinkingData = ThinkingData(
-            durationSeconds = 3,
+            thinkingDurationSeconds = 3,
             steps = listOf("Quick mode — single-pass generation"),
         ),
     ),

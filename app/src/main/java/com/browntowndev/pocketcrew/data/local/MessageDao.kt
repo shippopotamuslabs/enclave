@@ -46,4 +46,15 @@ abstract class MessageDao {
 
     @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY id ASC")
     abstract suspend fun getMessagesByChatId(chatId: Long): List<MessageEntity>
+
+    // ===== Step Completion Methods =====
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun insertStepCompletion(stepCompletion: StepCompletionEntity): Long
+
+    @Query("SELECT * FROM step_completion WHERE message_id = :messageId ORDER BY step_type ASC")
+    abstract suspend fun getStepCompletionsForMessage(messageId: Long): List<StepCompletionEntity>
+
+    @Query("DELETE FROM step_completion WHERE message_id = :messageId")
+    abstract suspend fun deleteStepCompletionsForMessage(messageId: Long)
 }

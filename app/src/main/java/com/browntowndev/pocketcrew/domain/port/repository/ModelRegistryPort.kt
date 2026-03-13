@@ -47,8 +47,17 @@ interface ModelRegistryPort {
     /**
      * Update (or insert) the model for a given type with full config.
      * Called after a successful download.
+     *
+     * @param config The model configuration to save
+     * @param status The status (CURRENT or OLD)
+     * @param markExistingAsOld If true and there's an existing CURRENT, it will be marked as OLD.
+     *                          If false, existing CURRENT will be updated in place (no OLD entry created).
      */
-    suspend fun setRegisteredModel(config: ModelConfiguration, status: ModelStatus = ModelStatus.CURRENT)
+    suspend fun setRegisteredModel(
+        config: ModelConfiguration,
+        status: ModelStatus = ModelStatus.CURRENT,
+        markExistingAsOld: Boolean = true
+    )
 
     /**
      * Clear all registered models.
