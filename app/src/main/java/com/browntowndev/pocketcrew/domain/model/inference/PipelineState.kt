@@ -129,6 +129,7 @@ data class PipelineState(
         const val KEY_START_TIME_MS = "start_time_ms"
 
         const val KEY_THINKING_CHUNK = "thinking_chunk"
+        const val KEY_THINKING_STEP = "thinking_step"
         const val KEY_CURRENT_MODEL_TYPE = "current_model_type"
         const val KEY_STEP_OUTPUT = "step_output"
         const val KEY_FINAL_RESPONSE = "final_response"

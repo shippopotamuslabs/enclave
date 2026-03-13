@@ -2,7 +2,10 @@ package com.browntowndev.pocketcrew.domain.usecase
 
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+import com.browntowndev.pocketcrew.domain.port.repository.StepCompletionData
 
 /**
  * Fake implementation of ChatRepository for testing.
@@ -14,6 +17,7 @@ class FakeChatRepository : ChatRepository {
     private var nextChatId = 1L
     var shouldThrowOnCreateChat = false
     private val savedAssistantMessages = mutableListOf<Pair<Long, String>>()
+    private val savedStepCompletions = mutableListOf<StepCompletionData>()
 
     override suspend fun createChat(chat: Chat): Long {
         if (shouldThrowOnCreateChat) {
@@ -30,6 +34,30 @@ class FakeChatRepository : ChatRepository {
         thinkingData: ThinkingData?
     ) {
         savedAssistantMessages.add(messageId to content)
+    }
+
+    override suspend fun saveStepCompletion(
+        messageId: Long,
+        stepType: PipelineStep,
+        stepOutput: String,
+        thinkingDurationSeconds: Int,
+        thinkingSteps: List<String>,
+        modelType: ModelType
+    ) {
+        savedStepCompletions.add(
+            StepCompletionData(
+                stepOutput = stepOutput,
+                thinkingDurationSeconds = thinkingDurationSeconds,
+                totalDurationSeconds = thinkingDurationSeconds,
+                thinkingSteps = thinkingSteps,
+                stepType = stepType,
+                modelType = modelType
+            )
+        )
+    }
+
+    override suspend fun getStepCompletionsForMessage(messageId: Long): List<StepCompletionData> {
+        return savedStepCompletions.toList()
     }
 
     fun getCreatedChats(): List<Chat> = createdChats.toList()
@@ -50,6 +78,7 @@ class FakeChatRepository : ChatRepository {
         nextChatId = 1L
         shouldThrowOnCreateChat = false
         savedAssistantMessages.clear()
+        savedStepCompletions.clear()
     }
 }
 

@@ -162,19 +162,28 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
 
     private suspend fun updateModelRegistry() {
         // Update the registry with the successfully downloaded models
-        // Use models from startup result which contains all expected models
-        val models = startupModelsResult?.modelsToDownload ?: return
-        for (model in models) {
+        // Note: markExistingAsOld=false because the file is already downloaded.
+        // If there was an OLD entry from startup (when SHA256 changed), it will be
+        // replaced with CURRENT for the newly downloaded file.
+        val modelsToDownload = startupModelsResult?.modelsToDownload ?: return
+
+        for (model in modelsToDownload) {
             try {
-                modelRegistry.setRegisteredModel(model, com.browntowndev.pocketcrew.domain.model.config.ModelStatus.CURRENT)
+                modelRegistry.setRegisteredModel(
+                    model,
+                    com.browntowndev.pocketcrew.domain.model.config.ModelStatus.CURRENT,
+                    markExistingAsOld = false
+                )
                 logger.debug(TAG, "Updated registry: ${model.modelType} -> ${model.metadata.displayName}")
             } catch (e: Exception) {
                 logger.error(TAG, "Failed to update registry for ${model.modelType}: ${e.message}")
             }
         }
 
-        // Clean up old files on filesystem that are not in current configurations
-        cleanupOrphanedModelFiles(models)
+        // Clean up old files on filesystem - use ALL registered models, not just downloaded ones
+        // This is critical: if we only pass modelsToDownload, valid files will be incorrectly deleted
+        val allRegisteredModels = modelRegistry.getRegisteredModels()
+        cleanupOrphanedModelFiles(allRegisteredModels)
 
         // Clear old entries after successful download
         modelRegistry.clearOld()
@@ -240,11 +249,28 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
 
     override suspend fun retryFailed() {
         cancelDownloads()
+        // If startupModelsResult is null (edge case), set error and return
+        // This can happen if the download screen was opened without proper initialization
+        if (startupModelsResult == null) {
+            logger.warning(TAG, "retryFailed called but startupModelsResult is null - setting error state")
+            stateManager.updateState {
+                copy(status = DownloadStatus.ERROR, errorMessage = "Download state lost. Please restart the app.")
+            }
+            return
+        }
         startDownloads(wifiOnly = false)
     }
 
     override suspend fun downloadOnMobileData() {
         stateManager.updateState { copy(wifiBlocked = false) }
+        // If startupModelsResult is null (edge case), set error and return
+        if (startupModelsResult == null) {
+            logger.warning(TAG, "downloadOnMobileData called but startupModelsResult is null - setting error state")
+            stateManager.updateState {
+                copy(status = DownloadStatus.ERROR, errorMessage = "Download state lost. Please restart the app.")
+            }
+            return
+        }
         startDownloads(wifiOnly = false)
     }
 

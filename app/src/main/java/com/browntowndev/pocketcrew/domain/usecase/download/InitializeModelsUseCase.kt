@@ -69,8 +69,20 @@ class InitializeModelsUseCase @Inject constructor(
         )
 
         // Now register each remote config in the registry with CURRENT status
-        remoteConfigs.forEach { config ->
-            modelRegistry.setRegisteredModel(config, status = ModelStatus.CURRENT)
+        // Only mark existing as OLD if the file actually changed (SHA256 different).
+        // If SHA256 is unchanged (e.g., only tunings changed), update CURRENT in place
+        // to avoid incorrectly marking valid files for deletion.
+        val currentModelsByType = currentModels.associateBy { it.modelType }
+        remoteConfigs.forEach { remoteConfig ->
+            val existingConfig = currentModelsByType[remoteConfig.modelType]
+            val fileChanged = existingConfig == null ||
+                existingConfig.metadata.sha256 != remoteConfig.metadata.sha256
+
+            modelRegistry.setRegisteredModel(
+                remoteConfig,
+                status = ModelStatus.CURRENT,
+                markExistingAsOld = fileChanged
+            )
         }
         logPort.debug(TAG, "Registered ${remoteConfigs.size} remote configs in registry")
 

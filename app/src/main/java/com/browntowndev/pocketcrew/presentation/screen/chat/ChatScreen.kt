@@ -88,6 +88,7 @@ fun ChatScreen(
                 selectedMode = uiState.selectedMode,
                 isExpanded = uiState.isInputExpanded,
                 isThinking = uiState.responseState != ResponseState.NONE,
+                isGlobalInferenceBlocked = uiState.isGlobalInferenceBlocked,
                 onInputChange = onInputChange,
                 onModeChange = onModeChange,
                 onSend = onSendMessage,

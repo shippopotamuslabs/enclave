@@ -95,12 +95,16 @@ class ModelRegistryImpl @Inject constructor(
         }
     }
 
-    override suspend fun setRegisteredModel(config: ModelConfiguration, status: ModelStatus) {
+    override suspend fun setRegisteredModel(
+        config: ModelConfiguration,
+        status: ModelStatus,
+        markExistingAsOld: Boolean
+    ) {
         // First, check if there's an existing CURRENT model for this type
         val existingCurrent = modelsDao.getModelEntityByStatus(config.modelType, ModelStatus.CURRENT)
 
-        // If we're setting a new CURRENT and there was an existing CURRENT, update it to OLD
-        if (status == ModelStatus.CURRENT && existingCurrent != null) {
+        // If we're setting a new CURRENT and there was an existing CURRENT, optionally update it to OLD
+        if (status == ModelStatus.CURRENT && existingCurrent != null && markExistingAsOld) {
             modelsDao.upsert(
                 existingCurrent.copy(modelStatus = ModelStatus.OLD)
             )

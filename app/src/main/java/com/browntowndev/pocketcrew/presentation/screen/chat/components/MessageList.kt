@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Icon
@@ -56,7 +57,17 @@ fun MessageList(
                 // Show indicator ONLY on the most recent User message when response is active.
                 val isMostRecentUserMessage = message.role == MessageRole.User &&
                     messages.indexOf(message) == mostRecentUserIndex
-                val showIndicator = isMostRecentUserMessage && isThinking
+
+                // Check if there's an assistant message after this user message with completed steps (Crew mode)
+                val nextMessageIndex = messages.indexOf(message) + 1
+                val hasCompletedSteps = nextMessageIndex < messages.size &&
+                    messages[nextMessageIndex].role == MessageRole.Assistant &&
+                    !messages[nextMessageIndex].completedSteps.isNullOrEmpty()
+
+                // For non-Crew mode: show ThinkingIndicator before assistant message
+                // For Crew mode with completed steps: don't show here (it shows after assistant message)
+                val showIndicator = isMostRecentUserMessage && isThinking && !hasCompletedSteps
+
                 if (message.role == MessageRole.User) {
                     if (showIndicator) {
                         when (responseState) {
@@ -70,6 +81,10 @@ fun MessageList(
                             ResponseState.PROCESSING -> {
                                 ProcessingIndicator()
                             }
+                            ResponseState.GENERATING -> {
+                                // Show generating indicator for Crew mode non-final steps
+                                GeneratingIndicator()
+                            }
                             ResponseState.NONE -> {
                                 // No indicator
                             }
@@ -79,7 +94,11 @@ fun MessageList(
                 } else {
                     AssistantResponse(
                         message = message,
-                        modelDisplayName = thinkingModelDisplayName
+                        modelDisplayName = thinkingModelDisplayName,
+                        // Pass thinking state for Crew mode live indicator below completed steps
+                        thinkingSteps = thinkingSteps,
+                        thinkingStartTime = thinkingStartTime,
+                        responseState = responseState,
                     )
                 }
             }

@@ -8,15 +8,19 @@ import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.inference.llama.ChatMessage
 import com.browntowndev.pocketcrew.inference.llama.ChatRole
 import com.browntowndev.pocketcrew.presentation.screen.chat.Mode
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -32,6 +36,8 @@ class GenerateChatResponseUseCaseTest {
     private lateinit var chatRepository: ChatRepository
     private lateinit var messageRepository: MessageRepository
     private lateinit var bufferThinkingSteps: BufferThinkingStepsUseCase
+    private lateinit var inferenceLockManager: InferenceLockManager
+    private lateinit var modelRegistry: ModelRegistryPort
     private lateinit var useCase: GenerateChatResponseUseCase
 
     @BeforeEach
@@ -41,6 +47,16 @@ class GenerateChatResponseUseCaseTest {
         chatRepository = mockk(relaxed = true)
         messageRepository = mockk(relaxed = true)
         bufferThinkingSteps = mockk(relaxed = true)
+        inferenceLockManager = mockk(relaxed = true)
+        modelRegistry = mockk(relaxed = true)
+
+        // Default: allow lock acquisition
+        coEvery { inferenceLockManager.acquireLock(any()) } returns true
+        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
+
+        // Default: models are registered (on-device)
+        every { modelRegistry.getRegisteredModelSync(any()) } returns mockk()
+
         val loggingPort = mockk<LoggingPort>(relaxed = true)
 
         useCase = GenerateChatResponseUseCase(
@@ -50,7 +66,9 @@ class GenerateChatResponseUseCaseTest {
             pipelineExecutor = mockk(relaxed = true),
             messageRepository = messageRepository,
             bufferThinkingSteps = bufferThinkingSteps,
-            loggingPort = loggingPort
+            loggingPort = loggingPort,
+            inferenceLockManager = inferenceLockManager,
+            modelRegistry = modelRegistry
         )
     }
 

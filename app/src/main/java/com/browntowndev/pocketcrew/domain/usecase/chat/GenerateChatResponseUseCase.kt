@@ -9,14 +9,20 @@ import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
 import com.browntowndev.pocketcrew.inference.llama.ChatMessage
 import com.browntowndev.pocketcrew.inference.llama.ChatRole
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.presentation.screen.chat.Mode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.withContext
 
 
@@ -40,20 +46,90 @@ class GenerateChatResponseUseCase @Inject constructor(
     private val messageRepository: MessageRepository,
     private val bufferThinkingSteps: BufferThinkingStepsUseCase,
     private val loggingPort: LoggingPort,
+    private val inferenceLockManager: InferenceLockManager,
+    private val modelRegistry: ModelRegistryPort,
 ) {
     companion object {
         private const val TAG = "GenerateChatResponse"
     }
 
     operator fun invoke(prompt: String, userMessageId: Long, assistantMessageId: Long, chatId: Long, mode: Mode): Flow<MessageGenerationState> {
-        return when (mode) {
-            Mode.FAST -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, fastModelService, ModelType.FAST)
-            Mode.THINKING -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, thinkingModelService, ModelType.THINKING)
+        // Determine inference type based on mode and available models
+        // For Crew mode, check if ANY model in the pipeline is on-device
+        val inferenceType = determineInferenceType(mode)
+
+        // Try to acquire the global inference lock
+        if (!inferenceLockManager.acquireLock(inferenceType)) {
+            return flow {
+                emit(MessageGenerationState.Blocked("Another inference is in progress. Please wait."))
+            }
+        }
+
+        val baseFlow: Flow<MessageGenerationState> = when (mode) {
+            Mode.FAST -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, fastModelService, ModelType.FAST, inferenceType)
+            Mode.THINKING -> generateWithService(prompt, userMessageId, assistantMessageId, chatId, thinkingModelService, ModelType.THINKING, inferenceType)
             Mode.CREW -> pipelineExecutor.executePipeline(
                 chatId = chatId.toString(),
                 userMessage = prompt,
                 assistantMessageId = assistantMessageId.toString()
             )
+        }
+
+        // Wrap the flow to ensure lock is released when the flow completes (for all modes)
+        return baseFlow.onCompletion { cause ->
+            // Release lock when flow completes (success, error, or cancellation)
+            inferenceLockManager.releaseLock()
+        }
+    }
+
+    /**
+     * Determines the inference type based on the mode and available models.
+     *
+     * For CREW mode: Checks if ANY model in the pipeline (DRAFT_ONE, DRAFT_TWO, MAIN)
+     * is registered (on-device). If at least one is on-device, uses ON_DEVICE lock.
+     * This ensures we block concurrent on-device inference even if some pipeline models are BYOK.
+     *
+     * For FAST/THINKING modes: Uses the specific model type.
+     *
+     * TODO: When BYOK support is added, check ModelConfiguration for external API configuration.
+     * If ALL models in the pipeline are configured for external APIs, use BYOK type.
+     */
+    private fun determineInferenceType(mode: Mode): InferenceType {
+        return when (mode) {
+            Mode.FAST -> {
+                // FAST uses FAST model - check if registered (on-device)
+                if (modelRegistry.getRegisteredModelSync(ModelType.FAST) != null) {
+                    InferenceType.ON_DEVICE
+                } else {
+                    // Model not registered - could be BYOK in the future
+                    InferenceType.ON_DEVICE // Default to blocking for safety
+                }
+            }
+            Mode.THINKING -> {
+                // THINKING uses THINKING model - check if registered (on-device)
+                if (modelRegistry.getRegisteredModelSync(ModelType.THINKING) != null) {
+                    InferenceType.ON_DEVICE
+                } else {
+                    InferenceType.ON_DEVICE // Default to blocking for safety
+                }
+            }
+            Mode.CREW -> {
+                // CREW uses DRAFT_ONE, DRAFT_TWO, and MAIN models
+                // If ANY of these are on-device, we need to block concurrent inference
+                val draftOneOnDevice = modelRegistry.getRegisteredModelSync(ModelType.DRAFT_ONE) != null
+                val draftTwoOnDevice = modelRegistry.getRegisteredModelSync(ModelType.DRAFT_TWO) != null
+                val mainOnDevice = modelRegistry.getRegisteredModelSync(ModelType.MAIN) != null
+
+                // If at least one model is on-device, use ON_DEVICE lock
+                // This handles the mixed scenario: some BYOK, some on-device
+                if (draftOneOnDevice || draftTwoOnDevice || mainOnDevice) {
+                    InferenceType.ON_DEVICE
+                } else {
+                    // TODO: When BYOK is implemented, check if all models are configured for external APIs
+                    // For now, default to ON_DEVICE if no models registered (safety)
+                    InferenceType.ON_DEVICE
+                }
+            }
         }
     }
 
@@ -95,7 +171,8 @@ class GenerateChatResponseUseCase @Inject constructor(
         assistantMessageId: Long,
         chatId: Long,
         service: LlmInferencePort,
-        modelType: ModelType
+        modelType: ModelType,
+        inferenceType: InferenceType
     ): Flow<MessageGenerationState> = flow {
         val startTime = System.currentTimeMillis()
         val currentSteps = mutableListOf<String>()
@@ -141,7 +218,7 @@ class GenerateChatResponseUseCase @Inject constructor(
 
                     val thinkingData = if (currentSteps.isNotEmpty()) {
                         ThinkingData(
-                            durationSeconds = duration,
+                            thinkingDurationSeconds = duration,
                             steps = currentSteps,
                             rawFullThought = currentSteps.joinToString(" -> ")
                         )
@@ -174,4 +251,13 @@ sealed interface MessageGenerationState {
     object Finished : MessageGenerationState
     data class Blocked(val reason: String) : MessageGenerationState
     data class Failed(val error: Throwable) : MessageGenerationState
+    data class StepCompleted(
+        val stepOutput: String,
+        val thinkingDurationSeconds: Int,                  // Thinking time only (for "Thought For Xs")
+        val totalDurationSeconds: Int = 0,       // Total time (for BottomSheet display)
+        val thinkingSteps: List<String>,
+        val modelDisplayName: String,
+        val modelType: ModelType,
+        val stepType: PipelineStep
+    ) : MessageGenerationState
 }

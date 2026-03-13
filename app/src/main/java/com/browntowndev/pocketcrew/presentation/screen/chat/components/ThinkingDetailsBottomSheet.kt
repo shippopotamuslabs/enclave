@@ -131,7 +131,6 @@ private fun ThoughtBubbleStatic(
     modifier: Modifier = Modifier
 ) {
     val displayName = modelDisplayName.ifBlank { "Agent" }
-    val message = stepText
 
     Row(
         modifier = modifier.fillMaxWidth()
@@ -158,7 +157,7 @@ private fun ThoughtBubbleStatic(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = message,
+                        text = stepText,
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontSize = 13.sp,
                             lineHeight = 18.sp

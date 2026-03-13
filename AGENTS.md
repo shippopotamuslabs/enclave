@@ -21,7 +21,7 @@ This is the **single immutable entry-point**. Read this file first on every sess
 
 ## Contract Supremacy Rule (HIGHEST PRIORITY)
 At session start and before EVERY tool call:
-1. Read this AGENTS.md
+1. Read this CLAUDE.md
 2. Read **ONLY** the exact contracts it specifies from the `/contracts/` directory
 3. Treat every referenced contract as immutable ground truth
 4. Any deviation → reply with exactly: "Contract violation detected in [file]. Request explicit 'Contract Waiver' from user."
