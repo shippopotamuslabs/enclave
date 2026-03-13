@@ -462,9 +462,9 @@ private fun StepCompletionBottomSheet(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Duration info
+                // Duration info - show TOTAL time (thinking + generation), not just thinking time
                 Text(
-                    text = "Duration: ${formatThinkingDuration(stepCompletion.thinkingDurationSeconds)}",
+                    text = "Duration: ${formatThinkingDuration(stepCompletion.totalDurationSeconds)}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
