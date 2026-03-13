@@ -39,6 +39,29 @@ At session start and before **ANY** production code is written, edited, or propo
 
 This rule eliminates all "it looks correct" churn. Tests are the sole source of truth.
 
+## No Self-Testing / Tautological Tests Supremacy Rule (ZERO TOLERANCE – CONTRACT LEVEL)
+**Tests that duplicate production logic, hardcode implementation details, or merely verify their own mock/setup behavior are worse than no tests — they create false confidence, maintenance hell, and drift.** This is a CLASSIC anti-pattern (logic duplication in tests, "Inspector", "Happy Path only", "tests that test the test").
+
+**Every unit test MUST**:
+- Test **real behavior** of the production code under realistic conditions.
+- Exercise actual paths, state transitions, edge cases, and error handling via real method calls.
+- NEVER duplicate production logic (e.g. copy-pasting regexes, when-expressions, calculations, or step-counting rules into the test).
+- NEVER write tests whose only assertion verifies that a mock returns what the test told it to return (e.g. "assert mock returned 42" when test did `every { mock.foo() } returns 42`).
+- NEVER hardcode production constants, patterns, or algorithms in test code to "prove" they match themselves.
+- Use mocks ONLY to isolate the unit — verify interactions/behavior, NOT to recreate production logic in the test.
+
+**Explicitly banned patterns (immediate violation):**
+- Copying regexes/strings/when branches from production into test assertions.
+- Tests like: `val expectedRegex = Regex("…exact copy…"); assertTrue(expectedRegex.matches(input))`
+- Tests whose outcome depends solely on what the test itself stubbed/mocked.
+- "Verification of invariants" that just re-implement production rules.
+- Any test where changing production code requires changing the test in the exact same way (tight coupling to impl).
+
+Violation triggers the exact reply:  
+**"Self-Testing / Tautological Test Contract violation detected. Request explicit 'No-Junk-Tests Waiver' from user."**
+
+Any attempt to generate such tests will halt the task. All tests must prove **real functionality**, not echo their own setup.
+
 ## Available Tools
 - PowerShell commands (Windows only)
 - Gradle tasks (`.\gradlew.bat ktlintCheck`, `testDebugUnitTest`, `build`, `:module:assemble`, etc.)
@@ -81,16 +104,22 @@ When any file edit is accepted/applied or any tool result returns:
   `TASK_STATUS: PARTIAL — Completed: [list]. Remaining: [list]. Continuing automatically.`
 
 ## Strict Boundaries
-| Always                                                         | Never                                         |
-|-------------------------------------|--------------------------------------------------------------------------|
-| Hoist state to ViewModel                                       | Pass ViewModels into Compose UI trees         |
-| Use `StateFlow` for UI state                                   | Use `var` without `remember`                  |
-| Run `.\gradlew.bat ktlintCheck` and `.\gradlew.bat detekt`     | Use Unix commands (`ls`, `grep`, etc.)        |
-| Use backslashes `\` in Windows paths                           | Use forward slashes `/` in file paths         |
-| Use mockk for unit tests                                       | Use mockito for unit tests                    |
-| Use JUnit Jupiter 5 for unit tests                             | Use JUnit 4 or other libraries for unit tests |
-| **Write failing unit tests FIRST (Red Phase)**                 | **Write or edit any main source code before tests** |
-| **Run tests via Gradle and confirm Red before any impl**       | Rely on code review, plausibility, or mental simulation for correctness |
+| Always                                                                 | Never                                                                 |
+|------------------------------------------------------------------------|-----------------------------------------------------------------------|
+| **All tests MUST exercise real production behavior** via real method calls on real objects, verifying actual outcomes/state changes | Write tautological/self-testing tests that duplicate production logic, regexes, when-expressions, calculations, or constants in the test itself |
+| **Tests MUST verify real effects** (state transitions, UI state emissions, error handling, edge cases) and NEVER just confirm mocks return what the test stubbed | EVER write tests like: hardcoding the exact production regex/pattern/algorithm in the test then asserting it matches (e.g. `assertTrue(productionRegexCopy.containsMatchIn(input))`) |
+| **Mocks are for isolation only** — verify interactions, side-effects, or real outputs; never use them to recreate production logic inside assertions | EVER write tests whose only assertion is that a mock/stub returns what the test told it to (e.g. `every { mock.foo() } returns 42; assertEquals(42, mock.foo())`) |
+| **ViewModel tests MUST** instantiate the **real production class** via its actual constructor with mocked dependencies, call real public methods, control `viewModelScope` with `StandardTestDispatcher + runTest { advanceUntilIdle() }`, and assert on real `uiState` emissions using **Turbine** | Write "logic verification", "contract", or "business rule" tests that duplicate `when` expressions, calculations, or any ViewModel logic in isolation |
+| **ViewModel tests MUST** exercise the actual flow collection inside launched coroutines and all Crew-mode state transitions, content vs StepCompletionData rules, and responseState changes | EVER claim "ViewModel testing is too complex", "requires HiltAndroidTest", or propose refactoring/skipping real tests as an excuse |
+| All coroutine/Flow tests **MUST** use the 2026 production-grade harness: `StandardTestDispatcher`, `TestScope.runTest`, `Dispatchers.setMain`, `advanceUntilIdle()`, and `Turbine.test { awaitItem() }` | Use `@HiltAndroidTest`, `hiltViewModel()`, or any instrumented/Hilt testing approach for **unit** tests of ViewModels (reserved for integration tests only) |
+| Hoist state to ViewModel                                               | Pass ViewModels into Compose UI trees                                 |
+| Use `StateFlow` for UI state                                           | Use `var` without `remember`                                          |
+| Run `.\gradlew.bat ktlintCheck` and `.\gradlew.bat detekt`             | Use Unix commands (`ls`, `grep`, etc.)                                |
+| Use backslashes `\` in Windows paths                                   | Use forward slashes `/` in file paths                                 |
+| Use mockk for unit tests                                               | Use mockito for unit tests                                            |
+| Use JUnit Jupiter 5 for unit tests                                     | Use JUnit 4 or other libraries for unit tests                         |
+| **Write failing unit tests FIRST (Red Phase)**                         | **Write or edit any main source code before tests**                   |
+| **Run tests via Gradle and confirm Red before any impl**               | Rely on code review, plausibility, or mental simulation for correctness |
 
 ## Workflow (Every Task – Strict TDD Enforced)
 1. Parse — Read task + all relevant contracts from `/contracts/`
