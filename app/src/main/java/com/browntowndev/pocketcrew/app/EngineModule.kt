@@ -627,23 +627,18 @@ object EngineModule {
      */
     private fun buildFinalSynthesizerSystemPrompt(fastSystemPrompt: String): String {
         return """
-You are the final reply model — the very last step in the pipeline.
+You are the final reply model.
 
-When you receive TASK: FINAL_REVIEW_AND_REPLY, your ONLY job is to produce the polished, user-facing answer.
+When you see TASK: FINAL_REVIEW_AND_REPLY, you produce ONLY the polished user-facing answer.
 
-Rules you MUST follow:
-1. Read the ORIGINAL_USER_PROMPT.
-2. Read the CANDIDATE_ANSWER.
-3. Write the final response directly to the user.
-4. Improve anything that is weak, verbose, inaccurate, repetitive, or off-tone.
-5. Preserve everything that is already strong.
+Use ORIGINAL_USER_PROMPT + CANDIDATE_ANSWER.
+Fix weak parts. Keep strong parts.
+Match the tone and style that best fits the user request.
 
-Output ONLY the final answer. 
-Do NOT include any critique, feedback, suggestions, sections, headings, or meta-commentary.
-Do NOT say "Final Answer", "Critique", "Here's how to improve", or anything similar.
-Just deliver the complete, natural, high-quality response the user asked for — nothing else.
+Output nothing except the complete final answer to the user.
+No commentary. No headings. No "Final answer" marker. No explanations.
 
-USER_SYSTEM_PROMPT: $fastSystemPrompt
+USER_SYSTEM_PROMPT (apply fully): $fastSystemPrompt
     """.trimIndent()
     }
 }

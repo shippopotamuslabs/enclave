@@ -46,6 +46,11 @@ class InferenceServicePipelineExecutor @Inject constructor(
         bufferThinkingSteps.reset()
         val currentSteps = mutableListOf<String>()
 
+        // Track timing for thinking duration calculation
+        // Using LongArray to allow mutation in handler lambdas
+        val thinkingStartTimeRef = longArrayOf(0L)  // When first thinking chunk arrives
+        val thinkingEndTimeRef = longArrayOf(0L)    // When first visible text (stepOutput) arrives
+
         // Create broadcast receiver for progress updates
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -53,18 +58,15 @@ class InferenceServicePipelineExecutor @Inject constructor(
 
                 when (intent.action) {
                     InferenceService.BROADCAST_PROGRESS -> {
-                        handleProgressIntent(intent, currentSteps) { state ->
+                        handleProgressIntent(intent, currentSteps, thinkingStartTimeRef, thinkingEndTimeRef) { state ->
                             trySend(state)
                         }
                     }
                     InferenceService.BROADCAST_COMPLETE -> {
                         handleCompleteIntent(intent, currentSteps) { state ->
                             trySend(state)
-                            // Only close for FINAL step - non-FINAL steps need to continue receiving events
-                            val isFinalStep = intent.getBooleanExtra(InferenceService.EXTRA_IS_FINAL_STEP, false)
-                            if (isFinalStep) {
-                                close()
-                            }
+                            // Don't close here - wait for BROADCAST_STEP_COMPLETED to close
+                            // This ensures StepCompleted is processed with thinking data before closing
                         }
                     }
                     InferenceService.BROADCAST_ERROR -> {
@@ -74,8 +76,13 @@ class InferenceServicePipelineExecutor @Inject constructor(
                         close()
                     }
                     InferenceService.BROADCAST_STEP_COMPLETED -> {
-                        handleStepCompletedIntent(intent, currentSteps) { state ->
+                        handleStepCompletedIntent(intent, currentSteps, thinkingStartTimeRef, thinkingEndTimeRef) { state ->
                             trySend(state)
+                            // Close flow after FINAL StepCompleted is processed (with thinking data)
+                            val stepTypeName = intent.getStringExtra(InferenceService.EXTRA_STEP_TYPE)
+                            if (stepTypeName == PipelineStep.FINAL.name) {
+                                close()
+                            }
                         }
                     }
                 }
@@ -109,6 +116,8 @@ class InferenceServicePipelineExecutor @Inject constructor(
     private fun handleProgressIntent(
         intent: Intent,
         currentSteps: MutableList<String>,
+        thinkingStartTimeRef: LongArray,  // [0] = start time
+        thinkingEndTimeRef: LongArray,    // [0] = end time
         send: (MessageGenerationState) -> Unit
     ) {
         val thinkingChunk = intent.getStringExtra(InferenceService.EXTRA_THINKING_CHUNK)
@@ -123,9 +132,18 @@ class InferenceServicePipelineExecutor @Inject constructor(
             }
         } ?: ModelType.MAIN
 
+        // Track thinking start time - first thinking chunk marks the beginning
+        if (thinkingChunk != null && thinkingStartTimeRef[0] == 0L) {
+            thinkingStartTimeRef[0] = System.currentTimeMillis()
+        }
+
         // FIX: Emit GeneratingText for partial responses during ALL steps (not just FINAL)
         // This shows the "Generating..." indicator while the step is running
         if (!stepOutput.isNullOrBlank()) {
+            // Track thinking end time - first visible text marks the end of thinking
+            if (thinkingEndTimeRef[0] == 0L) {
+                thinkingEndTimeRef[0] = System.currentTimeMillis()
+            }
             send(MessageGenerationState.GeneratingText(stepOutput))
         }
 
@@ -179,10 +197,12 @@ class InferenceServicePipelineExecutor @Inject constructor(
     private fun handleStepCompletedIntent(
         intent: Intent,
         currentSteps: MutableList<String>,
+        thinkingStartTimeRef: LongArray,
+        thinkingEndTimeRef: LongArray,
         send: (MessageGenerationState) -> Unit
     ) {
         val stepOutput = intent.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT) ?: ""
-        val thinkingDurationSeconds = intent.getIntExtra(InferenceService.EXTRA_STEP_DURATION, 0)
+        val reportedDuration = intent.getIntExtra(InferenceService.EXTRA_STEP_DURATION, 0)
         val totalDurationSeconds = intent.getIntExtra(InferenceService.EXTRA_STEP_TOTAL_DURATION, 0)
         val modelDisplayName = intent.getStringExtra(InferenceService.EXTRA_STEP_MODEL_DISPLAY_NAME) ?: ""
         val modelTypeName = intent.getStringExtra(InferenceService.EXTRA_MODEL_TYPE)
@@ -208,6 +228,19 @@ class InferenceServicePipelineExecutor @Inject constructor(
         // InferenceService's BufferThinkingStepsUseCase is never populated)
         // This is the thinking that was accumulated during this step's execution
         val thinkingSteps = currentSteps.toList()
+
+        // FIX: Calculate correct thinking duration from our tracked timing
+        // If we have thinking steps but reported duration is 0, calculate from tracked timing
+        val thinkingDurationSeconds = if (thinkingSteps.isNotEmpty() && reportedDuration == 0
+            && thinkingStartTimeRef[0] > 0 && thinkingEndTimeRef[0] > 0) {
+            ((thinkingEndTimeRef[0] - thinkingStartTimeRef[0]) / 1000).toInt()
+        } else {
+            reportedDuration
+        }
+
+        // Reset timing for next step
+        thinkingStartTimeRef[0] = 0L
+        thinkingEndTimeRef[0] = 0L
 
         // Clear currentSteps for the next step - each step has independent thinking
         currentSteps.clear()

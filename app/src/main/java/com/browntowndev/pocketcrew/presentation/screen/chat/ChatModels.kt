@@ -59,6 +59,7 @@ data class ThinkingData(
     val thinkingDurationSeconds: Int,
     val steps: List<String>,
     val modelDisplayName: String = "",
+    val thinkingStartTime: Long = 0L,
 )
 
 /**

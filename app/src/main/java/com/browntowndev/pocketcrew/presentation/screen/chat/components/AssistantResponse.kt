@@ -219,31 +219,32 @@ private fun CrewAssistantContent(
             }
         }
 
-        // Live indicator below completed steps - rendered based on computed state from ViewModel
-        when {
-            // Still thinking - show animated indicator
-            thinkingData != null && thinkingData.thinkingDurationSeconds == 0 -> {
-                ThinkingIndicator(
-                    thinkingSteps = thinkingData.steps,
-                    thinkingStartTime = 0L,
-                    modelDisplayName = thinkingData.modelDisplayName,
-                )
-            }
-            // Thought completed but still generating - show "Thought For" header + generating indicator
-            thinkingData != null && thinkingData.thinkingDurationSeconds > 0 -> {
-                ThoughtForHeader(
-                    thinkingData = thinkingData,
-                    onViewFullThinking = { thinkingDataForDetailsSheet = thinkingData }
-                )
-                if (processingIndicatorState == ProcessingIndicatorState.GENERATING) {
-                    GeneratingIndicator()
+        // Live indicator below completed steps
+        // In Crew mode: shows current step's thinking + generating, then Processing when step completes
+        when (processingIndicatorState) {
+            // Step is still generating text - show "Thought For" + generating indicator
+            ProcessingIndicatorState.GENERATING -> {
+                if (thinkingData != null && thinkingData.thinkingDurationSeconds > 0) {
+                    ThoughtForHeader(
+                        thinkingData = thinkingData,
+                        onViewFullThinking = { thinkingDataForDetailsSheet = thinkingData }
+                    )
                 }
+                GeneratingIndicator()
             }
-            processingIndicatorState == ProcessingIndicatorState.PROCESSING -> {
+            // Step completed, waiting for next step
+            ProcessingIndicatorState.PROCESSING -> {
                 ProcessingIndicator()
             }
-            processingIndicatorState == ProcessingIndicatorState.GENERATING -> {
-                GeneratingIndicator()
+            // Active thinking (no text generated yet) - show animated indicator
+            ProcessingIndicatorState.NONE -> {
+                if (thinkingData != null) {
+                    ThinkingIndicator(
+                        thinkingSteps = thinkingData.steps,
+                        thinkingStartTime = thinkingData.thinkingStartTime,
+                        modelDisplayName = thinkingData.modelDisplayName,
+                    )
+                }
             }
         }
 
