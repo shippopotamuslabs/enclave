@@ -29,6 +29,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -81,6 +82,50 @@ class ChatViewModelCrewModeRealTest {
         }
 
         testDispatcher.scheduler.advanceUntilIdle()
+    }
+
+    // ========================================================================
+    // Test: FINAL step thinking is stored in completedSteps
+    // ========================================================================
+
+    @Test
+    fun `Crew mode - FINAL StepCompleted with thinking is stored in completedSteps`() {
+        // Given: 3 steps completed
+        sendMessage(Mode.CREW)
+
+        listOf(
+            MessageGenerationState.StepCompleted(stepOutput = "D1", thinkingDurationSeconds = 30, thinkingSteps = listOf("T1"), modelDisplayName = "M", modelType = ModelType.DRAFT_ONE, stepType = PipelineStep.DRAFT_ONE),
+            MessageGenerationState.StepCompleted(stepOutput = "D2", thinkingDurationSeconds = 25, thinkingSteps = listOf("T2"), modelDisplayName = "M", modelType = ModelType.DRAFT_TWO, stepType = PipelineStep.DRAFT_TWO),
+            MessageGenerationState.StepCompleted(stepOutput = "Synth", thinkingDurationSeconds = 45, thinkingSteps = listOf("T3"), modelDisplayName = "M", modelType = ModelType.MAIN, stepType = PipelineStep.SYNTHESIS)
+        ).forEach { state ->
+            testScope.launch { generationFlow.emit(state) }
+            testDispatcher.scheduler.advanceUntilIdle()
+        }
+
+        // When: FINAL StepCompleted arrives WITH thinking
+        testScope.launch { generationFlow.emit(MessageGenerationState.StepCompleted(
+            stepOutput = "Final Output",
+            thinkingDurationSeconds = 300,  // 5 minutes
+            thinkingSteps = listOf("Final thinking step 1", "Final thinking step 2"),
+            modelDisplayName = "Final Model",
+            modelType = ModelType.MAIN,
+            stepType = PipelineStep.FINAL
+        )) }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Then: FINAL step with thinking is in completedSteps
+        val afterMsg = viewModel.uiState.value.messages.lastOrNull { it.role == MessageRole.Assistant }
+        val completedSteps = afterMsg?.completedSteps
+
+        assertNotNull(completedSteps)
+        assertEquals(4, completedSteps!!.size)
+
+        // FINAL should be the 4th step
+        val finalStep = completedSteps.find { it.stepType == PipelineStep.FINAL }
+        assertNotNull(finalStep)
+        assertEquals(300, finalStep!!.thinkingDurationSeconds)
+        assertEquals(2, finalStep.thinkingSteps.size)
+        assertTrue(finalStep.thinkingComplete)  // This is what determines if "Thought For" shows
     }
 
     @After

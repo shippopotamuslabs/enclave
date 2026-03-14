@@ -91,7 +91,8 @@ class ChatViewModel @Inject constructor(
                     ProcessingIndicatorState.NONE to ThinkingData(
                         thinkingDurationSeconds = 0, // still thinking
                         steps = thinkingSteps,
-                        modelDisplayName = thinkingModelDisplayName
+                        modelDisplayName = thinkingModelDisplayName,
+                        thinkingStartTime = thinkingStartTime
                     )
                 } else {
                     ProcessingIndicatorState.PROCESSING to null

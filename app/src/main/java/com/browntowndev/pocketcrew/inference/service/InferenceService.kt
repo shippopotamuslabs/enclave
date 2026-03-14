@@ -110,9 +110,6 @@ class InferenceService : Service() {
     private lateinit var finalService: () -> LlmInferencePort
 
     @Inject
-    lateinit var bufferThinkingSteps: BufferThinkingStepsUseCase
-
-    @Inject
     lateinit var modelRegistry: ModelRegistryPort
 
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -182,7 +179,6 @@ class InferenceService : Service() {
         }
 
         isRunning = true
-        bufferThinkingSteps.reset()
 
         // Parse state or create initial
         val state = try {
@@ -257,30 +253,13 @@ class InferenceService : Service() {
                 ?: throw IllegalStateException("Service not available for step: $currentStep")
 
             val stepStartTime = System.currentTimeMillis()
-            var thinkingEndTime = 0L  // Track when thinking ends (first visible text)
             val prompt = buildPromptForStep(currentState)
-            val result = executeStepForPipeline(service, prompt, currentStep) { isFirstPartialResponse ->
-                // Callback when first PartialResponse arrives - that's when thinking ends
-                if (isFirstPartialResponse && thinkingEndTime == 0L) {
-                    thinkingEndTime = System.currentTimeMillis()
-                }
+            val result = executeStepForPipeline(service, prompt, currentStep) { _ ->
+                // Callback - timing now handled in PipelineExecutor
             }
             val stepDuration = ((System.currentTimeMillis() - stepStartTime) / 1000).toInt()
 
-            // Get buffered thinking steps BEFORE resetting - must happen first!
-            val bufferedSteps = bufferThinkingSteps.getBufferedSteps()
-
-            // Reset buffer before next step to prevent carryover
-            bufferThinkingSteps.reset()
-
-            // Calculate thinking duration - only if the model actually did thinking (had thinking steps)
-            // If no thinking steps were buffered, this is not a thinking model
-            val thinkingDuration = if (thinkingEndTime > 0L && bufferedSteps.isNotEmpty()) {
-                ((thinkingEndTime - stepStartTime) / 1000).toInt()
-            } else {
-                0  // No thinking for non-thinking models
-            }
-            logger.info(TAG, "${currentStep.name} Response: ${result.output}, thinkingDuration=${thinkingDuration}s, totalDuration=${stepDuration}s")
+            logger.info(TAG, "${currentStep.name} Response: ${result.output}, totalDuration=${stepDuration}s")
 
             // Store output
             currentState = currentState.withStepOutput(currentStep, result.output)
@@ -293,12 +272,12 @@ class InferenceService : Service() {
             // Broadcast step completion SECOND for ALL steps (including non-FINAL)
             // This must come AFTER broadcastComplete so that StepCompleted sets responseState to PROCESSING
             // after GeneratingText has been processed
+            // Note: thinkingDurationSeconds is calculated in PipelineExecutor from actual timing
             broadcastStepCompleted(
                 stepName = currentStep.displayName(),
                 stepOutput = result.output,
-                thinkingDurationSeconds = thinkingDuration,  // Thinking time only (for "Thought For Xs")
+                thinkingDurationSeconds = 0,  // Calculated in PipelineExecutor
                 totalDurationSeconds = stepDuration,  // Total time (for BottomSheet)
-                thinkingSteps = bufferedSteps,
                 modelDisplayName = getModelDisplayNameForStep(currentStep),
                 modelType = getModelTypeForStep(currentStep),
                 stepType = currentStep
@@ -414,7 +393,6 @@ class InferenceService : Service() {
         stepOutput: String,
         thinkingDurationSeconds: Int,
         totalDurationSeconds: Int,
-        thinkingSteps: List<String>,
         modelDisplayName: String,
         modelType: ModelType,
         stepType: PipelineStep
@@ -424,7 +402,6 @@ class InferenceService : Service() {
             putExtra(EXTRA_STEP_OUTPUT, stepOutput)
             putExtra(EXTRA_STEP_DURATION, thinkingDurationSeconds)
             putExtra(EXTRA_STEP_TOTAL_DURATION, totalDurationSeconds)
-            putStringArrayListExtra(EXTRA_STEP_THINKING_STEPS, ArrayList(thinkingSteps))
             putExtra(EXTRA_STEP_MODEL_DISPLAY_NAME, modelDisplayName)
             putExtra(EXTRA_MODEL_TYPE, modelType.name)
             putExtra(EXTRA_STEP_TYPE, stepType.name)
