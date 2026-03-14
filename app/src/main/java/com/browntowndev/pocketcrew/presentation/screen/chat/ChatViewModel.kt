@@ -37,7 +37,7 @@ private data class ChatBaseState(
     val responseState: ResponseState = ResponseState.NONE,
     val thinkingSteps: List<String> = emptyList(),
     val thinkingStartTime: Long = 0L,
-    val thinkingEndTime: Long = 0L,  // Time when thinking ended (before text generation)
+    val thinkingDurationSeconds: Int = 0,  // Thinking duration - set when thinking ends
     val thinkingModelDisplayName: String = "",
     val showUseTheCrewPopup: Boolean = false,
     val pendingUpgradeMessageId: Long? = null,
@@ -54,6 +54,65 @@ class ChatViewModel @Inject constructor(
     private val modelRegistry: ModelRegistryPort,
     private val inferenceLockManager: InferenceLockManager,
 ) : ViewModel() {
+
+    /**
+     * Computes what thinking indicator to show based on response state and thinking data.
+     * Returns Pair of (ProcessingIndicatorState, ThinkingData).
+     * Business logic in ViewModel - UI just renders what it's given.
+     */
+    private fun computeIndicatorState(
+        responseState: ResponseState,
+        mode: Mode,
+        thinkingSteps: List<String>,
+        thinkingStartTime: Long,
+        thinkingDurationSeconds: Int,
+        thinkingModelDisplayName: String
+    ): Pair<ProcessingIndicatorState, ThinkingData?> {
+        return when (responseState) {
+            ResponseState.NONE -> ProcessingIndicatorState.NONE to null
+
+            ResponseState.PROCESSING -> {
+                // If there was previous thinking that completed (thinkingDurationSeconds > 0),
+                // preserve the thinkingData so the UI can still show "Thought For" header
+                if (thinkingDurationSeconds > 0 && thinkingSteps.isNotEmpty()) {
+                    ProcessingIndicatorState.PROCESSING to ThinkingData(
+                        thinkingDurationSeconds = thinkingDurationSeconds,
+                        steps = thinkingSteps,
+                        modelDisplayName = thinkingModelDisplayName
+                    )
+                } else {
+                    ProcessingIndicatorState.PROCESSING to null
+                }
+            }
+
+            ResponseState.THINKING -> {
+                if (thinkingSteps.isNotEmpty() && thinkingStartTime > 0) {
+                    // Active thinking - show animated indicator with current steps
+                    ProcessingIndicatorState.NONE to ThinkingData(
+                        thinkingDurationSeconds = 0, // still thinking
+                        steps = thinkingSteps,
+                        modelDisplayName = thinkingModelDisplayName
+                    )
+                } else {
+                    ProcessingIndicatorState.PROCESSING to null
+                }
+            }
+
+            ResponseState.GENERATING -> {
+                // If thinking completed but generation still running, show "Thought For"
+                // thinkingDurationSeconds > 0 means thinking has completed
+                if (thinkingDurationSeconds > 0) {
+                    ProcessingIndicatorState.GENERATING to ThinkingData(
+                        thinkingDurationSeconds = thinkingDurationSeconds,
+                        steps = thinkingSteps,
+                        modelDisplayName = thinkingModelDisplayName
+                    )
+                } else {
+                    ProcessingIndicatorState.GENERATING to null
+                }
+            }
+        }
+    }
 
     /**
      * Optional chat ID for continuing an existing conversation.
@@ -88,6 +147,16 @@ class ChatViewModel @Inject constructor(
         settingsUseCases.getSettings(),
         inferenceLockManager.isInferenceBlocked,
     ) { base, settings, isGlobalBlocked ->
+        // Compute what thinking indicator to show based on response state and thinking data
+        val (processingIndicatorState, thinkingData) = computeIndicatorState(
+            responseState = base.responseState,
+            mode = base.selectedMode,
+            thinkingSteps = base.thinkingSteps,
+            thinkingStartTime = base.thinkingStartTime,
+            thinkingDurationSeconds = base.thinkingDurationSeconds,
+            thinkingModelDisplayName = base.thinkingModelDisplayName
+        )
+
         ChatUiState(
             messages = base.messages,
             inputText = base.inputText,
@@ -96,6 +165,9 @@ class ChatViewModel @Inject constructor(
             responseState = base.responseState,
             thinkingSteps = base.thinkingSteps,
             thinkingStartTime = base.thinkingStartTime,
+            thinkingDurationSeconds = base.thinkingDurationSeconds,
+            processingIndicatorState = processingIndicatorState,
+            thinkingData = thinkingData,
             thinkingModelDisplayName = base.thinkingModelDisplayName,
             showUseTheCrewPopup = base.showUseTheCrewPopup,
             hapticPress = settings.hapticPress,
@@ -168,7 +240,7 @@ class ChatViewModel @Inject constructor(
                         responseState = ResponseState.PROCESSING,
                         thinkingSteps = emptyList(),
                         thinkingStartTime = 0L,
-                        thinkingEndTime = 0L,
+                        thinkingDurationSeconds = 0,
                         thinkingModelDisplayName = getModelDisplayName(currentState.selectedMode),
                         // Update currentChatId to continue this conversation
                         currentChatId = promptResult.chatId,
@@ -217,6 +289,7 @@ class ChatViewModel @Inject constructor(
             is MessageGenerationState.GeneratingText -> {
                 val currentThinkingStartTime = _baseState.value.thinkingStartTime
                 val currentThinkingSteps = _baseState.value.thinkingSteps
+                val currentThinkingDurationSeconds = _baseState.value.thinkingDurationSeconds
                 val currentModelDisplayName = _baseState.value.thinkingModelDisplayName
 
                 _baseState.update { base ->
@@ -237,13 +310,20 @@ class ChatViewModel @Inject constructor(
                     // Non-Crew mode: always update content (original behavior)
                     val shouldUpdateContent = !isCrewMode || isFinalStep
 
-                    // FIX: In Crew mode, don't set message.thinkingData at top level
-                    // The per-step thinking is stored in completedSteps and rendered correctly
-                    // Only set message.thinkingData for non-Crew mode (Fast/Thinking modes)
-                    val thinkingData = if (!isCrewMode && currentThinkingStartTime > 0 && currentThinkingSteps.isNotEmpty()) {
+                    // Preserve thinkingData if there's previous thinking (for both THINKING and CREW modes)
+                    // For CREW mode: need to preserve so "Thought For" header shows after StepCompleted
+                    val thinkingData = if (currentThinkingStartTime > 0 && currentThinkingSteps.isNotEmpty()) {
+                        // Active thinking - calculate duration
                         val thinkingDurationSeconds = ((now - currentThinkingStartTime) / 1000).toInt()
                         ThinkingData(
                             thinkingDurationSeconds = thinkingDurationSeconds,
+                            steps = currentThinkingSteps,
+                            modelDisplayName = currentModelDisplayName
+                        )
+                    } else if (base.thinkingDurationSeconds > 0 && currentThinkingSteps.isNotEmpty()) {
+                        // Thinking already completed (e.g., after StepCompleted) - preserve duration
+                        ThinkingData(
+                            thinkingDurationSeconds = base.thinkingDurationSeconds,
                             steps = currentThinkingSteps,
                             modelDisplayName = currentModelDisplayName
                         )
@@ -285,14 +365,22 @@ class ChatViewModel @Inject constructor(
                         // FIX: Don't clear thinkingSteps in Crew mode - keep them so UI can show "Thought For Xs"
                         // The thinkingSteps will be cleared when StepCompleted arrives
                         thinkingSteps = if (isCrewMode) base.thinkingSteps else emptyList(),
-                        thinkingEndTime = now,  // Mark when thinking ended
+                        // Only calculate thinking duration if not already set (e.g., from StepCompleted)
+                        // If currentThinkingStartTime is 0, thinking already ended and duration was set in StepCompleted
+                        thinkingDurationSeconds = if (currentThinkingStartTime > 0) {
+                            ((now - currentThinkingStartTime) / 1000).toInt()
+                        } else if (base.thinkingDurationSeconds > 0) {
+                            base.thinkingDurationSeconds  // Preserve duration from StepCompleted
+                        } else {
+                            0
+                        },
                     )
                 }
             }
             is MessageGenerationState.Finished -> {
                 val assistantMsg = _baseState.value.messages.find { it.id == assistantMessageId }
                 val currentThinkingStartTime = _baseState.value.thinkingStartTime
-                val currentThinkingEndTime = _baseState.value.thinkingEndTime
+                val currentThinkingDurationSeconds = _baseState.value.thinkingDurationSeconds
                 val currentThinkingSteps = _baseState.value.thinkingSteps
                 val currentModelDisplayName = _baseState.value.thinkingModelDisplayName
 
@@ -304,7 +392,7 @@ class ChatViewModel @Inject constructor(
                             responseState = ResponseState.NONE,
                             thinkingSteps = emptyList(),
                             thinkingStartTime = 0L,
-                            thinkingEndTime = 0L,
+                            thinkingDurationSeconds = 0,
                             thinkingModelDisplayName = "",
                         )
                     } else {
@@ -324,10 +412,10 @@ class ChatViewModel @Inject constructor(
                         } else {
                             // Non-Crew mode: create thinkingData if needed
                             existingThinkingData ?: if (currentThinkingStartTime > 0 && currentThinkingSteps.isNotEmpty()) {
-                                val endTime = if (currentThinkingEndTime > 0) currentThinkingEndTime else System.currentTimeMillis()
-                                val thinkingDurationSeconds = ((endTime - currentThinkingStartTime) / 1000).toInt()
+                                // Use the computed thinkingDurationSeconds from base state
+                                val duration = base.thinkingDurationSeconds
                                 ThinkingData(
-                                    thinkingDurationSeconds = thinkingDurationSeconds,
+                                    thinkingDurationSeconds = duration,
                                     steps = currentThinkingSteps,
                                     modelDisplayName = currentModelDisplayName
                                 )
@@ -351,7 +439,7 @@ class ChatViewModel @Inject constructor(
                             responseState = ResponseState.NONE,
                             thinkingSteps = emptyList(),
                             thinkingStartTime = 0L,
-                            thinkingEndTime = 0L,
+                            thinkingDurationSeconds = 0,
                             thinkingModelDisplayName = "",
                         )
 
@@ -381,7 +469,7 @@ class ChatViewModel @Inject constructor(
                         responseState = ResponseState.NONE,
                         thinkingSteps = emptyList(),
                         thinkingStartTime = 0L,
-                        thinkingEndTime = 0L,
+                        thinkingDurationSeconds = 0,
                         thinkingModelDisplayName = "",
                     )
                 }
@@ -456,7 +544,13 @@ class ChatViewModel @Inject constructor(
                         // Don't reset thinkingStartTime here - it will be set when the next ThinkingLive arrives
                         // Setting to 0 indicates no active thinking timer (step just completed)
                         thinkingStartTime = 0L,
-                        thinkingSteps = emptyList(),
+                        // Clear thinkingSteps when step completes - the thinking data is now in completedSteps
+                        // FIX: Don't clear thinkingSteps in Crew mode - keep them so UI can show "Thought For Xs"
+                        // when GeneratingText arrives after StepCompleted
+                        // These will be cleared when the next ThinkingLive arrives or when FINISHED
+                        thinkingSteps = if (mode == Mode.CREW) base.thinkingSteps else emptyList(),
+                        // Store thinking duration so we can show "Thought For" indicator when transitioning to GENERATING
+                        thinkingDurationSeconds = generationState.thinkingDurationSeconds,
                         thinkingModelDisplayName = generationState.modelDisplayName,
                     )
                 }
@@ -475,7 +569,7 @@ class ChatViewModel @Inject constructor(
                         responseState = ResponseState.NONE,
                         thinkingSteps = emptyList(),
                         thinkingStartTime = 0L,
-                        thinkingEndTime = 0L,
+                        thinkingDurationSeconds = 0,
                         thinkingModelDisplayName = "",
                     )
                 }
@@ -505,7 +599,7 @@ class ChatViewModel @Inject constructor(
                         responseState = ResponseState.PROCESSING,
                         thinkingSteps = emptyList(),
                         thinkingStartTime = 0L,
-                        thinkingEndTime = 0L,
+                        thinkingDurationSeconds = 0,
                         // Initial model is DRAFT_ONE - will be updated via ThinkingLive.modelType
                         thinkingModelDisplayName = getModelDisplayName(ModelType.DRAFT_ONE),
                     )

@@ -42,6 +42,15 @@ enum class ResponseState {
 }
 
 /**
+ * Simple indicator type for processing/generating states.
+ */
+enum class ProcessingIndicatorState {
+    NONE,
+    PROCESSING,
+    GENERATING
+}
+
+/**
  * Thinking metadata attached to a completed assistant message.
  * Persists on the message so users can review chain-of-thought
  * for any historical response in the conversation.
@@ -67,6 +76,9 @@ data class StepCompletionData(
     val modelType: ModelType,
     val modelDisplayName: String
 ) {
+    val thinkingComplete: Boolean
+        get() = thinkingDurationSeconds > 0 && thinkingSteps.isNotEmpty()
+
     /**
      * Human-readable step name derived from stepType.
      */
@@ -133,6 +145,12 @@ data class ChatUiState(
     val thinkingSteps: List<String> = emptyList(),
     /** Timestamp when thinking started, used to calculate elapsed thinking time. */
     val thinkingStartTime: Long = 0L,
+    /** Thinking duration in seconds - set when thinking ends (GeneratingText starts). */
+    val thinkingDurationSeconds: Int = 0,
+    /** Computed indicator state - business logic for what to show during response generation. */
+    val processingIndicatorState: ProcessingIndicatorState = ProcessingIndicatorState.NONE,
+    /** Thinking data for "Thought For Xs" or animated thinking indicator. Null when no thinking. */
+    val thinkingData: ThinkingData? = null,
     /** Display name of the model currently thinking (from ModelConfiguration). */
     val thinkingModelDisplayName: String = "",
     /** Shows the "Use the Crew" popup after Fast mode response */

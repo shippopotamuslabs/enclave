@@ -31,8 +31,8 @@ class JniLlamaEngine @Inject constructor(
         private const val TAG = "JniLlamaEngine"
 
         // Timeout for generation - thinking models may need significantly longer
-        // 15 minutes for thinking models, 15 minutes for regular (Qwen is slow at ~6 tokens/sec)
-        private const val GENERATION_TIMEOUT_SECONDS_THINKING = 900L
+        // 30 minutes for thinking models, 15 minutes for regular (Qwen is slow at ~6 tokens/sec)
+        private const val GENERATION_TIMEOUT_SECONDS_THINKING = 1800L
         private const val GENERATION_TIMEOUT_SECONDS_REGULAR = 900L
 
         // Timeout for unload - need longer to let ongoing generation finish
