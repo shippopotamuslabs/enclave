@@ -48,19 +48,11 @@ class WorkProgressParser @Inject constructor(
 
         val filesData = progress.getStringArray(DownloadKey.FILES_PROGRESS.key) ?: emptyArray()
 
-        // DIAGNOSTIC: Log raw files data from work progress
-        Log.w(TAG, "[DIAGNOSTIC] parseRunning: raw filesData count=${filesData.size}, data=${filesData.joinToString("; ")}")
-
         val parsedFiles = filesData.mapNotNull { file ->
             parseFileProgress(file).also {
                 if (it == null) Log.w(TAG, "Failed to parse file progress: $it")
             }
         }
-
-        // Merge modelTypes from existing downloads for backward compatibility
-        // This handles multi-type models like DRAFT + VISION where one file has multiple filenames
-        Log.d(TAG, "[DEBUG] parseRunning: currentDownloads count=${currentDownloads.size}, filenames=${currentDownloads.map { it.filename }}")
-        Log.d(TAG, "[DEBUG] parseRunning: parsedFiles count=${parsedFiles.size}, filenames=${parsedFiles.map { it.filename }}")
 
         // DIAGNOSTIC: Log if currentDownloads is empty (this is the likely root cause!)
         if (currentDownloads.isEmpty()) {
@@ -71,8 +63,6 @@ class WorkProgressParser @Inject constructor(
             val existing = currentDownloads.firstOrNull { download ->
                 download.filename == parsed.filename
             }
-            Log.d(TAG, "[DEBUG] parseRunning: looking up filename=${parsed.filename}, found=${existing != null}, existingModelTypes=${existing?.modelTypes}")
-
             // FIX: Handle empty currentDownloads by using parsed.modelTypes directly
             // This fixes the "Waiting for model configuration..." bug when currentDownloads is empty
             if (existing == null) {
@@ -97,7 +87,6 @@ class WorkProgressParser @Inject constructor(
                 // parsed.modelTypes is authoritative (from worker), existing from currentDownloads
                 val mergedModelTypes = (parsed.modelTypes + existing.modelTypes).distinctBy { it.name }
                 val result = parsed.copy(modelTypes = mergedModelTypes)
-                Log.d(TAG, "[DEBUG] parseRunning: MERGED modelTypes=${result.modelTypes} for filename=${parsed.filename}")
                 result
             } else if (parsed.modelTypes.isNotEmpty()) {
                 // Existing has no modelTypes but parsed does - use parsed
@@ -202,8 +191,6 @@ class WorkProgressParser @Inject constructor(
                 Log.w(TAG, "[PARSE_WARN] parseFileProgress: Empty modelTypes for filename=$filename, will derive from filename")
                 emptyList()
             }
-
-            Log.d(TAG, "[DEBUG] parseFileProgress: filename=$filename, bytes=$bytesDownloaded, total=$totalBytes, status=$status, modelTypes=$modelTypes")
 
             if (totalBytes in 1..<bytesDownloaded) return null
 

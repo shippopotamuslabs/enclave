@@ -32,6 +32,20 @@ class BufferThinkingStepsUseCase @Inject constructor() {
         // Matches list markers: - , * , + at start of line (after newline)
         private val LIST_MARKER_REGEX = Regex("""\n\s*([-*+]|\d+[.)])(\s*)""")
 
+        // Claude-style thought header: **Thought for <duration>** or similar
+        // Specifically targets Claude-style reasoning headers
+        private val THOUGHT_HEADER_REGEX = Regex(
+            """\*\*Thought\s+for\s+\d+[^}]*?\*\*""",
+            RegexOption.MULTILINE
+        )
+
+        // Bold subtitle header - matches emoji-prefixed bold lines like 🔎 **Insight Inferno**
+        // Requires emoji prefix (not optional), followed by bold text, then newline or end
+        private val BOLD_SUBTITLE_HEADER_REGEX = Regex(
+            """(?:\n|\A)\s*[\p{So}\p{Sk}\p{Sm}\p{Sc}]\s*\*\*[^\n*]+\*\*\s*(?:\n|\z)""",
+            RegexOption.MULTILINE
+        )
+
         private const val HARD_MAX_CHARS_BEFORE_FORCE = 500
     }
 
@@ -104,16 +118,26 @@ class BufferThinkingStepsUseCase @Inject constructor() {
             return emitted
         }
 
-        // Find paragraph breaks first
+        // Find Claude-style thought headers (highest priority after protected environments)
+        val thoughtHeaderMatches = THOUGHT_HEADER_REGEX.findAll(text)
+
+        // Find bold subtitle headers (emoji-prefixed, secondary pattern)
+        val boldHeaderMatches = BOLD_SUBTITLE_HEADER_REGEX.findAll(text)
+
+        // Find paragraph breaks
         val paragraphMatches = PARAGRAPH_BREAK_REGEX.findAll(text)
 
         // Find list markers
         val listMatches = LIST_MARKER_REGEX.findAll(text)
 
-        // Combine and sort all boundary positions
+        // Combine and sort all boundary positions - headers take priority
+        val thoughtHeaderPositions = thoughtHeaderMatches.map { it.range.first }.toList()
+        val boldHeaderPositions = boldHeaderMatches.map { it.range.first }.toList()
         val paragraphPositions = paragraphMatches.map { it.range.first }.toList()
         val listPositions = listMatches.map { it.range.first }.toList()
-        val allBoundaries = (paragraphPositions + listPositions).distinct().sorted()
+
+        // Headers have highest priority, then paragraphs, then lists
+        val allBoundaries = (thoughtHeaderPositions + boldHeaderPositions + paragraphPositions + listPositions).distinct().sorted()
 
         // If no boundaries found, check for length fallback
         if (allBoundaries.isEmpty()) {
@@ -129,10 +153,51 @@ class BufferThinkingStepsUseCase @Inject constructor() {
 
         // Process chunks up to each boundary
         var lastBoundaryEnd = 0
+        var pendingHeaderStart: Int? = null
+        var pendingHeaderEnd: Int? = null
+
         for (boundaryStart in allBoundaries) {
             // Find the actual boundary end by checking what type it is
+            val isThoughtHeader = thoughtHeaderMatches.any { it.range.first == boundaryStart }
+            val isBoldHeader = boldHeaderMatches.any { it.range.first == boundaryStart }
             val isParagraphBreak = paragraphMatches.any { it.range.first == boundaryStart }
             val listMatch = listMatches.find { it.range.first == boundaryStart }
+
+            // Handle header boundaries specially - they mark start of new chunk
+            if (isThoughtHeader || isBoldHeader) {
+                // Find the end of the header
+                val match = if (isThoughtHeader) {
+                    THOUGHT_HEADER_REGEX.find(text, boundaryStart)
+                } else {
+                    BOLD_SUBTITLE_HEADER_REGEX.find(text, boundaryStart)
+                }
+                val headerEnd = match?.range?.last?.plus(1) ?: (boundaryStart + 1)
+
+                // If we had a pending header, emit from that header to this header
+                if (pendingHeaderStart != null && pendingHeaderEnd != null) {
+                    val chunk = text.substring(pendingHeaderStart, pendingHeaderEnd).trim()
+                    if (chunk.isNotBlank()) {
+                        emitted.add(chunk)
+                    }
+                }
+
+                // Store this header as pending - will emit when we find next boundary
+                pendingHeaderStart = boundaryStart
+                pendingHeaderEnd = headerEnd
+                lastBoundaryEnd = headerEnd
+                continue
+            }
+
+            // For non-header boundaries, emit any pending header first
+            if (pendingHeaderStart != null && pendingHeaderEnd != null) {
+                // Emit from pending header to current boundary
+                val chunk = text.substring(pendingHeaderStart, boundaryStart).trim()
+                if (chunk.isNotBlank()) {
+                    emitted.add(chunk)
+                }
+                pendingHeaderStart = null
+                pendingHeaderEnd = null
+            }
 
             val boundaryEnd = when {
                 isParagraphBreak -> {
@@ -142,7 +207,6 @@ class BufferThinkingStepsUseCase @Inject constructor() {
                 }
                 listMatch != null -> {
                     // For list marker, include the marker and following whitespace in the NEXT chunk
-                    // So we end the current chunk at the boundary start
                     boundaryStart
                 }
                 else -> boundaryStart + 1
@@ -157,8 +221,29 @@ class BufferThinkingStepsUseCase @Inject constructor() {
             lastBoundaryEnd = boundaryEnd
         }
 
+        // Handle any remaining pending header at the end
+        // Only emit if there's actual content after the header (not just the header itself)
+        // Otherwise, keep the header in the buffer for the next call
+        val hasPendingHeaderWithoutContent = pendingHeaderStart != null && pendingHeaderEnd != null &&
+                text.substring(pendingHeaderEnd).trim().isBlank()
+
+        if (pendingHeaderStart != null && pendingHeaderEnd != null) {
+            // Check if there's content after the header (more than just whitespace)
+            val contentAfterHeader = text.substring(pendingHeaderEnd).trim()
+            if (contentAfterHeader.isNotBlank()) {
+                val chunk = text.substring(pendingHeaderStart).trim()
+                emitted.add(chunk)
+                // Clear buffer since we emitted everything
+                buffer.clear()
+                return emitted
+            }
+            // No content after header - don't emit, don't clear buffer
+            // The header stays in buffer for next call
+        }
+
         // Keep unprocessed portion in buffer
-        if (lastBoundaryEnd > 0) {
+        // Don't clear if we have a pending header waiting for content
+        if (lastBoundaryEnd > 0 && !hasPendingHeaderWithoutContent) {
             if (lastBoundaryEnd >= text.length) {
                 buffer.clear()
             } else {
