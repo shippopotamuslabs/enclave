@@ -49,12 +49,11 @@ import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.R
 import com.browntowndev.pocketcrew.presentation.screen.chat.ChatMessage
 import com.browntowndev.pocketcrew.presentation.screen.chat.MessageRole
-import com.browntowndev.pocketcrew.presentation.screen.chat.ResponseState
+import com.browntowndev.pocketcrew.presentation.screen.chat.Mode
+import com.browntowndev.pocketcrew.presentation.screen.chat.ProcessingIndicatorState
 import com.browntowndev.pocketcrew.presentation.screen.chat.StepCompletionData
 import com.browntowndev.pocketcrew.presentation.screen.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
-import com.browntowndev.pocketcrew.presentation.screen.chat.components.ProcessingIndicator
-import com.browntowndev.pocketcrew.presentation.screen.chat.components.ThinkingIndicator
 import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 import kotlinx.coroutines.launch
 
@@ -101,34 +100,22 @@ private fun parseContent(raw: String): List<ContentSegment> {
 
 // ── Main composable ──
 
-/**
- * Determines if a message is in Crew mode based on completed steps.
- * Returns true if there are completed steps (indicating Crew mode pipeline).
- */
-private fun isCrewMode(message: ChatMessage): Boolean {
-    return message.completedSteps?.isNotEmpty() == true
-}
-
 @Composable
 fun AssistantResponse(
     message: ChatMessage,
-    modelDisplayName: String = "",
-    // Thinking state for Crew mode live indicator below completed steps
-    thinkingSteps: List<String> = emptyList(),
-    thinkingStartTime: Long = 0L,
-    responseState: ResponseState = ResponseState.NONE,
+    processingIndicatorState: ProcessingIndicatorState = ProcessingIndicatorState.NONE,
+    thinkingData: ThinkingData? = null,
+    selectedMode: Mode = Mode.FAST,
     modifier: Modifier = Modifier,
 ) {
-    // Explicit mode detection - determines which rendering path to use
-    val crewMode = isCrewMode(message)
+    // Use deterministic mode from enum - not inferring from completedSteps
+    val crewMode = selectedMode == Mode.CREW
 
     if (crewMode) {
         CrewAssistantContent(
             message = message,
-            modelDisplayName = modelDisplayName,
-            thinkingSteps = thinkingSteps,
-            thinkingStartTime = thinkingStartTime,
-            responseState = responseState,
+            processingIndicatorState = processingIndicatorState,
+            thinkingData = thinkingData,
             modifier = modifier
         )
     } else {
@@ -197,14 +184,12 @@ private fun NormalAssistantContent(
 @Composable
 private fun CrewAssistantContent(
     message: ChatMessage,
-    modelDisplayName: String,
-    thinkingSteps: List<String>,
-    thinkingStartTime: Long,
-    responseState: ResponseState,
+    processingIndicatorState: ProcessingIndicatorState,
+    thinkingData: ThinkingData?,
     modifier: Modifier = Modifier
 ) {
     val segments = remember(message.content) { parseContent(message.content) }
-    var selectedStepForThinkingDetails by remember { mutableStateOf<StepCompletionData?>(null) }
+    var thinkingDataForDetailsSheet by remember { mutableStateOf<ThinkingData?>(null) }
     var selectedStepForCompletionDetails by remember { mutableStateOf<StepCompletionData?>(null) }
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -212,14 +197,16 @@ private fun CrewAssistantContent(
         // For each step in order: "Thought For Xs" → "✓ Step Completed!"
         message.completedSteps?.forEach { step ->
             // Show "Thought For" for THIS step if it has thinking
-            if (step.thinkingSteps.isNotEmpty()) {
+            // Both thinkingDurationSeconds > 0 AND steps must be non-empty for a thinking step
+            if (step.thinkingComplete) {
+                val stepThinkingData = ThinkingData(
+                    thinkingDurationSeconds = step.thinkingDurationSeconds,
+                    steps = step.thinkingSteps,
+                    modelDisplayName = step.modelDisplayName
+                )
                 ThoughtForHeader(
-                    thinkingData = ThinkingData(
-                        thinkingDurationSeconds = step.thinkingDurationSeconds,
-                        steps = step.thinkingSteps,
-                        modelDisplayName = step.modelDisplayName
-                    ),
-                    onViewFullThinking = { selectedStepForThinkingDetails = step }
+                    thinkingData = stepThinkingData,
+                    onViewFullThinking = { thinkingDataForDetailsSheet = stepThinkingData }
                 )
             }
 
@@ -232,31 +219,31 @@ private fun CrewAssistantContent(
             }
         }
 
-        // Live indicator below completed steps while next step is running
-        // This shows "Thinking..." during Draft Two, Draft Three, etc.
-        // Or "Processing..." when in PROCESSING state
-        // Or "Generating..." when in GENERATING state (text generation for non-final steps)
-        when (responseState) {
-            ResponseState.THINKING -> {
-                if (thinkingSteps.isNotEmpty() && thinkingStartTime > 0) {
-                    ThinkingIndicator(
-                        thinkingSteps = thinkingSteps,
-                        thinkingStartTime = thinkingStartTime,
-                        modelDisplayName = modelDisplayName,
-                    )
+        // Live indicator below completed steps - rendered based on computed state from ViewModel
+        when {
+            // Still thinking - show animated indicator
+            thinkingData != null && thinkingData.thinkingDurationSeconds == 0 -> {
+                ThinkingIndicator(
+                    thinkingSteps = thinkingData.steps,
+                    thinkingStartTime = 0L,
+                    modelDisplayName = thinkingData.modelDisplayName,
+                )
+            }
+            // Thought completed but still generating - show "Thought For" header + generating indicator
+            thinkingData != null && thinkingData.thinkingDurationSeconds > 0 -> {
+                ThoughtForHeader(
+                    thinkingData = thinkingData,
+                    onViewFullThinking = { thinkingDataForDetailsSheet = thinkingData }
+                )
+                if (processingIndicatorState == ProcessingIndicatorState.GENERATING) {
+                    GeneratingIndicator()
                 }
             }
-            ResponseState.PROCESSING -> {
-                // Show Processing indicator during initial processing (before thinking begins)
+            processingIndicatorState == ProcessingIndicatorState.PROCESSING -> {
                 ProcessingIndicator()
             }
-            ResponseState.GENERATING -> {
-                // Show generating indicator for Crew mode non-final steps
-                // Styled like Thinking indicator (orb + shimmer text)
+            processingIndicatorState == ProcessingIndicatorState.GENERATING -> {
                 GeneratingIndicator()
-            }
-            ResponseState.NONE -> {
-                // No indicator
             }
         }
 
@@ -283,13 +270,13 @@ private fun CrewAssistantContent(
     }
 
     // Bottom sheet for thinking details — from a specific step
-    if (selectedStepForThinkingDetails != null) {
+    if (thinkingDataForDetailsSheet != null) {
         ThinkingDetailsBottomSheet(
-            isVisible = selectedStepForThinkingDetails != null,
-            thinkingSteps = selectedStepForThinkingDetails!!.thinkingSteps,
-            thinkingDurationSeconds = selectedStepForThinkingDetails!!.thinkingDurationSeconds,
-            modelDisplayName = selectedStepForThinkingDetails!!.modelDisplayName,
-            onDismiss = { selectedStepForThinkingDetails = null }
+            isVisible = true,
+            thinkingSteps = thinkingDataForDetailsSheet!!.steps,
+            thinkingDurationSeconds = thinkingDataForDetailsSheet!!.thinkingDurationSeconds,
+            modelDisplayName = thinkingDataForDetailsSheet!!.modelDisplayName,
+            onDismiss = { thinkingDataForDetailsSheet = null }
         )
     }
 

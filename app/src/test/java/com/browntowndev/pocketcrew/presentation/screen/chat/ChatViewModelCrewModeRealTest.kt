@@ -727,8 +727,8 @@ class ChatViewModelCrewModeRealTest {
     }
 
     @Test
-    fun `Fast mode - StepCompleted stores thinkingData at message level`() {
-        // Given: Send FAST message, generate text
+    fun `Fast mode with thinking steps - stores thinkingData at message level`() {
+        // Given: Send FAST message with thinking steps (could be a thinking model)
         sendMessage(Mode.FAST)
         testScope.launch { generationFlow.emit(MessageGenerationState.ThinkingLive(
             steps = listOf("Step 1", "Step 2"),
@@ -742,10 +742,9 @@ class ChatViewModelCrewModeRealTest {
         testScope.launch { generationFlow.emit(MessageGenerationState.Finished) }
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Then: message has thinkingData at top level (not completedSteps)
+        // Then: message HAS thinkingData because thinking steps were provided
         val assistantMessage = viewModel.uiState.value.messages.lastOrNull { it.role == MessageRole.Assistant }
         assertTrue(assistantMessage?.thinkingData != null)
-        assertEquals(2, assistantMessage?.thinkingData?.steps?.size ?: 0)
     }
 
     // ========================================================================

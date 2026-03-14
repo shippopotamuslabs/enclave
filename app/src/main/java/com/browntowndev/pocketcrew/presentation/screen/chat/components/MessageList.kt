@@ -20,20 +20,22 @@ import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.R
 import com.browntowndev.pocketcrew.presentation.screen.chat.ChatMessage
 import com.browntowndev.pocketcrew.presentation.screen.chat.MessageRole
+import com.browntowndev.pocketcrew.presentation.screen.chat.Mode
 import com.browntowndev.pocketcrew.presentation.screen.chat.ResponseState
+import com.browntowndev.pocketcrew.presentation.screen.chat.ProcessingIndicatorState
+import com.browntowndev.pocketcrew.presentation.screen.chat.ThinkingData
 import com.browntowndev.pocketcrew.presentation.screen.chat.fakeLongMessages
 import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 
 @Composable
 fun MessageList(
     messages: List<ChatMessage>,
-    responseState: ResponseState,
-    thinkingSteps: List<String>,
-    thinkingStartTime: Long,
-    thinkingModelDisplayName: String,
+    processingIndicatorState: ProcessingIndicatorState,
+    thinkingData: ThinkingData?,
+    selectedMode: Mode,
     modifier: Modifier = Modifier,
 ) {
-    val isThinking = responseState != ResponseState.NONE
+    val isThinking = processingIndicatorState != ProcessingIndicatorState.NONE || thinkingData != null
 
     if (messages.isEmpty() && !isThinking) {
         EmptyState(modifier = modifier)
@@ -65,40 +67,33 @@ fun MessageList(
                     !messages[nextMessageIndex].completedSteps.isNullOrEmpty()
 
                 // For non-Crew mode: show ThinkingIndicator before assistant message
-                // For Crew mode with completed steps: don't show here (it shows after assistant message)
-                val showIndicator = isMostRecentUserMessage && isThinking && !hasCompletedSteps
+                // For Crew mode: don't show here (it shows after assistant message in AssistantResponse)
+                val showIndicator = isMostRecentUserMessage && isThinking && selectedMode != Mode.CREW
 
                 if (message.role == MessageRole.User) {
                     if (showIndicator) {
-                        when (responseState) {
-                            ResponseState.THINKING -> {
+                        // Render indicator based on computed state from ViewModel
+                        when {
+                            thinkingData != null && thinkingData.thinkingDurationSeconds == 0 -> {
+                                // Still thinking - show animated indicator
                                 ThinkingIndicator(
-                                    thinkingSteps = thinkingSteps,
-                                    thinkingStartTime = thinkingStartTime,
-                                    modelDisplayName = thinkingModelDisplayName,
+                                    thinkingSteps = thinkingData.steps,
+                                    thinkingStartTime = 0L, // Not used in current impl
+                                    modelDisplayName = thinkingData.modelDisplayName,
                                 )
                             }
-                            ResponseState.PROCESSING -> {
-                                ProcessingIndicator()
-                            }
-                            ResponseState.GENERATING -> {
-                                // Show generating indicator for Crew mode non-final steps
-                                GeneratingIndicator()
-                            }
-                            ResponseState.NONE -> {
-                                // No indicator
-                            }
+                            processingIndicatorState == ProcessingIndicatorState.PROCESSING -> ProcessingIndicator()
+                            processingIndicatorState == ProcessingIndicatorState.GENERATING -> GeneratingIndicator()
+                            // ThoughtCompleted case: don't show here - shows in AssistantResponse for Crew mode
                         }
                     }
                     MessageBubble(message = message)
                 } else {
                     AssistantResponse(
                         message = message,
-                        modelDisplayName = thinkingModelDisplayName,
-                        // Pass thinking state for Crew mode live indicator below completed steps
-                        thinkingSteps = thinkingSteps,
-                        thinkingStartTime = thinkingStartTime,
-                        responseState = responseState,
+                        processingIndicatorState = processingIndicatorState,
+                        thinkingData = thinkingData,
+                        selectedMode = selectedMode,
                     )
                 }
             }
@@ -136,7 +131,7 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 @Composable
 private fun PreviewMessageListEmpty() {
     PocketCrewTheme {
-        MessageList(emptyList(), ResponseState.NONE, emptyList(), 0L, "")
+        MessageList(emptyList(), ProcessingIndicatorState.NONE, null, Mode.FAST)
     }
 }
 
@@ -144,7 +139,7 @@ private fun PreviewMessageListEmpty() {
 @Composable
 private fun PreviewMessageListLong() {
     PocketCrewTheme(darkTheme = true) {
-        MessageList(fakeLongMessages, ResponseState.NONE, emptyList(), 0L, "")
+        MessageList(fakeLongMessages, ProcessingIndicatorState.NONE, null, Mode.FAST)
     }
 }
 
@@ -154,10 +149,13 @@ private fun PreviewMessageListThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             fakeLongMessages,
-            ResponseState.THINKING,
-            listOf("Drafting direct answer...", "Skeptical critique..."),
-            System.currentTimeMillis() - 5000,
-            "The Sentinel",
+            ProcessingIndicatorState.NONE,
+            ThinkingData(
+                thinkingDurationSeconds = 0,
+                steps = listOf("Drafting direct answer...", "Skeptical critique..."),
+                modelDisplayName = "The Sentinel"
+            ),
+            Mode.FAST,
         )
     }
 }
@@ -166,7 +164,16 @@ private fun PreviewMessageListThinking() {
 @Composable
 private fun PreviewMessageListThinkingEmpty() {
     PocketCrewTheme(darkTheme = true) {
-        MessageList(emptyList(), ResponseState.THINKING, listOf("Analyzing query..."), System.currentTimeMillis() - 3000, "The Brainstormer")
+        MessageList(
+            emptyList(),
+            ProcessingIndicatorState.NONE,
+            ThinkingData(
+                thinkingDurationSeconds = 0,
+                steps = listOf("Analyzing query..."),
+                modelDisplayName = "The Brainstormer"
+            ),
+            Mode.FAST
+        )
     }
 }
 
@@ -184,10 +191,13 @@ private fun PreviewMessageListMultipleUsersThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             messages,
-            ResponseState.THINKING,
-            listOf("Analyzing...", "Drafting response..."),
-            System.currentTimeMillis() - 10000,
-            "The Mastermind",
+            ProcessingIndicatorState.NONE,
+            ThinkingData(
+                thinkingDurationSeconds = 0,
+                steps = listOf("Analyzing...", "Drafting response..."),
+                modelDisplayName = "The Mastermind"
+            ),
+            Mode.FAST,
         )
     }
 }

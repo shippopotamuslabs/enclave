@@ -266,12 +266,19 @@ class InferenceService : Service() {
                 }
             }
             val stepDuration = ((System.currentTimeMillis() - stepStartTime) / 1000).toInt()
-            // FIX: Calculate thinking duration - time from step start to first visible text
-            // This is the actual thinking time, not including text generation
-            val thinkingDuration = if (thinkingEndTime > 0L) {
+
+            // Get buffered thinking steps BEFORE resetting - must happen first!
+            val bufferedSteps = bufferThinkingSteps.getBufferedSteps()
+
+            // Reset buffer before next step to prevent carryover
+            bufferThinkingSteps.reset()
+
+            // Calculate thinking duration - only if the model actually did thinking (had thinking steps)
+            // If no thinking steps were buffered, this is not a thinking model
+            val thinkingDuration = if (thinkingEndTime > 0L && bufferedSteps.isNotEmpty()) {
                 ((thinkingEndTime - stepStartTime) / 1000).toInt()
             } else {
-                stepDuration  // Fallback if no partial response captured
+                0  // No thinking for non-thinking models
             }
             logger.info(TAG, "${currentStep.name} Response: ${result.output}, thinkingDuration=${thinkingDuration}s, totalDuration=${stepDuration}s")
 
@@ -283,9 +290,6 @@ class InferenceService : Service() {
             val isFinalStep = currentStep == PipelineStep.FINAL
             broadcastComplete(result.output, isFinalStep)
 
-            // Reset buffer before next step to prevent carryover
-            bufferThinkingSteps.reset()
-
             // Broadcast step completion SECOND for ALL steps (including non-FINAL)
             // This must come AFTER broadcastComplete so that StepCompleted sets responseState to PROCESSING
             // after GeneratingText has been processed
@@ -294,7 +298,7 @@ class InferenceService : Service() {
                 stepOutput = result.output,
                 thinkingDurationSeconds = thinkingDuration,  // Thinking time only (for "Thought For Xs")
                 totalDurationSeconds = stepDuration,  // Total time (for BottomSheet)
-                thinkingSteps = bufferThinkingSteps.getBufferedSteps(),
+                thinkingSteps = bufferedSteps,
                 modelDisplayName = getModelDisplayNameForStep(currentStep),
                 modelType = getModelTypeForStep(currentStep),
                 stepType = currentStep

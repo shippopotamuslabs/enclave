@@ -57,10 +57,9 @@ fun ChatScreen(
                 MessageList(
                     modifier = Modifier.fillMaxSize(),
                     messages = uiState.messages,
-                    responseState = uiState.responseState,
-                    thinkingSteps = uiState.thinkingSteps,
-                    thinkingStartTime = uiState.thinkingStartTime,
-                    thinkingModelDisplayName = uiState.thinkingModelDisplayName,
+                    processingIndicatorState = uiState.processingIndicatorState,
+                    thinkingData = uiState.thinkingData,
+                    selectedMode = uiState.selectedMode,
                 )
 
                 if (uiState.showShield) {
