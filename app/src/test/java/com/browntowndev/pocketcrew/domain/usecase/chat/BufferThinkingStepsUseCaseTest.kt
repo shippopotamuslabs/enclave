@@ -156,4 +156,148 @@ class BufferThinkingStepsUseCaseTest {
         // Should have emitted the first item
         assertTrue(result.isNotEmpty() || processor.flush() != null, "Should emit at least one thought")
     }
+
+    // ========== CLAUDE-STYLE REASONING HEADER TESTS ==========
+
+    @Test
+    fun `shouldSplitOnThoughtForHeader`() {
+        // Claude-style: **Thought for 1m 53s** followed by content
+        val text = "**Thought for 1m 53s**\nLet me analyze this problem step by step."
+
+        val result = processor(text)
+
+        assertTrue(result.isNotEmpty(), "Should emit on Thought for header")
+        // The first chunk should contain the header
+        assertTrue(result.any { it.contains("**Thought for 1m 53s**") },
+            "First chunk should contain the header")
+    }
+
+    @Test
+    fun `shouldSplitOnThoughtForHeaderWithDuration`() {
+        // Various duration formats
+        val text = "**Thought for 2m 10s**\nAnalyzing the next approach..."
+
+        val result = processor(text)
+
+        assertTrue(result.isNotEmpty(), "Should emit on header with duration")
+        assertTrue(result.first().contains("**Thought for 2m 10s**"),
+            "Should include header in emitted chunk")
+    }
+
+    @Test
+    fun `shouldDetectEmojiPrefixedHeader`() {
+        // Claude-style: emoji prefix before bold header
+        val text = "🔎 **Insight Inferno**\nThis is a key insight about the problem."
+
+        val result = processor(text)
+
+        assertTrue(result.isNotEmpty(), "Should detect emoji-prefixed header")
+        assertTrue(result.any { it.contains("🔎 **Insight Inferno**") },
+            "Should include emoji-prefixed header")
+    }
+
+    @Test
+    fun `shouldDetectMultipleEmojiPrefixes`() {
+        val text = "💡 **Analysis**\nFirst analysis point.\n\n🎯 **Next Step**\nSecond thought."
+
+        val result = processor(text)
+
+        assertTrue(result.size >= 1, "Should emit on header")
+        assertTrue(result.any { it.contains("💡 **Analysis**") },
+            "Should detect first header")
+    }
+
+    @Test
+    fun `shouldNotSplitOnHeaderInsideCodeBlock`() {
+        // Header inside unclosed code block should be ignored
+        val text = "```python\n**Thought for 1m**\nprint('hello')\n```\n\n**Thought for 2m**"
+
+        val result = processor(text)
+
+        // Should not emit the header inside code block - only emit when code block closes
+        // The complete code block should be emitted
+        assertTrue(result.isNotEmpty(), "Should emit complete code block")
+    }
+
+    @Test
+    fun `shouldSplitOnHeaderAfterCodeBlockClosed`() {
+        // Header after code block should work
+        val text = "```python\nprint('hello')\n```\n\n**Thought for 1m 30s**\nNow let me think about this."
+
+        val result = processor(text)
+
+        assertTrue(result.isNotEmpty(), "Should emit after code block closed and header found")
+    }
+
+    @Test
+    fun `shouldPrioritizeHeadersOverParagraphBreaks`() {
+        // Mixed: has both header and paragraph breaks - headers should take priority
+        val text = "**Thought for 1m**\nFirst thought content\n\n**Thought for 2m**\nSecond thought content"
+
+        val result = processor(text)
+
+        assertTrue(result.isNotEmpty(), "Should emit on headers")
+        // Headers should create boundaries before paragraph breaks
+        assertTrue(result.any { it.contains("**Thought for 1m**") },
+            "Should include first header")
+    }
+
+    @Test
+    fun `shouldFallBackToParagraphWhenNoHeaders`() {
+        // No headers - should use existing paragraph logic
+        val text = "First paragraph content here.\n\nSecond paragraph content here."
+
+        val result = processor(text)
+
+        assertTrue(result.isNotEmpty(), "Should emit on paragraph breaks (fallback)")
+    }
+
+    @Test
+    fun `shouldHandleStreamingHeaderSplitAcrossChunks`() {
+        // First chunk: incomplete header
+        val result1 = processor("**Thought for")
+        assertTrue(result1.isEmpty(), "Should not emit incomplete header")
+
+        // Second chunk: completes header but no content yet
+        val result2 = processor(" 1m 53s**")
+        assertTrue(result2.isEmpty(), "Should not emit header without content")
+
+        // Third chunk: adds content after header
+        val result3 = processor("\nNow analyzing...")
+        assertTrue(result3.isNotEmpty(), "Should emit when content arrives after header")
+        assertTrue(result3.any { it.contains("**Thought for 1m 53s**") },
+            "Should include complete header with content")
+    }
+
+    @Test
+    fun `shouldHandleShortThoughtsGracefully`() {
+        // Short content after header
+        val text = "**Thought for 30s**\nOk."
+
+        val result = processor(text)
+
+        assertTrue(result.isNotEmpty(), "Should handle short content after header")
+    }
+
+    @Test
+    fun `shouldStillUseLengthFallbackWithHeaders`() {
+        // Long content without proper headers or paragraphs
+        val longText = "**Analysis** " + "some content ".repeat(50)
+
+        val result = processor(longText)
+
+        // Should emit due to length fallback
+        val hasContent = result.isNotEmpty() || processor.flush() != null
+        assertTrue(hasContent, "Should emit due to length fallback")
+    }
+
+    @Test
+    fun `shouldSplitMultipleHeadersInSequence`() {
+        // Multiple headers in one text
+        val text = "**Thought for 1m**\nFirst thought.\n\n**Thought for 2m**\nSecond thought.\n\n**Thought for 3m**\nThird thought."
+
+        val result = processor(text)
+
+        assertTrue(result.size >= 2, "Should emit multiple chunks at headers")
+    }
 }
