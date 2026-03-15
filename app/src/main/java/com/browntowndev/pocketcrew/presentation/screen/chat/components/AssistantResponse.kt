@@ -121,6 +121,8 @@ fun AssistantResponse(
     } else {
         NormalAssistantContent(
             message = message,
+            processingIndicatorState = processingIndicatorState,
+            thinkingData = thinkingData,
             modifier = modifier
         )
     }
@@ -131,14 +133,60 @@ fun AssistantResponse(
 @Composable
 private fun NormalAssistantContent(
     message: ChatMessage,
+    processingIndicatorState: ProcessingIndicatorState = ProcessingIndicatorState.NONE,
+    thinkingData: ThinkingData? = null,
     modifier: Modifier = Modifier
 ) {
     val segments = remember(message.content) { parseContent(message.content) }
     var showThinkingDetails by remember { mutableStateOf(false) }
 
+    // Determine which thinking data to use: passed parameter takes precedence over message data
+    val effectiveThinkingData = thinkingData ?: message.thinkingData
+    val hasCompletedThinking = effectiveThinkingData != null &&
+        effectiveThinkingData.thinkingDurationSeconds > 0 &&
+        effectiveThinkingData.steps.isNotEmpty()
+
     Column(modifier = modifier.fillMaxWidth()) {
-        // "Thought for Xs" collapsible header — only for messages with thinking data AND thinking steps
-        if (message.thinkingData != null && message.thinkingData.steps.isNotEmpty()) {
+        // Handle live indicator states for non-Crew mode
+        when (processingIndicatorState) {
+            // Step completed / waiting - show ThoughtForHeader if thinking completed
+            ProcessingIndicatorState.PROCESSING -> {
+                if (hasCompletedThinking) {
+                    ThoughtForHeader(
+                        thinkingData = effectiveThinkingData,
+                        onViewFullThinking = { showThinkingDetails = true }
+                    )
+                } else {
+                    // No thinking completed yet - show ProcessingIndicator to indicate work is happening
+                    ProcessingIndicator()
+                }
+            }
+            // Generating response - show ThoughtForHeader if thinking completed + GeneratingIndicator
+            ProcessingIndicatorState.GENERATING -> {
+                if (hasCompletedThinking) {
+                    ThoughtForHeader(
+                        thinkingData = effectiveThinkingData,
+                        onViewFullThinking = { showThinkingDetails = true }
+                    )
+                }
+                GeneratingIndicator()
+            }
+            // NONE: show animated ThinkingIndicator if thinking in progress (duration = 0)
+            ProcessingIndicatorState.NONE -> {
+                if (thinkingData != null && thinkingData.thinkingDurationSeconds == 0) {
+                    ThinkingIndicator(
+                        thinkingSteps = thinkingData.steps,
+                        thinkingStartTime = thinkingData.thinkingStartTime,
+                        modelDisplayName = thinkingData.modelDisplayName,
+                    )
+                }
+                // Otherwise (response complete) - show nothing
+            }
+        }
+
+        // "Thought for Xs" collapsible header from message data (for completed responses)
+        // Only show if not already shown above (when hasCompletedThinking is true)
+        if (!hasCompletedThinking && message.thinkingData != null && message.thinkingData.steps.isNotEmpty()) {
             ThoughtForHeader(
                 thinkingData = message.thinkingData,
                 onViewFullThinking = { showThinkingDetails = true }
@@ -168,12 +216,13 @@ private fun NormalAssistantContent(
     }
 
     // Bottom sheet for thinking details — only if there are thinking steps
-    if (message.thinkingData != null && message.thinkingData.steps.isNotEmpty()) {
+    // Use effectiveThinkingData (passed parameter takes precedence)
+    if (effectiveThinkingData != null && effectiveThinkingData.steps.isNotEmpty()) {
         ThinkingDetailsBottomSheet(
             isVisible = showThinkingDetails,
-            thinkingSteps = message.thinkingData.steps,
-            thinkingDurationSeconds = message.thinkingData.thinkingDurationSeconds,
-            modelDisplayName = message.thinkingData.modelDisplayName,
+            thinkingSteps = effectiveThinkingData.steps,
+            thinkingDurationSeconds = effectiveThinkingData.thinkingDurationSeconds,
+            modelDisplayName = effectiveThinkingData.modelDisplayName,
             onDismiss = { showThinkingDetails = false }
         )
     }

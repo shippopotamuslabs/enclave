@@ -66,9 +66,11 @@ fun MessageList(
                     messages[nextMessageIndex].role == MessageRole.Assistant &&
                     !messages[nextMessageIndex].completedSteps.isNullOrEmpty()
 
-                // For non-Crew mode: show ThinkingIndicator before assistant message
-                // For Crew mode: don't show here (it shows after assistant message in AssistantResponse)
-                val showIndicator = isMostRecentUserMessage && isThinking && selectedMode != Mode.CREW
+                // Indicators are now shown in AssistantResponse for ALL modes
+                // For non-Crew mode: AssistantResponse handles indicator states
+                // For Crew mode: AssistantResponse handles live indicators below completed steps
+                // Don't show indicators here - let AssistantResponse handle it
+                val showIndicator = false
 
                 if (message.role == MessageRole.User) {
                     if (showIndicator) {

@@ -15,6 +15,7 @@
 #include <android/log.h>
 
 #include "llama.h"
+#include "ggml-backend.h"
 
 // Forward declarations of common helper functions (from common.h)
 static inline void llama_batch_clear(struct llama_batch & batch) {
@@ -99,6 +100,20 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
     if (!g_initialized) {
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== INITIALIZING LLAMA BACKEND ===");
 
+        // Set LD_LIBRARY_PATH for OpenCL to find vendor libraries
+        // This is needed on Android to locate the Mali/OpenCL driver
+        const char* vendor_lib_path = "/vendor/lib64:/vendor/lib";
+        const char* existing_path = getenv("LD_LIBRARY_PATH");
+        if (existing_path) {
+            char new_path[1024];
+            snprintf(new_path, sizeof(new_path), "%s:%s", vendor_lib_path, existing_path);
+            setenv("LD_LIBRARY_PATH", new_path, 1);
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "LD_LIBRARY_PATH set to: %s", new_path);
+        } else {
+            setenv("LD_LIBRARY_PATH", vendor_lib_path, 1);
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "LD_LIBRARY_PATH set to: %s", vendor_lib_path);
+        }
+
         llama_backend_init();
         g_initialized = true;
 
@@ -106,12 +121,15 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
         bool supports_gpu = llama_supports_gpu_offload();
 
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== AVAILABLE BACKENDS ===");
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU offload support: %s", supports_gpu ? "YES" : "NO");
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU offload support (runtime check): %s", supports_gpu ? "YES" : "NO");
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "===========================");
 
         // Note: SVE and other CPU feature detection has been moved to ggml.h
-        // For CPU-only mode, we rely on llama's internal detection
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Running in CPU-only mode (GPU disabled)");
+        if (gpuLayers > 0) {
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU mode requested with %d layers", gpuLayers);
+        } else {
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "CPU-only mode requested (gpuLayers=0)");
+        }
     }
 
     std::lock_guard<std::mutex> lock(g_mutex);

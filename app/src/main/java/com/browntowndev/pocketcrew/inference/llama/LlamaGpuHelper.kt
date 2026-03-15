@@ -34,11 +34,6 @@ object LlamaGpuHelper {
             return false
         }
 
-        // API 24+ is required for stable GPU support
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
-            return false
-        }
-
         // Check if device has GPU memory (rough heuristic)
         val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
         if (activityManager != null) {
@@ -117,17 +112,19 @@ data class GpuConfig(
             Log.i(TAG, "Has enough RAM (3GB+): $hasEnoughRam")
 
             val hasGpu = LlamaGpuHelper.isGpuAvailable(context)
+            val totalRamGb = getTotalRamGb(context)
+            val calculatedGpuLayers = calculateGpuLayers(totalRamGb)
+
             Log.i(TAG, "GPU available (heuristic): $hasGpu")
+            Log.i(TAG, "Total RAM: ${totalRamGb}GB")
+            Log.i(TAG, "Calculated GPU layers: $calculatedGpuLayers")
             Log.i(TAG, "==========================")
 
-            // DEBUG: Force CPU-only mode for debugging - set to true to force CPU-only, false for GPU
-            val forceCpuOnly = true  // TODO: Set to true to force CPU-only, false for GPU
-
-            return if (hasGpu && !forceCpuOnly) {
-                // GPU enabled for Tensor G3 (with SVE fix in native code)
-                Log.i(TAG, "GPU config: gpuLayers=16, useGpu=true")
+            return if (hasGpu && calculatedGpuLayers > 0) {
+                // GPU enabled based on device capabilities
+                Log.i(TAG, "GPU config: gpuLayers=$calculatedGpuLayers, useGpu=true")
                 GpuConfig(
-                    gpuLayers = 16,
+                    gpuLayers = calculatedGpuLayers,
                     useGpu = true
                 )
             } else {
@@ -147,6 +144,35 @@ data class GpuConfig(
                 return memInfo.totalMem >= 3L * 1024 * 1024 * 1024
             }
             return false
+        }
+
+        /**
+         * Get the total RAM in GB for dynamic GPU layer calculation.
+         */
+        private fun getTotalRamGb(context: Context): Int {
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            if (activityManager != null) {
+                val memInfo = android.app.ActivityManager.MemoryInfo()
+                activityManager.getMemoryInfo(memInfo)
+                return (memInfo.totalMem / (1024 * 1024 * 1024)).toInt()
+            }
+            return 0
+        }
+
+        /**
+         * Calculate optimal GPU layers based on available RAM.
+         * - 3GB RAM: 0 layers (CPU only, not enough for GPU)
+         * - 4GB RAM: 8 layers
+         * - 6GB RAM: 16 layers
+         * - 8GB+ RAM: 24 layers
+         */
+        private fun calculateGpuLayers(totalRamGb: Int): Int {
+            return when {
+                totalRamGb < 4 -> 0  // Not enough RAM for GPU inference
+                totalRamGb < 6 -> 8
+                totalRamGb < 8 -> 16
+                else -> 24
+            }
         }
     }
 }
