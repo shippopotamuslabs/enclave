@@ -71,6 +71,20 @@ object EngineModule {
 
     private const val TAG = "EngineModule"
 
+    /**
+     * Calculates the optimal number of threads for llama.cpp inference.
+     * - If CPU count is 1, returns 1
+     * - If CPU count is 2, returns 2
+     * - Otherwise, returns max(CPU count - 2, 2) to ensure at least 2 threads
+     */
+    private fun calculateOptimalThreads(): Int {
+        val availableProcessors = Runtime.getRuntime().availableProcessors()
+        return when {
+            availableProcessors <= 2 -> availableProcessors
+            else -> maxOf(availableProcessors - 2, 2)
+        }
+    }
+
     private fun getModelPath(context: Context, filename: String): String {
         val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
 
@@ -350,8 +364,8 @@ object EngineModule {
                         topP = tunings.topP.toFloat(),
                         maxTokens = tunings.maxTokens,
                         contextWindow = tunings.contextWindow,
-                        threads = 4,
-                        batchSize = 256,
+                        threads = calculateOptimalThreads(),
+                        batchSize = 768,
                         gpuLayers = gpuConfig.gpuLayers,
                     )
                 )
@@ -395,8 +409,8 @@ object EngineModule {
                     topP = tunings.topP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = 4,
-                    batchSize = 256,
+                    threads = calculateOptimalThreads(),
+                    batchSize = 768,
                     gpuLayers = gpuConfig.gpuLayers,
                     thinkingEnabled = tunings.thinkingEnabled
                 )
@@ -436,8 +450,8 @@ object EngineModule {
                     topP = tunings.topP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = 4,
-                    batchSize = 256,
+                    threads = calculateOptimalThreads(),
+                    batchSize = 768,
                     gpuLayers = gpuConfig.gpuLayers,
                     thinkingEnabled = tunings.thinkingEnabled
                 )
@@ -477,8 +491,8 @@ object EngineModule {
                     topP = tunings.topP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = 4,
-                    batchSize = 256,
+                    threads = calculateOptimalThreads(),
+                    batchSize = 768,
                     gpuLayers = gpuConfig.gpuLayers,
                     thinkingEnabled = tunings.thinkingEnabled
                 )
@@ -518,8 +532,8 @@ object EngineModule {
                     topP = tunings.topP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = 4,
-                    batchSize = 256,
+                    threads = calculateOptimalThreads(),
+                    batchSize = 768,
                     gpuLayers = gpuConfig.gpuLayers,
                     thinkingEnabled = tunings.thinkingEnabled
                 )
@@ -559,8 +573,8 @@ object EngineModule {
                     topP = tunings.topP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = 4,
-                    batchSize = 256,
+                    threads = calculateOptimalThreads(),
+                    batchSize = 768,
                     gpuLayers = gpuConfig.gpuLayers,
                     thinkingEnabled = tunings.thinkingEnabled
                 )
@@ -608,8 +622,8 @@ object EngineModule {
                     topP = tunings.topP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = 4,
-                    batchSize = 256,
+                    threads = calculateOptimalThreads(),
+                    batchSize = 768,
                     gpuLayers = gpuConfig.gpuLayers,
                     thinkingEnabled = tunings.thinkingEnabled
                 )

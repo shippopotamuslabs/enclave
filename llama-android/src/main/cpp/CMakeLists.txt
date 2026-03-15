@@ -19,13 +19,12 @@ set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 
-# DISABLED Vulkan for CPU-only mode on Pixel 8 Pro (Tensor G3)
-# Vulkan causes DeviceLostError on this device even with gpuLayers=0
-# To enable GPU acceleration, set GGML_VULKAN=ON and ensure stable Vulkan driver
+# Disable Vulkan - known to crash on Mali GPUs (Tensor G3)
 set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
 
-# Disable OpenCL - use only Vulkan to avoid backend conflicts on Tensor G3
-set(GGML_OPENCL OFF CACHE BOOL "" FORCE)
+# Keep OpenCL enabled for potential Qualcomm Adreno GPU support
+# Note: On Mali GPUs (Pixel 8 Pro), OpenCL runs in CPU-only mode due to device detection issues
+set(GGML_OPENCL ON CACHE BOOL "" FORCE)
 
 # Disable other backends
 set(GGML_CUDA OFF CACHE BOOL "" FORCE)
@@ -41,8 +40,27 @@ set(Vulkan_INCLUDE_DIR "/home/sean/Code/pocket-crew/third_party/Vulkan-Headers/i
 set(Vulkan_LIBRARY "/home/sean/Android/Sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/34/libvulkan.so" CACHE FILEPATH "Vulkan library")
 set(Vulkan_FOUND TRUE CACHE BOOL "" FORCE)
 
+# Configure OpenCL using external Khronos headers for NDK compatibility
+set(OpenCL_INCLUDE_DIR "/home/sean/Code/pocket-crew/third_party/OpenCL-Headers" CACHE PATH "OpenCL include directory")
+set(OpenCL_FOUND TRUE CACHE BOOL "" FORCE)
+
+# Add OpenCL include directory globally so ggml-opencl can find CL/cl.h
+include_directories(BEFORE "${OpenCL_INCLUDE_DIR}")
+
+# Add custom OpenCL ICD Loader cmake modules to CMake module path
+list(APPEND CMAKE_MODULE_PATH "/home/sean/Code/pocket-crew/third_party/OpenCL-ICD-Loader/cmake")
+
+# Configure OpenCL ICD Loader - build as static library
+set(OPENCL_ICD_LOADER_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(OPENCL_ICD_LOADER_HEADERS_DIR "${OpenCL_INCLUDE_DIR}" CACHE PATH "OpenCL ICD Loader headers dir")
+set(ENABLE_OPENCL_LAYERS OFF CACHE BOOL "" FORCE)
+set(ENABLE_OPENCL_LOADER_MANAGED_DISPATCH OFF CACHE BOOL "" FORCE)
+
 # Add vulkan-shaders-gen to program search path for shader compilation
 list(APPEND CMAKE_PROGRAM_PATH "/home/sean/Code/pocket-crew/third_party/llama.cpp/build-host/bin")
+
+# Build OpenCL ICD Loader as static library first
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/OpenCL-ICD-Loader opencl-icd-loader)
 
 # Source directory for llama.cpp - relative path from this CMakeLists.txt to root
 set(LLAMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/llama.cpp)
@@ -63,10 +81,14 @@ target_include_directories(llama-jni PRIVATE
     ${LLAMA_DIR}/ggml/include
 )
 
-# Link libraries
+# Link libraries - ensure ggml-opencl links against OpenCL ICD Loader
+target_link_libraries(ggml-opencl PRIVATE OpenCL)
+
 target_link_libraries(llama-jni
     llama
     ggml
+    ggml-opencl
+    OpenCL
     log
     vulkan
     android

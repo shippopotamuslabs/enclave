@@ -33,6 +33,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
     private var systemPrompt: String = "You are a helpful assistant."
     private var samplingConfig: LlamaSamplingConfig = LlamaSamplingConfig()
     private var isInitialized = false
+    private var hasTriedCpuFallback = false
 
     /**
      * Configure the service with model path and optional parameters.
@@ -57,15 +58,38 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
         // Initialize engine if not yet done
         if (!isInitialized) {
-            sessionManager.initializeEngine(
-                LlamaModelConfig(
-                    modelPath = path,
-                    systemPrompt = systemPrompt,
-                    sampling = samplingConfig
+            try {
+                sessionManager.initializeEngine(
+                    LlamaModelConfig(
+                        modelPath = path,
+                        systemPrompt = systemPrompt,
+                        sampling = samplingConfig
+                    )
                 )
-            )
-            sessionManager.startNewConversation()
-            isInitialized = true
+                sessionManager.startNewConversation()
+                isInitialized = true
+            } catch (e: Exception) {
+                // GPU initialization failed, try falling back to CPU
+                if (!hasTriedCpuFallback && samplingConfig.gpuLayers > 0) {
+                    Log.w(TAG, "GPU initialization failed, falling back to CPU: ${e.message}")
+                    hasTriedCpuFallback = true
+                    // Retry with CPU (gpuLayers = 0)
+                    val cpuConfig = samplingConfig.copy(gpuLayers = 0)
+                    sessionManager.initializeEngine(
+                        LlamaModelConfig(
+                            modelPath = path,
+                            systemPrompt = systemPrompt,
+                            sampling = cpuConfig
+                        )
+                    )
+                    sessionManager.startNewConversation()
+                    isInitialized = true
+                    Log.i(TAG, "Successfully initialized with CPU fallback")
+                } else {
+                    // CPU also failed or already tried fallback, propagate error
+                    throw e
+                }
+            }
         }
 
         var isThinking = false
@@ -164,14 +188,35 @@ class LlamaInferenceServiceImpl @Inject constructor(
         if (!isInitialized) {
             val path = modelPath
             if (path != null) {
-                sessionManager.initializeEngine(
-                    LlamaModelConfig(
-                        modelPath = path,
-                        systemPrompt = systemPrompt,
-                        sampling = samplingConfig
+                try {
+                    sessionManager.initializeEngine(
+                        LlamaModelConfig(
+                            modelPath = path,
+                            systemPrompt = systemPrompt,
+                            sampling = samplingConfig
+                        )
                     )
-                )
-                isInitialized = true
+                    isInitialized = true
+                } catch (e: Exception) {
+                    // GPU initialization failed, try falling back to CPU
+                    if (!hasTriedCpuFallback && samplingConfig.gpuLayers > 0) {
+                        Log.w(TAG, "GPU initialization failed in setHistory, falling back to CPU: ${e.message}")
+                        hasTriedCpuFallback = true
+                        // Retry with CPU (gpuLayers = 0)
+                        val cpuConfig = samplingConfig.copy(gpuLayers = 0)
+                        sessionManager.initializeEngine(
+                            LlamaModelConfig(
+                                modelPath = path,
+                                systemPrompt = systemPrompt,
+                                sampling = cpuConfig
+                            )
+                        )
+                        isInitialized = true
+                        Log.i(TAG, "Successfully initialized with CPU fallback in setHistory")
+                    } else {
+                        throw e
+                    }
+                }
             } else {
                 throw IllegalStateException("Model not configured. Call configure() first.")
             }
