@@ -60,6 +60,7 @@ fun ChatScreen(
                     processingIndicatorState = uiState.processingIndicatorState,
                     thinkingData = uiState.thinkingData,
                     selectedMode = uiState.selectedMode,
+                    showThoughtForHeader = uiState.showThoughtForHeader,
                 )
 
                 if (uiState.showShield) {
