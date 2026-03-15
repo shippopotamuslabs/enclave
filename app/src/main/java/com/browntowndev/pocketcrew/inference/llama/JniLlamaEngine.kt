@@ -182,9 +182,14 @@ class JniLlamaEngine @Inject constructor(
         // llama.cpp is NOT thread-safe and requires all operations on the same thread
         try {
             // Convert thinkingEnabled to llama.cpp reasoning_budget:
-            // 0 = thinking enabled, -1 = unlimited
-            val reasoningBudget = if (cfg.sampling.thinkingEnabled) 0 else 0
+            // reasoningBudget > 0 = thinking enabled with token budget, 0 = disabled, -1 = unlimited
+            val reasoningBudget = if (cfg.sampling.thinkingEnabled) 2048 else 0
             Log.i(TAG, "Starting completion with reasoning_budget=$reasoningBudget")
+
+            // Use 0 penalties for thinking models to avoid interfering with extended reasoning
+            val penaltyFreq = if (cfg.sampling.thinkingEnabled) 0.0f else 0.05f
+            val penaltyPresent = if (cfg.sampling.thinkingEnabled) 0.0f else 0.05f
+            Log.i(TAG, "Penalties: freq=$penaltyFreq, present=$penaltyPresent")
 
             // Use longer timeout for thinking models
             val timeoutSeconds = if (cfg.sampling.thinkingEnabled) {
@@ -202,8 +207,11 @@ class JniLlamaEngine @Inject constructor(
                     temperature = cfg.sampling.temperature,
                     topK = cfg.sampling.topK,
                     topP = cfg.sampling.topP,
+                    minP = cfg.sampling.minP,
                     maxTokens = cfg.sampling.maxTokens,
                     repeatPenalty = cfg.sampling.repeatPenalty,
+                    penaltyFreq = penaltyFreq,
+                    penaltyPresent = penaltyPresent,
                     reasoningBudget = reasoningBudget,
                     callback = callback
                 )
@@ -418,9 +426,12 @@ class JniLlamaEngine @Inject constructor(
         temperature: Float,
         topK: Int,
         topP: Float,
+        minP: Float,
         maxTokens: Int,
         repeatPenalty: Float,
-        reasoningBudget: Int,  // -1 = unlimited, 0 = disabled
+        penaltyFreq: Float,  // 0.0f to disable for thinking models
+        penaltyPresent: Float,  // 0.0f to disable for thinking models
+        reasoningBudget: Int,  // -1 = unlimited, 0 = disabled, >0 = enabled with budget
         callback: NativeTokenCallback
     )
 

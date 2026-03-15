@@ -349,8 +349,11 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
     jfloat temperature,
     jint topK,
     jfloat topP,
+    jfloat minP,
     jint maxTokens,
     jfloat repeatPenalty,
+    jfloat penaltyFreq,
+    jfloat penaltyPresent,
     jint reasoningBudget,
     jobject callback
 ) {
@@ -491,12 +494,12 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
     }
 
     // Min-P
-    llama_sampler_chain_add(g_sampler, llama_sampler_init_min_p(0.1f, 1));
+    llama_sampler_chain_add(g_sampler, llama_sampler_init_min_p(minP, 1));
 
     // Repeat penalties
     float penalty_repeat = (repeatPenalty > 0) ? repeatPenalty : 1.10f;
-    float penalty_freq = 0.05f;
-    float penalty_present = 0.05f;
+    float penalty_freq = (penaltyFreq > 0.0f) ? penaltyFreq : 0.05f;
+    float penalty_present = (penaltyPresent > 0.0f) ? penaltyPresent : 0.05f;
     int   penalty_last_n = 128;
     llama_sampler_chain_add(g_sampler, llama_sampler_init_penalties(penalty_last_n, penalty_repeat, penalty_freq, penalty_present));
 

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "a62eef8227ef22d62be84e0a692361b6",
+    "identityHash": "b4f51f37b8456880db427a1352e1f92d",
     "entities": [
       {
         "tableName": "chat",
@@ -187,7 +187,7 @@
       },
       {
         "tableName": "models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`model_type` TEXT NOT NULL, `model_status` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `display_name` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_k` INTEGER NOT NULL, `top_p` REAL NOT NULL, `repetition_penalty` REAL NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `system_prompt` TEXT, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`model_type`, `model_status`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`model_type` TEXT NOT NULL, `model_status` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `display_name` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_k` INTEGER NOT NULL, `top_p` REAL NOT NULL, `min_p` REAL NOT NULL, `repetition_penalty` REAL NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `system_prompt` TEXT, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`model_type`, `model_status`))",
         "fields": [
           {
             "fieldPath": "modelType",
@@ -252,6 +252,12 @@
           {
             "fieldPath": "topP",
             "columnName": "top_p",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minP",
+            "columnName": "min_p",
             "affinity": "REAL",
             "notNull": true
           },
@@ -380,7 +386,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a62eef8227ef22d62be84e0a692361b6')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b4f51f37b8456880db427a1352e1f92d')"
     ]
   }
 }

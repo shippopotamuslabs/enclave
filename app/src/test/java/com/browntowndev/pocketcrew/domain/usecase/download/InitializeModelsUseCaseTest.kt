@@ -389,4 +389,152 @@ class InitializeModelsUseCaseTest {
             mockModelRegistry.setRegisteredModel(remoteConfig, ModelStatus.CURRENT, markExistingAsOld = false)
         }
     }
+
+    /**
+     * BUG FIX TEST:
+     * When DRAFT_ONE's SHA256 changes from "abc" to "xyz", but FAST still uses SHA256 "abc",
+     * the old DRAFT_ONE config should NOT be marked as OLD because the file is still in use by FAST.
+     * Only mark as OLD if the SHA256 changed AND no other model type uses that SHA256.
+     */
+    @Test
+    fun `invoke does NOT mark existing config as OLD when SHA256 changed but other model still uses that SHA256`() = runTest {
+        // Given - Current registry: DRAFT_ONE and FAST both use SHA256 "sharedSha256" (same file)
+        val existingDraftOne = ModelConfiguration(
+            modelType = ModelType.DRAFT_ONE,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/draft-one",
+                remoteFileName = "shared.bin",
+                localFileName = "shared.bin",
+                displayName = "Draft One",
+                sha256 = "sharedSha256",  // Same SHA256 as FAST
+                sizeInBytes = 1024,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(temperature = 0.0, topK = 40, topP = 0.95, repetitionPenalty = 1.0, maxTokens = 2048, contextWindow = 2048),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are draft one.")
+        )
+
+        val existingFast = ModelConfiguration(
+            modelType = ModelType.FAST,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/fast",
+                remoteFileName = "shared.bin",
+                localFileName = "shared.bin",
+                displayName = "Fast",
+                sha256 = "sharedSha256",  // Same file as DRAFT_ONE
+                sizeInBytes = 1024,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(temperature = 0.0, topK = 40, topP = 0.95, repetitionPenalty = 1.0, maxTokens = 2048, contextWindow = 2048),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are fast.")
+        )
+
+        // Remote config: DRAFT_ONE changed to new SHA256, FAST still uses same SHA256
+        val remoteDraftOne = existingDraftOne.copy(
+            metadata = existingDraftOne.metadata.copy(
+                sha256 = "newSha256ForDraftOne",  // SHA256 changed!
+                localFileName = "new-draft-one.bin",
+                remoteFileName = "new-draft-one.bin",
+                displayName = "Draft One Updated"
+            )
+        )
+
+        val remoteFast = existingFast.copy()  // FAST unchanged
+
+        // DRAFT_ONE's new file needs downloading (missing from filesystem)
+        // FAST's old file exists (same SHA256 "sharedSha256" still valid)
+        // The download list contains only the new DRAFT_ONE config
+        val downloadResult = DownloadModelsResult(
+            modelsToDownload = listOf(remoteDraftOne),  // New DRAFT_ONE file missing
+            scanResult = ModelScanResult(
+                missingModels = listOf(remoteDraftOne),
+                partialDownloads = emptyMap(),
+                allValid = false
+            )
+        )
+
+        // Registry has both models with shared SHA256
+        coEvery { mockModelRegistry.getModelsPreferringOld() } returns listOf(existingDraftOne, existingFast)
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(remoteDraftOne, remoteFast))
+        coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns downloadResult
+
+        // When
+        useCase.invoke()
+
+        // Then - DRAFT_ONE's old config should NOT be marked as OLD because FAST still uses that SHA256
+        // The fix: markExistingAsOld should be FALSE for DRAFT_ONE since FAST still references "sharedSha256"
+        coVerify(exactly = 1) {
+            mockModelRegistry.setRegisteredModel(
+                remoteDraftOne,
+                ModelStatus.CURRENT,
+                markExistingAsOld = false  // NOT true! Because FAST still uses sharedSha256
+            )
+        }
+        coVerify(exactly = 1) {
+            mockModelRegistry.setRegisteredModel(
+                remoteFast,
+                ModelStatus.CURRENT,
+                markExistingAsOld = false  // SHA256 unchanged
+            )
+        }
+    }
+
+    /**
+     * TEST: When SHA256 changes AND no other model uses that SHA256, mark as OLD (current behavior for single models)
+     */
+    @Test
+    fun `invoke marks existing config as OLD when SHA256 changed and no other model uses that SHA256`() = runTest {
+        // Given - Current registry: only DRAFT_ONE exists with SHA256 "oldSha256"
+        val existingDraftOne = ModelConfiguration(
+            modelType = ModelType.DRAFT_ONE,
+            metadata = ModelConfiguration.Metadata(
+                huggingFaceModelName = "test/draft-one",
+                remoteFileName = "old.bin",
+                localFileName = "old.bin",
+                displayName = "Draft One",
+                sha256 = "oldSha256",
+                sizeInBytes = 1024,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            tunings = ModelConfiguration.Tunings(temperature = 0.0, topK = 40, topP = 0.95, repetitionPenalty = 1.0, maxTokens = 2048, contextWindow = 2048),
+            persona = ModelConfiguration.Persona(systemPrompt = "You are draft one.")
+        )
+
+        // Remote config: DRAFT_ONE changed to new SHA256
+        val remoteDraftOne = existingDraftOne.copy(
+            metadata = existingDraftOne.metadata.copy(
+                sha256 = "newSha256",  // SHA256 changed!
+                localFileName = "new.bin",
+                remoteFileName = "new.bin",
+                displayName = "Draft One Updated"
+            )
+        )
+
+        // Download needed for new SHA256
+        val downloadResult = DownloadModelsResult(
+            modelsToDownload = listOf(remoteDraftOne),
+            scanResult = ModelScanResult(
+                missingModels = listOf(remoteDraftOne),
+                partialDownloads = emptyMap(),
+                allValid = false
+            )
+        )
+
+        // Registry has only DRAFT_ONE (no other models)
+        coEvery { mockModelRegistry.getModelsPreferringOld() } returns listOf(existingDraftOne)
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(remoteDraftOne))
+        coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns downloadResult
+
+        // When
+        useCase.invoke()
+
+        // Then - DRAFT_ONE's old config SHOULD be marked as OLD because no other model uses oldSha256
+        coVerify(exactly = 1) {
+            mockModelRegistry.setRegisteredModel(
+                remoteDraftOne,
+                ModelStatus.CURRENT,
+                markExistingAsOld = true  // TRUE! No other model uses oldSha256
+            )
+        }
+    }
 }

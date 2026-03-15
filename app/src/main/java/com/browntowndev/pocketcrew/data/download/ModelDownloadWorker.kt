@@ -288,11 +288,11 @@ class ModelDownloadWorker @AssistedInject constructor(
 
     private fun parseModelData(data: String): ModelConfiguration? {
         // Expected format:
-        // modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|maxTokens|contextWindow|systemPrompt
+        // modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt
         // Note: 13 parts is legacy (contextWindow is optional, defaults to 32768)
         val parts = data.split("|")
-        if (parts.size < 13) {
-            logger.warning(TAG, "Invalid model data format: expected at least 13 parts, got ${parts.size}")
+        if (parts.size < 14) {
+            logger.warning(TAG, "Invalid model data format: expected at least 14 parts, got ${parts.size}")
             return null
         }
 
@@ -322,9 +322,10 @@ class ModelDownloadWorker @AssistedInject constructor(
                 temperature = parts[8].toDoubleOrNull() ?: 0.0,
                 topK = parts[9].toIntOrNull() ?: 40,
                 topP = parts[10].toDoubleOrNull() ?: 0.95,
-                repetitionPenalty = parts[11].toDoubleOrNull() ?: 1.0,
-                maxTokens = parts[12].toIntOrNull() ?: 2048,
-                contextWindow = parts[13].toIntOrNull() ?: 32768
+                minP = parts[11].toDoubleOrNull() ?: 0.0,
+                repetitionPenalty = parts[12].toDoubleOrNull() ?: 1.0,
+                maxTokens = parts[13].toIntOrNull() ?: 2048,
+                contextWindow = parts[14].toIntOrNull() ?: 32768
             )
 
             val persona = ModelConfiguration.Persona(

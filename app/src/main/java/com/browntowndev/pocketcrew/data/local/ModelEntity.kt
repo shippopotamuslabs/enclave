@@ -49,6 +49,9 @@ data class ModelEntity(
     @ColumnInfo(name = "top_p")
     val topP: Double = 0.95,
 
+    @ColumnInfo(name = "min_p")
+    val minP: Double = 0.0,
+
     @ColumnInfo(name = "repetition_penalty")
     val repetitionPenalty: Double = 1.0,
 
