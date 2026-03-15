@@ -42,6 +42,7 @@ data class ModelConfiguration(
         val temperature: Double,
         val topK: Int,
         val topP: Double,
+        val minP: Double = 0.0,
         val repetitionPenalty: Double,
         val maxTokens: Int,
         val contextWindow: Int,

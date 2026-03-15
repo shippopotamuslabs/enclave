@@ -12,8 +12,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -35,6 +39,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.painterResource
@@ -185,8 +190,8 @@ private fun NormalAssistantContent(
         }
 
         // "Thought for Xs" collapsible header from message data (for completed responses)
-        // Only show if not already shown above (when hasCompletedThinking is true)
-        if (!hasCompletedThinking && message.thinkingData != null && message.thinkingData.steps.isNotEmpty()) {
+        // Show when processing is complete but message has thinking data to display
+        if (hasCompletedThinking && message.thinkingData != null && message.thinkingData.steps.isNotEmpty()) {
             ThoughtForHeader(
                 thinkingData = message.thinkingData,
                 onViewFullThinking = { showThinkingDetails = true }
@@ -418,15 +423,8 @@ private fun CompletedStepRow(
     val modelDisplayName = stepCompletion.modelDisplayName
     val stepOutput = stepCompletion.stepOutput
 
-    // Get first ~10 words for preview with ellipsis
-    val previewText = remember(stepOutput) {
-        val words = stepOutput.split(Regex("\\s+")).take(10)
-        if (words.size < stepOutput.split(Regex("\\s+")).size) {
-            words.joinToString(" ") + "…"
-        } else {
-            words.joinToString(" ")
-        }
-    }
+    // Preview text - "Tap to View" as requested
+    val previewText = "Tap to View"
 
     Column(
         modifier = modifier
@@ -476,17 +474,26 @@ private fun CompletedStepRow(
                 .clickable { onClick() }
                 .padding(12.dp)
         ) {
-            // Document icon on the left
-            Icon(
-                painter = painterResource(R.drawable.document),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(32.dp),
-            )
+            // Document icon - double size, rotated counterclockwise
+            // Position extends below card so bottom gets clipped by container
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .rotate(-25f)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.document),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .offset(y = 14.dp),
+                )
+            }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(24.dp))
 
-            // Text content on the right
+            // Text content on the right - moved further right
             Column(
                 modifier = Modifier.weight(1f)
             ) {
@@ -494,6 +501,7 @@ private fun CompletedStepRow(
                     text = "$stepName Results",
                     style = MaterialTheme.typography.titleSmall.copy(
                         fontWeight = FontWeight.Bold,
+                        fontSize = 23.sp,
                     ),
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -532,8 +540,8 @@ private fun StepCompletionBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight()
                     .padding(horizontal = 16.dp)
+                    .navigationBarsPadding()
                     .verticalScroll(rememberScrollState())
             ) {
                 // Header with step name

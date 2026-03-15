@@ -68,20 +68,38 @@ class InitializeModelsUseCase @Inject constructor(
             expectedModels = remoteConfigs
         )
 
-        // Now register each remote config in the registry with CURRENT status
-        // Only mark existing as OLD if the file actually changed (SHA256 different).
-        // If SHA256 is unchanged (e.g., only tunings changed), update CURRENT in place
-        // to avoid incorrectly marking valid files for deletion.
+        // Now register each remote config in the registry with CURRENT status.
+        //
+        // CRITICAL: Only mark existing config as OLD if:
+        // 1. SHA256 changed, AND
+        // 2. No other model configuration still uses the OLD SHA256 (shared file case).
+        //    If another modelType still uses that SHA256, the file is still needed.
         val currentModelsByType = currentModels.associateBy { it.modelType }
+
+        // Build a map of SHA256 -> count of modelTypes using it
+        // This helps detect if a file is shared (used by multiple models)
+        val sha256UsageCount = currentModels
+            .groupBy { it.metadata.sha256 }
+            .mapValues { it.value.size }
+
         remoteConfigs.forEach { remoteConfig ->
             val existingConfig = currentModelsByType[remoteConfig.modelType]
-            val fileChanged = existingConfig == null ||
-                existingConfig.metadata.sha256 != remoteConfig.metadata.sha256
+            val oldSha256 = existingConfig?.metadata?.sha256
+            val newSha256 = remoteConfig.metadata.sha256
+
+            // SHA256 changed if the old config has a different SHA256 than remote
+            val sha256Changed = existingConfig == null ||
+                existingConfig.metadata.sha256 != newSha256
+
+            // Mark as OLD only if SHA256 changed AND no other model type
+            // still uses the old SHA256 (file would be orphaned otherwise)
+            val markAsOld = sha256Changed && oldSha256 != null &&
+                (sha256UsageCount[oldSha256] ?: 0) <= 1
 
             modelRegistry.setRegisteredModel(
                 remoteConfig,
                 status = ModelStatus.CURRENT,
-                markExistingAsOld = fileChanged
+                markExistingAsOld = markAsOld
             )
         }
         logPort.debug(TAG, "Registered ${remoteConfigs.size} remote configs in registry")

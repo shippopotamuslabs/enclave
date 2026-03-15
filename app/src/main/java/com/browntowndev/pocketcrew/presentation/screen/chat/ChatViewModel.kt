@@ -363,9 +363,9 @@ class ChatViewModel @Inject constructor(
                         messages = updatedMessages,
                         responseState = newResponseState,
                         thinkingStartTime = 0L,  // Stop the timer
-                        // FIX: Don't clear thinkingSteps in Crew mode - keep them so UI can show "Thought For Xs"
-                        // The thinkingSteps will be cleared when StepCompleted arrives
-                        thinkingSteps = if (isCrewMode) base.thinkingSteps else emptyList(),
+                        // Preserve thinkingSteps in ALL modes so UI can show "Thought For Xs" header
+                        // The thinkingSteps will be cleared when response is fully complete
+                        thinkingSteps = base.thinkingSteps,
                         // Only calculate thinking duration if not already set (e.g., from StepCompleted)
                         // If currentThinkingStartTime is 0, thinking already ended and duration was set in StepCompleted
                         thinkingDurationSeconds = if (currentThinkingStartTime > 0) {

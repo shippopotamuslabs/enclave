@@ -362,6 +362,7 @@ object EngineModule {
                         temperature = tunings.temperature.toFloat(),
                         topK = tunings.topK,
                         topP = tunings.topP.toFloat(),
+                        minP = tunings.minP.toFloat(),
                         maxTokens = tunings.maxTokens,
                         contextWindow = tunings.contextWindow,
                         threads = calculateOptimalThreads(),
@@ -407,6 +408,7 @@ object EngineModule {
                     temperature = tunings.temperature.toFloat(),
                     topK = tunings.topK,
                     topP = tunings.topP.toFloat(),
+                    minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
                     threads = calculateOptimalThreads(),
@@ -448,6 +450,7 @@ object EngineModule {
                     temperature = tunings.temperature.toFloat(),
                     topK = tunings.topK,
                     topP = tunings.topP.toFloat(),
+                    minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
                     threads = calculateOptimalThreads(),
@@ -489,6 +492,7 @@ object EngineModule {
                     temperature = tunings.temperature.toFloat(),
                     topK = tunings.topK,
                     topP = tunings.topP.toFloat(),
+                    minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
                     threads = calculateOptimalThreads(),
@@ -530,6 +534,7 @@ object EngineModule {
                     temperature = tunings.temperature.toFloat(),
                     topK = tunings.topK,
                     topP = tunings.topP.toFloat(),
+                    minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
                     threads = calculateOptimalThreads(),
@@ -571,6 +576,7 @@ object EngineModule {
                     temperature = tunings.temperature.toFloat(),
                     topK = tunings.topK,
                     topP = tunings.topP.toFloat(),
+                    minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
                     threads = calculateOptimalThreads(),
@@ -620,6 +626,7 @@ object EngineModule {
                     temperature = tunings.temperature.toFloat(),
                     topK = tunings.topK,
                     topP = tunings.topP.toFloat(),
+                    minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
                     threads = calculateOptimalThreads(),
@@ -641,18 +648,68 @@ object EngineModule {
      */
     private fun buildFinalSynthesizerSystemPrompt(fastSystemPrompt: String): String {
         return """
-You are the final reply model.
+You are a polisher that turns a candidate answer into a clean final reply.
 
-When you see TASK: FINAL_REVIEW_AND_REPLY, you produce ONLY the polished user-facing answer.
+When you see TASK: FINAL_REVIEW_AND_REPLY you will receive:
 
-Use ORIGINAL_USER_PROMPT + CANDIDATE_ANSWER.
-Fix weak parts. Keep strong parts.
-Match the tone and style that best fits the user request.
+ORIGINAL_USER_PROMPT:    the real question from the user
+CANDIDATE_ANSWER:        the draft answer that needs improvement
 
-Output nothing except the complete final answer to the user.
-No commentary. No headings. No "Final answer" marker. No explanations.
+Your only job:
+1. Read both parts
+2. Decide what needs to be fixed / removed / improved
+3. Write ONLY a clean, direct final answer to the ORIGINAL_USER_PROMPT
 
-USER_SYSTEM_PROMPT (apply fully): $fastSystemPrompt
+VERY IMPORTANT RULES:
+- Output NOTHING except the final answer itself
+- Do NOT keep or mention any headers like # COMPLEX_SYNTHESIZE, # Draft Comparison, # Final Review, DRAFT_1, DRAFT_2, etc.
+- Do NOT write sentences like "Looking at CANDIDATE_ANSWER…" or "CANDIDATE_ANSWER was mistaken because…" or "I refined the candidate answer..."
+- Do NOT say "Here is the improved version", "After review:", "Polished answer:", etc.
+- DO reply as if you are directly answering the user
+- Follow the style/rules from:  USER_SYSTEM_PROMPT → $fastSystemPrompt
+
+Examples — notice what gets REMOVED:
+
+Example 1
+ORIGINAL_USER_PROMPT: What is the capital of Brazil?
+
+CANDIDATE_ANSWER:
+# COMPLEX_SYNTHESIZE
+DRAFT_1: Brasília is the capital.
+DRAFT_2: The capital city of Brazil is Brasília, not Rio or São Paulo.
+Comparing DRAFT_1 and DRAFT_2, DRAFT_2 gives more context so it is better.
+
+→ you should output only:
+The capital of Brazil is Brasília.
+
+Example 2
+ORIGINAL_USER_PROMPT: Why do cats purr?
+
+CANDIDATE_ANSWER:
+After reviewing two drafts:
+Draft A said "Cats purr when happy"
+Draft B said "Purring can mean happiness, but also stress or pain"
+The second one is more accurate.
+
+Final polished answer:
+Cats purr when they are happy, but they also purr when they are stressed, in pain, or healing.
+
+→ you should output only:
+Cats purr when they are content, but they also purr when stressed, in pain, or recovering from injury.
+
+Example 3
+ORIGINAL_USER_PROMPT: How many moons does Jupiter have in 2025?
+
+CANDIDATE_ANSWER:
+# FINAL_REVIEW_AND_REPLY_STEP
+Version 1: 95 moons (old number)
+Version 2: 92 confirmed + some provisional = ~95–97
+I think the current accepted number is 95.
+
+→ you should output only:
+As of 2025, Jupiter has 95 known moons.
+
+When you see TASK: FINAL_REVIEW_AND_REPLY, read the prompt + candidate, ignore/strip all meta-headers, draft comparisons, review notes, and output ONLY the clean final answer.
     """.trimIndent()
     }
 }

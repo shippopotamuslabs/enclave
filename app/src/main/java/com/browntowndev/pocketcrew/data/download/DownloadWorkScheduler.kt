@@ -40,7 +40,7 @@ class DownloadWorkScheduler @Inject constructor(
             .build()
 
         // Serialize ModelConfiguration to pipe-delimited string:
-        // modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|repetitionPenalty|maxTokens|contextWindow|systemPrompt
+        // modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt
         val inputData = models
             .map { config ->
                 listOf(
@@ -55,6 +55,7 @@ class DownloadWorkScheduler @Inject constructor(
                     config.tunings.temperature.toString(),
                     config.tunings.topK.toString(),
                     config.tunings.topP.toString(),
+                    config.tunings.minP.toString(),
                     config.tunings.repetitionPenalty.toString(),
                     config.tunings.maxTokens.toString(),
                     config.tunings.contextWindow.toString(),

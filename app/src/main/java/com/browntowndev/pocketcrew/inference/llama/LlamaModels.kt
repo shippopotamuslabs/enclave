@@ -42,6 +42,7 @@ data class LlamaSamplingConfig(
     val temperature: Float = 0.7f,
     val topK: Int = 40,
     val topP: Float = 0.95f,
+    val minP: Float,
     val maxTokens: Int = 2048,    // Maximum tokens to generate
     val repeatPenalty: Float = 1.1f,
     val contextWindow: Int = 4096,  // Context window size (input + output)
@@ -57,7 +58,7 @@ data class LlamaSamplingConfig(
 data class LlamaModelConfig(
     val modelPath: String,
     val systemPrompt: String = "You are a helpful assistant.",
-    val sampling: LlamaSamplingConfig = LlamaSamplingConfig()
+    val sampling: LlamaSamplingConfig = LlamaSamplingConfig(minP = 0.0f)
 )
 
 /**

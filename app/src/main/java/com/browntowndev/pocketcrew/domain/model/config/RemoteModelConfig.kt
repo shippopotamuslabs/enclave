@@ -15,6 +15,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
  * @property temperature Sampling temperature for LLM generation
  * @property topK Top-k sampling parameter
  * @property topP Top-p (nucleus) sampling parameter
+ * @property minP Min-p sampling parameter (required - throws if missing)
  * @property repetitionPenalty Repetition penalty for sampling
  * @property maxTokens Maximum tokens to generate
  * @property contextWindow LLM context window size in tokens (for llama.cpp)
@@ -32,6 +33,7 @@ data class RemoteModelConfig(
     val temperature: Double,
     val topK: Int,
     val topP: Double,
+    val minP: Double = 0.0,
     val repetitionPenalty: Double,
     val maxTokens: Int,
     val contextWindow: Int,

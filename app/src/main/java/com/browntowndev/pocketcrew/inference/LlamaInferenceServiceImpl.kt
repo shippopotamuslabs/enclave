@@ -31,7 +31,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
     private var modelPath: String? = null
     private var systemPrompt: String = "You are a helpful assistant."
-    private var samplingConfig: LlamaSamplingConfig = LlamaSamplingConfig()
+    private var samplingConfig: LlamaSamplingConfig = LlamaSamplingConfig(minP = 0.0f)
     private var isInitialized = false
     private var hasTriedCpuFallback = false
 
@@ -42,7 +42,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
     fun configure(
         modelPath: String,
         systemPrompt: String = "You are a helpful assistant.",
-        samplingConfig: LlamaSamplingConfig = LlamaSamplingConfig()
+        samplingConfig: LlamaSamplingConfig = LlamaSamplingConfig(minP = 0.0f)
     ) {
         this.modelPath = modelPath
         this.systemPrompt = systemPrompt

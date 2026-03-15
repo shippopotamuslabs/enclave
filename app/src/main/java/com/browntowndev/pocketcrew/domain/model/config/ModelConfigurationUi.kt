@@ -13,6 +13,7 @@ data class ModelConfigurationUi(
     val temperature: Double,
     val topK: Int,
     val topP: Double,
+    val minP: Double,
     val repetitionPenalty: Double,
     val maxTokens: Int,
     val contextWindow: Int
@@ -28,6 +29,7 @@ fun ModelConfiguration.toUi(): ModelConfigurationUi = ModelConfigurationUi(
     temperature = tunings.temperature,
     topK = tunings.topK,
     topP = tunings.topP,
+    minP = tunings.minP,
     repetitionPenalty = tunings.repetitionPenalty,
     maxTokens = tunings.maxTokens,
     contextWindow = tunings.contextWindow
@@ -46,6 +48,7 @@ fun ModelConfigurationUi.toModelConfiguration(
         temperature = temperature,
         topK = topK,
         topP = topP,
+        minP = minP,
         repetitionPenalty = repetitionPenalty,
         maxTokens = maxTokens,
         contextWindow = contextWindow
