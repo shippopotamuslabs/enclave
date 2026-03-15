@@ -69,7 +69,18 @@ class ChatViewModel @Inject constructor(
         thinkingModelDisplayName: String
     ): Pair<ProcessingIndicatorState, ThinkingData?> {
         return when (responseState) {
-            ResponseState.NONE -> ProcessingIndicatorState.NONE to null
+            // Preserve thinking data if there's completed thinking so UI can show "Thought for" header
+            ResponseState.NONE -> {
+                if (thinkingDurationSeconds > 0 && thinkingSteps.isNotEmpty()) {
+                    ProcessingIndicatorState.NONE to ThinkingData(
+                        thinkingDurationSeconds = thinkingDurationSeconds,
+                        steps = thinkingSteps,
+                        modelDisplayName = thinkingModelDisplayName
+                    )
+                } else {
+                    ProcessingIndicatorState.NONE to null
+                }
+            }
 
             ResponseState.PROCESSING -> {
                 // If there was previous thinking that completed (thinkingDurationSeconds > 0),
