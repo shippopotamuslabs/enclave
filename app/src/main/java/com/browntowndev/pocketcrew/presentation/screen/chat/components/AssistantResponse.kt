@@ -262,7 +262,7 @@ private fun CrewAssistantContent(
             // Show "✓ Step Completed!" for THIS step (except FINAL)
             if (step.stepType != PipelineStep.FINAL) {
                 CompletedStepRow(
-                    stepName = step.stepName,
+                    stepCompletion = step,
                     onClick = { selectedStepForCompletionDetails = step }
                 )
             }
@@ -399,7 +399,7 @@ private fun CompletedStepsHeader(
     ) {
         visibleSteps.forEach { step ->
             CompletedStepRow(
-                stepName = step.stepName,
+                stepCompletion = step,
                 onClick = { onStepClick(step) }
             )
         }
@@ -410,30 +410,104 @@ private fun CompletedStepsHeader(
 
 @Composable
 private fun CompletedStepRow(
-    stepName: String,
+    stepCompletion: StepCompletionData,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    val stepName = stepCompletion.stepName
+    val modelDisplayName = stepCompletion.modelDisplayName
+    val stepOutput = stepCompletion.stepOutput
+
+    // Get first ~10 words for preview with ellipsis
+    val previewText = remember(stepOutput) {
+        val words = stepOutput.split(Regex("\\s+")).take(10)
+        if (words.size < stepOutput.split(Regex("\\s+")).size) {
+            words.joinToString(" ") + "…"
+        } else {
+            words.joinToString(" ")
+        }
+    }
+
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(vertical = 4.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Text(
-            text = "✓",
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = "$stepName Completed!",
-            style = MaterialTheme.typography.titleSmall.copy(
-                fontWeight = FontWeight.Medium,
-            ),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        // Model message: "$modelDisplayName: I have completed my task for the Crew. Passing on to the next member."
+        val completionMessage = remember(modelDisplayName) {
+            buildAnnotatedString {
+                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                    append(modelDisplayName)
+                }
+                append(": I have completed my task for the Crew. Passing on to the next member.")
+            }
+        }
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onClick() }
+                .padding(vertical = 4.dp)
+        ) {
+            Text(
+                text = "✓",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = completionMessage,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Medium,
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Card that looks like Claude's design
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f))
+                .clickable { onClick() }
+                .padding(12.dp)
+        ) {
+            // Document icon on the left
+            Icon(
+                painter = painterResource(R.drawable.document),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(32.dp),
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            // Text content on the right
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = "$stepName Results",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = previewText,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                )
+            }
+        }
     }
 }
 
