@@ -111,6 +111,7 @@ fun AssistantResponse(
     processingIndicatorState: ProcessingIndicatorState = ProcessingIndicatorState.NONE,
     thinkingData: ThinkingData? = null,
     selectedMode: Mode = Mode.FAST,
+    showThoughtForHeader: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     // Use deterministic mode from enum - not inferring from completedSteps
@@ -128,6 +129,7 @@ fun AssistantResponse(
             message = message,
             processingIndicatorState = processingIndicatorState,
             thinkingData = thinkingData,
+            showThoughtForHeader = showThoughtForHeader,
             modifier = modifier
         )
     }
@@ -140,6 +142,7 @@ private fun NormalAssistantContent(
     message: ChatMessage,
     processingIndicatorState: ProcessingIndicatorState = ProcessingIndicatorState.NONE,
     thinkingData: ThinkingData? = null,
+    showThoughtForHeader: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val segments = remember(message.content) { parseContent(message.content) }
@@ -147,28 +150,24 @@ private fun NormalAssistantContent(
 
     // Determine which thinking data to use: passed parameter takes precedence over message data
     val effectiveThinkingData = thinkingData ?: message.thinkingData
-    val hasCompletedThinking = effectiveThinkingData != null &&
-        effectiveThinkingData.thinkingDurationSeconds > 0 &&
-        effectiveThinkingData.steps.isNotEmpty()
 
     Column(modifier = modifier.fillMaxWidth()) {
         // Handle live indicator states for non-Crew mode
         when (processingIndicatorState) {
-            // Step completed / waiting - show ThoughtForHeader if thinking completed
+            // Show ThoughtForHeader if thinking completed, otherwise show ProcessingIndicator
             ProcessingIndicatorState.PROCESSING -> {
-                if (hasCompletedThinking) {
+                if (showThoughtForHeader && effectiveThinkingData != null) {
                     ThoughtForHeader(
                         thinkingData = effectiveThinkingData,
                         onViewFullThinking = { showThinkingDetails = true }
                     )
                 } else {
-                    // No thinking completed yet - show ProcessingIndicator to indicate work is happening
                     ProcessingIndicator()
                 }
             }
-            // Generating response - show ThoughtForHeader if thinking completed + GeneratingIndicator
+            // Show ThoughtForHeader if thinking completed, always show GeneratingIndicator
             ProcessingIndicatorState.GENERATING -> {
-                if (hasCompletedThinking) {
+                if (showThoughtForHeader && effectiveThinkingData != null) {
                     ThoughtForHeader(
                         thinkingData = effectiveThinkingData,
                         onViewFullThinking = { showThinkingDetails = true }
@@ -178,24 +177,22 @@ private fun NormalAssistantContent(
             }
             // NONE: show animated ThinkingIndicator if thinking in progress (duration = 0)
             ProcessingIndicatorState.NONE -> {
-                if (thinkingData != null && thinkingData.thinkingDurationSeconds == 0) {
+                // If showThoughtForHeader is true, show it (response complete with thinking)
+                // Otherwise show animated indicator if still thinking
+                if (showThoughtForHeader && effectiveThinkingData != null) {
+                    ThoughtForHeader(
+                        thinkingData = effectiveThinkingData,
+                        onViewFullThinking = { showThinkingDetails = true }
+                    )
+                } else if (thinkingData != null && thinkingData.thinkingDurationSeconds == 0) {
                     ThinkingIndicator(
                         thinkingSteps = thinkingData.steps,
                         thinkingStartTime = thinkingData.thinkingStartTime,
                         modelDisplayName = thinkingData.modelDisplayName,
                     )
                 }
-                // Otherwise (response complete) - show nothing
+                // Otherwise (response complete, no thinking) - show nothing
             }
-        }
-
-        // "Thought for Xs" collapsible header from message data (for completed responses)
-        // Show when processing is complete but message has thinking data to display
-        if (hasCompletedThinking && message.thinkingData != null && message.thinkingData.steps.isNotEmpty()) {
-            ThoughtForHeader(
-                thinkingData = message.thinkingData,
-                onViewFullThinking = { showThinkingDetails = true }
-            )
         }
 
         // Response content

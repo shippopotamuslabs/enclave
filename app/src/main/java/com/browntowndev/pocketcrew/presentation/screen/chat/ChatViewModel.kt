@@ -158,6 +158,12 @@ class ChatViewModel @Inject constructor(
             thinkingModelDisplayName = base.thinkingModelDisplayName
         )
 
+        // Compute whether to show the "Thought for Xs" header
+        // Show when thinking has completed (duration > 0) and there are steps to display
+        val showThoughtForHeader = thinkingData != null &&
+            thinkingData.steps.isNotEmpty() &&
+            thinkingData.thinkingDurationSeconds > 0
+
         ChatUiState(
             messages = base.messages,
             inputText = base.inputText,
@@ -170,6 +176,7 @@ class ChatViewModel @Inject constructor(
             processingIndicatorState = processingIndicatorState,
             thinkingData = thinkingData,
             thinkingModelDisplayName = base.thinkingModelDisplayName,
+            showThoughtForHeader = showThoughtForHeader,
             showUseTheCrewPopup = base.showUseTheCrewPopup,
             hapticPress = settings.hapticPress,
             hapticResponse = settings.hapticResponse,

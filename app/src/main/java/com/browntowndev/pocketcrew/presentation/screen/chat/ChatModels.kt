@@ -152,6 +152,8 @@ data class ChatUiState(
     val processingIndicatorState: ProcessingIndicatorState = ProcessingIndicatorState.NONE,
     /** Thinking data for "Thought For Xs" or animated thinking indicator. Null when no thinking. */
     val thinkingData: ThinkingData? = null,
+    /** Whether to show the "Thought for Xs" header - computed in ViewModel based on state. */
+    val showThoughtForHeader: Boolean = false,
     /** Display name of the model currently thinking (from ModelConfiguration). */
     val thinkingModelDisplayName: String = "",
     /** Shows the "Use the Crew" popup after Fast mode response */

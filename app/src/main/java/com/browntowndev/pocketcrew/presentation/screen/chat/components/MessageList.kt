@@ -33,6 +33,7 @@ fun MessageList(
     processingIndicatorState: ProcessingIndicatorState,
     thinkingData: ThinkingData?,
     selectedMode: Mode,
+    showThoughtForHeader: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val isThinking = processingIndicatorState != ProcessingIndicatorState.NONE || thinkingData != null
@@ -96,6 +97,7 @@ fun MessageList(
                         processingIndicatorState = processingIndicatorState,
                         thinkingData = thinkingData,
                         selectedMode = selectedMode,
+                        showThoughtForHeader = showThoughtForHeader,
                     )
                 }
             }
