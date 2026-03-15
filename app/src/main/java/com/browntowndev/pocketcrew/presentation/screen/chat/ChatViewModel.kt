@@ -442,13 +442,14 @@ class ChatViewModel @Inject constructor(
                         }
 
                         // Show "Use the Crew" popup for Fast responses (no thinking steps)
+                        // Note: Keep thinkingSteps and thinkingDurationSeconds so computeIndicatorState
+                        // can still return thinkingData for showing "Thought for" header
                         val updatedBase = base.copy(
                             messages = updatedMessages,
                             responseState = ResponseState.NONE,
-                            thinkingSteps = emptyList(),
                             thinkingStartTime = 0L,
-                            thinkingDurationSeconds = 0,
-                            thinkingModelDisplayName = "",
+                            // Preserve thinkingSteps and thinkingDurationSeconds for "Thought for" header
+                            // They will be cleared when the next request starts
                         )
 
                         // Only show popup if we haven't shown it recently and this was a Fast mode response
