@@ -194,7 +194,7 @@ private fun ThoughtBubbleWheel(
     }
 
     LazyColumn(
-        modifier = modifier.heightIn(max = 1000.dp),
+        modifier = modifier.heightIn(max = 1500.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
         userScrollEnabled = false
     ) {
