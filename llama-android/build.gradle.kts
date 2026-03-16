@@ -5,6 +5,7 @@ plugins {
 android {
     namespace = "com.browntowndev.pocketcrew.llama"
     compileSdk = 36
+    ndkVersion = "27.0.11718014"
 
     defaultConfig {
         minSdk = 34
