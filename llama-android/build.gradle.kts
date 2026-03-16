@@ -16,11 +16,7 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += listOf(
-                    "-DANDROID_STL=c++_shared",
-                    "-DGGML_VULKAN=ON",
-                    "-DGGML_OPENCL=ON",
-                    "-DCMAKE_INCLUDE_PATH=/home/sean/Code/pocket-crew/third_party/Vulkan-Headers/include",
-                    "-DVulkan_LIBRARY=/home/sean/Android/Sdk/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/34/libvulkan.so"
+                    "-DANDROID_STL=c++_shared"
                 )
             }
         }

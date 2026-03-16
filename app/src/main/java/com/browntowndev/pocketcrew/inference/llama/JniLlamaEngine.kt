@@ -80,6 +80,7 @@ class JniLlamaEngine @Inject constructor(
                 modelPath = config.modelPath,
                 contextSize = config.sampling.contextWindow,
                 threads = config.sampling.threads,
+                nThreadsBatch = config.sampling.nThreadsBatch,
                 batchSize = config.sampling.batchSize,
                 gpuLayers = config.sampling.gpuLayers
             )
@@ -412,6 +413,7 @@ class JniLlamaEngine @Inject constructor(
         modelPath: String,
         contextSize: Int,
         threads: Int,
+        nThreadsBatch: Int,
         batchSize: Int,
         gpuLayers: Int
     ): Boolean

@@ -93,6 +93,7 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
     jstring modelPath,
     jint contextSize,
     jint threads,
+    jint nThreadsBatch,
     jint batchSize,
     jint gpuLayers
 ) {
@@ -152,6 +153,7 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Model path: %s", path.c_str());
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested contextSize: %d", contextSize);
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested threads: %d", threads);
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested nThreadsBatch: %d", nThreadsBatch);
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested batchSize: %d", batchSize);
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested GPU layers: %d", gpuLayers);
 
@@ -216,8 +218,9 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
     // Use at least 4 threads for reasonable CPU performance
     // Single thread is extremely slow on mobile
     int actualThreads = (threads > 0) ? threads : 4;
+    int actualNThreadsBatch = (nThreadsBatch > 0) ? nThreadsBatch : actualThreads;
     cparams.n_threads = actualThreads;
-    cparams.n_threads_batch = actualThreads;
+    cparams.n_threads_batch = actualNThreadsBatch;
 
     // Use batch size from config parameter
     int actualBatchSize = (batchSize > 0) ? batchSize : 512;
