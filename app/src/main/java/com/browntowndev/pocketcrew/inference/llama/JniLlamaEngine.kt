@@ -75,6 +75,13 @@ class JniLlamaEngine @Inject constructor(
 
         // Run on llama thread for thread safety
         val startTime = System.currentTimeMillis()
+
+        // Detect optimal backend based on GPU hardware
+        val gpuProfiler = GpuProfiler()
+        val detectedBackend = gpuProfiler.detectOptimalBackend()
+        val backendDescription = gpuProfiler.getBackendDescription()
+        Log.i(TAG, "GPU Backend: $backendDescription")
+
         val future = llamaExecutor.submit<Boolean> {
             nativeLoadModel(
                 modelPath = config.modelPath,
@@ -82,7 +89,8 @@ class JniLlamaEngine @Inject constructor(
                 threads = config.sampling.threads,
                 nThreadsBatch = config.sampling.nThreadsBatch,
                 batchSize = config.sampling.batchSize,
-                gpuLayers = config.sampling.gpuLayers
+                gpuLayers = config.sampling.gpuLayers,
+                backendType = detectedBackend.value
             )
         }
         val ok: Boolean = future.get()
@@ -415,7 +423,8 @@ class JniLlamaEngine @Inject constructor(
         threads: Int,
         nThreadsBatch: Int,
         batchSize: Int,
-        gpuLayers: Int
+        gpuLayers: Int,
+        backendType: Int
     ): Boolean
 
     private external fun nativeUnloadModel()

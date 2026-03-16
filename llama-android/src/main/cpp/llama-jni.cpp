@@ -17,6 +17,16 @@
 #include "llama.h"
 #include "ggml-backend.h"
 
+// Backend type enumeration - must match Kotlin enum
+enum LlamaBackend {
+    BACKEND_CPU = 0,
+    BACKEND_OPENCL = 1,
+    BACKEND_VULKAN = 2
+};
+
+// Current backend selection
+static LlamaBackend g_selectedBackend = BACKEND_CPU;
+
 // Forward declarations of common helper functions (from common.h)
 static inline void llama_batch_clear(struct llama_batch & batch) {
     batch.n_tokens = 0;
@@ -95,8 +105,12 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
     jint threads,
     jint nThreadsBatch,
     jint batchSize,
-    jint gpuLayers
+    jint gpuLayers,
+    jint backendType
 ) {
+    // Store the backend selection (convert from jint to enum)
+    g_selectedBackend = static_cast<LlamaBackend>(backendType);
+
     // Initialize backend if not already done
     if (!g_initialized) {
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== INITIALIZING LLAMA BACKEND ===");
@@ -115,19 +129,58 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
             __android_log_print(ANDROID_LOG_INFO, "llama-jni", "LD_LIBRARY_PATH set to: %s", vendor_lib_path);
         }
 
+        // Set backend priority based on detected hardware
+        // This controls which GPU backend llama.cpp uses when multiple are available
+        const char* backendPriority = "CPU";  // Default
+        switch (g_selectedBackend) {
+            case BACKEND_CPU:
+                backendPriority = "CPU";
+                break;
+            case BACKEND_OPENCL:
+                // For OpenCL, prioritize OpenCL (AMD GPUs on Android use OpenCL)
+                backendPriority = "OpenCL,CPU";
+                break;
+            case BACKEND_VULKAN:
+                backendPriority = "Vulkan,CPU";  // Prioritize Vulkan
+                break;
+        }
+        setenv("GGML_BACKEND_PRIORITY", backendPriority, 1);
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GGML_BACKEND_PRIORITY set to: %s", backendPriority);
+
+        // For OpenCL backend, we need to disable Vulkan at runtime
+        // This is done by setting an environment variable that ggml-vulkan checks
+        if (g_selectedBackend == BACKEND_OPENCL) {
+            setenv("GGML_VULKAN_DISABLED", "1", 1);
+            // Also set OpenCL specific debug if needed
+            setenv("CL_LOG_ERRORS", "stdout", 1);
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Vulkan disabled for OpenCL backend");
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "OpenCL debug logging enabled");
+        } else {
+            unsetenv("GGML_VULKAN_DISABLED");
+        }
+
         llama_backend_init();
         g_initialized = true;
 
         // Check GPU offload support
         bool supports_gpu = llama_supports_gpu_offload();
 
+        // Log backend selection
+        const char* backendName = "UNKNOWN";
+        switch (g_selectedBackend) {
+            case BACKEND_CPU: backendName = "CPU"; break;
+            case BACKEND_OPENCL: backendName = "OPENCL"; break;
+            case BACKEND_VULKAN: backendName = "VULKAN"; break;
+        }
+
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== AVAILABLE BACKENDS ===");
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested backend: %s", backendName);
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU offload support (runtime check): %s", supports_gpu ? "YES" : "NO");
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "===========================");
 
         // Note: SVE and other CPU feature detection has been moved to ggml.h
         if (gpuLayers > 0) {
-            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU mode requested with %d layers", gpuLayers);
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU mode requested with %d layers using %s", gpuLayers, backendName);
         } else {
             __android_log_print(ANDROID_LOG_INFO, "llama-jni", "CPU-only mode requested (gpuLayers=0)");
         }
@@ -162,7 +215,12 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
 
     // Use GPU if GPU layers are requested
     // Note: llama.cpp will automatically detect and use available GPU backends
+    // When backend is CPU, force gpuLayers to 0 to avoid crashes
     int actualGpuLayers = gpuLayers;
+    if (g_selectedBackend == BACKEND_CPU) {
+        actualGpuLayers = 0;
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "CPU backend selected - forcing GPU layers to 0");
+    }
 
     mparams.n_gpu_layers = actualGpuLayers;
     mparams.use_mmap = false;  // Disable mmap for mobile

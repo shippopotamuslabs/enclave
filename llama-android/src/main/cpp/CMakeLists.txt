@@ -19,7 +19,7 @@ set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 
-# CPU-only mode - disable all GPU backends
+# CPU-only mode - disable all GPU backends for stability
 set(GGML_VULKAN OFF CACHE BOOL "" FORCE)
 set(GGML_OPENCL OFF CACHE BOOL "" FORCE)
 set(GGML_CUDA OFF CACHE BOOL "" FORCE)
@@ -32,7 +32,7 @@ set(GGML_CPU_ARM_ENABLE_SVE OFF CACHE BOOL "" FORCE)
 # Source directory for llama.cpp - relative path from this CMakeLists.txt to root
 set(LLAMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/llama.cpp)
 
-# Add llama.cpp as a subdirectory
+# Source directory for llama.cpp
 add_subdirectory(${LLAMA_DIR} llama-build)
 
 # Define our JNI library
@@ -55,6 +55,7 @@ target_link_libraries(llama-jni
     ggml-cpu
     log
     android
+    dl
 )
 
 # Compiler options for optimization
