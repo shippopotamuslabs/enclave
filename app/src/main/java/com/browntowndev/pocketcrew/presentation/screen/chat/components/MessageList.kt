@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,6 +27,7 @@ import com.browntowndev.pocketcrew.presentation.screen.chat.ProcessingIndicatorS
 import com.browntowndev.pocketcrew.presentation.screen.chat.ThinkingData
 import com.browntowndev.pocketcrew.presentation.screen.chat.fakeLongMessages
 import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
+import com.google.ai.edge.litertlm.Message
 
 @Composable
 fun MessageList(
@@ -42,9 +44,8 @@ fun MessageList(
         EmptyState(modifier = modifier)
     } else {
         // Calculate most recent user index once, outside the loop to avoid O(n²) behavior
-        // Use indexOfFirst since messages are ordered [most_recent, ..., oldest]
         val mostRecentUserIndex = remember(messages) {
-            messages.indexOfFirst { it.role == MessageRole.User }
+            messages.indexOfLast { it.role == MessageRole.User }
         }
 
         LazyColumn(
@@ -53,27 +54,14 @@ fun MessageList(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(horizontal = 5.dp, vertical = 16.dp),
         ) {
-            items(
-                count = messages.size,
-                key = { index: Int -> "msg_${messages[messages.size - 1 - index].id}" },
-            ) { index: Int ->
-                val message = messages[messages.size - 1 - index]
+            itemsIndexed(
+                items = messages,
+                key = { _, message: ChatMessage -> message.id },
+            ) { index: Int, message: ChatMessage ->
                 // Show indicator ONLY on the most recent User message when response is active.
-                val isMostRecentUserMessage = message.role == MessageRole.User &&
-                    messages.indexOf(message) == mostRecentUserIndex
+                val isMostRecentUserMessage = index == mostRecentUserIndex
 
-                // Check if there's an assistant message after this user message with completed steps (Crew mode)
-                val nextMessageIndex = messages.indexOf(message) + 1
-                val hasCompletedSteps = nextMessageIndex < messages.size &&
-                    messages[nextMessageIndex].role == MessageRole.Assistant &&
-                    !messages[nextMessageIndex].completedSteps.isNullOrEmpty()
-
-                // Determine if this is the latest assistant message (the one following the most recent user)
-                // This is used to control where live indicators (Processing, Generating, Thinking) appear
-                val isLatestAssistantMessage = message.role == MessageRole.Assistant &&
-                    mostRecentUserIndex != -1 &&
-                    messages.indexOf(message) == mostRecentUserIndex - 1
-
+                // TODO: Move this logic into viewmodel
                 // Show indicators on the most recent User message for Fast/Thinking mode
                 // This shows the indicator immediately after the user sends a message while waiting for response
                 val showIndicatorOnUserMessage = selectedMode != Mode.CREW &&
