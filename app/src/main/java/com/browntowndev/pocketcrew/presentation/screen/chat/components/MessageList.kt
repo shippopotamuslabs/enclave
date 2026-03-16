@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,7 +26,6 @@ import com.browntowndev.pocketcrew.presentation.screen.chat.ProcessingIndicatorS
 import com.browntowndev.pocketcrew.presentation.screen.chat.ThinkingData
 import com.browntowndev.pocketcrew.presentation.screen.chat.fakeLongMessages
 import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
-import com.google.ai.edge.litertlm.Message
 
 @Composable
 fun MessageList(
@@ -54,14 +52,16 @@ fun MessageList(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(horizontal = 5.dp, vertical = 16.dp),
         ) {
-            itemsIndexed(
-                items = messages,
-                key = { _, message: ChatMessage -> message.id },
-            ) { index: Int, message: ChatMessage ->
+            items(
+                count = messages.size,
+                key = { index: Int -> "msg_${messages[messages.size - 1 - index].id}" },
+            ) { index: Int ->
+                val messageIndex = messages.size - 1 - index
+                val message = messages[messageIndex]
                 // Show indicator ONLY on the most recent User message when response is active.
-                val isMostRecentUserMessage = index == mostRecentUserIndex
+                val isMostRecentUserMessage = message.role == MessageRole.User &&
+                        messageIndex == mostRecentUserIndex
 
-                // TODO: Move this logic into viewmodel
                 // Show indicators on the most recent User message for Fast/Thinking mode
                 // This shows the indicator immediately after the user sends a message while waiting for response
                 val showIndicatorOnUserMessage = selectedMode != Mode.CREW &&
