@@ -9,12 +9,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeContent
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -153,19 +156,20 @@ private fun NormalAssistantContent(
 
     Column(modifier = modifier.fillMaxWidth()) {
         // Handle live indicator states for non-Crew mode
+        // Processing/Generating/Thinking indicators are now shown in MessageList on the most recent User message
+        // ThoughtForHeader shows for ALL messages with thinking data (when showThoughtForHeader is true)
         when (processingIndicatorState) {
-            // Show ThoughtForHeader if thinking completed, otherwise show ProcessingIndicator
+            // Show ThoughtForHeader if thinking completed
             ProcessingIndicatorState.PROCESSING -> {
                 if (showThoughtForHeader && effectiveThinkingData != null) {
                     ThoughtForHeader(
                         thinkingData = effectiveThinkingData,
                         onViewFullThinking = { showThinkingDetails = true }
                     )
-                } else {
-                    ProcessingIndicator()
                 }
+                // Processing indicator is shown in MessageList on user message
             }
-            // Show ThoughtForHeader if thinking completed, always show GeneratingIndicator
+            // Show ThoughtForHeader if thinking completed
             ProcessingIndicatorState.GENERATING -> {
                 if (showThoughtForHeader && effectiveThinkingData != null) {
                     ThoughtForHeader(
@@ -173,25 +177,19 @@ private fun NormalAssistantContent(
                         onViewFullThinking = { showThinkingDetails = true }
                     )
                 }
-                GeneratingIndicator()
+                // Generating indicator is shown in MessageList on user message
             }
             // NONE: show animated ThinkingIndicator if thinking in progress (duration = 0)
             ProcessingIndicatorState.NONE -> {
                 // If showThoughtForHeader is true, show it (response complete with thinking)
-                // Otherwise show animated indicator if still thinking
+                // This shows for ALL messages with thinking data
                 if (showThoughtForHeader && effectiveThinkingData != null) {
                     ThoughtForHeader(
                         thinkingData = effectiveThinkingData,
                         onViewFullThinking = { showThinkingDetails = true }
                     )
-                } else if (thinkingData != null && thinkingData.thinkingDurationSeconds == 0) {
-                    ThinkingIndicator(
-                        thinkingSteps = thinkingData.steps,
-                        thinkingStartTime = thinkingData.thinkingStartTime,
-                        modelDisplayName = thinkingData.modelDisplayName,
-                    )
                 }
-                // Otherwise (response complete, no thinking) - show nothing
+                // Thinking indicator is shown in MessageList on user message
             }
         }
 
@@ -533,6 +531,7 @@ private fun StepCompletionBottomSheet(
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
+            contentWindowInsets = { WindowInsets.safeDrawing }
         ) {
             Column(
                 modifier = Modifier

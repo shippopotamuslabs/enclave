@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.inference.llama
 
+import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
 import android.util.Log
@@ -54,6 +55,71 @@ object LlamaGpuHelper {
     }
 
     /**
+     * Dynamically calculates the optimal number of GPU layers to offload based on
+     * real-time available memory, OS safety buffers, and the specific model's size.
+     *
+     * @param context Android context to access ActivityManager
+     * @param modelSizeBytes The exact file size of the .gguf model
+     * @param totalModelLayers The total number of layers in the model architecture (e.g., 32 for Llama 3 8B)
+     * @param contextSizeBytes Estimated size of the KV cache (default: ~500MB)
+     * @return The optimal number of GPU layers (0 for CPU-only mode)
+     */
+    fun calculateDynamicGpuLayers(
+        context: Context,
+        modelSizeBytes: Long,
+        totalModelLayers: Int,
+        contextSizeBytes: Long = 500L * 1024 * 1024
+    ): Int {
+        try {
+            // 1. Get real-time available memory from the Android OS
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            if (activityManager == null) {
+                Log.w(TAG, "ActivityManager not available, falling back to CPU")
+                return 0
+            }
+
+            val memoryInfo = ActivityManager.MemoryInfo()
+            activityManager.getMemoryInfo(memoryInfo)
+
+            val availableRamBytes = memoryInfo.availMem
+
+            // 2. Reserve a strict safety buffer for Android OS and your app's UI to prevent crashing
+            val osHeadroomBytes = 1536L * 1024 * 1024 // 1.5 GB safety buffer
+
+            // 3. Calculate how much RAM we can actually use for the GPU
+            val usableRamBytes = availableRamBytes - osHeadroomBytes - contextSizeBytes
+
+            if (usableRamBytes <= 0) {
+                Log.w(TAG, "Not enough available RAM for GPU offloading. Falling back to CPU.")
+                return 0
+            }
+
+            // Handle edge cases to avoid division by zero
+            if (modelSizeBytes <= 0 || totalModelLayers <= 0) {
+                Log.w(TAG, "Invalid model parameters, falling back to CPU")
+                return 0
+            }
+
+            // 4. Estimate how much memory a single layer of this specific model consumes
+            val bytesPerLayer = modelSizeBytes / totalModelLayers.coerceAtLeast(1)
+
+            // 5. Calculate how many layers fit into our usable RAM
+            val optimalLayers = (usableRamBytes / bytesPerLayer).toInt()
+
+            // 6. Ensure we don't return a negative number or exceed the model's max layers
+            val finalLayerCount = optimalLayers.coerceIn(0, totalModelLayers)
+
+            Log.i(TAG, "Available RAM: ${availableRamBytes / 1024 / 1024}MB. Offloading $finalLayerCount/$totalModelLayers layers.")
+
+            return finalLayerCount
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to calculate dynamic layers, using safe fallback.", e)
+            return 0 // Safest fallback is CPU-only
+        }
+    }
+
+    /**
      * Check if running on an Android emulator.
      */
     private fun isEmulator(): Boolean {
@@ -82,14 +148,28 @@ data class GpuConfig(
     val useGpu: Boolean
 ) {
     companion object {
+
         /**
-         * Get recommended GPU configuration for the current device.
+         * Get recommended GPU configuration with specific model parameters.
+         * This uses dynamic calculation based on real-time available memory.
+         *
+         * @param context Android context
+         * @param modelSizeBytes The exact size of the model file in bytes
+         * @param totalModelLayers The total number of layers in the model
+         * @param contextSizeBytes Estimated KV cache size (default: 500MB)
          */
-        fun forDevice(context: Context, modelSizeMb: Int = 0): GpuConfig {
-            Log.i(TAG, "=== GPU CONFIG DETECTION ===")
+        fun forDevice(
+            context: Context,
+            modelSizeBytes: Long,
+            totalModelLayers: Int,
+            contextSizeBytes: Long = 500L * 1024 * 1024
+        ): GpuConfig {
+            Log.i(TAG, "=== GPU CONFIG DETECTION (Dynamic) ===")
             Log.i(TAG, "Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             Log.i(TAG, "Hardware: ${Build.HARDWARE}")
             Log.i(TAG, "API Level: ${Build.VERSION.SDK_INT}")
+            Log.i(TAG, "Model size: ${modelSizeBytes / 1024 / 1024}MB")
+            Log.i(TAG, "Model layers: $totalModelLayers")
 
             // Check emulator inline
             val isEmulator = (
@@ -112,16 +192,18 @@ data class GpuConfig(
             Log.i(TAG, "Has enough RAM (3GB+): $hasEnoughRam")
 
             val hasGpu = LlamaGpuHelper.isGpuAvailable(context)
-            val totalRamGb = getTotalRamGb(context)
-            val calculatedGpuLayers = calculateGpuLayers(totalRamGb)
+            val calculatedGpuLayers = LlamaGpuHelper.calculateDynamicGpuLayers(
+                context = context,
+                modelSizeBytes = modelSizeBytes,
+                totalModelLayers = totalModelLayers,
+                contextSizeBytes = contextSizeBytes
+            )
 
             Log.i(TAG, "GPU available (heuristic): $hasGpu")
-            Log.i(TAG, "Total RAM: ${totalRamGb}GB")
-            Log.i(TAG, "Calculated GPU layers: $calculatedGpuLayers")
-            Log.i(TAG, "==========================")
+            Log.i(TAG, "Calculated GPU layers (dynamic): $calculatedGpuLayers")
+            Log.i(TAG, "=====================================")
 
             return if (hasGpu && calculatedGpuLayers > 0) {
-                // GPU enabled based on device capabilities
                 Log.i(TAG, "GPU config: gpuLayers=$calculatedGpuLayers, useGpu=true")
                 GpuConfig(
                     gpuLayers = calculatedGpuLayers,
@@ -137,9 +219,9 @@ data class GpuConfig(
         }
 
         private fun checkRam(context: Context): Boolean {
-            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
             if (activityManager != null) {
-                val memInfo = android.app.ActivityManager.MemoryInfo()
+                val memInfo = ActivityManager.MemoryInfo()
                 activityManager.getMemoryInfo(memInfo)
                 return memInfo.totalMem >= 3L * 1024 * 1024 * 1024
             }
@@ -150,29 +232,13 @@ data class GpuConfig(
          * Get the total RAM in GB for dynamic GPU layer calculation.
          */
         private fun getTotalRamGb(context: Context): Int {
-            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
             if (activityManager != null) {
-                val memInfo = android.app.ActivityManager.MemoryInfo()
+                val memInfo = ActivityManager.MemoryInfo()
                 activityManager.getMemoryInfo(memInfo)
                 return (memInfo.totalMem / (1024 * 1024 * 1024)).toInt()
             }
             return 0
-        }
-
-        /**
-         * Calculate optimal GPU layers based on available RAM.
-         * - 3GB RAM: 0 layers (CPU only, not enough for GPU)
-         * - 4GB RAM: 8 layers
-         * - 6GB RAM: 16 layers
-         * - 8GB+ RAM: 24 layers
-         */
-        private fun calculateGpuLayers(totalRamGb: Int): Int {
-            return when {
-                totalRamGb < 4 -> 0  // Not enough RAM for GPU inference
-                totalRamGb < 6 -> 8
-                totalRamGb < 8 -> 16
-                else -> 24
-            }
         }
     }
 }

@@ -6,14 +6,17 @@ import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.inference.llama.DeviceCpuConfig
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeModelsUseCase
 import com.browntowndev.pocketcrew.presentation.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 sealed interface AppStartupState {
@@ -39,6 +42,14 @@ class MainViewModel @Inject constructor(
     private fun initializeApp() {
         viewModelScope.launch {
             try {
+                // Initialize CPU configuration for llama.cpp (big.LITTLE aware thread calculation)
+                // This does blocking I/O to read sysfs, so run on IO dispatcher
+                withContext(Dispatchers.IO) {
+                    val availableProcessors = Runtime.getRuntime().availableProcessors()
+                    DeviceCpuConfig.initialize(availableProcessors)
+                    logPort.debug("MainViewModel", "Device CPU configured: threads=${DeviceCpuConfig.numThreads}, batchThreads=${DeviceCpuConfig.batchThreads}")
+                }
+
                 // Suspends until network fetch, DB update, and cache init complete
                 // Returns DownloadModelsResult with scan result to avoid duplicate scanning
                 val modelsResult = initializeModelsUseCase()

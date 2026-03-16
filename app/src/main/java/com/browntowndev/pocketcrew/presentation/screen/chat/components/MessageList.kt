@@ -42,8 +42,9 @@ fun MessageList(
         EmptyState(modifier = modifier)
     } else {
         // Calculate most recent user index once, outside the loop to avoid O(n²) behavior
+        // Use indexOfFirst since messages are ordered [most_recent, ..., oldest]
         val mostRecentUserIndex = remember(messages) {
-            messages.indexOfLast { it.role == MessageRole.User }
+            messages.indexOfFirst { it.role == MessageRole.User }
         }
 
         LazyColumn(
@@ -67,27 +68,33 @@ fun MessageList(
                     messages[nextMessageIndex].role == MessageRole.Assistant &&
                     !messages[nextMessageIndex].completedSteps.isNullOrEmpty()
 
-                // Indicators are now shown in AssistantResponse for ALL modes
-                // For non-Crew mode: AssistantResponse handles indicator states
-                // For Crew mode: AssistantResponse handles live indicators below completed steps
-                // Don't show indicators here - let AssistantResponse handle it
-                val showIndicator = false
+                // Determine if this is the latest assistant message (the one following the most recent user)
+                // This is used to control where live indicators (Processing, Generating, Thinking) appear
+                val isLatestAssistantMessage = message.role == MessageRole.Assistant &&
+                    mostRecentUserIndex != -1 &&
+                    messages.indexOf(message) == mostRecentUserIndex - 1
+
+                // Show indicators on the most recent User message for Fast/Thinking mode
+                // This shows the indicator immediately after the user sends a message while waiting for response
+                val showIndicatorOnUserMessage = selectedMode != Mode.CREW &&
+                    isMostRecentUserMessage &&
+                    (processingIndicatorState != ProcessingIndicatorState.NONE || thinkingData != null)
 
                 if (message.role == MessageRole.User) {
-                    if (showIndicator) {
-                        // Render indicator based on computed state from ViewModel
+                    // Render indicator based on computed state from ViewModel - shows on most recent user message
+                    if (showIndicatorOnUserMessage) {
                         when {
                             thinkingData != null && thinkingData.thinkingDurationSeconds == 0 -> {
                                 // Still thinking - show animated indicator
                                 ThinkingIndicator(
                                     thinkingSteps = thinkingData.steps,
-                                    thinkingStartTime = 0L, // Not used in current impl
+                                    thinkingStartTime = thinkingData.thinkingStartTime,
                                     modelDisplayName = thinkingData.modelDisplayName,
                                 )
                             }
                             processingIndicatorState == ProcessingIndicatorState.PROCESSING -> ProcessingIndicator()
                             processingIndicatorState == ProcessingIndicatorState.GENERATING -> GeneratingIndicator()
-                            // ThoughtCompleted case: don't show here - shows in AssistantResponse for Crew mode
+                            // ThoughtCompleted case: don't show here - shows in AssistantResponse
                         }
                     }
                     MessageBubble(message = message)

@@ -11,6 +11,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.inference.LiteRtInferenceServiceImpl
 import com.browntowndev.pocketcrew.inference.LlamaInferenceServiceImpl
 import com.browntowndev.pocketcrew.inference.MediaPipeInferenceServiceImpl
+import com.browntowndev.pocketcrew.inference.llama.DeviceCpuConfig
 import com.browntowndev.pocketcrew.inference.llama.GpuConfig
 import com.browntowndev.pocketcrew.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.inference.llama.LlamaSamplingConfig
@@ -72,16 +73,33 @@ object EngineModule {
     private const val TAG = "EngineModule"
 
     /**
-     * Calculates the optimal number of threads for llama.cpp inference.
-     * - If CPU count is 1, returns 1
-     * - If CPU count is 2, returns 2
-     * - Otherwise, returns max(CPU count - 2, 2) to ensure at least 2 threads
+     * Returns the optimal number of threads for llama.cpp inference.
+     * Uses DeviceCpuConfig which profiles the device CPU at startup to detect big.LITTLE architecture.
+     * Falls back to naive calculation if not initialized yet.
      */
-    private fun calculateOptimalThreads(): Int {
-        val availableProcessors = Runtime.getRuntime().availableProcessors()
-        return when {
-            availableProcessors <= 2 -> availableProcessors
-            else -> maxOf(availableProcessors - 2, 2)
+    private fun getOptimalThreads(): Int {
+        return if (DeviceCpuConfig.isInitialized) {
+            DeviceCpuConfig.numThreads
+        } else {
+            // Fallback if called before initialization (shouldn't happen in normal flow)
+            val availableProcessors = Runtime.getRuntime().availableProcessors()
+            when {
+                availableProcessors <= 2 -> availableProcessors
+                else -> maxOf(availableProcessors - 2, 2)
+            }
+        }
+    }
+
+    /**
+     * Returns the optimal batch threads for llama.cpp prompt processing.
+     * Uses all available cores for better prompt evaluation performance.
+     */
+    private fun getOptimalBatchThreads(): Int {
+        return if (DeviceCpuConfig.isInitialized) {
+            DeviceCpuConfig.batchThreads
+        } else {
+            // Fallback
+            Runtime.getRuntime().availableProcessors()
         }
     }
 
@@ -353,7 +371,7 @@ object EngineModule {
                 // Use llama.cpp implementation for GGUF models
                 val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
                 val tunings = config.tunings
-                val gpuConfig = GpuConfig.forDevice(context)
+                val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
                 service.configure(
                     modelPath = modelPath,
@@ -365,7 +383,8 @@ object EngineModule {
                         minP = tunings.minP.toFloat(),
                         maxTokens = tunings.maxTokens,
                         contextWindow = tunings.contextWindow,
-                        threads = calculateOptimalThreads(),
+                        threads = getOptimalThreads(),
+                        nThreadsBatch = getOptimalBatchThreads(),
                         batchSize = 768,
                         gpuLayers = gpuConfig.gpuLayers,
                     )
@@ -399,7 +418,7 @@ object EngineModule {
             val modelPath = getModelPath(context, filename)
             val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
-            val gpuConfig = GpuConfig.forDevice(context)
+            val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
             service.configure(
                 modelPath = modelPath,
@@ -411,7 +430,8 @@ object EngineModule {
                     minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = calculateOptimalThreads(),
+                    threads = getOptimalThreads(),
+                        nThreadsBatch = getOptimalBatchThreads(),
                     batchSize = 768,
                     gpuLayers = gpuConfig.gpuLayers,
                     thinkingEnabled = tunings.thinkingEnabled
@@ -441,7 +461,7 @@ object EngineModule {
             val modelPath = getModelPath(context, filename)
             val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
-            val gpuConfig = GpuConfig.forDevice(context)
+            val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
             service.configure(
                 modelPath = modelPath,
@@ -453,7 +473,8 @@ object EngineModule {
                     minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = calculateOptimalThreads(),
+                    threads = getOptimalThreads(),
+                        nThreadsBatch = getOptimalBatchThreads(),
                     batchSize = 768,
                     gpuLayers = gpuConfig.gpuLayers,
                     thinkingEnabled = tunings.thinkingEnabled
@@ -483,7 +504,7 @@ object EngineModule {
             val modelPath = getModelPath(context, filename)
             val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
-            val gpuConfig = GpuConfig.forDevice(context)
+            val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
             service.configure(
                 modelPath = modelPath,
@@ -495,7 +516,8 @@ object EngineModule {
                     minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = calculateOptimalThreads(),
+                    threads = getOptimalThreads(),
+                        nThreadsBatch = getOptimalBatchThreads(),
                     batchSize = 768,
                     gpuLayers = gpuConfig.gpuLayers,
                     thinkingEnabled = tunings.thinkingEnabled
@@ -525,7 +547,7 @@ object EngineModule {
             val modelPath = getModelPath(context, filename)
             val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
-            val gpuConfig = GpuConfig.forDevice(context)
+            val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
             service.configure(
                 modelPath = modelPath,
@@ -537,7 +559,8 @@ object EngineModule {
                     minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = calculateOptimalThreads(),
+                    threads = getOptimalThreads(),
+                        nThreadsBatch = getOptimalBatchThreads(),
                     batchSize = 768,
                     gpuLayers = gpuConfig.gpuLayers,
                     thinkingEnabled = tunings.thinkingEnabled
@@ -567,7 +590,7 @@ object EngineModule {
             val modelPath = getModelPath(context, filename)
             val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = config.tunings
-            val gpuConfig = GpuConfig.forDevice(context)
+            val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
             service.configure(
                 modelPath = modelPath,
@@ -579,7 +602,8 @@ object EngineModule {
                     minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = calculateOptimalThreads(),
+                    threads = getOptimalThreads(),
+                        nThreadsBatch = getOptimalBatchThreads(),
                     batchSize = 768,
                     gpuLayers = gpuConfig.gpuLayers,
                     thinkingEnabled = tunings.thinkingEnabled
@@ -617,7 +641,7 @@ object EngineModule {
         return if (filename.endsWith(".gguf")) {
             val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
             val tunings = mainConfig.tunings
-            val gpuConfig = GpuConfig.forDevice(context)
+            val gpuConfig = GpuConfig.forDevice(context, mainConfig.metadata.sizeInBytes, 32)
 
             service.configure(
                 modelPath = modelPath,
@@ -629,7 +653,8 @@ object EngineModule {
                     minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = calculateOptimalThreads(),
+                    threads = getOptimalThreads(),
+                        nThreadsBatch = getOptimalBatchThreads(),
                     batchSize = 768,
                     gpuLayers = gpuConfig.gpuLayers,
                     thinkingEnabled = tunings.thinkingEnabled
