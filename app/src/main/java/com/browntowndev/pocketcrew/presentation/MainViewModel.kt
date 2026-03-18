@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.inference.llama.SveDetector
+import com.browntowndev.pocketcrew.feature.inference.llama.SveDetector
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeModelsUseCase
 import com.browntowndev.pocketcrew.presentation.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel

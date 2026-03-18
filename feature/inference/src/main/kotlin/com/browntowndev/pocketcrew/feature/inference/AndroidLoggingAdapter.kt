@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.inference
+package com.browntowndev.pocketcrew.feature.inference
 
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort

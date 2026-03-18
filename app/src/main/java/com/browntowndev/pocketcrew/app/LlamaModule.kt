@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.app
 
 import com.browntowndev.pocketcrew.domain.port.inference.LlamaEnginePort
-import com.browntowndev.pocketcrew.inference.llama.JniLlamaEngine
-import com.browntowndev.pocketcrew.inference.llama.LlamaChatSessionManager
+import com.browntowndev.pocketcrew.feature.inference.llama.JniLlamaEngine
+import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn

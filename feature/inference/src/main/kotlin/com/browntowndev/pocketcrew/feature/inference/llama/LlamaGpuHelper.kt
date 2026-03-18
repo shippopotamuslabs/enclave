@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.inference.llama
+package com.browntowndev.pocketcrew.feature.inference.llama
 
 import android.app.ActivityManager
 import android.content.Context

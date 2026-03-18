@@ -38,4 +38,7 @@ dependencies {
 
     // Inference
     implementation(project(":llama-android"))
+
+    // Inference implementations
+    implementation(project(":feature:inference"))
 }
