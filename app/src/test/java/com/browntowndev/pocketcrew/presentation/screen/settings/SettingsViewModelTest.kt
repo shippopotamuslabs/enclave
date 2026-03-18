@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.presentation.screen.settings
+package com.browntowndev.pocketcrew.feature.settings
 
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
