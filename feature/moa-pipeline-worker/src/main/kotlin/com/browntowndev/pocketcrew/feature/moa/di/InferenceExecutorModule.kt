@@ -1,7 +1,7 @@
-package com.browntowndev.pocketcrew.inference.worker
+package com.browntowndev.pocketcrew.feature.moa.di
 
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
-import com.browntowndev.pocketcrew.inference.InferenceServicePipelineExecutor
+import com.browntowndev.pocketcrew.feature.moa.InferenceServicePipelineExecutor
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn

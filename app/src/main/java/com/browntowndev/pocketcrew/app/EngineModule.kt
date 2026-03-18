@@ -6,6 +6,11 @@ import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.FastModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.ThinkingModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.MainModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.VisionModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.DraftOneModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.DraftTwoModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.FinalSynthesizerModelEngine
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.inference.ConversationManagerImpl
@@ -21,41 +26,13 @@ import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
-import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.io.File
-import javax.inject.Qualifier
 import javax.inject.Singleton
-import kotlin.annotation.AnnotationTarget
-
-@Qualifier
-@Retention(AnnotationRetention.BINARY)
-@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.FIELD)
-annotation class MainModelEngine
-
-@Qualifier
-@Retention(AnnotationRetention.BINARY)
-@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER)
-annotation class VisionModelEngine
-
-@Qualifier
-@Retention(AnnotationRetention.BINARY)
-@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.FIELD)
-annotation class DraftOneModelEngine
-
-@Qualifier
-@Retention(AnnotationRetention.BINARY)
-@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.FIELD)
-annotation class DraftTwoModelEngine
-
-@Qualifier
-@Retention(AnnotationRetention.BINARY)
-@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.FIELD)
-annotation class FinalSynthesizerModelEngine
 
 @Module
 @InstallIn(SingletonComponent::class)
