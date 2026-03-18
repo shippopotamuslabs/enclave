@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.presentation.screen.download
+package com.browntowndev.pocketcrew.feature.download
 
 import android.Manifest
 import android.app.Activity
@@ -71,9 +71,9 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
-import com.browntowndev.pocketcrew.presentation.screen.download.DownloadViewModel.FileProgressUiModel
+import com.browntowndev.pocketcrew.feature.download.DownloadViewModel.FileProgressUiModel
 import com.browntowndev.pocketcrew.core.ui.util.FeatureFlags
-import com.browntowndev.pocketcrew.util.formatBytes
+import com.browntowndev.pocketcrew.core.data.util.formatBytes
 
 /**
  * Full-screen model download status page.

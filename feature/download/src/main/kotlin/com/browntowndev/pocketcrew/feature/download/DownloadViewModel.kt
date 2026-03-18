@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.presentation.screen.download
+package com.browntowndev.pocketcrew.feature.download
 
 import android.util.Log
 import androidx.lifecycle.ViewModel

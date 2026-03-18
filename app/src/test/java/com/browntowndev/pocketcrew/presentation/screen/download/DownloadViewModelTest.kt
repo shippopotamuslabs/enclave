@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.presentation.screen.download
+package com.browntowndev.pocketcrew.feature.download
 
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
@@ -13,7 +13,7 @@ import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestrato
 import com.browntowndev.pocketcrew.core.data.repository.DownloadWorkRepository
 import com.browntowndev.pocketcrew.core.data.download.WorkProgressParser
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
-import com.browntowndev.pocketcrew.presentation.screen.download.DownloadViewModel.FileProgressUiModel
+import com.browntowndev.pocketcrew.feature.download.DownloadViewModel.FileProgressUiModel
 import io.mockk.MockKAnnotations
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
