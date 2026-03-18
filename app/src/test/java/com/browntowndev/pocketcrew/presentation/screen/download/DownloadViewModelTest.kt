@@ -10,7 +10,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
-import com.browntowndev.pocketcrew.data.repository.DownloadWorkRepository
+import com.browntowndev.pocketcrew.core.data.repository.DownloadWorkRepository
+import com.browntowndev.pocketcrew.core.data.download.WorkProgressParser
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.presentation.screen.download.DownloadViewModel.FileProgressUiModel
 import io.mockk.MockKAnnotations
@@ -70,6 +71,7 @@ class DownloadViewModelTest {
     private lateinit var mockOrchestrator: ModelDownloadOrchestratorPort
     private lateinit var mockDownloadWorkRepository: DownloadWorkRepository
     private lateinit var mockModelRegistry: ModelRegistryPort
+    private lateinit var mockProgressParser: WorkProgressParser
 
     // Mock DownloadModelsResult for tests
     private lateinit var mockModelsResult: DownloadModelsResult
@@ -95,6 +97,7 @@ class DownloadViewModelTest {
         mockOrchestrator = mockk(relaxed = true)
         mockDownloadWorkRepository = mockk(relaxed = true)
         mockModelRegistry = mockk(relaxed = true)
+        mockProgressParser = mockk(relaxed = true)
 
         // Mock getRegisteredModelSync to return configs with display names
         every { mockModelRegistry.getRegisteredModelSync(ModelType.VISION) } returns createTestConfig(ModelType.VISION, "The Observer")
@@ -124,6 +127,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -346,6 +350,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -366,6 +371,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -386,6 +392,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -406,6 +413,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -426,6 +434,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -455,6 +464,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -479,6 +489,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -520,6 +531,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -575,6 +587,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -633,6 +646,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -670,6 +684,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -705,6 +720,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )
@@ -738,6 +754,7 @@ class DownloadViewModelTest {
             modelDownloadOrchestrator = mockOrchestrator,
             downloadWorkRepository = mockDownloadWorkRepository,
             modelRegistry = mockModelRegistry,
+            progressParser = mockProgressParser,
             modelsResult = mockModelsResult,
             initialErrorMessage = null
         )

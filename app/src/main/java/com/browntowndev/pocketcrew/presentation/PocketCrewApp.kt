@@ -17,7 +17,7 @@ import androidx.navigation.compose.rememberNavController
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.presentation.navigation.PocketCrewNavGraph
 import com.browntowndev.pocketcrew.presentation.navigation.Routes
-import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import kotlinx.coroutines.launch
 
 @Composable

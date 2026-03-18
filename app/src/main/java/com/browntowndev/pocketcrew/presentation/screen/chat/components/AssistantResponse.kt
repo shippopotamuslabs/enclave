@@ -58,7 +58,7 @@ import com.browntowndev.pocketcrew.presentation.screen.chat.ChatMessage
 import com.browntowndev.pocketcrew.presentation.screen.chat.IndicatorState
 import com.browntowndev.pocketcrew.presentation.screen.chat.MessageRole
 import com.browntowndev.pocketcrew.presentation.screen.chat.ThinkingDataUi
-import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import kotlinx.coroutines.launch
 
 

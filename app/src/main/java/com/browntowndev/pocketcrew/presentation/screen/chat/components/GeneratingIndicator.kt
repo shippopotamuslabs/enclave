@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
 
 /**
  * Generating indicator for Crew mode non-final steps.
