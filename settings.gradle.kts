@@ -25,3 +25,17 @@ dependencyResolutionManagement {
 rootProject.name = "Pocket Crew"
 include(":app")
 include(":llama-android")
+
+// Core modules
+include(":core:domain")
+include(":core:data")
+include(":core:database")
+include(":core:ui")
+include(":core:common")
+
+// Feature modules
+include(":feature:chat")
+include(":feature:download")
+include(":feature:history")
+include(":feature:settings")
+include(":feature:moa-pipeline-worker")
