@@ -1,10 +1,10 @@
-package com.browntowndev.pocketcrew.presentation.screen.chat
+package com.browntowndev.pocketcrew.feature.chat
 
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
-import com.browntowndev.pocketcrew.presentation.screen.chat.IndicatorState.Complete
-import com.browntowndev.pocketcrew.presentation.screen.chat.IndicatorState.Generating
-import com.browntowndev.pocketcrew.presentation.screen.chat.IndicatorState.Processing
-import com.browntowndev.pocketcrew.presentation.screen.chat.IndicatorState.Thinking
+import com.browntowndev.pocketcrew.feature.chat.IndicatorState.Complete
+import com.browntowndev.pocketcrew.feature.chat.IndicatorState.Generating
+import com.browntowndev.pocketcrew.feature.chat.IndicatorState.Processing
+import com.browntowndev.pocketcrew.feature.chat.IndicatorState.Thinking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
