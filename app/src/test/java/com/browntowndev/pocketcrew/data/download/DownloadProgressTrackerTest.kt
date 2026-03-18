@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.data.download
+package com.browntowndev.pocketcrew.core.data.download
 
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration

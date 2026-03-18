@@ -49,18 +49,18 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.R
-import com.browntowndev.pocketcrew.presentation.screen.chat.Mode
-import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.presentation.screen.chat.ChatModeUi
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InputBar(
     inputText: String,
-    selectedMode: Mode,
+    selectedMode: ChatModeUi,
     isGenerating: Boolean,
     isGlobalInferenceBlocked: Boolean = false,
     onInputChange: (String) -> Unit,
-    onModeChange: (Mode) -> Unit,
+    onModeChange: (ChatModeUi) -> Unit,
     onSend: (String) -> Unit,
     onAttach: () -> Unit,
     modifier: Modifier = Modifier
@@ -256,7 +256,7 @@ fun InputBar(
 
                 Spacer(Modifier.weight(1f))
 
-                // Mode selector
+                // ChatModeUi selector
                 ExposedDropdownMenuBox(
                     expanded = modeExpanded,
                     onExpandedChange = { modeExpanded = it }
@@ -278,7 +278,7 @@ fun InputBar(
                         onDismissRequest = { modeExpanded = false },
                         modifier = Modifier.width(200.dp)
                     ) {
-                        Mode.entries.forEach { mode ->
+                        ChatModeUi.entries.forEach { mode ->
                             DropdownMenuItem(
                                 text = { Text(mode.getDisplayName(context)) },
                                 onClick = {
@@ -334,7 +334,7 @@ fun PreviewInputBar() {
     PocketCrewTheme {
         InputBar(
             inputText = "",
-            selectedMode = Mode.FAST,
+            selectedMode = ChatModeUi.FAST,
             isGenerating = false,
             onInputChange = {},
             onModeChange = {},
@@ -354,7 +354,7 @@ fun PreviewInputBarExpanded() {
                 Line 2.
                 Line 3: showing collapse icon.
             """.trimIndent(),
-            selectedMode = Mode.CREW,
+            selectedMode = ChatModeUi.CREW,
             isGenerating = false,
             onInputChange = {},
             onModeChange = {},
@@ -370,7 +370,7 @@ fun PreviewInputBarSingleLine() {
     PocketCrewTheme {
         InputBar(
             inputText = "Single line message",
-            selectedMode = Mode.FAST,
+            selectedMode = ChatModeUi.FAST,
             isGenerating = false,
             onInputChange = {},
             onModeChange = {},
@@ -386,7 +386,7 @@ fun PreviewInputBarThinking() {
     PocketCrewTheme {
         InputBar(
             inputText = "Message while thinking",
-            selectedMode = Mode.FAST,
+            selectedMode = ChatModeUi.FAST,
             isGenerating = true,
             onInputChange = {},
             onModeChange = {},
@@ -402,7 +402,7 @@ fun PreviewInputBarThinkingMode() {
     PocketCrewTheme {
         InputBar(
             inputText = "Tell me about quantum physics",
-            selectedMode = Mode.THINKING,
+            selectedMode = ChatModeUi.THINKING,
             isGenerating = false,
             onInputChange = {},
             onModeChange = {},

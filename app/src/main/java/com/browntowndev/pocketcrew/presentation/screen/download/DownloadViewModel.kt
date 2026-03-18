@@ -4,12 +4,14 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
+import com.browntowndev.pocketcrew.core.data.download.WorkProgressParser
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
+import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
-import com.browntowndev.pocketcrew.data.repository.DownloadWorkRepository
+import com.browntowndev.pocketcrew.core.data.repository.DownloadWorkRepository
 import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -38,6 +40,7 @@ class DownloadViewModel @AssistedInject constructor(
     private val modelDownloadOrchestrator: ModelDownloadOrchestratorPort,
     private val downloadWorkRepository: DownloadWorkRepository,
     private val modelRegistry: ModelRegistryPort,
+    private val progressParser: WorkProgressParser,
     @Assisted private val modelsResult: DownloadModelsResult,
     @Assisted private val initialErrorMessage: String?,
     @Assisted private val autoStartDownloads: Boolean = true,
@@ -374,11 +377,16 @@ class DownloadViewModel @AssistedInject constructor(
                             "id=${workInfo.id}, progress=$progress, totalBytes=$totalBytes, downloadedBytes=$downloadedBytes")
                     }
 
-                    // Step 3: Update the orchestrator with the latest work progress
-                    if (shouldLog) {
-                        Log.d(TAG, "[TRACE] observeWorkProgress: Calling updateFromWorkProgress with state=${workInfo.state}")
+                    // Step 3: Parse workInfo to domain progress update
+                    val currentDownloads = modelDownloadOrchestrator.downloadState.value.currentDownloads
+                    val progressUpdate = progressParser.parse(workInfo, currentDownloads)
+
+                    if (progressUpdate != null) {
+                        if (shouldLog) {
+                            Log.d(TAG, "[TRACE] observeWorkProgress: Calling updateFromProgressUpdate with status=${progressUpdate.status}")
+                        }
+                        modelDownloadOrchestrator.updateFromProgressUpdate(progressUpdate)
                     }
-                    modelDownloadOrchestrator.updateFromWorkProgress(workInfo)
                 }
         }
     }

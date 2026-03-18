@@ -47,7 +47,7 @@ import com.browntowndev.pocketcrew.R
 import com.browntowndev.pocketcrew.presentation.screen.chat.ChatMessage
 import com.browntowndev.pocketcrew.presentation.screen.chat.ContentUi
 import com.browntowndev.pocketcrew.presentation.screen.chat.MessageRole
-import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import kotlinx.coroutines.launch
 
 @Composable
