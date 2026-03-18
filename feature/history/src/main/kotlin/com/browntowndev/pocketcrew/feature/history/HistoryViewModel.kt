@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.presentation.screen.history
+package com.browntowndev.pocketcrew.feature.history
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
