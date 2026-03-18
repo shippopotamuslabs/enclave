@@ -72,7 +72,7 @@ import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.presentation.screen.download.DownloadViewModel.FileProgressUiModel
-import com.browntowndev.pocketcrew.util.FeatureFlags
+import com.browntowndev.pocketcrew.core.ui.util.FeatureFlags
 import com.browntowndev.pocketcrew.util.formatBytes
 
 /**

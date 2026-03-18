@@ -9,6 +9,7 @@ android {
 
     defaultConfig {
         minSdk = 34
+        buildConfigField("boolean", "ALLOW_CANCEL_DOWNLOAD", "false")
     }
 
     compileOptions {
@@ -19,6 +20,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
