@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.inference
+package com.browntowndev.pocketcrew.feature.inference
 
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
@@ -8,7 +8,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
-import com.browntowndev.pocketcrew.inference.llama.ChatMessage
+import com.browntowndev.pocketcrew.feature.inference.llama.ChatMessage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject

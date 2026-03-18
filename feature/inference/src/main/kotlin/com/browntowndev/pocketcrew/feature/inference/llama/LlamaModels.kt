@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.inference.llama
+package com.browntowndev.pocketcrew.feature.inference.llama
 
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent

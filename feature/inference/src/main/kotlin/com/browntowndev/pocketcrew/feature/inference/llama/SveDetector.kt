@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.inference.llama
+package com.browntowndev.pocketcrew.feature.inference.llama
 
 import android.os.Build
 import android.util.Log
