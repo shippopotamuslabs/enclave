@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.data.remote
+package com.browntowndev.pocketcrew.core.data.remote
 
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState

@@ -1,11 +1,11 @@
-package com.browntowndev.pocketcrew.data.worker
+package com.browntowndev.pocketcrew.core.data.worker
 
 import android.content.Context
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
-import com.browntowndev.pocketcrew.data.download.DownloadNotificationManager
-import com.browntowndev.pocketcrew.data.download.DownloadProgressTracker
-import com.browntowndev.pocketcrew.data.download.ModelDownloadWorker
+import com.browntowndev.pocketcrew.core.data.download.DownloadNotificationManager
+import com.browntowndev.pocketcrew.core.data.download.DownloadProgressTracker
+import com.browntowndev.pocketcrew.core.data.download.ModelDownloadWorker
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort

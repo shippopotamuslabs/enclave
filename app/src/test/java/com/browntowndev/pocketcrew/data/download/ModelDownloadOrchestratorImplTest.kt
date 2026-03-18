@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.data.download
+package com.browntowndev.pocketcrew.core.data.download
 
 import android.content.Context
 import android.util.Log

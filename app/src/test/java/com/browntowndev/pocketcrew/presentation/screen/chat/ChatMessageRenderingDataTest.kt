@@ -135,22 +135,20 @@ class ChatMessageRenderingDataTest {
     fun indicatorState_hasThinkingVariant() {
         val state = IndicatorState.Thinking(
             thinkingSteps = listOf("Step 1", "Step 2"),
-            thinkingStartTime = 1000L,
-            modelDisplayName = "Test Model"
+            thinkingDurationSeconds = 10L
         )
 
         assertTrue(state is IndicatorState.Thinking)
         val thinking = state as IndicatorState.Thinking
         assertEquals(2, thinking.thinkingSteps.size)
-        assertEquals("Test Model", thinking.modelDisplayName)
+        assertEquals(10L, thinking.thinkingDurationSeconds)
     }
 
     @Test
     fun indicatorState_hasGeneratingVariant_withThinkingData() {
         val thinkingData = ThinkingDataUi(
             thinkingDurationSeconds = 30,
-            steps = listOf("Thinking..."),
-            modelDisplayName = "Model"
+            steps = listOf("Thinking...")
         )
         val state = IndicatorState.Generating(thinkingData = thinkingData)
 
@@ -170,8 +168,7 @@ class ChatMessageRenderingDataTest {
     fun indicatorState_hasCompleteVariant_withThinkingData() {
         val thinkingData = ThinkingDataUi(
             thinkingDurationSeconds = 45,
-            steps = listOf("Step 1", "Step 2"),
-            modelDisplayName = "Model"
+            steps = listOf("Step 1", "Step 2")
         )
         val state = IndicatorState.Complete(thinkingData = thinkingData)
 

@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.port
 
-import com.browntowndev.pocketcrew.data.download.DownloadSpeedTracker
+import com.browntowndev.pocketcrew.core.data.download.DownloadSpeedTracker
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test

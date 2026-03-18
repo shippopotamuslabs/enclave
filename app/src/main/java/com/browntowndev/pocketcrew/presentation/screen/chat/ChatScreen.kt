@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.InputBar
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.MessageList
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.ShieldOverlay
-import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
 @Composable
 fun ChatScreen(
@@ -25,7 +25,7 @@ fun ChatScreen(
     onNavigateToHistory: () -> Unit,
     onNewChat: () -> Unit,
     onSendMessage: (String) -> Unit,
-    onModeChange: (Mode) -> Unit,
+    onModeChange: (ChatModeUi) -> Unit,
     onInputChange: (String) -> Unit,
     onAttach: () -> Unit,
     onShieldTap: () -> Unit,
