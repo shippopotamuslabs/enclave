@@ -1,7 +1,7 @@
-package com.browntowndev.pocketcrew.core.data.repository
+package com.browntowndev.pocketcrew.data.repository
 
-import com.browntowndev.pocketcrew.core.data.local.MessageDao
-import com.browntowndev.pocketcrew.core.data.local.MessageEntity
+import com.browntowndev.pocketcrew.data.local.MessageDao
+import com.browntowndev.pocketcrew.data.local.MessageEntity
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.Role

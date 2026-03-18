@@ -7,7 +7,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.core.content.ContextCompat
 
-enum class ChatModeUi(
+enum class Mode(
     @param:StringRes val displayNameRes: Int,
     @param:DrawableRes val iconRes: Int,
 ) {
@@ -38,7 +38,7 @@ data class ChatMessage(
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val inputText: String = "",
-    val selectedMode: ChatModeUi = ChatModeUi.FAST,
+    val selectedMode: Mode = Mode.FAST,
     val isGlobalInferenceBlocked: Boolean = false,
     val shieldReason: String? = null,
     val hapticPress: Boolean = false,

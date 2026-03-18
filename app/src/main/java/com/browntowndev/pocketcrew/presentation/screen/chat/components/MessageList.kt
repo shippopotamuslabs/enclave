@@ -36,7 +36,7 @@ import com.browntowndev.pocketcrew.presentation.screen.chat.MessageRole
 import com.browntowndev.pocketcrew.presentation.screen.chat.ThinkingDataUi
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.formatThinkingDuration
 import com.browntowndev.pocketcrew.presentation.screen.chat.fakeLongMessages
-import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 
 @Composable
 fun MessageList(

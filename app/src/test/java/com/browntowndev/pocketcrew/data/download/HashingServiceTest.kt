@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.core.data.download
+package com.browntowndev.pocketcrew.data.download
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals

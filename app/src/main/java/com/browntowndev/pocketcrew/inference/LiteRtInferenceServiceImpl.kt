@@ -1,7 +1,6 @@
 package com.browntowndev.pocketcrew.inference
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
@@ -85,7 +84,7 @@ class LiteRtInferenceServiceImpl @Inject constructor(
         conversationManager.closeEngine()
     }
 
-    override suspend fun setHistory(messages: List<DomainChatMessage>) {
+    override suspend fun setHistory(messages: List<ChatMessage>) {
         // LiteRT uses ConversationManager which handles its own history
         // This is a no-op for now - LiteRT may have different persistence needs
         Log.d(TAG, "setHistory called with ${messages.size} messages - not implemented for LiteRT")

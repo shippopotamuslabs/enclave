@@ -1,7 +1,6 @@
 package com.browntowndev.pocketcrew.inference
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
@@ -119,7 +118,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         }
     }
 
-    override suspend fun setHistory(messages: List<DomainChatMessage>) {
+    override suspend fun setHistory(messages: List<ChatMessage>) {
         // MediaPipe manages its own conversation history within the session
         // This is a no-op for now - MediaPipe may have different persistence needs
         Log.d(TAG, "setHistory called with ${messages.size} messages - not implemented for MediaPipe")

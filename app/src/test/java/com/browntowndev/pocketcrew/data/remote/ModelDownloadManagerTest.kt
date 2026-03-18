@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.core.data.remote
+package com.browntowndev.pocketcrew.data.remote
 
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import io.mockk.MockKAnnotations

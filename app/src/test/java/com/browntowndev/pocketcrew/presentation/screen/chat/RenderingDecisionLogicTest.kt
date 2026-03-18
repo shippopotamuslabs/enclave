@@ -41,7 +41,8 @@ class RenderingDecisionLogicTest {
     fun thinkingState_rendersThinkingIndicator() {
         val state = Thinking(
             thinkingSteps = listOf("Analyzing..."),
-            thinkingDurationSeconds = 10L
+            thinkingStartTime = 1000L,
+            modelDisplayName = "Model"
         )
 
         assertTrue(state is Thinking)
@@ -72,7 +73,8 @@ class RenderingDecisionLogicTest {
     fun generatingState_withThinkingData_showsThoughtForHeader() {
         val thinkingData = ThinkingDataUi(
             thinkingDurationSeconds = 30,
-            steps = listOf("Thinking step 1", "Thinking step 2")
+            steps = listOf("Thinking step 1", "Thinking step 2"),
+            modelDisplayName = "Test Model"
         )
         val state = Generating(thinkingData = thinkingData)
 
@@ -90,7 +92,8 @@ class RenderingDecisionLogicTest {
     fun completeState_withThinkingData_showsThoughtForHeader() {
         val thinkingData = ThinkingDataUi(
             thinkingDurationSeconds = 45,
-            steps = listOf("Step 1", "Step 2")
+            steps = listOf("Step 1", "Step 2"),
+            modelDisplayName = "Model"
         )
         val state = Complete(thinkingData = thinkingData)
 
@@ -268,7 +271,8 @@ class RenderingDecisionLogicTest {
         // AssistantResponse shows ThoughtForHeader when indicatorState has thinkingData
         val thinkingData = ThinkingDataUi(
             thinkingDurationSeconds = 30,
-            steps = listOf("Step 1", "Step 2")
+            steps = listOf("Step 1", "Step 2"),
+            modelDisplayName = "Model"
         )
         val message = ChatMessage(
             id = 1L,
@@ -296,7 +300,8 @@ class RenderingDecisionLogicTest {
     fun assistantResponse_rendersThoughtForHeaderForCompleteWithThinkingData() {
         val thinkingData = ThinkingDataUi(
             thinkingDurationSeconds = 45,
-            steps = listOf("Step 1")
+            steps = listOf("Step 1"),
+            modelDisplayName = "Model"
         )
         val message = ChatMessage(
             id = 1L,

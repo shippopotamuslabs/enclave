@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.core.data.repository
+package com.browntowndev.pocketcrew.data.repository
 
 import android.util.Log
 import androidx.work.WorkInfo

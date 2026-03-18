@@ -4,8 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.FastModelEngine
-import com.browntowndev.pocketcrew.domain.model.inference.ThinkingModelEngine
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.inference.ConversationManagerImpl
@@ -15,7 +13,7 @@ import com.browntowndev.pocketcrew.inference.LlamaInferenceServiceImpl
 import com.browntowndev.pocketcrew.inference.MediaPipeInferenceServiceImpl
 import com.browntowndev.pocketcrew.inference.llama.GpuConfig
 import com.browntowndev.pocketcrew.inference.llama.LlamaChatSessionManager
-import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
+import com.browntowndev.pocketcrew.inference.llama.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Engine
@@ -51,6 +49,16 @@ annotation class DraftOneModelEngine
 @Retention(AnnotationRetention.BINARY)
 @Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.FIELD)
 annotation class DraftTwoModelEngine
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER)
+annotation class FastModelEngine
+
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+@Target(AnnotationTarget.VALUE_PARAMETER, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER)
+annotation class ThinkingModelEngine
 
 @Qualifier
 @Retention(AnnotationRetention.BINARY)
