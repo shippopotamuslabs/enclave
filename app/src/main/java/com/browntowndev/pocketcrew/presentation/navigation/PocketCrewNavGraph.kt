@@ -11,7 +11,7 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.presentation.screen.chat.ChatRoute
 import com.browntowndev.pocketcrew.feature.history.HistoryRoute
 import com.browntowndev.pocketcrew.feature.settings.SettingsRoute
-import com.browntowndev.pocketcrew.presentation.screen.download.ModelDownloadScreen
+import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
 
 @Composable
 fun PocketCrewNavGraph(

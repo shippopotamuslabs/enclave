@@ -125,6 +125,7 @@ dependencies {
     implementation(project(":core:ui"))
     implementation(project(":feature:settings"))
     implementation(project(":feature:history"))
+    implementation(project(":feature:download"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
