@@ -1,16 +1,19 @@
 package com.browntowndev.pocketcrew.inference
 
 import android.util.Log
+import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
 import com.browntowndev.pocketcrew.inference.llama.ChatMessage
-import com.browntowndev.pocketcrew.inference.llama.GenerationEvent
+import com.browntowndev.pocketcrew.inference.llama.ChatRole
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.inference.llama.LlamaChatSessionManager
-import com.browntowndev.pocketcrew.inference.llama.LlamaModelConfig
-import com.browntowndev.pocketcrew.inference.llama.LlamaSamplingConfig
+import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
+import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
@@ -186,7 +189,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
         }
     }
 
-    override suspend fun setHistory(messages: List<ChatMessage>) {
+    override suspend fun setHistory(messages: List<DomainChatMessage>) {
         // Ensure the engine is initialized before setting history
         if (!isInitialized) {
             val path = modelPath
@@ -224,6 +227,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 throw IllegalStateException("Model not configured. Call configure() first.")
             }
         }
+        // Pass domain ChatMessage directly - conversion to inference format happens in LlamaChatSessionManager
         sessionManager.setHistory(messages)
     }
 }

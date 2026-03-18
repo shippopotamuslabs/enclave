@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.data.remote
+package com.browntowndev.pocketcrew.core.data.remote
 
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
