@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.presentation.screen.chat
+package com.browntowndev.pocketcrew.feature.chat
 
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import org.junit.Assert.assertEquals

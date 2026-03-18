@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 108 108"
+   width="108"
+   height="108"
+   version="1.1"
+   id="svg9"
+   sodipodi:docname="pocket_crew_icon.svg"
+   inkscape:version="1.4.3 (1:1.4.3+202512261035+0d15f75042)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview9"
+     pagecolor="#505050"
+     bordercolor="#eeeeee"
+     borderopacity="1"
+     inkscape:showpageshadow="0"
+     inkscape:pageopacity="0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#505050"
+     inkscape:zoom="14.549323"
+     inkscape:cx="49.693035"
+     inkscape:cy="-5.0517815"
+     inkscape:window-width="2560"
+     inkscape:window-height="1348"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg9" />
+  <defs
+     id="defs6">
+    <filter
+       id="neonGlow"
+       x="-0.44210526"
+       y="-0.38181818"
+       width="1.8842105"
+       height="1.7636364">
+      <feGaussianBlur
+         in="SourceGraphic"
+         stdDeviation="1"
+         result="blur1"
+         id="feGaussianBlur1" />
+      <feGaussianBlur
+         in="SourceGraphic"
+         stdDeviation="2.5"
+         result="blur2"
+         id="feGaussianBlur2" />
+      <feMerge
+         id="feMerge4">
+        <feMergeNode
+           in="blur2"
+           id="feMergeNode2" />
+        <feMergeNode
+           in="blur1"
+           id="feMergeNode3" />
+        <feMergeNode
+           in="SourceGraphic"
+           id="feMergeNode4" />
+      </feMerge>
+    </filter>
+    <g
+       id="agent">
+      <polygon
+         points="0,-11 9.5,-5.5 9.5,5.5 0,11 -9.5,5.5 -9.5,-5.5"
+         id="polygon4" />
+      <polygon
+         points="-5.5,1 -2,3 -3.5,6"
+         fill="#18181B"
+         id="polygon5" />
+      <polygon
+         points="5.5,1 2,3 3.5,6"
+         fill="#18181B"
+         id="polygon6" />
+    </g>
+  </defs>
+  <rect
+     width="108"
+     height="108"
+     fill="#18181b"
+     id="rect6"
+     x="-0.066420861"
+     y="0.11102507" />
+  <use
+     href="#agent"
+     x="54"
+     y="37"
+     fill="#F4A361"
+     filter="url(#neonGlow)"
+     id="use6" />
+  <use
+     href="#agent"
+     x="37"
+     y="54"
+     fill="#F4A361"
+     filter="url(#neonGlow)"
+     id="use7" />
+  <use
+     href="#agent"
+     x="71"
+     y="54"
+     fill="#F4A361"
+     filter="url(#neonGlow)"
+     id="use8" />
+  <use
+     href="#agent"
+     x="54"
+     y="71"
+     fill="#B37340"
+     id="use9" />
+  <path
+     style="fill:#000000"
+     d="m 34.975211,57.003874 v 2.846008 l -1.478808,0.12556 -1.618319,-1.297445 -0.251118,-1.130033 -0.13951,-2.539086"
+     id="path10" />
+  <use
+     x="0"
+     y="0"
+     xlink:href="#path10"
+     id="use11"
+     transform="translate(16.991182,-17.020988)" />
+  <use
+     x="0"
+     y="0"
+     xlink:href="#path10"
+     id="use11-5"
+     transform="matrix(-1,0,0,1,90.968526,-17.028815)" />
+  <use
+     x="0"
+     y="0"
+     xlink:href="#path10"
+     id="use11-5-2"
+     transform="matrix(-1,0,0,1,73.970408,-0.01753905)" />
+  <use
+     x="0"
+     y="0"
+     xlink:href="#path10"
+     id="use11-5-1"
+     transform="matrix(-1,0,0,1,90.971004,16.977219)" />
+  <use
+     x="0"
+     y="0"
+     xlink:href="#path10"
+     id="use11-5-7"
+     transform="matrix(-1,0,0,1,107.97026,-0.01822169)" />
+  <use
+     x="0"
+     y="0"
+     xlink:href="#path10"
+     id="use11-6"
+     transform="translate(34.022918,0.01996791)" />
+  <use
+     x="0"
+     y="0"
+     xlink:href="#path10"
+     id="use11-6-5"
+     transform="translate(17.003807,16.994569)" />
+</svg>

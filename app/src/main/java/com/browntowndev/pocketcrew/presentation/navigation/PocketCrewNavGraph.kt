@@ -8,7 +8,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
-import com.browntowndev.pocketcrew.presentation.screen.chat.ChatRoute
+import com.browntowndev.pocketcrew.feature.chat.ChatRoute
 import com.browntowndev.pocketcrew.feature.history.HistoryRoute
 import com.browntowndev.pocketcrew.feature.settings.SettingsRoute
 import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
