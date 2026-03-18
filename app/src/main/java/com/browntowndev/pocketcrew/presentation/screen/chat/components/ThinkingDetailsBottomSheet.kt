@@ -31,32 +31,16 @@ import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.R
 import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 
+
 /**
  * Bottom sheet that displays the full thinking details with ThoughtBubble components.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun ThinkingDetailsBottomSheet(
     isVisible: Boolean,
-    thinkingSteps: List<String>,
-    thinkingDurationSeconds: Int,
-    modelDisplayName: String,
     onDismiss: () -> Unit,
-) {
-    ThinkingDetailsContent(
-        isVisible,
-        onDismiss,
-        thinkingDurationSeconds,
-        thinkingSteps,
-        modelDisplayName)
-}
-
-@Composable
-@OptIn(ExperimentalMaterial3Api::class)
-private fun ThinkingDetailsContent(
-    isVisible: Boolean,
-    onDismiss: () -> Unit,
-    thinkingDurationSeconds: Int,
+    thinkingDurationSeconds: Long,
     thinkingSteps: List<String>,
     modelDisplayName: String
 ) {
@@ -83,7 +67,7 @@ private fun ThinkingDetailsContent(
                 ) {
                     Icon(
                         painter = painterResource(
-                            R.drawable.cognition
+                            R.drawable.lightbulb
                         ),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
@@ -117,7 +101,7 @@ private fun ThinkingDetailsContent(
     }
 }
 
-private fun formatThinkingDuration(seconds: Int): String = when {
+fun formatThinkingDuration(seconds: Long): String = when {
     seconds < 60 -> "${seconds}s"
     else -> "${seconds / 60}m ${seconds % 60}s"
 }

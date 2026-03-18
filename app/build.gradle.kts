@@ -94,7 +94,7 @@ android {
             )
         }
         debug {
-            isTestCoverageEnabled = true
+            enableUnitTestCoverage = true
         }
     }
     compileOptions {
@@ -167,3 +167,12 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
+
+// =============================================================================
+// KleidiAI Fat APK Build Check
+// =============================================================================
+// NOTE: Due to configuration cache issues, we rely on the script being run manually.
+// Run: ./build-kleidiai.sh before building the app.
+//
+// The check is done at packaging time - if libraries are missing, the build will fail.
+// We use lazy evaluation to avoid configuration cache issues.

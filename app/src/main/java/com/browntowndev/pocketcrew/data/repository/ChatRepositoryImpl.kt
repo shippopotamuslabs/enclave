@@ -1,16 +1,20 @@
 package com.browntowndev.pocketcrew.data.repository
 
 import com.browntowndev.pocketcrew.data.local.ChatDao
+import com.browntowndev.pocketcrew.data.local.CrewPipelineStepEntity
 import com.browntowndev.pocketcrew.data.local.MessageDao
-import com.browntowndev.pocketcrew.data.local.StepCompletionEntity
+import com.browntowndev.pocketcrew.data.local.ThinkingStepsEntity
+import com.browntowndev.pocketcrew.data.mapper.toDomain
 import com.browntowndev.pocketcrew.data.mapper.toEntity
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
-import com.browntowndev.pocketcrew.domain.port.repository.StepCompletionData
-import org.json.JSONArray
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,6 +32,110 @@ class ChatRepositoryImpl @Inject constructor(
     private val chatDao: ChatDao,
     private val messageDao: MessageDao
 ) : ChatRepository {
+
+    /**
+     * Returns all messages for a chat as a Flow.
+     */
+    override fun getMessagesForChat(chatId: Long): Flow<List<Message>> {
+        return messageDao.getMessagesWithAllRelations(chatId).map { entities ->
+            entities.map { it.toDomain() }
+        }
+    }
+
+    /**
+     * Updates the state of a message during streaming.
+     */
+    override suspend fun updateMessageState(messageId: Long, messageState: MessageState) {
+        messageDao.updateMessageState(messageId, messageState)
+    }
+
+    /**
+     * Updates the content of a message during streaming.
+     */
+    override suspend fun updateMessageContent(messageId: Long, content: String) {
+        messageDao.updateMessageContentText(messageId, content)
+    }
+
+    /**
+     * Appends content to an existing message during streaming.
+     */
+    override suspend fun appendMessageContent(messageId: Long, content: String) {
+        val existing = messageDao.getMessageById(messageId)
+        if (existing != null) {
+            val newContent = existing.content + content
+            messageDao.updateMessageContentText(messageId, newContent)
+        }
+    }
+
+    /**
+     * Saves thinking steps for a message during generation.
+     */
+    override suspend fun saveThinkingSteps(messageId: Long, thinkingSteps: List<String>) {
+        // Delete old thinking steps first
+        messageDao.deleteThinkingStepsForMessage(messageId)
+
+        // Upsert new thinking steps
+        val stepsToUpsert = thinkingSteps.map { step ->
+            ThinkingStepsEntity(
+                messageId = messageId,
+                thinkingChunk = step
+            )
+        }
+        messageDao.upsertManyThinkingSteps(stepsToUpsert)
+
+        // Update message state to THINKING
+        messageDao.updateMessageState(messageId, MessageState.THINKING)
+    }
+
+    /**
+     * Clears thinking steps from a message (for blocked/failed states).
+     */
+    override suspend fun clearThinkingSteps(messageId: Long) {
+        messageDao.deleteThinkingStepsForMessage(messageId)
+        messageDao.updateMessageState(messageId, MessageState.COMPLETE)
+    }
+
+    /**
+     * Updates the model type used for a message.
+     */
+    override suspend fun updateMessageModelType(messageId: Long, modelType: ModelType) {
+        messageDao.updateMessageModelType(messageId, modelType)
+    }
+
+    /**
+     * Updates the thinking duration for a message.
+     */
+    override suspend fun updateThinkingDuration(messageId: Long, thinkingDurationSeconds: Int) {
+        messageDao.updateThinkingDuration(messageId, thinkingDurationSeconds)
+    }
+
+    /**
+     * Creates a new assistant message for a new step in Crew mode.
+     * Also creates a CrewPipelineStepEntity to associate the message with its pipeline step.
+     */
+    override suspend fun createAssistantMessage(chatId: Long, userMessageId: Long, modelType: ModelType, pipelineStep: PipelineStep?): Long {
+        val entity = com.browntowndev.pocketcrew.data.local.MessageEntity(
+            chatId = chatId,
+            content = "",
+            role = com.browntowndev.pocketcrew.domain.model.chat.Role.ASSISTANT,
+            userMessageId = userMessageId,
+            messageState = MessageState.PROCESSING,
+            modelType = modelType
+        )
+        val messageId = messageDao.insert(entity)
+
+        // Create CrewPipelineStepEntity if pipelineStep is provided (Crew mode)
+        if (pipelineStep != null) {
+            messageDao.insertCrewPipelineStep(
+                CrewPipelineStepEntity(
+                    messageId = messageId,
+                    pipelineStep = pipelineStep
+                )
+            )
+        }
+
+        return messageId
+    }
 
     /**
      * Creates a new chat in the database.
@@ -56,54 +164,20 @@ class ChatRepositoryImpl @Inject constructor(
             id = messageId,
             content = content,
             thinkingDuration = thinkingData?.thinkingDurationSeconds,
-            thinkingSteps = thinkingData?.steps?.joinToString("\n"),
             thinkingRaw = thinkingData?.rawFullThought
         )
-    }
-
-    /**
-     * Saves a single step completion for Crew mode.
-     */
-    override suspend fun saveStepCompletion(
-        messageId: Long,
-        stepType: PipelineStep,
-        stepOutput: String,
-        thinkingDurationSeconds: Int,
-        thinkingSteps: List<String>,
-        modelType: ModelType
-    ) {
-        val entity = StepCompletionEntity(
-            messageId = messageId,
-            stepType = stepType,
-            stepOutput = stepOutput,
-            durationSeconds = thinkingDurationSeconds,
-            thinkingSteps = JSONArray(thinkingSteps).toString(),
-            modelType = modelType
-        )
-        messageDao.insertStepCompletion(entity)
-    }
-
-    /**
-     * Loads all step completions for a message.
-     */
-    override suspend fun getStepCompletionsForMessage(messageId: Long): List<StepCompletionData> {
-        val entities = messageDao.getStepCompletionsForMessage(messageId)
-        return entities.map { entity ->
-            val stepsArray = try {
-                JSONArray(entity.thinkingSteps).let { arr ->
-                    (0 until arr.length()).map { arr.getString(it) }
-                }
-            } catch (e: Exception) {
-                emptyList()
+        // Save thinking steps to separate table
+        if (thinkingData?.steps?.isNotEmpty() == true) {
+            // Delete old thinking steps first
+            messageDao.deleteThinkingStepsForMessage(messageId)
+            // Insert new thinking steps
+            val stepsToUpsert = thinkingData.steps.map { step ->
+                ThinkingStepsEntity(
+                    messageId = messageId,
+                    thinkingChunk = step
+                )
             }
-            StepCompletionData(
-                stepOutput = entity.stepOutput,
-                thinkingDurationSeconds = entity.durationSeconds,
-                totalDurationSeconds = entity.durationSeconds,
-                thinkingSteps = stepsArray,
-                stepType = entity.stepType,
-                modelType = entity.modelType
-            )
+            messageDao.upsertManyThinkingSteps(stepsToUpsert)
         }
     }
 }

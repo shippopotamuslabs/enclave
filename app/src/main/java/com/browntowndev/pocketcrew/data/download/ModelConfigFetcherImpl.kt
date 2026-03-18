@@ -78,6 +78,11 @@ class ModelConfigFetcherImpl @Inject constructor(
                     configs.add(parseModelConfig(thinking, ModelType.THINKING))
                 }
 
+                // Parse finalSynthesis model
+                json.optJSONObject("finalSynthesis")?.let { finalSynthesis ->
+                    configs.add(parseModelConfig(finalSynthesis, ModelType.FINAL_SYNTHESIS))
+                }
+
                 Log.i(TAG, "Fetched ${configs.size} model configs from server")
 
                 // Convert to ModelConfiguration

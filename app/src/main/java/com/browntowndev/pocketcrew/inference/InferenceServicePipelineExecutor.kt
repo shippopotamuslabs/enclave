@@ -37,7 +37,6 @@ class InferenceServicePipelineExecutor @Inject constructor(
     override fun executePipeline(
         chatId: String,
         userMessage: String,
-        assistantMessageId: String
     ): Flow<MessageGenerationState> = callbackFlow {
         val initialState = PipelineState.createInitial(chatId, userMessage)
         val stateJson = initialState.toJson()
@@ -72,7 +71,15 @@ class InferenceServicePipelineExecutor @Inject constructor(
                     InferenceService.BROADCAST_ERROR -> {
                         val error = intent.getStringExtra(InferenceService.EXTRA_ERROR_MESSAGE)
                             ?: "Unknown error"
-                        trySend(MessageGenerationState.Failed(IllegalStateException(error)))
+                        val modelTypeName = intent.getStringExtra(InferenceService.EXTRA_MODEL_TYPE)
+                        val modelType = modelTypeName?.let {
+                            try {
+                                ModelType.valueOf(it)
+                            } catch (e: Exception) {
+                                ModelType.MAIN
+                            }
+                        } ?: ModelType.MAIN
+                        trySend(MessageGenerationState.Failed(IllegalStateException(error), modelType))
                         close()
                     }
                     InferenceService.BROADCAST_STEP_COMPLETED -> {
@@ -102,7 +109,7 @@ class InferenceServicePipelineExecutor @Inject constructor(
         try {
             serviceStarter.startService(chatId, userMessage, stateJson)
         } catch (e: Exception) {
-            trySend(MessageGenerationState.Failed(e))
+            trySend(MessageGenerationState.Failed(e, ModelType.DRAFT_ONE))
             close()
             return@callbackFlow
         }
@@ -144,7 +151,7 @@ class InferenceServicePipelineExecutor @Inject constructor(
             if (thinkingEndTimeRef[0] == 0L) {
                 thinkingEndTimeRef[0] = System.currentTimeMillis()
             }
-            send(MessageGenerationState.GeneratingText(stepOutput))
+            send(MessageGenerationState.GeneratingText(stepOutput, modelType))
         }
 
         // Handle completed thinking step
@@ -174,23 +181,34 @@ class InferenceServicePipelineExecutor @Inject constructor(
     ) {
         // Flush any remaining buffered words
         val finalStep = bufferThinkingSteps.flush()
-        if (finalStep != null && finalStep != currentSteps.lastOrNull()) {
+        // Always add finalStep if it's not null - don't skip if it equals last item
+        // (the content could be different even if same string reference due to buffer accumulation)
+        if (finalStep != null) {
             currentSteps.add(finalStep)
         }
 
         val finalResponse = intent.getStringExtra(InferenceService.EXTRA_FINAL_RESPONSE)
         val isFinalStep = intent.getBooleanExtra(InferenceService.EXTRA_IS_FINAL_STEP, true)
 
+        val modelTypeName = intent.getStringExtra(InferenceService.EXTRA_MODEL_TYPE)
+        val modelType = modelTypeName?.let {
+            try {
+                ModelType.valueOf(it)
+            } catch (e: Exception) {
+                ModelType.MAIN
+            }
+        } ?: ModelType.MAIN
+
         // FIX: For FINAL step, don't emit GeneratingText here since handleProgressIntent
         // already emits it during the step for streaming effect.
         // For non-FINAL steps, we still emit GeneratingText at step completion.
         if (!isFinalStep && !finalResponse.isNullOrBlank()) {
-            complete(MessageGenerationState.GeneratingText(finalResponse))
+            complete(MessageGenerationState.GeneratingText(finalResponse, modelType))
         }
 
         // Only emit Finished for the final step - for non-final steps, we continue to next step
         if (isFinalStep) {
-            complete(MessageGenerationState.Finished)
+            complete(MessageGenerationState.Finished(modelType))
         }
     }
 

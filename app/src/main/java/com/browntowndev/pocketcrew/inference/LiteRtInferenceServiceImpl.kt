@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.inference
 
 import android.util.Log
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
@@ -14,6 +15,7 @@ import javax.inject.Inject
 class LiteRtInferenceServiceImpl @Inject constructor(
     private val conversationManager: ConversationManagerPort,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
+    private val modelType: ModelType,
 ) : LlmInferencePort {
     companion object {
         private const val TAG = "LiteRtInferenceService"
@@ -39,11 +41,11 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                     when (segment.kind) {
                         SegmentKind.THINKING -> {
                             accumulatedThought.append(segment.text)
-                            emit(InferenceEvent.Thinking(segment.text, accumulatedThought.toString()))
+                            emit(InferenceEvent.Thinking(segment.text, accumulatedThought.toString(), modelType))
                         }
                         SegmentKind.VISIBLE -> {
                             accumulatedText.append(segment.text)
-                            emit(InferenceEvent.PartialResponse(segment.text))
+                            emit(InferenceEvent.PartialResponse(segment.text, modelType))
                         }
                     }
                 }
@@ -53,22 +55,23 @@ class LiteRtInferenceServiceImpl @Inject constructor(
             if (buffer.isNotEmpty()) {
                 if (isThinking) {
                     accumulatedThought.append(buffer)
-                    emit(InferenceEvent.Thinking(buffer, accumulatedThought.toString()))
+                    emit(InferenceEvent.Thinking(buffer, accumulatedThought.toString(), modelType))
                 } else {
                     accumulatedText.append(buffer)
-                    emit(InferenceEvent.PartialResponse(buffer))
+                    emit(InferenceEvent.PartialResponse(buffer, modelType))
                 }
             }
 
             emit(
                 InferenceEvent.Completed(
                     finalResponse = accumulatedText.toString(),
-                    rawFullThought = accumulatedThought.toString().takeIf { it.isNotEmpty() }
+                    rawFullThought = accumulatedThought.toString().takeIf { it.isNotEmpty() },
+                    modelType = modelType
                 )
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error sending prompt", e)
-            emit(InferenceEvent.Error(e))
+            emit(InferenceEvent.Error(e, modelType))
         } finally {
             if (closeConversation) {
                 conversationManager.closeConversation()

@@ -37,7 +37,6 @@ data class ChatMessage(
  * @property maxTokens Maximum tokens to generate (output limit)
  * @property contextWindow LLM context window size in tokens (input + output limit)
  * @property thinkingEnabled Whether to enable thinking/reasoning mode (uses llama.cpp extraction)
- * @property nThreadsBatch Number of threads for prompt processing (n_threads_batch)
  */
 data class LlamaSamplingConfig(
     val temperature: Float = 0.7f,
@@ -47,8 +46,6 @@ data class LlamaSamplingConfig(
     val maxTokens: Int = 2048,    // Maximum tokens to generate
     val repeatPenalty: Float = 1.1f,
     val contextWindow: Int = 4096,  // Context window size (input + output)
-    val threads: Int = 4,           // Threads for token generation (n_threads)
-    val nThreadsBatch: Int = 4,    // Threads for prompt processing (n_threads_batch)
     val batchSize: Int = 256,       // Reduced from 512 to reduce memory pressure
     val gpuLayers: Int = 0,
     val thinkingEnabled: Boolean = false

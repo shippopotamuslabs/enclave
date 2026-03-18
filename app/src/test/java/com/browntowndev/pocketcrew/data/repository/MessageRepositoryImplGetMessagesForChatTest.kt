@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.data.repository
 
 import com.browntowndev.pocketcrew.data.local.MessageDao
 import com.browntowndev.pocketcrew.data.local.MessageEntity
+import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import io.mockk.coEvery
@@ -40,8 +41,8 @@ class MessageRepositoryImplGetMessagesForChatTest {
 
         // Then
         assertEquals(2, result.size)
-        assertEquals("Hello", result[0].content)
-        assertEquals("Hi there!", result[1].content)
+        assertEquals("Hello", result[0].content.text)
+        assertEquals("Hi there!", result[1].content.text)
     }
 
     @Test
@@ -136,7 +137,7 @@ class MessageRepositoryImplGetMessagesForChatTest {
         val result = repository.getMessagesForChat(chatId)
 
         // Then
-        assertEquals(specialContent, result[0].content)
+        assertEquals(specialContent, result[0].content.text)
     }
 
     @Test
@@ -150,7 +151,7 @@ class MessageRepositoryImplGetMessagesForChatTest {
         val result = repository.getMessagesForChat(chatId)
 
         // Then
-        assertEquals("", result[0].content)
+        assertEquals("", result[0].content.text)
     }
 
     // ========== Chat ID Tests ==========
@@ -219,12 +220,12 @@ class MessageRepositoryImplGetMessagesForChatTest {
 
         // Then - all 6 messages in order
         assertEquals(6, result.size)
-        assertEquals("Hello", result[0].content)
-        assertEquals("Hi! How can I help?", result[1].content)
-        assertEquals("Tell me a joke", result[2].content)
-        assertEquals("Why did the chicken cross the road?", result[3].content)
-        assertEquals("I don't know, why?", result[4].content)
-        assertEquals("To get to the other side!", result[5].content)
+        assertEquals("Hello", result[0].content.text)
+        assertEquals("Hi! How can I help?", result[1].content.text)
+        assertEquals("Tell me a joke", result[2].content.text)
+        assertEquals("Why did the chicken cross the road?", result[3].content.text)
+        assertEquals("I don't know, why?", result[4].content.text)
+        assertEquals("To get to the other side!", result[5].content.text)
 
         // Verify alternating user/assistant pattern
         assertEquals(Role.USER, result[0].role)
@@ -249,7 +250,7 @@ class MessageRepositoryImplGetMessagesForChatTest {
 
         // Then
         assertEquals(1, result.size)
-        assertEquals("Only message", result[0].content)
+        assertEquals("Only message", result[0].content.text)
     }
 
     @Test
@@ -264,6 +265,6 @@ class MessageRepositoryImplGetMessagesForChatTest {
         val result = repository.getMessagesForChat(chatId)
 
         // Then
-        assertEquals(unicodeContent, result[0].content)
+        assertEquals(unicodeContent, result[0].content.text)
     }
 }

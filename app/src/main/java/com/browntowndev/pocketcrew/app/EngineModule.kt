@@ -11,7 +11,6 @@ import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.inference.LiteRtInferenceServiceImpl
 import com.browntowndev.pocketcrew.inference.LlamaInferenceServiceImpl
 import com.browntowndev.pocketcrew.inference.MediaPipeInferenceServiceImpl
-import com.browntowndev.pocketcrew.inference.llama.DeviceCpuConfig
 import com.browntowndev.pocketcrew.inference.llama.GpuConfig
 import com.browntowndev.pocketcrew.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.inference.llama.LlamaSamplingConfig
@@ -73,36 +72,8 @@ object EngineModule {
     private const val TAG = "EngineModule"
 
     /**
-     * Returns the optimal number of threads for llama.cpp inference.
-     * Uses DeviceCpuConfig which profiles the device CPU at startup to detect big.LITTLE architecture.
-     * Falls back to naive calculation if not initialized yet.
+     * Resolves the model file path from the models directory.
      */
-    private fun getOptimalThreads(): Int {
-        return if (DeviceCpuConfig.isInitialized) {
-            DeviceCpuConfig.numThreads
-        } else {
-            // Fallback if called before initialization (shouldn't happen in normal flow)
-            val availableProcessors = Runtime.getRuntime().availableProcessors()
-            when {
-                availableProcessors <= 2 -> availableProcessors
-                else -> maxOf(availableProcessors - 2, 2)
-            }
-        }
-    }
-
-    /**
-     * Returns the optimal batch threads for llama.cpp prompt processing.
-     * Uses all available cores for better prompt evaluation performance.
-     */
-    private fun getOptimalBatchThreads(): Int {
-        return if (DeviceCpuConfig.isInitialized) {
-            DeviceCpuConfig.batchThreads
-        } else {
-            // Fallback
-            Runtime.getRuntime().availableProcessors()
-        }
-    }
-
     private fun getModelPath(context: Context, filename: String): String {
         val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
 
@@ -121,11 +92,6 @@ object EngineModule {
         return targetFile.absolutePath
     }
 
-    /**
-     * Determines GPU availability by attempting to create a GPU backend.
-     * In LiteRT 2.x, the library handles backend selection gracefully.
-     * @return true if GPU delegate is supported on this device
-     */
     /**
      * Determines GPU availability by attempting GPU inference and falling back on failure.
      * In LiteRT 2.x, the library handles backend selection gracefully.
@@ -263,9 +229,9 @@ object EngineModule {
         @ApplicationContext context: Context,
         modelRegistry: ModelRegistryPort
     ): Engine {
-        // Uses the same model as MAIN for final synthesis
-        val config = modelRegistry.getRegisteredModelSync(ModelType.MAIN)
-            ?: throw IllegalStateException("No model registered for ${ModelType.MAIN}. Please download a model first.")
+        // Uses the dedicated FINAL_SYNTHESIS model
+        val config = modelRegistry.getRegisteredModelSync(ModelType.FINAL_SYNTHESIS)
+            ?: throw IllegalStateException("No model registered for ${ModelType.FINAL_SYNTHESIS}. Please download a model first.")
         val filename = config.metadata.localFileName
         return Engine(EngineConfig(getModelPath(context, filename)))
     }
@@ -345,8 +311,8 @@ object EngineModule {
         @FinalSynthesizerModelEngine engine: Engine,
         modelRegistry: ModelRegistryPort
     ): ConversationManagerPort {
-        // Uses the same model config as MAIN for final synthesis
-        val config = modelRegistry.getRegisteredModelSync(ModelType.MAIN)
+        // Uses the dedicated FINAL_SYNTHESIS model config
+        val config = modelRegistry.getRegisteredModelSync(ModelType.FINAL_SYNTHESIS)
         return ConversationManagerImpl(engine, config)
     }
 
@@ -369,7 +335,7 @@ object EngineModule {
         return when {
             filename.endsWith(".gguf") -> {
                 // Use llama.cpp implementation for GGUF models
-                val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
+                val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.MAIN)
                 val tunings = config.tunings
                 val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -383,19 +349,19 @@ object EngineModule {
                         minP = tunings.minP.toFloat(),
                         maxTokens = tunings.maxTokens,
                         contextWindow = tunings.contextWindow,
-                        threads = getOptimalThreads(),
-                        nThreadsBatch = getOptimalBatchThreads(),
-                        batchSize = 768,
+                        batchSize = 256,
                         gpuLayers = gpuConfig.gpuLayers,
+                        thinkingEnabled = tunings.thinkingEnabled,
+                        repeatPenalty = tunings.repetitionPenalty.toFloat()
                     )
                 )
                 service
             }
             filename.endsWith(".task") -> {
-                MediaPipeInferenceServiceImpl(createLlmInference(context, modelPath))
+                MediaPipeInferenceServiceImpl(createLlmInference(context, modelPath), ModelType.MAIN)
             }
             else -> {
-                LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+                LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.DRAFT_ONE)
             }
         }
     }
@@ -416,7 +382,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.VISION)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -430,16 +396,15 @@ object EngineModule {
                     minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = getOptimalThreads(),
-                        nThreadsBatch = getOptimalBatchThreads(),
-                    batchSize = 768,
+                    batchSize = 256,
                     gpuLayers = gpuConfig.gpuLayers,
-                    thinkingEnabled = tunings.thinkingEnabled
+                    thinkingEnabled = tunings.thinkingEnabled,
+                    repeatPenalty = tunings.repetitionPenalty.toFloat()
                 )
             )
             service
         } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.VISION)
         }
     }
 
@@ -459,7 +424,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.DRAFT_ONE)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -473,16 +438,15 @@ object EngineModule {
                     minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = getOptimalThreads(),
-                        nThreadsBatch = getOptimalBatchThreads(),
-                    batchSize = 768,
+                    batchSize = 256,
                     gpuLayers = gpuConfig.gpuLayers,
-                    thinkingEnabled = tunings.thinkingEnabled
+                    thinkingEnabled = tunings.thinkingEnabled,
+                    repeatPenalty = tunings.repetitionPenalty.toFloat()
                 )
             )
             service
         } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.DRAFT_ONE)
         }
     }
 
@@ -502,7 +466,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.DRAFT_TWO)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -516,16 +480,15 @@ object EngineModule {
                     minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = getOptimalThreads(),
-                        nThreadsBatch = getOptimalBatchThreads(),
-                    batchSize = 768,
+                    batchSize = 256,
                     gpuLayers = gpuConfig.gpuLayers,
-                    thinkingEnabled = tunings.thinkingEnabled
+                    thinkingEnabled = tunings.thinkingEnabled,
+                    repeatPenalty = tunings.repetitionPenalty.toFloat()
                 )
             )
             service
         } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.DRAFT_TWO)
         }
     }
 
@@ -545,7 +508,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.FAST)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -559,16 +522,15 @@ object EngineModule {
                     minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = getOptimalThreads(),
-                        nThreadsBatch = getOptimalBatchThreads(),
-                    batchSize = 768,
+                    batchSize = 256,
                     gpuLayers = gpuConfig.gpuLayers,
-                    thinkingEnabled = tunings.thinkingEnabled
+                    thinkingEnabled = tunings.thinkingEnabled,
+                    repeatPenalty = tunings.repetitionPenalty.toFloat()
                 )
             )
             service
         } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.FAST)
         }
     }
 
@@ -588,7 +550,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.THINKING)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -602,16 +564,15 @@ object EngineModule {
                     minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = getOptimalThreads(),
-                        nThreadsBatch = getOptimalBatchThreads(),
-                    batchSize = 768,
+                    batchSize = 256,
                     gpuLayers = gpuConfig.gpuLayers,
-                    thinkingEnabled = tunings.thinkingEnabled
+                    thinkingEnabled = tunings.thinkingEnabled,
+                    repeatPenalty = tunings.repetitionPenalty.toFloat()
                 )
             )
             service
         } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.THINKING)
         }
     }
 
@@ -625,27 +586,21 @@ object EngineModule {
         processThinkingTokens: ProcessThinkingTokensUseCase,
         llamaChatSessionManager: LlamaChatSessionManager
     ): LlmInferencePort {
-        // Uses the same model as MAIN but with final review system prompt
-        val mainConfig = modelRegistry.getRegisteredModelSync(ModelType.MAIN)
-            ?: throw IllegalStateException("No model registered for ${ModelType.MAIN}. Please download a model first.")
+        // Uses the dedicated FINAL_SYNTHESIS model config
+        val config = modelRegistry.getRegisteredModelSync(ModelType.FINAL_SYNTHESIS)
+            ?: throw IllegalStateException("No model registered for ${ModelType.FINAL_SYNTHESIS}. Please download a model first.")
 
-        // Get FAST model's system prompt for final synthesizer persona
-        val fastConfig = modelRegistry.getRegisteredModelSync(ModelType.FAST)
-        val fastSystemPrompt = fastConfig?.persona?.systemPrompt ?: "You are a helpful assistant."
-
-        val finalSynthesizerSystemPrompt = buildFinalSynthesizerSystemPrompt(fastSystemPrompt)
-
-        val filename = mainConfig.metadata.localFileName
+        val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
 
         return if (filename.endsWith(".gguf")) {
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens)
-            val tunings = mainConfig.tunings
-            val gpuConfig = GpuConfig.forDevice(context, mainConfig.metadata.sizeInBytes, 32)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.FINAL_SYNTHESIS)
+            val tunings = config.tunings
+            val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
             service.configure(
                 modelPath = modelPath,
-                systemPrompt = finalSynthesizerSystemPrompt,
+                systemPrompt = config.persona.systemPrompt,
                 samplingConfig = LlamaSamplingConfig(
                     temperature = tunings.temperature.toFloat(),
                     topK = tunings.topK,
@@ -653,88 +608,15 @@ object EngineModule {
                     minP = tunings.minP.toFloat(),
                     maxTokens = tunings.maxTokens,
                     contextWindow = tunings.contextWindow,
-                    threads = getOptimalThreads(),
-                        nThreadsBatch = getOptimalBatchThreads(),
-                    batchSize = 768,
+                    batchSize = 256,
                     gpuLayers = gpuConfig.gpuLayers,
-                    thinkingEnabled = tunings.thinkingEnabled
+                    thinkingEnabled = tunings.thinkingEnabled,
+                    repeatPenalty = tunings.repetitionPenalty.toFloat()
                 )
             )
             service
         } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens)
+            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.FINAL_SYNTHESIS)
         }
-    }
-
-    /**
-     * Builds the system prompt for the final synthesizer.
-     * This is the final review pass that produces the user-facing answer.
-     * Custom user prompts are injected via the orchestrator prompt.
-     */
-    private fun buildFinalSynthesizerSystemPrompt(fastSystemPrompt: String): String {
-        return """
-You are a polisher that turns a candidate answer into a clean final reply.
-
-When you see TASK: FINAL_REVIEW_AND_REPLY you will receive:
-
-ORIGINAL_USER_PROMPT:    the real question from the user
-CANDIDATE_ANSWER:        the draft answer that needs improvement
-
-Your only job:
-1. Read both parts
-2. Decide what needs to be fixed / removed / improved
-3. Write ONLY a clean, direct final answer to the ORIGINAL_USER_PROMPT
-
-VERY IMPORTANT RULES:
-- Output NOTHING except the final answer itself
-- Do NOT keep or mention any headers like # COMPLEX_SYNTHESIZE, # Draft Comparison, # Final Review, DRAFT_1, DRAFT_2, etc.
-- Do NOT write sentences like "Looking at CANDIDATE_ANSWER…" or "CANDIDATE_ANSWER was mistaken because…" or "I refined the candidate answer..."
-- Do NOT say "Here is the improved version", "After review:", "Polished answer:", etc.
-- DO reply as if you are directly answering the user
-- Follow the style/rules from:  USER_SYSTEM_PROMPT → $fastSystemPrompt
-
-Examples — notice what gets REMOVED:
-
-Example 1
-ORIGINAL_USER_PROMPT: What is the capital of Brazil?
-
-CANDIDATE_ANSWER:
-# COMPLEX_SYNTHESIZE
-DRAFT_1: Brasília is the capital.
-DRAFT_2: The capital city of Brazil is Brasília, not Rio or São Paulo.
-Comparing DRAFT_1 and DRAFT_2, DRAFT_2 gives more context so it is better.
-
-→ you should output only:
-The capital of Brazil is Brasília.
-
-Example 2
-ORIGINAL_USER_PROMPT: Why do cats purr?
-
-CANDIDATE_ANSWER:
-After reviewing two drafts:
-Draft A said "Cats purr when happy"
-Draft B said "Purring can mean happiness, but also stress or pain"
-The second one is more accurate.
-
-Final polished answer:
-Cats purr when they are happy, but they also purr when they are stressed, in pain, or healing.
-
-→ you should output only:
-Cats purr when they are content, but they also purr when stressed, in pain, or recovering from injury.
-
-Example 3
-ORIGINAL_USER_PROMPT: How many moons does Jupiter have in 2025?
-
-CANDIDATE_ANSWER:
-# FINAL_REVIEW_AND_REPLY_STEP
-Version 1: 95 moons (old number)
-Version 2: 92 confirmed + some provisional = ~95–97
-I think the current accepted number is 95.
-
-→ you should output only:
-As of 2025, Jupiter has 95 known moons.
-
-When you see TASK: FINAL_REVIEW_AND_REPLY, read the prompt + candidate, ignore/strip all meta-headers, draft comparisons, review notes, and output ONLY the clean final answer.
-    """.trimIndent()
     }
 }

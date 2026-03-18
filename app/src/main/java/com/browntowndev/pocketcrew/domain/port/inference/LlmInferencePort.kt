@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.port.inference
 
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.inference.llama.ChatMessage
 import kotlinx.coroutines.flow.Flow
 
@@ -39,27 +40,34 @@ sealed interface InferenceEvent {
      * Emitted when the model is generating reasoning/Chain-of-Thought.
      * @param chunk The raw chunk of thought just generated.
      * @param accumulatedThought The full reasoning generated so far.
+     * @param modelType The type of model used to generate this chunk.
      */
-    data class Thinking(val chunk: String, val accumulatedThought: String) : InferenceEvent
+    data class Thinking(val chunk: String, val accumulatedThought: String, val modelType: ModelType) : InferenceEvent
 
     /**
      * Emitted when the model is generating the actual user-facing response.
      * @param chunk The raw text chunk just generated.
+     * @param modelType The type of model used to generate this chunk.
      */
-    data class PartialResponse(val chunk: String) : InferenceEvent
+    data class PartialResponse(val chunk: String, val modelType: ModelType) : InferenceEvent
 
     /**
      * Emitted when generation is completely finished.
+     * @param finalResponse The full generated response.
+     * @param rawFullThought The full reasoning generated.
+     * @param modelType The type of model used to generate this response.
      */
-    data class Completed(val finalResponse: String, val rawFullThought: String?) : InferenceEvent
+    data class Completed(val finalResponse: String, val rawFullThought: String?, val modelType: ModelType) : InferenceEvent
 
     /**
      * Emitted when generation is blocked by safety checks.
+     * @param reason The reason for blocking.
      */
-    data class SafetyBlocked(val reason: String) : InferenceEvent
+    data class SafetyBlocked(val reason: String, val modelType: ModelType) : InferenceEvent
 
     /**
      * Emitted when an error occurs during generation.
+     * @param cause The exception that caused the error.
      */
-    data class Error(val cause: Throwable) : InferenceEvent
+    data class Error(val cause: Throwable, val modelType: ModelType) : InferenceEvent
 }

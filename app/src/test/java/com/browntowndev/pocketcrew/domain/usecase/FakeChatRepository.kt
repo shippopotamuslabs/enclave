@@ -1,11 +1,14 @@
 package com.browntowndev.pocketcrew.domain.usecase
 
+import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
-import com.browntowndev.pocketcrew.domain.port.repository.StepCompletionData
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Fake implementation of ChatRepository for testing.
@@ -17,7 +20,44 @@ class FakeChatRepository : ChatRepository {
     private var nextChatId = 1L
     var shouldThrowOnCreateChat = false
     private val savedAssistantMessages = mutableListOf<Pair<Long, String>>()
-    private val savedStepCompletions = mutableListOf<StepCompletionData>()
+
+    private val messagesFlows = mutableMapOf<Long, MutableStateFlow<List<Message>>>()
+
+    override fun getMessagesForChat(chatId: Long): Flow<List<Message>> {
+        return messagesFlows.getOrPut(chatId) { MutableStateFlow(emptyList()) }
+    }
+
+    fun setMessagesForChat(chatId: Long, messages: List<Message>) {
+        messagesFlows.getOrPut(chatId) { MutableStateFlow(emptyList()) }.value = messages
+    }
+
+    override suspend fun updateMessageState(messageId: Long, messageState: MessageState) {
+        // No-op for testing
+    }
+
+    override suspend fun updateMessageContent(messageId: Long, content: String) {
+        // No-op for testing
+    }
+
+    override suspend fun appendMessageContent(messageId: Long, content: String) {
+        // No-op for testing
+    }
+
+    override suspend fun saveThinkingSteps(messageId: Long, thinkingSteps: List<String>) {
+        // No-op for testing
+    }
+
+    override suspend fun clearThinkingSteps(messageId: Long) {
+        // No-op for testing
+    }
+
+    override suspend fun updateMessageModelType(messageId: Long, modelType: ModelType) {
+        // No-op for testing
+    }
+
+    override suspend fun updateThinkingDuration(messageId: Long, thinkingDurationSeconds: Int) {
+        // No-op for testing
+    }
 
     override suspend fun createChat(chat: Chat): Long {
         if (shouldThrowOnCreateChat) {
@@ -36,28 +76,9 @@ class FakeChatRepository : ChatRepository {
         savedAssistantMessages.add(messageId to content)
     }
 
-    override suspend fun saveStepCompletion(
-        messageId: Long,
-        stepType: PipelineStep,
-        stepOutput: String,
-        thinkingDurationSeconds: Int,
-        thinkingSteps: List<String>,
-        modelType: ModelType
-    ) {
-        savedStepCompletions.add(
-            StepCompletionData(
-                stepOutput = stepOutput,
-                thinkingDurationSeconds = thinkingDurationSeconds,
-                totalDurationSeconds = thinkingDurationSeconds,
-                thinkingSteps = thinkingSteps,
-                stepType = stepType,
-                modelType = modelType
-            )
-        )
-    }
-
-    override suspend fun getStepCompletionsForMessage(messageId: Long): List<StepCompletionData> {
-        return savedStepCompletions.toList()
+    override suspend fun createAssistantMessage(chatId: Long, userMessageId: Long, modelType: ModelType, pipelineStep: PipelineStep?): Long {
+        // Return a fake message ID
+        return nextChatId++
     }
 
     fun getCreatedChats(): List<Chat> = createdChats.toList()
@@ -78,7 +99,5 @@ class FakeChatRepository : ChatRepository {
         nextChatId = 1L
         shouldThrowOnCreateChat = false
         savedAssistantMessages.clear()
-        savedStepCompletions.clear()
     }
 }
-

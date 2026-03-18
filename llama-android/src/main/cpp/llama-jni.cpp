@@ -13,9 +13,125 @@
 #include <cstring>
 #include <chrono>
 #include <android/log.h>
+#include <fstream>
 
 #include "llama.h"
 #include "ggml-backend.h"
+#include "ggml.h"
+
+// prctl-based SVE detection - more reliable than /proc filesystem
+// Returns vector length in bits, or 0 if SVE not available
+#ifndef PR_SVE_GET_VL
+#define PR_SVE_GET_VL 51
+#endif
+
+// ============================================================
+// Native CPU detection and thread affinity
+// Detects performance cores and pins llama.cpp threads to them
+// ============================================================
+
+struct CoreInfo {
+    int id;
+    long maxFreqKHz;
+};
+
+// Detect performance cores by reading cpuinfo_max_freq
+// Returns vector of core IDs sorted by frequency (highest first)
+static std::vector<CoreInfo> detectPerformanceCores() {
+    std::vector<CoreInfo> cores;
+
+    // Check up to 8 cores (typical for mobile)
+    for (int i = 0; i < 8; i++) {
+        std::string path = "/sys/devices/system/cpu/cpu" + std::to_string(i) + "/cpufreq/cpuinfo_max_freq";
+        std::ifstream f(path);
+        if (!f.is_open()) continue;
+
+        long freq = 0;
+        f >> freq;
+        if (freq > 0) {
+            cores.push_back({i, freq});
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Core %d: max freq = %ld kHz", i, freq);
+        }
+    }
+
+    // Sort descending by frequency
+    std::sort(cores.begin(), cores.end(),
+        [](const CoreInfo& a, const CoreInfo& b) {
+            return a.maxFreqKHz > b.maxFreqKHz;
+        });
+
+    return cores;
+}
+
+// Determine which cores are "performance" cores (within 80% of max freq)
+// This captures big cores on big.LITTLE but excludes efficiency cores
+static std::vector<int> getPerformanceCoreIds() {
+    auto cores = detectPerformanceCores();
+
+    if (cores.empty()) {
+        __android_log_print(ANDROID_LOG_WARN, "llama-jni", "CPU detection: no cores found, using defaults");
+        return {};
+    }
+
+    long topFreq = cores[0].maxFreqKHz;
+    std::vector<int> perfCoreIds;
+
+    for (const auto& c : cores) {
+        // Include cores within 80% of top frequency (captures big.LITTLE big cores)
+        if ((float)c.maxFreqKHz >= topFreq * 0.80f) {
+            perfCoreIds.push_back(c.id);
+        }
+    }
+
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "CPU detection: %zu performance cores identified", perfCoreIds.size());
+    for (size_t i = 0; i < perfCoreIds.size(); i++) {
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "  Performance core[%zu] = CPU%d", i, perfCoreIds[i]);
+    }
+
+    return perfCoreIds;
+}
+
+// Global threadpool for llama.cpp
+static ggml_threadpool_t g_threadpool = nullptr;
+static ggml_threadpool_t g_threadpool_batch = nullptr;
+
+// Initialize threadpool
+static void initThreadpool(int n_threads) {
+    // Clean up existing threadpools
+    if (g_threadpool) {
+        ggml_threadpool_free(g_threadpool);
+        g_threadpool = nullptr;
+    }
+    if (g_threadpool_batch) {
+        ggml_threadpool_free(g_threadpool_batch);
+        g_threadpool_batch = nullptr;
+    }
+
+    auto perfCores = getPerformanceCoreIds();
+
+    int actualThreads = n_threads;
+    if (!perfCores.empty()) {
+        actualThreads = (int)std::min((size_t)n_threads, perfCores.size());
+    }
+    actualThreads = std::max(actualThreads, 1);
+
+    struct ggml_threadpool_params tpp = ggml_threadpool_params_default(actualThreads);
+
+    g_threadpool = ggml_threadpool_new(&tpp);
+    g_threadpool_batch = ggml_threadpool_new(&tpp);
+}
+
+// Clean up threadpools
+static void cleanupThreadpool() {
+    if (g_threadpool) {
+        ggml_threadpool_free(g_threadpool);
+        g_threadpool = nullptr;
+    }
+    if (g_threadpool_batch) {
+        ggml_threadpool_free(g_threadpool_batch);
+        g_threadpool_batch = nullptr;
+    }
+}
 
 // Backend type enumeration - must match Kotlin enum
 enum LlamaBackend {
@@ -26,6 +142,7 @@ enum LlamaBackend {
 
 // Current backend selection
 static LlamaBackend g_selectedBackend = BACKEND_CPU;
+static bool g_supportsGpu = false;  // Set during initialization based on llama_supports_gpu_offload()
 
 // Forward declarations of common helper functions (from common.h)
 static inline void llama_batch_clear(struct llama_batch & batch) {
@@ -56,6 +173,11 @@ static llama_batch* g_batch = nullptr;  // Points to s_batch
 static llama_batch s_batch;  // The actual static batch - needs to be at file scope for unload to access
 static std::atomic<bool> g_generating(false);
 static std::mutex g_mutex;
+
+// Thinking token limit - hard cutoff at 1000 tokens to prevent infinite thinking
+static const int THINK_TOKEN_LIMIT = 1000;
+static bool g_in_thinking_phase = false;
+static int g_think_token_count = 0;
 
 // Helper to get vocab from model (must be after g_model declaration)
 static inline const llama_vocab* get_model_vocab() {
@@ -102,8 +224,6 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
     jobject /* this */,
     jstring modelPath,
     jint contextSize,
-    jint threads,
-    jint nThreadsBatch,
     jint batchSize,
     jint gpuLayers,
     jint backendType
@@ -113,7 +233,7 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
 
     // Initialize backend if not already done
     if (!g_initialized) {
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== INITIALIZING LLAMA BACKEND ===");
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Initializing llama backend");
 
         // Set LD_LIBRARY_PATH for OpenCL to find vendor libraries
         // This is needed on Android to locate the Mali/OpenCL driver
@@ -163,7 +283,8 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
         g_initialized = true;
 
         // Check GPU offload support
-        bool supports_gpu = llama_supports_gpu_offload();
+        g_supportsGpu = llama_supports_gpu_offload();
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "llama_supports_gpu_offload() = %s", g_supportsGpu ? "YES" : "NO");
 
         // Log backend selection
         const char* backendName = "UNKNOWN";
@@ -173,10 +294,7 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
             case BACKEND_VULKAN: backendName = "VULKAN"; break;
         }
 
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== AVAILABLE BACKENDS ===");
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested backend: %s", backendName);
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU offload support (runtime check): %s", supports_gpu ? "YES" : "NO");
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "===========================");
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Backend: %s, GPU support: %s", backendName, g_supportsGpu ? "YES" : "NO");
 
         // Note: SVE and other CPU feature detection has been moved to ggml.h
         if (gpuLayers > 0) {
@@ -202,39 +320,34 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
 
     std::string path = jstringToString(env, modelPath);
 
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== LOADING MODEL ===");
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Loading model: %s", path.c_str());
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Model path: %s", path.c_str());
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested contextSize: %d", contextSize);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested threads: %d", threads);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested nThreadsBatch: %d", nThreadsBatch);
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested batchSize: %d", batchSize);
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Requested GPU layers: %d", gpuLayers);
 
     // Model params
     llama_model_params mparams = llama_model_default_params();
 
-    // Use GPU if GPU layers are requested
+    // Use GPU if GPU layers are requested AND GPU is actually supported
     // Note: llama.cpp will automatically detect and use available GPU backends
-    // When backend is CPU, force gpuLayers to 0 to avoid crashes
+    // Force gpuLayers to 0 if backend is CPU OR if llama.cpp reports no GPU support
+    // This handles the case where GPU backend is selected but fails at runtime
     int actualGpuLayers = gpuLayers;
-    if (g_selectedBackend == BACKEND_CPU) {
+    if (g_selectedBackend == BACKEND_CPU || !g_supportsGpu) {
         actualGpuLayers = 0;
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "CPU backend selected - forcing GPU layers to 0");
+        if (g_selectedBackend == BACKEND_CPU) {
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "CPU backend selected - forcing GPU layers to 0");
+        } else {
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU not supported by llama.cpp - forcing GPU layers to 0");
+        }
     }
 
     mparams.n_gpu_layers = actualGpuLayers;
     mparams.use_mmap = false;  // Disable mmap for mobile
 
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== GPU CONFIGURATION ===");
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU layers requested: %d", gpuLayers);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU layers ACTUALLY USED: %d", actualGpuLayers);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Execution mode: %s", actualGpuLayers > 0 ? "GPU ACCELERATED" : "CPU ONLY");
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "==========================");
-
     auto load_start = std::chrono::high_resolution_clock::now();
 
-    // Load model
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Calling llama_model_load_from_file...");
     g_model = llama_model_load_from_file(path.c_str(), mparams);
     if (!g_model) {
         __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "FAILED to load model from: %s", path.c_str());
@@ -244,39 +357,29 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
     auto load_end = std::chrono::high_resolution_clock::now();
     double load_ms = std::chrono::duration<double, std::milli>(load_end - load_start).count();
 
-    // Log successful load
     const int32_t n_vocab = llama_vocab_n_tokens(get_model_vocab());
 
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== MODEL LOADED SUCCESSFULLY ===");
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Load time: %.2f ms", load_ms);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Vocabulary size: %d", n_vocab);
-
-    // Log GPU info if available
-    if (actualGpuLayers > 0) {
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "*** GPU ACCELERATION ACTIVE ***");
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Offloaded %d layers to GPU", actualGpuLayers);
+    if (actualGpuLayers > 0 && g_supportsGpu) {
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "GPU ACCELERATED: %d layers, Load: %.2f ms", actualGpuLayers, load_ms);
     } else {
-        __android_log_print(ANDROID_LOG_WARN, "llama-jni", "*** RUNNING IN CPU-ONLY MODE ***");
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "CPU ONLY: Load: %.2f ms, Vocab: %d", load_ms, n_vocab);
     }
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "==========================");
 
     // Context params
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== CREATING CONTEXT ===");
     llama_context_params cparams = llama_context_default_params();
-
-    // Log default values before modification
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "DEFAULT params: n_ctx=%d, n_batch=%d, n_ubatch=%d, n_threads=%d, n_threads_batch=%d",
-        cparams.n_ctx, cparams.n_batch, cparams.n_ubatch, cparams.n_threads, cparams.n_threads_batch);
-
-    // Use the full context size from config
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Context size: requested=%d, using=%d", contextSize, contextSize);
 
     cparams.n_ctx = contextSize;
 
-    // Use at least 4 threads for reasonable CPU performance
-    // Single thread is extremely slow on mobile
-    int actualThreads = (threads > 0) ? threads : 4;
-    int actualNThreadsBatch = (nThreadsBatch > 0) ? nThreadsBatch : actualThreads;
+    // Auto-detect optimal thread count based on available CPUs
+    // Use performance cores when available (big.LITTLE architecture)
+    int cpuCount = (int)sysconf(_SC_NPROCESSORS_ONLN);
+    if (cpuCount <= 0) {
+        cpuCount = 4;  // Fallback default
+    }
+
+    // Use all available cores, but cap at 8 for mobile thermal constraints
+    int actualThreads = std::min(cpuCount, 8);
+    int actualNThreadsBatch = actualThreads;
     cparams.n_threads = actualThreads;
     cparams.n_threads_batch = actualNThreadsBatch;
 
@@ -285,16 +388,19 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
     cparams.n_batch = actualBatchSize;
     cparams.n_ubatch = actualBatchSize;
 
-    cparams.offload_kqv = (actualGpuLayers > 0);  // Use GPU only if GPU layers configured
+    // Only offload to GPU if both layers > 0 AND llama.cpp reports GPU support
+    // g_supportsGpu is checked because llama_supports_gpu_offload() may return true
+    // even when the actual GPU backend (Vulkan/OpenCL) fails to initialize
+    cparams.offload_kqv = (actualGpuLayers > 0 && g_supportsGpu);
     cparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;  // Disable for CPU mode stability
+    cparams.kv_unified = true;  // Enable unified KV cache (saves memory, can improve performance)
 
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "FINAL params: n_ctx=%d, n_batch=%d, n_ubatch=%d, n_threads=%d, n_threads_batch=%d, offload_kqv=%d",
         cparams.n_ctx, cparams.n_batch, cparams.n_ubatch, cparams.n_threads, cparams.n_threads_batch, cparams.offload_kqv);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Context n_ctx: %d", cparams.n_ctx);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Context n_threads: %d", cparams.n_threads);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Context n_threads_batch: %d", cparams.n_threads_batch);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Context offload_kqv: %s", cparams.offload_kqv ? "true" : "false");
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Context flash_attn_type: %d", (int)cparams.flash_attn_type);
+    // Initialize threadpool for CPU inference
+    if (actualGpuLayers == 0 || !g_supportsGpu) {
+        initThreadpool(actualThreads);
+    }
 
     // Create context
     g_ctx = llama_init_from_model(g_model, cparams);
@@ -302,7 +408,13 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeLoadModel(
         __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "FAILED to create context");
         llama_model_free(g_model);
         g_model = nullptr;
+        cleanupThreadpool();
         return JNI_FALSE;
+    }
+
+    // Attach threadpool to context
+    if (g_threadpool && g_threadpool_batch) {
+        llama_attach_threadpool(g_ctx, g_threadpool, g_threadpool_batch);
     }
 
     // Create reusable batch (like official example)
@@ -357,6 +469,13 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeUnloadMode
         llama_sampler_free(g_sampler);
         g_sampler = nullptr;
     }
+
+    // Detach and cleanup threadpool with CPU affinity
+    if (g_ctx) {
+        llama_detach_threadpool(g_ctx);
+    }
+    cleanupThreadpool();
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Threadpool cleaned up");
 
     // Batch cleanup: only call llama_batch_free, do NOT delete the pointer
     // because g_batch points to a static variable (s_batch)
@@ -544,20 +663,25 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
     float temp = temperature > 0 ? temperature : 0.7f;
     llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(temp));
 
-    // Top-K
-    if (topK > 0) {
-        llama_sampler_chain_add(g_sampler, llama_sampler_init_top_k(topK));
+    // Only add probabilistic samplers when using temperature > 0
+    // For greedy (temp = 0), these add unnecessary overhead per token
+    if (temp > 0.0f) {
+        // Top-K
+        if (topK > 0) {
+            llama_sampler_chain_add(g_sampler, llama_sampler_init_top_k(topK));
+        }
+
+        // Top-P
+        if (topP > 0) {
+            llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(topP, 1));
+        }
+
+        // Min-P
+        llama_sampler_chain_add(g_sampler, llama_sampler_init_min_p(minP, 1));
     }
 
-    // Top-P
-    if (topP > 0) {
-        llama_sampler_chain_add(g_sampler, llama_sampler_init_top_p(topP, 1));
-    }
-
-    // Min-P
-    llama_sampler_chain_add(g_sampler, llama_sampler_init_min_p(minP, 1));
-
-    // Repeat penalties
+    // Repeat penalties - reduced from 128 to 32 for better performance
+    // The 128 value was causing unnecessary history scanning per token
     float penalty_repeat = (repeatPenalty > 0) ? repeatPenalty : 1.10f;
     float penalty_freq = (penaltyFreq > 0.0f) ? penaltyFreq : 0.05f;
     float penalty_present = (penaltyPresent > 0.0f) ? penaltyPresent : 0.05f;
@@ -572,8 +696,12 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
     }
 
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== SAMPLER CONFIGURED ===");
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Penalties: repeat=%.2f, freq=%.2f, present=%.2f", penalty_repeat, penalty_freq, penalty_present);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Top-K: %d | Top-P: %.2f | Min-P: 0.05 | Temp: %.2f", topK, topP, temp);
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Penalties: repeat=%.2f, freq=%.2f, present=%.2f, last_n=%d", penalty_repeat, penalty_freq, penalty_present, penalty_last_n);
+    if (temp > 0.0f) {
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Using probabilistic sampling: Top-K: %d | Top-P: %.2f | Min-P: %.2f | Temp: %.2f", topK, topP, minP, temp);
+    } else {
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Using GREEDY sampling (temp=0) - skipped top-k/p/min_p for performance");
+    }
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "===========================");
 
     g_generating = true;
@@ -706,6 +834,13 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
 
     auto gen_start = std::chrono::high_resolution_clock::now();
 
+    // Initialize thinking token tracking - assume we're in thinking phase at start
+    // This will be disabled if reasoning_budget is 0 (thinking disabled)
+    g_in_thinking_phase = (reasoningBudget > 0);
+    g_think_token_count = 0;
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Thinking tracking initialized: enabled=%d, budget=%d",
+                       g_in_thinking_phase ? 1 : 0, reasoningBudget);
+
     // Get special tokens and vocab
     llama_token eos_token = llama_vocab_eos(get_model_vocab());
     const int vocab_size = llama_vocab_n_tokens(get_model_vocab());
@@ -729,28 +864,21 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
             break;
         }
 
-        // Accept the token (updates sampler state for next iteration)
-        llama_sampler_accept(g_sampler, token);
-
-        // FIXED: Calculate position BEFORE incrementing n_generated_tokens
-        // The first generated token goes at position n_prompt_tokens (not n_prompt_tokens + 1)
-        int32_t current_pos = n_prompt_tokens + n_generated_tokens;
-
-        // Get token text - use llama_token_to_piece to convert token to string
-        // FIXED: Use larger buffer (256 bytes) to handle any token
+        // Get token text BEFORE accepting - needed for thinking limit check
         char tokenBuffer[256];
         int tokenLen = llama_token_to_piece(get_model_vocab(), token, tokenBuffer, sizeof(tokenBuffer) - 1, 0, false);
-        if (tokenLen > 0) {
+        if (tokenLen <= 0) {
+            tokenBuffer[0] = '\0';
+            tokenLen = 0;
+        } else {
             tokenBuffer[tokenLen] = '\0';
             // Replace BPE word-start marker (U+2581 = ▁) with space
-            // This character appears at the start of tokens that follow a space
             for (int i = 0; i < tokenLen; i++) {
                 if ((unsigned char)tokenBuffer[i] == 0xE2 &&
                     i + 2 < tokenLen &&
                     (unsigned char)tokenBuffer[i+1] == 0x96 &&
                     (unsigned char)tokenBuffer[i+2] == 0x81) {
                     tokenBuffer[i] = ' ';
-                    // Shift remaining bytes left by 2
                     for (int j = i + 1; j < tokenLen - 2; j++) {
                         tokenBuffer[j] = tokenBuffer[j + 2];
                     }
@@ -760,6 +888,80 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
                 }
             }
         }
+
+        // ============================================================
+        // Thinking token limit enforcement
+        // Check BEFORE accepting the token to properly handle limit
+        // ============================================================
+        std::string piece_str(tokenBuffer, tokenLen);
+
+        if (g_in_thinking_phase) {
+            // Check for natural </think> first - respect model intent
+            if (piece_str.find("</think>") != std::string::npos) {
+                g_in_thinking_phase = false;
+                __android_log_print(ANDROID_LOG_DEBUG, "llama-jni", "End of thinking detected at token %d", n_generated_tokens);
+            } else {
+                // Check if adding this token would exceed the limit
+                if (g_think_token_count + 1 >= THINK_TOKEN_LIMIT) {
+                    // === HARD LIMIT HIT - Force close thinking ===
+                    const char* force_close = "\n</think>\n";
+
+                    __android_log_print(ANDROID_LOG_WARN, "llama-jni",
+                        "Hard think limit %d reached at token %d - forcing end of thinking",
+                        THINK_TOKEN_LIMIT, n_generated_tokens);
+
+                    // Stream forced close to UI
+                    jstring forceStr = env->NewStringUTF(force_close);
+                    env->CallVoidMethod(g_callback, onTokenMethod, forceStr);
+                    env->DeleteLocalRef(forceStr);
+
+                    // CRITICAL: Inject forced close into KV cache so model sees it
+                    std::vector<llama_token> force_tokens(64);
+                    int n_force = llama_tokenize(get_model_vocab(),
+                        force_close, strlen(force_close),
+                        force_tokens.data(), force_tokens.size(),
+                        false, true);
+
+                    if (n_force > 0) {
+                        int force_pos = n_prompt_tokens + n_generated_tokens;
+                        llama_batch_clear(*g_batch);
+
+                        for (int i = 0; i < n_force; ++i) {
+                            llama_batch_add(*g_batch, force_tokens[i],
+                                force_pos + i, {0}, (i == n_force - 1));
+                        }
+
+                        int decode_res = llama_decode(g_ctx, *g_batch);
+                        if (decode_res != 0) {
+                            __android_log_print(ANDROID_LOG_ERROR, "llama-jni",
+                                "ERROR: llama_decode failed for force-close (err %d)", decode_res);
+                        } else {
+                            // CRITICAL: Update token count to account for injected force tokens
+                            // This ensures subsequent tokens are positioned correctly in the KV cache
+                            n_generated_tokens += n_force;
+                        }
+                    }
+
+                    // Exit thinking phase
+                    g_in_thinking_phase = false;
+
+                    // Reset sampler to clear accumulated state from long thinking
+                    llama_sampler_reset(g_sampler);
+
+                    // Skip the current token entirely - don't accept it
+                    continue;
+                }
+
+                // Count the token if we're still in thinking phase
+                g_think_token_count++;
+            }
+        }
+
+        // Calculate position after thinking check (position doesn't change if we skip)
+        int32_t current_pos = n_prompt_tokens + n_generated_tokens;
+
+        // Accept the token (updates sampler state for next iteration)
+        llama_sampler_accept(g_sampler, token);
 
         // Send token to callback - let JNI handle any invalid UTF-8 gracefully
         jstring tokenStr = env->NewStringUTF(tokenBuffer);
@@ -793,6 +995,7 @@ Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_nativeStartCompl
 
         // FIXED: Increment counter AFTER successful decode
         n_generated_tokens++;
+
         if (n_generated_tokens % 100 == 0) {
             __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Generated %d tokens so far...", n_generated_tokens);
         }

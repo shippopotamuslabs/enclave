@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.inference
 
 import android.util.Log
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
@@ -23,6 +24,7 @@ import javax.inject.Inject
 class LlamaInferenceServiceImpl @Inject constructor(
     private val sessionManager: LlamaChatSessionManager,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
+    private val modelType: ModelType,
 ) : LlmInferencePort {
 
     companion object {
@@ -52,7 +54,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
     override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = flow {
         val path = modelPath
         if (path == null) {
-            emit(InferenceEvent.Error(IllegalStateException("Model not configured. Call configure() first.")))
+            emit(InferenceEvent.Error(IllegalStateException("Model not configured. Call configure() first."), modelType))
             return@flow
         }
 
@@ -115,11 +117,11 @@ class LlamaInferenceServiceImpl @Inject constructor(
                             when (segment.kind) {
                                 SegmentKind.THINKING -> {
                                     accumulatedThought.append(segment.text)
-                                    emit(InferenceEvent.Thinking(segment.text, accumulatedThought.toString()))
+                                    emit(InferenceEvent.Thinking(segment.text, accumulatedThought.toString(), modelType))
                                 }
                                 SegmentKind.VISIBLE -> {
                                     accumulatedText.append(segment.text)
-                                    emit(InferenceEvent.PartialResponse(segment.text))
+                                    emit(InferenceEvent.PartialResponse(segment.text, modelType))
                                 }
                             }
                         }
@@ -129,21 +131,22 @@ class LlamaInferenceServiceImpl @Inject constructor(
                         if (buffer.isNotEmpty()) {
                             if (isThinking) {
                                 accumulatedThought.append(buffer)
-                                emit(InferenceEvent.Thinking(buffer, accumulatedThought.toString()))
+                                emit(InferenceEvent.Thinking(buffer, accumulatedThought.toString(), modelType))
                             } else {
                                 accumulatedText.append(buffer)
-                                emit(InferenceEvent.PartialResponse(buffer))
+                                emit(InferenceEvent.PartialResponse(buffer, modelType))
                             }
                         }
 
                         // Emit completed with the full response
                         emit(InferenceEvent.Completed(
                             finalResponse = accumulatedText.toString(),
-                            rawFullThought = accumulatedThought.toString().takeIf { it.isNotEmpty() }
+                            rawFullThought = accumulatedThought.toString().takeIf { it.isNotEmpty() },
+                            modelType = modelType
                         ))
                     }
                     is GenerationEvent.Error -> {
-                        emit(InferenceEvent.Error(event.throwable))
+                        emit(InferenceEvent.Error(event.throwable, modelType))
                     }
                 }
             }
@@ -154,7 +157,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error during inference", e)
-            emit(InferenceEvent.Error(e))
+            emit(InferenceEvent.Error(e, modelType))
         }
     }
 

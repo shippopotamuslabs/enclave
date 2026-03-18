@@ -12,13 +12,16 @@ class ModelTypeTest {
     fun `ModelType has correct names`() {
         assertEquals("VISION", ModelType.VISION.name)
         assertEquals("DRAFT_ONE", ModelType.DRAFT_ONE.name)
+        assertEquals("DRAFT_TWO", ModelType.DRAFT_TWO.name)
         assertEquals("MAIN", ModelType.MAIN.name)
+        assertEquals("FAST", ModelType.FAST.name)
         assertEquals("THINKING", ModelType.THINKING.name)
+        assertEquals("FINAL_SYNTHESIS", ModelType.FINAL_SYNTHESIS.name)
     }
 
     @Test
-    fun `ModelType has exactly 6 values`() {
-        assertEquals(6, ModelType.entries.size)
+    fun `ModelType has exactly 7 values`() {
+        assertEquals(7, ModelType.entries.size)
     }
 
     @Test
@@ -29,6 +32,7 @@ class ModelTypeTest {
         assertEquals(ModelType.MAIN, ModelType.fromApiValue("main"))
         assertEquals(ModelType.FAST, ModelType.fromApiValue("fast"))
         assertEquals(ModelType.THINKING, ModelType.fromApiValue("thinking"))
+        assertEquals(ModelType.FINAL_SYNTHESIS, ModelType.fromApiValue("final_synthesis"))
     }
 }
 

@@ -166,6 +166,22 @@ class ModelConfigFetcherImplTest {
                 maxTokens = 512,
                 contextWindow = 1024,
                 systemPrompt = "Be quick."
+            ),
+            RemoteModelConfig(
+                modelType = ModelType.FINAL_SYNTHESIS,
+                fileName = "final_synthesis.gguf",
+                huggingFaceModelName = "test/final",
+                displayName = "Final Synthesis Model",
+                sha256 = "pqr678",
+                sizeInBytes = 300000L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                temperature = 0.3,
+                topK = 20,
+                topP = 0.8,
+                repetitionPenalty = 1.0,
+                maxTokens = 512,
+                contextWindow = 1024,
+                systemPrompt = "You are a final synthesizer."
             )
         )
 
@@ -173,18 +189,21 @@ class ModelConfigFetcherImplTest {
         val modelConfigs = fetcher.toModelConfigurations(remoteConfigs)
 
         // Then
-        assertEquals(5, modelConfigs.size)
+        assertEquals(6, modelConfigs.size)
 
         val mainConfig = modelConfigs.first { it.modelType == ModelType.MAIN }
         val visionConfig = modelConfigs.first { it.modelType == ModelType.VISION }
         val draftOneConfig = modelConfigs.first { it.modelType == ModelType.DRAFT_ONE }
         val draftTwoConfig = modelConfigs.first { it.modelType == ModelType.DRAFT_TWO }
         val fastConfig = modelConfigs.first { it.modelType == ModelType.FAST }
+        val finalSynthesisConfig = modelConfigs.first { it.modelType == ModelType.FINAL_SYNTHESIS }
 
         assertEquals(0.7, mainConfig.tunings.temperature)
         assertEquals(0.7, visionConfig.tunings.temperature)
         assertEquals(0.5, draftOneConfig.tunings.temperature)
         assertEquals(0.5, draftTwoConfig.tunings.temperature)
         assertEquals(0.3, fastConfig.tunings.temperature)
+        assertEquals(0.3, finalSynthesisConfig.tunings.temperature)
+        assertEquals("You are a final synthesizer.", finalSynthesisConfig.persona.systemPrompt)
     }
 }

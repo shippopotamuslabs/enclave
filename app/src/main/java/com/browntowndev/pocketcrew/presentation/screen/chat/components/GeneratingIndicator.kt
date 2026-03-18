@@ -42,12 +42,12 @@ fun GeneratingIndicator(
 
             Spacer(modifier = Modifier.width(5.dp))
 
-            // "Generating" text with shimmer
+            // "Responding" text with shimmer
             val grayColor = MaterialTheme.colorScheme.onSurfaceVariant
             val highlightColor = grayColor.copy(alpha = 0.3f)
 
             ShimmerText(
-                text = "Generating...",
+                text = "Responding...",
                 baseColor = grayColor,
                 highlightColor = highlightColor,
                 style = MaterialTheme.typography.titleMedium.copy(
