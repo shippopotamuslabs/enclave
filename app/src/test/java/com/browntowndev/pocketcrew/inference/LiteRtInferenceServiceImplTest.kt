@@ -4,6 +4,7 @@ import android.util.Log
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import io.mockk.MockKAnnotations
 import io.mockk.every
@@ -54,7 +55,7 @@ class LiteRtInferenceServiceImplTest {
         val chunks = flowOf("<think>", "thinking", "</think>answer")
         every { mockConversation.sendMessageAsync(any()) } returns chunks
 
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens)
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.MAIN)
         val events = service.sendPrompt("Hello", closeConversation = false).toList()
 
         // Then - events should be processed by use case
@@ -68,7 +69,7 @@ class LiteRtInferenceServiceImplTest {
         val chunks = flowOf("<think>", "thought", "</think>answer")
         every { mockConversation.sendMessageAsync(any()) } returns chunks
 
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens)
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.MAIN)
         service.sendPrompt("Hello", closeConversation = true).toList()
 
         verify { mockConversationManager.closeConversation() }
@@ -79,7 +80,7 @@ class LiteRtInferenceServiceImplTest {
         val chunks = flowOf("<think>", "thought", "</think>answer")
         every { mockConversation.sendMessageAsync(any()) } returns chunks
 
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens)
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.MAIN)
         service.sendPrompt("Hello", closeConversation = false).toList()
 
         verify(exactly = 0) { mockConversationManager.closeConversation() }
@@ -87,7 +88,7 @@ class LiteRtInferenceServiceImplTest {
 
     @Test
     fun `closeSession closes conversation and engine`() {
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens)
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.MAIN)
         service.closeSession()
 
         verify { mockConversationManager.closeConversation() }

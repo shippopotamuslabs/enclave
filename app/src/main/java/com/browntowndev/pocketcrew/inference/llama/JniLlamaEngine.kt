@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -38,8 +39,93 @@ class JniLlamaEngine @Inject constructor(
         // Timeout for unload - need longer to let ongoing generation finish
         private const val UNLOAD_TIMEOUT_SECONDS = 30L
 
+        // Native library names for dual-library approach
+        private const val LIBRARY_CPUDETECT = "cpudetect"
+        private const val LIBRARY_SVE = "llama-jni-sve"
+        private const val LIBRARY_NEON = "llama-jni-neon"
+
+        // Declared before init runs - cpudetect must be loaded first
+        @JvmStatic
+        private external fun detectSveBits(): Int
+
         init {
-            System.loadLibrary("llama-jni")
+            loadOptimalLibrary()
+        }
+
+        /**
+         * Load the optimal native library based on hardware SVE support.
+         *
+         * Strategy:
+         * 1. Load cpudetect.so first (tiny library with no llama.cpp dependency)
+         * 2. Query SVE vector length via prctl
+         * 3. Load exactly one llama library - whichever matches the hardware
+         */
+        private fun loadOptimalLibrary() {
+            // Step 1: Load cpudetect library first (no symbol conflicts)
+            try {
+                Log.i(TAG, "Loading CPU detector: $LIBRARY_CPUDETECT")
+                System.loadLibrary(LIBRARY_CPUDETECT)
+            } catch (e: UnsatisfiedLinkError) {
+                throw RuntimeException("Critical: cpudetect library failed to load", e)
+            }
+
+            // Step 2: Query SVE via prctl (bypasses SELinux file restrictions)
+            val sveBits = try {
+                detectSveBits()
+            } catch (e: Exception) {
+                Log.w(TAG, "SVE detection failed: ${e.message}")
+                0
+            }
+
+            // Step 3: Check for blacklisted devices (Tensor G3 has broken 128-bit SVE)
+            val isBlacklisted = isKnownSveBlacklisted()
+
+            // Step 4: Load exactly one llama library based on detection
+            val libraryToLoad = when {
+                isBlacklisted.first -> {
+                    Log.w(TAG, "Blacklisted device: ${isBlacklisted.second}. Using NEON.")
+                    LIBRARY_NEON
+                }
+                sveBits >= 256 -> {
+                    Log.i(TAG, "SVE $sveBits-bit confirmed. Loading SVE library.")
+                    LIBRARY_SVE
+                }
+                sveBits > 0 -> {
+                    Log.i(TAG, "SVE present but narrow (${sveBits}-bit < 256). Using NEON.")
+                    LIBRARY_NEON
+                }
+                else -> {
+                    Log.i(TAG, "No SVE support detected. Using NEON.")
+                    LIBRARY_NEON
+                }
+            }
+
+            try {
+                Log.i(TAG, "Loading llama library: $libraryToLoad")
+                System.loadLibrary(libraryToLoad)
+            } catch (e: UnsatisfiedLinkError) {
+                throw RuntimeException("Critical: Failed to load $libraryToLoad", e)
+            }
+
+            Log.i(TAG, "Library loaded successfully")
+        }
+
+        /**
+         * Check if device is known to have problematic (128-bit) SVE implementation.
+         */
+        private fun isKnownSveBlacklisted(): Pair<Boolean, String> {
+            val socModel = android.os.Build.SOC_MODEL.uppercase()
+            if (socModel == "GS301") {
+                return Pair(true, "Tensor G3 (GS301)")
+            }
+
+            val device = android.os.Build.DEVICE.lowercase()
+            val pixel8Family = setOf("shiba", "husky", "akita")
+            if (device in pixel8Family) {
+                return Pair(true, "Pixel 8 family ($device)")
+            }
+
+            return Pair(false, "")
         }
     }
 
@@ -66,7 +152,7 @@ class JniLlamaEngine @Inject constructor(
 
     override suspend fun initialize(config: LlamaModelConfig) = withContext(ioDispatcher) {
         Log.i(TAG, "Initializing llama model: ${config.modelPath}")
-        Log.i(TAG, "  contextWindow=${config.sampling.contextWindow}, maxTokens=${config.sampling.maxTokens}, threads=${config.sampling.threads}, batchSize=${config.sampling.batchSize}, gpuLayers=${config.sampling.gpuLayers}")
+        Log.i(TAG, "  contextWindow=${config.sampling.contextWindow}, maxTokens=${config.sampling.maxTokens}, batchSize=${config.sampling.batchSize}, gpuLayers=${config.sampling.gpuLayers}")
 
         if (loaded.get()) {
             Log.i(TAG, "Unloading previous model")
@@ -80,14 +166,22 @@ class JniLlamaEngine @Inject constructor(
         val gpuProfiler = GpuProfiler()
         val detectedBackend = gpuProfiler.detectOptimalBackend()
         val backendDescription = gpuProfiler.getBackendDescription()
+        val gpuName = gpuProfiler.detectGpuName()
         Log.i(TAG, "GPU Backend: $backendDescription")
+        Log.i(TAG, "GPU detected: $gpuName")
+
+        // CRITICAL: Log whether GPU is actually being used
+        if (detectedBackend == LlamaBackend.CPU) {
+            Log.w(TAG, "=== WARNING: Running on CPU only! GPU acceleration is DISABLED ===")
+            Log.w(TAG, "=== To enable GPU: change GpuProfiler to return Vulkan backend ===")
+        } else {
+            Log.i(TAG, "=== GPU acceleration ENABLED ===")
+        }
 
         val future = llamaExecutor.submit<Boolean> {
             nativeLoadModel(
                 modelPath = config.modelPath,
                 contextSize = config.sampling.contextWindow,
-                threads = config.sampling.threads,
-                nThreadsBatch = config.sampling.nThreadsBatch,
                 batchSize = config.sampling.batchSize,
                 gpuLayers = config.sampling.gpuLayers,
                 backendType = detectedBackend.value
@@ -276,7 +370,7 @@ class JniLlamaEngine @Inject constructor(
         }.get(10, TimeUnit.SECONDS)
 
         // Give the native thread a moment to exit the generation loop
-        kotlinx.coroutines.delay(500)
+        delay(500)
 
         // Now unload the model with longer timeout
         llamaExecutor.submit {
@@ -420,8 +514,6 @@ class JniLlamaEngine @Inject constructor(
     private external fun nativeLoadModel(
         modelPath: String,
         contextSize: Int,
-        threads: Int,
-        nThreadsBatch: Int,
         batchSize: Int,
         gpuLayers: Int,
         backendType: Int

@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.inference
 
 import android.util.Log
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.inference.llama.ChatMessage
@@ -20,6 +21,7 @@ import javax.inject.Inject
  */
 class MediaPipeInferenceServiceImpl @Inject constructor(
     private val llmInference: LlmInference,
+    private val modelType: ModelType,
 ) : LlmInferencePort {
 
     companion object {
@@ -62,21 +64,21 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                         val cleanText = chunkText.replace("<think>", "")
                         if (cleanText.isNotEmpty()) {
                             accumulatedThought.append(cleanText)
-                            trySend(InferenceEvent.Thinking(cleanText, accumulatedThought.toString()))
+                            trySend(InferenceEvent.Thinking(cleanText, accumulatedThought.toString(), modelType))
                         }
                     } else if (chunkText.contains("</think>")) {
                         isThinkingPhase = false
                         val cleanText = chunkText.replace("</think>", "")
                         if (cleanText.isNotEmpty()) {
                             accumulatedText.append(cleanText)
-                            trySend(InferenceEvent.PartialResponse(cleanText))
+                            trySend(InferenceEvent.PartialResponse(cleanText, modelType))
                         }
                     } else if (isThinkingPhase) {
                         accumulatedThought.append(chunkText)
-                        trySend(InferenceEvent.Thinking(chunkText, accumulatedThought.toString()))
+                        trySend(InferenceEvent.Thinking(chunkText, accumulatedThought.toString(), modelType))
                     } else {
                         accumulatedText.append(chunkText)
-                        trySend(InferenceEvent.PartialResponse(chunkText))
+                        trySend(InferenceEvent.PartialResponse(chunkText, modelType))
                     }
                 }
 
@@ -84,7 +86,8 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                     trySend(
                         InferenceEvent.Completed(
                             finalResponse = accumulatedText.toString(),
-                            rawFullThought = accumulatedThought.toString().takeIf { it.isNotEmpty() }
+                            rawFullThought = accumulatedThought.toString().takeIf { it.isNotEmpty() },
+                            modelType = modelType
                         )
                     )
                     close()
@@ -96,7 +99,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error during inference", e)
-            trySend(InferenceEvent.Error(e))
+            trySend(InferenceEvent.Error(e, modelType))
             close()
         } finally {
             if (closeConversation) {

@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
@@ -55,7 +56,7 @@ class CreateUserMessageUseCase @Inject constructor(
             // (0 is the default value that triggers auto-generation in Room)
             if (message.chatId == 0L) {
                 val now = Date()
-                val chatName = generateChatName(message.content)
+                val chatName = generateChatName(message.content.text)
                 val newChat = Chat(
                     name = chatName,
                     created = now,
@@ -69,7 +70,7 @@ class CreateUserMessageUseCase @Inject constructor(
                 // Create placeholder assistant message (empty content, will be updated after generation)
                 val assistantMessage = Message(
                     chatId = newChatId,
-                    content = "",
+                    content = Content(text = ""),
                     role = Role.ASSISTANT
                 )
                 val assistantMessageId = messageRepository.saveMessage(assistantMessage)
@@ -80,7 +81,7 @@ class CreateUserMessageUseCase @Inject constructor(
                 // Create placeholder assistant message for existing chat too
                 val assistantMessage = Message(
                     chatId = message.chatId,
-                    content = "",
+                    content = Content(text = ""),
                     role = Role.ASSISTANT
                 )
                 val assistantMessageId = messageRepository.saveMessage(assistantMessage)

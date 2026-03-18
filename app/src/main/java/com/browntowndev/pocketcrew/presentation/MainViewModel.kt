@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.inference.llama.DeviceCpuConfig
+import com.browntowndev.pocketcrew.inference.llama.SveDetector
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeModelsUseCase
 import com.browntowndev.pocketcrew.presentation.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -42,13 +42,8 @@ class MainViewModel @Inject constructor(
     private fun initializeApp() {
         viewModelScope.launch {
             try {
-                // Initialize CPU configuration for llama.cpp (big.LITTLE aware thread calculation)
-                // This does blocking I/O to read sysfs, so run on IO dispatcher
-                withContext(Dispatchers.IO) {
-                    val availableProcessors = Runtime.getRuntime().availableProcessors()
-                    DeviceCpuConfig.initialize(availableProcessors)
-                    logPort.debug("MainViewModel", "Device CPU configured: threads=${DeviceCpuConfig.numThreads}, batchThreads=${DeviceCpuConfig.batchThreads}")
-                }
+                // Detect SVE support for optimal native library selection
+                logPort.debug("MainViewModel", "SVE detected: ${SveDetector.shouldUseSve()}")
 
                 // Suspends until network fetch, DB update, and cache init complete
                 // Returns DownloadModelsResult with scan result to avoid duplicate scanning

@@ -9,14 +9,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -39,11 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -62,38 +57,26 @@ import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 fun InputBar(
     inputText: String,
     selectedMode: Mode,
-    isExpanded: Boolean,
-    isThinking: Boolean,
+    isGenerating: Boolean,
     isGlobalInferenceBlocked: Boolean = false,
     onInputChange: (String) -> Unit,
     onModeChange: (Mode) -> Unit,
     onSend: (String) -> Unit,
-    onExpandToggle: () -> Unit,
     onAttach: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var modeExpanded by remember { mutableStateOf(false) }
+    var isExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
     var textFieldValue by remember { mutableStateOf(TextFieldValue(inputText)) }
 
-    // Track previous inputText to detect when it becomes empty (message sent)
-    var previousInputText by remember { mutableStateOf(inputText) }
-
     LaunchedEffect(inputText) {
         if (textFieldValue.text != inputText) {
             textFieldValue = TextFieldValue(inputText)
         }
-        // Clear focus when inputText becomes empty (after sending)
-        if (previousInputText.isNotEmpty() && inputText.isEmpty()) {
-            if (isExpanded) {
-                onExpandToggle()
-            }
-            focusManager.clearFocus()
-        }
-        previousInputText = inputText
     }
 
     // Auto-expand: when text exceeds ~60 chars OR has newlines, show expand icon and auto-expand
@@ -189,7 +172,9 @@ fun InputBar(
                         )
 
                         // Collapse icon
-                        IconButton(onClick = onExpandToggle) {
+                        IconButton(onClick = {
+                            isExpanded = !isExpanded
+                        }) {
                             Icon(
                                 painter = painterResource(R.drawable.collapse_content),
                                 contentDescription = "Collapse input",
@@ -241,7 +226,9 @@ fun InputBar(
 
                     // Expand icon (if applicable)
                     if (showExpandIcon) {
-                        IconButton(onClick = onExpandToggle) {
+                        IconButton(onClick = {
+                            isExpanded = !isExpanded
+                        }) {
                             Icon(
                                 painter = painterResource(R.drawable.expand_content),
                                 contentDescription = "Expand input",
@@ -310,14 +297,16 @@ fun InputBar(
                 }
 
                 // Send
-                val isSendDisabled = isThinking || isGlobalInferenceBlocked
+                val isSendDisabled = isGenerating || isGlobalInferenceBlocked
                 IconButton(
                     onClick = {
                         if (textFieldValue.text.isNotBlank() && !isSendDisabled) {
                             val textToSend = textFieldValue.text
                             onSend(textToSend) // Send FIRST while inputText still has value
                             textFieldValue = TextFieldValue("") // Clear locally
-                            onInputChange("") // Clear parent state - LaunchedEffect will handle focus
+                            onInputChange("") // Clear parent state
+                            isExpanded = false
+                            focusManager.clearFocus()
                         }
                     },
                     enabled = textFieldValue.text.isNotBlank() && !isSendDisabled
@@ -346,12 +335,10 @@ fun PreviewInputBar() {
         InputBar(
             inputText = "",
             selectedMode = Mode.FAST,
-            isExpanded = false,
-            isThinking = false,
+            isGenerating = false,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
-            onExpandToggle = {},
             onAttach = {}
         )
     }
@@ -368,12 +355,10 @@ fun PreviewInputBarExpanded() {
                 Line 3: showing collapse icon.
             """.trimIndent(),
             selectedMode = Mode.CREW,
-            isExpanded = true,
-            isThinking = false,
+            isGenerating = false,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
-            onExpandToggle = {},
             onAttach = {}
         )
     }
@@ -386,12 +371,10 @@ fun PreviewInputBarSingleLine() {
         InputBar(
             inputText = "Single line message",
             selectedMode = Mode.FAST,
-            isExpanded = false,
-            isThinking = false,
+            isGenerating = false,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
-            onExpandToggle = {},
             onAttach = {}
         )
     }
@@ -404,12 +387,10 @@ fun PreviewInputBarThinking() {
         InputBar(
             inputText = "Message while thinking",
             selectedMode = Mode.FAST,
-            isExpanded = false,
-            isThinking = true,
+            isGenerating = true,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
-            onExpandToggle = {},
             onAttach = {}
         )
     }
@@ -422,12 +403,10 @@ fun PreviewInputBarThinkingMode() {
         InputBar(
             inputText = "Tell me about quantum physics",
             selectedMode = Mode.THINKING,
-            isExpanded = false,
-            isThinking = false,
+            isGenerating = false,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
-            onExpandToggle = {},
             onAttach = {}
         )
     }

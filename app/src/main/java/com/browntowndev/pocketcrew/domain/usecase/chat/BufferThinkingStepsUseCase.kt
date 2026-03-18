@@ -30,7 +30,7 @@ class BufferThinkingStepsUseCase @Inject constructor() {
         private val PARAGRAPH_BREAK_REGEX = Regex("""\n\s*\n""")
 
         // Matches list markers: - , * , + at start of line (after newline)
-        private val LIST_MARKER_REGEX = Regex("""\n\s*([-*+]|\d+[.)])(\s*)""")
+        private val LIST_MARKER_REGEX = Regex("""\n\s*([\-+*]|\d+[.)])(\s*)""")
 
         // Claude-style thought header: **Thought for <duration>** or similar
         // Specifically targets Claude-style reasoning headers
@@ -83,7 +83,7 @@ class BufferThinkingStepsUseCase @Inject constructor() {
         // Detect EXIT from protected environment - emit everything
         if (wasInCodeBlock && !isInCodeBlock) {
             // Exited code block - emit everything
-            val content = text.trim()
+            val content = text
             if (content.isNotBlank()) {
                 emitted.add(content)
             }
@@ -93,7 +93,7 @@ class BufferThinkingStepsUseCase @Inject constructor() {
 
         if (wasInMathBlock && !isInMathBlock) {
             // Exited math block - emit everything
-            val content = text.trim()
+            val content = text
             if (content.isNotBlank()) {
                 emitted.add(content)
             }
@@ -110,7 +110,7 @@ class BufferThinkingStepsUseCase @Inject constructor() {
         val codeBlockCount = text.split("```").size - 1
         if (codeBlockCount > 0 && codeBlockCount % 2 == 0) {
             // We have complete code block(s) - emit everything
-            val content = text.trim()
+            val content = text
             if (content.isNotBlank()) {
                 emitted.add(content)
             }
@@ -142,7 +142,7 @@ class BufferThinkingStepsUseCase @Inject constructor() {
         // If no boundaries found, check for length fallback
         if (allBoundaries.isEmpty()) {
             if (buffer.length > HARD_MAX_CHARS_BEFORE_FORCE) {
-                val content = buffer.toString().trim()
+                val content = buffer.toString()
                 if (content.isNotBlank()) {
                     emitted.add(content)
                     buffer.clear()
@@ -175,7 +175,7 @@ class BufferThinkingStepsUseCase @Inject constructor() {
 
                 // If we had a pending header, emit from that header to this header
                 if (pendingHeaderStart != null && pendingHeaderEnd != null) {
-                    val chunk = text.substring(pendingHeaderStart, pendingHeaderEnd).trim()
+                    val chunk = text.substring(pendingHeaderStart, pendingHeaderEnd)
                     if (chunk.isNotBlank()) {
                         emitted.add(chunk)
                     }
@@ -191,7 +191,7 @@ class BufferThinkingStepsUseCase @Inject constructor() {
             // For non-header boundaries, emit any pending header first
             if (pendingHeaderStart != null && pendingHeaderEnd != null) {
                 // Emit from pending header to current boundary
-                val chunk = text.substring(pendingHeaderStart, boundaryStart).trim()
+                val chunk = text.substring(pendingHeaderStart, boundaryStart)
                 if (chunk.isNotBlank()) {
                     emitted.add(chunk)
                 }
@@ -213,7 +213,7 @@ class BufferThinkingStepsUseCase @Inject constructor() {
             }
 
             // Extract the chunk before this boundary
-            val chunk = text.substring(lastBoundaryEnd, boundaryStart).trim()
+            val chunk = text.substring(lastBoundaryEnd, boundaryStart)
             if (chunk.isNotBlank()) {
                 emitted.add(chunk)
             }
@@ -225,13 +225,13 @@ class BufferThinkingStepsUseCase @Inject constructor() {
         // Only emit if there's actual content after the header (not just the header itself)
         // Otherwise, keep the header in the buffer for the next call
         val hasPendingHeaderWithoutContent = pendingHeaderStart != null && pendingHeaderEnd != null &&
-                text.substring(pendingHeaderEnd).trim().isBlank()
+                text.substring(pendingHeaderEnd).isBlank()
 
         if (pendingHeaderStart != null && pendingHeaderEnd != null) {
             // Check if there's content after the header (more than just whitespace)
-            val contentAfterHeader = text.substring(pendingHeaderEnd).trim()
+            val contentAfterHeader = text.substring(pendingHeaderEnd)
             if (contentAfterHeader.isNotBlank()) {
-                val chunk = text.substring(pendingHeaderStart).trim()
+                val chunk = text.substring(pendingHeaderStart)
                 emitted.add(chunk)
                 // Clear buffer since we emitted everything
                 buffer.clear()
@@ -298,7 +298,7 @@ class BufferThinkingStepsUseCase @Inject constructor() {
 
         // For flush, we emit everything regardless of protected state
         // This ensures no content is lost
-        val remaining = buffer.toString().trim()
+        val remaining = buffer.toString()
             .ifBlank { null }
 
         reset()

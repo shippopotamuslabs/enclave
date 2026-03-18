@@ -1,11 +1,30 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.presentation.screen.chat.Mode
+import com.browntowndev.pocketcrew.domain.model.chat.Message
 import kotlinx.coroutines.flow.Flow
 
 interface ChatUseCases {
-    val processPrompt: CreateUserMessageUseCase
+    /**
+     * Creates the initial user prompt.
+     */
+    val processPromptUseCase: CreateUserMessageUseCase
+
+    /**
+     * Generates a chat response for the given prompt.
+     */
     val generateChatResponseUseCase: GenerateChatResponseUseCase
+
+    /**
+     * Gets the chat messages for the given chat ID.
+     */
+    val getChatUseCase: GetChatUseCase
+
+    /**
+     * Creates the initial user prompt.
+     * @param message The user's input text
+     */
+    suspend fun processPrompt(message: Message) = processPromptUseCase(message)
 
     /**
      * Generates a chat response for the given prompt using streaming.
@@ -16,6 +35,13 @@ interface ChatUseCases {
      * @param mode The execution mode (FAST, THINKING, or CREW)
      * @return Flow of MessageGenerationState for UI updates
      */
-    fun generateChatResponse(prompt: String, userMessageId: Long, assistantMessageId: Long, chatId: Long, mode: Mode): Flow<MessageGenerationState> =
+    suspend fun generateChatResponse(prompt: String, userMessageId: Long, assistantMessageId: Long, chatId: Long, mode: Mode) =
         generateChatResponseUseCase(prompt, userMessageId, assistantMessageId, chatId, mode)
+
+    /**
+     * Gets the chat messages for the given chat ID.
+     * @param chatId The chat ID to get messages for
+     * @return Flow of messages for the chat
+     */
+    suspend fun getChat(chatId: Long): Flow<List<Message>> = getChatUseCase(chatId)
 }

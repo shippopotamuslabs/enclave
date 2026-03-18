@@ -14,11 +14,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.pocketcrew.presentation.screen.chat.ResponseState
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.InputBar
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.MessageList
 import com.browntowndev.pocketcrew.presentation.screen.chat.components.ShieldOverlay
-import com.browntowndev.pocketcrew.presentation.screen.chat.components.UseTheCrewPopup
 import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 
 @Composable
@@ -29,21 +27,18 @@ fun ChatScreen(
     onSendMessage: (String) -> Unit,
     onModeChange: (Mode) -> Unit,
     onInputChange: (String) -> Unit,
-    onExpandToggle: () -> Unit,
     onAttach: () -> Unit,
     onShieldTap: () -> Unit,
-    onUseTheCrew: () -> Unit,
-    onDismissUseTheCrew: () -> Unit,
 ) {
     Scaffold(
         topBar = {
             ChatTopBar(
                 onMenuClick = onNavigateToHistory,
                 onNewChatClick = onNewChat,
-                isThinking = uiState.responseState != ResponseState.NONE,
+                isThinking = uiState.isGenerating,
             )
         },
-        contentWindowInsets = WindowInsets(0),
+        contentWindowInsets = WindowInsets(),
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -57,42 +52,29 @@ fun ChatScreen(
                 MessageList(
                     modifier = Modifier.fillMaxSize(),
                     messages = uiState.messages,
-                    processingIndicatorState = uiState.processingIndicatorState,
-                    thinkingData = uiState.thinkingData,
-                    selectedMode = uiState.selectedMode,
-                    showThoughtForHeader = uiState.showThoughtForHeader,
                 )
 
-                if (uiState.showShield) {
+                if (uiState.shieldReason != null) {
                     ShieldOverlay(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(16.dp),
-                        reason = uiState.shieldReason,
+                        reason = uiState.shieldReason ?: "",
                         onTap = onShieldTap,
                     )
                 }
             }
-
-            // "Use the Crew" popup - appears after Fast response
-            UseTheCrewPopup(
-                visible = uiState.showUseTheCrewPopup,
-                onUseTheCrew = onUseTheCrew,
-                onDismiss = onDismissUseTheCrew,
-            )
 
             // InputBar — pinned above keyboard
             InputBar(
                 modifier = Modifier.fillMaxWidth(),
                 inputText = uiState.inputText,
                 selectedMode = uiState.selectedMode,
-                isExpanded = uiState.isInputExpanded,
-                isThinking = uiState.responseState != ResponseState.NONE,
+                isGenerating = uiState.isGenerating,
                 isGlobalInferenceBlocked = uiState.isGlobalInferenceBlocked,
                 onInputChange = onInputChange,
                 onModeChange = onModeChange,
                 onSend = onSendMessage,
-                onExpandToggle = onExpandToggle,
                 onAttach = onAttach,
             )
         }
@@ -112,11 +94,8 @@ private fun PreviewChatScreenLight() {
             onSendMessage = {},
             onModeChange = {},
             onInputChange = {},
-            onExpandToggle = {},
             onAttach = {},
             onShieldTap = {},
-            onUseTheCrew = {},
-            onDismissUseTheCrew = {},
         )
     }
 }
@@ -145,20 +124,14 @@ private fun PreviewChatScreenWithMessages() {
             uiState = ChatUiState(
                 messages = fakeLongMessages,
                 inputText = "Hello, how are you?",
-                selectedMode = Mode.FAST,
-                isInputExpanded = false,
-                responseState = ResponseState.NONE,
             ),
             onNavigateToHistory = {},
             onNewChat = {},
             onSendMessage = {},
             onModeChange = {},
             onInputChange = {},
-            onExpandToggle = {},
             onAttach = {},
             onShieldTap = {},
-            onUseTheCrew = {},
-            onDismissUseTheCrew = {},
         )
     }
 }
@@ -170,19 +143,14 @@ private fun PreviewChatScreenThinking() {
         ChatScreen(
             uiState = ChatUiState(
                 messages = fakeLongMessages.takeLast(1),
-                responseState = ResponseState.THINKING,
-                thinkingSteps = listOf("Analyzing query...", "Refining response..."),
             ),
             onNavigateToHistory = {},
             onNewChat = {},
             onSendMessage = {},
             onModeChange = {},
             onInputChange = {},
-            onExpandToggle = {},
             onAttach = {},
             onShieldTap = {},
-            onUseTheCrew = {},
-            onDismissUseTheCrew = {},
         )
     }
 }
@@ -193,7 +161,6 @@ private fun PreviewChatScreenShield() {
     PocketCrewTheme {
         ChatScreen(
             uiState = ChatUiState(
-                showShield = true,
                 shieldReason = "Potential harm detected",
             ),
             onNavigateToHistory = {},
@@ -201,11 +168,8 @@ private fun PreviewChatScreenShield() {
             onSendMessage = {},
             onModeChange = {},
             onInputChange = {},
-            onExpandToggle = {},
             onAttach = {},
             onShieldTap = {},
-            onUseTheCrew = {},
-            onDismissUseTheCrew = {},
         )
     }
 }
@@ -217,18 +181,14 @@ private fun PreviewChatScreenExpandedInput() {
         ChatScreen(
             uiState = ChatUiState(
                 inputText = "This is a long input text to test expanded state...",
-                isInputExpanded = true,
             ),
             onNavigateToHistory = {},
             onNewChat = {},
             onSendMessage = {},
             onModeChange = {},
             onInputChange = {},
-            onExpandToggle = {},
             onAttach = {},
             onShieldTap = {},
-            onUseTheCrew = {},
-            onDismissUseTheCrew = {},
         )
     }
 }

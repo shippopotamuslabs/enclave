@@ -2,8 +2,6 @@ package com.browntowndev.pocketcrew.presentation.screen.chat
 
 import android.content.Context
 import com.browntowndev.pocketcrew.R
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
 import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
@@ -14,7 +12,7 @@ enum class Mode(
     @param:DrawableRes val iconRes: Int,
 ) {
     FAST(R.string.mode_fast, R.drawable.bolt),
-    THINKING(R.string.mode_thinking, R.drawable.cognition),
+    THINKING(R.string.mode_thinking, R.drawable.lightbulb),
     CREW(R.string.mode_crew, R.drawable.merge);
 
     fun getDisplayName(context: Context): String = context.getString(displayNameRes)
@@ -27,210 +25,96 @@ enum class MessageRole {
     Assistant,
 }
 
-/**
- * Represents the current state of the AI response generation.
- */
-enum class ResponseState {
-    /** No active response generation */
-    NONE,
-    /** Generating text (no thinking) - shows orb */
-    PROCESSING,
-    /** Model is thinking (has thinkingSteps) - shows animated thinking indicator */
-    THINKING,
-    /** Crew mode: generating text for non-thinking step (shows "Generating..." indicator) */
-    GENERATING,
-}
-
-/**
- * Simple indicator type for processing/generating states.
- */
-enum class ProcessingIndicatorState {
-    NONE,
-    PROCESSING,
-    GENERATING
-}
-
-/**
- * Thinking metadata attached to a completed assistant message.
- * Persists on the message so users can review chain-of-thought
- * for any historical response in the conversation.
- */
-data class ThinkingData(
-    val thinkingDurationSeconds: Int,
-    val steps: List<String>,
-    val modelDisplayName: String = "",
-    val thinkingStartTime: Long = 0L,
-)
-
-/**
- * Step completion data for Crew mode.
- * Tracks each step's output and metadata for display in the UI.
- * stepName is derived from stepType.displayName().
- * modelDisplayName should be populated from ModelRegistry in the ViewModel.
- */
-data class StepCompletionData(
-    val stepOutput: String,
-    val thinkingDurationSeconds: Int,                    // Thinking time only (for "Thought For Xs")
-    val totalDurationSeconds: Int = 0,         // Total time (for BottomSheet)
-    val thinkingSteps: List<String>,
-    val stepType: PipelineStep,
-    val modelType: ModelType,
-    val modelDisplayName: String
-) {
-    val thinkingComplete: Boolean
-        get() = thinkingDurationSeconds > 0 && thinkingSteps.isNotEmpty()
-
-    /**
-     * Human-readable step name derived from stepType.
-     */
-    val stepName: String
-        get() = stepType.displayName()
-
-    companion object {
-        /**
-         * Creates StepCompletionData from domain model.
-         */
-        fun fromDomain(
-            domainData: com.browntowndev.pocketcrew.domain.port.repository.StepCompletionData,
-            modelDisplayName: String
-        ): StepCompletionData {
-            return StepCompletionData(
-                stepOutput = domainData.stepOutput,
-                thinkingDurationSeconds = domainData.thinkingDurationSeconds,
-                totalDurationSeconds = domainData.totalDurationSeconds,
-                thinkingSteps = domainData.thinkingSteps,
-                stepType = domainData.stepType,
-                modelType = domainData.modelType,
-                modelDisplayName = modelDisplayName
-            )
-        }
-
-        /**
-         * Creates StepCompletionData from MessageGenerationState.StepCompleted.
-         */
-        fun fromMessageGenerationState(
-            state: com.browntowndev.pocketcrew.domain.usecase.chat.MessageGenerationState.StepCompleted,
-            modelDisplayName: String
-        ): StepCompletionData {
-            return StepCompletionData(
-                stepOutput = state.stepOutput,
-                thinkingDurationSeconds = state.thinkingDurationSeconds,
-                totalDurationSeconds = state.totalDurationSeconds,
-                thinkingSteps = state.thinkingSteps,
-                stepType = state.stepType,
-                modelType = state.modelType,
-                modelDisplayName = modelDisplayName
-            )
-        }
-    }
-}
-
 data class ChatMessage(
     val id: Long,
     val chatId: Long,
     val role: MessageRole,
-    val content: String,
+    val content: ContentUi,
     val formattedTimestamp: String,
-    val thinkingData: ThinkingData? = null,
-    val completedSteps: List<StepCompletionData>? = null,
+    val indicatorState: IndicatorState? = null,
+    val modelDisplayName: String = ""
 )
 
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val inputText: String = "",
     val selectedMode: Mode = Mode.FAST,
-    val isInputExpanded: Boolean = false,
-    /** Current state of the AI response generation. */
-    val responseState: ResponseState = ResponseState.NONE,
-    /** Live steps for the in-progress generation — NOT persisted on messages. */
-    val thinkingSteps: List<String> = emptyList(),
-    /** Timestamp when thinking started, used to calculate elapsed thinking time. */
-    val thinkingStartTime: Long = 0L,
-    /** Thinking duration in seconds - set when thinking ends (GeneratingText starts). */
-    val thinkingDurationSeconds: Int = 0,
-    /** Computed indicator state - business logic for what to show during response generation. */
-    val processingIndicatorState: ProcessingIndicatorState = ProcessingIndicatorState.NONE,
-    /** Thinking data for "Thought For Xs" or animated thinking indicator. Null when no thinking. */
-    val thinkingData: ThinkingData? = null,
-    /** Whether to show the "Thought for Xs" header - computed in ViewModel based on state. */
-    val showThoughtForHeader: Boolean = false,
-    /** Display name of the model currently thinking (from ModelConfiguration). */
-    val thinkingModelDisplayName: String = "",
-    /** Shows the "Use the Crew" popup after Fast mode response */
-    val showUseTheCrewPopup: Boolean = false,
-    val showShield: Boolean = false,
-    val shieldReason: String = "",
-    val hapticPress: Boolean = true,
-    val hapticResponse: Boolean = true,
-    /** Global lock - true when any on-device inference is in progress */
     val isGlobalInferenceBlocked: Boolean = false,
-)
+    val shieldReason: String? = null,
+    val hapticPress: Boolean = false,
+    val hapticResponse: Boolean = false,
+) {
+    val isGenerating: Boolean
+        get() = messages.any {
+            it.indicatorState is IndicatorState.Generating ||
+                    it.indicatorState is IndicatorState.Thinking ||
+                    it.indicatorState is IndicatorState.Processing
+        }
+}
 
+/**
+ * Used in previews.
+ */
 val fakeLongMessages = listOf(
     ChatMessage(
         id = 1,
         chatId = 1L,
         role = MessageRole.Assistant,
-        content = "Here's a Kotlin example that demonstrates the pattern:\n\n" +
-            "```kotlin\n" +
-            "fun greet(name: String): String {\n" +
-            "    return \"Hello, \$name!\"\n" +
-            "}\n\n" +
-            "fun main() {\n" +
-            "    println(greet(\"Pocket Crew\"))\n" +
-            "}\n" +
-            "```\n\n" +
-            "You can also represent the config as JSON:\n\n" +
-            "```json\n" +
-            "{\n" +
-            "  \"model\": \"qwen3-8b\",\n" +
-            "  \"temperature\": 0.7,\n" +
-            "  \"max_tokens\": 2048\n" +
-            "}\n" +
-            "```\n\n" +
-            "Let me know if you'd like me to extend this.",
-        formattedTimestamp = "10:29 AM",
-        thinkingData = ThinkingData(
-            thinkingDurationSeconds = 14,
-            steps = listOf(
-                "Agent A: Drafting direct Kotlin example with greeting function...",
-                "Agent B: Adding JSON config representation for completeness...",
-                "Synthesizer: Merging drafts into cohesive response...",
-                "Refinement: Verifying code correctness and formatting...",
-            ),
+        content = ContentUi(
+            text = "Here's a Kotlin example that demonstrates the pattern:\n\n" +
+                "```kotlin\n" +
+                "fun greet(name: String): String {\n" +
+                "    return \"Hello, \$name!\"\n" +
+                "}\n\n" +
+                "fun main() {\n" +
+                "    println(greet(\"Pocket Crew\"))\n" +
+                "}\n" +
+                "```\n\n" +
+                "You can also represent the config as JSON:\n\n" +
+                "```json\n" +
+                "{\n" +
+                "  \"model\": \"qwen3-8b\",\n" +
+                "  \"temperature\": 0.7,\n" +
+                "  \"max_tokens\": 2048\n" +
+                "}\n" +
+                "```\n\n" +
+                "Let me know if you'd like me to extend this."
         ),
+        formattedTimestamp = "10:29 AM",
+        modelDisplayName = "Qwen 3 8B",
     ),
     ChatMessage(
         id = 2,
         chatId = 1L,
         role = MessageRole.User,
-        content = "Tell me a joke.",
+        content = ContentUi(text = "Tell me a joke."),
         formattedTimestamp = "10:28 AM",
     ),
     ChatMessage(
         id = 3,
         chatId = 1L,
         role = MessageRole.Assistant,
-        content = "Why did the AI go to therapy? It had too many unresolved tokens!",
-        formattedTimestamp = "10:28 AM",
-        thinkingData = ThinkingData(
-            thinkingDurationSeconds = 3,
-            steps = listOf("Quick mode — single-pass generation"),
+        content = ContentUi(
+            text = "Why did the AI go to therapy? It had too many unresolved tokens!"
         ),
+        formattedTimestamp = "10:28 AM",
+        modelDisplayName = "Qwen 3 8B",
     ),
     ChatMessage(
         id = 4,
         chatId = 1L,
         role = MessageRole.User,
-        content = "What is Jetpack Compose?",
+        content = ContentUi(text = "What is Jetpack Compose?"),
         formattedTimestamp = "10:27 AM",
     ),
     ChatMessage(
         id = 5,
         chatId = 1L,
         role = MessageRole.Assistant,
-        content = "Jetpack Compose is Android's modern toolkit for building native UI. It replaces XML layouts with declarative Kotlin code.",
+        content = ContentUi(
+            text = "Jetpack Compose is Android's modern toolkit for building native UI. It replaces XML layouts with declarative Kotlin code."
+        ),
         formattedTimestamp = "10:26 AM",
-        thinkingData = null, // Quick mode, no thinking
+        modelDisplayName = "Qwen 3 8B",
     ),
 )

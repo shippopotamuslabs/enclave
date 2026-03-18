@@ -267,7 +267,8 @@ class InferenceService : Service() {
             // Broadcast step output FIRST - for all steps (to trigger GENERATING state in ViewModel)
             // For FINAL step, this also streams the text to the UI
             val isFinalStep = currentStep == PipelineStep.FINAL
-            broadcastComplete(result.output, isFinalStep)
+            val modelType = getModelTypeForStep(currentStep)
+            broadcastComplete(result.output, isFinalStep, modelType)
 
             // Broadcast step completion SECOND for ALL steps (including non-FINAL)
             // This must come AFTER broadcastComplete so that StepCompleted sets responseState to PROCESSING
@@ -374,10 +375,11 @@ class InferenceService : Service() {
     /**
      * Broadcasts completion with final response.
      */
-    private fun broadcastComplete(finalResponse: String, isFinalStep: Boolean = true) {
+    private fun broadcastComplete(finalResponse: String, isFinalStep: Boolean, modelType: ModelType) {
         val intent = Intent(BROADCAST_COMPLETE).apply {
             putExtra(EXTRA_FINAL_RESPONSE, finalResponse)
             putExtra(EXTRA_IS_FINAL_STEP, isFinalStep)
+            putExtra(EXTRA_MODEL_TYPE, modelType.name)
             setPackage(packageName)
         }
         sendBroadcast(intent)
@@ -435,10 +437,14 @@ class InferenceService : Service() {
                 state.stepOutputs[PipelineStep.DRAFT_ONE] ?: "",
                 state.stepOutputs[PipelineStep.DRAFT_TWO] ?: ""
             )
-            PipelineStep.FINAL -> buildFinalReviewPrompt(
-                userPrompt,
-                state.stepOutputs[PipelineStep.SYNTHESIS] ?: ""
-            )
+            PipelineStep.FINAL -> {
+                val userSystemPrompt = modelRegistry.getRegisteredModelSync(ModelType.FAST)?.persona?.systemPrompt ?: ""
+                buildFinalReviewPrompt(
+                    userPrompt,
+                    state.stepOutputs[PipelineStep.SYNTHESIS] ?: "",
+                    userSystemPrompt
+                )
+            }
         }
     }
 
@@ -469,7 +475,7 @@ DRAFT_2:
 $draft2
 """.trimIndent()
 
-    private fun buildFinalReviewPrompt(userPrompt: String, candidateAnswer: String): String = """
+    private fun buildFinalReviewPrompt(userPrompt: String, candidateAnswer: String, userSystemPrompt: String): String = """
 TASK: FINAL_REVIEW_AND_REPLY
 
 ORIGINAL_USER_PROMPT:
@@ -477,6 +483,9 @@ $userPrompt
 
 CANDIDATE_ANSWER:
 $candidateAnswer
+
+USER_SYSTEM_PROMPT:
+${userSystemPrompt.ifEmpty { "(none provided)" }}
 
 OUTPUT_CONTRACT:
 Produce the final polished response for the user. Output ONLY the essay itself â€” no critique, no feedback, no suggestions, no headings. Just the clean final answer.
@@ -490,7 +499,7 @@ Produce the final polished response for the user. Output ONLY the essay itself â
             PipelineStep.DRAFT_ONE -> ModelType.DRAFT_ONE
             PipelineStep.DRAFT_TWO -> ModelType.DRAFT_TWO
             PipelineStep.SYNTHESIS -> ModelType.MAIN
-            PipelineStep.FINAL -> ModelType.MAIN // Uses MAIN model via FinalSynthesizer
+            PipelineStep.FINAL -> ModelType.FINAL_SYNTHESIS
         }
     }
 

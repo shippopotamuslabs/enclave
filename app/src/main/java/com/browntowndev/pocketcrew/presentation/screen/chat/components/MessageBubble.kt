@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.browntowndev.pocketcrew.R
 import com.browntowndev.pocketcrew.presentation.screen.chat.ChatMessage
+import com.browntowndev.pocketcrew.presentation.screen.chat.ContentUi
 import com.browntowndev.pocketcrew.presentation.screen.chat.MessageRole
 import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 import kotlinx.coroutines.launch
@@ -90,8 +91,9 @@ fun MessageBubble(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     SelectionContainer(modifier = Modifier.fillMaxWidth()) {
-                        if (message.content.contains("```")) {
-                            val codeContent = message.content
+                        val contentText = message.content.text
+                        if (contentText.contains("```")) {
+                            val codeContent = contentText
                                 .substringAfter("```")
                                 .substringBeforeLast("```")
                                 .trim()
@@ -115,7 +117,7 @@ fun MessageBubble(
                             }
                         } else {
                             Text(
-                                text = message.content,
+                                text = contentText,
                                 style = MaterialTheme.typography.bodyLarge,
                             )
                         }
@@ -156,7 +158,7 @@ fun MessageBubble(
 
                     // Copy
                     IconButton (
-                        onClick = { copyToClipboard(message.content) },
+                        onClick = { copyToClipboard(message.content.text) },
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.content_copy),
@@ -178,7 +180,7 @@ fun MessageBubble(
 private fun PreviewMessageBubbleUser() {
     PocketCrewTheme {
         MessageBubble(
-            ChatMessage(id = 1L, chatId = 1L, role = MessageRole.User, content = "Hello!", formattedTimestamp = "10:30 AM"),
+            ChatMessage(id = 1L, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Hello!"), formattedTimestamp = "10:30 AM"),
         )
     }
 }
@@ -192,13 +194,13 @@ private fun PreviewMessageBubbleCode() {
                 id = 3L,
                 chatId = 1L,
                 role = MessageRole.User,
-                content = """
+                content = ContentUi(text = """
 ```
 fun main() {
   println("Hello")
 }
 ```
-                """.trimIndent(),
+                """.trimIndent()),
                 formattedTimestamp = "10:32 AM",
             ),
         )
@@ -214,7 +216,7 @@ private fun PreviewMessageBubbleLong() {
                 id = 4L,
                 chatId = 1L,
                 role = MessageRole.User,
-                content = "This is a longer message that spans multiple lines to verify layout behavior and make sure the action buttons align properly beneath the bubble.",
+                content = ContentUi(text = "This is a longer message that spans multiple lines to verify layout behavior and make sure the action buttons align properly beneath the bubble."),
                 formattedTimestamp = "10:33 AM",
             ),
         )

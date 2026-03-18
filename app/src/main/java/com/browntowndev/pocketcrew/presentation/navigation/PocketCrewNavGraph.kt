@@ -7,7 +7,6 @@ import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.presentation.screen.chat.ChatRoute
 import com.browntowndev.pocketcrew.presentation.screen.history.HistoryRoute
@@ -22,7 +21,6 @@ fun PocketCrewNavGraph(
     modelsResult: DownloadModelsResult?,
     errorMessage: String? = null,
 ) {
-    val modelsToDownload = modelsResult?.modelsToDownload ?: emptyList()
     NavHost(
         navController = navController,
         startDestination = startDestination,

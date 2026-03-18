@@ -5,7 +5,10 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
+import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 @Dao
 abstract class MessageDao {
@@ -35,26 +38,61 @@ abstract class MessageDao {
     @Query("SELECT * FROM message ORDER BY id ASC")
     abstract fun getAllMessages(): Flow<List<MessageEntity>>
 
-    @Query("UPDATE message SET content = :content, thinking_duration_seconds = :thinkingDuration, thinking_steps = :thinkingSteps, thinking_raw = :thinkingRaw WHERE id = :id")
+    @Query("UPDATE message SET content = :content, thinking_duration_seconds = :thinkingDuration, thinking_raw = :thinkingRaw WHERE id = :id")
     abstract suspend fun updateMessageContent(
         id: Long,
         content: String,
         thinkingDuration: Int?,
-        thinkingSteps: String?,
         thinkingRaw: String?
     )
 
     @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY id ASC")
     abstract suspend fun getMessagesByChatId(chatId: Long): List<MessageEntity>
 
-    // ===== Step Completion Methods =====
+    @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY id ASC")
+    abstract fun getMessagesByChatIdFlow(chatId: Long): Flow<List<MessageEntity>>
+
+    // ===== Message State Methods =====
+
+    @Query("UPDATE message SET message_state = :messageState WHERE id = :id")
+    abstract suspend fun updateMessageState(id: Long, messageState: MessageState)
+
+    @Query("UPDATE message SET content = :content WHERE id = :id")
+    abstract suspend fun updateMessageContentText(id: Long, content: String)
+
+    @Query("UPDATE message SET model_type = :modelType WHERE id = :id")
+    abstract suspend fun updateMessageModelType(id: Long, modelType: ModelType)
+
+    @Query("UPDATE message SET thinking_duration_seconds = :thinkingDuration WHERE id = :id")
+    abstract suspend fun updateThinkingDuration(id: Long, thinkingDuration: Int)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    abstract suspend fun insertStepCompletion(stepCompletion: StepCompletionEntity): Long
+    abstract suspend fun insert(messageEntity: MessageEntity): Long
 
-    @Query("SELECT * FROM step_completion WHERE message_id = :messageId ORDER BY step_type ASC")
-    abstract suspend fun getStepCompletionsForMessage(messageId: Long): List<StepCompletionEntity>
+    // ===== Crew Pipeline Steps Methods =====
 
-    @Query("DELETE FROM step_completion WHERE message_id = :messageId")
-    abstract suspend fun deleteStepCompletionsForMessage(messageId: Long)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun insertCrewPipelineStep(pipelineStep: CrewPipelineStepEntity): Long
+
+    @Query("SELECT * FROM crew_pipeline_steps WHERE message_id = :messageId")
+    abstract suspend fun getCrewPipelineStepForMessage(messageId: Long): CrewPipelineStepEntity?
+
+    @Query("DELETE FROM crew_pipeline_steps WHERE message_id = :messageId")
+    abstract suspend fun deleteCrewPipelineStepForMessage(messageId: Long)
+
+    // ===== Thinking Steps Methods =====
+
+    @Upsert
+    abstract suspend fun upsertManyThinkingSteps(thinkingSteps: List<ThinkingStepsEntity>)
+
+    @Query("DELETE FROM thinking_steps WHERE message_id = :messageId")
+    abstract suspend fun deleteThinkingStepsForMessage(messageId: Long)
+
+    // ===== Queries with Relations =====
+    /**
+     * Get all messages for a chat with both pipeline step and thinking steps.
+     */
+    @Transaction
+    @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY id ASC")
+    abstract fun getMessagesWithAllRelations(chatId: Long): Flow<List<MessageWithAllRelations>>
 }

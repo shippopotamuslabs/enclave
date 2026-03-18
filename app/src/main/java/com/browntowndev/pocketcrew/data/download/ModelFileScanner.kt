@@ -204,6 +204,7 @@ class ModelFileScanner @Inject constructor(
             ModelType.MAIN -> "main.$extension"
             ModelType.FAST -> "fast.$extension"
             ModelType.THINKING -> "thinking.$extension"
+            ModelType.FINAL_SYNTHESIS -> "final_synthesis.$extension"
         }
     }
 

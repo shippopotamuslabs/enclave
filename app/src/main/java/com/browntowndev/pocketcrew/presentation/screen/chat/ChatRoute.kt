@@ -20,12 +20,12 @@ fun ChatRoute(
         onSendMessage = { viewModel.onSendMessage() },
         onModeChange = viewModel::onModeChange,
         onInputChange = viewModel::onInputChange,
-        onExpandToggle = viewModel::onExpandToggle,
         onAttach = viewModel::onAttach,
         onShieldTap = {
-            onShowSnackbar("Procedural harm blocked – ${uiState.shieldReason}", null)
+            val reason = viewModel.getShieldReason()
+            if (reason != null) {
+                onShowSnackbar("Procedural harm blocked – $reason", null)
+            }
         },
-        onUseTheCrew = viewModel::onUseTheCrewTapped,
-        onDismissUseTheCrew = viewModel::onDismissUseTheCrewPopup,
     )
 }

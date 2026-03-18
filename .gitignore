@@ -35,3 +35,9 @@ third_party/
 bin/
 
 tech_docs/
+
+llama-android/src/main/cpp/libs/arm64-v8a/libllama-jni-neon.so
+
+.claude/skills/
+
+modularization-plan.md

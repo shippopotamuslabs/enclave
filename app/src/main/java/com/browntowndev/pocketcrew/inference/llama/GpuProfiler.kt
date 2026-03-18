@@ -43,28 +43,27 @@ enum class LlamaBackend(val value: Int) {
 class GpuProfiler @Inject constructor() {
 
     companion object {
-        // Known problematic GPU patterns
-        // Default all GPUs to CPU for stability
-        // TODO: Re-enable GPU backends once driver issues are resolved
+        // GPU patterns - enable Vulkan for modern Adreno GPUs
+        // Adreno 6xx series and newer support Vulkan well
         private val ADRENO_PATTERNS = listOf(
-            "Adreno" to LlamaBackend.CPU,
-            "Adreno 7" to LlamaBackend.CPU,
-            "Adreno 6" to LlamaBackend.CPU,
-            "Adreno 5" to LlamaBackend.CPU
+            "Adreno 7" to LlamaBackend.VULKAN,  // Adreno 730+ (Snapdragon 8 Gen 1+)
+            "Adreno 6" to LlamaBackend.VULKAN,  // Adreno 600-690 (Snapdragon 888, 778G, etc)
         )
 
+        // Mali - enable Vulkan for modern GPUs
         private val MALI_PATTERNS = listOf(
-            "Mali" to LlamaBackend.CPU,
-            "Immortalis" to LlamaBackend.CPU
+            "Mali-G7" to LlamaBackend.VULKAN,
+            "Mali-G6" to LlamaBackend.VULKAN,
+            "Mali-G5" to LlamaBackend.VULKAN,
+            "Immortalis-G7" to LlamaBackend.VULKAN,
+            "Immortalis" to LlamaBackend.VULKAN,
         )
 
         private val XCLIPSE_PATTERNS = listOf(
-            "Xclipse" to LlamaBackend.CPU,
-            "AMD" to LlamaBackend.CPU,
-            "Radeon" to LlamaBackend.CPU
+            "Xclipse" to LlamaBackend.VULKAN,  // Samsung Xclipse (RDNA2)
         )
 
-        // Fallback backend for unknown GPUs - use CPU for stability
+        // Default to CPU for unknown GPUs
         private val DEFAULT_BACKEND = LlamaBackend.CPU
     }
 

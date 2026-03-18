@@ -32,7 +32,12 @@ enum class ModelType(val apiValue: String) {
     /**
      * Thinking model for reasoning tasks with extended context.
      */
-    THINKING("thinking");
+    THINKING("thinking"),
+
+    /**
+     * Final synthesis model for producing polished final output.
+     */
+    FINAL_SYNTHESIS("final_synthesis");
 
     companion object {
         /**

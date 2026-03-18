@@ -6,6 +6,8 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 @Entity(tableName = "message",
     foreignKeys = [ForeignKey(
@@ -37,9 +39,13 @@ data class MessageEntity(
     @ColumnInfo(name = "user_message_id")
     val userMessageId: Long? = null,
     @ColumnInfo(name = "thinking_duration_seconds")
-    val thinkingDurationSeconds: Int? = null,
-    @ColumnInfo(name = "thinking_steps")
-    val thinkingSteps: String? = null,
+    val thinkingDurationSeconds: Long? = null,
     @ColumnInfo(name = "thinking_raw")
     val thinkingRaw: String? = null,
+    @ColumnInfo(name = "message_state")
+    val messageState: MessageState = MessageState.PROCESSING,
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "model_type")
+    val modelType: ModelType? = null,
 )

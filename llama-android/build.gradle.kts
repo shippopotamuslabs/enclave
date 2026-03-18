@@ -17,7 +17,9 @@ android {
         externalNativeBuild {
             cmake {
                 arguments += listOf(
-                    "-DANDROID_STL=c++_shared"
+                    "-DANDROID_STL=c++_shared",
+                    // Point to local KleidiAI sources to avoid FetchContent download
+                    "-DFETCHCONTENT_SOURCE_DIR_KLEIDIAI_DOWNLOAD=/home/sean/Code/pocket-crew/third_party/kleidiai-1.22.0"
                 )
             }
         }
