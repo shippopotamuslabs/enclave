@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.presentation.screen.history
+package com.browntowndev.pocketcrew.feature.history
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -37,11 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.pocketcrew.R
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -180,10 +180,12 @@ private fun NewChatButton(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 10.dp)
         ) {
             Icon(
-                painter = painterResource(R.drawable.edit_square),
+                imageVector = Icons.Default.Add,
                 contentDescription = null,
                 modifier = Modifier.size(20.dp)
             )
@@ -252,13 +254,13 @@ private fun ChatOptionsContent(
         )
         if (isPinned) {
             BottomSheetOption(
-                painter = painterResource(R.drawable.pin),
+                icon = Icons.Outlined.PushPin,
                 text = "Unpin",
                 onClick = onUnpin
             )
         } else {
             BottomSheetOption(
-                painter = painterResource(R.drawable.unpin),
+                icon = Icons.Default.PushPin,
                 text = "Pin",
                 onClick = onPin
             )
