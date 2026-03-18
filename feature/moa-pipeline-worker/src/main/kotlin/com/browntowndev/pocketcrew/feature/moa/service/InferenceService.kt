@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.inference.service
+package com.browntowndev.pocketcrew.feature.moa.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -11,10 +11,10 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.browntowndev.pocketcrew.app.DraftOneModelEngine
-import com.browntowndev.pocketcrew.app.DraftTwoModelEngine
-import com.browntowndev.pocketcrew.app.FinalSynthesizerModelEngine
-import com.browntowndev.pocketcrew.app.MainModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.DraftOneModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.DraftTwoModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.FinalSynthesizerModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.MainModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
@@ -23,7 +23,6 @@ import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.BufferThinkingStepsUseCase
-import com.browntowndev.pocketcrew.presentation.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -567,7 +566,9 @@ Produce the final polished response for the user. Output ONLY the essay itself â
             "Final step..."
         }
 
-        val intent = Intent(this, MainActivity::class.java).apply {
+        val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        } ?: Intent(packageName).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = PendingIntent.getActivity(
@@ -603,7 +604,9 @@ Produce the final polished response for the user. Output ONLY the essay itself â
     }
 
     private fun showCompletionNotification(thinkingDurationSeconds: Int) {
-        val intent = Intent(this, MainActivity::class.java).apply {
+        val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        } ?: Intent(packageName).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = PendingIntent.getActivity(

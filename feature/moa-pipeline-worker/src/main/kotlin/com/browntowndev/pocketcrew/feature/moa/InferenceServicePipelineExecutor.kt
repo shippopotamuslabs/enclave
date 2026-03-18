@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.inference
+package com.browntowndev.pocketcrew.feature.moa
 
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -10,8 +10,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.BufferThinkingStepsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MessageGenerationState
-import com.browntowndev.pocketcrew.inference.service.InferenceService
-import com.browntowndev.pocketcrew.inference.service.InferenceServiceStarter
+import com.browntowndev.pocketcrew.feature.moa.service.InferenceService
+import com.browntowndev.pocketcrew.feature.moa.service.InferenceServiceStarter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow

@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.inference.service
+package com.browntowndev.pocketcrew.feature.moa.service
 
 import android.app.PendingIntent
 import android.content.ComponentName
