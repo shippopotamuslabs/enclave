@@ -2,7 +2,7 @@ package com.browntowndev.pocketcrew.presentation.screen.settings
 
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
-import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -73,7 +73,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.R
-import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.presentation.theme.PocketCrewTheme
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)

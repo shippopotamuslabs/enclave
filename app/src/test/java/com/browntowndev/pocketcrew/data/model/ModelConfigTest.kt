@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.core.data.model
+package com.browntowndev.pocketcrew.data.model
 
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import org.junit.Assert.assertEquals

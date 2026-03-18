@@ -1,9 +1,5 @@
 package com.browntowndev.pocketcrew.inference.llama
 
-import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
-import com.browntowndev.pocketcrew.domain.model.chat.Role
-import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
-import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LlamaEnginePort
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -34,7 +30,7 @@ class LlamaChatSessionManager @Inject constructor(
      * Send a user message to the conversation.
      */
     suspend fun sendUserMessage(text: String) {
-        engine.appendMessage(DomainChatMessage(role = Role.USER, content = text))
+        engine.appendMessage(ChatMessage(ChatRole.USER, text))
     }
 
     /**
@@ -43,7 +39,7 @@ class LlamaChatSessionManager @Inject constructor(
      *
      * @param messages List of messages to set as history (excluding system prompt)
      */
-    suspend fun setHistory(messages: List<DomainChatMessage>) {
+    suspend fun setHistory(messages: List<ChatMessage>) {
         engine.setHistory(messages)
     }
 

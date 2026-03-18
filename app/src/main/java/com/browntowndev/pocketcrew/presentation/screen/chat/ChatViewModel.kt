@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.presentation.screen.chat
 
+import android.content.Context
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,11 +9,12 @@ import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
+import com.browntowndev.pocketcrew.domain.usecase.chat.GetChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.pocketcrew.presentation.screen.chat.ChatModeMapper.toDomain
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -49,7 +51,7 @@ class ChatViewModel @Inject constructor(
     private val _inputText = MutableStateFlow("")
 
     // Mutable state for selected mode (not persisted, managed locally)
-    private val _selectedMode = MutableStateFlow(ChatModeUi.FAST)
+    private val _selectedMode = MutableStateFlow(Mode.FAST)
 
     // Track current chat ID for continuing conversations
     private val _currentChatId = MutableStateFlow<Long?>(null)
@@ -131,24 +133,19 @@ class ChatViewModel @Inject constructor(
                 IndicatorState.Processing
             }
             MessageState.THINKING -> {
-                val duration = message.thinkingDurationSeconds
-                IndicatorState.Thinking(message.thinkingSteps, requireNotNull(duration))
+                IndicatorState.Thinking(message.thinkingSteps, requireNotNull(message.thinkingDurationSeconds))
             }
             MessageState.GENERATING -> {
-                val duration = message.thinkingDurationSeconds
-                val raw = message.thinkingRaw
                 IndicatorState.Generating(
-                    thinkingData = if (duration != null && raw != null)
-                        ThinkingDataUi(duration, message.thinkingSteps)
+                    thinkingData = if (message.thinkingDurationSeconds != null && message.thinkingRaw != null)
+                        ThinkingDataUi(message.thinkingDurationSeconds, message.thinkingSteps)
                     else null
                 )
             }
             MessageState.COMPLETE -> {
-                val duration = message.thinkingDurationSeconds
-                val raw = message.thinkingRaw
                 IndicatorState.Complete(
-                    thinkingData = if (duration != null && raw != null)
-                        ThinkingDataUi(duration, message.thinkingSteps)
+                    thinkingData = if (message.thinkingDurationSeconds != null && message.thinkingRaw != null)
+                        ThinkingDataUi(message.thinkingDurationSeconds, message.thinkingSteps)
                     else null
                 )
             }
@@ -170,7 +167,7 @@ class ChatViewModel @Inject constructor(
         _inputText.value = inputText
     }
 
-    fun onModeChange(mode: ChatModeUi) {
+    fun onModeChange(mode: Mode) {
         _selectedMode.value = mode
     }
 
@@ -205,7 +202,7 @@ class ChatViewModel @Inject constructor(
                     userMessageId = promptResult.userMessageId,
                     assistantMessageId = promptResult.assistantMessageId,
                     chatId = promptResult.chatId,
-                    mode = _selectedMode.value.toDomain()
+                    mode = _selectedMode.value
                 ).launchIn(this)
             }
         }

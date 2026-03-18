@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Custom foreground Service for executing the Crew ChatModeUi pipeline.
+ * Custom foreground Service for executing the Crew Mode pipeline.
  * Uses `specialUse` foreground service type which has no quota limits
  * (unlike dataSync which has a 6-hour limit in any 24-hour period on Android 15+).
  *

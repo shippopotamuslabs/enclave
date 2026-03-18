@@ -120,9 +120,6 @@ tasks.matching { it.name.startsWith("connected") && it.name.endsWith("AndroidTes
 dependencies {
     // Using custom llama-android (llama.cpp with Vulkan)
     implementation(project(":llama-android"))
-    implementation(project(":core:domain"))
-    implementation(project(":core:data"))
-    implementation(project(":core:ui"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -154,7 +151,6 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
-    testImplementation(project(":core:data"))
     testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlin.test.junit5)

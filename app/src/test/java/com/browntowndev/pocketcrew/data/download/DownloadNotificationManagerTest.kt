@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.core.data.download
+package com.browntowndev.pocketcrew.data.download
 
 import android.app.Notification
 import android.app.NotificationManager

@@ -1,10 +1,6 @@
 package com.browntowndev.pocketcrew.inference.llama
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
-import com.browntowndev.pocketcrew.domain.model.chat.Role
-import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
-import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LlamaEnginePort
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -212,28 +208,19 @@ class JniLlamaEngine @Inject constructor(
         history += ChatMessage(ChatRole.SYSTEM, prompt)
     }
 
-    override suspend fun appendMessage(message: DomainChatMessage) = withContext(ioDispatcher) {
+    override suspend fun appendMessage(message: ChatMessage) = withContext(ioDispatcher) {
         check(loaded.get()) { "Engine not initialized" }
-        val llamaMessage = ChatMessage(
-            role = ChatRole.fromDomainRole(message.role),
-            content = message.content
-        )
-        history += llamaMessage
+        history += message
     }
 
-    override suspend fun setHistory(messages: List<DomainChatMessage>) = withContext(ioDispatcher) {
+    override suspend fun setHistory(messages: List<ChatMessage>) = withContext(ioDispatcher) {
         check(loaded.get()) { "Engine not initialized" }
         history.clear()
         // Add system prompt first
         val systemPrompt = currentConfig?.systemPrompt ?: "You are a helpful assistant."
         history += ChatMessage(ChatRole.SYSTEM, systemPrompt)
-        // Add all the provided messages, converting domain to inference format
-        messages.forEach { domainMsg ->
-            history += ChatMessage(
-                role = ChatRole.fromDomainRole(domainMsg.role),
-                content = domainMsg.content
-            )
-        }
+        // Add all the provided messages
+        history += messages
     }
 
     override fun generate(): Flow<GenerationEvent> = callbackFlow {

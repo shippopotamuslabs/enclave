@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.core.data.repository
+package com.browntowndev.pocketcrew.data.repository
 
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption

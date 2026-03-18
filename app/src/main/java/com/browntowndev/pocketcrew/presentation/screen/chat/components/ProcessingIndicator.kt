@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
 
 /**
  * Processing indicator shown during PROCESSING state (generating text without thinking).
