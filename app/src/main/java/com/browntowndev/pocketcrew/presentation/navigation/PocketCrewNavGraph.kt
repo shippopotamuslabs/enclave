@@ -10,7 +10,7 @@ import androidx.navigation.compose.composable
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.presentation.screen.chat.ChatRoute
 import com.browntowndev.pocketcrew.presentation.screen.history.HistoryRoute
-import com.browntowndev.pocketcrew.presentation.screen.settings.SettingsRoute
+import com.browntowndev.pocketcrew.feature.settings.SettingsRoute
 import com.browntowndev.pocketcrew.presentation.screen.download.ModelDownloadScreen
 
 @Composable

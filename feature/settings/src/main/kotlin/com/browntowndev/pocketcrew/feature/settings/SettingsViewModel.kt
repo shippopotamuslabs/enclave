@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.presentation.screen.settings
+package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope

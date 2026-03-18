@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.presentation.screen.settings
+package com.browntowndev.pocketcrew.feature.settings
 
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
@@ -25,6 +25,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -68,11 +70,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.pocketcrew.R
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import java.util.Locale
 
@@ -154,7 +154,7 @@ fun SettingsScreen(
             }
             item {
                 SettingsToggleRow(
-                    icon = painterResource(R.drawable.automation),
+                    icon = Icons.Default.Vibration,
                     title = "When Pocket Crew is responding",
                     checked = uiState.hapticResponse,
                     onCheckedChange = onHapticResponseChange
@@ -164,7 +164,7 @@ fun SettingsScreen(
             item { SectionHeader("Customization") }
             item {
                 SettingsClickableRow(
-                    icon = painterResource(R.drawable.edit_square),
+                    icon = Icons.Default.Tune,
                     title = "Customize Pocket Crew",
                     onClick = { onShowCustomizationSheet(true) }
                 )
