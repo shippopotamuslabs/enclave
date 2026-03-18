@@ -1,0 +1,16 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /home/sean/Code/pocket-crew/core/domain/build/intermediates/tmp/ProcessLibraryManifest/release/tempAndroidManifest689630723802029831.xml:2:13-83
+INJECTED from /home/sean/Code/pocket-crew/core/domain/build/intermediates/tmp/ProcessLibraryManifest/release/tempAndroidManifest689630723802029831.xml:2:13-83
+	package
+		INJECTED from /home/sean/Code/pocket-crew/core/domain/build/intermediates/tmp/ProcessLibraryManifest/release/tempAndroidManifest689630723802029831.xml
+	xmlns:android
+		ADDED from /home/sean/Code/pocket-crew/core/domain/build/intermediates/tmp/ProcessLibraryManifest/release/tempAndroidManifest689630723802029831.xml:2:23-81
+uses-sdk
+INJECTED from /home/sean/Code/pocket-crew/core/domain/build/intermediates/tmp/ProcessLibraryManifest/release/tempAndroidManifest689630723802029831.xml reason: use-sdk injection requested
+INJECTED from /home/sean/Code/pocket-crew/core/domain/build/intermediates/tmp/ProcessLibraryManifest/release/tempAndroidManifest689630723802029831.xml
+INJECTED from /home/sean/Code/pocket-crew/core/domain/build/intermediates/tmp/ProcessLibraryManifest/release/tempAndroidManifest689630723802029831.xml
+	android:targetSdkVersion
+		INJECTED from /home/sean/Code/pocket-crew/core/domain/build/intermediates/tmp/ProcessLibraryManifest/release/tempAndroidManifest689630723802029831.xml
+	android:minSdkVersion
+		INJECTED from /home/sean/Code/pocket-crew/core/domain/build/intermediates/tmp/ProcessLibraryManifest/release/tempAndroidManifest689630723802029831.xml

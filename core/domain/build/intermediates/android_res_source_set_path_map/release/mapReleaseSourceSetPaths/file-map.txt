@@ -1,0 +1,8 @@
+com.browntowndev.pocketcrew.core.domain-pngs-0 /home/sean/Code/pocket-crew/core/domain/build/generated/res/pngs/release
+com.browntowndev.pocketcrew.core.domain-updated_navigation_xml-1 /home/sean/Code/pocket-crew/core/domain/build/generated/updated_navigation_xml/release
+com.browntowndev.pocketcrew.core.domain-mergeReleaseResources-2 /home/sean/Code/pocket-crew/core/domain/build/intermediates/incremental/release/mergeReleaseResources/merged.dir
+com.browntowndev.pocketcrew.core.domain-mergeReleaseResources-3 /home/sean/Code/pocket-crew/core/domain/build/intermediates/incremental/release/mergeReleaseResources/stripped.dir
+com.browntowndev.pocketcrew.core.domain-release-4 /home/sean/Code/pocket-crew/core/domain/build/intermediates/merged_res/release/mergeReleaseResources
+com.browntowndev.pocketcrew.core.domain-release-5 /home/sean/Code/pocket-crew/core/domain/build/intermediates/packaged_res/release/packageReleaseResources
+com.browntowndev.pocketcrew.core.domain-main-6 /home/sean/Code/pocket-crew/core/domain/src/main/res
+com.browntowndev.pocketcrew.core.domain-release-7 /home/sean/Code/pocket-crew/core/domain/src/release/res
