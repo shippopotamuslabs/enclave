@@ -18,9 +18,12 @@ android {
 
 dependencies {
     // Kotlin stdlib
-    implementation(libs.kotlin.stdlib)
+    implementation("org.jetbrains.kotlin:kotlin-stdlib")
 
     // Coroutines
-    implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlinx.coroutines.android)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+
+    // Dependency Injection
+    implementation("javax.inject:javax.inject:1")
 }
