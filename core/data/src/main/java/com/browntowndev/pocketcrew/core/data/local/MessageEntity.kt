@@ -42,6 +42,10 @@ data class MessageEntity(
     val thinkingDurationSeconds: Long? = null,
     @ColumnInfo(name = "thinking_raw")
     val thinkingRaw: String? = null,
+    @ColumnInfo(name = "thinking_start_time")
+    val thinkingStartTime: Long? = null,
+    @ColumnInfo(name = "thinking_end_time")
+    val thinkingEndTime: Long? = null,
     @ColumnInfo(name = "message_state")
     val messageState: MessageState = MessageState.PROCESSING,
     @ColumnInfo(name = "created_at")

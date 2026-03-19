@@ -10,10 +10,9 @@ import androidx.room.TypeConverters
         MessageEntity::class,
         MessageSearch::class,
         ModelEntity::class,
-        CrewPipelineStepEntity::class,
-        ThinkingStepsEntity::class
+        CrewPipelineStepEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(DateConverters::class, RoleConverters::class, ModelTypeConverters::class, MessageStateConverters::class)

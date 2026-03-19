@@ -24,8 +24,6 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -50,7 +48,6 @@ class GenerateChatResponseUseCaseTest {
     private lateinit var pipelineExecutor: PipelineExecutorPort
     private lateinit var chatRepository: ChatRepository
     private lateinit var messageRepository: MessageRepository
-    private lateinit var bufferThinkingSteps: BufferThinkingStepsUseCase
     private lateinit var loggingPort: LoggingPort
     private lateinit var inferenceLockManager: InferenceLockManager
     private lateinit var modelRegistry: ModelRegistryPort
@@ -63,7 +60,6 @@ class GenerateChatResponseUseCaseTest {
         pipelineExecutor = mockk(relaxed = true)
         chatRepository = mockk(relaxed = true)
         messageRepository = mockk(relaxed = true)
-        bufferThinkingSteps = mockk(relaxed = true)
         loggingPort = mockk(relaxed = true)
         inferenceLockManager = InferenceLockManagerImpl()
         modelRegistry = mockk(relaxed = true)
@@ -74,7 +70,6 @@ class GenerateChatResponseUseCaseTest {
             pipelineExecutor = pipelineExecutor,
             chatRepository = chatRepository,
             messageRepository = messageRepository,
-            bufferThinkingSteps = bufferThinkingSteps,
             loggingPort = loggingPort,
             inferenceLockManager = inferenceLockManager,
             modelRegistry = modelRegistry
@@ -265,7 +260,7 @@ class GenerateChatResponseUseCaseTest {
             stepOutput = "First draft output",
             thinkingDurationSeconds = 10,
             totalDurationSeconds = 10,
-            thinkingSteps = listOf("Step 1", "Step 2"),
+            thinkingRaw = "Step 1\nStep 2",
             modelDisplayName = "Draft One",
             modelType = ModelType.DRAFT_ONE,
             stepType = PipelineStep.DRAFT_ONE
@@ -385,7 +380,7 @@ class GenerateChatResponseUseCaseTest {
         ).collect { }
 
         // Then - should clear thinking and content
-        coVerify { chatRepository.clearThinkingSteps(2L) }
+        coVerify { chatRepository.clearThinking(2L) }
         coVerify { chatRepository.updateMessageContent(2L, "") }
         coVerify { chatRepository.updateMessageState(2L, MessageState.COMPLETE) }
     }

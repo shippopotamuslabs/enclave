@@ -43,19 +43,23 @@ class FakeChatRepository : ChatRepository {
         // No-op for testing
     }
 
-    override suspend fun saveThinkingSteps(messageId: Long, thinkingSteps: List<String>) {
+    override suspend fun setThinkingStartTime(messageId: Long) {
         // No-op for testing
     }
 
-    override suspend fun clearThinkingSteps(messageId: Long) {
+    override suspend fun setThinkingEndTime(messageId: Long) {
+        // No-op for testing
+    }
+
+    override suspend fun appendThinkingRaw(messageId: Long, thinkingText: String) {
+        // No-op for testing
+    }
+
+    override suspend fun clearThinking(messageId: Long) {
         // No-op for testing
     }
 
     override suspend fun updateMessageModelType(messageId: Long, modelType: ModelType) {
-        // No-op for testing
-    }
-
-    override suspend fun updateThinkingDuration(messageId: Long, thinkingDurationSeconds: Int) {
         // No-op for testing
     }
 

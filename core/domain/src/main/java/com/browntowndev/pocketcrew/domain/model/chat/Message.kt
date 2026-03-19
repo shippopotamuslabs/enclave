@@ -13,6 +13,10 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
  * @property role The role of the message sender (USER, ASSISTANT, or SYSTEM)
  * @property chatId The ID of the chat this message belongs to
  * @property messageState Current state of the message in the generation pipeline
+ * @property thinkingDurationSeconds Duration of thinking in seconds (computed from timestamps)
+ * @property thinkingRaw Raw thinking text as markdown (no chunking)
+ * @property thinkingStartTime Timestamp when thinking started
+ * @property thinkingEndTime Timestamp when thinking ended
  * @property modelType The model type used to generate this message (for Crew mode tracking)
  */
 data class Message(
@@ -24,6 +28,16 @@ data class Message(
     val createdAt: Long = System.currentTimeMillis(),
     val thinkingDurationSeconds: Long? = null,
     val thinkingRaw: String? = null,
-    val thinkingSteps: List<String> = emptyList(),
+    val thinkingStartTime: Long? = null,
+    val thinkingEndTime: Long? = null,
     val modelType: ModelType? = null,
-)
+) {
+    /**
+     * Computed duration in seconds from timestamps.
+     * Returns null if either timestamp is missing.
+     */
+    val computedDurationSeconds: Long?
+        get() = if (thinkingStartTime != null && thinkingEndTime != null) {
+            (thinkingEndTime - thinkingStartTime) / 1000
+        } else null
+}

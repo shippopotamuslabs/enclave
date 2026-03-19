@@ -94,6 +94,14 @@ class ChatViewModel @Inject constructor(
 
     /**
      * Maps domain Message to ChatMessage for the UI layer.
+     * Exposed for unit testing.
+     */
+    internal fun mapToChatMessageForTesting(message: Message): ChatMessage {
+        return mapToChatMessage(message)
+    }
+
+    /**
+     * Maps domain Message to ChatMessage for the UI layer.
      */
     private fun mapToChatMessage(message: Message): ChatMessage {
         val role = when (message.role) {
@@ -122,6 +130,10 @@ class ChatViewModel @Inject constructor(
     /**
      * Computes the indicator state based on the message's messageState.
      * This derives UI indicator state from the database state.
+     *
+     * Note: duration may be null during THINKING state because thinkingEndTime
+     * is only set when thinking completes. In this case, we return the indicator
+     * without duration (or compute from timestamps if available).
      */
     private fun computeIndicatorState(message: Message): IndicatorState? {
         if (message.role == Role.USER) return IndicatorState.None
@@ -131,15 +143,19 @@ class ChatViewModel @Inject constructor(
                 IndicatorState.Processing
             }
             MessageState.THINKING -> {
+                // Duration may be null during thinking - compute from timestamps if available
                 val duration = message.thinkingDurationSeconds
-                IndicatorState.Thinking(message.thinkingSteps, requireNotNull(duration))
+                IndicatorState.Thinking(
+                    thinkingRaw = message.thinkingRaw ?: "",
+                    thinkingDurationSeconds = duration ?: 0L
+                )
             }
             MessageState.GENERATING -> {
                 val duration = message.thinkingDurationSeconds
                 val raw = message.thinkingRaw
                 IndicatorState.Generating(
                     thinkingData = if (duration != null && raw != null)
-                        ThinkingDataUi(duration, message.thinkingSteps)
+                        ThinkingDataUi(duration, raw)
                     else null
                 )
             }
@@ -148,7 +164,7 @@ class ChatViewModel @Inject constructor(
                 val raw = message.thinkingRaw
                 IndicatorState.Complete(
                     thinkingData = if (duration != null && raw != null)
-                        ThinkingDataUi(duration, message.thinkingSteps)
+                        ThinkingDataUi(duration, raw)
                     else null
                 )
             }

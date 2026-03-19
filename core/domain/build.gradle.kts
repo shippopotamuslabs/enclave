@@ -14,6 +14,23 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
+    sourceSets {
+        named("test") {
+            kotlin.srcDirs("src/test/java")
+        }
+    }
+}
+
+tasks.withType<Test> {
+    // Disable failOnNoDiscoveredTests since this module only has test utilities, not actual tests
+    failOnNoDiscoveredTests.set(false)
 }
 
 dependencies {
@@ -26,4 +43,10 @@ dependencies {
 
     // Dependency Injection
     implementation("javax.inject:javax.inject:1")
+
+    // Test dependencies
+    testImplementation(libs.junit)
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.kotlin.test.junit5)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
