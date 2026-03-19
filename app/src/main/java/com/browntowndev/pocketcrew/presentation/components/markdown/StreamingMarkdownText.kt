@@ -34,8 +34,7 @@ import androidx.compose.ui.unit.sp
  * - Theme support (light/dark mode)
  * - Link handling with click callback
  * 
- * REF: CLARIFIED_REQUIREMENTS.md - Section 5 (MarkdownBlockDetector Replacement)
- * 
+ *
  * @param markdown The markdown text to render
  * @param isStreaming Whether the text is being streamed (enables streaming optimizations)
  * @param modifier Modifier for the composable

@@ -59,50 +59,8 @@ import com.browntowndev.pocketcrew.feature.chat.IndicatorState
 import com.browntowndev.pocketcrew.feature.chat.MessageRole
 import com.browntowndev.pocketcrew.feature.chat.ThinkingDataUi
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamingMarkdownText
 import kotlinx.coroutines.launch
-
-
-private sealed interface ContentSegment {
-    data class TextSegment(val text: String) : ContentSegment
-    data class CodeBlock(val language: String, val code: String) : ContentSegment
-}
-
-private fun parseContent(raw: String): List<ContentSegment> {
-    val segments = mutableListOf<ContentSegment>()
-    var remaining = raw
-    val fencePattern = Regex("```(\\w*)\\s*\\n")
-
-    while (remaining.isNotEmpty()) {
-        val openMatch = fencePattern.find(remaining)
-        if (openMatch == null) {
-            // Don't trim - preserve whitespace and newlines in text content
-            val text = remaining
-            if (text.isNotEmpty()) segments += ContentSegment.TextSegment(text)
-            break
-        }
-
-        // Don't trim text before code block - preserve whitespace
-        val textBefore = remaining.substring(0, openMatch.range.first)
-        if (textBefore.isNotEmpty()) segments += ContentSegment.TextSegment(textBefore)
-
-        val language = openMatch.groupValues[1].lowercase()
-        val afterOpen = remaining.substring(openMatch.range.last + 1)
-
-        val closeIndex = afterOpen.indexOf("```")
-        if (closeIndex == -1) {
-            val code = afterOpen.trimEnd()
-            if (code.isNotEmpty()) segments += ContentSegment.CodeBlock(language, code)
-            break
-        }
-
-        val code = afterOpen.substring(0, closeIndex).trimEnd()
-        if (code.isNotEmpty()) segments += ContentSegment.CodeBlock(language, code)
-
-        remaining = afterOpen.substring(closeIndex + 3)
-    }
-
-    return segments
-}
 
 // ── Main composable ──
 
@@ -146,17 +104,11 @@ fun AssistantResponse(
                 }
             )
         } else {
-            // Response content - parse and render
-            val segments = remember(contentText) { parseContent(contentText) }
-            segments.forEach { segment ->
-                when (segment) {
-                    is ContentSegment.TextSegment -> TextBlock(segment.text)
-                    is ContentSegment.CodeBlock -> FencedCodeBlock(
-                        language = segment.language,
-                        code = segment.code,
-                    )
-                }
-            }
+            // Response content - use StreamingMarkdownText for proper markdown rendering
+            StreamingMarkdownText(
+                markdown = contentText,
+                modifier = Modifier.fillMaxWidth(),
+            )
 
             // Timestamp
             Text(
@@ -335,123 +287,6 @@ private fun StepCompletionBottomSheet(
                 }
 
                 Spacer(modifier = Modifier.height(32.dp))
-            }
-        }
-    }
-}
-
-// ── Text and code block composables ──
-
-@Composable
-private fun TextBlock(text: String) {
-    val tertiaryColor = MaterialTheme.colorScheme.tertiary
-    // Create a very light, transparent background matching the primary color
-    val inlineBackgroundColor = tertiaryColor.copy(alpha = 0.05f)
-
-    val annotatedString = remember(text, tertiaryColor, inlineBackgroundColor) {
-        buildAnnotatedString {
-            val inlineCodeRegex = Regex("`([^`]+)`")
-            var lastIndex = 0
-            val matches = inlineCodeRegex.findAll(text)
-
-            for (match in matches) {
-                // Append text before the match
-                append(text.substring(lastIndex, match.range.first))
-
-                // Append styled code without backticks
-                withStyle(
-                    style = SpanStyle(
-                        color = tertiaryColor,
-                        fontWeight = FontWeight.Bold,
-                        background = inlineBackgroundColor,
-                        fontFamily = FontFamily.Monospace // Distinguish as code
-                    ),
-                ) {
-                    // Wrapping the text in thin spaces (\u2009) adds a tiny bit
-                    // of visual padding inside the background rectangle.
-                    append("\u2009${match.groupValues[1]}\u2009")
-                }
-                lastIndex = match.range.last + 1
-            }
-            // Append remaining text
-            if (lastIndex < text.length) {
-                append(text.substring(lastIndex))
-            }
-        }
-    }
-
-    SelectionContainer(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = annotatedString,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-        )
-    }
-}
-
-@Composable
-private fun FencedCodeBlock(
-    language: String,
-    code: String,
-) {
-    val clipboardManager = LocalClipboard.current
-    val scope = rememberCoroutineScope()
-    val codeBlockBackground = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
-    val displayLanguage = language.replaceFirstChar { it.uppercase() }.ifEmpty { "Code" }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(codeBlockBackground),
-    ) {
-        // Header row: language label + copy button
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 4.dp, top = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = displayLanguage,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            IconButton(
-                onClick = {
-                    scope.launch {
-                        clipboardManager.setClipEntry(
-                            ClipEntry(ClipData.newPlainText(displayLanguage, code)),
-                        )
-                    }
-                },
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.content_copy),
-                    contentDescription = "Copy $displayLanguage code",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
-        // Code content — horizontally scrollable, monospace
-        SelectionContainer {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-            ) {
-                Text(
-                    text = code,
-                    fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp,
-                    lineHeight = 19.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
             }
         }
     }

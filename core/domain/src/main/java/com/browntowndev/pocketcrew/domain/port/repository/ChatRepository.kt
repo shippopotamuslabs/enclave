@@ -51,19 +51,36 @@ interface ChatRepository {
     suspend fun appendMessageContent(messageId: Long, content: String)
 
     /**
-     * Saves thinking steps for a message during generation.
+     * Sets the thinking start time for a message.
+     * Called when thinking begins.
      *
      * @param messageId The ID of the message
-     * @param thinkingSteps The thinking steps to save
      */
-    suspend fun saveThinkingSteps(messageId: Long, thinkingSteps: List<String>)
+    suspend fun setThinkingStartTime(messageId: Long)
 
     /**
-     * Clears thinking steps from a message (for blocked/failed states).
+     * Sets the thinking end time for a message.
+     * Called when thinking completes.
      *
      * @param messageId The ID of the message
      */
-    suspend fun clearThinkingSteps(messageId: Long)
+    suspend fun setThinkingEndTime(messageId: Long)
+
+    /**
+     * Appends raw thinking text to a message.
+     * Used during streaming to accumulate thinking without chunking.
+     *
+     * @param messageId The ID of the message
+     * @param thinkingText The text to append
+     */
+    suspend fun appendThinkingRaw(messageId: Long, thinkingText: String)
+
+    /**
+     * Clears thinking data from a message (for blocked/failed states).
+     *
+     * @param messageId The ID of the message
+     */
+    suspend fun clearThinking(messageId: Long)
 
     /**
      * Updates the model type used for a message.
@@ -72,14 +89,6 @@ interface ChatRepository {
      * @param modelType The model type
      */
     suspend fun updateMessageModelType(messageId: Long, modelType: ModelType)
-
-    /**
-     * Updates the thinking duration for a message.
-     *
-     * @param messageId The ID of the message
-     * @param thinkingDurationSeconds The thinking duration in seconds
-     */
-    suspend fun updateThinkingDuration(messageId: Long, thinkingDurationSeconds: Int)
 
     /**
      * Creates a new chat in the database.

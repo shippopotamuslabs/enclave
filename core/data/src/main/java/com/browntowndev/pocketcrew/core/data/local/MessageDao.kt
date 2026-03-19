@@ -80,19 +80,23 @@ abstract class MessageDao {
     @Query("DELETE FROM crew_pipeline_steps WHERE message_id = :messageId")
     abstract suspend fun deleteCrewPipelineStepForMessage(messageId: Long)
 
-    // ===== Thinking Steps Methods =====
+    // ===== Thinking Raw (Simplified - no more chunking) =====
 
-    @Upsert
-    abstract suspend fun upsertManyThinkingSteps(thinkingSteps: List<ThinkingStepsEntity>)
+    @Query("UPDATE message SET thinking_start_time = :startTime WHERE id = :messageId")
+    abstract suspend fun updateThinkingStartTime(messageId: Long, startTime: Long)
 
-    @Query("DELETE FROM thinking_steps WHERE message_id = :messageId")
-    abstract suspend fun deleteThinkingStepsForMessage(messageId: Long)
+    @Query("UPDATE message SET thinking_end_time = :endTime WHERE id = :messageId")
+    abstract suspend fun updateThinkingEndTime(messageId: Long, endTime: Long)
+
+    @Query("UPDATE message SET thinking_raw = :thinkingRaw WHERE id = :messageId")
+    abstract suspend fun updateThinkingRaw(messageId: Long, thinkingRaw: String?)
 
     // ===== Queries with Relations =====
     /**
-     * Get all messages for a chat with both pipeline step and thinking steps.
+     * Get all messages for a chat with pipeline step.
+     * Thinking is now stored directly on the message entity.
      */
     @Transaction
     @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY id ASC")
-    abstract fun getMessagesWithAllRelations(chatId: Long): Flow<List<MessageWithAllRelations>>
+    abstract fun getMessagesWithAllRelations(chatId: Long): Flow<List<MessageWithPipelineStep>>
 }

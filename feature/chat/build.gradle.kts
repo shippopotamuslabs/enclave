@@ -18,6 +18,17 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
+    sourceSets {
+        named("test") {
+            kotlin.srcDirs("src/test/kotlin")
+        }
+    }
 
     buildFeatures {
         compose = true
@@ -63,4 +74,13 @@ dependencies {
 
     // Inference implementations
     implementation(project(":feature:inference"))
+
+    // Test dependencies
+    testImplementation(libs.junit)
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.kotlin.test.junit5)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 }

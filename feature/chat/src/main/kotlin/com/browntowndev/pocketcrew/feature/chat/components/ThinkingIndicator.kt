@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
@@ -47,16 +48,15 @@ import kotlinx.coroutines.delay
  * Features:
  * - Dynamic liquid-flow / molten-lava orb with constantly swirling, ebbing, color-shifting interior
  * - "Thinking" text with elapsed time counter
- * - Exactly 3 visible thought bubbles with smooth vertical wheel animation
- * - Self-contained, always expanded while thinking is active
+ * - Shows latest thinking content as it streams in
  *
- * @param thinkingSteps List of thought messages to display
+ * @param thinkingRaw Raw thinking text as markdown
  * @param thinkingStartTime Timestamp (System.currentTimeMillis()) when thinking started. If not provided or 0, elapsed time won't be shown.
  * @param modifier Modifier for the composable
  */
 @Composable
 fun ThinkingIndicator(
-    thinkingSteps: List<String>,
+    thinkingRaw: String,
     modifier: Modifier = Modifier,
     thinkingStartTime: Long = 0L,
     modelDisplayName: String = "",
@@ -65,8 +65,8 @@ fun ThinkingIndicator(
     var elapsedSeconds by remember { mutableIntStateOf(0) }
 
     // Update elapsed time every second when thinking is active
-    LaunchedEffect(thinkingSteps.isNotEmpty()) {
-        if (thinkingSteps.isNotEmpty()) {
+    LaunchedEffect(thinkingRaw.isNotEmpty()) {
+        if (thinkingRaw.isNotEmpty()) {
             // Calculate initial elapsed time if start time provided
             if (thinkingStartTime > 0) {
                 elapsedSeconds = ((System.currentTimeMillis() - thinkingStartTime) / 1000).toInt()
@@ -124,10 +124,10 @@ fun ThinkingIndicator(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Thought bubbles section - exactly 3 visible with wheel animation
-        if (thinkingSteps.isNotEmpty()) {
-            ThoughtBubbleWheel(
-                thoughts = thinkingSteps,
+        // Show raw thinking text - as streaming content
+        if (thinkingRaw.isNotEmpty()) {
+            ThinkingRawContent(
+                thinkingRaw = thinkingRaw,
                 modelDisplayName = modelDisplayName,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -147,153 +147,23 @@ private fun formatElapsedTime(seconds: Int): String {
 }
 
 /**
- * Thought bubble wheel with smooth vertical scrolling animation.
- * Shows exactly 3 bubbles at a time with wheel-like rotation effect.
- * Uses buffering to debounce rapid thought updates for smooth animations.
+ * Shows the raw thinking content as it streams in.
+ * Simple implementation - shows the text directly without complex animation.
  */
 @Composable
-private fun ThoughtBubbleWheel(
-    thoughts: List<String>,
+private fun ThinkingRawContent(
+    thinkingRaw: String,
     modelDisplayName: String,
     modifier: Modifier = Modifier
 ) {
-    var displayedThoughts by remember { mutableStateOf<List<ThoughtItem>>(emptyList()) }
-    var pendingThoughts by remember { mutableStateOf<List<Triple<Int, String, Int>>>(emptyList()) }
-
-    var lastProcessedCount by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(thoughts) {
-        if (thoughts.isEmpty()) {
-            displayedThoughts = emptyList()
-            pendingThoughts = emptyList()
-            lastProcessedCount = 0
-            return@LaunchedEffect
-        }
-
-        if (thoughts.size > lastProcessedCount) {
-            for (i in lastProcessedCount until thoughts.size) {
-                val pendingIndex = pendingThoughts.size
-                pendingThoughts = pendingThoughts + Triple(i, thoughts[i], pendingIndex)
-            }
-        }
-        lastProcessedCount = thoughts.size
-
-        if (pendingThoughts.isNotEmpty()) {
-            delay(450L)
-
-            val (globalIndex, nextText, _) = pendingThoughts.first()
-            pendingThoughts = pendingThoughts.drop(1)
-
-            val newItem = ThoughtItem(
-                id = globalIndex.toString(),
-                text = nextText,
-                isNewest = true
-            )
-
-            displayedThoughts = (displayedThoughts.map { it.copy(isNewest = false) } + newItem).takeLast(3)
-        }
-    }
-
-    LazyColumn(
-        modifier = modifier.heightIn(max = 1500.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        userScrollEnabled = false
-    ) {
-        items(
-            items = displayedThoughts,
-            key = { it.id }
-        ) { item ->
-            AnimatedThoughtBubble(
-                item = item,
-                modelDisplayName = modelDisplayName
-            )
-        }
-    }
-}
-
-/**
- * Data class to represent a thought item with stable identity.
- */
-private data class ThoughtItem(
-    val id: String,
-    val text: String,
-    val isNewest: Boolean
-)
-
-/**
- * Animated thought bubble that slides in from bottom with wheel effect.
- * Uses offset animation for entrance and preserves existing scale/alpha animations.
- */
-@Composable
-private fun LazyItemScope.AnimatedThoughtBubble(
-    item: ThoughtItem,
-    modelDisplayName: String,
-    modifier: Modifier = Modifier
-) {
-    val entranceAnimatable = remember(item.id) {
-        Animatable(if (item.isNewest) 140f else 0f)
-    }
-
-    LaunchedEffect(item.id) {
-        entranceAnimatable.animateTo(
-            targetValue = 0f,
-            animationSpec = tween(
-                durationMillis = 420,
-                easing = FastOutSlowInEasing
-            )
-        )
-    }
-
-    ThoughtBubble(
-        stepText = item.text,
-        isNewest = item.isNewest,
-        modelDisplayName = modelDisplayName,
-        modifier = modifier
-            .offset(y = entranceAnimatable.value.dp)
-            .animateItem(
-                placementSpec = tween(
-                    durationMillis = 400,
-                    easing = FastOutSlowInEasing
-                )
-            )
-    )
-}
-
-@Composable
-private fun ThoughtBubble(
-    stepText: String,
-    isNewest: Boolean,
-    modelDisplayName: String,
-    modifier: Modifier = Modifier
-) {
-    val displayName = modelDisplayName.ifBlank { "Agent" }
-    val message = stepText
-
-    val alpha by animateFloatAsState(
-        targetValue = if (isNewest) 1f else 0.85f,
-        animationSpec = tween(300),
-        label = "bubble_alpha"
-    )
-
-    val scale by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "bubble_scale"
-    )
-
     Row(
         modifier = modifier
-            .fillMaxWidth()
-            .alpha(alpha)
-            .scale(scale)
+            .alpha(0.9f)
             .padding(start = 8.dp)
     ) {
         Column {
             Text(
-                text = displayName,
+                text = modelDisplayName.ifBlank { "Agent" },
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp
@@ -308,19 +178,17 @@ private fun ThoughtBubble(
                 shadowElevation = 2.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                    )
-                }
+                Text(
+                    text = thinkingRaw,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                    maxLines = 10,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(12.dp)
+                )
             }
         }
     }
@@ -342,7 +210,7 @@ private fun PreviewTheme(content: @Composable () -> Unit) {
 fun ThinkingIndicator_EmptyPreview() {
     PreviewTheme {
         ThinkingIndicator(
-            thinkingSteps = emptyList(),
+            thinkingRaw = "",
             modifier = Modifier.padding(16.dp)
         )
     }
@@ -350,45 +218,10 @@ fun ThinkingIndicator_EmptyPreview() {
 
 @androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFF121212)
 @Composable
-fun ThinkingIndicator_SingleStepPreview() {
+fun ThinkingIndicator_WithContentPreview() {
     PreviewTheme {
         ThinkingIndicator(
-            thinkingSteps = listOf(
-                "Overclocked Truth Nuke: Initializing search strategy for deep dive analysis."
-            ),
-            modifier = Modifier.padding(16.dp)
-        )
-    }
-}
-
-@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFF121212)
-@Composable
-fun ThinkingIndicator_MultipleStepsPreview() {
-    PreviewTheme {
-        ThinkingIndicator(
-            thinkingSteps = listOf(
-                "Overclocked Truth Nuke: Planning task execution and parallel searches.",
-                "Overclocked Truth Nuke: Executing web_search for latest documentation.",
-                "Overclocked Truth Nuke: Synthesizing results and structuring the final report."
-            ),
-            modifier = Modifier.padding(16.dp)
-        )
-    }
-}
-
-@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFF121212)
-@Composable
-fun ThinkingIndicator_ManyStepsPreview() {
-    PreviewTheme {
-        ThinkingIndicator(
-            thinkingSteps = listOf(
-                "Overclocked Truth Nuke: Planning task execution and parallel searches.",
-                "Overclocked Truth Nuke: Executing web_search for latest documentation.",
-                "Overclocked Truth Nuke: Synthesizing results and structuring the final report.",
-                "Overclocked Truth Nuke: Analyzing the search results for relevant patterns.",
-                "Overclocked Truth Nuke: Cross-referencing with internal knowledge base.",
-                "Overclocked Truth Nuke: Preparing final summary with citations."
-            ),
+            thinkingRaw = "Analyzing the problem step by step:\n\n1. First, let me understand what we're dealing with\n2. Breaking down the requirements\n3. Planning the implementation",
             modifier = Modifier.padding(16.dp)
         )
     }

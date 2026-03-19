@@ -3,17 +3,13 @@ package com.browntowndev.pocketcrew.core.data.mapper
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
 import com.browntowndev.pocketcrew.core.data.local.CrewPipelineStepEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
-import com.browntowndev.pocketcrew.core.data.local.MessageWithAllRelations
 import com.browntowndev.pocketcrew.core.data.local.MessageWithPipelineStep
-import com.browntowndev.pocketcrew.core.data.local.MessageWithThinkingSteps
-import com.browntowndev.pocketcrew.core.data.local.ThinkingStepsEntity
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 
 /**
  * Mappers for converting between domain models and Room entities.
- * Uses requireNotNull() for null-checks as per contract requirements.
  */
 
 /**
@@ -51,6 +47,8 @@ fun MessageEntity.toDomain(): Message {
         createdAt = createdAt,
         thinkingDurationSeconds = thinkingDurationSeconds,
         thinkingRaw = thinkingRaw,
+        thinkingStartTime = thinkingStartTime,
+        thinkingEndTime = thinkingEndTime,
         modelType = modelType
     )
 }
@@ -71,44 +69,8 @@ fun MessageWithPipelineStep.toDomain(): Message {
         createdAt = message.createdAt,
         thinkingDurationSeconds = message.thinkingDurationSeconds,
         thinkingRaw = message.thinkingRaw,
-        modelType = message.modelType
-    )
-}
-
-/**
- * Converts MessageWithThinkingSteps to domain Message with thinking chunks.
- */
-fun MessageWithThinkingSteps.toDomain(): Message {
-    return Message(
-        id = message.id,
-        content = Content(text = message.content),
-        role = message.role,
-        chatId = message.chatId,
-        messageState = message.messageState,
-        createdAt = message.createdAt,
-        thinkingDurationSeconds = message.thinkingDurationSeconds,
-        thinkingRaw = message.thinkingRaw,
-        modelType = message.modelType
-    )
-}
-
-/**
- * Converts MessageWithAllRelations to domain Message with both pipeline step and thinking chunks.
- */
-fun MessageWithAllRelations.toDomain(): Message {
-    return Message(
-        id = message.id,
-        content = Content(
-            text = message.content,
-            pipelineStep = pipelineStep?.pipelineStep
-        ),
-        role = message.role,
-        chatId = message.chatId,
-        messageState = message.messageState,
-        createdAt = message.createdAt,
-        thinkingDurationSeconds = message.thinkingDurationSeconds,
-        thinkingRaw = message.thinkingRaw,
-        thinkingSteps = thinkingSteps.map { it.thinkingChunk },
+        thinkingStartTime = message.thinkingStartTime,
+        thinkingEndTime = message.thinkingEndTime,
         modelType = message.modelType
     )
 }

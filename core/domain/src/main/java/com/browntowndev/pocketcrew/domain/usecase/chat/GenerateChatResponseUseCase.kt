@@ -41,12 +41,11 @@ import javax.inject.Inject
  * to maintain conversation context across app restarts or model unloads.
  */
 class GenerateChatResponseUseCase @Inject constructor(
-    @FastModelEngine private val fastModelService: LlmInferencePort,
-    @ThinkingModelEngine private val thinkingModelService: LlmInferencePort,
+    @param:FastModelEngine private val fastModelService: LlmInferencePort,
+    @param:ThinkingModelEngine private val thinkingModelService: LlmInferencePort,
     private val pipelineExecutor: PipelineExecutorPort,
     private val chatRepository: ChatRepository,
     private val messageRepository: MessageRepository,
-    private val bufferThinkingSteps: BufferThinkingStepsUseCase,
     private val loggingPort: LoggingPort,
     private val inferenceLockManager: InferenceLockManager,
     private val modelRegistry: ModelRegistryPort,
@@ -114,8 +113,11 @@ class GenerateChatResponseUseCase @Inject constructor(
                         // Update model type for the message
                         chatRepository.updateMessageModelType(currentMessageId, state.modelType)
 
-                        // Save thinking steps and update message state to THINKING
-                        chatRepository.saveThinkingSteps(currentMessageId, state.steps)
+                        // Set thinking start time on first thinking event
+                        chatRepository.setThinkingStartTime(currentMessageId)
+
+                        // Append raw thinking text (simplified - no chunking)
+                        chatRepository.appendThinkingRaw(currentMessageId, state.thinkingChunk)
                     }
                     is MessageGenerationState.GeneratingText -> {
                         val currentMessageId = getCurrentMessageId(
@@ -139,8 +141,10 @@ class GenerateChatResponseUseCase @Inject constructor(
                             defaultValue = assistantMessageId,
                             assistantMessageIds = assistantMessageIds)
 
-                        // Update thinking duration and message state to COMPLETED
-                        chatRepository.updateThinkingDuration(currentMessageId, state.thinkingDurationSeconds)
+                        // Set thinking end time
+                        chatRepository.setThinkingEndTime(currentMessageId)
+
+                        // Update message state to COMPLETED
                         chatRepository.updateMessageState(currentMessageId, MessageState.COMPLETE)
                     }
                     is MessageGenerationState.Finished -> {
@@ -167,8 +171,8 @@ class GenerateChatResponseUseCase @Inject constructor(
                             defaultValue = assistantMessageId,
                             assistantMessageIds = assistantMessageIds)
 
-                        // Clear thinking steps and replace content with reason
-                        chatRepository.clearThinkingSteps(currentMessageId)
+                        // Clear thinking and replace content with reason
+                        chatRepository.clearThinking(currentMessageId)
                         chatRepository.updateMessageContent(currentMessageId, "[Blocked: ${state.reason}]")
                         chatRepository.updateMessageState(currentMessageId, MessageState.COMPLETE)
                     }
@@ -181,8 +185,8 @@ class GenerateChatResponseUseCase @Inject constructor(
                             defaultValue = assistantMessageId,
                             assistantMessageIds = assistantMessageIds)
 
-                        // Clear thinking steps and content, update state
-                        chatRepository.clearThinkingSteps(currentMessageId)
+                        // Clear thinking and content, update state
+                        chatRepository.clearThinking(currentMessageId)
                         chatRepository.updateMessageContent(currentMessageId, "")
                         chatRepository.updateMessageState(currentMessageId, MessageState.COMPLETE)
                     }
@@ -324,8 +328,8 @@ class GenerateChatResponseUseCase @Inject constructor(
         modelType: ModelType,
     ): Flow<MessageGenerationState> = flow {
         val startTime = System.currentTimeMillis()
-        val currentSteps = mutableListOf<String>()
-        bufferThinkingSteps.reset()
+        var hasStartedThinking = false
+        val thinkingBuffer = StringBuilder()
 
         // REHYDRATION PHASE: Load conversation history from database
         // This ensures context is preserved across app restarts or model unloads
@@ -344,15 +348,16 @@ class GenerateChatResponseUseCase @Inject constructor(
         service.sendPrompt(prompt, closeConversation = false).collect { event ->
             when (event) {
                 is InferenceEvent.Thinking -> {
-                    val newThoughts = bufferThinkingSteps(event.chunk)
-                    for (thought in newThoughts) {
-                        if (thought != currentSteps.lastOrNull()) {
-                            currentSteps.add(thought)
-                        }
+                    // Set thinking start time on first thinking event
+                    if (!hasStartedThinking) {
+                        hasStartedThinking = true
                     }
-                    if (newThoughts.isNotEmpty()) {
-                        emit(MessageGenerationState.ThinkingLive(currentSteps.toList(), modelType))
-                    }
+
+                    // Accumulate raw thinking text
+                    thinkingBuffer.append(event.chunk)
+
+                    // Emit thinking state with raw text (simplified - no chunking)
+                    emit(MessageGenerationState.ThinkingLive(event.chunk, modelType))
                 }
 
                 is InferenceEvent.PartialResponse -> {
@@ -360,19 +365,14 @@ class GenerateChatResponseUseCase @Inject constructor(
                 }
 
                 is InferenceEvent.Completed -> {
-                    // Flush any remaining buffered words
-                    val finalStep = bufferThinkingSteps.flush()
-                    if (finalStep != null && finalStep != currentSteps.lastOrNull()) {
-                        currentSteps.add(finalStep)
-                    }
+                    val endTime = System.currentTimeMillis()
+                    val duration = ((endTime - startTime) / 1000).toInt()
+                    val rawThinking = thinkingBuffer.toString()
 
-                    val duration = ((System.currentTimeMillis() - startTime) / 1000).toInt()
-
-                    val thinkingData = if (currentSteps.isNotEmpty()) {
+                    val thinkingData = if (rawThinking.isNotBlank()) {
                         ThinkingData(
                             thinkingDurationSeconds = duration,
-                            steps = currentSteps,
-                            rawFullThought = currentSteps.joinToString(" -> ")
+                            rawFullThought = rawThinking
                         )
                     } else null
 
@@ -398,7 +398,7 @@ class GenerateChatResponseUseCase @Inject constructor(
 }
 
 sealed interface MessageGenerationState {
-    data class ThinkingLive(val steps: List<String>, val modelType: ModelType) : MessageGenerationState
+    data class ThinkingLive(val thinkingChunk: String, val modelType: ModelType) : MessageGenerationState
     data class GeneratingText(val textDelta: String, val modelType: ModelType) : MessageGenerationState
     data class Finished(val modelType: ModelType) : MessageGenerationState
     data class Blocked(val reason: String, val modelType: ModelType) : MessageGenerationState
@@ -407,7 +407,7 @@ sealed interface MessageGenerationState {
         val stepOutput: String,
         val thinkingDurationSeconds: Int,                  // Thinking time only (for "Thought For Xs")
         val totalDurationSeconds: Int = 0,       // Total time (for BottomSheet display)
-        val thinkingSteps: List<String>,
+        val thinkingRaw: String,
         val modelDisplayName: String,
         val modelType: ModelType,
         val stepType: PipelineStep

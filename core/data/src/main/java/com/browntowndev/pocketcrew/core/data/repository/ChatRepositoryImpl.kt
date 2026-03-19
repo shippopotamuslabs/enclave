@@ -3,7 +3,6 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.CrewPipelineStepEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
-import com.browntowndev.pocketcrew.core.data.local.ThinkingStepsEntity
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
@@ -69,30 +68,36 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Saves thinking steps for a message during generation.
+     * Sets the thinking start time for a message.
      */
-    override suspend fun saveThinkingSteps(messageId: Long, thinkingSteps: List<String>) {
-        // Delete old thinking steps first
-        messageDao.deleteThinkingStepsForMessage(messageId)
-
-        // Upsert new thinking steps
-        val stepsToUpsert = thinkingSteps.map { step ->
-            ThinkingStepsEntity(
-                messageId = messageId,
-                thinkingChunk = step
-            )
-        }
-        messageDao.upsertManyThinkingSteps(stepsToUpsert)
-
-        // Update message state to THINKING
+    override suspend fun setThinkingStartTime(messageId: Long) {
+        messageDao.updateThinkingStartTime(messageId, System.currentTimeMillis())
         messageDao.updateMessageState(messageId, MessageState.THINKING)
     }
 
     /**
-     * Clears thinking steps from a message (for blocked/failed states).
+     * Sets the thinking end time for a message.
      */
-    override suspend fun clearThinkingSteps(messageId: Long) {
-        messageDao.deleteThinkingStepsForMessage(messageId)
+    override suspend fun setThinkingEndTime(messageId: Long) {
+        messageDao.updateThinkingEndTime(messageId, System.currentTimeMillis())
+    }
+
+    /**
+     * Appends raw thinking text to a message.
+     */
+    override suspend fun appendThinkingRaw(messageId: Long, thinkingText: String) {
+        val existing = messageDao.getMessageById(messageId)
+        val currentRaw = existing?.thinkingRaw ?: ""
+        messageDao.updateThinkingRaw(messageId, currentRaw + thinkingText)
+    }
+
+    /**
+     * Clears thinking data from a message (for blocked/failed states).
+     */
+    override suspend fun clearThinking(messageId: Long) {
+        messageDao.updateThinkingRaw(messageId, null)
+        messageDao.updateThinkingStartTime(messageId, 0)
+        messageDao.updateThinkingEndTime(messageId, 0)
         messageDao.updateMessageState(messageId, MessageState.COMPLETE)
     }
 
@@ -101,13 +106,6 @@ class ChatRepositoryImpl @Inject constructor(
      */
     override suspend fun updateMessageModelType(messageId: Long, modelType: ModelType) {
         messageDao.updateMessageModelType(messageId, modelType)
-    }
-
-    /**
-     * Updates the thinking duration for a message.
-     */
-    override suspend fun updateThinkingDuration(messageId: Long, thinkingDurationSeconds: Int) {
-        messageDao.updateThinkingDuration(messageId, thinkingDurationSeconds)
     }
 
     /**
@@ -161,24 +159,14 @@ class ChatRepositoryImpl @Inject constructor(
         content: String,
         thinkingData: ThinkingData?
     ) {
+        // Calculate duration if we have thinking data with start/end times
+        val duration = thinkingData?.thinkingDurationSeconds?.toInt()
+        
         messageDao.updateMessageContent(
             id = messageId,
             content = content,
-            thinkingDuration = thinkingData?.thinkingDurationSeconds,
+            thinkingDuration = duration,
             thinkingRaw = thinkingData?.rawFullThought
         )
-        // Save thinking steps to separate table
-        if (thinkingData?.steps?.isNotEmpty() == true) {
-            // Delete old thinking steps first
-            messageDao.deleteThinkingStepsForMessage(messageId)
-            // Insert new thinking steps
-            val stepsToUpsert = thinkingData.steps.map { step ->
-                ThinkingStepsEntity(
-                    messageId = messageId,
-                    thinkingChunk = step
-                )
-            }
-            messageDao.upsertManyThinkingSteps(stepsToUpsert)
-        }
     }
 }

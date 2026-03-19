@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.feature.chat.components
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -10,14 +9,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -30,10 +28,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamingMarkdownText
 
 
 /**
- * Bottom sheet that displays the full thinking details with ThoughtBubble components.
+ * Bottom sheet that displays the full thinking details as markdown.
  */
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,7 +40,7 @@ fun ThinkingDetailsBottomSheet(
     isVisible: Boolean,
     onDismiss: () -> Unit,
     thinkingDurationSeconds: Long,
-    thinkingSteps: List<String>,
+    thinkingRaw: String,
     modelDisplayName: String
 ) {
     if (isVisible) {
@@ -70,7 +69,7 @@ fun ThinkingDetailsBottomSheet(
                             R.drawable.lightbulb
                         ),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.padding(end = 8.dp)
                     )
                     Text(
@@ -85,74 +84,32 @@ fun ThinkingDetailsBottomSheet(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Thought bubbles - let LazyColumn size naturally based on content
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    itemsIndexed(thinkingSteps) { _, step ->
-                        ThoughtBubbleStatic(
-                            stepText = step,
-                            modelDisplayName = modelDisplayName
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-fun formatThinkingDuration(seconds: Long): String = when {
-    seconds < 60 -> "${seconds}s"
-    else -> "${seconds / 60}m ${seconds % 60}s"
-}
-
-/**
- * Static thought bubble for bottom sheet (without animations).
- */
-@Composable
-private fun ThoughtBubbleStatic(
-    stepText: String,
-    modelDisplayName: String,
-    modifier: Modifier = Modifier
-) {
-    val displayName = modelDisplayName.ifBlank { "Agent" }
-
-    Row(
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Column {
-            Text(
-                text = displayName,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-            )
-
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shadowElevation = 2.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
+                // Raw thinking content rendered as markdown
+                if (thinkingRaw.isNotBlank()) {
+                    StreamingMarkdownText(
+                        markdown = thinkingRaw,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState())
+                    )
+                } else {
                     Text(
-                        text = stepText,
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontSize = 13.sp,
-                            lineHeight = 18.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
+                        text = "No thinking content available",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp)
                     )
                 }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
+}
+
+private fun formatThinkingDuration(seconds: Long): String = when {
+    seconds < 60 -> "${seconds}s"
+    else -> "${seconds / 60}m ${seconds % 60}s"
 }
 
 @Preview(showBackground = true)
@@ -161,12 +118,21 @@ private fun PreviewThinkingDetailsBottomSheet() {
     PocketCrewTheme {
         ThinkingDetailsBottomSheet(
             isVisible = true,
-            thinkingSteps = listOf(
-                "Analyzing the user's request for information about quantum computing.",
-                "Searching the internal knowledge base for recent breakthroughs in topological superconductors.",
-                "Synthesizing a comprehensive explanation suitable for a beginner audience.",
-                "Double-checking the accuracy of the historical timeline provided."
-            ),
+            thinkingRaw = """
+                # Analysis in Progress
+
+                Let me break down this problem:
+
+                1. First, identify the key components
+                2. Research the historical context
+                3. Synthesize a comprehensive response
+
+                ```kotlin
+                fun main() {
+                    println("Hello!")
+                }
+                ```
+            """.trimIndent(),
             thinkingDurationSeconds = 42,
             modelDisplayName = "PocketCrew Assistant",
             onDismiss = {}

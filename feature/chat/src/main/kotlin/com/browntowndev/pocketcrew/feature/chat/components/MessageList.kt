@@ -62,15 +62,6 @@ fun MessageList(
                 val message = messages[messageIndex]
 
                 // ============================================================
-                // Indicator rendering - shows at TOP for Assistant messages
-                // (below content for User messages since they have no indicators)
-                // ============================================================
-                Indicators(
-                    modelDisplayName = message.modelDisplayName,
-                    indicatorState = message.indicatorState
-                )
-
-                // ============================================================
                 // Content rendering based on message role
                 // ============================================================
                 if (message.role == MessageRole.User) {
@@ -78,6 +69,15 @@ fun MessageList(
                 } else {
                     AssistantResponse(message = message)
                 }
+
+                // ============================================================
+                // Indicator rendering - shows at TOP for Assistant messages
+                // (below content for User messages since they have no indicators)
+                // ============================================================
+                Indicators(
+                    modelDisplayName = message.modelDisplayName,
+                    indicatorState = message.indicatorState
+                )
             }
         }
     }
@@ -112,12 +112,12 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 @Composable
 private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?) {
     if (indicatorState != null) {
-        var bottomSheetThinkingData by remember { mutableStateOf<ThinkingDataUi?>(null) }
+        var bottomSheetThinkingRaw by remember { mutableStateOf<String?>(null) }
 
         when (indicatorState) {
             is IndicatorState.Thinking -> {
                 ThinkingIndicator(
-                    thinkingSteps = indicatorState.thinkingSteps,
+                    thinkingRaw = indicatorState.thinkingRaw,
                     thinkingStartTime = indicatorState.thinkingDurationSeconds,
                     modelDisplayName = modelDisplayName,
                 )
@@ -127,11 +127,11 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
             }
             is IndicatorState.Generating -> {
                 val thinkingData = indicatorState.thinkingData
-                if (thinkingData != null && thinkingData.steps.isNotEmpty()) {
+                if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank()) {
                     ThoughtForHeader(
                         thinkingData = thinkingData,
                         onViewFullThinking = {
-                            bottomSheetThinkingData = indicatorState.thinkingData
+                            bottomSheetThinkingRaw = indicatorState.thinkingData?.thinkingRaw
                         }
                     )
                 }
@@ -139,11 +139,11 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
             }
             is IndicatorState.Complete -> {
                 val thinkingData = indicatorState.thinkingData
-                if (thinkingData != null && thinkingData.steps.isNotEmpty()) {
+                if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank()) {
                     ThoughtForHeader(
                         thinkingData = thinkingData,
                         onViewFullThinking = {
-                            bottomSheetThinkingData = indicatorState.thinkingData
+                            bottomSheetThinkingRaw = indicatorState.thinkingData?.thinkingRaw
                         }
                     )
                 }
@@ -154,11 +154,18 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
         }
 
         ThinkingDetailsBottomSheet(
-            isVisible = bottomSheetThinkingData != null,
-            thinkingSteps = bottomSheetThinkingData?.steps ?: emptyList(),
-            thinkingDurationSeconds = bottomSheetThinkingData?.thinkingDurationSeconds ?: 0,
+            isVisible = bottomSheetThinkingRaw != null,
+            thinkingRaw = bottomSheetThinkingRaw ?: "",
+            thinkingDurationSeconds = indicatorState.let {
+                when (it) {
+                    is IndicatorState.Thinking -> it.thinkingDurationSeconds
+                    is IndicatorState.Generating -> it.thinkingData?.thinkingDurationSeconds ?: 0
+                    is IndicatorState.Complete -> it.thinkingData?.thinkingDurationSeconds ?: 0
+                    else -> 0
+                }
+            },
             modelDisplayName = modelDisplayName,
-            onDismiss = { bottomSheetThinkingData = null }
+            onDismiss = { bottomSheetThinkingRaw = null }
         )
     }
 }
@@ -169,7 +176,8 @@ private fun ThoughtForHeader(
     thinkingData: ThinkingDataUi,
     onViewFullThinking: () -> Unit,
 ) {
-    val durationText = formatThinkingDuration(thinkingData.thinkingDurationSeconds)
+    val durationSeconds = thinkingData.thinkingDurationSeconds.toInt()
+    val durationText = formatThinkingDuration(durationSeconds)
 
     // Header row: lightbulb + "Thought for Xs" — clickable to open bottom sheet
     Row(

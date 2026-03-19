@@ -1,7 +1,13 @@
 package com.browntowndev.pocketcrew.domain.model.chat
 
+/**
+ * Data class for thinking/co chain-of-thought data.
+ * Now stores only raw thinking text (no chunking).
+ *
+ * @property thinkingDurationSeconds Duration of thinking in seconds
+ * @property rawFullThought The complete, untruncated chain-of-thought as markdown
+ */
 data class ThinkingData(
     val thinkingDurationSeconds: Int,
-    val steps: List<String>, // The ~10 word truncated snippets for the UI header
-    val rawFullThought: String // The complete, untruncated chain-of-thought
+    val rawFullThought: String
 )

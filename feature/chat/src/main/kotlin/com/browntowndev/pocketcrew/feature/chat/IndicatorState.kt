@@ -8,9 +8,9 @@ sealed class IndicatorState {
     /** Processing state - shows processing indicator */
     object Processing : IndicatorState()
 
-    /** Thinking state - shows animated thinking indicator with steps */
+    /** Thinking state - shows animated thinking indicator with raw markdown */
     data class Thinking(
-        val thinkingSteps: List<String>,
+        val thinkingRaw: String,
         val thinkingDurationSeconds: Long,
     ) : IndicatorState()
 
@@ -19,7 +19,7 @@ sealed class IndicatorState {
         val thinkingData: ThinkingDataUi?
     ) : IndicatorState() {
         val hasThinkingData: Boolean
-            get() = thinkingData != null && thinkingData.steps.isNotEmpty()
+            get() = thinkingData != null && thinkingData.thinkingRaw.isNotBlank()
     }
 
     /** Complete state - shows final response (with optional thinking data for "Thought For" header) */
@@ -27,7 +27,7 @@ sealed class IndicatorState {
         val thinkingData: ThinkingDataUi?
     ) : IndicatorState() {
         val hasThinkingData: Boolean
-            get() = thinkingData != null && thinkingData.steps.isNotEmpty()
+            get() = thinkingData != null && thinkingData.thinkingRaw.isNotBlank()
     }
 
     /**
@@ -38,9 +38,9 @@ sealed class IndicatorState {
 
 /**
  * Data class for thinking information.
- * Contains the thinking steps, duration, and model display name.
+ * Contains the raw thinking text as markdown and duration.
  */
 data class ThinkingDataUi(
     val thinkingDurationSeconds: Long,
-    val steps: List<String>,
+    val thinkingRaw: String,
 )
