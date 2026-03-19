@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.download
 
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
+import com.browntowndev.pocketcrew.domain.util.Clock
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Inject
@@ -10,7 +11,9 @@ data class SpeedSample(
     val bytesDownloaded: Long
 )
 
-class DownloadSpeedTracker @Inject constructor() : DownloadSpeedTrackerPort {
+class DownloadSpeedTracker @Inject constructor(
+    private val clock: Clock
+) : DownloadSpeedTrackerPort {
 
     // Per-file speed samples - each file gets its own sample list
     private val fileSpeedSamples: ConcurrentHashMap<String, MutableList<SpeedSample>> = ConcurrentHashMap()
@@ -27,7 +30,7 @@ class DownloadSpeedTracker @Inject constructor() : DownloadSpeedTrackerPort {
         bytesDownloaded: Long,
         totalSize: Long
     ): Pair<Double, Long> {
-        val currentTime = System.currentTimeMillis()
+        val currentTime = clock.currentTimeMillis()
         val samples = getOrCreateFileSamples(filename)
 
         // Add current sample for this specific file
@@ -76,7 +79,7 @@ class DownloadSpeedTracker @Inject constructor() : DownloadSpeedTrackerPort {
         totalBytesDownloaded: Long,
         totalSize: Long
     ): Pair<Double, Long> {
-        val currentTime = System.currentTimeMillis()
+        val currentTime = clock.currentTimeMillis()
         aggregateSpeedSamples.add(SpeedSample(currentTime, totalBytesDownloaded))
 
         val tenSecondsAgo = currentTime - 10_000L

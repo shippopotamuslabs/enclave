@@ -53,8 +53,8 @@ set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
 set(GGML_CPU_KLEIDIAI ON CACHE BOOL "" FORCE)
 
 # Vendor KleidiAI locally to avoid FetchContent network issues
-# This tells GGML's FetchContent to use the local copy instead of downloading
-set(FETCHCONTENT_SOURCE_DIR_KLEIDIAI
+# IMPORTANT: Variable name must match FetchContent content name exactly (KleidiAI_Download -> KLEIDIAI_DOWNLOAD)
+set(FETCHCONTENT_SOURCE_DIR_KLEIDIAI_DOWNLOAD
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/kleidiai-1.22.0
     CACHE PATH "" FORCE)
 

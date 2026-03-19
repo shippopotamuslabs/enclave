@@ -20,7 +20,7 @@
 
 extern "C"
 JNIEXPORT jint JNICALL
-Java_com_browntowndev_pocketcrew_inference_llama_JniLlamaEngine_detectSveBits(
+Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_detectSveBits(
         JNIEnv*,
         jobject) {
     // Method 1: Try prctl to get actual SVE vector length

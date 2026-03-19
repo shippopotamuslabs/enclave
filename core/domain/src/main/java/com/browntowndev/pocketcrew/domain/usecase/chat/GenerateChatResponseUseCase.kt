@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.withContext
 
 
 import javax.inject.Inject
@@ -331,11 +330,14 @@ class GenerateChatResponseUseCase @Inject constructor(
         // REHYDRATION PHASE: Load conversation history from database
         // This ensures context is preserved across app restarts or model unloads
         try {
-            withContext(Dispatchers.IO) {
-                rehydrateHistory(chatId, userMessageId, assistantMessageId, service)
-            }
+            rehydrateHistory(chatId, userMessageId, assistantMessageId, service)
         } catch (e: Exception) {
-            android.util.Log.w(TAG, "Failed to rehydrate history: ${e.message}")
+            try {
+                android.util.Log.w(TAG, "Failed to rehydrate history: ${e.message}")
+            } catch (logEx: Exception) {
+                // Ignore logging failures - don't let logging break the flow
+                loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
+            }
             // Continue without rehydration - the service will start with fresh context
         }
 

@@ -9,7 +9,7 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -43,7 +43,7 @@ class DownloadWorkRepositoryTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun observeDownloadProgress_emitsWorkInfo_whenWorkRunning() = runBlocking {
+    fun observeDownloadProgress_emitsWorkInfo_whenWorkRunning() = runTest {
         // Arrange: Return a Flow that emits RUNNING state
         val workInfoRunning = createMockWorkInfo(WorkInfo.State.RUNNING)
 
@@ -59,7 +59,7 @@ class DownloadWorkRepositoryTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun observeDownloadProgress_emitsTerminalState_whenWorkSucceeds() = runBlocking {
+    fun observeDownloadProgress_emitsTerminalState_whenWorkSucceeds() = runTest {
         // Arrange: Return a Flow that emits SUCCEEDED state
         val workInfoSucceeded = createMockWorkInfo(WorkInfo.State.SUCCEEDED)
 
@@ -75,7 +75,7 @@ class DownloadWorkRepositoryTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun observeDownloadProgress_emitsTerminalState_whenWorkFails() = runBlocking {
+    fun observeDownloadProgress_emitsTerminalState_whenWorkFails() = runTest {
         // Arrange: Return a Flow that emits FAILED state
         val workInfoFailed = createMockWorkInfo(WorkInfo.State.FAILED)
 
@@ -91,7 +91,7 @@ class DownloadWorkRepositoryTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
-    fun observeDownloadProgress_filtersByWorkId() = runBlocking {
+    fun observeDownloadProgress_filtersByWorkId() = runTest {
         // Arrange: Return multiple work infos, only one matching our workId
         val otherWorkId = UUID.randomUUID()
         val workInfoRunning = createMockWorkInfo(WorkInfo.State.RUNNING)
@@ -111,7 +111,7 @@ class DownloadWorkRepositoryTest {
     }
 
     @Test
-    fun getWorkId_returnsWorkId_whenWorkRunning() = runBlocking {
+    fun getWorkId_returnsWorkId_whenWorkRunning() = runTest {
         // Arrange
         val workInfoRunning = createMockWorkInfo(WorkInfo.State.RUNNING)
         every {
@@ -126,7 +126,7 @@ class DownloadWorkRepositoryTest {
     }
 
     @Test
-    fun getWorkId_returnsNull_whenNoWorkRunning() = runBlocking {
+    fun getWorkId_returnsNull_whenNoWorkRunning() = runTest {
         // Arrange
         every {
             mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()

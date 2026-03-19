@@ -45,6 +45,8 @@ import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+import com.browntowndev.pocketcrew.domain.util.Clock
+import com.browntowndev.pocketcrew.domain.util.SystemClock
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -96,7 +98,11 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideDownloadSpeedTracker(): DownloadSpeedTrackerPort = DownloadSpeedTracker()
+    fun provideSystemClock(): Clock = SystemClock()
+
+    @Provides
+    @Singleton
+    fun provideDownloadSpeedTracker(clock: Clock): DownloadSpeedTrackerPort = DownloadSpeedTracker(clock)
 
     @Provides
     @Singleton

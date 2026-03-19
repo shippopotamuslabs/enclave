@@ -56,7 +56,7 @@ class HttpFileDownloaderTest {
     // ============ getServerFileSize Tests ============
 
     @Test
-    fun getServerFileSize_returnsSize_whenServerRespondsWithContentLength() = kotlinx.coroutines.runBlocking {
+    fun getServerFileSize_returnsSize_whenServerRespondsWithContentLength() = kotlinx.coroutines.test.runTest {
         // Given: Mock HTTP client returns successful response with Content-Length
         val mockCall = mockk<okhttp3.Call>(relaxed = true)
         val mockResponse = mockk<Response>(relaxed = true)
@@ -74,7 +74,7 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun getServerFileSize_returnsNull_whenServerReturnsError() = kotlinx.coroutines.runBlocking {
+    fun getServerFileSize_returnsNull_whenServerReturnsError() = kotlinx.coroutines.test.runTest {
         // Given: Mock HTTP client returns error response
         val mockCall = mockk<okhttp3.Call>(relaxed = true)
         val mockResponse = mockk<Response>(relaxed = true)
@@ -91,7 +91,7 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun getServerFileSize_returnsNull_onException() = kotlinx.coroutines.runBlocking {
+    fun getServerFileSize_returnsNull_onException() = kotlinx.coroutines.test.runTest {
         // Given: Mock HTTP client throws exception
         val mockCall = mockk<okhttp3.Call>(relaxed = true)
 
@@ -108,7 +108,7 @@ class HttpFileDownloaderTest {
     // ============ downloadFile Success Tests ============
 
     @Test
-    fun downloadFile_succeeds_withNoExistingBytes() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_succeeds_withNoExistingBytes() = kotlinx.coroutines.test.runTest {
         // Given: A simple response body with content
         val testContent = "test file content"
         val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
@@ -142,7 +142,7 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun downloadFile_succeeds_withExistingBytes_resume() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_succeeds_withExistingBytes_resume() = kotlinx.coroutines.test.runTest {
         // Given: Server supports resume with 206 Partial Content
         val existingContent = "existing partial content"
         val newContent = " - added content"
@@ -190,7 +190,7 @@ class HttpFileDownloaderTest {
     // ============ downloadFile Error Tests ============
 
     @Test
-    fun downloadFile_throwsException_onHttpError() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_throwsException_onHttpError() = kotlinx.coroutines.test.runTest {
         // Given: Server returns error response
         val testConfig = createTestConfig("dummy")
 
@@ -219,7 +219,7 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun downloadFile_throwsException_onEmptyResponseBody() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_throwsException_onEmptyResponseBody() = kotlinx.coroutines.test.runTest {
         // Note: okhttp3 Response.body is non-null, so this test verifies that
         // a smaller than expected body throws an exception for size mismatch
         val smallContent = "x" // 1 byte but we expect 100 bytes
@@ -262,7 +262,7 @@ class HttpFileDownloaderTest {
     // ============ HTTP 416 Range Not Satisfiable Tests ============
 
     @Test
-    fun downloadFile_retriesFromStart_onHttp416() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_retriesFromStart_onHttp416() = kotlinx.coroutines.test.runTest {
         // Given: Server returns 416 (Range not satisfiable), indicating stale temp file
         val testContent = "complete file content after retry"
         val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
@@ -314,7 +314,7 @@ class HttpFileDownloaderTest {
     // ============ Progress Callback Tests ============
 
     @Test
-    fun downloadFile_callsProgressCallback_onDownload() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_callsProgressCallback_onDownload() = kotlinx.coroutines.test.runTest {
         // Given: Progress callback to track progress
         val testContent = "test content for progress"
         val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
@@ -357,7 +357,7 @@ class HttpFileDownloaderTest {
     // ============ File Cleanup Tests ============
 
     @Test
-    fun downloadFile_deletesTempFile_afterSuccessfulDownload() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_deletesTempFile_afterSuccessfulDownload() = kotlinx.coroutines.test.runTest {
         // Given: Clean target directory
         val testContent = "test content"
         val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
@@ -391,7 +391,7 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun downloadFile_overwritesExistingTargetFile() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_overwritesExistingTargetFile() = kotlinx.coroutines.test.runTest {
         // Given: Target file already exists
         val existingTarget = File(tempDir, "test-model.gguf")
         existingTarget.writeText("old content")
@@ -428,7 +428,7 @@ class HttpFileDownloaderTest {
     // ============ Logging Tests ============
 
     @Test
-    fun downloadFile_logsDownloadStart() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_logsDownloadStart() = kotlinx.coroutines.test.runTest {
         // Given: Simple download - verify logger is called (we just check it doesn't throw)
         val testContent = "test"
         val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
@@ -462,7 +462,7 @@ class HttpFileDownloaderTest {
     // ============ Edge Case Tests ============
 
     @Test
-    fun downloadFile_throwsException_whenTargetDirectoryDoesNotExist() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_throwsException_whenTargetDirectoryDoesNotExist() = kotlinx.coroutines.test.runTest {
         // Given: Target directory does not exist
         val nonExistentDir = File(tempDir, "nonexistent/subdir")
         val testContent = "test"
@@ -498,7 +498,7 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun downloadFile_throwsException_whenNoContentLengthHeader() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_throwsException_whenNoContentLengthHeader() = kotlinx.coroutines.test.runTest {
         // Given: Server does not provide Content-Length header
         val testContent = "test content"
         val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
@@ -533,7 +533,7 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun downloadFile_usesServerContentLength_whenDifferentFromConfig() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_usesServerContentLength_whenDifferentFromConfig() = kotlinx.coroutines.test.runTest {
         // Given: Server reports different size than config (server is source of truth)
         // With SHA-256 validation, we need to provide valid SHA-256 for the actual content
         // but expect different size - this will cause size mismatch error after SHA-256 passes
@@ -576,7 +576,7 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun downloadFile_handlesIOException_duringNetworkRead() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_handlesIOException_duringNetworkRead() = kotlinx.coroutines.test.runTest {
         // Given: Input stream throws IOException during read
         // Use dummy content - actual content won't matter since IOException happens first
         val testConfig = createTestConfig("dummy")
@@ -620,7 +620,7 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun downloadFile_failsWhenRenameToTargetFails() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_failsWhenRenameToTargetFails() = kotlinx.coroutines.test.runTest {
         // Given: File rename will fail (target file exists and is locked)
         val testContent = "test"
         val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
@@ -661,7 +661,7 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun getServerFileSize_handlesRedirect() = kotlinx.coroutines.runBlocking {
+    fun getServerFileSize_handlesRedirect() = kotlinx.coroutines.test.runTest {
         // Given: Server returns redirect (301/302) - OkHttp should follow redirects by default
         val mockCall = mockk<okhttp3.Call>(relaxed = true)
         val mockResponse = mockk<Response>(relaxed = true)
@@ -683,7 +683,7 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun downloadFile_reportsProgressAccurately() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_reportsProgressAccurately() = kotlinx.coroutines.test.runTest {
         // Given: Download with multiple chunks, track progress calls
         val testContent = "1234567890" // 10 bytes
         val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
@@ -722,7 +722,7 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun downloadFile_usesActualTotalSize_fromServer() = kotlinx.coroutines.runBlocking {
+    fun downloadFile_usesActualTotalSize_fromServer() = kotlinx.coroutines.test.runTest {
         // Given: Server provides Content-Range with total size
         val partialContent = "test"
         val contentBytes = partialContent.toByteArray(StandardCharsets.UTF_8)
