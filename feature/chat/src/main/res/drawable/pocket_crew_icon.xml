@@ -1,63 +1,55 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="80dp"
-    android:height="80dp"
+    android:width="108dp"
+    android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Agent hexagon at center-top with glow -->
-    <group
-        android:translateX="54"
-        android:translateY="37">
-        <path
-            android:fillColor="#F4A361"
-            android:pathData="M0,-11 L9.5,-5.5 L9.5,5.5 L0,11 L-9.5,5.5 L-9.5,-5.5 Z" />
-        <path
-            android:fillColor="#18181B"
-            android:pathData="M-5.5,1 L-2,3 L-3.5,6 Z" />
-        <path
-            android:fillColor="#18181B"
-            android:pathData="M5.5,1 L2,3 L3.5,6 Z" />
-    </group>
-    <!-- Agent hexagon at left-middle with glow -->
-    <group
-        android:translateX="37"
-        android:translateY="54">
-        <path
-            android:fillColor="#F4A361"
-            android:pathData="M0,-11 L9.5,-5.5 L9.5,5.5 L0,11 L-9.5,5.5 L-9.5,-5.5 Z" />
-        <path
-            android:fillColor="#18181B"
-            android:pathData="M-5.5,1 L-2,3 L-3.5,6 Z" />
-        <path
-            android:fillColor="#18181B"
-            android:pathData="M5.5,1 L2,3 L3.5,6 Z" />
-    </group>
-    <!-- Agent hexagon at right-middle with glow -->
-    <group
-        android:translateX="71"
-        android:translateY="54">
-        <path
-            android:fillColor="#F4A361"
-            android:pathData="M0,-11 L9.5,-5.5 L9.5,5.5 L0,11 L-9.5,5.5 L-9.5,-5.5 Z" />
-        <path
-            android:fillColor="#18181B"
-            android:pathData="M-5.5,1 L-2,3 L-3.5,6 Z" />
-        <path
-            android:fillColor="#18181B"
-            android:pathData="M5.5,1 L2,3 L3.5,6 Z" />
-    </group>
-    <!-- Agent hexagon at center-bottom (darker, no glow) -->
-    <group
-        android:translateX="54"
-        android:translateY="71">
-        <path
-            android:fillColor="#B37340"
-            android:pathData="M0,-11 L9.5,-5.5 L9.5,5.5 L0,11 L-9.5,5.5 L-9.5,-5.5 Z" />
-        <path
-            android:fillColor="#18181B"
-            android:pathData="M-5.5,1 L-2,3 L-3.5,6 Z" />
-        <path
-            android:fillColor="#18181B"
-            android:pathData="M5.5,1 L2,3 L3.5,6 Z" />
-    </group>
+    <!-- Dark background -->
+    <path
+        android:fillColor="#18181b"
+        android:pathData="M0,0h108v108h-108z"/>
+    <!-- Top hexagon -->
+    <path
+        android:fillColor="#F4A361"
+        android:pathData="M54,20 L63.5,26 L63.5,38 L54,44 L44.5,38 L44.5,26 Z"/>
+    <!-- Top hexagon eyes -->
+    <path
+        android:fillColor="#18181b"
+        android:pathData="M48.5,32 L52,34 L50.5,37 Z"/>
+    <path
+        android:fillColor="#18181b"
+        android:pathData="M59.5,32 L56,34 L57.5,37 Z"/>
+    <!-- Left hexagon -->
+    <path
+        android:fillColor="#F4A361"
+        android:pathData="M37,44 L46.5,50 L46.5,62 L37,68 L27.5,62 L27.5,50 Z"/>
+    <!-- Left hexagon eyes -->
+    <path
+        android:fillColor="#18181b"
+        android:pathData="M31.5,56 L35,58 L33.5,61 Z"/>
+    <path
+        android:fillColor="#18181b"
+        android:pathData="M42.5,56 L39,58 L40.5,61 Z"/>
+    <!-- Right hexagon -->
+    <path
+        android:fillColor="#F4A361"
+        android:pathData="M71,44 L80.5,50 L80.5,62 L71,68 L61.5,62 L61.5,50 Z"/>
+    <!-- Right hexagon eyes -->
+    <path
+        android:fillColor="#18181b"
+        android:pathData="M65.5,56 L69,58 L67.5,61 Z"/>
+    <path
+        android:fillColor="#18181b"
+        android:pathData="M76.5,56 L73,58 L74.5,61 Z"/>
+    <!-- Bottom hexagon (darker) -->
+    <path
+        android:fillColor="#B37340"
+        android:pathData="M54,68 L63.5,74 L63.5,86 L54,92 L44.5,86 L44.5,74 Z"/>
+    <!-- Bottom hexagon eyes -->
+    <path
+        android:fillColor="#18181b"
+        android:pathData="M48.5,80 L52,82 L50.5,85 Z"/>
+    <path
+        android:fillColor="#18181b"
+        android:pathData="M59.5,80 L56,82 L57.5,85 Z"/>
 </vector>

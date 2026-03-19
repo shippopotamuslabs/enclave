@@ -24,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -34,7 +35,6 @@ import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
 import com.browntowndev.pocketcrew.feature.chat.MessageRole
 import com.browntowndev.pocketcrew.feature.chat.ThinkingDataUi
-import com.browntowndev.pocketcrew.feature.chat.components.formatThinkingDuration
 import com.browntowndev.pocketcrew.feature.chat.fakeLongMessages
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
@@ -90,10 +90,10 @@ private fun EmptyState(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
         modifier = modifier.fillMaxSize(),
     ) {
-        Icon(
+        Image(
             painter = painterResource(R.drawable.pocket_crew_icon),
             contentDescription = null,
-            modifier = Modifier.size(80.dp),
+            modifier = Modifier.size(160.dp)
         )
         Text(
             text = "Pocket Crew is ready",
