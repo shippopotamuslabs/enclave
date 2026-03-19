@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
+import com.browntowndev.pocketcrew.domain.exception.ModelsDirectoryException
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
@@ -46,7 +47,7 @@ class CheckModelsUseCase @Inject constructor(
 
         // Handle directory creation error
         if (scan.directoryError) {
-            throw Exception("Failed to create models directory")
+            throw ModelsDirectoryException("Failed to create models directory")
         }
 
         // Use CheckModelEligibilityUseCase to determine which models need downloading

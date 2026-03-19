@@ -91,10 +91,9 @@ private fun EmptyState(modifier: Modifier = Modifier) {
         modifier = modifier.fillMaxSize(),
     ) {
         Icon(
-            painter = painterResource(R.drawable.network_intelligence),
+            painter = painterResource(R.drawable.pocket_crew_icon),
             contentDescription = null,
             modifier = Modifier.size(80.dp),
-            tint = MaterialTheme.colorScheme.primary,
         )
         Text(
             text = "Pocket Crew is ready",

@@ -92,14 +92,52 @@ class CreateUserMessageUseCase @Inject constructor(
 
     /**
      * Generates a chat name from the message content.
-     * Takes the first 5 words of the content, or all words if fewer than 5.
+     * 
+     * | Input | Output |
+     * |-------|--------|
+     * | Empty content | "New Chat" (default) |
+     * | Single word | That word only |
+     * | 2-5 words | First N words (N = actual count) |
+     * | More than 5 words | First 5 words |
+     * | No words (split fails) AND length > 30 | First 30 chars + "..." |
+     * | Special characters | Included as-is |
+     * | Numbers only | Allowed as chat name |
      *
      * @param content The message content
      * @return The generated chat name
      */
     private fun generateChatName(content: String): String {
+        // Empty content returns default name
+        if (content.isBlank()) {
+            return "New Chat"
+        }
+        
         val words = content.split("\\s+".toRegex())
-        val firstFiveWords = words.take(5)
-        return firstFiveWords.joinToString(" ")
+        
+        // If we have words, take up to 5
+        if (words.isNotEmpty()) {
+            val firstFiveWords = words.take(5)
+            val result = firstFiveWords.joinToString(" ")
+            
+            // If we have more than 5 words, truncate to first 5
+            if (words.size > 5) {
+                return result
+            }
+            
+            // If we got some words but content has no spaces and is > 30 chars
+            // (meaning words.size == 1 and content.length > 30), truncate
+            if (words.size == 1 && content.length > 30) {
+                return content.take(30) + "..."
+            }
+            
+            return result
+        }
+        
+        // Fallback: no words but content exists - truncate if too long
+        if (content.length > 30) {
+            return content.take(30) + "..."
+        }
+        
+        return content
     }
 }

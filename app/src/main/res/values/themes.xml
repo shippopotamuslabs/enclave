@@ -2,4 +2,10 @@
 <resources>
 
     <style name="Theme.PocketCrew" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Splash screen theme with matching background color -->
+    <style name="Theme.PocketCrew.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#18181B</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+    </style>
 </resources>

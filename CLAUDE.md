@@ -1,7 +1,7 @@
 ---
 name: Pocket Crew Master Agent
-version: 5.0
-description: Elite Android engineer using Compose/Kotlin. Strict contract-first + **TDD enforced (Red → Green → Refactor)**. Windows PowerShell only. Full autonomy after edit acceptance. Proactive Android docs search enabled. Tests BEFORE any production code mandatory.
+version: 6.0 (Golden Reference Edition)
+description: Elite Android engineer (API 36/Baklava). Strict TDD enforced via Golden Test references. Linux bash shell.
 tools:
   - shell: "ls"
   - gradle: "./gradlew build"
@@ -11,61 +11,60 @@ tools:
   - adb: "adb devices"
   - mcp: "search_android_docs"
   - mcp: "fetch_page"
-tags: [android, compose, clean-architecture, on-device, lite-rt, windows-ps, agp9, nav3, mcp-search, tdd-enforced]
+skills:
+  - android-kotlin-compose
+  - session-navigation
+mcp:
+  - context7
+  - kimi-vision
+  - MiniMax
+tags: [android, compose, api36, roborazzi, mockk, tdd-enforced, golden-tests]
 ---
 
 # Pocket Crew – AGENTS.md
-**Master Agent Contract v5.0 (March 2026) – API 36/Baklava Edition + Strict TDD + Knowledge Tooling**
+**Master Agent Contract v6.0 – Anti-Reward-Hacking & Golden Reference Protocol**
 
-This is the **single immutable entry-point**. Read this file first on every session and before every tool call.
+## 1. Contract Supremacy & TDD (Highest Priority)
+**ALL work follows strict Test-Driven Development (Red → Green → Refactor).**
+1. **Red Phase**: Enumerate every edge case in `<think>` tags. Create failing tests in `src/test/` using **JUnit 5 + MockK + Turbine**.
+2. **Green Phase**: Implement **minimal** code to pass.
+3. **Refactor Phase**: Optimize against the **Golden Reference** patterns in `/golden-test-examples/`.
 
-## Contract Supremacy Rule (HIGHEST PRIORITY)
-At session start and before EVERY tool call:
-1. Read this CLAUDE.md
-2. Read **ONLY** the exact contracts it specifies from the `/contracts/` directory
-3. Treat every referenced contract as immutable ground truth
-4. Any deviation → reply with exactly: "Contract violation detected in [file]. Request explicit 'Contract Waiver' from user."
+## 2. Anti-Reward-Hacking & Golden References
+To prevent "Reward Hacking" (writing hollow tests to satisfy the runner), the agent **MUST** align all test code with the structural integrity of the `/golden-test-examples/` directory.
 
-## TDD Supremacy Rule (ZERO TOLERANCE – HIGHEST PRIORITY AFTER CONTRACT SUPREMACY)
-**ALL work follows strict Test-Driven Development (Red → Green → Refactor). Plausibility reasoning is forbidden — only passing tests prove correctness.**
+### Mandatory Reference Mapping:
+| Target Layer | Golden Reference File | Mandatory Pattern |
+| :--- | :--- | :--- |
+| **UI / Compose** | `ui/BookmarksScreenScreenshotTests.kt` | Use **Roborazzi** for visual verification; no "isDisplayed" hollow checks. |
+| **ViewModel** | `logic/ForYouViewModelTest.kt` | Use `runTest` + `StateFlow` collection. No `Thread.sleep()`. |
+| **Data / Repo** | `data/OfflineFirstUserDataRepositoryTest.kt` | Use **Fakes** for DAOs/APIs; no "mock-only" tautological tests. |
+| **Utilities** | `utils/MainDispatcherRule.kt` | All async tests must use this Rule for deterministic timing. |
 
-At session start and before **ANY** production code is written, edited, or proposed:
-1. In `<think>` tags: Explicitly enumerate **EVERY** scenario, edge case, boundary, error path, state transition, and Android-specific behavior (configuration changes, process death, thermal/memory pressure, API 36 constraints, recomposition stability, dark mode, large fonts, etc.) impacted by the changes. Base this strictly on the task and loaded contracts.
-2. **Red Phase (mandatory first step)**: Create or update unit test files **ONLY** (src/test/...). Use JUnit Jupiter 5 + mockk. Tests must follow AAA pattern, be descriptively named, and cover 100% of enumerated scenarios. Tests **must fail** against current code.
-3. Execute targeted tests: `.\gradlew.bat testDebugUnitTest --tests "*AffectedClass*"` (or specific test class). Confirm and document failures in output.
-4. **Green Phase**: **Only after** Red confirmation — implement **minimal** production code to make all tests pass.
-5. **Refactor Phase**: Improve design, readability, and performance while keeping tests green. Re-run tests after every change.
-6. Any production code edited before a successful Red phase → reply with exactly: "TDD Contract violation detected. Request explicit 'TDD Waiver' from user."
+### Forbidden "Tautological" Patterns:
+* **Logic Duplication:** Never copy production regexes, calculations, or `when` branches into a test.
+* **Mock Echoing:** Never write a test where the only assertion is verifying that a mock returned exactly what you just told it to return.
+* **The "Sloppy-Test" Filter:** Any test that would stay "Green" if the production business logic was deleted is a contract violation.
 
-This rule eliminates all "it looks correct" churn. Tests are the sole source of truth.
+## 3. Rigor & Knowledge Protocol (API 36)
+1. **No Guessing:** If an API signature (Baklava/API 36) or Compose behavior is uncertain, **immediately** call `search_android_docs`.
+2. **Lint Mastery:** Run `./gradlew ktlintCheck` and `detekt` on **both** main and test sources before finishing.
+3. **Linux Only:** Use `./gradlew` and forward slashes `/` for all paths.
 
-## No Self-Testing / Tautological Tests Supremacy Rule (ZERO TOLERANCE – CONTRACT LEVEL)
-**Tests that duplicate production logic, hardcode implementation details, or merely verify their own mock/setup behavior are worse than no tests — they create false confidence, maintenance hell, and drift.** This is a CLASSIC anti-pattern (logic duplication in tests, "Inspector", "Happy Path only", "tests that test the test").
+## 4. Contract Loading
+Enforce **ONLY** the following from `/contracts/`:
+- UI_DESIGN_SPEC.md | ARCHITECTURE_RULES.md | CODE_STYLE_RULES.md | DATA_LAYER_RULES.md
 
-**Every unit test MUST**:
-- Test **real behavior** of the production code under realistic conditions.
-- Exercise actual paths, state transitions, edge cases, and error handling via real method calls.
-- NEVER duplicate production logic (e.g. copy-pasting regexes, when-expressions, calculations, or step-counting rules into the test).
-- NEVER write tests whose only assertion verifies that a mock returns what the test told it to return (e.g. "assert mock returned 42" when test did `every { mock.foo() } returns 42`).
-- NEVER hardcode production constants, patterns, or algorithms in test code to "prove" they match themselves.
-- Use mocks ONLY to isolate the unit — verify interactions/behavior, NOT to recreate production logic in the test.
-
-**Explicitly banned patterns (immediate violation):**
-- Copying regexes/strings/when branches from production into test assertions.
-- Tests like: `val expectedRegex = Regex("…exact copy…"); assertTrue(expectedRegex.matches(input))`
-- Tests whose outcome depends solely on what the test itself stubbed/mocked.
-- "Verification of invariants" that just re-implement production rules.
-- Any test where changing production code requires changing the test in the exact same way (tight coupling to impl).
-
-Violation triggers the exact reply:  
-**"Self-Testing / Tautological Test Contract violation detected. Request explicit 'No-Junk-Tests Waiver' from user."**
-
-Any attempt to generate such tests will halt the task. All tests must prove **real functionality**, not echo their own setup.
+## 5. Autonomous Continuation
+Resume the **TDD Cycle** automatically after every accepted edit. End every response with:
+`TASK_STATUS: COMPLETE — All tests passing, code green, validated against Golden Refs.`
+OR
+`TASK_STATUS: PARTIAL — Remaining: [list]. Continuing cycle.`
 
 ## Available Tools
-- PowerShell commands (Windows only)
-- Gradle tasks (`.\gradlew.bat ktlintCheck`, `testDebugUnitTest`, `build`, `:module:assemble`, etc.)
-- `adb.exe devices`
+- Shell commands (Linux/bash)
+- Gradle tasks (`./gradlew ktlintCheck`, `testDebugUnitTest`, `build`, `:module:assemble`, etc.)
+- `adb devices`
 - **MCP Knowledge Tools (NEW & MANDATORY):**
   - `search_android_docs(query: str, max_results: int = 12, include_community: bool = True)` — searches official developer.android.com, codelabs, AOSP, Kotlin, GitHub, etc.
   - `fetch_page(url: str)` — returns clean Markdown of the page (perfect for code samples, tables, deprecation notes)
@@ -86,6 +85,8 @@ Read and enforce **ONLY** the following from `/contracts/`:
 - CODE_STYLE_RULES.md
 - DATA_LAYER_RULES.md
 - INFERENCE_RULES.md
+
+Read and enforce the android-kotlin-compose skill.
 
 (You may load multiple at once if relevant.)
 
@@ -114,8 +115,8 @@ When any file edit is accepted/applied or any tool result returns:
 | All coroutine/Flow tests **MUST** use the 2026 production-grade harness: `StandardTestDispatcher`, `TestScope.runTest`, `Dispatchers.setMain`, `advanceUntilIdle()`, and `Turbine.test { awaitItem() }` | Use `@HiltAndroidTest`, `hiltViewModel()`, or any instrumented/Hilt testing approach for **unit** tests of ViewModels (reserved for integration tests only) |
 | Hoist state to ViewModel                                               | Pass ViewModels into Compose UI trees                                 |
 | Use `StateFlow` for UI state                                           | Use `var` without `remember`                                          |
-| Run `.\gradlew.bat ktlintCheck` and `.\gradlew.bat detekt`             | Use Unix commands (`ls`, `grep`, etc.)                                |
-| Use backslashes `\` in Windows paths                                   | Use forward slashes `/` in file paths                                 |
+| Run `./gradlew ktlintCheck` and `./gradlew detekt`             | Use Windows commands (`dir`, `findstr`, etc.)                                |
+| Use forward slashes `/` in Linux paths                                   | Use backslashes `\\` in file paths                                 |
 | Use mockk for unit tests                                               | Use mockito for unit tests                                            |
 | Use JUnit Jupiter 5 for unit tests                                     | Use JUnit 4 or other libraries for unit tests                         |
 | **Write failing unit tests FIRST (Red Phase)**                         | **Write or edit any main source code before tests**                   |
@@ -125,10 +126,10 @@ When any file edit is accepted/applied or any tool result returns:
 1. Parse — Read task + all relevant contracts from `/contracts/`
 2. **Knowledge Acquisition** — Aggressively use `search_android_docs` + `fetch_page` for any unclear API or best practice
 3. Plan — Decompose into files/changes. **Enforce strict Clean Architecture per ARCHITECTURE_RULES.md with zero tolerance.** In `<think>`: Exhaustively enumerate every test scenario.
-4. **Red Phase (Tests First)**: Create/update unit tests covering 100% of scenarios. Run `.\gradlew.bat testDebugUnitTest --tests "*AffectedClass*"` and confirm failures.
+4. **Red Phase (Tests First)**: Create/update unit tests covering 100% of scenarios. Run `./gradlew testDebugUnitTest --tests "*AffectedClass*"` and confirm failures.
 5. **Green Phase**: Implement minimal production code to make ALL tests pass.
 6. **Refactor Phase**: Optimize while keeping tests green. Re-run targeted tests.
-7. Validate — Run `.\gradlew.bat ktlintCheck`, `.\gradlew.bat detekt`, full `testDebugUnitTest`, `build`. Fix all failures.
+7. Validate — Run `./gradlew ktlintCheck`, `./gradlew detekt`, full `testDebugUnitTest`, `build`. Fix all failures.
 8. Update Tests — Any newly discovered edge cases are added to the test suite before final validation.
 
 ## Priority Order
