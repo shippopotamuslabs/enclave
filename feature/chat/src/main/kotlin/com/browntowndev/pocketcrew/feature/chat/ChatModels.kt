@@ -53,68 +53,124 @@ data class ChatUiState(
 }
 
 /**
- * Used in previews.
+ * Used in previews - various indicator states.
  */
 val fakeLongMessages = listOf(
+    // Message with Processing indicator
     ChatMessage(
         id = 1,
         chatId = 1L,
         role = MessageRole.Assistant,
-        content = ContentUi(
-            text = "Here's a Kotlin example that demonstrates the pattern:\n\n" +
-                "```kotlin\n" +
-                "fun greet(name: String): String {\n" +
-                "    return \"Hello, \$name!\"\n" +
-                "}\n\n" +
-                "fun main() {\n" +
-                "    println(greet(\"Pocket Crew\"))\n" +
-                "}\n" +
-                "```\n\n" +
-                "You can also represent the config as JSON:\n\n" +
-                "```json\n" +
-                "{\n" +
-                "  \"model\": \"qwen3-8b\",\n" +
-                "  \"temperature\": 0.7,\n" +
-                "  \"max_tokens\": 2048\n" +
-                "}\n" +
-                "```\n\n" +
-                "Let me know if you'd like me to extend this."
-        ),
-        formattedTimestamp = "10:29 AM",
+        content = ContentUi(text = ""),
+        formattedTimestamp = "10:30 AM",
+        indicatorState = IndicatorState.Processing,
         modelDisplayName = "Qwen 3 8B",
     ),
+    // Message with Thinking indicator (streaming)
     ChatMessage(
         id = 2,
         chatId = 1L,
-        role = MessageRole.User,
-        content = ContentUi(text = "Tell me a joke."),
-        formattedTimestamp = "10:28 AM",
+        role = MessageRole.Assistant,
+        content = ContentUi(text = ""),
+        formattedTimestamp = "10:29 AM",
+        indicatorState = IndicatorState.Thinking(
+            thinkingRaw = "# Analysis in Progress\n\n" +
+                "Let me break down this problem step by step:\n\n" +
+                "1. First, I need to understand the core requirements\n" +
+                "2. Then analyze the existing codebase structure\n" +
+                "3. Finally, design an optimal solution\n\n" +
+                "```kotlin\n" +
+                "fun solve() {\n" +
+                "    val problem = analyze()\n" +
+                "    val solution = design(problem)\n" +
+                "    return implement(solution)\n" +
+                "}\n" +
+                "```",
+            thinkingDurationSeconds = 42,
+        ),
+        modelDisplayName = "Qwen 3 8B",
     ),
+    // User message
     ChatMessage(
         id = 3,
         chatId = 1L,
-        role = MessageRole.Assistant,
-        content = ContentUi(
-            text = "Why did the AI go to therapy? It had too many unresolved tokens!"
-        ),
+        role = MessageRole.User,
+        content = ContentUi(text = "Can you explain how coroutines work in Kotlin?"),
         formattedTimestamp = "10:28 AM",
-        modelDisplayName = "Qwen 3 8B",
     ),
+    // Message with Generating indicator (with thinking data)
     ChatMessage(
         id = 4,
         chatId = 1L,
-        role = MessageRole.User,
-        content = ContentUi(text = "What is Jetpack Compose?"),
+        role = MessageRole.Assistant,
+        content = ContentUi(text = "Message with Generating indicator (with thinking data)"),
         formattedTimestamp = "10:27 AM",
+        indicatorState = IndicatorState.Generating(
+            thinkingData = ThinkingDataUi(
+                thinkingDurationSeconds = 15,
+                thinkingRaw = "Kotlin coroutines are like lightweight threads. They allow you to write asynchronous code in a sequential manner. Key concepts: **suspend functions**, **Dispatchers**, and **Scopes**.\n\n- `launch` for fire-and-forget\n- `async` for results\n- `flow` for streams"
+            )
+        ),
+        modelDisplayName = "Qwen 3 8B",
     ),
+    // Message with Complete indicator (with thinking data)
     ChatMessage(
         id = 5,
         chatId = 1L,
         role = MessageRole.Assistant,
-        content = ContentUi(
-            text = "Jetpack Compose is Android's modern toolkit for building native UI. It replaces XML layouts with declarative Kotlin code."
-        ),
+        content = ContentUi(text = "Message with Complete indicator (with thinking data)"),
         formattedTimestamp = "10:26 AM",
+        indicatorState = IndicatorState.Complete(
+            thinkingData = ThinkingDataUi(
+                thinkingDurationSeconds = 8,
+                thinkingRaw = "Let me think about this more carefully...\n\n" +
+                    "## Key Points\n\n" +
+                    "1. **Simplicity** - Compose reduces boilerplate\n" +
+                    "2. **Declarative** - Describe UI, not steps\n" +
+                    "3. **Reactive** - Automatic recomposition"
+            )
+        ),
+        modelDisplayName = "Qwen 3 8B",
+    ),
+    // Completed message with response
+    ChatMessage(
+        id = 6,
+        chatId = 1L,
+        role = MessageRole.Assistant,
+        content = ContentUi(
+            text = "Jetpack Compose is Android's modern UI toolkit. It replaces XML layouts with declarative Kotlin code.\n\n" +
+                "**Key Benefits:**\n" +
+                "- Less boilerplate\n" +
+                "- Declarative syntax\n" +
+                "- Built-in state management\n\n" +
+                "```kotlin\n" +
+                "@Composable\n" +
+                "fun Greeting(name: String) {\n" +
+                "    Text(\"Hello, \$name!\")\n" +
+                "}\n" +
+                "```"
+        ),
+        formattedTimestamp = "10:25 AM",
+        indicatorState = IndicatorState.Complete(thinkingData = null),
+        modelDisplayName = "Qwen 3 8B",
+    ),
+    // User message
+    ChatMessage(
+        id = 7,
+        chatId = 1L,
+        role = MessageRole.User,
+        content = ContentUi(text = "Show me a code example"),
+        formattedTimestamp = "10:24 AM",
+    ),
+    // Simple completed message
+    ChatMessage(
+        id = 8,
+        chatId = 1L,
+        role = MessageRole.Assistant,
+        content = ContentUi(
+            text = "Here's a complete example in Kotlin:\n\n```kotlin\nfun main() {\n    println(\"Hello, World!\")\n}\n```"
+        ),
+        formattedTimestamp = "10:23 AM",
         modelDisplayName = "Qwen 3 8B",
     ),
 )

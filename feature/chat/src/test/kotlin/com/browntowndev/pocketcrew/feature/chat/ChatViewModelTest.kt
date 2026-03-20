@@ -33,14 +33,11 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Before
-import org.junit.Rule
-import org.junit.Test
-import org.junit.rules.TestWatcher
-import org.junit.runner.Description
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
 
 /**
  * Tests for ChatViewModel's computeIndicatorState function.
@@ -52,15 +49,10 @@ import org.junit.runner.Description
  */
 class ChatViewModelTest {
 
-    /**
-     * JUnit rule that sets the Main dispatcher to a test dispatcher for unit testing.
-     */
-    @get:Rule
-    val mainDispatcherRule = object : TestWatcher() {
-        @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-        override fun starting(description: Description) {
-            Dispatchers.setMain(StandardTestDispatcher())
-        }
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @BeforeEach
+    fun setupDispatcher() {
+        Dispatchers.setMain(StandardTestDispatcher())
     }
 
     private lateinit var chatViewModel: ChatViewModel
@@ -69,7 +61,7 @@ class ChatViewModelTest {
     private lateinit var inferenceLockManager: InferenceLockManager
     private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
 
-    @Before
+    @BeforeEach
     fun setup() {
         settingsUseCases = mockk(relaxed = true)
         chatUseCases = mockk(relaxed = true)
@@ -118,9 +110,9 @@ class ChatViewModelTest {
         // Verify the indicator state is Thinking (not crashed)
         assertNotNull(chatMessage.indicatorState)
         assertEquals(
-            "Indicator state should be Thinking",
             IndicatorState.Thinking::class,
-            chatMessage.indicatorState!!::class
+            chatMessage.indicatorState!!::class,
+            "Indicator state should be Thinking"
         )
         // Verify it has 0 duration when null
         val thinkingState = chatMessage.indicatorState as IndicatorState.Thinking

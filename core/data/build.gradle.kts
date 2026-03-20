@@ -17,6 +17,15 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+}
+
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
 }
 
 ksp {
@@ -25,7 +34,6 @@ ksp {
 
 dependencies {
     implementation(project(":core:domain"))
-    implementation(project(":core:database"))
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
@@ -50,4 +58,15 @@ dependencies {
 
     // DataStore
     implementation(libs.androidx.datastore.preferences)
+
+    // Test dependencies - JUnit 5 (Jupiter)
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.kotlin.test.junit5)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockk)
+    testImplementation(testFixtures(project(":core:domain")))
+
+    // JUnit 5 Engine for test discovery
+    testRuntimeOnly("org.junit.platform:junit-platform-engine")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

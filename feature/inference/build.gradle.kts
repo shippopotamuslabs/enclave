@@ -18,6 +18,10 @@ android {
     }
 }
 
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
+}
+
 dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
@@ -39,9 +43,9 @@ dependencies {
     implementation(libs.tasks.genai)
 
     // Testing
-    testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.feature.inference.llama
 
-import org.junit.Assert.*
-import org.junit.Test
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.*
 
 /**
  * Unit tests for GpuProfiler - tests the backend routing logic.

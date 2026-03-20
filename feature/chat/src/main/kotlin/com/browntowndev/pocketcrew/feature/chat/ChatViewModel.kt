@@ -7,20 +7,28 @@ import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.MessageGenerationState
+import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -29,9 +37,10 @@ import javax.inject.Inject
  * ViewModel for the Chat screen.
  * Uses Flow-based state management - derives UI state from database and settings flows.
  */
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    settingsUseCases: SettingsUseCases,
+    private val settingsUseCases: SettingsUseCases,
     private val chatUseCases: ChatUseCases,
     private val savedStateHandle: SavedStateHandle,
     inferenceLockManager: InferenceLockManager,
@@ -54,27 +63,79 @@ class ChatViewModel @Inject constructor(
     // Track current chat ID for continuing conversations
     private val _currentChatId = MutableStateFlow<Long?>(null)
 
+    // Accumulates real-time inference updates before database persistence
+    // Merged with database messages in uiState for real-time UI updates
+    private val _inFlightMessages = MutableStateFlow<Map<Long, MessageSnapshot>>(emptyMap())
+
+    // Job for tracking inference flow collection (for cancellation in onCleared)
+    private var inferenceJob: Job? = null
+
     /**
      * Main UI state flow.
-     * Combines settings, messages from database, and inference lock state.
+     * Combines settings, messages from database, inference lock state, and in-flight messages.
+     * Uses nested combine for 6 flows (Kotlin only supports up to 5-arg combine natively).
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<ChatUiState> = combine(
-        settingsUseCases.getSettings(),
-        _inputText,
-        _selectedMode,
+        combine(
+            settingsUseCases.getSettings(),
+            _inputText,
+            _selectedMode
+        ) { settings: SettingsData, inputText: String, selectedMode: ChatModeUi ->
+            Triple(settings, inputText, selectedMode)
+        },
         inferenceLockManager.isInferenceBlocked,
-        _currentChatId.flatMapLatest { chatId ->
-            val id = chatId ?: initialChatId ?: 0L
+        _currentChatId.flatMapLatest { chatId: Long? ->
+            val id: Long = chatId ?: initialChatId ?: 0L
             if (id == 0L) {
-                flowOf(emptyList())
+                flowOf<List<Message>>(emptyList())
             } else {
-                chatUseCases.getChat(id)
+                chatUseCases.getChat(id).debounce(50)
             }
+        },
+        _inFlightMessages
+    ) { 
+        triple: Triple<SettingsData, String, ChatModeUi>,
+        isBlocked: Boolean,
+        messages: List<Message>,
+        inFlight: Map<Long, MessageSnapshot> ->
+        
+        val settings: SettingsData = triple.first
+        val inputText: String = triple.second
+        val selectedMode: ChatModeUi = triple.third
+        
+        // Convert DB messages to map for merging
+        val dbMessagesMap: Map<Long, Message> = messages.associateBy { m: Message -> m.id }
+        
+        // Convert in-flight MessageSnapshots to Message objects for merging
+        val inFlightMessagesMap: Map<Long, Message> = inFlight.mapValues { entry: Map.Entry<Long, MessageSnapshot> ->
+            val snapshot: MessageSnapshot = entry.value
+            Message(
+                id = snapshot.messageId,
+                chatId = snapshot.messageId,
+                role = Role.ASSISTANT,
+                content = Content(text = snapshot.content, pipelineStep = null),
+                thinkingRaw = snapshot.thinkingRaw.ifBlank { null },
+                thinkingDurationSeconds = snapshot.thinkingDurationSeconds,
+                thinkingStartTime = snapshot.thinkingStartTime.takeIf { st: Long -> st != 0L },
+                thinkingEndTime = snapshot.thinkingEndTime.takeIf { et: Long -> et != 0L },
+                createdAt = 0L,
+                messageState = if (snapshot.isComplete) MessageState.COMPLETE else MessageState.GENERATING,
+                modelType = snapshot.modelType
+            )
         }
-    ) { settings, inputText, selectedMode, isBlocked, messages ->
+        
+        // Merge using use case - DB COMPLETE wins, otherwise use in-flight
+        val mergedMessages: Map<Long, Message> = dbMessagesMap.mapValues { (id, dbMessage) ->
+            val inFlightMessage = inFlightMessagesMap[id]
+            chatUseCases.mergeMessagesUseCase(dbMessage, inFlightMessage) ?: dbMessage
+        }
+        
+        // Also include any in-flight messages that don't have a DB counterpart
+        val allMergedMessages = mergedMessages + inFlightMessagesMap.filterKeys { it !in mergedMessages }
+        
         // Map domain messages to UI messages
-        val chatMessages = messages.map { message ->
+        val chatMessages: List<ChatMessage> = allMergedMessages.values.map { message: Message ->
             mapToChatMessage(message)
         }
 
@@ -215,14 +276,31 @@ class ChatViewModel @Inject constructor(
                 // Clear input text
                 _inputText.value = ""
 
+                // Clear previous in-flight messages
+                _inFlightMessages.value = emptyMap()
+
                 // Use mode to route to appropriate service
-                chatUseCases.generateChatResponse(
+                // Collect flow to update _inFlightMessages for real-time UI updates
+                inferenceJob = chatUseCases.generateChatResponse(
                     prompt = input,
                     userMessageId = promptResult.userMessageId,
                     assistantMessageId = promptResult.assistantMessageId,
                     chatId = promptResult.chatId,
                     mode = _selectedMode.value.toDomain()
-                ).launchIn(this)
+                ).onEach { state ->
+                    when (state) {
+                        is MessageGenerationState.MessagesState -> {
+                            // Merge new messages with existing in-flight messages
+                            // In-flight messages override database messages for same messageId
+                            _inFlightMessages.value = _inFlightMessages.value + state.messages
+                        }
+                        else -> { /* ignore other state types for UI merging */ }
+                    }
+                }.onCompletion { cause ->
+                    // Clear in-flight after flow completion
+                    // Database has been updated with final state via persistAccumulatedMessages
+                    _inFlightMessages.value = emptyMap()
+                }.launchIn(viewModelScope)
             }
         }
     }
@@ -245,5 +323,11 @@ class ChatViewModel @Inject constructor(
         } else {
             null
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        // Cancel any ongoing inference flow
+        inferenceJob?.cancel()
     }
 }

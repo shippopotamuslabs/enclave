@@ -49,11 +49,6 @@ android {
             isIncludeAndroidResources = true
         }
     }
-    sourceSets {
-        named("test") {
-            kotlin.directories += "src/test/java"
-        }
-    }
 
     defaultConfig {
         applicationId = "com.browntowndev.pocketcrew"
@@ -162,15 +157,12 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
     testImplementation(project(":core:data"))
-    testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core)
-    // JUnit Vintage for running JUnit 4 tests (like Robolectric) on JUnit Platform
-    testImplementation(libs.junit.vintage.engine)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

@@ -1,10 +1,7 @@
 package com.browntowndev.pocketcrew.feature.chat.components
 
-import android.content.ClipData
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -22,11 +19,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -35,32 +29,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
-import com.browntowndev.pocketcrew.feature.chat.IndicatorState
-import com.browntowndev.pocketcrew.feature.chat.MessageRole
-import com.browntowndev.pocketcrew.feature.chat.ThinkingDataUi
-import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
-import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamingMarkdownText
-import kotlinx.coroutines.launch
+import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
 
 // ── Main composable ──
 
@@ -68,6 +52,7 @@ import kotlinx.coroutines.launch
 fun AssistantResponse(
     modifier: Modifier = Modifier,
     message: ChatMessage,
+    isPreview: Boolean = false,
 ) {
     // Get content and pipeline step from ContentUi
     val contentText = message.content.text
@@ -105,9 +90,13 @@ fun AssistantResponse(
             )
         } else {
             // Response content - use StreamingMarkdownText for proper markdown rendering
-            StreamingMarkdownText(
+            // disable scroll since parent LazyColumn handles scrolling
+            StreamableMarkdownText(
                 markdown = contentText,
                 modifier = Modifier.fillMaxWidth(),
+                enableScroll = false,
+                isStreaming = true,
+                isPreview = isPreview, // So preview text is rendered
             )
 
             // Timestamp
@@ -133,6 +122,8 @@ private fun CompletedStepRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    if (stepOutput.isEmpty()) return
+
     // Preview text - "Tap to View" as requested
     val previewText = "Tap to View"
 

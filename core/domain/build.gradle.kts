@@ -21,10 +21,8 @@ android {
         }
     }
 
-    sourceSets {
-        named("test") {
-            kotlin.srcDirs("src/test/java")
-        }
+    testFixtures {
+        enable = true
     }
 }
 
@@ -45,8 +43,13 @@ dependencies {
     implementation("javax.inject:javax.inject:1")
 
     // Test dependencies
-    testImplementation(libs.junit)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.mockk)
+
+    // TestFixtures dependencies
+    testFixturesApi(libs.junit.jupiter)
+    testFixturesImplementation("org.jetbrains.kotlin:kotlin-stdlib")
+    testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 }

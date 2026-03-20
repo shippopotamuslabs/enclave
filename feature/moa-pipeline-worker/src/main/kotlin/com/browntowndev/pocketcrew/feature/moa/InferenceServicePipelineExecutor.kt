@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
+import com.browntowndev.pocketcrew.domain.port.repository.PipelineStateRepository
 import com.browntowndev.pocketcrew.domain.usecase.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.feature.moa.service.InferenceService
 import com.browntowndev.pocketcrew.feature.moa.service.InferenceServiceStarter
@@ -29,7 +30,8 @@ import javax.inject.Singleton
 @Singleton
 class InferenceServicePipelineExecutor @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val serviceStarter: InferenceServiceStarter
+    private val serviceStarter: InferenceServiceStarter,
+    private val pipelineStateRepository: PipelineStateRepository
 ) : PipelineExecutorPort {
 
     override fun executePipeline(
@@ -106,6 +108,104 @@ class InferenceServicePipelineExecutor @Inject constructor(
             serviceStarter.startService(chatId, userMessage, stateJson)
         } catch (e: Exception) {
             trySend(MessageGenerationState.Failed(e, ModelType.DRAFT_ONE))
+            close()
+            return@callbackFlow
+        }
+
+        // Wait for completion or cancellation
+        awaitClose {
+            context.unregisterReceiver(receiver)
+        }
+    }
+
+    override suspend fun stopPipeline(pipelineId: String) {
+        // Send stop broadcast to InferenceService
+        val stopIntent = Intent(InferenceService.ACTION_STOP).apply {
+            setPackage(context.packageName)
+            putExtra(InferenceService.EXTRA_CHAT_ID, pipelineId)
+        }
+        context.sendBroadcast(stopIntent)
+        
+        // Clear saved state
+        pipelineStateRepository.clearPipelineState(pipelineId)
+    }
+
+    override suspend fun resumeFromState(
+        chatId: String,
+        pipelineId: String,
+        onComplete: () -> Unit,
+        onError: (Throwable) -> Unit
+    ): Flow<MessageGenerationState> = callbackFlow {
+        // Retrieve saved state
+        val savedState = pipelineStateRepository.getPipelineState(chatId)
+        
+        if (savedState == null) {
+            trySend(MessageGenerationState.Failed(
+                IllegalStateException("No saved pipeline state found for resume"),
+                ModelType.MAIN
+            ))
+            close()
+            return@callbackFlow
+        }
+
+        // Track thinking content as raw text (same as executePipeline)
+        val thinkingBuffer = StringBuilder()
+        
+        // Track timing for thinking duration calculation
+        val thinkingStartTimeRef = longArrayOf(0L)
+        val thinkingEndTimeRef = longArrayOf(0L)
+
+        // Create broadcast receiver for progress updates
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                intent ?: return
+
+                when (intent.action) {
+                    InferenceService.BROADCAST_PROGRESS -> {
+                        handleProgressIntent(intent, thinkingBuffer, thinkingStartTimeRef, thinkingEndTimeRef) { state ->
+                            trySend(state)
+                        }
+                    }
+                    InferenceService.BROADCAST_COMPLETE -> {
+                        handleCompleteIntent(intent, thinkingBuffer) { state ->
+                            trySend(state)
+                        }
+                    }
+                    InferenceService.BROADCAST_ERROR -> {
+                        val error = intent.getStringExtra(InferenceService.EXTRA_ERROR_MESSAGE)
+                            ?: "Unknown error"
+                        trySend(MessageGenerationState.Failed(IllegalStateException(error), ModelType.MAIN))
+                        close()
+                    }
+                    InferenceService.BROADCAST_STEP_COMPLETED -> {
+                        handleStepCompletedIntent(intent, thinkingBuffer, thinkingStartTimeRef, thinkingEndTimeRef) { state ->
+                            trySend(state)
+                            // Close flow after FINAL StepCompleted is processed
+                            val stepTypeName = intent.getStringExtra(InferenceService.EXTRA_STEP_TYPE)
+                            if (stepTypeName == PipelineStep.FINAL.name) {
+                                close()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Register receiver
+        val filter = IntentFilter().apply {
+            addAction(InferenceService.BROADCAST_PROGRESS)
+            addAction(InferenceService.BROADCAST_COMPLETE)
+            addAction(InferenceService.BROADCAST_ERROR)
+            addAction(InferenceService.BROADCAST_STEP_COMPLETED)
+        }
+        context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+
+        // Start the service with resume intent
+        try {
+            serviceStarter.startServiceResume(chatId, savedState.toJson())
+        } catch (e: Exception) {
+            onError(e)
+            trySend(MessageGenerationState.Failed(e, ModelType.MAIN))
             close()
             return@callbackFlow
         }

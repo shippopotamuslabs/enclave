@@ -27,7 +27,6 @@ android {
 dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
-    implementation(project(":core:database"))
     implementation(project(":core:ui"))
 
     // AndroidX Core
@@ -39,6 +38,7 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
+    debugImplementation(libs.androidx.compose.ui.tooling)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.material.icons.extended)

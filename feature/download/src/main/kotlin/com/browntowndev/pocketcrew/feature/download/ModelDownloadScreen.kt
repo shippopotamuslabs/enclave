@@ -60,6 +60,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -72,6 +73,7 @@ import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.feature.download.DownloadViewModel.FileProgressUiModel
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.core.ui.util.FeatureFlags
 import com.browntowndev.pocketcrew.core.data.util.formatBytes
 
@@ -812,4 +814,372 @@ private fun NotificationPermissionRationaleDialog(
             }
         }
     )
+}
+
+// ==================== PREVIEWS ====================
+
+private val fakeFilesAllDownloading = listOf(
+    FileProgressUiModel(
+        filename = "model-qwen3-8b.gguf",
+        displayName = "Qwen 3 8B",
+        bytesDownloaded = 2_500_000_000L,
+        totalBytes = 5_000_000_000L,
+        status = FileStatus.DOWNLOADING,
+        speedMBs = 12.4
+    ),
+    FileProgressUiModel(
+        filename = "model-embeddings.gguf",
+        displayName = "Embeddings",
+        bytesDownloaded = 800_000_000L,
+        totalBytes = 2_000_000_000L,
+        status = FileStatus.DOWNLOADING,
+        speedMBs = 8.2
+    ),
+    FileProgressUiModel(
+        filename = "model-tokenizer.gguf",
+        displayName = "Tokenizer",
+        bytesDownloaded = 0L,
+        totalBytes = 500_000_000L,
+        status = FileStatus.QUEUED,
+        speedMBs = null
+    )
+)
+
+private val fakeFilesMixedStates = listOf(
+    FileProgressUiModel(
+        filename = "model-qwen3-8b.gguf",
+        displayName = "Qwen 3 8B",
+        bytesDownloaded = 5_000_000_000L,
+        totalBytes = 5_000_000_000L,
+        status = FileStatus.COMPLETE,
+        speedMBs = null
+    ),
+    FileProgressUiModel(
+        filename = "model-embeddings.gguf",
+        displayName = "Embeddings",
+        bytesDownloaded = 1_500_000_000L,
+        totalBytes = 2_000_000_000L,
+        status = FileStatus.DOWNLOADING,
+        speedMBs = 15.7
+    ),
+    FileProgressUiModel(
+        filename = "model-tokenizer.gguf",
+        displayName = "Tokenizer",
+        bytesDownloaded = 0L,
+        totalBytes = 500_000_000L,
+        status = FileStatus.FAILED,
+        speedMBs = null
+    ),
+    FileProgressUiModel(
+        filename = "model-vision.gguf",
+        displayName = "Vision Encoder",
+        bytesDownloaded = 400_000_000L,
+        totalBytes = 1_200_000_000L,
+        status = FileStatus.PAUSED,
+        speedMBs = null
+    )
+)
+
+private val fakeFilesAllComplete = listOf(
+    FileProgressUiModel(
+        filename = "model-qwen3-8b.gguf",
+        displayName = "Qwen 3 8B",
+        bytesDownloaded = 5_000_000_000L,
+        totalBytes = 5_000_000_000L,
+        status = FileStatus.COMPLETE,
+        speedMBs = null
+    ),
+    FileProgressUiModel(
+        filename = "model-embeddings.gguf",
+        displayName = "Embeddings",
+        bytesDownloaded = 2_000_000_000L,
+        totalBytes = 2_000_000_000L,
+        status = FileStatus.COMPLETE,
+        speedMBs = null
+    ),
+    FileProgressUiModel(
+        filename = "model-tokenizer.gguf",
+        displayName = "Tokenizer",
+        bytesDownloaded = 500_000_000L,
+        totalBytes = 500_000_000L,
+        status = FileStatus.COMPLETE,
+        speedMBs = null
+    )
+)
+
+@Preview(name = "Downloading - Multiple Files")
+@Composable
+private fun PreviewDownloadHeaderDownloading() {
+    PocketCrewTheme {
+        Scaffold { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+            ) {
+                DownloadHeader(
+                    status = DownloadStatus.DOWNLOADING,
+                    progress = { 0.65f },
+                    modelsComplete = 1,
+                    modelsTotal = 3,
+                    speedMBs = 12.4,
+                    eta = "5 min"
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                FileProgressList(
+                    files = fakeFilesAllDownloading,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Preview(name = "Mixed States")
+@Composable
+private fun PreviewDownloadMixedStates() {
+    PocketCrewTheme {
+        Scaffold { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+            ) {
+                DownloadHeader(
+                    status = DownloadStatus.DOWNLOADING,
+                    progress = { 0.72f },
+                    modelsComplete = 1,
+                    modelsTotal = 4,
+                    speedMBs = 15.7,
+                    eta = "3 min"
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                FileProgressList(
+                    files = fakeFilesMixedStates,
+                    modifier = Modifier.weight(1f)
+                )
+                ErrorBanner(
+                    message = "Failed to download Tokenizer: Network timeout",
+                    onRetry = {}
+                )
+            }
+        }
+    }
+}
+
+@Preview(name = "Checking Status")
+@Composable
+private fun PreviewDownloadChecking() {
+    PocketCrewTheme {
+        Scaffold { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+            ) {
+                DownloadHeader(
+                    status = DownloadStatus.CHECKING,
+                    progress = { 0f },
+                    modelsComplete = 0,
+                    modelsTotal = 3,
+                    speedMBs = null,
+                    eta = null
+                )
+            }
+        }
+    }
+}
+
+@Preview(name = "Paused")
+@Composable
+private fun PreviewDownloadPaused() {
+    PocketCrewTheme {
+        Scaffold { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+            ) {
+                DownloadHeader(
+                    status = DownloadStatus.PAUSED,
+                    progress = { 0.42f },
+                    modelsComplete = 1,
+                    modelsTotal = 3,
+                    speedMBs = null,
+                    eta = null
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                FileProgressList(
+                    files = fakeFilesMixedStates,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Preview(name = "Error State")
+@Composable
+private fun PreviewDownloadError() {
+    PocketCrewTheme {
+        Scaffold { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+            ) {
+                DownloadHeader(
+                    status = DownloadStatus.ERROR,
+                    progress = { 0.35f },
+                    modelsComplete = 0,
+                    modelsTotal = 3,
+                    speedMBs = null,
+                    eta = null
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                FileProgressList(
+                    files = fakeFilesMixedStates,
+                    modifier = Modifier.weight(1f)
+                )
+                ErrorBanner(
+                    message = "Connection lost: Please check your internet connection",
+                    onRetry = {}
+                )
+            }
+        }
+    }
+}
+
+@Preview(name = "Complete")
+@Composable
+private fun PreviewDownloadComplete() {
+    PocketCrewTheme {
+        Scaffold { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+            ) {
+                DownloadHeader(
+                    status = DownloadStatus.READY,
+                    progress = { 1f },
+                    modelsComplete = 3,
+                    modelsTotal = 3,
+                    speedMBs = null,
+                    eta = null
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                FileProgressList(
+                    files = fakeFilesAllComplete,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+    }
+}
+
+@Preview(name = "File States")
+@Composable
+private fun PreviewFileProgressItems() {
+    PocketCrewTheme {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("Downloading", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            FileProgressItem(
+                file = FileProgressUiModel("model.gguf", "Qwen 3 8B", 2_500_000_000L, 5_000_000_000L, FileStatus.DOWNLOADING, 12.4),
+                progress = { 0.5f }
+            )
+
+            Text("Complete", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            FileProgressItem(
+                file = FileProgressUiModel("model.gguf", "Embeddings", 2_000_000_000L, 2_000_000_000L, FileStatus.COMPLETE, null),
+                progress = { 1f }
+            )
+
+            Text("Failed", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            FileProgressItem(
+                file = FileProgressUiModel("model.gguf", "Tokenizer", 150_000_000L, 500_000_000L, FileStatus.FAILED, null),
+                progress = { 0.3f }
+            )
+
+            Text("Paused", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            FileProgressItem(
+                file = FileProgressUiModel("model.gguf", "Vision Encoder", 400_000_000L, 1_200_000_000L, FileStatus.PAUSED, null),
+                progress = { 0.33f }
+            )
+
+            Text("Queued", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            FileProgressItem(
+                file = FileProgressUiModel("model.gguf", "Large Model", 0L, 8_000_000_000L, FileStatus.QUEUED, null),
+                progress = { 0f }
+            )
+        }
+    }
+}
+
+@Preview(name = "Long ETA")
+@Composable
+private fun PreviewDownloadLongETA() {
+    PocketCrewTheme {
+        Scaffold { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(16.dp)
+            ) {
+                DownloadHeader(
+                    status = DownloadStatus.DOWNLOADING,
+                    progress = { 0.15f },
+                    modelsComplete = 0,
+                    modelsTotal = 5,
+                    speedMBs = 2.3,
+                    eta = "1.8 hours"
+                )
+            }
+        }
+    }
+}
+
+@Preview(name = "Background Notice")
+@Composable
+private fun PreviewBackgroundNotice() {
+    PocketCrewTheme {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text("With Permission", style = MaterialTheme.typography.titleMedium)
+            BackgroundNotice(hasPermission = true)
+            androidx.compose.material3.HorizontalDivider()
+            Text("Without Permission", style = MaterialTheme.typography.titleMedium)
+            BackgroundNotice(hasPermission = false)
+        }
+    }
+}
+
+@Preview(name = "WiFi Blocked Dialog")
+@Composable
+private fun PreviewWifiBlockedDialog() {
+    PocketCrewTheme {
+        WifiBlockedDialog(onDownloadOnMobile = {}, onDismiss = {})
+    }
+}
+
+@Preview(name = "Notification Permission Dialog")
+@Composable
+private fun PreviewNotificationPermissionDialog() {
+    PocketCrewTheme {
+        NotificationPermissionRationaleDialog(onRequestPermission = {}, onDismiss = {})
+    }
 }

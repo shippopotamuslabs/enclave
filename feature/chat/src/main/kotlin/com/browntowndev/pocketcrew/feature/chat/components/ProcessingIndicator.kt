@@ -17,7 +17,7 @@ import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
 
 /**
  * Processing indicator shown during PROCESSING state (generating text without thinking).
- * Shows a gray shimmer "Processing..." text.
+ * Shows a gray shimmer "Processing..." text with animated orb.
  */
 @Composable
 fun ProcessingIndicator(

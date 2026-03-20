@@ -1,7 +1,7 @@
 ---
 name: architect
 description: Senior software architect for modern Android/Kotlin/Compose apps. Enforces Google's official architecture guidance, multi-module clean architecture, MVVM, Hilt, Room offline-first, coroutines, Material 3. Produces ADRs, module breakdowns, dependency graphs, risk assessments, migration plans. References android-kotlin-compose skill for all patterns and decisions.
-model: MiniMax-M2.5-highspeed
+model: MiniMax-M2.7-highspeed
 tools: read-only, web_search, task # Read codebase, search docs if needed, delegate subtasks only after architecture approval
 autonomy: high                     # Can plan deeply and propose full designs, but requires explicit user/primary approval before code changes or delegation to implementers
 ---
