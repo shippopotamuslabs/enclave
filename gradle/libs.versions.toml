@@ -34,6 +34,7 @@ identityDoctypesJvm = "202411.1"
 foundation = "1.10.4"
 robolectricVersion = "4.13"
 androidxTestCoreVersion = "1.7.0"
+markdown = "1.0.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -85,6 +86,8 @@ androidx-compose-foundation = { group = "androidx.compose.foundation", name = "f
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectricVersion" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCoreVersion" }
 junit-vintage-engine = { group = "org.junit.vintage", name = "junit-vintage-engine", version.ref = "junitJupiterVersion" }
+markdown-parser = { module = "io.github.huarangmeng:markdown-parser", version.ref = "markdown" }
+markdown-renderer = { module = "io.github.huarangmeng:markdown-renderer", version.ref = "markdown" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

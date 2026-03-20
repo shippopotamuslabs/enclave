@@ -50,6 +50,7 @@ class InferenceService : Service() {
         const val TAG = "InferenceService"
         const val ACTION_START = "com.browntowndev.pocketcrew.inference.ACTION_START"
         const val ACTION_STOP = "com.browntowndev.pocketcrew.inference.ACTION_STOP"
+        const val ACTION_RESUME = "com.browntowndev.pocketcrew.inference.ACTION_RESUME"
         const val EXTRA_CHAT_ID = "chat_id"
         const val EXTRA_USER_MESSAGE = "user_message"
         const val EXTRA_STATE_JSON = "state_json"
@@ -138,6 +139,7 @@ class InferenceService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> handleStartCommand(intent)
+            ACTION_RESUME -> handleResumeCommand(intent)
             ACTION_STOP -> handleStopCommand()
         }
         return START_NOT_STICKY
@@ -210,6 +212,70 @@ class InferenceService : Service() {
         currentJob?.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun handleResumeCommand(intent: Intent) {
+        val chatId = intent.getStringExtra(EXTRA_CHAT_ID)
+        val stateJson = intent.getStringExtra(EXTRA_STATE_JSON)
+
+        if (chatId == null || stateJson == null) {
+            logger.warning(TAG, "Missing required extras: chatId or stateJson for resume")
+            stopSelf()
+            return
+        }
+
+        // Parse saved state
+        val savedState = try {
+            PipelineState.fromJson(stateJson)
+        } catch (e: Exception) {
+            logger.error(TAG, "Failed to parse saved state: ${e.message}")
+            stopSelf()
+            return
+        }
+
+        // If already running, cancel previous job
+        currentJob?.cancel()
+
+        // Create foreground notification with specialUse type
+        val cancelIntent = createCancelPendingIntent()
+        val currentStep = savedState.currentStep
+        val hasMoreSteps = currentStep.next() != null
+        val notification = createProgressNotification(
+            currentStep = currentStep,
+            hasMoreSteps = hasMoreSteps,
+            cancelPendingIntent = cancelIntent
+        )
+
+        // Start foreground with specialUse type
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                notificationId,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+        } else {
+            startForeground(notificationId, notification)
+        }
+
+        isRunning = true
+
+        // Execute pipeline from saved state
+        currentJob = serviceScope.launch {
+            try {
+                // Resume from saved state (currentStep is already set in savedState)
+                executePipeline(chatId, savedState.userMessage, savedState)
+            } catch (e: CancellationException) {
+                logger.info(TAG, "Pipeline cancelled for chat: $chatId")
+                broadcastProgress(EXTRA_THINKING_STEP, "Cancelled")
+            } catch (e: Exception) {
+                logger.error(TAG, "Pipeline error for chat $chatId: ${e.message}", e)
+                broadcastError(e.message ?: "Unknown error")
+            } finally {
+                isRunning = false
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+            }
+        }
     }
 
     override fun onDestroy() {

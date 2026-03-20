@@ -52,8 +52,8 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun MessageBubble(
-    message: ChatMessage,
     modifier: Modifier = Modifier,
+    message: ChatMessage,
 ) {
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
@@ -68,17 +68,16 @@ fun MessageBubble(
     }
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
     ) {
         Column(
-            modifier = modifier.fillMaxWidth(0.75f),
             horizontalAlignment = Alignment.End,
         ) {
             // Bubble
             Surface(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxWidth(fraction = .75f)
                     .zIndex(1f)
                     .clickable { showActions = !showActions },
                 shape = RoundedCornerShape(
@@ -180,7 +179,7 @@ fun MessageBubble(
 private fun PreviewMessageBubbleUser() {
     PocketCrewTheme {
         MessageBubble(
-            ChatMessage(id = 1L, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Hello!"), formattedTimestamp = "10:30 AM"),
+            message = ChatMessage(id = 1L, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Hello!"), formattedTimestamp = "10:30 AM"),
         )
     }
 }
@@ -190,7 +189,7 @@ private fun PreviewMessageBubbleUser() {
 private fun PreviewMessageBubbleCode() {
     PocketCrewTheme {
         MessageBubble(
-            ChatMessage(
+            message = ChatMessage(
                 id = 3L,
                 chatId = 1L,
                 role = MessageRole.User,
@@ -212,7 +211,7 @@ fun main() {
 private fun PreviewMessageBubbleLong() {
     PocketCrewTheme {
         MessageBubble(
-            ChatMessage(
+            message = ChatMessage(
                 id = 4L,
                 chatId = 1L,
                 role = MessageRole.User,

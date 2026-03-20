@@ -9,6 +9,12 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextDecoration
+import com.hrm.markdown.renderer.AdmonitionStyle
+import com.hrm.markdown.renderer.MarkdownTheme
+import com.hrm.markdown.renderer.highlight.SyntaxColorScheme
 
 private val DarkColorScheme = darkColorScheme(
     primary = PeachAccent,
@@ -68,3 +74,75 @@ fun PocketCrewTheme(
         content = content
     )
 }
+
+private fun darkHeadingStyles() = listOf(
+    Typography.headlineLarge.copy(color = DarkOnBackground, textDecoration = TextDecoration.None),
+    Typography.headlineMedium.copy(color = DarkOnBackground, textDecoration = TextDecoration.None),
+    Typography.titleLarge.copy(color = DarkOnBackground, textDecoration = TextDecoration.None),
+    Typography.titleMedium.copy(color = DarkOnBackground, textDecoration = TextDecoration.None),
+    Typography.titleMedium.copy(color = DarkOnSurfaceVariant, textDecoration = TextDecoration.None),
+    Typography.titleMedium.copy(color = DarkOnSurfaceVariant, textDecoration = TextDecoration.None),
+)
+
+private fun darkAdmonitionStyles(): Map<String, AdmonitionStyle> = mapOf(
+    "tip" to AdmonitionStyle(
+        borderColor = PeachAccent,
+        backgroundColor = DarkSurface,
+        iconText = "\u2728",
+        titleColor = DarkOnBackground
+    ),
+    "warning" to AdmonitionStyle(
+        borderColor = PeachVariant,
+        backgroundColor = DarkSurface,
+        iconText = "\u26A0\uFE0F",
+        titleColor = DarkOnBackground
+    ),
+    "danger" to AdmonitionStyle(
+        borderColor = Color(0xFFE53E3E),
+        backgroundColor = DarkSurface,
+        iconText = "\u274C",
+        titleColor = DarkOnBackground
+    ),
+    "info" to AdmonitionStyle(
+        borderColor = Color(0xFF3182CE),
+        backgroundColor = DarkSurface,
+        iconText = "\u2139\uFE0F",
+        titleColor = DarkOnBackground
+    ),
+    "note" to AdmonitionStyle(
+        borderColor = Color(0xFF805AD5),
+        backgroundColor = DarkSurface,
+        iconText = "\uD83D\uDCDD",
+        titleColor = DarkOnBackground
+    ),
+)
+
+fun darkMarkdownTheme(): MarkdownTheme = MarkdownTheme(
+    headingStyles = darkHeadingStyles(),
+    bodyStyle = Typography.bodyLarge.copy(color = DarkOnBackground),
+    inlineCodeStyle = SpanStyle(color = DarkOnBackground),
+    inlineCodeBackground = DarkSurfaceVariant,
+    codeBlockStyle = Typography.bodySmall.copy(
+        fontFamily = FontFamily.Monospace,
+        color = DarkOnBackground,
+    ),
+    codeBlockBackground = DarkSurface,
+    blockQuoteBorderColor = DarkOutline,
+    blockQuoteTextColor = DarkOnSurfaceVariant,
+    dividerColor = DarkOutline,
+    linkColor = PeachAccent,
+    listBulletColor = DarkOnBackground,
+    tableBorderColor = DarkOutline,
+    tableHeaderBackground = DarkSurface,
+    highlightColor = Color(0xFF5C4B00),
+    taskCheckedColor = Color(0xFF3FB950),
+    taskUncheckedColor = DarkOutline,
+    mathBlockBackground = DarkSurface,
+    mathColor = DarkOnBackground,
+    admonitionStyles = darkAdmonitionStyles(),
+    kbdBackground = DarkSurfaceVariant,
+    syntaxColorScheme = SyntaxColorScheme.GitHubDark,
+    codeBlockTitleBackground = Color(0xFF21262D),
+    codeBlockLineNumberColor = Color(0xFF484F58),
+    codeBlockHighlightLineColor = Color(0xFF3B2E00),
+)

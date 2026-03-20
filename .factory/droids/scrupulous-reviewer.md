@@ -1,7 +1,7 @@
 ---
 name: scrupulous-reviewer
 description: Extremely rigorous, highly scrupulous code reviewer for Android/Kotlin/Compose. Performs multi-pass architectural, security, performance, accessibility, testing, and idiomatic checks. References every file in the android-kotlin-compose skill. Never approves sub-standard code.
-model: MiniMax-M2.5-highspeed
+model: MiniMax-M2.7-highspeed
 tools: read-only
 autonomy: medium
 ---

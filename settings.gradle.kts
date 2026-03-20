@@ -29,9 +29,7 @@ include(":llama-android")
 // Core modules
 include(":core:domain")
 include(":core:data")
-include(":core:database")
 include(":core:ui")
-include(":core:common")
 
 // Feature modules
 include(":feature:chat")

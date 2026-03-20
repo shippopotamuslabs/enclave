@@ -9,9 +9,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -28,7 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
-import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamingMarkdownText
+import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
 
 
 /**
@@ -85,12 +82,13 @@ fun ThinkingDetailsBottomSheet(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Raw thinking content rendered as markdown
+                // disable scroll since parent Column with verticalScroll handles scrolling
                 if (thinkingRaw.isNotBlank()) {
-                    StreamingMarkdownText(
+                    StreamableMarkdownText(
                         markdown = thinkingRaw,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .verticalScroll(rememberScrollState())
+                        modifier = Modifier.fillMaxWidth(),
+                        enableScroll = true,
+                        isStreaming = true,
                     )
                 } else {
                     Text(

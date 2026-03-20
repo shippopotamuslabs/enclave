@@ -1,26 +1,18 @@
 package com.browntowndev.pocketcrew.feature.chat.components
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyItemScope
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -28,15 +20,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
@@ -46,13 +35,15 @@ import kotlinx.coroutines.delay
  * Redesigned Thinking Indicator that matches the Grok-style thinking indicator.
  *
  * Features:
- * - Dynamic liquid-flow / molten-lava orb with constantly swirling, ebbing, color-shifting interior
+ * - Dynamic molten-lava orb with constantly swirling animation
  * - "Thinking" text with elapsed time counter
- * - Shows latest thinking content as it streams in
+ * - Chevron that rotates 90° when tapped to reveal details in bottom sheet
  *
  * @param thinkingRaw Raw thinking text as markdown
  * @param thinkingStartTime Timestamp (System.currentTimeMillis()) when thinking started. If not provided or 0, elapsed time won't be shown.
  * @param modifier Modifier for the composable
+ * @param isExpanded Whether the details are expanded (chevron rotation)
+ * @param onToggleDetails Callback when the indicator is tapped to toggle details bottom sheet
  */
 @Composable
 fun ThinkingIndicator(
@@ -60,7 +51,15 @@ fun ThinkingIndicator(
     modifier: Modifier = Modifier,
     thinkingStartTime: Long = 0L,
     modelDisplayName: String = "",
+    isExpanded: Boolean = false,
+    onToggleDetails: () -> Unit = {},
 ) {
+    val rotation by animateFloatAsState(
+        targetValue = if (isExpanded) 90f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "chevronRotation"
+    )
+
     // Track elapsed thinking time
     var elapsedSeconds by remember { mutableIntStateOf(0) }
 
@@ -81,13 +80,16 @@ fun ThinkingIndicator(
 
     Column(
         modifier = modifier
+            .padding(vertical = 10.dp)
             .fillMaxWidth()
-            .padding(horizontal = 8.dp)
     ) {
-        // Header Row: Orb + "Thinking" + elapsed time
+        // Header Row: Orb + "Thinking" text + elapsed time + chevron
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggleDetails() }
+                .padding(vertical = 8.dp)
         ) {
             // Dynamic molten-lava orb
             DynamicThinkingAnimation(
@@ -96,9 +98,10 @@ fun ThinkingIndicator(
 
             Spacer(modifier = Modifier.width(5.dp))
 
-            // Combined "Thinking - Xs" text with unified shimmer
+            // "Thinking - Xs" text with shimmer
             Row(
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
             ) {
                 val thinkingText = if (elapsedSeconds > 0 || thinkingStartTime > 0) {
                     "Thinking • ${formatElapsedTime(elapsedSeconds)}"
@@ -106,7 +109,6 @@ fun ThinkingIndicator(
                     "Thinking"
                 }
 
-                // Gray shimmer text
                 val grayColor = MaterialTheme.colorScheme.onSurfaceVariant
                 val highlightColor = grayColor.copy(alpha = 0.3f)
 
@@ -119,18 +121,18 @@ fun ThinkingIndicator(
                         fontSize = 15.sp
                     ),
                 )
+
+                Spacer(Modifier.width(6.dp))
+                // Chevron that rotates when tapped
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Expand thinking details",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .rotate(rotation)
+                )
             }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Show raw thinking text - as streaming content
-        if (thinkingRaw.isNotEmpty()) {
-            ThinkingRawContent(
-                thinkingRaw = thinkingRaw,
-                modelDisplayName = modelDisplayName,
-                modifier = Modifier.fillMaxWidth()
-            )
         }
     }
 }
@@ -143,54 +145,6 @@ private fun formatElapsedTime(seconds: Int): String {
         seconds < 60 -> "${seconds}s"
         seconds < 3600 -> "${seconds / 60}m ${seconds % 60}s"
         else -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
-    }
-}
-
-/**
- * Shows the raw thinking content as it streams in.
- * Simple implementation - shows the text directly without complex animation.
- */
-@Composable
-private fun ThinkingRawContent(
-    thinkingRaw: String,
-    modelDisplayName: String,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier
-            .alpha(0.9f)
-            .padding(start = 8.dp)
-    ) {
-        Column {
-            Text(
-                text = modelDisplayName.ifBlank { "Agent" },
-                style = MaterialTheme.typography.labelMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp)
-            )
-
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shadowElevation = 2.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(
-                    text = thinkingRaw,
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontSize = 13.sp,
-                        lineHeight = 18.sp
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
-                    maxLines = 10,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(12.dp)
-                )
-            }
-        }
     }
 }
 

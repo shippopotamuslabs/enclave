@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "3949bd29daed89e0dca0ed4b1a2c3479",
+    "identityHash": "d9b4d50a0b6d55cdfec7354fe0d94321",
     "entities": [
       {
         "tableName": "chat",
@@ -48,7 +48,7 @@
       },
       {
         "tableName": "message",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chat_id` INTEGER NOT NULL, `content` TEXT NOT NULL, `role` TEXT NOT NULL, `user_message_id` INTEGER, `thinking_duration_seconds` INTEGER, `thinking_raw` TEXT, `message_state` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `model_type` TEXT, FOREIGN KEY(`user_message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`chat_id`) REFERENCES `chat`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chat_id` INTEGER NOT NULL, `content` TEXT NOT NULL, `role` TEXT NOT NULL, `user_message_id` INTEGER, `thinking_duration_seconds` INTEGER, `thinking_raw` TEXT, `thinking_start_time` INTEGER, `thinking_end_time` INTEGER, `message_state` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `model_type` TEXT, `pipeline_step` TEXT, FOREIGN KEY(`user_message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`chat_id`) REFERENCES `chat`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -90,6 +90,16 @@
             "affinity": "TEXT"
           },
           {
+            "fieldPath": "thinkingStartTime",
+            "columnName": "thinking_start_time",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "thinkingEndTime",
+            "columnName": "thinking_end_time",
+            "affinity": "INTEGER"
+          },
+          {
             "fieldPath": "messageState",
             "columnName": "message_state",
             "affinity": "TEXT",
@@ -104,6 +114,11 @@
           {
             "fieldPath": "modelType",
             "columnName": "model_type",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "pipelineStep",
+            "columnName": "pipeline_step",
             "affinity": "TEXT"
           }
         ],
@@ -316,119 +331,11 @@
             "model_status"
           ]
         }
-      },
-      {
-        "tableName": "crew_pipeline_steps",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `message_id` INTEGER NOT NULL, `pipeline_step` TEXT NOT NULL, FOREIGN KEY(`message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
-        "fields": [
-          {
-            "fieldPath": "id",
-            "columnName": "id",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "messageId",
-            "columnName": "message_id",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "pipelineStep",
-            "columnName": "pipeline_step",
-            "affinity": "TEXT",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": true,
-          "columnNames": [
-            "id"
-          ]
-        },
-        "indices": [
-          {
-            "name": "index_crew_pipeline_steps_message_id",
-            "unique": false,
-            "columnNames": [
-              "message_id"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_crew_pipeline_steps_message_id` ON `${TABLE_NAME}` (`message_id`)"
-          }
-        ],
-        "foreignKeys": [
-          {
-            "table": "message",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "message_id"
-            ],
-            "referencedColumns": [
-              "id"
-            ]
-          }
-        ]
-      },
-      {
-        "tableName": "thinking_steps",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `message_id` INTEGER NOT NULL, `thinking_chunk` TEXT NOT NULL, FOREIGN KEY(`message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
-        "fields": [
-          {
-            "fieldPath": "id",
-            "columnName": "id",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "messageId",
-            "columnName": "message_id",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "thinkingChunk",
-            "columnName": "thinking_chunk",
-            "affinity": "TEXT",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": true,
-          "columnNames": [
-            "id"
-          ]
-        },
-        "indices": [
-          {
-            "name": "index_thinking_steps_message_id",
-            "unique": false,
-            "columnNames": [
-              "message_id"
-            ],
-            "orders": [],
-            "createSql": "CREATE INDEX IF NOT EXISTS `index_thinking_steps_message_id` ON `${TABLE_NAME}` (`message_id`)"
-          }
-        ],
-        "foreignKeys": [
-          {
-            "table": "message",
-            "onDelete": "CASCADE",
-            "onUpdate": "NO ACTION",
-            "columns": [
-              "message_id"
-            ],
-            "referencedColumns": [
-              "id"
-            ]
-          }
-        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3949bd29daed89e0dca0ed4b1a2c3479')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd9b4d50a0b6d55cdfec7354fe0d94321')"
     ]
   }
 }

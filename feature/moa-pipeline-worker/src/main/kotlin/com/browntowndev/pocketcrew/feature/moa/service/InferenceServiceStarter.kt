@@ -83,4 +83,38 @@ class InferenceServiceStarter @Inject constructor(
         val intent = createStopIntent()
         context.startService(intent)
     }
+
+    /**
+     * Creates an intent to resume the inference pipeline from a saved state.
+     *
+     * @param chatId Unique identifier for the chat session
+     * @param stateJson The serialized pipeline state to resume from
+     * @return Intent ready for startForegroundService()
+     */
+    fun createResumeIntent(
+        chatId: String,
+        stateJson: String
+    ): Intent {
+        return Intent(context, InferenceService::class.java).apply {
+            action = InferenceService.ACTION_RESUME
+            putExtra(InferenceService.EXTRA_CHAT_ID, chatId)
+            putExtra(InferenceService.EXTRA_STATE_JSON, stateJson)
+        }
+    }
+
+    /**
+     * Starts the inference service to resume from a saved state.
+     *
+     * @param chatId Unique identifier for the chat session
+     * @param stateJson The serialized pipeline state to resume from
+     */
+    fun startServiceResume(chatId: String, stateJson: String) {
+        val intent = createResumeIntent(chatId, stateJson)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(intent)
+        } else {
+            context.startService(intent)
+        }
+    }
 }
