@@ -841,6 +841,10 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Thinking tracking initialized: enabled=%d, budget=%d",
                        g_in_thinking_phase ? 1 : 0, reasoningBudget);
 
+    std::string expected_end_tag = "</think>";
+    std::string expected_force_close = "\n</think>\n";
+    std::string first_token_output = "";
+
     // Get special tokens and vocab
     llama_token eos_token = llama_vocab_eos(get_model_vocab());
     const int vocab_size = llama_vocab_n_tokens(get_model_vocab());
@@ -896,15 +900,39 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
         std::string piece_str(tokenBuffer, tokenLen);
 
         if (g_in_thinking_phase) {
-            // Check for natural </think> first - respect model intent
-            if (piece_str.find("</think>") != std::string::npos) {
+            // Check for natural end tag first - respect model intent
+            if (piece_str.find(expected_end_tag) != std::string::npos) {
                 g_in_thinking_phase = false;
                 __android_log_print(ANDROID_LOG_DEBUG, "llama-jni", "End of thinking detected at token %d", n_generated_tokens);
             } else {
+                // Detect tag format from the very first non-whitespace token output
+                if (first_token_output.empty()) {
+                    bool is_ws = true;
+                    for (char c : piece_str) {
+                        if (!std::isspace(static_cast<unsigned char>(c))) {
+                            is_ws = false;
+                            break;
+                        }
+                    }
+                    if (!is_ws) {
+                        first_token_output = piece_str;
+                        // If the first token contains '[' or 'THINK', assume [THINK] format
+                        if (first_token_output.find("[") != std::string::npos || 
+                            first_token_output.find("THINK") != std::string::npos) {
+                            expected_end_tag = "[/THINK]";
+                            expected_force_close = "\n[/THINK]\n";
+                        } else {
+                            // Default to standard <think> format
+                            expected_end_tag = "</think>";
+                            expected_force_close = "\n</think>\n";
+                        }
+                    }
+                }
+
                 // Check if adding this token would exceed the limit
                 if (g_think_token_count + 1 >= THINK_TOKEN_LIMIT) {
                     // === HARD LIMIT HIT - Force close thinking ===
-                    const char* force_close = "\n</think>\n";
+                    const char* force_close = expected_force_close.c_str();
 
                     __android_log_print(ANDROID_LOG_WARN, "llama-jni",
                         "Hard think limit %d reached at token %d - forcing end of thinking",
