@@ -65,6 +65,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
     testImplementation(testFixtures(project(":core:domain")))
+    testImplementation(project(":core:testing"))
 
     // JUnit 5 Engine for test discovery
     testRuntimeOnly("org.junit.platform:junit-platform-engine")

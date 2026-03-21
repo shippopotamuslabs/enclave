@@ -21,6 +21,7 @@ import com.browntowndev.pocketcrew.feature.inference.MediaPipeInferenceServiceIm
 import com.browntowndev.pocketcrew.feature.inference.llama.GpuConfig
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Engine
@@ -294,7 +295,8 @@ object EngineModule {
         @MainModelEngine conversationManager: ConversationManagerPort,
         modelRegistry: ModelRegistryPort,
         processThinkingTokens: ProcessThinkingTokensUseCase,
-        llamaChatSessionManager: LlamaChatSessionManager
+        llamaChatSessionManager: LlamaChatSessionManager,
+        loggingPort: LoggingPort
     ): LlmInferencePort {
         val config = modelRegistry.getRegisteredModelSync(ModelType.MAIN)
             ?: throw IllegalStateException("No model registered for ${ModelType.MAIN}. Please download a model first.")
@@ -304,7 +306,7 @@ object EngineModule {
         return when {
             filename.endsWith(".gguf") -> {
                 // Use llama.cpp implementation for GGUF models
-                val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.MAIN)
+                val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.MAIN, loggingPort)
                 val tunings = config.tunings
                 val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -343,7 +345,8 @@ object EngineModule {
         @VisionModelEngine conversationManager: ConversationManagerPort,
         modelRegistry: ModelRegistryPort,
         processThinkingTokens: ProcessThinkingTokensUseCase,
-        llamaChatSessionManager: LlamaChatSessionManager
+        llamaChatSessionManager: LlamaChatSessionManager,
+        loggingPort: LoggingPort
     ): LlmInferencePort {
         val config = modelRegistry.getRegisteredModelSync(ModelType.VISION)
             ?: throw IllegalStateException("No model registered for ${ModelType.VISION}. Please download a model first.")
@@ -351,7 +354,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.VISION)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.VISION, loggingPort)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -385,7 +388,8 @@ object EngineModule {
         @DraftOneModelEngine conversationManager: ConversationManagerPort,
         modelRegistry: ModelRegistryPort,
         processThinkingTokens: ProcessThinkingTokensUseCase,
-        llamaChatSessionManager: LlamaChatSessionManager
+        llamaChatSessionManager: LlamaChatSessionManager,
+        loggingPort: LoggingPort
     ): LlmInferencePort {
         val config = modelRegistry.getRegisteredModelSync(ModelType.DRAFT_ONE)
             ?: throw IllegalStateException("No model registered for ${ModelType.DRAFT_ONE}. Please download a model first.")
@@ -393,7 +397,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.DRAFT_ONE)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.DRAFT_ONE, loggingPort)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -427,7 +431,8 @@ object EngineModule {
         @DraftTwoModelEngine conversationManager: ConversationManagerPort,
         modelRegistry: ModelRegistryPort,
         processThinkingTokens: ProcessThinkingTokensUseCase,
-        llamaChatSessionManager: LlamaChatSessionManager
+        llamaChatSessionManager: LlamaChatSessionManager,
+        loggingPort: LoggingPort
     ): LlmInferencePort {
         val config = modelRegistry.getRegisteredModelSync(ModelType.DRAFT_TWO)
             ?: throw IllegalStateException("No model registered for ${ModelType.DRAFT_TWO}. Please download a model first.")
@@ -435,7 +440,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.DRAFT_TWO)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.DRAFT_TWO, loggingPort)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -469,7 +474,8 @@ object EngineModule {
         @FastModelEngine conversationManager: ConversationManagerPort,
         modelRegistry: ModelRegistryPort,
         processThinkingTokens: ProcessThinkingTokensUseCase,
-        llamaChatSessionManager: LlamaChatSessionManager
+        llamaChatSessionManager: LlamaChatSessionManager,
+        loggingPort: LoggingPort
     ): LlmInferencePort {
         val config = modelRegistry.getRegisteredModelSync(ModelType.FAST)
             ?: throw IllegalStateException("No model registered for ${ModelType.FAST}. Please download a model first.")
@@ -477,7 +483,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.FAST)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.FAST, loggingPort)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -511,7 +517,8 @@ object EngineModule {
         @ThinkingModelEngine conversationManager: ConversationManagerPort,
         modelRegistry: ModelRegistryPort,
         processThinkingTokens: ProcessThinkingTokensUseCase,
-        llamaChatSessionManager: LlamaChatSessionManager
+        llamaChatSessionManager: LlamaChatSessionManager,
+        loggingPort: LoggingPort
     ): LlmInferencePort {
         val config = modelRegistry.getRegisteredModelSync(ModelType.THINKING)
             ?: throw IllegalStateException("No model registered for ${ModelType.THINKING}. Please download a model first.")
@@ -519,7 +526,7 @@ object EngineModule {
 
         return if (filename.endsWith(".gguf")) {
             val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.THINKING)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.THINKING, loggingPort)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -553,7 +560,8 @@ object EngineModule {
         @FinalSynthesizerModelEngine conversationManager: ConversationManagerPort,
         modelRegistry: ModelRegistryPort,
         processThinkingTokens: ProcessThinkingTokensUseCase,
-        llamaChatSessionManager: LlamaChatSessionManager
+        llamaChatSessionManager: LlamaChatSessionManager,
+        loggingPort: LoggingPort
     ): LlmInferencePort {
         // Uses the dedicated FINAL_SYNTHESIS model config
         val config = modelRegistry.getRegisteredModelSync(ModelType.FINAL_SYNTHESIS)
@@ -563,7 +571,7 @@ object EngineModule {
         val modelPath = getModelPath(context, filename)
 
         return if (filename.endsWith(".gguf")) {
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.FINAL_SYNTHESIS)
+            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.FINAL_SYNTHESIS, loggingPort)
             val tunings = config.tunings
             val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 

@@ -10,7 +10,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
-import com.browntowndev.pocketcrew.domain.usecase.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
@@ -40,7 +39,7 @@ import javax.inject.Inject
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    private val settingsUseCases: SettingsUseCases,
+    settingsUseCases: SettingsUseCases,
     private val chatUseCases: ChatUseCases,
     private val savedStateHandle: SavedStateHandle,
     inferenceLockManager: InferenceLockManager,
@@ -88,7 +87,7 @@ class ChatViewModel @Inject constructor(
         _currentChatId.flatMapLatest { chatId: Long? ->
             val id: Long = chatId ?: initialChatId ?: 0L
             if (id == 0L) {
-                flowOf<List<Message>>(emptyList())
+                flowOf(emptyList())
             } else {
                 chatUseCases.getChat(id).debounce(50)
             }
@@ -114,13 +113,13 @@ class ChatViewModel @Inject constructor(
                 id = snapshot.messageId,
                 chatId = snapshot.messageId,
                 role = Role.ASSISTANT,
-                content = Content(text = snapshot.content, pipelineStep = null),
+                content = Content(text = snapshot.content, pipelineStep = snapshot.pipelineStep),
                 thinkingRaw = snapshot.thinkingRaw.ifBlank { null },
                 thinkingDurationSeconds = snapshot.thinkingDurationSeconds,
                 thinkingStartTime = snapshot.thinkingStartTime.takeIf { st: Long -> st != 0L },
                 thinkingEndTime = snapshot.thinkingEndTime.takeIf { et: Long -> et != 0L },
                 createdAt = 0L,
-                messageState = if (snapshot.isComplete) MessageState.COMPLETE else MessageState.GENERATING,
+                messageState = snapshot.messageState,
                 modelType = snapshot.modelType
             )
         }
@@ -152,14 +151,6 @@ class ChatViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = ChatUiState()
     )
-
-    /**
-     * Maps domain Message to ChatMessage for the UI layer.
-     * Exposed for unit testing.
-     */
-    internal fun mapToChatMessageForTesting(message: Message): ChatMessage {
-        return mapToChatMessage(message)
-    }
 
     /**
      * Maps domain Message to ChatMessage for the UI layer.
@@ -288,14 +279,9 @@ class ChatViewModel @Inject constructor(
                     chatId = promptResult.chatId,
                     mode = _selectedMode.value.toDomain()
                 ).onEach { state ->
-                    when (state) {
-                        is MessageGenerationState.MessagesState -> {
-                            // Merge new messages with existing in-flight messages
-                            // In-flight messages override database messages for same messageId
-                            _inFlightMessages.value = _inFlightMessages.value + state.messages
-                        }
-                        else -> { /* ignore other state types for UI merging */ }
-                    }
+                    // Merge new messages with existing in-flight messages
+                    // In-flight messages override database messages for same messageId
+                    _inFlightMessages.value += state.messages
                 }.onCompletion { cause ->
                     // Clear in-flight after flow completion
                     // Database has been updated with final state via persistAccumulatedMessages

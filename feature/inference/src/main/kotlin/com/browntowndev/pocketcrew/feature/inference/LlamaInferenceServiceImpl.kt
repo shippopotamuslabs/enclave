@@ -14,6 +14,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
@@ -28,6 +29,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
     private val sessionManager: LlamaChatSessionManager,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
     private val modelType: ModelType,
+    private val loggingPort: LoggingPort
 ) : LlmInferencePort {
 
     companion object {
@@ -106,6 +108,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
             // Send user message
             sessionManager.sendUserMessage(prompt)
 
+            var loggedThinking: Boolean = false
+
             // Stream the response and map to InferenceEvent
             sessionManager.streamAssistantResponse().collect { event ->
                 when (event) {
@@ -119,8 +123,15 @@ class LlamaInferenceServiceImpl @Inject constructor(
                         state.emittedSegments.forEach { segment ->
                             when (segment.kind) {
                                 SegmentKind.THINKING -> {
+                                    if (!loggedThinking) {
+                                        loggingPort.debug(
+                                            TAG,
+                                            "Model Type: $modelType Thinking chunk: ${segment.text}"
+                                        )
+                                        loggedThinking = true
+                                    }
                                     accumulatedThought.append(segment.text)
-                                    emit(InferenceEvent.Thinking(segment.text, accumulatedThought.toString(), modelType))
+                                    emit(InferenceEvent.Thinking(segment.text, modelType))
                                 }
                                 SegmentKind.VISIBLE -> {
                                     accumulatedText.append(segment.text)
@@ -134,19 +145,14 @@ class LlamaInferenceServiceImpl @Inject constructor(
                         if (buffer.isNotEmpty()) {
                             if (isThinking) {
                                 accumulatedThought.append(buffer)
-                                emit(InferenceEvent.Thinking(buffer, accumulatedThought.toString(), modelType))
+                                emit(InferenceEvent.Thinking(buffer, modelType))
                             } else {
                                 accumulatedText.append(buffer)
                                 emit(InferenceEvent.PartialResponse(buffer, modelType))
                             }
                         }
 
-                        // Emit completed with the full response
-                        emit(InferenceEvent.Completed(
-                            finalResponse = accumulatedText.toString(),
-                            rawFullThought = accumulatedThought.toString().takeIf { it.isNotEmpty() },
-                            modelType = modelType
-                        ))
+                        emit(InferenceEvent.Finished(modelType))
                     }
                     is GenerationEvent.Error -> {
                         emit(InferenceEvent.Error(event.throwable, modelType))

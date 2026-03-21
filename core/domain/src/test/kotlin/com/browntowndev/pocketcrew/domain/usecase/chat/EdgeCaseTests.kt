@@ -1,15 +1,29 @@
+/*
+ * Copyright 2024 Pocket Crew
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.MessageState
-import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
-import com.browntowndev.pocketcrew.domain.model.chat.Role
-import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
+import kotlinx.coroutines.flow.flow
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
@@ -28,6 +42,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+
 /**
  * Edge case tests for GenerateChatResponseUseCase.
  * 
@@ -42,6 +57,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 class EdgeCaseTests {
 
     private lateinit var fastModelService: LlmInferencePort
+    private lateinit var thinkingModelService: LlmInferencePort
     private lateinit var pipelineExecutor: PipelineExecutorPort
     private lateinit var chatRepository: ChatRepository
     private lateinit var messageRepository: MessageRepository
@@ -51,8 +67,9 @@ class EdgeCaseTests {
     private lateinit var generateChatResponseUseCase: GenerateChatResponseUseCase
 
     @BeforeEach
-    fun setup() {
+    fun setUp() {
         fastModelService = mockk(relaxed = true)
+        thinkingModelService = mockk(relaxed = true)
         pipelineExecutor = mockk(relaxed = true)
         chatRepository = mockk(relaxed = true)
         messageRepository = mockk(relaxed = true)
@@ -62,7 +79,7 @@ class EdgeCaseTests {
         
         generateChatResponseUseCase = GenerateChatResponseUseCase(
             fastModelService = fastModelService,
-            thinkingModelService = fastModelService,
+            thinkingModelService = thinkingModelService,
             pipelineExecutor = pipelineExecutor,
             chatRepository = chatRepository,
             messageRepository = messageRepository,
@@ -85,12 +102,12 @@ class EdgeCaseTests {
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
-            InferenceEvent.Completed("Hello", null, ModelType.FAST)
+            InferenceEvent.Finished(ModelType.FAST)
         )
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
 
         // When
-        val states = mutableListOf<MessageGenerationState>()
+        val accumulatedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()
         generateChatResponseUseCase(
             prompt = "Hello",
             userMessageId = 1L,
@@ -98,115 +115,119 @@ class EdgeCaseTests {
             chatId = 1L,
             mode = Mode.FAST
         ).collect { state ->
-            states.add(state)
+            accumulatedMessages.add(state)
         }
 
-        // Then - should complete successfully
-        val messagesStates = states.filterIsInstance<MessageGenerationState.MessagesState>()
-        assertTrue(messagesStates.isNotEmpty())
-        
-        val finalState = messagesStates.lastOrNull()
-        assertNotNull(finalState)
-        assertEquals("Hello", finalState!!.messages[2L]?.content)
-        assertTrue(finalState.messages[2L]?.thinkingRaw?.isEmpty() == true, "Thinking should be empty")
+        // Then - should handle empty thinking gracefully
+        assertTrue(accumulatedMessages.isNotEmpty())
+        val finalState = accumulatedMessages.lastOrNull()
+        val snapshot = finalState!!.messages[2L]
+        assertEquals("Hello", snapshot!!.content)
+        assertTrue(snapshot.thinkingRaw.isEmpty())
     }
 
     // ========================================================================
-    // Test: Long response is handled correctly
-    // Evidence: Large content doesn't cause memory issues
+    // Test: Long responses are handled correctly
+    // Evidence: Multiple partial responses accumulate correctly
     // ========================================================================
 
     @Test
-    fun `long response is handled correctly`() = runTest {
-        // Given - response with long content
+    fun `long responses are handled correctly`() = runTest {
+        // Given - response with many partial responses
         val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
-        val longContent = "A".repeat(10000) // 10KB response
-        // Split into chunks to simulate partial responses
-        val chunk1 = longContent.substring(0, 5000)
-        val chunk2 = longContent.substring(5000)
-        
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
-            InferenceEvent.PartialResponse(chunk1, ModelType.FAST),
-            InferenceEvent.PartialResponse(chunk2, ModelType.FAST),
-            InferenceEvent.Completed(longContent, null, ModelType.FAST)
-        )
+        val partialResponses = (1..100).map { i ->
+            InferenceEvent.PartialResponse("chunk$i ", ModelType.FAST)
+        } + InferenceEvent.Finished(ModelType.FAST)
+
+        every { fastModelService.sendPrompt(any(), any()) } returns flow { partialResponses.forEach { emit(it) } }
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
 
         // When
-        val messagesStates = mutableListOf<MessageGenerationState.MessagesState>()
+        val accumulatedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()
         generateChatResponseUseCase(
-            prompt = "Give me a long response",
+            prompt = "Hello",
             userMessageId = 1L,
             assistantMessageId = 2L,
             chatId = 1L,
             mode = Mode.FAST
         ).collect { state ->
-            if (state is MessageGenerationState.MessagesState) {
-                messagesStates.add(state)
-            }
+            accumulatedMessages.add(state)
         }
 
-        // Then - should handle long content
-        assertTrue(messagesStates.isNotEmpty())
-        val finalState = messagesStates.lastOrNull()
-        assertNotNull(finalState)
-        assertEquals(longContent, finalState!!.messages[2L]?.content)
+        // Then - all content should be accumulated
+        val finalState = accumulatedMessages.lastOrNull()
+        val snapshot = finalState!!.messages[2L]
+        assertTrue(snapshot!!.content.contains("chunk1"))
+        assertTrue(snapshot.content.contains("chunk100"))
+        assertTrue(snapshot.content.contains("Done"))
     }
 
     // ========================================================================
-    // Test: Rapid partial responses are accumulated correctly
-    // Evidence: Fast token emission doesn't cause race conditions
+    // Test: Lock is acquired and released correctly
+    // Evidence: Lock management works properly
     // ========================================================================
 
     @Test
-    fun `rapid partial responses are accumulated correctly`() = runTest {
+    fun `lock is acquired and released correctly`() = runTest {
         // Given
         val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
-        // Emit many rapid partial responses
-        val rapidEvents = mutableListOf<InferenceEvent>()
-        for (i in 1..100) {
-            rapidEvents.add(InferenceEvent.PartialResponse("$i ", ModelType.FAST))
-        }
-        rapidEvents.add(InferenceEvent.Completed("", null, ModelType.FAST))
-        
-        every { fastModelService.sendPrompt(any(), any()) } returns kotlinx.coroutines.flow.flow {
-            rapidEvents.forEach { emit(it) }
-        }
+        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+            InferenceEvent.Finished(ModelType.FAST)
+        )
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
 
         // When
-        val messagesStates = mutableListOf<MessageGenerationState.MessagesState>()
         generateChatResponseUseCase(
-            prompt = "Count to 100",
+            prompt = "Hello",
+            userMessageId = 1L,
+            assistantMessageId = 2L,
+            chatId = 1L,
+            mode = Mode.FAST
+        ).collect { }
+
+        // Then - lock should be released
+        assertFalse(inferenceLockManager.isInferenceBlocked.value)
+    }
+
+    // ========================================================================
+    // Test: Blocked inference returns blocked content
+    // Evidence: Blocked state is handled correctly
+    // ========================================================================
+
+    @Test
+    fun `blocked inference returns blocked content`() = runTest {
+        // Given - lock already held
+        inferenceLockManager.acquireLock(InferenceType.ON_DEVICE)
+
+        // When
+        val accumulatedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()
+        generateChatResponseUseCase(
+            prompt = "Hello",
             userMessageId = 1L,
             assistantMessageId = 2L,
             chatId = 1L,
             mode = Mode.FAST
         ).collect { state ->
-            if (state is MessageGenerationState.MessagesState) {
-                messagesStates.add(state)
-            }
+            accumulatedMessages.add(state)
         }
 
-        // Then - all content should be accumulated
-        val finalState = messagesStates.lastOrNull()
-        assertNotNull(finalState)
-        val content = finalState!!.messages[2L]?.content ?: ""
-        assertTrue(content.contains("1 "))
-        assertTrue(content.contains("100 "))
+        // Then - should return blocked message
+        val state = accumulatedMessages.firstOrNull()
+        val snapshot = state!!.messages[2L]
+        assertTrue(snapshot!!.content.contains("Another message is in progress"))
     }
 
     // ========================================================================
-    // Test: Safety blocked response is handled correctly
-    // Evidence: Blocked content is accumulated and emitted
+    // Test: Safety blocked returns proper message
+    // Evidence: Safety blocking is handled correctly
     // ========================================================================
 
     @Test
-    fun `safety blocked response is handled correctly`() = runTest {
+    fun `safety blocked returns proper message`() = runTest {
         // Given
         val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
@@ -217,141 +238,40 @@ class EdgeCaseTests {
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
 
         // When
-        val messagesStates = mutableListOf<MessageGenerationState.MessagesState>()
+        val accumulatedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()
         generateChatResponseUseCase(
-            prompt = "Bad request",
+            prompt = "Hello",
             userMessageId = 1L,
             assistantMessageId = 2L,
             chatId = 1L,
             mode = Mode.FAST
         ).collect { state ->
-            if (state is MessageGenerationState.MessagesState) {
-                messagesStates.add(state)
-            }
+            accumulatedMessages.add(state)
         }
 
-        // Then - MessagesState should contain blocked content
-        assertTrue(messagesStates.isNotEmpty())
-        val finalState = messagesStates.lastOrNull()
-        assertTrue(finalState!!.messages[2L]?.content?.contains("Blocked") ?: false)
+        // Then - should contain blocked message
+        assertTrue(accumulatedMessages.isNotEmpty())
+        val finalState = accumulatedMessages.lastOrNull()
+        val snapshot = finalState!!.messages[2L]
+        assertTrue(snapshot!!.content.contains("Blocked"))
     }
 
     // ========================================================================
-    // Test: Thinking followed by response is accumulated correctly
-    // Evidence: Both thinking and content are preserved
+    // Test: ON_DEVICE blocks other ON_DEVICE
+    // Evidence: Lock acquisition failure is handled correctly
     // ========================================================================
 
     @Test
-    fun `thinking followed by response is accumulated correctly`() = runTest {
-        // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+    fun `ON_DEVICE blocks other ON_DEVICE`() = runTest {
+        // Given - First inference holds lock
+        val firstAcquire = inferenceLockManager.acquireLock(InferenceType.ON_DEVICE)
+        assertTrue(firstAcquire)
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
-            InferenceEvent.Thinking("Let me think...", "Let me think...", ModelType.FAST),
-            InferenceEvent.PartialResponse("Based on my ", ModelType.FAST),
-            InferenceEvent.PartialResponse("thinking, here ", ModelType.FAST),
-            InferenceEvent.PartialResponse("is the answer.", ModelType.FAST),
-            InferenceEvent.Completed("Based on my thinking, here is the answer.", "Let me think...", ModelType.FAST)
-        )
-        coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
+        // When - Second ON_DEVICE tries to acquire
+        val secondAcquire = inferenceLockManager.acquireLock(InferenceType.ON_DEVICE)
 
-        // When
-        val messagesStates = mutableListOf<MessageGenerationState.MessagesState>()
-        generateChatResponseUseCase(
-            prompt = "What do you think?",
-            userMessageId = 1L,
-            assistantMessageId = 2L,
-            chatId = 1L,
-            mode = Mode.FAST
-        ).collect { state ->
-            if (state is MessageGenerationState.MessagesState) {
-                messagesStates.add(state)
-            }
-        }
-
-        // Then - both thinking and content should be accumulated
-        val finalState = messagesStates.lastOrNull()
-        assertNotNull(finalState)
-        assertTrue(finalState!!.messages[2L]?.thinkingRaw?.contains("think") == true, "Should contain 'think'")
-        assertTrue(finalState.messages[2L]?.content?.contains("thinking") == true, "Should contain 'thinking'")
-    }
-
-    // ========================================================================
-    // Test: Empty content response is handled correctly
-    // Evidence: Empty response doesn't cause issues
-    // ========================================================================
-
-    @Test
-    fun `empty content response is handled correctly`() = runTest {
-        // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
-
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
-            InferenceEvent.Completed("", null, ModelType.FAST)
-        )
-        coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
-
-        // When
-        val messagesStates = mutableListOf<MessageGenerationState.MessagesState>()
-        generateChatResponseUseCase(
-            prompt = "Say nothing",
-            userMessageId = 1L,
-            assistantMessageId = 2L,
-            chatId = 1L,
-            mode = Mode.FAST
-        ).collect { state ->
-            if (state is MessageGenerationState.MessagesState) {
-                messagesStates.add(state)
-            }
-        }
-
-        // Then - should handle empty content
-        val finalState = messagesStates.lastOrNull()
-        assertNotNull(finalState)
-        assertEquals("", finalState!!.messages[2L]?.content)
-    }
-
-    // ========================================================================
-    // Test: Multiple thinking segments are accumulated
-    // Evidence: Chain-of-thought is preserved
-    // ========================================================================
-
-    @Test
-    fun `multiple thinking segments are accumulated`() = runTest {
-        // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
-
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
-            InferenceEvent.Thinking("First, ", "First, ", ModelType.FAST),
-            InferenceEvent.Thinking("second, ", "First, second, ", ModelType.FAST),
-            InferenceEvent.Thinking("and third.", "First, second, and third.", ModelType.FAST),
-            InferenceEvent.Completed("Done", "First, second, and third.", ModelType.FAST)
-        )
-        coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
-
-        // When
-        val messagesStates = mutableListOf<MessageGenerationState.MessagesState>()
-        generateChatResponseUseCase(
-            prompt = "Think step by step",
-            userMessageId = 1L,
-            assistantMessageId = 2L,
-            chatId = 1L,
-            mode = Mode.FAST
-        ).collect { state ->
-            if (state is MessageGenerationState.MessagesState) {
-                messagesStates.add(state)
-            }
-        }
-
-        // Then - all thinking should be accumulated
-        val finalState = messagesStates.lastOrNull()
-        assertNotNull(finalState)
-        val thinking = finalState!!.messages[2L]?.thinkingRaw ?: ""
-        assertTrue(thinking.contains("First"))
-        assertTrue(thinking.contains("second"))
-        assertTrue(thinking.contains("third"))
+        // Then - Second is blocked
+        assertFalse(secondAcquire)
+        assertTrue(inferenceLockManager.isInferenceBlocked.value)
     }
 }

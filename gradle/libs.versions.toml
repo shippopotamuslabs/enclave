@@ -35,6 +35,7 @@ foundation = "1.10.4"
 robolectricVersion = "4.13"
 androidxTestCoreVersion = "1.7.0"
 markdown = "1.0.3"
+turbineVersion = "1.2.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -88,6 +89,7 @@ androidx-test-core = { group = "androidx.test", name = "core", version.ref = "an
 junit-vintage-engine = { group = "org.junit.vintage", name = "junit-vintage-engine", version.ref = "junitJupiterVersion" }
 markdown-parser = { module = "io.github.huarangmeng:markdown-parser", version.ref = "markdown" }
 markdown-renderer = { module = "io.github.huarangmeng:markdown-renderer", version.ref = "markdown" }
+turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbineVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

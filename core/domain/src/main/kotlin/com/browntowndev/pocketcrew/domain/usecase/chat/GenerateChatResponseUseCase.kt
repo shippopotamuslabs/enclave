@@ -4,11 +4,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.FastModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.ThinkingModelEngine
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
-import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
-import com.browntowndev.pocketcrew.domain.model.chat.Role
-import com.browntowndev.pocketcrew.domain.model.chat.Message
-import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
@@ -26,7 +23,6 @@ import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.flow.transform
 
 import javax.inject.Inject
 
@@ -35,7 +31,7 @@ import javax.inject.Inject
  * 
  * ARCHITECTURE (Real-Time Flow Refactor):
  * 1. Accumulates state internally using MessageAccumulatorManager (not DB on every token)
- * 2. Emits MessagesState on every state change for real-time UI updates
+ * 2. Emits AccumulatedMessages on every state change for real-time UI updates
  * 3. Persists all accumulated state to DB in single transaction on completion
  * 4. Uses buffer(64) for backpressure handling
  */
@@ -54,20 +50,20 @@ class GenerateChatResponseUseCase @Inject constructor(
         private const val FLOW_BUFFER_SIZE = 64
     }
 
-    suspend operator fun invoke(
+    operator fun invoke(
         prompt: String,
         userMessageId: Long,
         assistantMessageId: Long,
         chatId: Long,
         mode: Mode
-    ): Flow<MessageGenerationState> {
+    ): Flow<AccumulatedMessages> {
         val inferenceType = determineInferenceType(mode)
 
         // Try to acquire the global inference lock
         if (!inferenceLockManager.acquireLock(inferenceType)) {
             return flow {
                 emit(
-                    MessageGenerationState.MessagesState(
+                    AccumulatedMessages(
                         mapOf(
                             assistantMessageId to MessageSnapshot(
                                 messageId = assistantMessageId,
@@ -86,9 +82,16 @@ class GenerateChatResponseUseCase @Inject constructor(
             Mode.FAST -> generateWithService(
                 prompt, userMessageId, assistantMessageId, chatId, fastModelService, ModelType.FAST
             )
+
             Mode.THINKING -> generateWithService(
-                prompt, userMessageId, assistantMessageId, chatId, thinkingModelService, ModelType.THINKING
+                prompt,
+                userMessageId,
+                assistantMessageId,
+                chatId,
+                thinkingModelService,
+                ModelType.THINKING
             )
+
             Mode.CREW -> pipelineExecutor.executePipeline(
                 chatId = chatId.toString(),
                 userMessage = prompt,
@@ -96,7 +99,7 @@ class GenerateChatResponseUseCase @Inject constructor(
         }
 
         val assistantMessageIds = mutableMapOf(ModelType.DRAFT_ONE to assistantMessageId)
-        
+
         // Create accumulator manager for this invocation
         val accumulatorManager = MessageAccumulatorManager(
             mode = mode,
@@ -105,74 +108,108 @@ class GenerateChatResponseUseCase @Inject constructor(
             defaultAssistantMessageId = assistantMessageId,
             assistantMessageIds = assistantMessageIds
         )
+        val loggedThinkingFor = mutableMapOf(ModelType.DRAFT_ONE to false, ModelType.DRAFT_TWO to false, ModelType.MAIN to false, ModelType.FINAL_SYNTHESIS to false)
+        val loggedProcessingFor = mutableMapOf(ModelType.DRAFT_ONE to false, ModelType.DRAFT_TWO to false, ModelType.MAIN to false, ModelType.FINAL_SYNTHESIS to false)
+        val loggedGenerationFor = mutableMapOf(ModelType.DRAFT_ONE to false, ModelType.DRAFT_TWO to false, ModelType.MAIN to false, ModelType.FINAL_SYNTHESIS to false)
+        val loggedStepCompletionFor = mutableMapOf(ModelType.DRAFT_ONE to false, ModelType.DRAFT_TWO to false, ModelType.MAIN to false, ModelType.FINAL_SYNTHESIS to false)
 
         return flow {
             baseFlow
                 .collect { state ->
                     when (state) {
+                        is MessageGenerationState.Processing -> {
+                            if (loggedProcessingFor[state.modelType] == false) {
+                                loggingPort.debug(TAG, "Processing Started: ${state.modelType}")
+                                loggedProcessingFor[state.modelType] = true
+                            }
+
+                            val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
+                            accumulator.currentState = MessageState.PROCESSING
+                            accumulator.pipelineStep = getPipelineStepForModelType(state.modelType)
+                            emit(accumulatorManager.toMessagesState())
+                        }
+
                         is MessageGenerationState.ThinkingLive -> {
+                            if (loggedThinkingFor[state.modelType] == false) {
+                                loggingPort.debug(TAG, "Thinking Started: ${state.modelType}")
+                                loggedThinkingFor[state.modelType] = true
+                            }
+
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
                             accumulator.thinkingRaw.append(state.thinkingChunk)
                             if (accumulator.thinkingStartTime == null) {
                                 accumulator.thinkingStartTime = System.currentTimeMillis()
                             }
+                            accumulator.currentState = MessageState.THINKING
                             emit(accumulatorManager.toMessagesState())
                         }
+
                         is MessageGenerationState.GeneratingText -> {
+                            if (loggedGenerationFor[state.modelType] == false) {
+                                loggingPort.debug(TAG, "Generation Started: ${state.modelType}")
+                                loggedGenerationFor[state.modelType] = true
+                            }
+
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
                             accumulator.content.append(state.textDelta)
+                            accumulator.currentState = MessageState.GENERATING
+                            if (accumulator.thinkingStartTime != null && accumulator.thinkingEndTime == null) {
+                                accumulator.thinkingEndTime = System.currentTimeMillis()
+                            }
                             emit(accumulatorManager.toMessagesState())
                         }
+
                         is MessageGenerationState.StepCompleted -> {
+                            if (loggedStepCompletionFor[state.modelType] == false) {
+                                loggingPort.debug(TAG, "Step Completed: ${state.modelType}")
+                                loggedStepCompletionFor[state.modelType] = true
+                            }
+
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
-                            accumulator.content.clear()
-                            accumulator.content.append(state.stepOutput)
-                            accumulator.thinkingRaw.clear()
-                            accumulator.thinkingRaw.append(state.thinkingRaw)
-                            accumulator.thinkingEndTime = System.currentTimeMillis()
                             accumulator.isComplete = true
+                            accumulator.currentState = MessageState.COMPLETE
                             emit(accumulatorManager.toMessagesState())
                         }
+
                         is MessageGenerationState.Finished -> {
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
-                            accumulator.thinkingEndTime = System.currentTimeMillis()
                             accumulator.isComplete = true
+                            accumulator.currentState = MessageState.COMPLETE
                             emit(accumulatorManager.toMessagesState())
                         }
+
                         is MessageGenerationState.Blocked -> {
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
                             accumulator.content.clear()
                             accumulator.content.append("[Blocked: ${state.reason}]")
                             accumulator.isComplete = true
+                            accumulator.currentState = MessageState.COMPLETE
                             emit(accumulatorManager.toMessagesState())
                         }
+
                         is MessageGenerationState.Failed -> {
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
                             accumulator.content.clear()
                             accumulator.content.append("Error: ${state.error.message ?: "Unknown error"}")
                             accumulator.isComplete = true
+                            accumulator.currentState = MessageState.COMPLETE
                             emit(accumulatorManager.toMessagesState())
-                        }
-                        is MessageGenerationState.MessagesState -> {
-                            emit(state)
                         }
                     }
                 }
-        }
-            .buffer(FLOW_BUFFER_SIZE)
-            .onCompletion { cause ->
-                if (cause != null) {
-                    loggingPort.error(TAG, "Flow failed", cause)
-                }
-                
-                try {
-                    persistAccumulatedMessages(accumulatorManager, mode)
-                } catch (e: Exception) {
-                    loggingPort.error(TAG, "Failed to persist messages", e)
-                }
-                
-                inferenceLockManager.releaseLock()
+        }.buffer(FLOW_BUFFER_SIZE).onCompletion { cause ->
+            if (cause != null) {
+                loggingPort.error(TAG, "Flow failed", cause)
             }
+
+            try {
+                persistAccumulatedMessages(accumulatorManager)
+            } catch (e: Exception) {
+                loggingPort.error(TAG, "Failed to persist messages", e)
+            }
+
+            inferenceLockManager.releaseLock()
+        }
     }
 
     /**
@@ -180,8 +217,7 @@ class GenerateChatResponseUseCase @Inject constructor(
      * Called once on flow completion.
      */
     private suspend fun persistAccumulatedMessages(
-        accumulatorManager: MessageAccumulatorManager,
-        mode: Mode
+        accumulatorManager: MessageAccumulatorManager
     ) {
         accumulatorManager.messages.values.forEach { accumulator ->
             val finalState = if (accumulator.isComplete) {
@@ -189,7 +225,10 @@ class GenerateChatResponseUseCase @Inject constructor(
             } else {
                 MessageState.PROCESSING
             }
-            
+
+            // Compute pipelineStep from modelType using the existing helper
+            val pipelineStep = getPipelineStepForModelType(accumulator.modelType)
+
             chatRepository.persistAllMessageData(
                 messageId = accumulator.messageId,
                 modelType = accumulator.modelType,
@@ -198,7 +237,8 @@ class GenerateChatResponseUseCase @Inject constructor(
                 thinkingDuration = accumulator.thinkingDurationSeconds.toInt(),
                 thinkingRaw = accumulator.thinkingRaw.toString().ifBlank { null },
                 content = accumulator.content.toString(),
-                messageState = finalState
+                messageState = finalState,
+                pipelineStep = pipelineStep
             )
         }
     }
@@ -240,14 +280,22 @@ class GenerateChatResponseUseCase @Inject constructor(
             }
         }
 
-        fun toMessagesState(): MessageGenerationState.MessagesState {
-            return MessageGenerationState.MessagesState(
+        fun toMessagesState(): AccumulatedMessages {
+            return AccumulatedMessages(
                 messages = _messages.mapValues { (_, accumulator) ->
                     accumulator.toSnapshot()
                 }
             )
         }
     }
+
+    /**
+     * Accumulated state of all messages for real-time UI updates.
+     * This is the primary emission type after the flow transformation.
+     */
+    data class AccumulatedMessages(
+        val messages: Map<Long, MessageSnapshot>
+    )
 
     /**
      * Accumulates state for a single message using StringBuilder (in-place updates).
@@ -260,7 +308,9 @@ class GenerateChatResponseUseCase @Inject constructor(
         val thinkingRaw: StringBuilder = StringBuilder(),
         var thinkingStartTime: Long? = null,
         var thinkingEndTime: Long? = null,
-        var isComplete: Boolean = false
+        var isComplete: Boolean = false,
+        var currentState: MessageState = MessageState.GENERATING,
+        var pipelineStep: PipelineStep? = null
     ) {
         val thinkingDurationSeconds: Long
             get() = if (thinkingStartTime != null && thinkingEndTime != null) {
@@ -275,7 +325,9 @@ class GenerateChatResponseUseCase @Inject constructor(
             thinkingDurationSeconds = thinkingDurationSeconds,
             thinkingStartTime = thinkingStartTime ?: 0L,
             thinkingEndTime = thinkingEndTime ?: 0L,
-            isComplete = isComplete
+            isComplete = isComplete,
+            messageState = currentState,
+            pipelineStep = pipelineStep,
         )
     }
 
@@ -360,7 +412,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                 is InferenceEvent.PartialResponse -> {
                     emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
                 }
-                is InferenceEvent.Completed -> {
+                is InferenceEvent.Finished -> {
                     emit(MessageGenerationState.Finished(event.modelType))
                 }
                 is InferenceEvent.SafetyBlocked -> {
@@ -375,37 +427,8 @@ class GenerateChatResponseUseCase @Inject constructor(
 }
 
 /**
- * Sealed interface for message generation states.
- * MessagesState is the primary emission for UI updates.
- */
-sealed interface MessageGenerationState {
-    data class ThinkingLive(val thinkingChunk: String, val modelType: ModelType) : MessageGenerationState
-    data class GeneratingText(val textDelta: String, val modelType: ModelType) : MessageGenerationState
-    data class Finished(val modelType: ModelType) : MessageGenerationState
-    data class Blocked(val reason: String, val modelType: ModelType) : MessageGenerationState
-    data class Failed(val error: Throwable, val modelType: ModelType) : MessageGenerationState
-    data class StepCompleted(
-        val stepOutput: String,
-        val thinkingDurationSeconds: Int,
-        val totalDurationSeconds: Int = 0,
-        val thinkingRaw: String,
-        val modelDisplayName: String,
-        val modelType: ModelType,
-        val stepType: PipelineStep
-    ) : MessageGenerationState
-
-    /**
-     * Accumulated state of all messages for real-time UI updates.
-     * This is the primary emission type after the flow transformation.
-     */
-    data class MessagesState(
-        val messages: Map<Long, MessageSnapshot>
-    ) : MessageGenerationState
-}
-
-/**
  * Immutable snapshot of a message's accumulated state.
- * Used by MessagesState for UI consumption.
+ * Used by AccumulatedMessages for UI consumption.
  */
 data class MessageSnapshot(
     val messageId: Long,
@@ -415,5 +438,7 @@ data class MessageSnapshot(
     val thinkingDurationSeconds: Long = 0,
     val thinkingStartTime: Long = 0,
     val thinkingEndTime: Long = 0,
-    val isComplete: Boolean = false
+    val isComplete: Boolean = false,
+    val messageState: MessageState = if (isComplete) MessageState.COMPLETE else MessageState.GENERATING,
+    val pipelineStep: PipelineStep? = null
 )

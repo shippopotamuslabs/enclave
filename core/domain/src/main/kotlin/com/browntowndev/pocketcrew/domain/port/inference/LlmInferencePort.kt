@@ -39,10 +39,9 @@ sealed interface InferenceEvent {
     /**
      * Emitted when the model is generating reasoning/Chain-of-Thought.
      * @param chunk The raw chunk of thought just generated.
-     * @param accumulatedThought The full reasoning generated so far.
      * @param modelType The type of model used to generate this chunk.
      */
-    data class Thinking(val chunk: String, val accumulatedThought: String, val modelType: ModelType) : InferenceEvent
+    data class Thinking(val chunk: String, val modelType: ModelType) : InferenceEvent
 
     /**
      * Emitted when the model is generating the actual user-facing response.
@@ -52,12 +51,10 @@ sealed interface InferenceEvent {
     data class PartialResponse(val chunk: String, val modelType: ModelType) : InferenceEvent
 
     /**
-     * Emitted when generation is completely finished.
-     * @param finalResponse The full generated response.
-     * @param rawFullThought The full reasoning generated.
-     * @param modelType The type of model used to generate this response.
+     * Emitted when the generation is complete.
+     * @param modelType The type of model used to generate this chunk.
      */
-    data class Completed(val finalResponse: String, val rawFullThought: String?, val modelType: ModelType) : InferenceEvent
+    data class Finished(val modelType: ModelType) : InferenceEvent
 
     /**
      * Emitted when generation is blocked by safety checks.

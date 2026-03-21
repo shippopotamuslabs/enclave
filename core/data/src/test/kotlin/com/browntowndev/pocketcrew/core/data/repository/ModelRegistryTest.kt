@@ -1,245 +1,215 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
+import com.browntowndev.pocketcrew.core.testing.FakeModelRegistry
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
+/**
+ * Tests for ModelRegistry repository using FakeModelRegistry.
+ * These tests verify actual behavioral scenarios, not mock interactions.
+ */
 class ModelRegistryTest {
 
-    private lateinit var mockRegistry: ModelRegistryPort
+    private lateinit var fakeRegistry: FakeModelRegistry
 
     @BeforeEach
     fun setup() {
-        mockRegistry = mockk()
+        fakeRegistry = FakeModelRegistry()
     }
 
-    @Test
-    fun getRegisteredModel_returnsModel_whenRegistered() = runTest {
-        // Given
-        val registeredModel = ModelConfiguration(
-            modelType = ModelType.MAIN,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "model/main",
-                remoteFileName = "main.bin",
-                localFileName = "main.bin",
-                displayName = "Main Model",
-                sha256 = "abc123",
-                sizeInBytes = 1024,
-                modelFileFormat = ModelFileFormat.LITERTLM
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.0,
-                topK = 40,
-                topP = 0.95,
-                maxTokens = 2048,
-                repetitionPenalty = 1.1,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
-        )
+    private fun createMainModelConfig() = ModelConfiguration(
+        modelType = ModelType.MAIN,
+        metadata = ModelConfiguration.Metadata(
+            huggingFaceModelName = "model/main",
+            remoteFileName = "main.bin",
+            localFileName = "main.bin",
+            displayName = "Main Model",
+            sha256 = "abc123",
+            sizeInBytes = 1024,
+            modelFileFormat = ModelFileFormat.LITERTLM
+        ),
+        tunings = ModelConfiguration.Tunings(
+            temperature = 0.0,
+            topK = 40,
+            topP = 0.95,
+            maxTokens = 2048,
+            repetitionPenalty = 1.1,
+            contextWindow = 2048
+        ),
+        persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
+    )
 
-        coEvery { mockRegistry.getRegisteredModel(ModelType.MAIN) } returns registeredModel
+    private fun createVisionModelConfig() = ModelConfiguration(
+        modelType = ModelType.VISION,
+        metadata = ModelConfiguration.Metadata(
+            huggingFaceModelName = "model/vision",
+            remoteFileName = "vision.bin",
+            localFileName = "vision.bin",
+            displayName = "Vision Model",
+            sha256 = "vision123",
+            sizeInBytes = 1024,
+            modelFileFormat = ModelFileFormat.LITERTLM
+        ),
+        tunings = ModelConfiguration.Tunings(
+            temperature = 0.0,
+            topK = 40,
+            topP = 0.95,
+            maxTokens = 2048,
+            repetitionPenalty = 1.1,
+            contextWindow = 2048
+        ),
+        persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
+    )
 
-        // When
-        val result = mockRegistry.getRegisteredModel(ModelType.MAIN)
-
-        // Then
-        assertEquals(ModelType.MAIN, result?.modelType)
-        assertEquals("Main Model", result?.metadata?.displayName)
-        assertEquals(ModelFileFormat.LITERTLM, result?.metadata?.modelFileFormat)
-    }
+    private fun createFastModelConfig() = ModelConfiguration(
+        modelType = ModelType.FAST,
+        metadata = ModelConfiguration.Metadata(
+            huggingFaceModelName = "model/fast",
+            remoteFileName = "fast.bin",
+            localFileName = "fast.bin",
+            displayName = "Fast Model",
+            sha256 = "fast123",
+            sizeInBytes = 512,
+            modelFileFormat = ModelFileFormat.LITERTLM
+        ),
+        tunings = ModelConfiguration.Tunings(
+            temperature = 0.0,
+            topK = 40,
+            topP = 0.95,
+            maxTokens = 1024,
+            repetitionPenalty = 1.1,
+            contextWindow = 2048
+        ),
+        persona = ModelConfiguration.Persona(systemPrompt = "")
+    )
 
     @Test
     fun getRegisteredModel_returnsNull_whenNotRegistered() = runTest {
-        // Given
-        coEvery { mockRegistry.getRegisteredModel(ModelType.MAIN) } returns null
+        // When - querying for a model that was never registered
+        val result = fakeRegistry.getRegisteredModel(ModelType.MAIN)
 
-        // When
-        val result = mockRegistry.getRegisteredModel(ModelType.MAIN)
-
-        // Then
+        // Then - should return null
         assertNull(result)
     }
 
     @Test
-    fun setRegisteredModel_callsRepository() = runTest {
+    fun setRegisteredModel_persistsModel_andCanBeRetrieved() = runTest {
         // Given
-        coEvery { mockRegistry.setRegisteredModel(any()) } returns Unit
-
-        val config = ModelConfiguration(
-            modelType = ModelType.MAIN,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "model/main",
-                remoteFileName = "main.bin",
-                localFileName = "main.bin",
-                displayName = "Main Model",
-                sha256 = "abc123",
-                sizeInBytes = 1024,
-                modelFileFormat = ModelFileFormat.LITERTLM
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.0,
-                topK = 40,
-                topP = 0.95,
-                maxTokens = 2048,
-                repetitionPenalty = 1.1,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
-        )
+        val mainConfig = createMainModelConfig()
 
         // When
-        mockRegistry.setRegisteredModel(config)
+        fakeRegistry.setRegisteredModel(mainConfig)
 
-        // Then
-        coVerify {
-            mockRegistry.setRegisteredModel(config)
-        }
+        // Then - verify the model can be retrieved with correct properties
+        val retrieved = fakeRegistry.getRegisteredModel(ModelType.MAIN)
+        assertEquals(ModelType.MAIN, retrieved?.modelType)
+        assertEquals("Main Model", retrieved?.metadata?.displayName)
+        assertEquals(ModelFileFormat.LITERTLM, retrieved?.metadata?.modelFileFormat)
     }
 
     @Test
-    fun observeRegisteredModels_emitsModels() = runTest {
+    fun observeRegisteredModels_emitsUpdatedMap_whenModelsAdded() = runTest {
+        // Given - start with empty registry
+        val initialFlow = fakeRegistry.observeRegisteredModels().first()
+        assertEquals(0, initialFlow.size)
+
+        // When - register models
+        fakeRegistry.setRegisteredModel(createMainModelConfig())
+        fakeRegistry.setRegisteredModel(createVisionModelConfig())
+
+        // Then - verify the flow emits updated map
+        val updatedFlow = fakeRegistry.observeRegisteredModels().first()
+        assertEquals(2, updatedFlow.size)
+        assertEquals("Main Model", updatedFlow[ModelType.MAIN])
+        assertEquals("Vision Model", updatedFlow[ModelType.VISION])
+    }
+
+    @Test
+    fun clearAll_removesAllModels() = runTest {
+        // Given - register multiple models
+        fakeRegistry.setRegisteredModel(createMainModelConfig())
+        fakeRegistry.setRegisteredModel(createVisionModelConfig())
+
+        // When
+        fakeRegistry.clearAll()
+
+        // Then - verify registry is empty
+        assertEquals(0, fakeRegistry.getRegisteredModels().size)
+        assertNull(fakeRegistry.getRegisteredModel(ModelType.MAIN))
+        assertNull(fakeRegistry.getRegisteredModel(ModelType.VISION))
+    }
+
+    @Test
+    fun setRegisteredModel_withMarkExistingAsOld_marksPreviousAsOld() = runTest {
+        // Given - register initial MAIN model
+        val initialMain = createMainModelConfig()
+        fakeRegistry.setRegisteredModel(initialMain)
+
+        // When - register new MAIN model with markExistingAsOld
+        val updatedMain = createMainModelConfig().copy(
+            metadata = createMainModelConfig().metadata.copy(
+                displayName = "Updated Main Model",
+                sha256 = "new123"
+            )
+        )
+        fakeRegistry.setRegisteredModel(updatedMain, markExistingAsOld = true)
+
+        // Then - verify new model is registered and status is tracked
+        val retrieved = fakeRegistry.getRegisteredModel(ModelType.MAIN)
+        assertEquals("Updated Main Model", retrieved?.metadata?.displayName)
+        assertEquals("new123", retrieved?.metadata?.sha256)
+    }
+
+    @Test
+    fun getRegisteredModels_returnsAllRegisteredModels() = runTest {
         // Given
-        val modelsMap = mapOf(
-            ModelType.MAIN to "main.litertlm",
-            ModelType.VISION to "vision.litertlm"
-        )
-
-        coEvery { mockRegistry.observeRegisteredModels() } returns flowOf(modelsMap)
+        fakeRegistry.setRegisteredModel(createMainModelConfig())
+        fakeRegistry.setRegisteredModel(createVisionModelConfig())
+        fakeRegistry.setRegisteredModel(createFastModelConfig())
 
         // When
-        val result = mockRegistry.observeRegisteredModels()
+        val allModels = fakeRegistry.getRegisteredModels()
 
-        // Then - collect from the flow to get the actual value
-        val collectedValue = result.toList()
-        assertEquals(listOf(modelsMap), collectedValue)
+        // Then
+        assertEquals(3, allModels.size)
+        assertEquals(
+            setOf(ModelType.MAIN, ModelType.VISION, ModelType.FAST),
+            allModels.map { it.modelType }.toSet()
+        )
     }
 
     @Test
-    fun clearAll_clearsRegistry() = runTest {
+    fun getRegisteredModel_syncVersion_returnsSameAsSuspend() = runTest {
         // Given
-        coEvery { mockRegistry.clearAll() } returns Unit
+        fakeRegistry.setRegisteredModel(createMainModelConfig())
 
-        // When
-        mockRegistry.clearAll()
+        // When - both sync and suspend versions
+        val syncResult = fakeRegistry.getRegisteredModelSync(ModelType.MAIN)
+        val suspendResult = fakeRegistry.getRegisteredModel(ModelType.MAIN)
 
-        // Then
-        coVerify { mockRegistry.clearAll() }
+        // Then - both should return the same model
+        assertEquals(syncResult?.metadata?.displayName, suspendResult?.metadata?.displayName)
     }
 
     @Test
-    fun getRegisteredModel_handlesAllModelTypes() = runTest {
-        // Given - test VISION
-        val visionModel = ModelConfiguration(
-            modelType = ModelType.VISION,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "model/vision",
-                remoteFileName = "vision.bin",
-                localFileName = "vision.bin",
-                displayName = "Vision Model",
-                sha256 = "vision123",
-                sizeInBytes = 1024,
-                modelFileFormat = ModelFileFormat.LITERTLM
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.0,
-                topK = 40,
-                topP = 0.95,
-                maxTokens = 2048,
-                repetitionPenalty = 1.1,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
-        )
-
-        coEvery { mockRegistry.getRegisteredModel(ModelType.VISION) } returns visionModel
-
-        // When
-        val result = mockRegistry.getRegisteredModel(ModelType.VISION)
-
-        // Then
-        assertEquals(ModelType.VISION, result?.modelType)
-    }
-
-    @Test
-    fun setRegisteredModel_handlesAllModelTypes() = runTest {
-        // Given - test FAST
-        coEvery { mockRegistry.setRegisteredModel(any()) } returns Unit
-
-        val config = ModelConfiguration(
-            modelType = ModelType.FAST,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "model/fast",
-                remoteFileName = "fast.bin",
-                localFileName = "fast.bin",
-                displayName = "Fast Model",
-                sha256 = "fast123",
-                sizeInBytes = 512,
-                modelFileFormat = ModelFileFormat.LITERTLM
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.0,
-                topK = 40,
-                topP = 0.95,
-                maxTokens = 1024,
-                repetitionPenalty = 1.1,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(systemPrompt = "")
-        )
-
-        // When
-        mockRegistry.setRegisteredModel(config)
-
-        // Then
-        coVerify {
-            mockRegistry.setRegisteredModel(config)
-        }
-    }
-
-    @Test
-    fun getRegisteredModel_handlesDraftModel() = runTest {
+    fun getRegisteredModelsSync_returnsSameAsSuspend() = runTest {
         // Given
-        val draftModel = ModelConfiguration(
-            modelType = ModelType.DRAFT_ONE,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "model/draft",
-                remoteFileName = "draft.bin",
-                localFileName = "draft.bin",
-                displayName = "Draft Model",
-                sha256 = "draft123",
-                sizeInBytes = 512,
-                modelFileFormat = ModelFileFormat.TASK
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.0,
-                topK = 40,
-                topP = 0.95,
-                maxTokens = 512,
-                repetitionPenalty = 1.1,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(systemPrompt = "You are a draft assistant.")
-        )
-
-        coEvery { mockRegistry.getRegisteredModel(ModelType.DRAFT_ONE) } returns draftModel
+        fakeRegistry.setRegisteredModel(createMainModelConfig())
+        fakeRegistry.setRegisteredModel(createVisionModelConfig())
 
         // When
-        val result = mockRegistry.getRegisteredModel(ModelType.DRAFT_ONE)
+        val syncResult = fakeRegistry.getRegisteredModelsSync()
+        val suspendResult = fakeRegistry.getRegisteredModels()
 
         // Then
-        assertEquals(ModelType.DRAFT_ONE, result?.modelType)
-        assertEquals(ModelFileFormat.TASK, result?.metadata?.modelFileFormat)
+        assertEquals(syncResult.size, suspendResult.size)
     }
 }

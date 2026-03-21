@@ -65,7 +65,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                         val cleanText = chunkText.replace("<think>", "")
                         if (cleanText.isNotEmpty()) {
                             accumulatedThought.append(cleanText)
-                            trySend(InferenceEvent.Thinking(cleanText, accumulatedThought.toString(), modelType))
+                            trySend(InferenceEvent.Thinking(cleanText, modelType))
                         }
                     } else if (chunkText.contains("</think>")) {
                         isThinkingPhase = false
@@ -76,7 +76,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                         }
                     } else if (isThinkingPhase) {
                         accumulatedThought.append(chunkText)
-                        trySend(InferenceEvent.Thinking(chunkText, accumulatedThought.toString(), modelType))
+                        trySend(InferenceEvent.Thinking(chunkText, modelType))
                     } else {
                         accumulatedText.append(chunkText)
                         trySend(InferenceEvent.PartialResponse(chunkText, modelType))
@@ -84,13 +84,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                 }
 
                 if (done) {
-                    trySend(
-                        InferenceEvent.Completed(
-                            finalResponse = accumulatedText.toString(),
-                            rawFullThought = accumulatedThought.toString().takeIf { it.isNotEmpty() },
-                            modelType = modelType
-                        )
-                    )
+                    trySend(InferenceEvent.Finished(modelType))
                     close()
                 }
             }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -240,6 +241,7 @@ private fun StepCompletionBottomSheet(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
                     .navigationBarsPadding()
+                    .statusBarsPadding()
                     .verticalScroll(rememberScrollState())
             ) {
                 // Header with step name
@@ -265,17 +267,12 @@ private fun StepCompletionBottomSheet(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Step output content
-                SelectionContainer {
-                    Text(
-                        text = stepOutput,
-                        style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f)
-                    )
-                }
+                StreamableMarkdownText(
+                    modifier = Modifier.fillMaxWidth(),
+                    markdown = stepOutput,
+                    isStreaming = true,
+                    enableScroll = false,
+                )
 
                 Spacer(modifier = Modifier.height(32.dp))
             }
