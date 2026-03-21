@@ -111,7 +111,7 @@ class ChatRepositoryImpl @Inject constructor(
 
     /**
      * Persists all message data atomically in a single transaction.
-     * Updates model type, thinking timestamps, thinking content, content, and state.
+     * Updates model type, thinking timestamps, thinking content, content, pipeline step, and state.
      */
     override suspend fun persistAllMessageData(
         messageId: Long,
@@ -121,7 +121,8 @@ class ChatRepositoryImpl @Inject constructor(
         thinkingDuration: Int?,
         thinkingRaw: String?,
         content: String,
-        messageState: MessageState
+        messageState: MessageState,
+        pipelineStep: PipelineStep?
     ) {
         messageDao.persistAllMessageData(
             messageId = messageId,
@@ -131,7 +132,8 @@ class ChatRepositoryImpl @Inject constructor(
             thinkingDuration = thinkingDuration,
             thinkingRaw = thinkingRaw,
             content = content,
-            messageState = messageState
+            messageState = messageState,
+            pipelineStep = pipelineStep
         )
     }
 

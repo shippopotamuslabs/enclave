@@ -125,7 +125,7 @@ interface ChatRepository {
 
     /**
      * Persists all message data atomically in a single transaction.
-     * Updates model type, thinking timestamps, thinking content, content, and state.
+     * Updates model type, thinking timestamps, thinking content, content, pipeline step, and state.
      * This is more efficient than calling individual update methods as it minimizes
      * database round trips and ensures atomicity.
      *
@@ -137,6 +137,7 @@ interface ChatRepository {
      * @param thinkingRaw The raw thinking content (null to clear)
      * @param content The final message content
      * @param messageState The final message state
+     * @param pipelineStep The pipeline step (for CREW mode messages)
      */
     suspend fun persistAllMessageData(
         messageId: Long,
@@ -146,7 +147,8 @@ interface ChatRepository {
         thinkingDuration: Int?,
         thinkingRaw: String?,
         content: String,
-        messageState: MessageState
+        messageState: MessageState,
+        pipelineStep: PipelineStep?
     )
 
     /**

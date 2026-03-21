@@ -8,6 +8,7 @@ import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
 @Dao
 abstract class MessageDao {
@@ -82,14 +83,17 @@ abstract class MessageDao {
     @Query("UPDATE message SET thinking_raw = :thinkingRaw WHERE id = :messageId")
     abstract suspend fun updateThinkingRaw(messageId: Long, thinkingRaw: String?)
 
+    @Query("UPDATE message SET pipeline_step = :pipelineStep WHERE id = :messageId")
+    abstract suspend fun updateMessagePipelineStep(messageId: Long, pipelineStep: PipelineStep?)
+
     open suspend fun insertMessageWithSearch(messageEntity: MessageEntity): Long {
         return insertMessage(messageEntity)
     }
 
     /**
      * Persists all message data atomically in a single transaction.
-     * Updates model type, thinking timestamps, thinking content, content, and state.
-     * 
+     * Updates model type, thinking timestamps, thinking content, content, pipeline step, and state.
+     *
      * @param messageId The ID of the message to update
      * @param modelType The model type used
      * @param thinkingStartTime The thinking start timestamp (0 if not applicable)
@@ -98,6 +102,7 @@ abstract class MessageDao {
      * @param thinkingRaw The raw thinking content (null to clear)
      * @param content The final message content
      * @param messageState The final message state
+     * @param pipelineStep The pipeline step (for CREW mode messages)
      */
     @Transaction
     open suspend fun persistAllMessageData(
@@ -108,7 +113,8 @@ abstract class MessageDao {
         thinkingDuration: Int?,
         thinkingRaw: String?,
         content: String,
-        messageState: MessageState
+        messageState: MessageState,
+        pipelineStep: PipelineStep?
     ) {
         // Update model type
         updateMessageModelType(messageId, modelType)
@@ -128,6 +134,8 @@ abstract class MessageDao {
         updateThinkingRaw(messageId, thinkingRaw)
         // Update content
         updateMessageContentText(messageId, content)
+        // Update pipeline step
+        updateMessagePipelineStep(messageId, pipelineStep)
         // Update state
         updateMessageState(messageId, messageState)
     }

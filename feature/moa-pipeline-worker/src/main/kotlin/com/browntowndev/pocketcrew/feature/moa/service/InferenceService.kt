@@ -57,9 +57,9 @@ class InferenceService : Service() {
 
         // Broadcast actions for progress updates
         const val BROADCAST_PROGRESS = "com.browntowndev.pocketcrew.inference.BROADCAST_PROGRESS"
-        const val BROADCAST_COMPLETE = "com.browntowndev.pocketcrew.inference.BROADCAST_COMPLETE"
         const val BROADCAST_ERROR = "com.browntowndev.pocketcrew.inference.BROADCAST_ERROR"
         const val BROADCAST_STEP_COMPLETED = "com.browntowndev.pocketcrew.inference.BROADCAST_STEP_COMPLETED"
+        const val BROADCAST_STEP_STARTED = "com.browntowndev.pocketcrew.inference.BROADCAST_STEP_STARTED"
 
         // Intent extras for broadcasts
         const val EXTRA_THINKING_CHUNK = "thinking_chunk"
@@ -71,13 +71,8 @@ class InferenceService : Service() {
 
         // Step completion extras
         const val EXTRA_STEP_NAME = "step_name"
-        const val EXTRA_STEP_DURATION = "step_duration"
-        const val EXTRA_STEP_TOTAL_DURATION = "step_total_duration"
-        const val EXTRA_STEP_THINKING_STEPS = "step_thinking_steps"
         const val EXTRA_STEP_MODEL_DISPLAY_NAME = "step_model_display_name"
         const val EXTRA_STEP_TYPE = "step_type"
-        const val EXTRA_MESSAGE_ID = "message_id"
-        const val EXTRA_IS_FINAL_STEP = "is_final_step"
     }
 
     @Inject
@@ -168,15 +163,11 @@ class InferenceService : Service() {
         )
 
         // Start foreground with specialUse type
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                notificationId,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(notificationId, notification)
-        }
+        startForeground(
+            notificationId,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        )
 
         isRunning = true
 
@@ -316,23 +307,19 @@ class InferenceService : Service() {
             val service = serviceGetter()
                 ?: throw IllegalStateException("Service not available for step: $currentStep")
 
-            val stepStartTime = System.currentTimeMillis()
             val prompt = buildPromptForStep(currentState)
-            val result = executeStepForPipeline(service, prompt, currentStep) { _ ->
-                // Callback - timing now handled in PipelineExecutor
-            }
-            val stepDuration = ((System.currentTimeMillis() - stepStartTime) / 1000).toInt()
 
-            logger.info(TAG, "${currentStep.name} Response: ${result.output}, totalDuration=${stepDuration}s")
+            // Broadcast step started BEFORE model begins generation
+            // This ensures ProcessingIndicator appears immediately in UI
+            val modelType = getModelTypeForStep(currentStep)
+            broadcastStepStarted(modelType)
+
+            val result = executeStepForPipeline(service, prompt, currentStep)
+
+            logger.info(TAG, "${currentStep.name} Response: ${result.output}")
 
             // Store output
             currentState = currentState.withStepOutput(currentStep, result.output)
-
-            // Broadcast step output FIRST - for all steps (to trigger GENERATING state in ViewModel)
-            // For FINAL step, this also streams the text to the UI
-            val isFinalStep = currentStep == PipelineStep.FINAL
-            val modelType = getModelTypeForStep(currentStep)
-            broadcastComplete(result.output, isFinalStep, modelType)
 
             // Broadcast step completion SECOND for ALL steps (including non-FINAL)
             // This must come AFTER broadcastComplete so that StepCompleted sets responseState to PROCESSING
@@ -340,9 +327,6 @@ class InferenceService : Service() {
             // Note: thinkingDurationSeconds is calculated in PipelineExecutor from actual timing
             broadcastStepCompleted(
                 stepName = currentStep.displayName(),
-                stepOutput = result.output,
-                thinkingDurationSeconds = 0,  // Calculated in PipelineExecutor
-                totalDurationSeconds = stepDuration,  // Total time (for BottomSheet)
                 modelDisplayName = getModelDisplayNameForStep(currentStep),
                 modelType = getModelTypeForStep(currentStep),
                 stepType = currentStep
@@ -369,41 +353,26 @@ class InferenceService : Service() {
 
     /**
      * Executes a single step for the pipeline (closes session after each step to free memory).
-     * @param onFirstPartialResponse Callback invoked when first visible text arrives (thinking ends)
      */
     private suspend fun executeStepForPipeline(
         service: LlmInferencePort,
         prompt: String,
         step: PipelineStep,
-        onFirstPartialResponse: (Boolean) -> Unit = {}
     ): StepResult {
         var output = ""
-        var isFirstPartialResponse = true
 
         try {
             service.sendPrompt(prompt, closeConversation = false).collect { event ->
                 when (event) {
                     is InferenceEvent.Thinking -> {
-                        // Broadcast true thinking from model - NOT the response
                         broadcastProgress(EXTRA_THINKING_CHUNK, event.chunk, getModelTypeForStep(step).name)
                     }
                     is InferenceEvent.PartialResponse -> {
-                        // Collect text for final output step
-                        if (step == PipelineStep.FINAL) {
-                            output += event.chunk
-                        }
-                        // FIX: Also broadcast partial response for ALL steps so UI shows "Generating..." indicator
-                        // For non-FINAL steps, this triggers the GENERATING state in ViewModel
+                        output += event.chunk
                         broadcastProgress(EXTRA_STEP_OUTPUT, event.chunk, getModelTypeForStep(step).name)
-                        // Notify when first visible text arrives (thinking has ended)
-                        if (isFirstPartialResponse) {
-                            isFirstPartialResponse = false
-                            onFirstPartialResponse(true)
-                        }
                     }
-                    is InferenceEvent.Completed -> {
-                        output = event.finalResponse
-                        // Don't broadcast thinking here - thinking only comes from InferenceEvent.Thinking events
+                    is InferenceEvent.Finished -> {
+                        // Ignore. StepCompleted signifies completion for pipeline steps & is detected by flow finishing
                     }
                     is InferenceEvent.SafetyBlocked -> {
                         throw SecurityException("Content blocked: ${event.reason}")
@@ -437,40 +406,35 @@ class InferenceService : Service() {
     }
 
     /**
-     * Broadcasts completion with final response.
-     */
-    private fun broadcastComplete(finalResponse: String, isFinalStep: Boolean, modelType: ModelType) {
-        val intent = Intent(BROADCAST_COMPLETE).apply {
-            putExtra(EXTRA_FINAL_RESPONSE, finalResponse)
-            putExtra(EXTRA_IS_FINAL_STEP, isFinalStep)
-            putExtra(EXTRA_MODEL_TYPE, modelType.name)
-            setPackage(packageName)
-        }
-        sendBroadcast(intent)
-    }
-
-    /**
      * Broadcasts step completion for Crew mode progress display.
-     * @param thinkingDurationSeconds Thinking time only (for "Thought For Xs")
-     * @param totalDurationSeconds Total step time (thinking + generation, for BottomSheet)
+     * @param stepName Name of the step
+     * @param modelDisplayName Name of the model used for this step
+     * @param modelType Type of the model used for this step
+     * @param stepType Type of the step
      */
     private fun broadcastStepCompleted(
         stepName: String,
-        stepOutput: String,
-        thinkingDurationSeconds: Int,
-        totalDurationSeconds: Int,
         modelDisplayName: String,
         modelType: ModelType,
         stepType: PipelineStep
     ) {
         val intent = Intent(BROADCAST_STEP_COMPLETED).apply {
             putExtra(EXTRA_STEP_NAME, stepName)
-            putExtra(EXTRA_STEP_OUTPUT, stepOutput)
-            putExtra(EXTRA_STEP_DURATION, thinkingDurationSeconds)
-            putExtra(EXTRA_STEP_TOTAL_DURATION, totalDurationSeconds)
             putExtra(EXTRA_STEP_MODEL_DISPLAY_NAME, modelDisplayName)
             putExtra(EXTRA_MODEL_TYPE, modelType.name)
             putExtra(EXTRA_STEP_TYPE, stepType.name)
+            setPackage(packageName)
+        }
+        sendBroadcast(intent)
+    }
+
+    /**
+     * Broadcasts that a new pipeline step has started.
+     * Called BEFORE model.sendPrompt() to show ProcessingIndicator immediately.
+     */
+    private fun broadcastStepStarted(modelType: ModelType) {
+        val intent = Intent(BROADCAST_STEP_STARTED).apply {
+            putExtra(EXTRA_MODEL_TYPE, modelType.name)
             setPackage(packageName)
         }
         sendBroadcast(intent)

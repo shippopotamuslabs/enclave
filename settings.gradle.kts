@@ -30,6 +30,7 @@ include(":llama-android")
 include(":core:domain")
 include(":core:data")
 include(":core:ui")
+include(":core:testing")
 
 // Feature modules
 include(":feature:chat")

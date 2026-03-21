@@ -7,24 +7,24 @@ import kotlin.math.max
  * Streaming parser for mixed visible assistant text and hidden thinking text.
  *
  * Supports:
- * 1) Interleaved visible text + <think>...</think> blocks
+ * 1) Interleaved visible text + <think>...</think> blocks (and other token types like [THINK])
  * 2) Standard "all thinking first, then answer" flows
  * 3) Tokens split across chunk boundaries
  *
  * Example:
- *   "Hello <thi" + "nk>reasoning</th" + "ink> world"
+ * "Hello <thi" + "nk>reasoning</th" + "ink> world"
  *
  * Output:
- *   VISIBLE("Hello ")
- *   THINKING("reasoning")
- *   VISIBLE(" world")
+ * VISIBLE("Hello ")
+ * THINKING("reasoning")
+ * VISIBLE(" world")
  */
 class ProcessThinkingTokensUseCase @Inject constructor() {
 
     companion object {
-        private const val START_TOKEN = "<think>"
-        private const val END_TOKEN = "</think>"
-        private val TOKENS = listOf(START_TOKEN, END_TOKEN)
+        private val START_TOKENS = listOf("<think>", "[THINK]")
+        private val END_TOKENS = listOf("</think>", "[/THINK]")
+        private val ALL_TOKENS = START_TOKENS + END_TOKENS
     }
 
     /**
@@ -46,9 +46,27 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
         val emitted = mutableListOf<EmittedSegment>()
 
         while (buffer.isNotEmpty()) {
-            // Find the earliest token occurrence (regardless of current thinking state)
-            val startIdx = buffer.indexOf(START_TOKEN)
-            val endIdx = buffer.indexOf(END_TOKEN)
+            // Find the earliest start token occurrence (regardless of current thinking state)
+            var startIdx = -1
+            var matchedStartToken = ""
+            for (token in START_TOKENS) {
+                val idx = buffer.indexOf(token)
+                if (idx >= 0 && (startIdx == -1 || idx < startIdx)) {
+                    startIdx = idx
+                    matchedStartToken = token
+                }
+            }
+
+            // Find the earliest end token occurrence
+            var endIdx = -1
+            var matchedEndToken = ""
+            for (token in END_TOKENS) {
+                val idx = buffer.indexOf(token)
+                if (idx >= 0 && (endIdx == -1 || idx < endIdx)) {
+                    endIdx = idx
+                    matchedEndToken = token
+                }
+            }
 
             when {
                 // Both tokens present - process the first one found
@@ -62,7 +80,7 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
                             )
                         }
                         thinking = true
-                        buffer = buffer.substring(startIdx + START_TOKEN.length)
+                        buffer = buffer.substring(startIdx + matchedStartToken.length)
                     } else {
                         // End token comes first
                         if (endIdx > 0) {
@@ -78,7 +96,7 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
                             )
                         }
                         thinking = false
-                        buffer = buffer.substring(endIdx + END_TOKEN.length)
+                        buffer = buffer.substring(endIdx + matchedEndToken.length)
                     }
                 }
                 // Only start token
@@ -90,7 +108,7 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
                         )
                     }
                     thinking = true
-                    buffer = buffer.substring(startIdx + START_TOKEN.length)
+                    buffer = buffer.substring(startIdx + matchedStartToken.length)
                 }
                 // Only end token
                 endIdx >= 0 -> {
@@ -106,7 +124,7 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
                         )
                     }
                     thinking = false
-                    buffer = buffer.substring(endIdx + END_TOKEN.length)
+                    buffer = buffer.substring(endIdx + matchedEndToken.length)
                 }
                 // No complete tokens - check for partial tokens
                 else -> {
@@ -143,12 +161,12 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
      * - "hello"      -> ""
      */
     private fun longestPossibleTokenPrefixSuffix(text: String): String {
-        val maxTokenLength = TOKENS.maxOf { it.length }
+        val maxTokenLength = ALL_TOKENS.maxOf { it.length }
         val start = max(0, text.length - maxTokenLength + 1)
 
         for (i in start until text.length) {
             val suffix = text.substring(i)
-            if (TOKENS.any { token -> token.startsWith(suffix) }) {
+            if (ALL_TOKENS.any { token -> token.startsWith(suffix) }) {
                 return suffix
             }
         }

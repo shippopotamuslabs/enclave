@@ -3,7 +3,7 @@ package com.browntowndev.pocketcrew.domain.usecase
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
-import com.browntowndev.pocketcrew.domain.usecase.chat.MessageGenerationState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -58,6 +58,14 @@ class FakePipelineExecutor : PipelineExecutorPort {
     }
     
     /**
+     * Add a Processing event to be emitted.
+     * Used to simulate a step starting (before thinking/generation).
+     */
+    fun addProcessingEvent(modelType: ModelType = ModelType.DRAFT_ONE) {
+        eventsToEmit.add(MessageGenerationState.Processing(modelType))
+    }
+    
+    /**
      * Add a ThinkingLive event to be emitted.
      */
     fun addThinkingLiveEvent(chunk: String, modelType: ModelType = ModelType.DRAFT_ONE) {
@@ -76,9 +84,6 @@ class FakePipelineExecutor : PipelineExecutorPort {
      */
     fun addStepCompletedEvent(
         stepOutput: String,
-        thinkingDurationSeconds: Int,
-        totalDurationSeconds: Int = thinkingDurationSeconds,
-        thinkingRaw: String,
         modelDisplayName: String,
         modelType: ModelType = ModelType.DRAFT_ONE,
         stepType: PipelineStep = PipelineStep.DRAFT_ONE
@@ -86,9 +91,6 @@ class FakePipelineExecutor : PipelineExecutorPort {
         eventsToEmit.add(
             MessageGenerationState.StepCompleted(
                 stepOutput = stepOutput,
-                thinkingDurationSeconds = thinkingDurationSeconds,
-                totalDurationSeconds = totalDurationSeconds,
-                thinkingRaw = thinkingRaw,
                 modelDisplayName = modelDisplayName,
                 modelType = modelType,
                 stepType = stepType
@@ -122,45 +124,43 @@ class FakePipelineExecutor : PipelineExecutorPort {
      */
     fun configureCompleteCrewPipeline() {
         eventsToEmit.clear()
-        
+
         // DRAFT_ONE
+        addProcessingEvent(ModelType.DRAFT_ONE)
         addThinkingLiveEvent("# Analyzing the problem...\n", ModelType.DRAFT_ONE)
         addThinkingLiveEvent("Let me break this down step by step.", ModelType.DRAFT_ONE)
         addGeneratingTextEvent("Here is my first approach:", ModelType.DRAFT_ONE)
         addStepCompletedEvent(
             stepOutput = "First approach completed.",
-            thinkingDurationSeconds = 5,
-            thinkingRaw = "## Analysis\n\nStep 1: Understanding\nStep 2: Planning\nStep 3: Implementation",
             modelDisplayName = "Draft One",
             modelType = ModelType.DRAFT_ONE,
             stepType = PipelineStep.DRAFT_ONE
         )
-        
+
         // DRAFT_TWO
+        addProcessingEvent(ModelType.DRAFT_TWO)
         addThinkingLiveEvent("# Alternative approach...\n", ModelType.DRAFT_TWO)
         addGeneratingTextEvent("Let me try a different angle:", ModelType.DRAFT_TWO)
         addStepCompletedEvent(
             stepOutput = "Alternative approach completed.",
-            thinkingDurationSeconds = 4,
-            thinkingRaw = "## Alternative\n\nDifferent perspective...",
             modelDisplayName = "Draft Two",
             modelType = ModelType.DRAFT_TWO,
             stepType = PipelineStep.DRAFT_TWO
         )
-        
+
         // SYNTHESIS
+        addProcessingEvent(ModelType.MAIN)
         addThinkingLiveEvent("# Combining insights...\n", ModelType.MAIN)
         addGeneratingTextEvent("Combining both approaches:", ModelType.MAIN)
         addStepCompletedEvent(
             stepOutput = "Synthesis completed.",
-            thinkingDurationSeconds = 3,
-            thinkingRaw = "## Synthesis\n\nBest of both worlds...",
             modelDisplayName = "Main",
             modelType = ModelType.MAIN,
             stepType = PipelineStep.SYNTHESIS
         )
-        
+
         // FINAL
+        addProcessingEvent(ModelType.FINAL_SYNTHESIS)
         addThinkingLiveEvent("# Final review...\n", ModelType.FINAL_SYNTHESIS)
         addGeneratingTextEvent("Final response:\n\n", ModelType.FINAL_SYNTHESIS)
         addFinishedEvent(ModelType.FINAL_SYNTHESIS)

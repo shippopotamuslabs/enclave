@@ -157,6 +157,7 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
     testImplementation(project(":core:data"))
+    testImplementation(project(":core:testing"))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.mockk)

@@ -17,6 +17,8 @@
 package com.browntowndev.pocketcrew.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
+import app.cash.turbine.test
+import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
@@ -27,33 +29,25 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
 /**
- * Tests for ChatViewModel's computeIndicatorState function.
+ * Tests for ChatViewModel's mapping logic.
  *
  * These tests verify that the indicator state is correctly computed from
  * domain messages, especially handling nullable duration during THINKING state.
  *
+ * Uses MainDispatcherRule per Golden Reference pattern.
+ *
  * REF: Bug fix - thinkingDurationSeconds was requireNotNull'd but never set during THINKING state
  */
 class ChatViewModelTest {
-
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    @BeforeEach
-    fun setupDispatcher() {
-        Dispatchers.setMain(StandardTestDispatcher())
-    }
 
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var settingsUseCases: SettingsUseCases
@@ -268,5 +262,53 @@ class ChatViewModelTest {
         assertNotNull(chatMessage.indicatorState)
         val completeState = chatMessage.indicatorState as IndicatorState.Complete
         assertNull(completeState.thinkingData)
+    }
+
+    // ========================================================================
+    // Test: pipelineStep is propagated from Message to ChatMessage
+    // ========================================================================
+
+    @Test
+    fun `mapToChatMessage propagates pipelineStep from Message to ChatMessage`() = runTest {
+        // Given: A message with pipelineStep set
+        val expectedPipelineStep = PipelineStep.DRAFT_ONE
+
+        val message = Message(
+            id = 2L,
+            chatId = 1L,
+            content = Content(text = "Response content", pipelineStep = expectedPipelineStep),
+            role = Role.ASSISTANT,
+            messageState = MessageState.GENERATING,
+            thinkingDurationSeconds = 5L,
+            thinkingRaw = "Raw thought"
+        )
+
+        // When: Map to ChatMessage
+        val chatMessage = chatViewModel.mapToChatMessageForTesting(message)
+
+        // Then: pipelineStep should be propagated
+        assertEquals(
+            expectedPipelineStep,
+            chatMessage.content.pipelineStep,
+            "pipelineStep should be propagated from Message to ChatMessage"
+        )
+    }
+
+    @Test
+    fun `mapToChatMessage with null pipelineStep returns null`() = runTest {
+        // Given: A message with null pipelineStep
+        val message = Message(
+            id = 2L,
+            chatId = 1L,
+            content = Content(text = "Response content", pipelineStep = null),
+            role = Role.ASSISTANT,
+            messageState = MessageState.GENERATING
+        )
+
+        // When: Map to ChatMessage
+        val chatMessage = chatViewModel.mapToChatMessageForTesting(message)
+
+        // Then: pipelineStep should be null
+        assertNull(chatMessage.content.pipelineStep, "pipelineStep should be null when not set in Message")
     }
 }

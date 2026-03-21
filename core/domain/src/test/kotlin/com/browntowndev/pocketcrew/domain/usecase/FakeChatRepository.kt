@@ -134,7 +134,8 @@ class FakeChatRepository : ChatRepository {
         thinkingDuration: Int?,
         thinkingRaw: String?,
         content: String,
-        messageState: MessageState
+        messageState: MessageState,
+        pipelineStep: PipelineStep?
     ) {
         // No-op for testing
     }

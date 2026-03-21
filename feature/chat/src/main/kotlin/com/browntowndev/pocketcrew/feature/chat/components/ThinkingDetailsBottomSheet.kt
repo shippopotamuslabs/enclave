@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +56,7 @@ fun ThinkingDetailsBottomSheet(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
                     .navigationBarsPadding()
+                    .statusBarsPadding()
             ) {
                 // Header
                 Row(
@@ -85,10 +87,10 @@ fun ThinkingDetailsBottomSheet(
                 // disable scroll since parent Column with verticalScroll handles scrolling
                 if (thinkingRaw.isNotBlank()) {
                     StreamableMarkdownText(
-                        markdown = thinkingRaw,
                         modifier = Modifier.fillMaxWidth(),
-                        enableScroll = true,
+                        markdown = thinkingRaw,
                         isStreaming = true,
+                        enableScroll = false,
                     )
                 } else {
                     Text(

@@ -42,7 +42,7 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                     when (segment.kind) {
                         SegmentKind.THINKING -> {
                             accumulatedThought.append(segment.text)
-                            emit(InferenceEvent.Thinking(segment.text, accumulatedThought.toString(), modelType))
+                            emit(InferenceEvent.Thinking(segment.text, modelType))
                         }
                         SegmentKind.VISIBLE -> {
                             accumulatedText.append(segment.text)
@@ -56,20 +56,14 @@ class LiteRtInferenceServiceImpl @Inject constructor(
             if (buffer.isNotEmpty()) {
                 if (isThinking) {
                     accumulatedThought.append(buffer)
-                    emit(InferenceEvent.Thinking(buffer, accumulatedThought.toString(), modelType))
+                    emit(InferenceEvent.Thinking(buffer, modelType))
                 } else {
                     accumulatedText.append(buffer)
                     emit(InferenceEvent.PartialResponse(buffer, modelType))
                 }
             }
 
-            emit(
-                InferenceEvent.Completed(
-                    finalResponse = accumulatedText.toString(),
-                    rawFullThought = accumulatedThought.toString().takeIf { it.isNotEmpty() },
-                    modelType = modelType
-                )
-            )
+            emit(InferenceEvent.Finished(modelType))
         } catch (e: Exception) {
             Log.e(TAG, "Error sending prompt", e)
             emit(InferenceEvent.Error(e, modelType))

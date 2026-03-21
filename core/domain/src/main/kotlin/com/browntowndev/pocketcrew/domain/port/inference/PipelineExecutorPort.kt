@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.port.inference
 
+import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
-import com.browntowndev.pocketcrew.domain.usecase.chat.MessageGenerationState
 import kotlinx.coroutines.flow.Flow
 
 /**
