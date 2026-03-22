@@ -311,6 +311,11 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Internal test helper to allow unit tests to verify mapping logic.
+     */
+    internal fun mapToChatMessageForTesting(message: Message): ChatMessage = mapToChatMessage(message)
+
     override fun onCleared() {
         super.onCleared()
         // Cancel any ongoing inference flow

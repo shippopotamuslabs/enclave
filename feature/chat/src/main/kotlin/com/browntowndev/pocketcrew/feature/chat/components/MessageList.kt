@@ -190,7 +190,6 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                     else -> 0
                 }
             },
-            modelDisplayName = modelDisplayName,
             onDismiss = { bottomSheetThinkingRaw = null }
         )
     }

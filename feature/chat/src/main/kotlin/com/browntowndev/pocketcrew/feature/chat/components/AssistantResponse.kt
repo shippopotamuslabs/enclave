@@ -6,26 +6,17 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,11 +56,13 @@ fun AssistantResponse(
     var selectedStepOutput by remember { mutableStateOf("") }
 
     // Show bottom sheet if triggered
-    StepCompletionBottomSheet(
-        isVisible = showStepDetails,
-        stepName = selectedStepName,
-        stepOutput = selectedStepOutput,
-        onDismiss = { showStepDetails = false }
+    DetailBottomSheet(
+        config = DetailBottomSheetConfig.StepCompletion(
+            isVisible = showStepDetails,
+            content = selectedStepOutput,
+            stepName = selectedStepName,
+            onDismiss = { showStepDetails = false }
+        )
     )
 
     Column(modifier = modifier.fillMaxWidth()) {
@@ -216,67 +209,5 @@ private fun CompletedStepRow(
     }
 }
 
-// ── Bottom sheet for step completion details ──
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun StepCompletionBottomSheet(
-    isVisible: Boolean,
-    stepName: String,
-    stepOutput: String,
-    onDismiss: () -> Unit,
-) {
-    if (isVisible) {
-        val sheetState = rememberModalBottomSheetState()
-
-        ModalBottomSheet(
-            onDismissRequest = onDismiss,
-            sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            contentWindowInsets = { WindowInsets.safeDrawing }
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .navigationBarsPadding()
-                    .statusBarsPadding()
-                    .verticalScroll(rememberScrollState())
-            ) {
-                // Header with step name
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = "✓",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "$stepName Output",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 18.sp
-                        ),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                StreamableMarkdownText(
-                    modifier = Modifier.fillMaxWidth(),
-                    markdown = stepOutput,
-                    isStreaming = true,
-                    enableScroll = false,
-                )
-
-                Spacer(modifier = Modifier.height(32.dp))
-            }
-        }
-    }
-}
 
