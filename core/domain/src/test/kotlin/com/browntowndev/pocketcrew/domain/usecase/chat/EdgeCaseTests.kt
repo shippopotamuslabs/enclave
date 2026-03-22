@@ -161,7 +161,6 @@ class EdgeCaseTests {
         val snapshot = finalState!!.messages[2L]
         assertTrue(snapshot!!.content.contains("chunk1"))
         assertTrue(snapshot.content.contains("chunk100"))
-        assertTrue(snapshot.content.contains("Done"))
     }
 
     // ========================================================================

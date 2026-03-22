@@ -381,6 +381,9 @@ class GenerateChatResponseUseCaseTest {
             val fakePipelineExecutor = com.browntowndev.pocketcrew.domain.usecase.FakePipelineExecutor()
             fakePipelineExecutor.addProcessingEvent(modelType)
             
+            val expectedMessageId = if (modelType == ModelType.DRAFT_ONE) 2L else 3L
+            coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns expectedMessageId
+            
             val useCase = GenerateChatResponseUseCase(
                 fastModelService = fastModelService,
                 thinkingModelService = thinkingModelService,
@@ -406,10 +409,10 @@ class GenerateChatResponseUseCaseTest {
 
             // Then - pipelineStep should match expected
             val processingState = accumulatedMessages.find { 
-                it.messages[2L]?.messageState == MessageState.PROCESSING
+                it.messages[expectedMessageId]?.messageState == MessageState.PROCESSING
             }
             assertNotNull(processingState, "Should have PROCESSING state for $modelType")
-            assertEquals(expectedPipelineStep, processingState!!.messages[2L]!!.pipelineStep,
+            assertEquals(expectedPipelineStep, processingState!!.messages[expectedMessageId]!!.pipelineStep,
                 "pipelineStep should be $expectedPipelineStep for $modelType")
         }
     }
