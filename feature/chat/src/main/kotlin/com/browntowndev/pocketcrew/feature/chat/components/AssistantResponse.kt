@@ -53,13 +53,12 @@ fun AssistantResponse(
     // State for step completion bottom sheet
     var showStepDetails by remember { mutableStateOf(false) }
     var selectedStepName by remember { mutableStateOf("") }
-    var selectedStepOutput by remember { mutableStateOf("") }
 
     // Show bottom sheet if triggered
     DetailBottomSheet(
         config = DetailBottomSheetConfig.StepCompletion(
             isVisible = showStepDetails,
-            content = selectedStepOutput,
+            content = contentText, // Always use live content from message
             stepName = selectedStepName,
             onDismiss = { showStepDetails = false }
         )
@@ -78,7 +77,6 @@ fun AssistantResponse(
                 modelDisplayName = message.modelDisplayName,
                 onClick = {
                     selectedStepName = pipelineStep.displayName()
-                    selectedStepOutput = contentText
                     showStepDetails = true
                 }
             )
