@@ -84,12 +84,8 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
                     } else {
                         // End token comes first
                         if (endIdx > 0) {
-                            var textToEmit = buffer.substring(0, endIdx)
-                            // Trim leading newline when transitioning from thinking to visible
-                            // The END_TOKEN is "\n</think>\n" so after it there's often a leading newline
-                            if (textToEmit.startsWith("\n")) {
-                                textToEmit = textToEmit.drop(1)
-                            }
+                            val textToEmit = buffer.substring(0, endIdx)
+                            // No trimming - preserve LLM output exactly as-is
                             emitted += EmittedSegment(
                                 kind = if (thinking) SegmentKind.THINKING else SegmentKind.VISIBLE,
                                 text = textToEmit
@@ -113,11 +109,8 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
                 // Only end token
                 endIdx >= 0 -> {
                     if (endIdx > 0) {
-                        var textToEmit = buffer.substring(0, endIdx)
-                        // Trim leading newline when transitioning from thinking to visible
-                        if (textToEmit.startsWith("\n")) {
-                            textToEmit = textToEmit.drop(1)
-                        }
+                        val textToEmit = buffer.substring(0, endIdx)
+                        // No trimming - preserve LLM output exactly as-is
                         emitted += EmittedSegment(
                             kind = if (thinking) SegmentKind.THINKING else SegmentKind.VISIBLE,
                             text = textToEmit

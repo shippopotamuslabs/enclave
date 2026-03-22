@@ -275,7 +275,8 @@ class GenerateChatResponseUseCase @Inject constructor(
             return _messages.getOrPut(messageId) {
                 MessageAccumulator(
                     messageId = messageId,
-                    modelType = modelType
+                    modelType = modelType,
+                    pipelineStep = getPipelineStepForModelType(modelType)
                 )
             }
         }

@@ -26,9 +26,8 @@ android {
     }
 }
 
-tasks.withType<Test> {
-    // Disable failOnNoDiscoveredTests since this module only has test utilities, not actual tests
-    failOnNoDiscoveredTests.set(false)
+tasks.withType<Test>().configureEach {
+    useJUnitPlatform()
 }
 
 dependencies {
