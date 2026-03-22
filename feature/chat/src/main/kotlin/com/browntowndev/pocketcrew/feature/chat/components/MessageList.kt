@@ -128,7 +128,7 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 @Composable
 private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?) {
     if (indicatorState != null) {
-        var bottomSheetThinkingRaw by remember { mutableStateOf<String?>(null) }
+        var isThinkingSheetVisible by remember { mutableStateOf(false) }
 
         when (indicatorState) {
             is IndicatorState.Thinking -> {
@@ -137,9 +137,9 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                     thinkingRaw = indicatorState.thinkingRaw,
                     thinkingStartTime = indicatorState.thinkingDurationSeconds,
                     modelDisplayName = modelDisplayName,
-                    isExpanded = bottomSheetThinkingRaw != null,
+                    isExpanded = isThinkingSheetVisible,
                     onToggleDetails = {
-                        bottomSheetThinkingRaw = if (bottomSheetThinkingRaw != null) null else indicatorState.thinkingRaw
+                        isThinkingSheetVisible = !isThinkingSheetVisible
                     },
                 )
             }
@@ -154,9 +154,9 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                     ThoughtForHeader(
                         modifier = Modifier.padding(horizontal = 5.dp),
                         thinkingData = thinkingData,
-                        isExpanded = bottomSheetThinkingRaw != null,
+                        isExpanded = isThinkingSheetVisible,
                         onViewFullThinking = {
-                            bottomSheetThinkingRaw = if (bottomSheetThinkingRaw != null) null else indicatorState.thinkingData.thinkingRaw
+                            isThinkingSheetVisible = !isThinkingSheetVisible
                         }
                     )
                 }
@@ -167,9 +167,9 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                     ThoughtForHeader(
                         modifier = Modifier.padding(horizontal = 5.dp),
                         thinkingData = thinkingData,
-                        isExpanded = bottomSheetThinkingRaw != null,
+                        isExpanded = isThinkingSheetVisible,
                         onViewFullThinking = {
-                            bottomSheetThinkingRaw = if (bottomSheetThinkingRaw != null) null else indicatorState.thinkingData.thinkingRaw
+                            isThinkingSheetVisible = !isThinkingSheetVisible
                         }
                     )
                 }
@@ -180,8 +180,15 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
         }
 
         ThinkingDetailsBottomSheet(
-            isVisible = bottomSheetThinkingRaw != null,
-            thinkingRaw = bottomSheetThinkingRaw ?: "",
+            isVisible = isThinkingSheetVisible,
+            thinkingRaw = indicatorState.let {
+                when (it) {
+                    is IndicatorState.Thinking -> it.thinkingRaw
+                    is IndicatorState.Generating -> it.thinkingData?.thinkingRaw ?: ""
+                    is IndicatorState.Complete -> it.thinkingData?.thinkingRaw ?: ""
+                    else -> ""
+                }
+            },
             thinkingDurationSeconds = indicatorState.let {
                 when (it) {
                     is IndicatorState.Thinking -> it.thinkingDurationSeconds
@@ -190,7 +197,7 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                     else -> 0
                 }
             },
-            onDismiss = { bottomSheetThinkingRaw = null }
+            onDismiss = { isThinkingSheetVisible = false }
         )
     }
 }
