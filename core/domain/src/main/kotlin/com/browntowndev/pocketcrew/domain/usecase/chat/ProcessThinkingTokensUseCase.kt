@@ -33,13 +33,17 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
      * @param currentBuffer leftover partial-token buffer from the previous call
      * @param newChunk new streamed text chunk
      * @param isThinking whether parser is currently inside a <think> block
+     * @param accumulatedThinkingText cumulative thinking text from previous calls (for streaming)
+     * @param accumulatedVisibleText cumulative visible text from previous calls (for streaming)
      *
-     * @return updated parser state plus typed emitted segments
+     * @return updated parser state plus typed emitted segments with cumulative text
      */
     operator fun invoke(
         currentBuffer: String,
         newChunk: String,
-        isThinking: Boolean
+        isThinking: Boolean,
+        accumulatedThinkingText: String = "",
+        accumulatedVisibleText: String = ""
     ): ThinkingState {
         var buffer = currentBuffer + newChunk
         var thinking = isThinking
@@ -138,10 +142,24 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
             }
         }
 
+        val merged = emitted.mergeAdjacent()
+
+        // Build new accumulated values from emitted segments
+        val newAccumulatedThinking = accumulatedThinkingText +
+            merged.asSequence()
+                .filter { it.kind == SegmentKind.THINKING }
+                .joinToString("") { it.text }
+        val newAccumulatedVisible = accumulatedVisibleText +
+            merged.asSequence()
+                .filter { it.kind == SegmentKind.VISIBLE }
+                .joinToString("") { it.text }
+
         return ThinkingState(
             isThinking = thinking,
             buffer = buffer,
-            emittedSegments = emitted.mergeAdjacent()
+            emittedSegments = merged,
+            accumulatedThinkingText = newAccumulatedThinking,
+            accumulatedVisibleText = newAccumulatedVisible
         )
     }
 
@@ -192,22 +210,20 @@ class ProcessThinkingTokensUseCase @Inject constructor() {
     data class ThinkingState(
         val isThinking: Boolean,
         val buffer: String,
-        val emittedSegments: List<EmittedSegment>
+        val emittedSegments: List<EmittedSegment>,
+        // Cumulative tracking for streaming across multiple calls
+        val accumulatedThinkingText: String = "",
+        val accumulatedVisibleText: String = ""
     ) {
         /**
          * Convenience accessors if the caller wants split channels.
+         * Returns cumulative text including content from previous calls.
          */
         val visibleTextToEmit: String
-            get() = emittedSegments
-                .asSequence()
-                .filter { it.kind == SegmentKind.VISIBLE }
-                .joinToString(separator = "") { it.text }
+            get() = accumulatedVisibleText
 
         val thinkingTextToEmit: String
-            get() = emittedSegments
-                .asSequence()
-                .filter { it.kind == SegmentKind.THINKING }
-                .joinToString(separator = "") { it.text }
+            get() = accumulatedThinkingText
 
         /**
          * Kept for easier migration, but ambiguous for mixed-mode output.
