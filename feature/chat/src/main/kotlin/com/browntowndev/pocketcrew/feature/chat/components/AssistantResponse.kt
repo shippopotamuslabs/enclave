@@ -55,14 +55,16 @@ fun AssistantResponse(
     var selectedStepName by remember { mutableStateOf("") }
 
     // Show bottom sheet if triggered
-    DetailBottomSheet(
-        config = DetailBottomSheetConfig.StepCompletion(
-            isVisible = showStepDetails,
-            content = contentText, // Always use live content from message
-            stepName = selectedStepName,
-            onDismiss = { showStepDetails = false }
+    if (showStepDetails) {
+        DetailBottomSheet(
+            config = DetailBottomSheetConfig.StepCompletion(
+                isVisible = showStepDetails,
+                content = contentText, // Always use live content from message
+                stepName = selectedStepName,
+                onDismiss = { showStepDetails = false }
+            )
         )
-    )
+    }
 
     Column(modifier = modifier.fillMaxWidth()) {
         // For Crew mode: if this message has a pipeline step (non-FINAL), render as completed step
