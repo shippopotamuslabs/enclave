@@ -1,0 +1,39 @@
+name: MiniMax PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize] 
+
+permissions:
+  pull-requests: write 
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest 
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        # Updated to use anthropic instead of openai
+        run: pip install anthropic requests
+
+      - name: Fetch PR Diff
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Grabs only the raw patch diff of the changed files
+        run: gh pr diff ${{ github.event.pull_request.number }} > pr_diff.txt
+
+      - name: Run MiniMax Review
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: python .github/scripts/review.py
