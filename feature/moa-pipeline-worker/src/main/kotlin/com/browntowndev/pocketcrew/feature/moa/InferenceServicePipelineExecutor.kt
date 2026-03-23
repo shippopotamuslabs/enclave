@@ -234,10 +234,10 @@ class InferenceServicePipelineExecutor @Inject constructor(
             }
         } ?: ModelType.MAIN
 
-        if (!thinkingChunk.isNullOrBlank()) {
+        if (!thinkingChunk.isNullOrEmpty()) {
             send(MessageGenerationState.ThinkingLive(thinkingChunk, modelType))
         }
-        else if (!stepOutput.isNullOrBlank()) {
+        else if (!stepOutput.isNullOrEmpty()) {
             send(MessageGenerationState.GeneratingText(stepOutput, modelType))
         }
     }
