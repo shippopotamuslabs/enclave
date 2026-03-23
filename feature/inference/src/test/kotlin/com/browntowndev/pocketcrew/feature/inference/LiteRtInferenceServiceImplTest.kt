@@ -61,7 +61,7 @@ class LiteRtInferenceServiceImplTest {
         // Then - events should be processed by use case
         assertTrue(events.any { it is InferenceEvent.Thinking })
         assertTrue(events.any { it is InferenceEvent.PartialResponse })
-        assertTrue(events.any { it is InferenceEvent.Completed })
+        assertTrue(events.any { it is InferenceEvent.Finished })
     }
 
     @Test
