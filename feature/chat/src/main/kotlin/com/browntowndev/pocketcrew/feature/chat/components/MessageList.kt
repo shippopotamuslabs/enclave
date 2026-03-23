@@ -179,26 +179,28 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
             }
         }
 
-        ThinkingDetailsBottomSheet(
-            isVisible = isThinkingSheetVisible,
-            thinkingRaw = indicatorState.let {
-                when (it) {
-                    is IndicatorState.Thinking -> it.thinkingRaw
-                    is IndicatorState.Generating -> it.thinkingData?.thinkingRaw ?: ""
-                    is IndicatorState.Complete -> it.thinkingData?.thinkingRaw ?: ""
-                    else -> ""
-                }
-            },
-            thinkingDurationSeconds = indicatorState.let {
-                when (it) {
-                    is IndicatorState.Thinking -> it.thinkingDurationSeconds
-                    is IndicatorState.Generating -> it.thinkingData?.thinkingDurationSeconds ?: 0
-                    is IndicatorState.Complete -> it.thinkingData?.thinkingDurationSeconds ?: 0
-                    else -> 0
-                }
-            },
-            onDismiss = { isThinkingSheetVisible = false }
-        )
+        if (isThinkingSheetVisible) {
+            ThinkingDetailsBottomSheet(
+                isVisible = isThinkingSheetVisible,
+                thinkingRaw = indicatorState.let {
+                    when (it) {
+                        is IndicatorState.Thinking -> it.thinkingRaw
+                        is IndicatorState.Generating -> it.thinkingData?.thinkingRaw ?: ""
+                        is IndicatorState.Complete -> it.thinkingData?.thinkingRaw ?: ""
+                        else -> ""
+                    }
+                },
+                thinkingDurationSeconds = indicatorState.let {
+                    when (it) {
+                        is IndicatorState.Thinking -> it.thinkingDurationSeconds
+                        is IndicatorState.Generating -> it.thinkingData?.thinkingDurationSeconds ?: 0
+                        is IndicatorState.Complete -> it.thinkingData?.thinkingDurationSeconds ?: 0
+                        else -> 0
+                    }
+                },
+                onDismiss = { isThinkingSheetVisible = false }
+            )
+        }
     }
 }
 
