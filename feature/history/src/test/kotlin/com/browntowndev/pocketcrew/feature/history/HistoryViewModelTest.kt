@@ -354,28 +354,38 @@ class HistoryViewModelTest {
 
     @Test
     fun `C4 uses device timezone for formatting`() = runTest(testDispatcher) {
+        // Create a date at a specific hour in UTC
         val calendar = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
-            set(Calendar.HOUR_OF_DAY, 23) // 11 PM UTC
+            set(Calendar.HOUR_OF_DAY, 23)
             set(Calendar.MINUTE, 30)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }
         val utcDate = calendar.time
-        val testChat = createTestChat(1, "Test", utcDate, pinned = false)
-        val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-        every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
-
-        viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
         
-        chatsFlow.value = listOf(testChat)
-        advanceUntilIdle()
+        // Change the default timezone for the test to one where the hour will definitely be different from 23
+        val originalTz = TimeZone.getDefault()
+        TimeZone.setDefault(TimeZone.getTimeZone("America/New_York")) // UTC-5 (or -4)
+        
+        try {
+            val testChat = createTestChat(1, "Test", utcDate, pinned = false)
+            val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
+            every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
-        val state = viewModel.uiState.value
-        val formattedTime = state.otherChats.first().lastMessageDateTime
-        val localZone = TimeZone.getDefault()
-        if (localZone.id != "UTC") {
-            assertFalse(formattedTime.contains("11:30 PM"))
+            viewModel = createViewModel()
+            backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+            
+            chatsFlow.value = listOf(testChat)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            val formattedTime = state.otherChats.first().lastMessageDateTime
+            
+            // In New York, 23:30 UTC is either 18:30 or 19:30
+            // The formatted string should NOT contain "11:30 PM" (which is 23:30)
+            assertFalse(formattedTime.contains("11:30 PM"), "Should reflect local time, not UTC. Got: $formattedTime")
+        } finally {
+            TimeZone.setDefault(originalTz)
         }
     }
 
