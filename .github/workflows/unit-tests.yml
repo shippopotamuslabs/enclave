@@ -31,10 +31,12 @@ jobs:
         run: chmod +x gradlew
 
       - name: Accept Android SDK Licenses
-        run: yes | sdkmanager --licenses || true
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager --install "ndk;27.0.11718014"
 
       - name: Run Unit Tests
-        run: ./gradlew testDebugUnitTest --parallel --build-cache
+        run: ./gradlew testDebugUnitTest --parallel --build-cache -Pandroid.builder.sdk.download=true
 
       - name: Upload Test Reports
         if: failure()
