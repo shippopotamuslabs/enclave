@@ -1,5 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.PocketCrew" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.PocketCrew" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Splash screen theme with matching background color -->
+    <style name="Theme.PocketCrew.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#18181B</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
 </resources>

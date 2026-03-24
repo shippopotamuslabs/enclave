@@ -8,14 +8,16 @@ junit = "4.13.2"
 junitVersion = "1.3.0"
 junitJupiterVersion = "6.0.3"
 mockkVersion = "1.14.9"
+coroutinesVersion = "1.10.2"
 coroutinesTestVersion = "1.10.2"
 espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.12.4"
 kotlin = "2.3.10"
+kotlinStdlib = "2.3.10"
 composeBom = "2026.02.01"
 litert = "2.1.1"
-litertlm = "0.9.0-alpha05"
+litertlm = "0.9.0-alpha06"
 hilt = "2.59.2"
 ksp = "2.3.6"
 ktlintVersion = "14.0.1"
@@ -29,6 +31,11 @@ androidx-core-splashscreen = "1.2.0"
 tasks-genai = "0.10.32"             # latest stable as of Feb 28 2026
 workVersion = "2.11.1"
 identityDoctypesJvm = "202411.1"
+foundation = "1.10.4"
+robolectricVersion = "4.13"
+androidxTestCoreVersion = "1.7.0"
+markdown = "1.0.3"
+turbineVersion = "1.2.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -62,7 +69,10 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junitJupiterVersion" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockkVersion" }
 mockk-agent = { group = "io.mockk", name = "mockk-agent-jvm", version.ref = "mockkVersion" }
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutinesVersion" }
+kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutinesVersion" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTestVersion" }
+kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlinStdlib" }
 kotlin-test-junit5 = { group = "org.jetbrains.kotlin", name = "kotlin-test-junit5", version.ref = "kotlin" }
 room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "roomVersion" }
 room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "roomVersion" }
@@ -73,6 +83,13 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttpVersion" }
 # litert-gpu removed - not available in 2.x series, unused in project
 identity-doctypes-jvm = { group = "com.android.identity", name = "identity-doctypes-jvm", version.ref = "identityDoctypesJvm" }
+androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
+robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectricVersion" }
+androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCoreVersion" }
+junit-vintage-engine = { group = "org.junit.vintage", name = "junit-vintage-engine", version.ref = "junitJupiterVersion" }
+markdown-parser = { module = "io.github.huarangmeng:markdown-parser", version.ref = "markdown" }
+markdown-renderer = { module = "io.github.huarangmeng:markdown-renderer", version.ref = "markdown" }
+turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbineVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
