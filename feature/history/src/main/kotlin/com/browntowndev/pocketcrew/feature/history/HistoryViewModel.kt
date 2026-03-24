@@ -84,6 +84,7 @@ class HistoryViewModel @Inject constructor(
     }
 
     fun deleteChat(id: Long) {
+        println("DEBUG: HistoryViewModel.deleteChat called for id: $id")
         viewModelScope.launch {
             try {
                 deleteChatUseCase(id)
