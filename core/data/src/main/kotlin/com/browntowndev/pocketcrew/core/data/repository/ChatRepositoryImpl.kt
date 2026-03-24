@@ -23,6 +23,14 @@ class ChatRepositoryImpl @Inject constructor(
     private val messageDao: MessageDao
 ) : ChatRepository {
 
+    override fun getAllChats(): Flow<List<Chat>> {
+        throw NotImplementedError("getAllChats not yet implemented - TDD Red Phase")
+    }
+
+    override suspend fun togglePinStatus(chatId: Long) {
+        throw NotImplementedError("togglePinStatus not yet implemented - TDD Red Phase")
+    }
+
     override fun getMessagesForChat(chatId: Long): Flow<List<Message>> {
         return messageDao.getMessagesByChatIdFlow(chatId).map { entities ->
             entities.map { it.toDomain() }
