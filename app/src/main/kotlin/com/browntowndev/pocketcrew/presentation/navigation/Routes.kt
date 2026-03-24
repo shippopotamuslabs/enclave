@@ -7,3 +7,4 @@ object Routes {
     const val SETTINGS = "settings"
     const val MODEL_DOWNLOAD = "model_download"
 }
+
