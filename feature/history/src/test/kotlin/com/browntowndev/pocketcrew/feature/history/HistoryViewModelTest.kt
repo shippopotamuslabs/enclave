@@ -71,6 +71,8 @@ class HistoryViewModelTest {
         set(Calendar.MINUTE, 0)
         set(Calendar.SECOND, 0)
         set(Calendar.MILLISECOND, 0)
+        // Ensure year is set to a known value that won't be affected by current date
+        set(Calendar.YEAR, 2024)
     }.time
 
     private fun createTestChat(

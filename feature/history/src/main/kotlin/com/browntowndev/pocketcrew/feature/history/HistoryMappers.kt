@@ -22,23 +22,19 @@ fun Chat.toHistoryChat(): HistoryChat {
  * Formats a Date to a human-readable string for display in the history list.
  */
 private fun formatLastModified(date: Date): String {
-    val calendar = Calendar.getInstance()
-    val today = calendar.clone() as Calendar
-
-    calendar.time = date
-
-    val dateCalendar = Calendar.getInstance().apply { time = date }
+    val dateCal = Calendar.getInstance().apply { time = date }
+    val todayCal = Calendar.getInstance()
 
     return when {
-        isSameDay(dateCalendar, today) -> {
+        isSameDay(dateCal, todayCal) -> {
             val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
             "Today, ${timeFormat.format(date)}"
         }
-        isYesterday(dateCalendar, today) -> {
+        isYesterday(dateCal, todayCal) -> {
             val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
             "Yesterday, ${timeFormat.format(date)}"
         }
-        isSameYear(dateCalendar, today) -> {
+        isSameYear(dateCal, todayCal) -> {
             val dateFormat = SimpleDateFormat("MMM d, h:mm a", Locale.getDefault())
             dateFormat.format(date)
         }
