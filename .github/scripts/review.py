@@ -62,7 +62,7 @@ Your objective is to identify general bugs, architectural flaws, performance bot
     try:
         message = client.messages.create(
             model="MiniMax-M2.7-highspeed", 
-            max_tokens=2000,
+            max_tokens=4000,
             system=system_prompt,
             messages=[
                 {
@@ -81,24 +81,37 @@ Your objective is to identify general bugs, architectural flaws, performance bot
                 thinking_process = block.thinking
             elif block.type == "text":
                 review_comment += block.text
-                
-        # Use a variable for markdown backticks to prevent parser breakage
-        md_code = "```"
+        
+        # If the model put thinking inside the text block (e.g. <thought>...</thought>), extract it
+        import re
+        thought_match = re.search(r"<thought>(.*?)</thought>", review_comment, re.DOTALL | re.IGNORECASE)
+        if thought_match:
+            if not thinking_process:
+                thinking_process = thought_match.group(1).strip()
+            review_comment = review_comment.replace(thought_match.group(0), "").strip()
+
+        # Use 4 backticks for the outer container to allow 3 backticks inside thinking_process
+        outer_md_code = "````"
         
         # Construct the final markdown payload with the collapsible section
-        final_output = f"""### 🤖 MiniMax Architect Review
-
+        if thinking_process:
+            thinking_section = f"""
 <details>
 <summary>🧠 View MiniMax Reasoning Process</summary>
 
-{md_code}text
-{thinking_process}
-{md_code}
+{outer_md_code}text
+{thinking_process.strip()}
+{outer_md_code}
 </details>
+"""
+        else:
+            thinking_section = ""
 
+        final_output = f"""### 🤖 MiniMax Architect Review
+{thinking_section}
 ---
 
-{review_comment}
+{review_comment.strip()}
 """
         
         post_github_comment(final_output)

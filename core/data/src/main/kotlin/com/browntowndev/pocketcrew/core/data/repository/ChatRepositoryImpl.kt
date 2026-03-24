@@ -23,6 +23,19 @@ class ChatRepositoryImpl @Inject constructor(
     private val messageDao: MessageDao
 ) : ChatRepository {
 
+    override fun getAllChats(): Flow<List<Chat>> {
+        return chatDao.getAllChats().map { entities ->
+            entities.map { it.toDomain() }
+        }
+    }
+
+    override suspend fun togglePinStatus(chatId: Long) {
+        val rowsAffected = chatDao.updatePinStatus(chatId)
+        if (rowsAffected == 0) {
+            throw IllegalArgumentException("Chat not found with id: $chatId")
+        }
+    }
+
     override fun getMessagesForChat(chatId: Long): Flow<List<Message>> {
         return messageDao.getMessagesByChatIdFlow(chatId).map { entities ->
             entities.map { it.toDomain() }
@@ -99,7 +112,7 @@ class ChatRepositoryImpl @Inject constructor(
         content: String,
         thinkingData: ThinkingData?
     ) {
-        val duration = thinkingData?.thinkingDurationSeconds?.toInt()
+        val duration = thinkingData?.thinkingDurationSeconds
 
         messageDao.updateMessageContent(
             id = messageId,
@@ -149,5 +162,19 @@ class ChatRepositoryImpl @Inject constructor(
         )
         val entities = messageDao.getMessagesByStates(chatId, incompleteStates)
         return entities.map { it.toDomain() }
+    }
+
+    override suspend fun deleteChat(chatId: Long) {
+        val rowsAffected = chatDao.deleteById(chatId)
+        if (rowsAffected == 0) {
+            throw IllegalArgumentException("Chat not found with id: $chatId")
+        }
+    }
+
+    override suspend fun renameChat(chatId: Long, newName: String) {
+        val rowsAffected = chatDao.updateName(chatId, newName)
+        if (rowsAffected == 0) {
+            throw IllegalArgumentException("Chat not found with id: $chatId")
+        }
     }
 }
