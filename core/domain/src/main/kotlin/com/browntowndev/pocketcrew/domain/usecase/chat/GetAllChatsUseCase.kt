@@ -22,18 +22,17 @@ import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
 /**
- * STUB: Use case for getting all chats as a Flow.
+ * Use case for getting all chats as a Flow.
  * Listens to database changes via Room Flow.
- * TDD Red Phase - Implementation pending.
+ * Returns chats sorted by pinned first, then by lastModified descending.
  */
 class GetAllChatsUseCase @Inject constructor(
     private val chatRepository: ChatRepository
 ) {
     /**
-     * Returns all chats as a Flow.
-     * STUB: Throws NotImplementedError until production code is written.
+     * Returns all chats as a Flow, sorted by pinned first, then by lastModified descending.
      */
     operator fun invoke(): Flow<List<Chat>> {
-        throw NotImplementedError("GetAllChatsUseCase not yet implemented - TDD Red Phase")
+        return chatRepository.getAllChats()
     }
 }

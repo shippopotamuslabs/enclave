@@ -62,10 +62,9 @@ dependencies {
     implementation(libs.hilt.navigation.compose)
 
     // Test dependencies
-    testImplementation(libs.junit.jupiter)
+    testImplementation(project(":core:testing"))
     testImplementation(libs.mockk)
     testImplementation(libs.mockk.agent)
-    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
