@@ -175,4 +175,20 @@ interface ChatRepository {
      * @return List of messages in incomplete states
      */
     suspend fun getIncompleteCrewMessages(chatId: Long): List<Message>
+
+    /**
+     * Deletes a chat by its ID.
+     * This will cascade delete all associated messages due to foreign key constraints.
+     *
+     * @param chatId The ID of the chat to delete
+     */
+    suspend fun deleteChat(chatId: Long)
+
+    /**
+     * Renames a chat.
+     *
+     * @param chatId The ID of the chat to rename
+     * @param newName The new name for the chat
+     */
+    suspend fun renameChat(chatId: Long, newName: String)
 }

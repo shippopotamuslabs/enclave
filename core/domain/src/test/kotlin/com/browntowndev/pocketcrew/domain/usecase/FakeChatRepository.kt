@@ -146,6 +146,19 @@ class FakeChatRepository : ChatRepository {
         }
     }
 
+    private val deletedChatIds = mutableListOf<Long>()
+
+    override suspend fun deleteChat(chatId: Long) {
+        deletedChatIds.add(chatId)
+        _chatsFlow.value = _chatsFlow.value.filter { it.id != chatId }
+    }
+
+    override suspend fun renameChat(chatId: Long, newName: String) {
+        _chatsFlow.value = _chatsFlow.value.map { chat ->
+            if (chat.id == chatId) chat.copy(name = newName) else chat
+        }
+    }
+
     override suspend fun persistAllMessageData(
         messageId: Long,
         modelType: ModelType,

@@ -5,11 +5,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -78,7 +75,7 @@ class GetAllChatsUseCaseTest {
             assertEquals("Alpha", emittedChats[0].name)
             assertEquals("Beta", emittedChats[1].name)
             assertEquals("Gamma", emittedChats[2].name)
-            awaitComplete()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -103,7 +100,7 @@ class GetAllChatsUseCaseTest {
             val emittedChats = awaitItem()
             assertEquals(0, emittedChats.size)
             assertEquals(emptyList<Chat>(), emittedChats)
-            awaitComplete()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -137,7 +134,7 @@ class GetAllChatsUseCaseTest {
             val secondEmission = awaitItem()
             assertEquals(2, secondEmission.size)
 
-            awaitComplete()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -151,23 +148,15 @@ class GetAllChatsUseCaseTest {
     @Test
     fun `A4 repository error propagates`() = runTest {
         // Given: Repository that throws RuntimeException via flow error
-        
-        // Create a flow that emits one item then errors
-        val errorFlow = MutableSharedFlow<List<Chat>>(
-            replay = 0,
-            extraBufferCapacity = 1
-        )
-        every { mockRepository.getAllChats() } returns errorFlow
+        every { mockRepository.getAllChats() } returns flow {
+            throw RuntimeException("DB Error")
+        }
 
         val useCase = GetAllChatsUseCase(mockRepository)
 
         // When/Then: Error propagates through use case
         useCase().test {
-            // Emit empty list first
-            errorFlow.emit(emptyList())
-
-            // Expect error to propagate - awaitError() is the correct Turbine API
-            awaitError() // Expect exactly one error
+            awaitError()
         }
     }
 }
