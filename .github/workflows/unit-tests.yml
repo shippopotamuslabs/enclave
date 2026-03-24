@@ -32,8 +32,8 @@ jobs:
 
       - name: Accept Android SDK Licenses
         run: |
-          yes | sdkmanager --licenses || true
-          sdkmanager --install "ndk;27.0.11718014"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;27.0.11718014"
 
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --parallel --build-cache -Pandroid.builder.sdk.download=true
