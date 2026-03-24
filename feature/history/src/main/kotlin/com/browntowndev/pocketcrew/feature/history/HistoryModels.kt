@@ -13,3 +13,7 @@ data class HistoryUiState(
     val isLoading: Boolean = false,
     val hapticPress: Boolean = true,
 )
+
+sealed class HistoryEvent {
+    data class ShowError(val message: String) : HistoryEvent()
+}

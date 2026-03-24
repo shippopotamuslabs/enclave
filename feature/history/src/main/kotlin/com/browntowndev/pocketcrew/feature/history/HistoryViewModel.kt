@@ -9,9 +9,12 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.RenameChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.TogglePinChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.stateIn
@@ -35,6 +38,9 @@ class HistoryViewModel @Inject constructor(
         val pinned: List<HistoryChat>,
         val other: List<HistoryChat>
     )
+
+    private val _events = MutableSharedFlow<HistoryEvent>()
+    val events: SharedFlow<HistoryEvent> = _events.asSharedFlow()
 
     val uiState: StateFlow<HistoryUiState> = combine(
         getAllChatsUseCase().catch { emit(emptyList()) },
@@ -70,9 +76,10 @@ class HistoryViewModel @Inject constructor(
             compareByDescending<Chat> { it.pinned }
                 .thenByDescending { it.lastModified }
         )
+        val partitioned = sorted.partition { it.pinned }
         return CategorizedChats(
-            pinned = sorted.filter { it.pinned }.map { it.toHistoryChat() },
-            other = sorted.filter { !it.pinned }.map { it.toHistoryChat() }
+            pinned = partitioned.first.map { it.toHistoryChat() },
+            other = partitioned.second.map { it.toHistoryChat() }
         )
     }
 
@@ -81,7 +88,7 @@ class HistoryViewModel @Inject constructor(
             try {
                 deleteChatUseCase(id)
             } catch (e: Exception) {
-                // Ignore or log error
+                _events.emit(HistoryEvent.ShowError("Failed to delete chat"))
             }
         }
     }
@@ -91,27 +98,21 @@ class HistoryViewModel @Inject constructor(
             try {
                 renameChatUseCase(id, newName)
             } catch (e: Exception) {
-                // Ignore or log error
+                _events.emit(HistoryEvent.ShowError("Failed to rename chat"))
             }
         }
     }
 
-    fun pinChat(id: Long) {
-        viewModelScope.launch {
-            try {
-                togglePinChatUseCase(id)
-            } catch (e: Exception) {
-                // Ignore or log error
-            }
-        }
-    }
+    fun pinChat(id: Long) = togglePin(id)
 
-    fun unpinChat(id: Long) {
+    fun unpinChat(id: Long) = togglePin(id)
+
+    private fun togglePin(id: Long) {
         viewModelScope.launch {
             try {
                 togglePinChatUseCase(id)
             } catch (e: Exception) {
-                // Ignore or log error
+                _events.emit(HistoryEvent.ShowError("Failed to update pin status"))
             }
         }
     }
