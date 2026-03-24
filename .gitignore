@@ -8,7 +8,7 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 .DS_Store
-/build
+build/
 /captures
 .externalNativeBuild
 .cxx
@@ -29,7 +29,36 @@ mcp.config
 llama-android/build/
 llama-android/.cxx/
 
+# CMake build artifacts (generated during native build)
+llama-android/src/main/cpp/.ninja_deps
+llama-android/src/main/cpp/.ninja_log
+llama-android/src/main/cpp/build.ninja
+llama-android/src/main/cpp/cmake_install.cmake
+llama-android/src/main/cpp/compile_commands.json
+llama-android/src/main/cpp/cmake-output/
+llama-android/src/main/cpp/llama-build/
+llama-android/src/main/cpp/_deps/
+llama-android/src/main/cpp/CMakeCache.txt
+llama-android/src/main/cpp/CMakeFiles/
+
 # Third-party dependencies
 third_party/
 
 bin/
+
+tech_docs/
+
+llama-android/src/main/cpp/libs/arm64-v8a/libllama-jni-neon.so
+
+.claude/skills/
+
+modularization-plan.md
+
+golden-test-examples/
+*.so
+
+PHASE_10_HANDOFF.md
+
+plans/
+
+.forge/

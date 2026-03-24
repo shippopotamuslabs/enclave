@@ -44,6 +44,12 @@ android {
     namespace = "com.browntowndev.pocketcrew"
     compileSdk = 36
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
     defaultConfig {
         applicationId = "com.browntowndev.pocketcrew"
         minSdk = 34
@@ -83,7 +89,7 @@ android {
             )
         }
         debug {
-            isTestCoverageEnabled = true
+            enableUnitTestCoverage = true
         }
     }
     compileOptions {
@@ -107,8 +113,18 @@ tasks.matching { it.name.startsWith("connected") && it.name.endsWith("AndroidTes
 }
 
 dependencies {
-    // Using custom llama-android (llama.cpp with Vulkan)
+    // Using custom llama-android (llama.cpp with KleidiAI)
+    // Native libraries are built automatically via build-kleidiai.sh
     implementation(project(":llama-android"))
+    implementation(project(":core:domain"))
+    implementation(project(":core:data"))
+    implementation(project(":core:ui"))
+    implementation(project(":feature:settings"))
+    implementation(project(":feature:history"))
+    implementation(project(":feature:download"))
+    implementation(project(":feature:chat"))
+    implementation(project(":feature:moa-pipeline-worker"))
+    implementation(project(":feature:inference"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -126,8 +142,8 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.androidx.compose.ui.text)
     implementation(libs.androidx.compose.animation)
-    // litert-gpu removed - not available in 2.x series
     implementation(libs.identity.doctypes.jvm)
+    implementation(libs.androidx.compose.foundation)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.work)
@@ -140,11 +156,14 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
-    testImplementation(libs.junit)
+    testImplementation(project(":core:data"))
+    testImplementation(project(":core:testing"))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -152,3 +171,12 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
+
+// =============================================================================
+// KleidiAI Fat APK Build Check
+// =============================================================================
+// NOTE: Due to configuration cache issues, we rely on the script being run manually.
+// Run: ./build-kleidiai.sh before building the app.
+//
+// The check is done at packaging time - if libraries are missing, the build will fail.
+// We use lazy evaluation to avoid configuration cache issues.

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "b8c6e9d37cf20330f0f6fc8e352e695c",
+    "identityHash": "3949bd29daed89e0dca0ed4b1a2c3479",
     "entities": [
       {
         "tableName": "chat",
@@ -48,7 +48,7 @@
       },
       {
         "tableName": "message",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chat_id` INTEGER NOT NULL, `content` TEXT NOT NULL, `role` TEXT NOT NULL, `user_message_id` INTEGER, `thinking_duration_seconds` INTEGER, `thinking_steps` TEXT, `thinking_raw` TEXT, FOREIGN KEY(`user_message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`chat_id`) REFERENCES `chat`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chat_id` INTEGER NOT NULL, `content` TEXT NOT NULL, `role` TEXT NOT NULL, `user_message_id` INTEGER, `thinking_duration_seconds` INTEGER, `thinking_raw` TEXT, `message_state` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `model_type` TEXT, FOREIGN KEY(`user_message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`chat_id`) REFERENCES `chat`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -85,13 +85,25 @@
             "affinity": "INTEGER"
           },
           {
-            "fieldPath": "thinkingSteps",
-            "columnName": "thinking_steps",
+            "fieldPath": "thinkingRaw",
+            "columnName": "thinking_raw",
             "affinity": "TEXT"
           },
           {
-            "fieldPath": "thinkingRaw",
-            "columnName": "thinking_raw",
+            "fieldPath": "messageState",
+            "columnName": "message_state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modelType",
+            "columnName": "model_type",
             "affinity": "TEXT"
           }
         ],
@@ -187,7 +199,7 @@
       },
       {
         "tableName": "models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`model_type` TEXT NOT NULL, `model_status` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `display_name` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_k` INTEGER NOT NULL, `top_p` REAL NOT NULL, `repetition_penalty` REAL NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `system_prompt` TEXT, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`model_type`, `model_status`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`model_type` TEXT NOT NULL, `model_status` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `display_name` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_k` INTEGER NOT NULL, `top_p` REAL NOT NULL, `min_p` REAL NOT NULL, `repetition_penalty` REAL NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `system_prompt` TEXT, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`model_type`, `model_status`))",
         "fields": [
           {
             "fieldPath": "modelType",
@@ -256,6 +268,12 @@
             "notNull": true
           },
           {
+            "fieldPath": "minP",
+            "columnName": "min_p",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
             "fieldPath": "repetitionPenalty",
             "columnName": "repetition_penalty",
             "affinity": "REAL",
@@ -298,11 +316,119 @@
             "model_status"
           ]
         }
+      },
+      {
+        "tableName": "crew_pipeline_steps",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `message_id` INTEGER NOT NULL, `pipeline_step` TEXT NOT NULL, FOREIGN KEY(`message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageId",
+            "columnName": "message_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pipelineStep",
+            "columnName": "pipeline_step",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_crew_pipeline_steps_message_id",
+            "unique": false,
+            "columnNames": [
+              "message_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_crew_pipeline_steps_message_id` ON `${TABLE_NAME}` (`message_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "message",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "message_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "thinking_steps",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `message_id` INTEGER NOT NULL, `thinking_chunk` TEXT NOT NULL, FOREIGN KEY(`message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageId",
+            "columnName": "message_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "thinkingChunk",
+            "columnName": "thinking_chunk",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_thinking_steps_message_id",
+            "unique": false,
+            "columnNames": [
+              "message_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_thinking_steps_message_id` ON `${TABLE_NAME}` (`message_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "message",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "message_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'b8c6e9d37cf20330f0f6fc8e352e695c')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3949bd29daed89e0dca0ed4b1a2c3479')"
     ]
   }
 }
