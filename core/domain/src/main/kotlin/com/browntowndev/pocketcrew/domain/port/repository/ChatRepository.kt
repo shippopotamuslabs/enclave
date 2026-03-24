@@ -18,6 +18,21 @@ import kotlinx.coroutines.flow.Flow
  */
 interface ChatRepository {
     /**
+     * Returns all chats as a Flow.
+     * Listens to database changes.
+     *
+     * @return Flow of all chats sorted by pinned first, then by lastModified descending
+     */
+    fun getAllChats(): Flow<List<Chat>>
+
+    /**
+     * Toggles the pinned status of a chat.
+     *
+     * @param chatId The ID of the chat to toggle
+     */
+    suspend fun togglePinStatus(chatId: Long)
+
+    /**
      * Returns all messages for a chat as a Flow.
      * Listens to database changes.
      *

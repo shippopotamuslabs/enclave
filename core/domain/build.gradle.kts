@@ -46,6 +46,7 @@ dependencies {
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
 
     // TestFixtures dependencies
     testFixturesApi(libs.junit.jupiter)
