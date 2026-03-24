@@ -30,6 +30,9 @@ jobs:
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
 
+      - name: Accept Android SDK Licenses
+        run: yes | sdkmanager --licenses || true
+
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --parallel --build-cache
 
