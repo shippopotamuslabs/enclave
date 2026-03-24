@@ -133,7 +133,11 @@ fun HistoryScreen(
         is HistoryOptionsState.Hidden -> {}
         is HistoryOptionsState.Sheet -> {
             ModalBottomSheet(
-                onDismissRequest = { optionsState = HistoryOptionsState.Hidden },
+                onDismissRequest = { 
+                    if (optionsState is HistoryOptionsState.Sheet) {
+                        optionsState = HistoryOptionsState.Hidden 
+                    }
+                },
                 sheetState = sheetState,
                 modifier = Modifier.testTag("ChatOptionsBottomSheet")
             ) {
