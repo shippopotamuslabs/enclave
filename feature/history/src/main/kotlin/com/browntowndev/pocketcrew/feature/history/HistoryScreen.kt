@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.PushPin
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,10 +40,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+
+private sealed interface HistoryOptionsState {
+    data object Hidden : HistoryOptionsState
+    data class Sheet(val chat: HistoryChat) : HistoryOptionsState
+    data class Dialog(val chat: HistoryChat) : HistoryOptionsState
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,9 +66,8 @@ fun HistoryScreen(
     onSettingsClick: () -> Unit,
     @Suppress("UNUSED_PARAMETER") onShowSnackbar: (String, String?) -> Unit
 ) {
-    var selectedChatForOptions by remember { mutableStateOf<HistoryChat?>(null) }
+    var optionsState by remember { mutableStateOf<HistoryOptionsState>(HistoryOptionsState.Hidden) }
     val sheetState = rememberModalBottomSheetState()
-    var showBottomSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -88,13 +95,15 @@ fun HistoryScreen(
                 item {
                     SectionHeader(text = "Pinned")
                 }
-                items(uiState.pinnedChats) { chat ->
+                items(
+                    items = uiState.pinnedChats,
+                    key = { it.id }
+                ) { chat ->
                     HistoryChatItem(
                         chat = chat,
                         onClick = { onChatClick(chat.id) },
                         onLongClick = {
-                            selectedChatForOptions = chat
-                            showBottomSheet = true
+                            optionsState = HistoryOptionsState.Sheet(chat)
                         }
                     )
                 }
@@ -104,13 +113,15 @@ fun HistoryScreen(
                 item {
                     SectionHeader(text = "Recent")
                 }
-                items(uiState.otherChats) { chat ->
+                items(
+                    items = uiState.otherChats,
+                    key = { it.id }
+                ) { chat ->
                     HistoryChatItem(
                         chat = chat,
                         onClick = { onChatClick(chat.id) },
                         onLongClick = {
-                            selectedChatForOptions = chat
-                            showBottomSheet = true
+                            optionsState = HistoryOptionsState.Sheet(chat)
                         }
                     )
                 }
@@ -118,41 +129,96 @@ fun HistoryScreen(
         }
     }
 
-    if (showBottomSheet && selectedChatForOptions != null) {
-        val chat = selectedChatForOptions!!
-        ModalBottomSheet(
-            onDismissRequest = { 
-                showBottomSheet = false
-                selectedChatForOptions = null
-            },
-            sheetState = sheetState
-        ) {
-            ChatOptionsContent(
-                isPinned = chat.isPinned,
-                onDelete = {
-                    onDeleteChat(chat.id)
-                    showBottomSheet = false
-                    selectedChatForOptions = null
+    when (val state = optionsState) {
+        is HistoryOptionsState.Hidden -> {}
+        is HistoryOptionsState.Sheet -> {
+            ModalBottomSheet(
+                onDismissRequest = { 
+                    if (optionsState is HistoryOptionsState.Sheet) {
+                        optionsState = HistoryOptionsState.Hidden 
+                    }
                 },
-                onRename = {
-                    onRenameChat(chat.id, "Renamed Chat")
-                    showBottomSheet = false
-                    selectedChatForOptions = null
+                sheetState = sheetState,
+                modifier = Modifier.testTag("ChatOptionsBottomSheet")
+            ) {
+                ChatOptionsContent(
+                    isPinned = state.chat.isPinned,
+                    onDelete = {
+                        optionsState = HistoryOptionsState.Dialog(state.chat)
+                    },
+                    onRename = {
+                        onRenameChat(state.chat.id, "Renamed Chat")
+                        optionsState = HistoryOptionsState.Hidden
+                    },
+                    onUnpin = {
+                        onUnpinChat(state.chat.id)
+                        optionsState = HistoryOptionsState.Hidden
+                    },
+                    onPin = {
+                        onPinChat(state.chat.id)
+                        optionsState = HistoryOptionsState.Hidden
+                    }
+                )
+            }
+        }
+        is HistoryOptionsState.Dialog -> {
+            DeleteConfirmationDialog(
+                onConfirm = {
+                    onDeleteChat(state.chat.id)
+                    optionsState = HistoryOptionsState.Hidden
                 },
-                onUnpin = {
-                    onUnpinChat(chat.id)
-                    showBottomSheet = false
-                    selectedChatForOptions = null
+                onDismiss = {
+                    optionsState = HistoryOptionsState.Hidden
                 },
-                onPin = {
-                    onPinChat(chat.id)
-                    showBottomSheet = false
-                    selectedChatForOptions = null
-                }
+                modifier = Modifier.testTag("DeleteConfirmationDialog")
             )
         }
     }
 }
+
+@Composable
+fun DeleteConfirmationDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Delete Chat?",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        text = {
+            Text(text = "This chat will be permanently deleted. This action cannot be undone.")
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                ),
+                modifier = Modifier.testTag("ConfirmDeleteButton")
+            ) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                modifier = Modifier.testTag("CancelDeleteButton")
+            ) {
+                Text("Cancel")
+            }
+        },
+        modifier = modifier
+    )
+}
+
 
 @Composable
 private fun SectionHeader(text: String) {
@@ -245,7 +311,8 @@ private fun ChatOptionsContent(
             icon = Icons.Default.Delete,
             text = "Delete",
             contentColor = MaterialTheme.colorScheme.error,
-            onClick = onDelete
+            onClick = onDelete,
+            modifier = Modifier.testTag("DeleteOption")
         )
         BottomSheetOption(
             icon = Icons.Default.Edit,
@@ -273,11 +340,12 @@ private fun BottomSheetOption(
     text: String,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     icon: @Composable () -> Unit
 ) {
     TextButton(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp),
         colors = ButtonDefaults.textButtonColors(contentColor = contentColor)
@@ -300,9 +368,10 @@ private fun BottomSheetOption(
     painter: Painter,
     text: String,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    BottomSheetOption(text, contentColor, onClick) {
+    BottomSheetOption(text, contentColor, onClick, modifier) {
         Icon(painter = painter, contentDescription = null)
     }
 }
@@ -312,9 +381,10 @@ private fun BottomSheetOption(
     icon: ImageVector,
     text: String,
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    BottomSheetOption(text, contentColor, onClick) {
+    BottomSheetOption(text, contentColor, onClick, modifier) {
         Icon(imageVector = icon, contentDescription = null)
     }
 }
