@@ -8,7 +8,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun HistoryRoute(
     onNavigateBack: () -> Unit,
-    onNavigateToChat: (Long) -> Unit,
+    onNavigateToChat: (Long?) -> Unit,
     onNavigateToSettings: () -> Unit,
     onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
     viewModel: HistoryViewModel = hiltViewModel(),
