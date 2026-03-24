@@ -72,8 +72,36 @@ Your objective is to identify general bugs, architectural flaws, performance bot
             ]
         )
         
-        review_comment = message.content[0].text
-        post_github_comment(f"### 🤖 AI Architect Review\n\n{review_comment}")
+        # Safely extract both the thinking process and the final text review
+        review_comment = ""
+        thinking_process = ""
+        
+        for block in message.content:
+            if block.type == "thinking":
+                thinking_process = block.thinking
+            elif block.type == "text":
+                review_comment += block.text
+                
+        # Use a variable for markdown backticks to prevent parser breakage
+        md_code = "```"
+        
+        # Construct the final markdown payload with the collapsible section
+        final_output = f"""### 🤖 MiniMax Architect Review
+
+<details>
+<summary>🧠 View MiniMax Reasoning Process</summary>
+
+{md_code}text
+{thinking_process}
+{md_code}
+</details>
+
+---
+
+{review_comment}
+"""
+        
+        post_github_comment(final_output)
         
     except Exception as e:
         print(f"Error calling MiniMax API: {e}")
