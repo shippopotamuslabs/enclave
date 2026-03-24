@@ -18,6 +18,21 @@ import kotlinx.coroutines.flow.Flow
  */
 interface ChatRepository {
     /**
+     * Returns all chats as a Flow.
+     * Listens to database changes.
+     *
+     * @return Flow of all chats sorted by pinned first, then by lastModified descending
+     */
+    fun getAllChats(): Flow<List<Chat>>
+
+    /**
+     * Toggles the pinned status of a chat.
+     *
+     * @param chatId The ID of the chat to toggle
+     */
+    suspend fun togglePinStatus(chatId: Long)
+
+    /**
      * Returns all messages for a chat as a Flow.
      * Listens to database changes.
      *
@@ -160,4 +175,20 @@ interface ChatRepository {
      * @return List of messages in incomplete states
      */
     suspend fun getIncompleteCrewMessages(chatId: Long): List<Message>
+
+    /**
+     * Deletes a chat by its ID.
+     * This will cascade delete all associated messages due to foreign key constraints.
+     *
+     * @param chatId The ID of the chat to delete
+     */
+    suspend fun deleteChat(chatId: Long)
+
+    /**
+     * Renames a chat.
+     *
+     * @param chatId The ID of the chat to rename
+     * @param newName The new name for the chat
+     */
+    suspend fun renameChat(chatId: Long, newName: String)
 }

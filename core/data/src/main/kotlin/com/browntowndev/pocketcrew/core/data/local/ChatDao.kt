@@ -19,9 +19,18 @@ abstract class ChatDao {
     @Delete
     abstract suspend fun delete(chatEntity: ChatEntity): Int
 
-    @Query("SELECT * FROM chat ORDER BY last_modified DESC")
+    @Query("SELECT * FROM chat ORDER BY pinned DESC, last_modified DESC")
     abstract fun getAllChats(): Flow<List<ChatEntity>>
 
     @Query("SELECT * FROM chat WHERE id = :id")
     abstract suspend fun getChatById(id: Long): ChatEntity?
+
+    @Query("UPDATE chat SET pinned = NOT pinned WHERE id = :chatId")
+    abstract suspend fun updatePinStatus(chatId: Long): Int
+
+    @Query("DELETE FROM chat WHERE id = :chatId")
+    abstract suspend fun deleteById(chatId: Long): Int
+
+    @Query("UPDATE chat SET name = :newName WHERE id = :chatId")
+    abstract suspend fun updateName(chatId: Long, newName: String): Int
 }

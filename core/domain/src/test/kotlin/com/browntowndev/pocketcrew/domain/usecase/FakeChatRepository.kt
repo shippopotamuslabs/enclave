@@ -25,6 +25,26 @@ class FakeChatRepository : ChatRepository {
     
     // Track incomplete crew messages for testing
     private var incompleteCrewMessages: List<Message> = emptyList()
+
+    // For getAllChats and togglePinStatus tests
+    private val _chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
+    private val pinnedChats = mutableMapOf<Long, Boolean>()
+    
+    fun setChats(chats: List<Chat>) {
+        _chatsFlow.value = chats
+        chats.forEach { pinnedChats[it.id] = it.pinned }
+    }
+    
+    override fun getAllChats(): Flow<List<Chat>> = _chatsFlow
+    
+    override suspend fun togglePinStatus(chatId: Long) {
+        val current = pinnedChats[chatId] ?: return
+        pinnedChats[chatId] = !current
+        // Update the flow with modified chat
+        _chatsFlow.value = _chatsFlow.value.map { chat ->
+            if (chat.id == chatId) chat.copy(pinned = !current) else chat
+        }
+    }
     
     fun setIncompleteCrewMessages(messages: List<Message>) {
         incompleteCrewMessages = messages
@@ -123,6 +143,19 @@ class FakeChatRepository : ChatRepository {
             message.messageState == MessageState.PROCESSING ||
             message.messageState == MessageState.THINKING ||
             message.messageState == MessageState.GENERATING
+        }
+    }
+
+    private val deletedChatIds = mutableListOf<Long>()
+
+    override suspend fun deleteChat(chatId: Long) {
+        deletedChatIds.add(chatId)
+        _chatsFlow.value = _chatsFlow.value.filter { it.id != chatId }
+    }
+
+    override suspend fun renameChat(chatId: Long, newName: String) {
+        _chatsFlow.value = _chatsFlow.value.map { chat ->
+            if (chat.id == chatId) chat.copy(name = newName) else chat
         }
     }
 
