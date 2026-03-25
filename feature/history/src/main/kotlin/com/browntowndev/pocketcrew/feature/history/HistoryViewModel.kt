@@ -15,11 +15,16 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.browntowndev.pocketcrew.domain.usecase.chat.SearchChatsUseCase
 
 /**
  * ViewModel for the History screen.
@@ -28,11 +33,19 @@ import javax.inject.Inject
 @HiltViewModel
 class HistoryViewModel @Inject constructor(
     private val getAllChatsUseCase: GetAllChatsUseCase,
+    private val searchChatsUseCase: SearchChatsUseCase,
     private val deleteChatUseCase: DeleteChatUseCase,
     private val renameChatUseCase: RenameChatUseCase,
     private val togglePinChatUseCase: TogglePinChatUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
 ) : ViewModel() {
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    fun onSearchQueryChange(query: String) {
+        _searchQuery.update { query }
+    }
 
     private data class CategorizedChats(
         val pinned: List<HistoryChat>,
@@ -42,8 +55,15 @@ class HistoryViewModel @Inject constructor(
     private val _events = MutableSharedFlow<HistoryEvent>()
     val events: SharedFlow<HistoryEvent> = _events.asSharedFlow()
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class, kotlinx.coroutines.FlowPreview::class)
     val uiState: StateFlow<HistoryUiState> = combine(
-        getAllChatsUseCase().catch { emit(emptyList()) },
+        _searchQuery.debounce(300L).flatMapLatest { query ->
+            if (query.isBlank()) {
+                getAllChatsUseCase().catch { emit(emptyList()) }
+            } else {
+                searchChatsUseCase(query).catch { emit(emptyList()) }
+            }
+        },
         getSettingsUseCase().catch { 
             emit(
                 com.browntowndev.pocketcrew.domain.port.repository.SettingsData(

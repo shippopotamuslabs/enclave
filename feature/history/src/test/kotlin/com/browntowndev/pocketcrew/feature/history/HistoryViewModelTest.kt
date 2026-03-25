@@ -42,6 +42,7 @@ class HistoryViewModelTest {
     val mainDispatcherRule = MainDispatcherRule(testDispatcher)
 
     private lateinit var mockGetAllChatsUseCase: GetAllChatsUseCase
+    private lateinit var mockSearchChatsUseCase: com.browntowndev.pocketcrew.domain.usecase.chat.SearchChatsUseCase
     private lateinit var mockDeleteChatUseCase: DeleteChatUseCase
     private lateinit var mockRenameChatUseCase: RenameChatUseCase
     private lateinit var mockTogglePinChatUseCase: TogglePinChatUseCase
@@ -91,6 +92,7 @@ class HistoryViewModelTest {
     @BeforeEach
     fun setup() {
         mockGetAllChatsUseCase = mockk(relaxed = true)
+        mockSearchChatsUseCase = mockk(relaxed = true)
         mockDeleteChatUseCase = mockk(relaxed = true)
         mockRenameChatUseCase = mockk(relaxed = true)
         mockTogglePinChatUseCase = mockk(relaxed = true)
@@ -114,6 +116,7 @@ class HistoryViewModelTest {
     private fun createViewModel(): HistoryViewModel {
         return HistoryViewModel(
             getAllChatsUseCase = mockGetAllChatsUseCase,
+            searchChatsUseCase = mockSearchChatsUseCase,
             deleteChatUseCase = mockDeleteChatUseCase,
             renameChatUseCase = mockRenameChatUseCase,
             togglePinChatUseCase = mockTogglePinChatUseCase,
@@ -547,4 +550,178 @@ class HistoryViewModelTest {
         val gammaChat = state.pinnedChats.find { it.name == "Gamma" }
         assertEquals("Oct 15, 12:00 AM", gammaChat?.lastMessageDateTime)
     }
+
+    // Suite S: Search Tests (from test_spec.md)
+
+    @Test
+    fun `Scenario 1 Initial State Shows All Chats`() = runTest(testDispatcher) {
+        val testChats = listOf(
+            createTestChat(1, "Chat 1", today, pinned = false),
+            createTestChat(2, "Chat 2", today, pinned = false),
+            createTestChat(3, "Chat 3", today, pinned = false)
+        )
+        val chatsFlow = MutableStateFlow(testChats)
+        every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
+
+        viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        
+        // Initial state has empty search query
+        assertEquals("", viewModel.searchQuery.value)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(3, state.otherChats.size + state.pinnedChats.size)
+        assertFalse(state.isLoading)
+    }
+
+    @Test
+    fun `Scenario 2 Search by Chat Name`() = runTest(testDispatcher) {
+        val allChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
+        val matchingChat = createTestChat(1, "Project Plan", today, false)
+        val searchChatsFlow = MutableStateFlow(listOf(matchingChat))
+        
+        every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
+        every { mockSearchChatsUseCase.invoke("Project") } returns searchChatsFlow
+
+        viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        
+        viewModel.onSearchQueryChange("Project")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        val allVisibleChats = state.otherChats + state.pinnedChats
+        assertEquals(1, allVisibleChats.size)
+        assertEquals("Project Plan", allVisibleChats.first().name)
+        assertEquals(1L, allVisibleChats.first().id)
+    }
+
+    @Test
+    fun `Scenario 3 Search by Message Content`() = runTest(testDispatcher) {
+        val allChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
+        val matchingChat = createTestChat(10, "Kotlin Chat", today, false)
+        val searchChatsFlow = MutableStateFlow(listOf(matchingChat))
+        
+        every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
+        every { mockSearchChatsUseCase.invoke("coroutines") } returns searchChatsFlow
+
+        viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        
+        viewModel.onSearchQueryChange("coroutines")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        val allVisibleChats = state.otherChats + state.pinnedChats
+        assertEquals(1, allVisibleChats.size)
+        assertEquals(10L, allVisibleChats.first().id)
+    }
+
+    @Test
+    fun `Scenario 4 No Matching Results`() = runTest(testDispatcher) {
+        val allChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
+        val searchChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
+        
+        every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
+        every { mockSearchChatsUseCase.invoke("xyz123nonexistent") } returns searchChatsFlow
+
+        viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        
+        viewModel.onSearchQueryChange("xyz123nonexistent")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.pinnedChats.isEmpty(), "Pinned chats should be empty")
+        assertTrue(state.otherChats.isEmpty(), "Other chats should be empty")
+    }
+
+    @Test
+    fun `Scenario 5 Search Query Debouncing`() = runTest(testDispatcher) {
+        val allChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
+        val searchChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
+        
+        every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
+        every { mockSearchChatsUseCase.invoke(any()) } returns searchChatsFlow
+
+        viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        
+        // Simulating rapid typing
+        viewModel.onSearchQueryChange("h")
+        viewModel.onSearchQueryChange("he")
+        viewModel.onSearchQueryChange("hel")
+        viewModel.onSearchQueryChange("hell")
+        viewModel.onSearchQueryChange("hello")
+        
+        advanceUntilIdle()
+
+        // Verify that the use case was only invoked exactly once with the final string
+        io.mockk.verify(exactly = 1) { mockSearchChatsUseCase.invoke("hello") }
+        io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("h") }
+        io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("he") }
+        io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("hel") }
+        io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("hell") }
+    }
+
+    @Test
+    fun `Scenario 6 Clear Search Query Restores All Chats`() = runTest(testDispatcher) {
+        val testChats = listOf(
+            createTestChat(1, "Chat 1", today, false),
+            createTestChat(2, "Chat 2", today, false),
+            createTestChat(3, "Chat 3", today, false),
+            createTestChat(4, "Chat 4", today, false),
+            createTestChat(5, "Chat 5", today, false)
+        )
+        val allChatsFlow = MutableStateFlow(testChats)
+        val searchResult = createTestChat(1, "Project Chat", today, false)
+        val searchChatsFlow = MutableStateFlow(listOf(searchResult))
+        
+        every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
+        every { mockSearchChatsUseCase.invoke("Project") } returns searchChatsFlow
+        every { mockSearchChatsUseCase.invoke("") } returns allChatsFlow
+
+        viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        
+        viewModel.onSearchQueryChange("Project")
+        advanceUntilIdle()
+        
+        var state = viewModel.uiState.value
+        assertEquals(1, state.otherChats.size + state.pinnedChats.size)
+        assertEquals("Project Chat", (state.otherChats + state.pinnedChats).first().name)
+        
+        // Clear search query
+        viewModel.onSearchQueryChange("")
+        advanceUntilIdle()
+        
+        state = viewModel.uiState.value
+        assertEquals(5, state.otherChats.size + state.pinnedChats.size)
+        val chatIds = (state.otherChats + state.pinnedChats).map { it.id }.toSet()
+        assertEquals(setOf(1L, 2L, 3L, 4L, 5L), chatIds)
+    }
+
+    @Test
+    fun `Error 1 FTS Query with Special Characters Handled via Sanitizer`() = runTest(testDispatcher) {
+        // In this unit test, we verify that the ViewModel correctly passes the "raw" 
+        // special character query to the use case without crashing.
+        // The actual crash prevention (Sanitization) is verified in FtsSanitizerTest.
+        val searchChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
+        val invalidQuery = "\"*^\" OR AND"
+        
+        every { mockGetAllChatsUseCase.invoke() } returns MutableStateFlow(emptyList())
+        every { mockSearchChatsUseCase.invoke(invalidQuery) } returns searchChatsFlow
+
+        viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        
+        viewModel.onSearchQueryChange(invalidQuery)
+        advanceUntilIdle()
+        
+        // Ensure it reached the use case
+        io.mockk.verify { mockSearchChatsUseCase.invoke(invalidQuery) }
+        assertTrue(viewModel.uiState.value.otherChats.isEmpty())
+    }
 }
+

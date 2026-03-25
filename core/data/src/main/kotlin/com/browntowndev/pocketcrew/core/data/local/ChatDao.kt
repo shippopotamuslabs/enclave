@@ -33,4 +33,20 @@ abstract class ChatDao {
 
     @Query("UPDATE chat SET name = :newName WHERE id = :chatId")
     abstract suspend fun updateName(chatId: Long, newName: String): Int
+
+    @Query("""
+        SELECT * FROM (
+            SELECT chat.* FROM chat
+            JOIN message ON chat.id = message.chat_id
+            JOIN message_search ON message.id = message_search.rowid
+            WHERE message_search MATCH :ftsQuery
+            
+            UNION
+            
+            SELECT * FROM chat
+            WHERE name LIKE '%' || :query || '%'
+        )
+        ORDER BY pinned DESC, last_modified DESC
+    """)
+    abstract fun searchChats(query: String, ftsQuery: String): Flow<List<ChatEntity>>
 }
