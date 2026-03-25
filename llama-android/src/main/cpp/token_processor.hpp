@@ -32,22 +32,25 @@ public:
      */
     std::string extract_utf8(std::string_view lookahead_tag = "") {
         std::string result = "";
-        size_t processed_idx = 0;
-        size_t last_valid_idx = 0;
+        size_t i = 0;
+        size_t last_extraction_point = 0;
         
-        for (size_t i = 0; i < buffer.length(); ) {
+        while (i < buffer.length()) {
             unsigned char c = (unsigned char)buffer[i];
             int len = 0;
             
-            if (c < 0x80) len = 1;
-            else if ((c & 0xE0) == 0xC0) len = 2;
-            else if ((c & 0xF0) == 0xE0) len = 3;
-            else if ((c & 0xF0) == 0xF0) len = 4;
-            else {
+            if (c < 0x80) {
+                len = 1;
+            } else if ((c & 0xE0) == 0xC0 && (c & 0x1E) != 0) {
+                len = 2;
+            } else if ((c & 0xF0) == 0xE0) {
+                len = 3;
+            } else if ((c & 0xF8) == 0xF0 && (c & 0x07) <= 0x04) {
+                len = 4;
+            } else {
                 // Invalid UTF-8 start byte - skip and discard
                 i++;
-                processed_idx = i;
-                last_valid_idx = i;
+                last_extraction_point = i;
                 continue;
             }
 
@@ -62,40 +65,40 @@ public:
                 }
 
                 if (valid) {
+                    // Valid character!
+                    // Check if this (and everything before it) would be a prefix of the tag
+                    // if it's at the very end of the buffer.
+                    if (!lookahead_tag.empty()) {
+                        std::string_view remaining(buffer.data() + i, buffer.length() - i);
+                        bool is_tag_prefix = false;
+                        for (size_t l = 1; l <= std::min(remaining.length(), lookahead_tag.length()); l++) {
+                            if (remaining.substr(0, l) == lookahead_tag.substr(0, l) && (i + l == buffer.length())) {
+                                is_tag_prefix = true;
+                                break;
+                            }
+                        }
+                        if (is_tag_prefix) {
+                            // Stop here to protect the potential tag
+                            break;
+                        }
+                    }
+
+                    result.append(buffer.substr(i, len));
                     i += len;
-                    last_valid_idx = i;
+                    last_extraction_point = i;
                 } else {
                     // Invalid continuation byte - discard the start byte
                     i++;
-                    processed_idx = i;
-                    last_valid_idx = i;
+                    last_extraction_point = i;
                 }
             } else {
-                // Incomplete multi-byte character, leave in buffer
+                // Incomplete multi-byte character - leave in buffer
                 break;
             }
         }
 
-        size_t extraction_end = last_valid_idx;
-
-        // If a lookahead tag is provided, check if the buffer ends with a prefix of it.
-        // We use string_view to avoid allocations during comparison.
-        if (!lookahead_tag.empty() && extraction_end > 0) {
-            std::string_view current_view(buffer.data(), extraction_end);
-            for (size_t len = std::min(extraction_end, lookahead_tag.length()); len > 0; len--) {
-                if (current_view.substr(extraction_end - len) == lookahead_tag.substr(0, len)) {
-                    extraction_end -= len;
-                    break;
-                }
-            }
-        }
-
-        if (extraction_end > processed_idx) {
-            result = buffer.substr(processed_idx, extraction_end - processed_idx);
-            buffer.erase(0, extraction_end);
-        } else if (processed_idx > 0) {
-            // We discarded some invalid bytes but didn't extract anything new
-            buffer.erase(0, processed_idx);
+        if (last_extraction_point > 0) {
+            buffer.erase(0, last_extraction_point);
         }
 
         return result;
