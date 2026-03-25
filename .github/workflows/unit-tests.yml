@@ -36,6 +36,9 @@ jobs:
           ./test_token_processor
           rm test_token_processor
 
+      - name: Accept Android SDK Licenses
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest --parallel --build-cache -Pandroid.builder.sdk.download=true
 
