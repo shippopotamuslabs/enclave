@@ -87,11 +87,32 @@ void test_invalid_utf8_recovery() {
     std::cout << "Running test_invalid_utf8_recovery..." << std::endl;
     TokenProcessor processor;
     
-    // Invalid byte followed by valid string
-    const char* input = "\xFFHello";
-    processor.append(input, 6);
-    std::string output = processor.extract_utf8();
-    assert(output == "Hello");
+    // 1. Invalid leading byte
+    const char* input1 = "\xFF" "Hello";
+    processor.append(input1, 6);
+    assert(processor.extract_utf8() == "Hello");
+    
+    // 2. Interleaved invalid bytes: "A" + invalid + "B"
+    const char* input2 = "A\xFF" "B";
+    processor.append(input2, 3);
+    assert(processor.extract_utf8() == "AB");
+    
+    // 3. Multiple invalid bytes
+    const char* input3 = "X\x80\x80" "Y"; // Continuation bytes without start
+    processor.append(input3, 4);
+    assert(processor.extract_utf8() == "XY");
+}
+
+void test_empty_pieces() {
+    std::cout << "Running test_empty_pieces..." << std::endl;
+    TokenProcessor processor;
+    
+    processor.append("", 0);
+    assert(processor.extract_utf8().empty());
+    
+    processor.append("A", 1);
+    processor.append("", 0);
+    assert(processor.extract_utf8() == "A");
 }
 
 void test_complex_mixing() {
@@ -128,6 +149,7 @@ int main() {
         test_split_bpe_marker();
         test_split_tag_detection();
         test_invalid_utf8_recovery();
+        test_empty_pieces();
         test_complex_mixing();
         
         std::cout << "\nALL TESTS PASSED!" << std::endl;
