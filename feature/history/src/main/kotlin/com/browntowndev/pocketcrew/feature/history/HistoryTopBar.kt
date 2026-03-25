@@ -16,10 +16,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
@@ -29,11 +25,11 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HistoryTopBar(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     onBackClick: () -> Unit,
     onSettingsClick: () -> Unit
 ) {
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-
     TopAppBar(
         navigationIcon = {
             IconButton(onClick = onBackClick) {
@@ -47,13 +43,19 @@ fun HistoryTopBar(
             OutlinedTextField(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(48.dp),
                 shape = RoundedCornerShape(28.dp),
                 singleLine = true,
                 maxLines = 1,
+                textStyle = MaterialTheme.typography.bodyMedium,
                 value = searchQuery,
-                onValueChange = { searchQuery = it },
-                placeholder = { Text("Search Pocket Crew History") },
+                onValueChange = onSearchQueryChange,
+                placeholder = {
+                    Text(
+                        text = "Search Pocket Crew History",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
@@ -90,7 +92,7 @@ fun HistoryTopBar(
 @Composable
 fun PreviewHistoryTopBarLight() {
     PocketCrewTheme {
-        HistoryTopBar({}, {})
+        HistoryTopBar("", {}, {}, {})
     }
 }
 
@@ -98,7 +100,7 @@ fun PreviewHistoryTopBarLight() {
 @Composable
 fun PreviewHistoryTopBarDark() {
     PocketCrewTheme(darkTheme = true) {
-        HistoryTopBar({}, {})
+        HistoryTopBar("", {}, {}, {})
     }
 }
 
@@ -106,6 +108,6 @@ fun PreviewHistoryTopBarDark() {
 @Composable
 fun PreviewHistoryTopBarDynamic() {
     PocketCrewTheme(dynamicColor = true) {
-        HistoryTopBar({}, {})
+        HistoryTopBar("", {}, {}, {})
     }
 }

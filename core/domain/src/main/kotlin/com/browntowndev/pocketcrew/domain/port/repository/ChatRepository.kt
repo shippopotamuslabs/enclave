@@ -191,4 +191,14 @@ interface ChatRepository {
      * @param newName The new name for the chat
      */
     suspend fun renameChat(chatId: Long, newName: String)
+
+    /**
+     * Searches chats by name or message content.
+     *
+     * @param query The search query
+     * @param ftsQuery The sanitized FTS query
+     * @return Flow of matching chats
+     */
+    fun searchChats(query: String, ftsQuery: String): Flow<List<Chat>>
 }
+

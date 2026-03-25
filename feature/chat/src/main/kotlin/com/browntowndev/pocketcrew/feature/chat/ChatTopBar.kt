@@ -57,20 +57,14 @@ fun ChatTopBar(
             }
         },
         actions = {
-            Surface(
-                onClick = onNewChatClick,
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
-                tonalElevation = 2.dp,
-                modifier = Modifier.padding(end = 8.dp)
-            ) {
+            IconButton(onClick = onNewChatClick) {
                 Icon(
                     painter = painterResource(R.drawable.edit_square),
                     contentDescription = "Start new chat",
                     modifier = Modifier
                         .size(40.dp)
                         .padding(8.dp),
-                    tint = MaterialTheme.colorScheme.onPrimary
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
         }
