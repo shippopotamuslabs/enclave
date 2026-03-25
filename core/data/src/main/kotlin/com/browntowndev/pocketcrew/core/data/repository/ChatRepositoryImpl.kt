@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
+import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
@@ -175,6 +176,13 @@ class ChatRepositoryImpl @Inject constructor(
         val rowsAffected = chatDao.updateName(chatId, newName)
         if (rowsAffected == 0) {
             throw IllegalArgumentException("Chat not found with id: $chatId")
+        }
+    }
+
+    override fun searchChats(query: String, ftsQuery: String): Flow<List<Chat>> {
+        val sanitizedFts = FtsSanitizer.sanitize(ftsQuery)
+        return chatDao.searchChats(query, sanitizedFts).map { entities ->
+            entities.map { it.toDomain() }
         }
     }
 }

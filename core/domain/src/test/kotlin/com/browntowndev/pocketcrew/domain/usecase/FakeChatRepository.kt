@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 
 /**
  * Fake implementation of ChatRepository for testing.
@@ -156,6 +157,12 @@ class FakeChatRepository : ChatRepository {
     override suspend fun renameChat(chatId: Long, newName: String) {
         _chatsFlow.value = _chatsFlow.value.map { chat ->
             if (chat.id == chatId) chat.copy(name = newName) else chat
+        }
+    }
+
+    override fun searchChats(query: String, ftsQuery: String): Flow<List<Chat>> {
+        return _chatsFlow.map { list ->
+            list.filter { it.name.contains(query, ignoreCase = true) }
         }
     }
 
