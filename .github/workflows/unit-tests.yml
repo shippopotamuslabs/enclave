@@ -36,6 +36,9 @@ jobs:
           ./test_token_processor
           rm test_token_processor
 
+      - name: Verify Native Compilation
+        run: ./gradlew :llama-android:externalNativeBuildDebug --parallel
+
       - name: Accept Android SDK Licenses
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
