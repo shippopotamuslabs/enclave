@@ -37,7 +37,9 @@ private val DarkColorScheme = darkColorScheme(
     surfaceVariant = DarkSurfaceVariant,
     onSurfaceVariant = DarkOnSurfaceVariant,
 
-    outline = DarkOutline
+    outline = DarkOutline,
+    error = ErrorRed,
+    onError = OnErrorWhite,
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -49,6 +51,8 @@ private val LightColorScheme = lightColorScheme(
     onPrimary = Color.White,
     onBackground = LightOnBackground,
     onSurface = LightOnBackground,
+    error = ErrorRed,
+    onError = OnErrorWhite,
 )
 
 @Composable
@@ -98,7 +102,7 @@ private fun darkAdmonitionStyles(): Map<String, AdmonitionStyle> = mapOf(
         titleColor = DarkOnBackground
     ),
     "danger" to AdmonitionStyle(
-        borderColor = Color(0xFFE53E3E),
+        borderColor = ErrorRed,
         backgroundColor = DarkSurface,
         iconText = "\u274C",
         titleColor = DarkOnBackground
