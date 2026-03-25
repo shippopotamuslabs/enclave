@@ -37,11 +37,16 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    externalNativeBuild {
-        cmake {
-            path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+    val hasLlamaCpp = file("../third_party/llama.cpp/CMakeLists.txt").exists()
+    if (hasLlamaCpp) {
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.22.1"
+            }
         }
+    } else {
+        println("Skipping externalNativeBuild: third_party/llama.cpp not found. (Expected in CI environments)")
     }
 
     packaging {
