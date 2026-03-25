@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.download.remote
 
+import com.browntowndev.pocketcrew.core.data.BuildConfig
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -46,6 +47,10 @@ class HttpFileDownloader @Inject constructor(
                 if (existingBytes > 0) {
                     addHeader("Range", "bytes=$existingBytes-")
                 }
+                // Add HF Auth token if it's a HF URL
+                if (downloadUrl.startsWith("https://huggingface.co") && BuildConfig.HUGGING_FACE_API_KEY.isNotEmpty()) {
+                    addHeader("Authorization", "Bearer ${BuildConfig.HUGGING_FACE_API_KEY}")
+                }
             }
             .build()
 
@@ -58,6 +63,12 @@ class HttpFileDownloader @Inject constructor(
                 tempFile.delete()
                 val retryRequest = Request.Builder()
                     .url(downloadUrl)
+                    .apply {
+                        // Add HF Auth token if it's a HF URL
+                        if (downloadUrl.startsWith("https://huggingface.co") && BuildConfig.HUGGING_FACE_API_KEY.isNotEmpty()) {
+                            addHeader("Authorization", "Bearer ${BuildConfig.HUGGING_FACE_API_KEY}")
+                        }
+                    }
                     .build()
                 return@withContext downloadWithRetry(retryRequest, config, downloadUrl, targetDir, progressCallback)
             }
@@ -270,6 +281,12 @@ class HttpFileDownloader @Inject constructor(
             val request = Request.Builder()
                 .url(url)
                 .head()
+                .apply {
+                    // Add HF Auth token if it's a HF URL
+                    if (url.startsWith("https://huggingface.co") && BuildConfig.HUGGING_FACE_API_KEY.isNotEmpty()) {
+                        addHeader("Authorization", "Bearer ${BuildConfig.HUGGING_FACE_API_KEY}")
+                    }
+                }
                 .build()
 
             okHttpClient.newCall(request).execute().use { response ->

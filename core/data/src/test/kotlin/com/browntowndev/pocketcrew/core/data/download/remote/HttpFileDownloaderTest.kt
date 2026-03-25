@@ -187,6 +187,43 @@ class HttpFileDownloaderTest {
         assertTrue(result.isResumed)
     }
 
+    @Test
+    fun downloadFile_addsHuggingFaceAuthHeader_whenUrlIsHuggingFace() = kotlinx.coroutines.test.runTest {
+        // Given: A Hugging Face URL
+        val hfUrl = "https://huggingface.co/google/gemma-2b-it/resolve/main/model.gguf"
+        val testContent = "test"
+        val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
+        val testConfig = createTestConfig(testContent)
+
+        val requestSlot = slot<Request>()
+        val mockCall = mockk<okhttp3.Call>(relaxed = true)
+        val mockResponse = mockk<Response>(relaxed = true)
+        val mockBody = mockk<ResponseBody>(relaxed = true)
+
+        every { mockClient.newCall(capture(requestSlot)) } returns mockCall
+        every { mockCall.execute() } returns mockResponse
+        every { mockResponse.isSuccessful } returns true
+        every { mockResponse.code } returns 200
+        every { mockResponse.body } returns mockBody
+        every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
+        every { mockBody.byteStream() } returns contentBytes.inputStream()
+
+        // When: Download from HF URL
+        httpFileDownloader.downloadFile(
+            config = testConfig,
+            downloadUrl = hfUrl,
+            targetDir = tempDir,
+            existingBytes = 0L,
+            progressCallback = null
+        )
+
+        // Then: Request should have Authorization header if API key is not empty
+        if (com.browntowndev.pocketcrew.core.data.BuildConfig.HUGGING_FACE_API_KEY.isNotEmpty()) {
+            val authHeader = requestSlot.captured.header("Authorization")
+            assertEquals("Bearer ${com.browntowndev.pocketcrew.core.data.BuildConfig.HUGGING_FACE_API_KEY}", authHeader)
+        }
+    }
+
     // ============ downloadFile Error Tests ============
 
     @Test

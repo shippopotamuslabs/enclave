@@ -23,9 +23,11 @@ import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManag
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.browntowndev.pocketcrew.feature.inference.llama.LlamaGpuHelper
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.ExperimentalFlags
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import dagger.Module
 import dagger.Provides
@@ -63,52 +65,40 @@ object EngineModule {
     }
 
     /**
-     * Determines GPU availability by attempting GPU inference and falling back on failure.
-     * In LiteRT 2.x, the library handles backend selection gracefully.
+     * Creates LlmInference using the GPU backend. 
+     * LiteRT 2.x handles the internal fallback to CPU if GPU is unavailable.
      */
     private fun createLlmInference(context: Context, modelPath: String): LlmInference {
-        // Try GPU first, fall back to CPU on failure
-        return try {
-            Log.i(TAG, "Attempting GPU backend.")
-            val options = LlmInference.LlmInferenceOptions.builder()
-                .setModelPath(modelPath)
-                .setMaxTokens(16384)
-                .setPreferredBackend(LlmInference.Backend.GPU)
-                .build()
+        Log.i(TAG, "Creating LlmInference with GPU preference (auto-fallback handled by SDK).")
 
-            LlmInference.createFromOptions(context, options).also {
-                Log.i(TAG, "GPU Delegate supported! Using GPU backend.")
-            }
-        } catch (e: Exception) {
-            Log.i(TAG, "GPU not supported, falling back to CPU: ${e.message}")
-            val cpuOptions = LlmInference.LlmInferenceOptions.builder()
-                .setModelPath(modelPath)
-                .setMaxTokens(16384)
-                .setPreferredBackend(LlmInference.Backend.CPU)
-                .build()
+        val options = LlmInference.LlmInferenceOptions.builder()
+            .setModelPath(modelPath)
+            .setMaxTokens(16384)
+            .setPreferredBackend(LlmInference.Backend.GPU)
+            .build()
 
-            LlmInference.createFromOptions(context, cpuOptions)
-        }
+        return LlmInference.createFromOptions(context, options)
     }
 
-    private fun createEngine(modelPath: String): Engine {
-        // Try GPU first, fall back to CPU on failure
-        return try {
-            Log.i(TAG, "Attempting GPU backend for LiteRT Engine.")
-            val config = EngineConfig(
-                modelPath,
-                backend = Backend.GPU()
-            )
-            Engine(config).also {
-                Log.i(TAG, "GPU Delegate supported! Using GPU backend for LiteRT Engine.")
-            }
-        } catch (e: Exception) {
-            Log.i(TAG, "GPU not supported, falling back to CPU: ${e.message}")
-            val config = EngineConfig(
-                modelPath,
-                backend = Backend.CPU()
-            )
-            Engine(config)
+    /**
+     * Creates LiteRT Engine using explicit GPU preference.
+     */
+    @OptIn(com.google.ai.edge.litertlm.ExperimentalApi::class)
+    private fun createEngine(context: Context, modelPath: String): Engine {
+        Log.i(TAG, "Creating LiteRT Engine with GPU backend (and experimental NPU flags).")
+
+        // Required for NPU support if available on the device
+        ExperimentalFlags.npuLibrariesDir = context.applicationInfo.nativeLibraryDir
+
+        val config = EngineConfig(
+            modelPath = modelPath,
+            backend = Backend.GPU(),
+            // For Gemma 3n models, vision should match the primary backend
+            visionBackend = Backend.GPU()
+        )
+        
+        return Engine(config).also {
+            Log.i(TAG, "LiteRT Engine initialized with EngineConfig (GPU backend).")
         }
     }
 
@@ -124,7 +114,7 @@ object EngineModule {
             ?: throw IllegalStateException("No model registered for ${ModelType.MAIN}. Please download a model first.")
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
-        return createEngine(modelPath)
+        return createEngine(context, modelPath)
     }
 
     @Provides
@@ -137,7 +127,8 @@ object EngineModule {
         val config = modelRegistry.getRegisteredModelSync(ModelType.VISION)
             ?: throw IllegalStateException("No model registered for ${ModelType.VISION}. Please download a model first.")
         val filename = config.metadata.localFileName
-        return Engine(EngineConfig(getModelPath(context, filename)))
+        val modelPath = getModelPath(context, filename)
+        return createEngine(context, modelPath)
     }
 
     @Provides
@@ -150,7 +141,8 @@ object EngineModule {
         val config = modelRegistry.getRegisteredModelSync(ModelType.DRAFT_ONE)
             ?: throw IllegalStateException("No model registered for ${ModelType.DRAFT_ONE}. Please download a model first.")
         val filename = config.metadata.localFileName
-        return Engine(EngineConfig(getModelPath(context, filename)))
+        val modelPath = getModelPath(context, filename)
+        return createEngine(context, modelPath)
     }
 
     @Provides
@@ -163,7 +155,8 @@ object EngineModule {
         val config = modelRegistry.getRegisteredModelSync(ModelType.DRAFT_TWO)
             ?: throw IllegalStateException("No model registered for ${ModelType.DRAFT_TWO}. Please download a model first.")
         val filename = config.metadata.localFileName
-        return Engine(EngineConfig(getModelPath(context, filename)))
+        val modelPath = getModelPath(context, filename)
+        return createEngine(context, modelPath)
     }
 
     @Provides
@@ -176,7 +169,8 @@ object EngineModule {
         val config = modelRegistry.getRegisteredModelSync(ModelType.FAST)
             ?: throw IllegalStateException("No model registered for ${ModelType.FAST}. Please download a model first.")
         val filename = config.metadata.localFileName
-        return Engine(EngineConfig(getModelPath(context, filename)))
+        val modelPath = getModelPath(context, filename)
+        return createEngine(context, modelPath)
     }
 
     @Provides
@@ -189,7 +183,8 @@ object EngineModule {
         val config = modelRegistry.getRegisteredModelSync(ModelType.THINKING)
             ?: throw IllegalStateException("No model registered for ${ModelType.THINKING}. Please download a model first.")
         val filename = config.metadata.localFileName
-        return Engine(EngineConfig(getModelPath(context, filename)))
+        val modelPath = getModelPath(context, filename)
+        return createEngine(context, modelPath)
     }
 
     @Provides
@@ -203,7 +198,8 @@ object EngineModule {
         val config = modelRegistry.getRegisteredModelSync(ModelType.FINAL_SYNTHESIS)
             ?: throw IllegalStateException("No model registered for ${ModelType.FINAL_SYNTHESIS}. Please download a model first.")
         val filename = config.metadata.localFileName
-        return Engine(EngineConfig(getModelPath(context, filename)))
+        val modelPath = getModelPath(context, filename)
+        return createEngine(context, modelPath)
     }
 
     // Qualified ConversationManager providers - each is bound to a specific Engine
@@ -286,27 +282,27 @@ object EngineModule {
         return ConversationManagerImpl(engine, config)
     }
 
-    // LlmInferencePort providers - inject qualified ConversationManager
-    @Provides
-    @Singleton
-    @MainModelEngine
-    fun provideMainInferenceService(
-        @ApplicationContext context: Context,
-        @MainModelEngine conversationManager: ConversationManagerPort,
+    /**
+     * Factory method for creating LlmInferencePort implementations based on model file extension.
+     */
+    private fun createInferenceService(
+        context: Context,
+        modelType: ModelType,
+        conversationManager: ConversationManagerPort,
         modelRegistry: ModelRegistryPort,
         processThinkingTokens: ProcessThinkingTokensUseCase,
         llamaChatSessionManager: LlamaChatSessionManager,
         loggingPort: LoggingPort
     ): LlmInferencePort {
-        val config = modelRegistry.getRegisteredModelSync(ModelType.MAIN)
-            ?: throw IllegalStateException("No model registered for ${ModelType.MAIN}. Please download a model first.")
+        val config = modelRegistry.getRegisteredModelSync(modelType)
+            ?: throw IllegalStateException("No model registered for $modelType. Please download a model first.")
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
 
         return when {
             filename.endsWith(".gguf") -> {
                 // Use llama.cpp implementation for GGUF models
-                val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.MAIN, loggingPort)
+                val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, modelType, loggingPort)
                 val tunings = config.tunings
                 val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
 
@@ -329,12 +325,32 @@ object EngineModule {
                 service
             }
             filename.endsWith(".task") -> {
-                MediaPipeInferenceServiceImpl(createLlmInference(context, modelPath), ModelType.MAIN)
+                // Use MediaPipe for .task files
+                MediaPipeInferenceServiceImpl(createLlmInference(context, modelPath), modelType)
             }
             else -> {
-                LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.DRAFT_ONE)
+                // Default to LiteRT Engine
+                LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, modelType)
             }
         }
+    }
+
+    // LlmInferencePort providers - inject qualified ConversationManager
+    @Provides
+    @Singleton
+    @MainModelEngine
+    fun provideMainInferenceService(
+        @ApplicationContext context: Context,
+        @MainModelEngine conversationManager: ConversationManagerPort,
+        modelRegistry: ModelRegistryPort,
+        processThinkingTokens: ProcessThinkingTokensUseCase,
+        llamaChatSessionManager: LlamaChatSessionManager,
+        loggingPort: LoggingPort
+    ): LlmInferencePort {
+        return createInferenceService(
+            context, ModelType.MAIN, conversationManager, modelRegistry,
+            processThinkingTokens, llamaChatSessionManager, loggingPort
+        )
     }
 
     @Provides
@@ -348,36 +364,10 @@ object EngineModule {
         llamaChatSessionManager: LlamaChatSessionManager,
         loggingPort: LoggingPort
     ): LlmInferencePort {
-        val config = modelRegistry.getRegisteredModelSync(ModelType.VISION)
-            ?: throw IllegalStateException("No model registered for ${ModelType.VISION}. Please download a model first.")
-        val filename = config.metadata.localFileName
-
-        return if (filename.endsWith(".gguf")) {
-            val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.VISION, loggingPort)
-            val tunings = config.tunings
-            val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
-
-            service.configure(
-                modelPath = modelPath,
-                systemPrompt = config.persona.systemPrompt,
-                samplingConfig = LlamaSamplingConfig(
-                    temperature = tunings.temperature.toFloat(),
-                    topK = tunings.topK,
-                    topP = tunings.topP.toFloat(),
-                    minP = tunings.minP.toFloat(),
-                    maxTokens = tunings.maxTokens,
-                    contextWindow = tunings.contextWindow,
-                    batchSize = 256,
-                    gpuLayers = gpuConfig.gpuLayers,
-                    thinkingEnabled = tunings.thinkingEnabled,
-                    repeatPenalty = tunings.repetitionPenalty.toFloat()
-                )
-            )
-            service
-        } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.VISION)
-        }
+        return createInferenceService(
+            context, ModelType.VISION, conversationManager, modelRegistry,
+            processThinkingTokens, llamaChatSessionManager, loggingPort
+        )
     }
 
     @Provides
@@ -391,36 +381,10 @@ object EngineModule {
         llamaChatSessionManager: LlamaChatSessionManager,
         loggingPort: LoggingPort
     ): LlmInferencePort {
-        val config = modelRegistry.getRegisteredModelSync(ModelType.DRAFT_ONE)
-            ?: throw IllegalStateException("No model registered for ${ModelType.DRAFT_ONE}. Please download a model first.")
-        val filename = config.metadata.localFileName
-
-        return if (filename.endsWith(".gguf")) {
-            val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.DRAFT_ONE, loggingPort)
-            val tunings = config.tunings
-            val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
-
-            service.configure(
-                modelPath = modelPath,
-                systemPrompt = config.persona.systemPrompt,
-                samplingConfig = LlamaSamplingConfig(
-                    temperature = tunings.temperature.toFloat(),
-                    topK = tunings.topK,
-                    topP = tunings.topP.toFloat(),
-                    minP = tunings.minP.toFloat(),
-                    maxTokens = tunings.maxTokens,
-                    contextWindow = tunings.contextWindow,
-                    batchSize = 256,
-                    gpuLayers = gpuConfig.gpuLayers,
-                    thinkingEnabled = tunings.thinkingEnabled,
-                    repeatPenalty = tunings.repetitionPenalty.toFloat()
-                )
-            )
-            service
-        } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.DRAFT_ONE)
-        }
+        return createInferenceService(
+            context, ModelType.DRAFT_ONE, conversationManager, modelRegistry,
+            processThinkingTokens, llamaChatSessionManager, loggingPort
+        )
     }
 
     @Provides
@@ -434,36 +398,10 @@ object EngineModule {
         llamaChatSessionManager: LlamaChatSessionManager,
         loggingPort: LoggingPort
     ): LlmInferencePort {
-        val config = modelRegistry.getRegisteredModelSync(ModelType.DRAFT_TWO)
-            ?: throw IllegalStateException("No model registered for ${ModelType.DRAFT_TWO}. Please download a model first.")
-        val filename = config.metadata.localFileName
-
-        return if (filename.endsWith(".gguf")) {
-            val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.DRAFT_TWO, loggingPort)
-            val tunings = config.tunings
-            val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
-
-            service.configure(
-                modelPath = modelPath,
-                systemPrompt = config.persona.systemPrompt,
-                samplingConfig = LlamaSamplingConfig(
-                    temperature = tunings.temperature.toFloat(),
-                    topK = tunings.topK,
-                    topP = tunings.topP.toFloat(),
-                    minP = tunings.minP.toFloat(),
-                    maxTokens = tunings.maxTokens,
-                    contextWindow = tunings.contextWindow,
-                    batchSize = 256,
-                    gpuLayers = gpuConfig.gpuLayers,
-                    thinkingEnabled = tunings.thinkingEnabled,
-                    repeatPenalty = tunings.repetitionPenalty.toFloat()
-                )
-            )
-            service
-        } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.DRAFT_TWO)
-        }
+        return createInferenceService(
+            context, ModelType.DRAFT_TWO, conversationManager, modelRegistry,
+            processThinkingTokens, llamaChatSessionManager, loggingPort
+        )
     }
 
     @Provides
@@ -477,36 +415,10 @@ object EngineModule {
         llamaChatSessionManager: LlamaChatSessionManager,
         loggingPort: LoggingPort
     ): LlmInferencePort {
-        val config = modelRegistry.getRegisteredModelSync(ModelType.FAST)
-            ?: throw IllegalStateException("No model registered for ${ModelType.FAST}. Please download a model first.")
-        val filename = config.metadata.localFileName
-
-        return if (filename.endsWith(".gguf")) {
-            val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.FAST, loggingPort)
-            val tunings = config.tunings
-            val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
-
-            service.configure(
-                modelPath = modelPath,
-                systemPrompt = config.persona.systemPrompt,
-                samplingConfig = LlamaSamplingConfig(
-                    temperature = tunings.temperature.toFloat(),
-                    topK = tunings.topK,
-                    topP = tunings.topP.toFloat(),
-                    minP = tunings.minP.toFloat(),
-                    maxTokens = tunings.maxTokens,
-                    contextWindow = tunings.contextWindow,
-                    batchSize = 256,
-                    gpuLayers = gpuConfig.gpuLayers,
-                    thinkingEnabled = tunings.thinkingEnabled,
-                    repeatPenalty = tunings.repetitionPenalty.toFloat()
-                )
-            )
-            service
-        } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.FAST)
-        }
+        return createInferenceService(
+            context, ModelType.FAST, conversationManager, modelRegistry,
+            processThinkingTokens, llamaChatSessionManager, loggingPort
+        )
     }
 
     @Provides
@@ -520,36 +432,10 @@ object EngineModule {
         llamaChatSessionManager: LlamaChatSessionManager,
         loggingPort: LoggingPort
     ): LlmInferencePort {
-        val config = modelRegistry.getRegisteredModelSync(ModelType.THINKING)
-            ?: throw IllegalStateException("No model registered for ${ModelType.THINKING}. Please download a model first.")
-        val filename = config.metadata.localFileName
-
-        return if (filename.endsWith(".gguf")) {
-            val modelPath = getModelPath(context, filename)
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.THINKING, loggingPort)
-            val tunings = config.tunings
-            val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
-
-            service.configure(
-                modelPath = modelPath,
-                systemPrompt = config.persona.systemPrompt,
-                samplingConfig = LlamaSamplingConfig(
-                    temperature = tunings.temperature.toFloat(),
-                    topK = tunings.topK,
-                    topP = tunings.topP.toFloat(),
-                    minP = tunings.minP.toFloat(),
-                    maxTokens = tunings.maxTokens,
-                    contextWindow = tunings.contextWindow,
-                    batchSize = 256,
-                    gpuLayers = gpuConfig.gpuLayers,
-                    thinkingEnabled = tunings.thinkingEnabled,
-                    repeatPenalty = tunings.repetitionPenalty.toFloat()
-                )
-            )
-            service
-        } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.THINKING)
-        }
+        return createInferenceService(
+            context, ModelType.THINKING, conversationManager, modelRegistry,
+            processThinkingTokens, llamaChatSessionManager, loggingPort
+        )
     }
 
     @Provides
@@ -563,37 +449,9 @@ object EngineModule {
         llamaChatSessionManager: LlamaChatSessionManager,
         loggingPort: LoggingPort
     ): LlmInferencePort {
-        // Uses the dedicated FINAL_SYNTHESIS model config
-        val config = modelRegistry.getRegisteredModelSync(ModelType.FINAL_SYNTHESIS)
-            ?: throw IllegalStateException("No model registered for ${ModelType.FINAL_SYNTHESIS}. Please download a model first.")
-
-        val filename = config.metadata.localFileName
-        val modelPath = getModelPath(context, filename)
-
-        return if (filename.endsWith(".gguf")) {
-            val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, ModelType.FINAL_SYNTHESIS, loggingPort)
-            val tunings = config.tunings
-            val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
-
-            service.configure(
-                modelPath = modelPath,
-                systemPrompt = config.persona.systemPrompt,
-                samplingConfig = LlamaSamplingConfig(
-                    temperature = tunings.temperature.toFloat(),
-                    topK = tunings.topK,
-                    topP = tunings.topP.toFloat(),
-                    minP = tunings.minP.toFloat(),
-                    maxTokens = tunings.maxTokens,
-                    contextWindow = tunings.contextWindow,
-                    batchSize = 256,
-                    gpuLayers = gpuConfig.gpuLayers,
-                    thinkingEnabled = tunings.thinkingEnabled,
-                    repeatPenalty = tunings.repetitionPenalty.toFloat()
-                )
-            )
-            service
-        } else {
-            LiteRtInferenceServiceImpl(conversationManager, processThinkingTokens, ModelType.FINAL_SYNTHESIS)
-        }
+        return createInferenceService(
+            context, ModelType.FINAL_SYNTHESIS, conversationManager, modelRegistry,
+            processThinkingTokens, llamaChatSessionManager, loggingPort
+        )
     }
 }
