@@ -18,7 +18,7 @@ public:
      * Appends a raw piece of text to the internal buffer and handles BPE markers.
      */
     void append(const char* piece, int len) {
-        if (len < 0) return;
+        if (len <= 0) return;
         buffer.append(piece, len);
         handle_bpe_markers();
     }
