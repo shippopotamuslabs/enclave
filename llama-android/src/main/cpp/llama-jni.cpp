@@ -15,6 +15,7 @@
 #include <android/log.h>
 #include <fstream>
 
+#include "token_processor.hpp"
 #include "llama.h"
 #include "ggml-backend.h"
 #include "ggml.h"
@@ -844,6 +845,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
     std::string expected_end_tag = "</think>";
     std::string expected_force_close = "\n</think>\n";
     std::string first_token_output = "";
+    TokenProcessor processor;
 
     // Get special tokens and vocab
     llama_token eos_token = llama_vocab_eos(get_model_vocab());
@@ -871,52 +873,35 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
         // Get token text BEFORE accepting - needed for thinking limit check
         char tokenBuffer[256];
         int tokenLen = llama_token_to_piece(get_model_vocab(), token, tokenBuffer, sizeof(tokenBuffer) - 1, 0, false);
-        if (tokenLen <= 0) {
-            tokenBuffer[0] = '\0';
-            tokenLen = 0;
-        } else {
-            tokenBuffer[tokenLen] = '\0';
-            // Replace BPE word-start marker (U+2581 = ▁) with space
-            for (int i = 0; i < tokenLen; i++) {
-                if ((unsigned char)tokenBuffer[i] == 0xE2 &&
-                    i + 2 < tokenLen &&
-                    (unsigned char)tokenBuffer[i+1] == 0x96 &&
-                    (unsigned char)tokenBuffer[i+2] == 0x81) {
-                    tokenBuffer[i] = ' ';
-                    for (int j = i + 1; j < tokenLen - 2; j++) {
-                        tokenBuffer[j] = tokenBuffer[j + 2];
-                    }
-                    tokenLen -= 2;
-                    tokenBuffer[tokenLen] = '\0';
-                    break;
-                }
-            }
-        }
+        if (tokenLen < 0) continue; 
+        
+        // Add piece to buffer
+        processor.append(tokenBuffer, tokenLen);
 
         // ============================================================
         // Thinking token limit enforcement
         // Check BEFORE accepting the token to properly handle limit
         // ============================================================
-        std::string piece_str(tokenBuffer, tokenLen);
-
         if (g_in_thinking_phase) {
-            // Check for natural end tag first - respect model intent
-            if (piece_str.find(expected_end_tag) != std::string::npos) {
+            // Check for natural end tag in the whole buffer (robust against split tags)
+            if (processor.contains_tag(expected_end_tag)) {
                 g_in_thinking_phase = false;
-                __android_log_print(ANDROID_LOG_DEBUG, "llama-jni", "End of thinking detected at token %d", n_generated_tokens);
+                __android_log_print(ANDROID_LOG_DEBUG, "llama-jni", "End of thinking detected in buffer at token %d", n_generated_tokens);
             } else {
                 // Detect tag format from the very first non-whitespace token output
                 if (first_token_output.empty()) {
+                    // Check internal buffer for non-whitespace
+                    const std::string& buf = processor.get_buffer();
                     bool is_ws = true;
-                    for (char c : piece_str) {
+                    for (char c : buf) {
                         if (!std::isspace(static_cast<unsigned char>(c))) {
                             is_ws = false;
                             break;
                         }
                     }
                     if (!is_ws) {
-                        first_token_output = piece_str;
-                        // If the first token contains '[' or 'THINK', assume [THINK] format
+                        first_token_output = buf;
+                        // If the first non-whitespace contains '[' or 'THINK', assume [THINK] format
                         if (first_token_output.find("[") != std::string::npos || 
                             first_token_output.find("THINK") != std::string::npos) {
                             expected_end_tag = "[/THINK]";
@@ -940,8 +925,10 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
 
                     // Stream forced close to UI
                     jstring forceStr = env->NewStringUTF(force_close);
-                    env->CallVoidMethod(g_callback, onTokenMethod, forceStr);
-                    env->DeleteLocalRef(forceStr);
+                    if (forceStr) {
+                        env->CallVoidMethod(g_callback, onTokenMethod, forceStr);
+                        env->DeleteLocalRef(forceStr);
+                    }
 
                     // CRITICAL: Inject forced close into KV cache so model sees it
                     std::vector<llama_token> force_tokens(64);
@@ -965,7 +952,6 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
                                 "ERROR: llama_decode failed for force-close (err %d)", decode_res);
                         } else {
                             // CRITICAL: Update token count to account for injected force tokens
-                            // This ensures subsequent tokens are positioned correctly in the KV cache
                             n_generated_tokens += n_force;
                         }
                     }
@@ -975,6 +961,9 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
 
                     // Reset sampler to clear accumulated state from long thinking
                     llama_sampler_reset(g_sampler);
+                    
+                    // Clear processor buffer of current partial/skipped bytes
+                    processor.clear();
 
                     // Skip the current token entirely - don't accept it
                     continue;
@@ -991,10 +980,17 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
         // Accept the token (updates sampler state for next iteration)
         llama_sampler_accept(g_sampler, token);
 
-        // Send token to callback - let JNI handle any invalid UTF-8 gracefully
-        jstring tokenStr = env->NewStringUTF(tokenBuffer);
-        env->CallVoidMethod(g_callback, onTokenMethod, tokenStr);
-        env->DeleteLocalRef(tokenStr);
+        // Extract and send valid UTF-8 sequences from buffer
+        // If in thinking phase, protect the expected_end_tag from being split by extraction
+        std::string to_send = processor.extract_utf8(g_in_thinking_phase ? expected_end_tag : "");
+
+        if (!to_send.empty()) {
+            jstring tokenStr = env->NewStringUTF(to_send.c_str());
+            if (tokenStr) {
+                env->CallVoidMethod(g_callback, onTokenMethod, tokenStr);
+                env->DeleteLocalRef(tokenStr);
+            }
+        }
 
         // Create a fresh batch for each token
         llama_batch_clear(*g_batch);

@@ -30,6 +30,12 @@ jobs:
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
 
+      - name: Run C++ TokenProcessor Tests
+        run: |
+          g++ -I llama-android/src/main/cpp llama-android/src/main/cpp/test_token_processor.cpp -o test_token_processor
+          ./test_token_processor
+          rm test_token_processor
+
       - name: Accept Android SDK Licenses
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
