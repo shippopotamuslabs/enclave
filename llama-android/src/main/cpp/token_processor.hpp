@@ -2,6 +2,7 @@
 #define TOKEN_PROCESSOR_HPP
 
 #include <string>
+#include <string_view>
 #include <algorithm>
 
 /**
@@ -29,7 +30,7 @@ public:
      * If lookahead_tag is provided, it will NOT extract a trailing sequence that
      * matches the start of that tag, allowing split tags to be detected later.
      */
-    std::string extract_utf8(const std::string& lookahead_tag = "") {
+    std::string extract_utf8(std::string_view lookahead_tag = "") {
         std::string result = "";
         size_t processed_idx = 0;
         size_t last_valid_idx = 0;
@@ -77,13 +78,12 @@ public:
 
         size_t extraction_end = last_valid_idx;
 
-        // If a lookahead tag is provided, check if the buffer ends with a prefix of it
+        // If a lookahead tag is provided, check if the buffer ends with a prefix of it.
+        // We use string_view to avoid allocations during comparison.
         if (!lookahead_tag.empty() && extraction_end > 0) {
-            // Check potential prefixes of the tag at the end of what we're about to extract
-            // We only care about prefixes that reach the end of the buffer
+            std::string_view current_view(buffer.data(), extraction_end);
             for (size_t len = std::min(extraction_end, lookahead_tag.length()); len > 0; len--) {
-                std::string suffix = buffer.substr(extraction_end - len, len);
-                if (suffix == lookahead_tag.substr(0, len)) {
+                if (current_view.substr(extraction_end - len) == lookahead_tag.substr(0, len)) {
                     extraction_end -= len;
                     break;
                 }
