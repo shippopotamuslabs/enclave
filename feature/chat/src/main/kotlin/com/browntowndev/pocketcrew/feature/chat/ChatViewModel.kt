@@ -51,7 +51,7 @@ class ChatViewModel @Inject constructor(
      * Can be passed via navigation or set programmatically.
      */
     val initialChatId: Long?
-        get() = savedStateHandle.get<Long>("chatId")
+        get() = savedStateHandle.get<String>("chatId")?.toLongOrNull()
 
     // Mutable state for input text (not persisted, managed locally)
     private val _inputText = MutableStateFlow("")
@@ -144,7 +144,8 @@ class ChatViewModel @Inject constructor(
             selectedMode = selectedMode,
             isGlobalInferenceBlocked = isBlocked,
             hapticPress = settings.hapticPress,
-            hapticResponse = settings.hapticResponse
+            hapticResponse = settings.hapticResponse,
+            chatId = _currentChatId.value ?: initialChatId ?: -1L
         )
     }.stateIn(
         scope = viewModelScope,

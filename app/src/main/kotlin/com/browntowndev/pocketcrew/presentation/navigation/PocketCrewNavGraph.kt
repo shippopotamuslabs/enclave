@@ -5,8 +5,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navArgument
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.feature.chat.ChatRoute
 import com.browntowndev.pocketcrew.feature.history.HistoryRoute
@@ -51,7 +53,14 @@ fun PocketCrewNavGraph(
             )
         }
         composable(
-            route = Routes.CHAT,
+            route = Routes.CHAT_WITH_ID,
+            arguments = listOf(
+                navArgument("chatId") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            ),
             enterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { it },
@@ -111,7 +120,13 @@ fun PocketCrewNavGraph(
         ) {
             HistoryRoute(
                 onNavigateBack = { navController.popBackStack() },
-                onNavigateToChat = { id -> navController.navigate(Routes.CHAT) },
+                onNavigateToChat = { id ->
+                    if (id != null && id != -1L) {
+                        navController.navigate(Routes.CHAT_WITH_ID.replace("{chatId}", id.toString()))
+                    } else {
+                        navController.navigate(Routes.CHAT)
+                    }
+                },
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
                 onShowSnackbar = onShowSnackbar,
             )

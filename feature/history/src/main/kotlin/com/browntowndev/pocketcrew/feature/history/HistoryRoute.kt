@@ -8,7 +8,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 @Composable
 fun HistoryRoute(
     onNavigateBack: () -> Unit,
-    onNavigateToChat: (Long) -> Unit,
+    onNavigateToChat: (Long?) -> Unit,
     onNavigateToSettings: () -> Unit,
     onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
     viewModel: HistoryViewModel = hiltViewModel(),
@@ -20,7 +20,10 @@ fun HistoryRoute(
         onBackClick = onNavigateBack,
         onChatClick = onNavigateToChat,
         onNewChatClick = { onNavigateToChat(-1L) },
-        onDeleteChat = viewModel::deleteChat,
+        onDeleteChat = { id ->
+            println("DEBUG: HistoryRoute onDeleteChat called for id: $id")
+            viewModel.deleteChat(id)
+        },
         onRenameChat = viewModel::renameChat,
         onPinChat = viewModel::pinChat,
         onUnpinChat = viewModel::unpinChat,

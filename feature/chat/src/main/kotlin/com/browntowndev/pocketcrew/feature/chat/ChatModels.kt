@@ -43,6 +43,7 @@ data class ChatUiState(
     val shieldReason: String? = null,
     val hapticPress: Boolean = false,
     val hapticResponse: Boolean = false,
+    val chatId: Long? = null,
 ) {
     val isGenerating: Boolean
         get() = messages.any {
