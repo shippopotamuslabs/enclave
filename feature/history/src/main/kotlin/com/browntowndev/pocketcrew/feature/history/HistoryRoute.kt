@@ -20,10 +20,7 @@ fun HistoryRoute(
         onBackClick = onNavigateBack,
         onChatClick = onNavigateToChat,
         onNewChatClick = { onNavigateToChat(-1L) },
-        onDeleteChat = { id ->
-            println("DEBUG: HistoryRoute onDeleteChat called for id: $id")
-            viewModel.deleteChat(id)
-        },
+        onDeleteChat = viewModel::deleteChat,
         onRenameChat = viewModel::renameChat,
         onPinChat = viewModel::pinChat,
         onUnpinChat = viewModel::unpinChat,
