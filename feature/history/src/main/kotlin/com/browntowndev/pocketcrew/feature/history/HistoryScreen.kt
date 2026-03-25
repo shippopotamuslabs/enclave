@@ -49,6 +49,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.R
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
@@ -62,6 +63,8 @@ private sealed interface HistoryOptionsState {
 @Composable
 fun HistoryScreen(
     uiState: HistoryUiState,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
     onBackClick: () -> Unit,
     onChatClick: (Long) -> Unit,
     onNewChatClick: () -> Unit,
@@ -78,6 +81,8 @@ fun HistoryScreen(
     Scaffold(
         topBar = {
             HistoryTopBar(
+                searchQuery = searchQuery,
+                onSearchQueryChange = onSearchQueryChange,
                 onBackClick = onBackClick,
                 onSettingsClick = onSettingsClick
             )
@@ -263,7 +268,8 @@ private fun NewChatButton(
             Text(
                 text = "New Chat",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 18.sp
             )
         }
     }
@@ -421,6 +427,8 @@ private fun PreviewHistoryScreenLight() {
                     HistoryChat(3, "Recipe Ideas", "2 days ago", false)
                 )
             ),
+            searchQuery = "",
+            onSearchQueryChange = {},
             onBackClick = {},
             onChatClick = {},
             onNewChatClick = {},
@@ -446,6 +454,8 @@ private fun PreviewHistoryScreenDark() {
                     HistoryChat(3, "Recipe Ideas", "2 days ago", false)
                 )
             ),
+            searchQuery = "",
+            onSearchQueryChange = {},
             onBackClick = {},
             onChatClick = {},
             onNewChatClick = {},
@@ -468,6 +478,8 @@ private fun PreviewHistoryScreenEmpty() {
                 pinnedChats = emptyList(),
                 otherChats = emptyList()
             ),
+            searchQuery = "",
+            onSearchQueryChange = {},
             onBackClick = {},
             onChatClick = {},
             onNewChatClick = {},
