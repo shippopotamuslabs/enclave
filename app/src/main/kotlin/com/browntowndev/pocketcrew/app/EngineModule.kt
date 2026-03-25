@@ -23,11 +23,9 @@ import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManag
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
-import com.browntowndev.pocketcrew.feature.inference.llama.LlamaGpuHelper
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
-import com.google.ai.edge.litertlm.ExperimentalFlags
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import dagger.Module
 import dagger.Provides
@@ -84,11 +82,8 @@ object EngineModule {
      * Creates LiteRT Engine using explicit GPU preference.
      */
     @OptIn(com.google.ai.edge.litertlm.ExperimentalApi::class)
-    private fun createEngine(context: Context, modelPath: String): Engine {
-        Log.i(TAG, "Creating LiteRT Engine with GPU backend (and experimental NPU flags).")
-
-        // Required for NPU support if available on the device
-        ExperimentalFlags.npuLibrariesDir = context.applicationInfo.nativeLibraryDir
+    private fun createEngine(modelPath: String): Engine {
+        Log.i(TAG, "Creating LiteRT Engine with GPU backend (NPU flags initialized in Application).")
 
         val config = EngineConfig(
             modelPath = modelPath,
@@ -114,7 +109,7 @@ object EngineModule {
             ?: throw IllegalStateException("No model registered for ${ModelType.MAIN}. Please download a model first.")
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
-        return createEngine(context, modelPath)
+        return createEngine(modelPath)
     }
 
     @Provides
@@ -128,7 +123,7 @@ object EngineModule {
             ?: throw IllegalStateException("No model registered for ${ModelType.VISION}. Please download a model first.")
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
-        return createEngine(context, modelPath)
+        return createEngine(modelPath)
     }
 
     @Provides
@@ -142,7 +137,7 @@ object EngineModule {
             ?: throw IllegalStateException("No model registered for ${ModelType.DRAFT_ONE}. Please download a model first.")
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
-        return createEngine(context, modelPath)
+        return createEngine(modelPath)
     }
 
     @Provides
@@ -156,7 +151,7 @@ object EngineModule {
             ?: throw IllegalStateException("No model registered for ${ModelType.DRAFT_TWO}. Please download a model first.")
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
-        return createEngine(context, modelPath)
+        return createEngine(modelPath)
     }
 
     @Provides
@@ -170,7 +165,7 @@ object EngineModule {
             ?: throw IllegalStateException("No model registered for ${ModelType.FAST}. Please download a model first.")
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
-        return createEngine(context, modelPath)
+        return createEngine(modelPath)
     }
 
     @Provides
@@ -184,7 +179,7 @@ object EngineModule {
             ?: throw IllegalStateException("No model registered for ${ModelType.THINKING}. Please download a model first.")
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
-        return createEngine(context, modelPath)
+        return createEngine(modelPath)
     }
 
     @Provides
@@ -199,7 +194,7 @@ object EngineModule {
             ?: throw IllegalStateException("No model registered for ${ModelType.FINAL_SYNTHESIS}. Please download a model first.")
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
-        return createEngine(context, modelPath)
+        return createEngine(modelPath)
     }
 
     // Qualified ConversationManager providers - each is bound to a specific Engine
