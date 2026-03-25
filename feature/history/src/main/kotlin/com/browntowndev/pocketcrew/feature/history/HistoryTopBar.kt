@@ -47,6 +47,7 @@ fun HistoryTopBar(
                 shape = RoundedCornerShape(28.dp),
                 singleLine = true,
                 maxLines = 1,
+                textStyle = MaterialTheme.typography.bodyMedium,
                 value = searchQuery,
                 onValueChange = onSearchQueryChange,
                 placeholder = {

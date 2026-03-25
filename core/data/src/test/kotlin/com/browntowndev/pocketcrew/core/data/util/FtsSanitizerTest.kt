@@ -38,4 +38,18 @@ class FtsSanitizerTest {
     fun `sanitize multiple spaces collapses into single spaces`() {
         assertEquals("hello* world*", FtsSanitizer.sanitize("hello    world"))
     }
+
+    @Test
+    fun `sanitize preserves underscores and alphanumeric characters`() {
+        assertEquals("user_123* chat_id*", FtsSanitizer.sanitize("user_123 chat_id"))
+    }
+
+    @Test
+    fun `sanitize preserves accented characters`() {
+        // e + combining acute accent
+        val accentedE = "e\u0301" 
+        assertEquals("${accentedE}*", FtsSanitizer.sanitize(accentedE))
+        // single code point é
+        assertEquals("é*", FtsSanitizer.sanitize("é"))
+    }
 }
