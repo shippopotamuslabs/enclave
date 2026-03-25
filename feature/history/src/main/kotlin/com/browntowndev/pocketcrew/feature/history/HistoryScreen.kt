@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.feature.history
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,10 +14,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
@@ -24,6 +27,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
@@ -41,9 +45,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.browntowndev.pocketcrew.core.ui.R
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
 private sealed interface HistoryOptionsState {
@@ -102,7 +108,7 @@ fun HistoryScreen(
                     HistoryChatItem(
                         chat = chat,
                         onClick = { onChatClick(chat.id) },
-                        onLongClick = {
+                        onShowOptions = {
                             optionsState = HistoryOptionsState.Sheet(chat)
                         }
                     )
@@ -120,7 +126,7 @@ fun HistoryScreen(
                     HistoryChatItem(
                         chat = chat,
                         onClick = { onChatClick(chat.id) },
-                        onLongClick = {
+                        onShowOptions = {
                             optionsState = HistoryOptionsState.Sheet(chat)
                         }
                     )
@@ -237,28 +243,27 @@ private fun NewChatButton(
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier,
-        shape = MaterialTheme.shapes.medium,
+        modifier = modifier.height(56.dp),
+        shape = RoundedCornerShape(28.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
+        ),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 10.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.Add,
+                painter = painterResource(R.drawable.edit_square),
                 contentDescription = null,
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(12.dp))
             Text(
                 text = "New Chat",
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
             )
         }
     }
@@ -269,28 +274,43 @@ private fun NewChatButton(
 private fun HistoryChatItem(
     chat: HistoryChat,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onShowOptions: () -> Unit
 ) {
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .combinedClickable(
                 onClick = onClick,
-                onLongClick = onLongClick
+                onLongClick = onShowOptions
             )
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+        .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = chat.name,
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium
-        )
-        Spacer(modifier = Modifier.height(2.dp))
-        Text(
-            text = chat.lastMessageDateTime,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(vertical = 4.dp)
+        ) {
+            Text(
+                text = chat.name,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = chat.lastMessageDateTime,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        IconButton(onClick = onShowOptions) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "Options",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -391,12 +411,62 @@ private fun BottomSheetOption(
 
 @Preview(showBackground = true)
 @Composable
-private fun PreviewHistoryScreen() {
+private fun PreviewHistoryScreenLight() {
     PocketCrewTheme {
         HistoryScreen(
             uiState = HistoryUiState(
-                pinnedChats = listOf(HistoryChat(1, "Pinned Chat", "10:30 AM", true)),
-                otherChats = listOf(HistoryChat(2, "Recent Chat", "Yesterday", false))
+                pinnedChats = listOf(HistoryChat(1, "Important Project", "10:30 AM", true)),
+                otherChats = listOf(
+                    HistoryChat(2, "Weekend Plans", "Yesterday", false),
+                    HistoryChat(3, "Recipe Ideas", "2 days ago", false)
+                )
+            ),
+            onBackClick = {},
+            onChatClick = {},
+            onNewChatClick = {},
+            onDeleteChat = {},
+            onRenameChat = { _, _ -> },
+            onPinChat = {},
+            onUnpinChat = {},
+            onSettingsClick = {},
+            onShowSnackbar = { _, _ -> }
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun PreviewHistoryScreenDark() {
+    PocketCrewTheme(darkTheme = true) {
+        HistoryScreen(
+            uiState = HistoryUiState(
+                pinnedChats = listOf(HistoryChat(1, "Important Project", "10:30 AM", true)),
+                otherChats = listOf(
+                    HistoryChat(2, "Weekend Plans", "Yesterday", false),
+                    HistoryChat(3, "Recipe Ideas", "2 days ago", false)
+                )
+            ),
+            onBackClick = {},
+            onChatClick = {},
+            onNewChatClick = {},
+            onDeleteChat = {},
+            onRenameChat = { _, _ -> },
+            onPinChat = {},
+            onUnpinChat = {},
+            onSettingsClick = {},
+            onShowSnackbar = { _, _ -> }
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun PreviewHistoryScreenEmpty() {
+    PocketCrewTheme {
+        HistoryScreen(
+            uiState = HistoryUiState(
+                pinnedChats = emptyList(),
+                otherChats = emptyList()
             ),
             onBackClick = {},
             onChatClick = {},
