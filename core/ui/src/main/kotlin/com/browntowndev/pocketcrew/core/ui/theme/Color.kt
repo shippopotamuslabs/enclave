@@ -22,3 +22,7 @@ val DarkOutline = Color(0xFF52525B)          // Borders / Dividers (Zinc 600)
 val LightBackground = Color(0xFFFFFFFF)
 val LightSurface = Color(0xFFF3F4F6)
 val LightOnBackground = Color(0xFF111827)
+
+// --- ERROR & SEMANTIC ---
+val ErrorRed = Color(0xFFDC2626) // High-vibrancy Tailwind-inspired red
+val OnErrorWhite = Color(0xFFFFFFFF)
