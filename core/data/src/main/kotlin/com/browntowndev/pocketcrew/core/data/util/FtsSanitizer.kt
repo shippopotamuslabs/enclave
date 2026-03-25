@@ -9,9 +9,10 @@ object FtsSanitizer {
     fun sanitize(query: String): String {
         if (query.isBlank()) return ""
         
-        // Remove special characters while preserving Unicode word characters and spaces.
-        // (?U) enables Unicode character classes.
-        val sanitized = query.replace(Regex("""(?U)[^\w\s]"""), " ")
+        // Remove special characters while preserving Unicode word characters, spaces and underscores.
+        // We use explicit Unicode properties \p{L} (Letters), \p{N} (Numbers), and \p{M} (Marks)
+        // instead of (?U)\w to avoid PatternSyntaxException on Android.
+        val sanitized = query.replace(Regex("""[^\p{L}\p{N}\p{M}\s_]"""), " ")
             .replace(Regex("""\s+"""), " ")
             .trim()
             
