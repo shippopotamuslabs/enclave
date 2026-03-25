@@ -873,7 +873,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
         // Get token text BEFORE accepting - needed for thinking limit check
         char tokenBuffer[256];
         int tokenLen = llama_token_to_piece(get_model_vocab(), token, tokenBuffer, sizeof(tokenBuffer) - 1, 0, false);
-        if (tokenLen < 0) continue; 
+        if (tokenLen <= 0) continue; 
         
         // Add piece to buffer
         processor.append(tokenBuffer, tokenLen);
