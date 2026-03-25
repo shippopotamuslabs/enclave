@@ -874,9 +874,9 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
         char tokenBuffer[256];
         int tokenLen = llama_token_to_piece(get_model_vocab(), token, tokenBuffer, sizeof(tokenBuffer) - 1, 0, false);
         
-        // Add piece to buffer if valid
+        // Add piece to buffer if valid (clamp to buffer size for safety)
         if (tokenLen > 0) {
-            processor.append(tokenBuffer, tokenLen);
+            processor.append(tokenBuffer, std::min(tokenLen, (int)(sizeof(tokenBuffer) - 1)));
         }
 
         // ============================================================

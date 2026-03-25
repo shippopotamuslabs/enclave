@@ -15,17 +15,19 @@ public:
     TokenProcessor() : buffer("") {}
 
     /**
-     * Appends a raw piece of text to the internal buffer and handles BPE markers.
+     * Appends a raw piece of text to the internal buffer.
      */
     void append(const char* piece, int len) {
         if (len <= 0) return;
         buffer.append(piece, len);
-        handle_bpe_markers();
     }
 
     /**
      * Extracts all complete and valid UTF-8 characters from the buffer.
      * Invalid bytes are discarded. Incomplete multi-byte characters remain.
+     * 
+     * Handles BPE word-start markers (U+2581) by replacing them with spaces
+     * during extraction.
      * 
      * If lookahead_tag is provided, it will NOT extract a trailing sequence that
      * matches the start of that tag, allowing split tags to be detected later.
@@ -66,6 +68,8 @@ public:
 
                 if (valid) {
                     // Valid character!
+                    std::string_view char_view(buffer.data() + i, len);
+
                     // Check if this (and everything before it) would be a prefix of the tag
                     // if it's at the very end of the buffer.
                     if (!lookahead_tag.empty()) {
@@ -83,7 +87,13 @@ public:
                         }
                     }
 
-                    result.append(buffer.substr(i, len));
+                    // Handle BPE word-start marker (U+2581 = 0xE2 0x96 0x81)
+                    if (len == 3 && char_view == "\xE2\x96\x81") {
+                        result.append(" ");
+                    } else {
+                        result.append(char_view);
+                    }
+
                     i += len;
                     last_extraction_point = i;
                 } else {
@@ -128,17 +138,6 @@ public:
 
 private:
     std::string buffer;
-
-    /**
-     * Replaces BPE word-start marker (U+2581 = 0xE2 0x96 0x81) with a standard space.
-     */
-    void handle_bpe_markers() {
-        size_t bpe_pos = 0;
-        while ((bpe_pos = buffer.find("\xE2\x96\x81", bpe_pos)) != std::string::npos) {
-            buffer.replace(bpe_pos, 3, " ");
-            bpe_pos += 1;
-        }
-    }
 };
 
 #endif // TOKEN_PROCESSOR_HPP

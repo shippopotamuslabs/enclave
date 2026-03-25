@@ -39,6 +39,9 @@ void test_bpe_marker() {
     // BPE word-start marker is U+2581 (E2 96 81)
     const char* input = "\xE2\x96\x81word";
     processor.append(input, 7);
+    // Before extraction, buffer has raw bytes
+    assert(processor.get_buffer() == input);
+    
     std::string output = processor.extract_utf8();
     assert(output == " word");
     assert(processor.get_buffer().empty());
@@ -51,6 +54,7 @@ void test_split_bpe_marker() {
     processor.append("\xE2", 1);
     std::string out1 = processor.extract_utf8();
     assert(out1.empty());
+    assert(processor.get_buffer() == "\xE2");
     
     processor.append("\x96\x81", 2);
     std::string out2 = processor.extract_utf8();
@@ -125,7 +129,8 @@ void test_complex_mixing() {
     processor.append("\x96\x81", 2); // Finish BPE -> " "
     processor.append("\xF0\x9F", 2); // Start of Emoji
     
-    assert(processor.get_buffer() == " \xF0\x9F");
+    // Buffer should contain raw BPE bytes + partial emoji bytes
+    assert(processor.get_buffer() == "\xE2\x96\x81\xF0\x9F");
     
     processor.append("\x98\x81</thi", 7);
     assert(!processor.contains_tag(tag));
