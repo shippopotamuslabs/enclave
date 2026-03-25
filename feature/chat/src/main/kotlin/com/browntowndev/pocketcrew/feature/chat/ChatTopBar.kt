@@ -2,6 +2,8 @@ package com.browntowndev.pocketcrew.feature.chat
 
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
@@ -23,7 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.pocketcrew.feature.chat.R
+import com.browntowndev.pocketcrew.core.ui.R
 import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
@@ -55,10 +57,20 @@ fun ChatTopBar(
             }
         },
         actions = {
-            IconButton(onClick = onNewChatClick) {
+            Surface(
+                onClick = onNewChatClick,
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.primary,
+                tonalElevation = 2.dp,
+                modifier = Modifier.padding(end = 8.dp)
+            ) {
                 Icon(
                     painter = painterResource(R.drawable.edit_square),
-                    contentDescription = "Start new chat"
+                    contentDescription = "Start new chat",
+                    modifier = Modifier
+                        .size(40.dp)
+                        .padding(8.dp),
+                    tint = MaterialTheme.colorScheme.onPrimary
                 )
             }
         }
