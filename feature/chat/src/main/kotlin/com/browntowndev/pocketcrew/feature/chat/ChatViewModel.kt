@@ -200,24 +200,27 @@ class ChatViewModel @Inject constructor(
                 val duration = message.thinkingDurationSeconds
                 IndicatorState.Thinking(
                     thinkingRaw = message.thinkingRaw ?: "",
-                    thinkingDurationSeconds = duration ?: 0L
+                    thinkingDurationSeconds = duration ?: 0L,
+                    thinkingStartTime = message.thinkingStartTime ?: 0L
                 )
             }
             MessageState.GENERATING -> {
                 val duration = message.thinkingDurationSeconds
                 val raw = message.thinkingRaw
+                val startTime = message.thinkingStartTime ?: 0L
                 IndicatorState.Generating(
                     thinkingData = if (duration != null && raw != null)
-                        ThinkingDataUi(duration, raw)
+                        ThinkingDataUi(duration, raw, startTime)
                     else null
                 )
             }
             MessageState.COMPLETE -> {
                 val duration = message.thinkingDurationSeconds
                 val raw = message.thinkingRaw
+                val startTime = message.thinkingStartTime ?: 0L
                 IndicatorState.Complete(
                     thinkingData = if (duration != null && raw != null)
-                        ThinkingDataUi(duration, raw)
+                        ThinkingDataUi(duration, raw, startTime)
                     else null
                 )
             }
