@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.GetAllChatsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.RenameChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.TogglePinChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,7 +39,12 @@ class HistoryViewModel @Inject constructor(
     private val renameChatUseCase: RenameChatUseCase,
     private val togglePinChatUseCase: TogglePinChatUseCase,
     private val getSettingsUseCase: GetSettingsUseCase,
+    private val errorHandler: ViewModelErrorHandler,
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "HistoryViewModel"
+    }
 
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
@@ -51,9 +57,6 @@ class HistoryViewModel @Inject constructor(
         val pinned: List<HistoryChat>,
         val other: List<HistoryChat>
     )
-
-    private val _events = MutableSharedFlow<HistoryEvent>()
-    val events: SharedFlow<HistoryEvent> = _events.asSharedFlow()
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class, kotlinx.coroutines.FlowPreview::class)
     val uiState: StateFlow<HistoryUiState> = combine(
@@ -108,7 +111,7 @@ class HistoryViewModel @Inject constructor(
             try {
                 deleteChatUseCase(id)
             } catch (e: Exception) {
-                _events.emit(HistoryEvent.ShowError("Failed to delete chat"))
+                errorHandler.handleError(TAG, "Failed to delete chat with id: $id", e, "Failed to delete chat")
             }
         }
     }
@@ -118,7 +121,7 @@ class HistoryViewModel @Inject constructor(
             try {
                 renameChatUseCase(id, newName)
             } catch (e: Exception) {
-                _events.emit(HistoryEvent.ShowError("Failed to rename chat"))
+                errorHandler.handleError(TAG, "Failed to rename chat with id: $id to: $newName", e, "Failed to rename chat")
             }
         }
     }
@@ -132,7 +135,7 @@ class HistoryViewModel @Inject constructor(
             try {
                 togglePinChatUseCase(id)
             } catch (e: Exception) {
-                _events.emit(HistoryEvent.ShowError("Failed to update pin status"))
+                errorHandler.handleError(TAG, "Failed to update pin status for chat id: $id", e, "Failed to update pin status")
             }
         }
     }
