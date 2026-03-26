@@ -20,6 +20,10 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -93,23 +97,31 @@ fun formatThinkingDuration(seconds: Long): String = when {
 @Composable
 fun DetailBottomSheet(
     config: DetailBottomSheetConfig,
+    elapsedSeconds: Int = 0,
 ) {
     if (config.isVisible) {
         val sheetState = rememberModalBottomSheetState()
+
+        val displayDuration = if (config is DetailBottomSheetConfig.Thinking && config.durationSeconds == 0L && elapsedSeconds > 0) {
+            elapsedSeconds.toLong()
+        } else if (config is DetailBottomSheetConfig.Thinking) {
+            config.durationSeconds
+        } else 0L
 
         ModalBottomSheet(
             onDismissRequest = config.onDismiss,
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
-            contentWindowInsets = { WindowInsets.safeDrawing }
+            contentWindowInsets = { WindowInsets.safeDrawing },
+            modifier = Modifier
+                .statusBarsPadding()
+                .padding(top = 64.dp) // Capped below TopAppBar
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .navigationBarsPadding()
-                    .statusBarsPadding()
                     .verticalScroll(rememberScrollState())
             ) {
                 // Header row - content varies by config type
@@ -122,16 +134,16 @@ fun DetailBottomSheet(
                             Icon(
                                 painter = painterResource(R.drawable.lightbulb),
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(end = 8.dp)
                             )
                             Text(
-                                text = "Thought for ${formatThinkingDuration(config.durationSeconds)}",
+                                text = "Thought for ${formatThinkingDuration(displayDuration)}",
                                 style = MaterialTheme.typography.titleMedium.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 18.sp
                                 ),
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         is DetailBottomSheetConfig.StepCompletion -> {
@@ -205,6 +217,7 @@ fun ThinkingDetailsBottomSheet(
     onDismiss: () -> Unit,
     thinkingDurationSeconds: Long,
     thinkingRaw: String,
+    elapsedSeconds: Int = 0,
 ) {
     DetailBottomSheet(
         config = DetailBottomSheetConfig.Thinking(
@@ -212,6 +225,7 @@ fun ThinkingDetailsBottomSheet(
             content = thinkingRaw,
             durationSeconds = thinkingDurationSeconds,
             onDismiss = onDismiss,
-        )
+        ),
+        elapsedSeconds = elapsedSeconds
     )
 }

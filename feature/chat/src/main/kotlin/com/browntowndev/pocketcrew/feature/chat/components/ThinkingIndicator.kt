@@ -49,7 +49,7 @@ import kotlinx.coroutines.delay
 fun ThinkingIndicator(
     thinkingRaw: String,
     modifier: Modifier = Modifier,
-    thinkingStartTime: Long = 0L,
+    elapsedSeconds: Int = 0,
     modelDisplayName: String = "",
     isExpanded: Boolean = false,
     onToggleDetails: () -> Unit = {},
@@ -59,24 +59,6 @@ fun ThinkingIndicator(
         animationSpec = tween(durationMillis = 200),
         label = "chevronRotation"
     )
-
-    // Track elapsed thinking time
-    var elapsedSeconds by remember { mutableIntStateOf(0) }
-
-    // Update elapsed time every second when thinking is active
-    LaunchedEffect(thinkingRaw.isNotEmpty()) {
-        if (thinkingRaw.isNotEmpty()) {
-            // Calculate initial elapsed time if start time provided
-            if (thinkingStartTime > 0) {
-                elapsedSeconds = ((System.currentTimeMillis() - thinkingStartTime) / 1000).toInt()
-            }
-
-            while (true) {
-                delay(1000L)
-                elapsedSeconds++
-            }
-        }
-    }
 
     Column(
         modifier = modifier
@@ -103,7 +85,7 @@ fun ThinkingIndicator(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
-                val thinkingText = if (elapsedSeconds > 0 || thinkingStartTime > 0) {
+                val thinkingText = if (elapsedSeconds > 0) {
                     "Thinking • ${formatElapsedTime(elapsedSeconds)}"
                 } else {
                     "Thinking"
@@ -165,6 +147,7 @@ fun ThinkingIndicator_EmptyPreview() {
     PreviewTheme {
         ThinkingIndicator(
             thinkingRaw = "",
+            elapsedSeconds = 0,
             modifier = Modifier.padding(16.dp)
         )
     }
@@ -176,6 +159,7 @@ fun ThinkingIndicator_WithContentPreview() {
     PreviewTheme {
         ThinkingIndicator(
             thinkingRaw = "Analyzing the problem step by step:\n\n1. First, let me understand what we're dealing with\n2. Breaking down the requirements\n3. Planning the implementation",
+            elapsedSeconds = 42,
             modifier = Modifier.padding(16.dp)
         )
     }
