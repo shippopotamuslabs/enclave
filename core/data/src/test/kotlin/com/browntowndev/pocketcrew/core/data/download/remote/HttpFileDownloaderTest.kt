@@ -45,12 +45,14 @@ class HttpFileDownloaderTest {
         )
     }
 
+    private val testHfApiKey = "test_hf_api_key"
+
     @BeforeEach
     fun setup() {
         MockKAnnotations.init(this)
         mockClient = mockk()
         mockLogger = mockk(relaxed = true)
-        httpFileDownloader = HttpFileDownloader(mockClient, mockLogger)
+        httpFileDownloader = HttpFileDownloader(mockClient, mockLogger, testHfApiKey)
     }
 
     // ============ getServerFileSize Tests ============
@@ -71,6 +73,27 @@ class HttpFileDownloaderTest {
 
         // Then: Returns the size from header
         assertEquals(2048L, result)
+    }
+
+    @Test
+    fun getServerFileSize_addsHuggingFaceAuthHeader_whenUrlIsHuggingFace() = kotlinx.coroutines.test.runTest {
+        // Given: A Hugging Face URL
+        val hfUrl = "https://huggingface.co/google/gemma-2b-it/resolve/main/model.gguf"
+        val requestSlot = slot<Request>()
+        val mockCall = mockk<okhttp3.Call>(relaxed = true)
+        val mockResponse = mockk<Response>(relaxed = true)
+
+        every { mockClient.newCall(capture(requestSlot)) } returns mockCall
+        every { mockCall.execute() } returns mockResponse
+        every { mockResponse.isSuccessful } returns true
+        every { mockResponse.header("Content-Length") } returns "2048"
+
+        // When: Get server file size for HF URL
+        httpFileDownloader.getServerFileSize(hfUrl)
+
+        // Then: Request should have Authorization header
+        val authHeader = requestSlot.captured.header("Authorization")
+        assertEquals("Bearer $testHfApiKey", authHeader)
     }
 
     @Test
@@ -217,11 +240,9 @@ class HttpFileDownloaderTest {
             progressCallback = null
         )
 
-        // Then: Request should have Authorization header if API key is not empty
-        if (com.browntowndev.pocketcrew.core.data.BuildConfig.HUGGING_FACE_API_KEY.isNotEmpty()) {
-            val authHeader = requestSlot.captured.header("Authorization")
-            assertEquals("Bearer ${com.browntowndev.pocketcrew.core.data.BuildConfig.HUGGING_FACE_API_KEY}", authHeader)
-        }
+        // Then: Request should have Authorization header
+        val authHeader = requestSlot.captured.header("Authorization")
+        assertEquals("Bearer $testHfApiKey", authHeader)
     }
 
     // ============ downloadFile Error Tests ============

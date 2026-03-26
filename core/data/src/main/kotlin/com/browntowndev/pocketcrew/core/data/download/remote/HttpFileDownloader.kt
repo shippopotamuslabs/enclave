@@ -19,7 +19,8 @@ import javax.inject.Inject
 
 class HttpFileDownloader @Inject constructor(
     private val okHttpClient: OkHttpClient,
-    private val logger: LoggingPort
+    private val logger: LoggingPort,
+    private val hfApiKey: String = BuildConfig.HUGGING_FACE_API_KEY
 ) : FileDownloaderPort {
 
     companion object {
@@ -48,8 +49,8 @@ class HttpFileDownloader @Inject constructor(
                     addHeader("Range", "bytes=$existingBytes-")
                 }
                 // Add HF Auth token if it's a HF URL
-                if (downloadUrl.startsWith("https://huggingface.co") && BuildConfig.HUGGING_FACE_API_KEY.isNotEmpty()) {
-                    addHeader("Authorization", "Bearer ${BuildConfig.HUGGING_FACE_API_KEY}")
+                if (downloadUrl.startsWith("https://huggingface.co") && hfApiKey.isNotEmpty()) {
+                    addHeader("Authorization", "Bearer $hfApiKey")
                 }
             }
             .build()
@@ -65,8 +66,8 @@ class HttpFileDownloader @Inject constructor(
                     .url(downloadUrl)
                     .apply {
                         // Add HF Auth token if it's a HF URL
-                        if (downloadUrl.startsWith("https://huggingface.co") && BuildConfig.HUGGING_FACE_API_KEY.isNotEmpty()) {
-                            addHeader("Authorization", "Bearer ${BuildConfig.HUGGING_FACE_API_KEY}")
+                        if (downloadUrl.startsWith("https://huggingface.co") && hfApiKey.isNotEmpty()) {
+                            addHeader("Authorization", "Bearer $hfApiKey")
                         }
                     }
                     .build()
@@ -283,8 +284,8 @@ class HttpFileDownloader @Inject constructor(
                 .head()
                 .apply {
                     // Add HF Auth token if it's a HF URL
-                    if (url.startsWith("https://huggingface.co") && BuildConfig.HUGGING_FACE_API_KEY.isNotEmpty()) {
-                        addHeader("Authorization", "Bearer ${BuildConfig.HUGGING_FACE_API_KEY}")
+                    if (url.startsWith("https://huggingface.co") && hfApiKey.isNotEmpty()) {
+                        addHeader("Authorization", "Bearer $hfApiKey")
                     }
                 }
                 .build()
