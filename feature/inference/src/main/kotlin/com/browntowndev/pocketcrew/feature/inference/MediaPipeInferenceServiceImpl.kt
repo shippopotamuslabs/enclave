@@ -6,7 +6,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
-import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -33,24 +32,40 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
     private val mutex = Mutex()
 
     // Session is stateful — maintains multi-turn conversation context.
-    // MediaPipe auto-manages conversation history within a session.
     private var session: LlmSessionPort? = null
 
     // Cached history to seed new sessions
     private var history: List<DomainChatMessage> = emptyList()
 
-    private fun getOrCreateSession(): Pair<LlmSessionPort, Boolean> {
-        session?.let { return it to false }
+    /**
+     * Gets the current session or creates and seeds a new one.
+     * This operation is atomic to ensure history context is correctly injected.
+     */
+    private fun getOrCreateAndSeedSessionLocked(): LlmSessionPort {
+        session?.let { return it }
         
         val newSession = llmInference.createSession(
-            LlmInferenceSession.LlmInferenceSessionOptions.builder()
+            com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.LlmInferenceSessionOptions.builder()
                 .setTopK(40)
                 .setTopP(0.95f)
                 .setTemperature(0.7f)
                 .build()
         )
+
+        if (history.isNotEmpty()) {
+            Log.d(TAG, "Seeding new session with ${history.size} historical messages")
+            history.forEach { msg ->
+                val label = when (msg.role) {
+                    Role.USER -> "User"
+                    Role.ASSISTANT -> "Assistant"
+                    Role.SYSTEM -> "System"
+                }
+                newSession.addQueryChunk("$label: ${msg.content}\n")
+            }
+        }
+
         session = newSession
-        return newSession to true
+        return newSession
     }
 
     override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = callbackFlow {
@@ -59,25 +74,8 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         val accumulatedText = StringBuilder()
 
         try {
-            val (currentSession, isNewSession) = mutex.withLock {
-                getOrCreateSession()
-            }
-            
-            // If it's a new session and we have history, seed it now
-            if (isNewSession) {
-                mutex.withLock {
-                    if (history.isNotEmpty()) {
-                        Log.d(TAG, "Seeding session with ${history.size} historical messages")
-                        history.forEach { msg ->
-                            val label = when (msg.role) {
-                                Role.USER -> "User"
-                                Role.ASSISTANT -> "Assistant"
-                                Role.SYSTEM -> "System"
-                            }
-                            currentSession.addQueryChunk("$label: ${msg.content}\n")
-                        }
-                    }
-                }
+            val currentSession = mutex.withLock {
+                getOrCreateAndSeedSessionLocked()
             }
             
             currentSession.addQueryChunk(prompt)
@@ -86,9 +84,6 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                 val chunkText = partialResult ?: ""
 
                 if (chunkText.isNotEmpty()) {
-                    // Route text based on <think> tags — same logic as the old Engine impl.
-                    // TODO: For production, use a sliding window buffer to handle split tokens
-                    //       (e.g., "<th" + "ink>") across chunk boundaries.
                     if (chunkText.contains("<think>")) {
                         isThinkingPhase = true
                         val cleanText = chunkText.replace("<think>", "")
@@ -119,7 +114,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
             }
 
             awaitClose {
-                // No-op: session lifecycle managed by closeSession()
+                // No-op: session lifecycle managed by closeSession() or finally block
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error during inference", e)
@@ -135,44 +130,36 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         }
     }
 
-    private suspend fun closeSessionOnly() {
-        mutex.withLock {
-            try {
-                session?.close()
-                session = null
-            } catch (e: Exception) {
-                Log.w(TAG, "Error closing session only", e)
-            }
-        }
-    }
-
     override suspend fun setHistory(messages: List<DomainChatMessage>) {
         mutex.withLock {
             if (this.history != messages) {
                 this.history = messages
-                // Close existing session to force re-seeding with new history on next prompt
-                // Call internal logic without nested lock
-                try {
-                    session?.close()
-                    session = null
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error closing session during setHistory", e)
-                }
+                // Invalidate session to force re-seeding on next prompt
+                session?.close()
+                session = null
             }
         }
     }
 
     override fun closeSession() {
-        // This is called from outside, likely main thread or DI cleanup.
-        // Since it's not suspend, we use a fire-and-forget approach or block if absolutely needed.
-        // The interface LlmInferencePort.closeSession() is not suspend.
-        // We'll use tryLock or similar to be safe, but session close is usually fast.
-        try {
+        // Non-suspend cleanup. Using tryLock to avoid blocking if inference is active,
+        // but typically session close is a priority during shutdown.
+        if (mutex.tryLock()) {
+            try {
+                session?.close()
+                session = null
+                llmInference.close()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error closing session", e)
+            } finally {
+                mutex.unlock()
+            }
+        } else {
+            // If lock is held, we still attempt a force close of the underlying components
+            // to ensure resources are released during DI cleanup.
             session?.close()
             session = null
             llmInference.close()
-        } catch (e: Exception) {
-            Log.w(TAG, "Error closing session", e)
         }
     }
 }
