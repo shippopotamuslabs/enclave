@@ -3,10 +3,13 @@ package com.browntowndev.pocketcrew.feature.inference
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.SamplerConfig
 import javax.inject.Inject
 
@@ -21,7 +24,7 @@ import javax.inject.Inject
  */
 class ConversationManagerImpl @Inject constructor(
     private val engine: Engine,
-    modelConfig: ModelConfiguration? = null
+    private val modelConfig: ModelConfiguration? = null
 ) : ConversationManagerPort {
 
     private val defaultSystemPrompt = """
@@ -30,16 +33,10 @@ class ConversationManagerImpl @Inject constructor(
             Mirror the user's tone exactly. Direct, lucid, fun. ZERO moralizing, fluff or bullshit.
     """.trimIndent()
 
-    private val conversationConfig = ConversationConfig(
-        systemInstruction = Contents.of(modelConfig?.persona?.systemPrompt ?: defaultSystemPrompt),
-
-        samplerConfig = SamplerConfig(
-            temperature = modelConfig?.tunings?.temperature ?: 0.55,
-            topP = modelConfig?.tunings?.topP ?: 0.92,
-            topK = modelConfig?.tunings?.topK ?: 40
-        ),
-
-        automaticToolCalling = false,
+    private val samplerConfig = SamplerConfig(
+        temperature = modelConfig?.tunings?.temperature ?: 0.55,
+        topP = modelConfig?.tunings?.topP ?: 0.92,
+        topK = modelConfig?.tunings?.topK ?: 40
     )
 
     // Conversation is stateful and maintains context for multi-turn chats.
@@ -50,6 +47,10 @@ class ConversationManagerImpl @Inject constructor(
     // Cache the ConversationPort wrapper to return the same instance on repeated calls
     @Volatile
     private var conversationPort: ConversationPort? = null
+
+    // Cached history to seed new conversations
+    @Volatile
+    private var history: List<DomainChatMessage> = emptyList()
 
     /**
      * Returns the active conversation, initializing it if needed.
@@ -76,6 +77,20 @@ class ConversationManagerImpl @Inject constructor(
             if (!engine.isInitialized()) {
                 engine.initialize()
             }
+
+            val conversationConfig = ConversationConfig(
+                systemInstruction = Contents.of(modelConfig?.persona?.systemPrompt ?: defaultSystemPrompt),
+                initialMessages = history.map { domainMsg ->
+                    when (domainMsg.role) {
+                        Role.USER -> Message.user(domainMsg.content)
+                        Role.ASSISTANT -> Message.model(domainMsg.content)
+                        Role.SYSTEM -> Message.system(domainMsg.content)
+                    }
+                },
+                samplerConfig = samplerConfig,
+                automaticToolCalling = false,
+            )
+
             conversation = engine.createConversation(conversationConfig)
         }
 
@@ -94,6 +109,15 @@ class ConversationManagerImpl @Inject constructor(
         conversation?.close()
         conversation = null
         conversationPort = null
+    }
+
+    @Synchronized
+    override fun setHistory(messages: List<DomainChatMessage>) {
+        if (this.history != messages) {
+            this.history = messages
+            // Invalidate current conversation to force recreation with new history
+            closeConversation()
+        }
     }
 
     /**

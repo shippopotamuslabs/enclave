@@ -2,15 +2,16 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
-import com.browntowndev.pocketcrew.feature.inference.llama.ChatMessage
-import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 /**
@@ -21,7 +22,7 @@ import javax.inject.Inject
  * litertlm.Engine is the lower-level preview API with limited model support.
  */
 class MediaPipeInferenceServiceImpl @Inject constructor(
-    private val llmInference: LlmInference,
+    private val llmInference: LlmInferenceWrapper,
     private val modelType: ModelType,
 ) : LlmInferencePort {
 
@@ -29,19 +30,27 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         private const val TAG = "MediaPipeInference"
     }
 
+    private val mutex = Mutex()
+
     // Session is stateful — maintains multi-turn conversation context.
     // MediaPipe auto-manages conversation history within a session.
-    private var session: LlmInferenceSession? = null
+    private var session: LlmSessionPort? = null
 
-    private fun getOrCreateSession(): LlmInferenceSession {
-        return session ?: LlmInferenceSession.createFromOptions(
-            llmInference,
+    // Cached history to seed new sessions
+    private var history: List<DomainChatMessage> = emptyList()
+
+    private fun getOrCreateSession(): Pair<LlmSessionPort, Boolean> {
+        session?.let { return it to false }
+        
+        val newSession = llmInference.createSession(
             LlmInferenceSession.LlmInferenceSessionOptions.builder()
                 .setTopK(40)
                 .setTopP(0.95f)
                 .setTemperature(0.7f)
                 .build()
-        ).also { session = it }
+        )
+        session = newSession
+        return newSession to true
     }
 
     override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = callbackFlow {
@@ -50,7 +59,27 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         val accumulatedText = StringBuilder()
 
         try {
-            val currentSession = getOrCreateSession()
+            val (currentSession, isNewSession) = mutex.withLock {
+                getOrCreateSession()
+            }
+            
+            // If it's a new session and we have history, seed it now
+            if (isNewSession) {
+                mutex.withLock {
+                    if (history.isNotEmpty()) {
+                        Log.d(TAG, "Seeding session with ${history.size} historical messages")
+                        history.forEach { msg ->
+                            val label = when (msg.role) {
+                                Role.USER -> "User"
+                                Role.ASSISTANT -> "Assistant"
+                                Role.SYSTEM -> "System"
+                            }
+                            currentSession.addQueryChunk("$label: ${msg.content}\n")
+                        }
+                    }
+                }
+            }
+            
             currentSession.addQueryChunk(prompt)
 
             currentSession.generateResponseAsync { partialResult, done ->
@@ -98,30 +127,49 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
             close()
         } finally {
             if (closeConversation) {
-                session?.close()
-                session = null
+                mutex.withLock {
+                    session?.close()
+                    session = null
+                }
             }
         }
     }
 
-    private fun closeSessionOnly() {
-        try {
-            session?.close()
-            session = null
-        } catch (e: Exception) {
-            Log.w(TAG, "Error closing session only", e)
+    private suspend fun closeSessionOnly() {
+        mutex.withLock {
+            try {
+                session?.close()
+                session = null
+            } catch (e: Exception) {
+                Log.w(TAG, "Error closing session only", e)
+            }
         }
     }
 
     override suspend fun setHistory(messages: List<DomainChatMessage>) {
-        // MediaPipe manages its own conversation history within the session
-        // This is a no-op for now - MediaPipe may have different persistence needs
-        Log.d(TAG, "setHistory called with ${messages.size} messages - not implemented for MediaPipe")
+        mutex.withLock {
+            if (this.history != messages) {
+                this.history = messages
+                // Close existing session to force re-seeding with new history on next prompt
+                // Call internal logic without nested lock
+                try {
+                    session?.close()
+                    session = null
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error closing session during setHistory", e)
+                }
+            }
+        }
     }
 
     override fun closeSession() {
+        // This is called from outside, likely main thread or DI cleanup.
+        // Since it's not suspend, we use a fire-and-forget approach or block if absolutely needed.
+        // The interface LlmInferencePort.closeSession() is not suspend.
+        // We'll use tryLock or similar to be safe, but session close is usually fast.
         try {
-            closeSessionOnly()
+            session?.close()
+            session = null
             llmInference.close()
         } catch (e: Exception) {
             Log.w(TAG, "Error closing session", e)

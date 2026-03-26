@@ -23,6 +23,14 @@ interface ConversationManagerPort {
     fun closeConversation()
 
     /**
+     * Sets the historical messages for the conversation.
+     * These will be injected as a preface when the conversation is initialized or updated.
+     *
+     * @param messages The list of historical messages.
+     */
+    fun setHistory(messages: List<com.browntowndev.pocketcrew.domain.model.chat.ChatMessage>)
+
+    /**
      * Closes the underlying engine and releases all resources.
      * After calling this, the ConversationManager should not be used.
      */
