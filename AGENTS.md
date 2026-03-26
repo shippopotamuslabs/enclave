@@ -11,18 +11,66 @@ tools:
   - adb: "adb devices"
   - mcp: "search_android_docs"
   - mcp: "fetch_page"
+  - factory: "factory exec --droid <droid-name>"
 skills:
   - android-kotlin-compose
   - session-navigation
+  - code-reviewer
+  - test-master
+  - architecture-designer
+droids:
+  - architect
+  - coder
+  - tdd-droid
+  - scrutiny-feature-reviewer
 mcp:
   - context7
   - kimi-vision
   - MiniMax
+  - mobile-mcp
 tags: [android, compose, api36, cfaw, cfa-w, contract-first]
 ---
 
 # Pocket Crew — AGENTS.md
 **Master Agent Contract v7.0 — Contract-First Agentic Workflow (CFAW)**
+
+## 0. Droid Routing
+
+Use Factory Droid subagents with specialized models for different tasks:
+
+### Droid Assignment
+
+| Task Type | Droid | Model | Purpose |
+|---|---|---|---|
+| Architecture, ADRs, High-level Design | `architect` | `custom:gemini-3.1-pro-preview` | Strategic reasoning, system design, decision records |
+| Implementation, Code Generation | `coder` | `custom:MiniMax-M2.7-highspeed-0` | Fast, high-quality code writing |
+| TDD, Test Writing | `tdd-droid` | `custom:MiniMax-M2.7-highspeed-0` | Test-driven development workflow |
+| Code Review | `scrupulously-reviewer` | `custom:MiniMax-M2.7-highspeed-0` | Critical code analysis |
+
+### How to Invoke a Droid
+
+Use Factory Droid's exec command to spawn a subagent:
+
+```bash
+factory exec --droid architect --prompt "Your architecture task here"
+factory exec --droid coder --prompt "Your coding task here"
+factory exec --droid tdd-droid --prompt "Your TDD task here"
+```
+
+### Droid Configuration Files
+
+- Architect: `.factory/droids/architect.md` (Gemini 3.1 Pro)
+- Coder: `~/.factory/droids/coder.md` (MiniMax M2.7)
+- TDD: `.factory/droids/tdd-droid.md` (MiniMax M2.7)
+- Reviewer: `~/.factory/droids/scrutiny-feature-reviewer.md` (MiniMax M2.7)
+
+### Routing Rules
+
+1. **Architecture/Design tasks** → Use `architect` droid (Gemini 3.1 Pro)
+2. **Implementation/Coding tasks** → Use `coder` droid (MiniMax)
+3. **Test-writing tasks** → Use `tdd-droid` (MiniMax)
+4. **Code review tasks** → Use `scrupulously-reviewer` (MiniMax)
+5. **Complex tasks** → Orchestrate multiple droids in sequence
 
 ## 1. Contract Supremacy & CFAW
 
