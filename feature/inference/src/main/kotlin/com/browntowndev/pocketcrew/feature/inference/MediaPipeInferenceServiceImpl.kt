@@ -133,7 +133,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
     override suspend fun setHistory(messages: List<DomainChatMessage>) {
         mutex.withLock {
             if (this.history != messages) {
-                this.history = messages
+                this.history = messages.toList() // Defensive copy
                 // Invalidate session to force re-seeding on next prompt
                 session?.close()
                 session = null
@@ -142,8 +142,8 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
     }
 
     override fun closeSession() {
-        // Non-suspend cleanup. Using tryLock to avoid blocking if inference is active,
-        // but typically session close is a priority during shutdown.
+        // Defensive closure: only close if we can acquire the lock or if it's terminal cleanup.
+        // If the lock is held, something is either seeding or closing.
         if (mutex.tryLock()) {
             try {
                 session?.close()
@@ -155,11 +155,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                 mutex.unlock()
             }
         } else {
-            // If lock is held, we still attempt a force close of the underlying components
-            // to ensure resources are released during DI cleanup.
-            session?.close()
-            session = null
-            llmInference.close()
+            Log.w(TAG, "Could not acquire lock for closeSession - logic may be busy. Native resources will be freed by DI cleanup.")
         }
     }
 }

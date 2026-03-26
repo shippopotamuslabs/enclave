@@ -114,7 +114,7 @@ class ConversationManagerImpl @Inject constructor(
     @Synchronized
     override fun setHistory(messages: List<DomainChatMessage>) {
         if (this.history != messages) {
-            this.history = messages
+            this.history = messages.toList() // Defensive copy
             // Invalidate current conversation to force recreation with new history
             closeConversation()
         }

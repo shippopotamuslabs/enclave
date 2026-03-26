@@ -4,7 +4,6 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession
 import com.google.mediapipe.tasks.genai.llminference.ProgressListener
-import javax.inject.Inject
 
 /**
  * Interface representing a stateful LLM session to facilitate testing.
@@ -37,7 +36,7 @@ class MediaPipeSessionWrapper(private val session: LlmInferenceSession) : LlmSes
  * The SDK's LlmInference class has a static initializer that loads native libraries,
  * which makes it extremely difficult to mock in standard unit tests.
  */
-class LlmInferenceWrapper @Inject constructor(private val llmInference: LlmInference) {
+class LlmInferenceWrapper constructor(private val llmInference: LlmInference) {
     fun createSession(options: LlmInferenceSession.LlmInferenceSessionOptions): LlmSessionPort {
         val session = LlmInferenceSession.createFromOptions(llmInference, options)
         return MediaPipeSessionWrapper(session)
