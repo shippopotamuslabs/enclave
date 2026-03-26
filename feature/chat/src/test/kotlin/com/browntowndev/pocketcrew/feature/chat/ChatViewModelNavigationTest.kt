@@ -11,6 +11,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -30,6 +31,7 @@ class ChatViewModelNavigationTest {
     private lateinit var chatUseCases: ChatUseCases
     private lateinit var inferenceLockManager: InferenceLockManager
     private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
+    private lateinit var errorHandler: ViewModelErrorHandler
 
     @BeforeEach
     fun setup() {
@@ -37,6 +39,7 @@ class ChatViewModelNavigationTest {
         chatUseCases = mockk(relaxed = true)
         inferenceLockManager = mockk(relaxed = true)
         modelDisplayNamesUseCase = mockk(relaxed = true)
+        errorHandler = mockk(relaxed = true)
 
         every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
@@ -50,7 +53,8 @@ class ChatViewModelNavigationTest {
             chatUseCases = chatUseCases,
             savedStateHandle = savedStateHandle,
             inferenceLockManager = inferenceLockManager,
-            modelDisplayNamesUseCase = modelDisplayNamesUseCase
+            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            errorHandler = errorHandler
         )
     }
 

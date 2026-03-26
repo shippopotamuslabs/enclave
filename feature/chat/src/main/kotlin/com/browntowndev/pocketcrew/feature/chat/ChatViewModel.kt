@@ -14,6 +14,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -21,6 +22,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
@@ -44,7 +46,12 @@ class ChatViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     inferenceLockManager: InferenceLockManager,
     private val modelDisplayNamesUseCase: GetModelDisplayNameUseCase,
+    private val errorHandler: ViewModelErrorHandler,
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "ChatViewModel"
+    }
 
     /**
      * Optional chat ID for continuing an existing conversation.
@@ -260,7 +267,7 @@ class ChatViewModel @Inject constructor(
                 role = Role.USER
             )
 
-            viewModelScope.launch {
+            viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to send message", "Could not send message. Please try again.")) {
                 // Step 1: Save user message (creates new chat if needed)
                 // Also creates placeholder assistant message, returns assistant message ID and chat ID
                 val promptResult = chatUseCases.processPrompt(domainMessage)
@@ -286,6 +293,8 @@ class ChatViewModel @Inject constructor(
                     // Merge new messages with existing in-flight messages
                     // In-flight messages override database messages for same messageId
                     _inFlightMessages.value += state.messages
+                }.catch { cause ->
+                    errorHandler.handleError(TAG, "Inference failed", cause, "Failed to generate response. Please try again.")
                 }.onCompletion { cause ->
                     // Clear in-flight after flow completion
                     // Database has been updated with final state via persistAccumulatedMessages

@@ -1,10 +1,12 @@
-package com.browntowndev.pocketcrew.domain.util
+package com.browntowndev.pocketcrew.core.testing
+
+import com.browntowndev.pocketcrew.domain.util.Clock
 
 /**
  * Test implementation of [Clock] that allows controlling time for deterministic testing.
  */
-class TestClock : Clock {
-    private var currentTime: Long = 0L
+class TestClock(initialTime: Long = 0L) : Clock {
+    private var currentTime: Long = initialTime
 
     override fun currentTimeMillis(): Long = currentTime
 

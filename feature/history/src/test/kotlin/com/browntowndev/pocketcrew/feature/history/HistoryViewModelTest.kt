@@ -11,6 +11,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.TogglePinChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -48,6 +49,7 @@ class HistoryViewModelTest {
     private lateinit var mockTogglePinChatUseCase: TogglePinChatUseCase
     private lateinit var mockGetSettingsUseCase: GetSettingsUseCase
     private lateinit var mockSettingsUseCases: SettingsUseCases
+    private lateinit var mockErrorHandler: ViewModelErrorHandler
     private lateinit var viewModel: HistoryViewModel
 
     private val today = Calendar.getInstance().apply {
@@ -98,6 +100,7 @@ class HistoryViewModelTest {
         mockTogglePinChatUseCase = mockk(relaxed = true)
         mockGetSettingsUseCase = mockk(relaxed = true)
         mockSettingsUseCases = mockk(relaxed = true)
+        mockErrorHandler = mockk(relaxed = true)
 
         every { mockSettingsUseCases.getSettings } returns mockGetSettingsUseCase
         every { mockGetSettingsUseCase.invoke() } returns MutableStateFlow(
@@ -120,7 +123,8 @@ class HistoryViewModelTest {
             deleteChatUseCase = mockDeleteChatUseCase,
             renameChatUseCase = mockRenameChatUseCase,
             togglePinChatUseCase = mockTogglePinChatUseCase,
-            getSettingsUseCase = mockGetSettingsUseCase
+            getSettingsUseCase = mockGetSettingsUseCase,
+            errorHandler = mockErrorHandler
         )
     }
 
@@ -282,6 +286,30 @@ class HistoryViewModelTest {
         assertEquals(2, state.pinnedChats.size)
         assertEquals(2L, state.pinnedChats[0].id)
         assertEquals(1L, state.pinnedChats[1].id)
+    }
+
+    @Test
+    fun `deleteChat error invokes errorHandler`() = runTest(testDispatcher) {
+        // Given
+        val chatId = 1L
+        val exception = RuntimeException("Delete Error")
+        coEvery { mockDeleteChatUseCase.invoke(chatId) } throws exception
+        
+        viewModel = createViewModel()
+        
+        // When
+        viewModel.deleteChat(chatId)
+        advanceUntilIdle()
+        
+        // Then
+        io.mockk.verify {
+            mockErrorHandler.handleError(
+                tag = "HistoryViewModel",
+                message = "Failed to delete chat with id: 1",
+                throwable = exception,
+                userMessage = "Failed to delete chat"
+            )
+        }
     }
 
     // Suite C: Relative Date Formatting Tests
