@@ -235,6 +235,8 @@ fun InputBar(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    } else {
+                        Spacer(Modifier.width(36.dp))
                     }
                 }
             }

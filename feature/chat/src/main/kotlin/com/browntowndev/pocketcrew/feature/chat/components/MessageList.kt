@@ -15,13 +15,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -52,13 +55,22 @@ fun MessageList(
     modifier: Modifier = Modifier,
     isPreview: Boolean = false,
 ) {
+    val listState = rememberLazyListState()
     val hasActiveIndicator = messages.any { it.indicatorState != null }
+
+    // Auto-scroll to bottom (index 0 in reverseLayout) when messages are added
+    LaunchedEffect(messages.size) {
+        if (messages.isNotEmpty()) {
+            listState.animateScrollToItem(0)
+        }
+    }
 
     if (messages.isEmpty() && !hasActiveIndicator) {
         EmptyState(modifier = modifier)
     } else {
         LazyColumn(
             modifier = modifier,
+            state = listState,
             reverseLayout = true,
             verticalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(vertical = 16.dp),
@@ -130,12 +142,40 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
     if (indicatorState != null) {
         var isThinkingSheetVisible by remember { mutableStateOf(false) }
 
+        // Hoist elapsed time counter to share between Indicator and BottomSheet
+        var elapsedSeconds by remember { mutableIntStateOf(0) }
+        val startTime = when (indicatorState) {
+            is IndicatorState.Thinking -> indicatorState.thinkingStartTime
+            is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingStartTime ?: 0L
+            is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingStartTime ?: 0L
+            else -> 0L
+        }
+        val isThinkingActive = indicatorState is IndicatorState.Thinking ||
+                (indicatorState is IndicatorState.Generating && indicatorState.thinkingData?.thinkingDurationSeconds == 0L)
+
+        if (startTime > 0 && isThinkingActive) {
+            androidx.compose.runtime.LaunchedEffect(startTime) {
+                while (true) {
+                    elapsedSeconds = ((System.currentTimeMillis() - startTime) / 1000).toInt()
+                    kotlinx.coroutines.delay(1000L)
+                }
+            }
+        } else {
+            // For completed states, use the final duration
+            elapsedSeconds = when (indicatorState) {
+                is IndicatorState.Thinking -> indicatorState.thinkingDurationSeconds.toInt()
+                is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
+                is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
+                else -> 0
+            }
+        }
+
         when (indicatorState) {
             is IndicatorState.Thinking -> {
                 ThinkingIndicator(
                     modifier = Modifier.padding(horizontal = 5.dp),
                     thinkingRaw = indicatorState.thinkingRaw,
-                    thinkingStartTime = indicatorState.thinkingDurationSeconds,
+                    elapsedSeconds = elapsedSeconds,
                     modelDisplayName = modelDisplayName,
                     isExpanded = isThinkingSheetVisible,
                     onToggleDetails = {
@@ -153,7 +193,7 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                 if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank()) {
                     ThoughtForHeader(
                         modifier = Modifier.padding(horizontal = 5.dp),
-                        thinkingData = thinkingData,
+                        durationText = formatThinkingDuration(elapsedSeconds),
                         isExpanded = isThinkingSheetVisible,
                         onViewFullThinking = {
                             isThinkingSheetVisible = !isThinkingSheetVisible
@@ -166,7 +206,7 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                 if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank()) {
                     ThoughtForHeader(
                         modifier = Modifier.padding(horizontal = 5.dp),
-                        thinkingData = thinkingData,
+                        durationText = formatThinkingDuration(elapsedSeconds),
                         isExpanded = isThinkingSheetVisible,
                         onViewFullThinking = {
                             isThinkingSheetVisible = !isThinkingSheetVisible
@@ -198,6 +238,7 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                         else -> 0
                     }
                 },
+                elapsedSeconds = elapsedSeconds,
                 onDismiss = { isThinkingSheetVisible = false }
             )
         }
@@ -207,12 +248,10 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
 @Composable
 private fun ThoughtForHeader(
     modifier: Modifier = Modifier,
-    thinkingData: ThinkingDataUi,
+    durationText: String,
     isExpanded: Boolean = false,
     onViewFullThinking: () -> Unit,
 ) {
-    val durationSeconds = thinkingData.thinkingDurationSeconds.toInt()
-    val durationText = formatThinkingDuration(durationSeconds)
     val rotation by animateFloatAsState(
         targetValue = if (isExpanded) 90f else 0f,
         animationSpec = tween(durationMillis = 200),
