@@ -236,7 +236,7 @@ fun InputBar(
                             )
                         }
                     } else {
-                        Spacer(Modifier.width(36.dp))
+                        Spacer(Modifier.width(48.dp))
                     }
                 }
             }

@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import android.util.Log
+import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
@@ -93,5 +95,15 @@ class LiteRtInferenceServiceImplTest {
 
         verify { mockConversationManager.closeConversation() }
         verify { mockConversationManager.closeEngine() }
+    }
+
+    @Test
+    fun `setHistory delegates to conversation manager`() = runTest {
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.MAIN)
+        val history = listOf(ChatMessage(Role.USER, "Hello"))
+
+        service.setHistory(history)
+
+        verify { mockConversationManager.setHistory(history) }
     }
 }
