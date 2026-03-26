@@ -1,12 +1,16 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import android.util.Log
+import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
+import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
+import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import org.junit.jupiter.api.AfterEach
@@ -142,5 +146,66 @@ class ConversationManagerImplTest {
 
         // Then - should be different wrapper instances
         assertTrue(conv1 !== conv2, "Should return new wrapper after close")
+    }
+
+    // ========== Conversation History (setHistory) ==========
+
+    @Test
+    fun `setHistory seeds initialMessages in ConversationConfig`() {
+        // Given
+        val manager = ConversationManagerImpl(engine = mockEngine)
+        val history = listOf(
+            ChatMessage(Role.USER, "Hello, what's up?"),
+            ChatMessage(Role.ASSISTANT, "Not much, how are you?")
+        )
+
+        // When
+        manager.setHistory(history)
+        manager.getConversation()
+
+        // Then
+        val configSlot = slot<ConversationConfig>()
+        verify { mockEngine.createConversation(capture(configSlot)) }
+
+        val initialMessages = configSlot.captured.initialMessages
+        assertEquals(2, initialMessages.size)
+        // Verify mapping (role and content)
+        assertEquals("user", initialMessages[0].role.name.lowercase())
+        assertEquals("Hello, what's up?", initialMessages[0].contents.contents.filterIsInstance<com.google.ai.edge.litertlm.Content.Text>().joinToString("") { it.text })
+        assertEquals("model", initialMessages[1].role.name.lowercase())
+        assertEquals("Not much, how are you?", initialMessages[1].contents.contents.filterIsInstance<com.google.ai.edge.litertlm.Content.Text>().joinToString("") { it.text })
+    }
+
+    @Test
+    fun `setting different history invalidates current conversation`() {
+        // Given
+        val manager = ConversationManagerImpl(engine = mockEngine)
+        val conv1 = manager.getConversation()
+
+        val history = listOf(ChatMessage(Role.USER, "New history"))
+
+        // When
+        manager.setHistory(history)
+        val conv2 = manager.getConversation()
+
+        // Then
+        assertTrue(conv1 !== conv2, "Should return new conversation instance after history change")
+        verify { mockConversation.close() }
+    }
+
+    @Test
+    fun `setHistory with empty list seeds empty initialMessages`() {
+        // Given
+        val manager = ConversationManagerImpl(engine = mockEngine)
+        val history = emptyList<ChatMessage>()
+
+        // When
+        manager.setHistory(history)
+        manager.getConversation()
+
+        // Then
+        val configSlot = slot<ConversationConfig>()
+        verify { mockEngine.createConversation(capture(configSlot)) }
+        assertTrue(configSlot.captured.initialMessages.isEmpty())
     }
 }
