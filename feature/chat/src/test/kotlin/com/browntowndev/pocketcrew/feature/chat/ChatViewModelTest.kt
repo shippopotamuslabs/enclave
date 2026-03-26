@@ -27,9 +27,11 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
-import io.mockk.every
-import io.mockk.mockk
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
+import io.mockk.*
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.test.runTest
+
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -54,12 +56,17 @@ class ChatViewModelTest {
     private lateinit var chatUseCases: ChatUseCases
     private lateinit var inferenceLockManager: InferenceLockManager
     private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
+    private lateinit var errorHandler: ViewModelErrorHandler
 
     @BeforeEach
     fun setup() {
         settingsUseCases = mockk(relaxed = true)
         chatUseCases = mockk(relaxed = true)
         inferenceLockManager = mockk(relaxed = true)
+        errorHandler = mockk(relaxed = true)
+        
+        // Stub coroutineExceptionHandler to return a real one to avoid ClassCastException with MockK
+        every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
 
         // Create a simple fake for GetModelDisplayNameUseCase
         modelDisplayNamesUseCase = mockk(relaxed = true)
@@ -72,8 +79,32 @@ class ChatViewModelTest {
             chatUseCases = chatUseCases,
             savedStateHandle = savedStateHandle,
             inferenceLockManager = inferenceLockManager,
-            modelDisplayNamesUseCase = modelDisplayNamesUseCase
+            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            errorHandler = errorHandler
         )
+    }
+
+    @Test
+    fun `onSendMessage error invokes errorHandler`() = runTest {
+        // Given
+        val input = "Hello"
+        chatViewModel.onInputChange(input)
+        
+        val exception = java.io.IOException("Network error")
+        coEvery { chatUseCases.processPrompt(any()) } throws exception
+        
+        // When
+        chatViewModel.onSendMessage()
+        
+        // Then
+        // Verify coroutineExceptionHandler was called with correct parameters
+        verify {
+            errorHandler.coroutineExceptionHandler(
+                tag = "ChatViewModel",
+                message = "Failed to send message",
+                userMessage = "Could not send message. Please try again."
+            )
+        }
     }
 
     // ========================================================================

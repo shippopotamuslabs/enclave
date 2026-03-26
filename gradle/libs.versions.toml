@@ -36,6 +36,10 @@ robolectricVersion = "4.13"
 androidxTestCoreVersion = "1.7.0"
 markdown = "1.0.3"
 turbineVersion = "1.2.0"
+firebaseCrashlyticsVersion = "19.0.3"
+googleServicesVersion = "4.4.4"
+firebaseCrashlyticsPluginVersion = "3.0.2"
+firebaseBomVersion = "34.11.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -59,6 +63,7 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 litert = { group = "com.google.ai.edge.litert", name = "litert", version.ref = "litert" }
 litertlm-android = { group = "com.google.ai.edge.litertlm", name = "litertlm-android", version.ref = "litertlm" }
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
+hilt-android-testing = { group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
 hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "hiltNavCompose" }
 hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltWorkVersion" }
@@ -91,6 +96,9 @@ junit-vintage-engine = { group = "org.junit.vintage", name = "junit-vintage-engi
 markdown-parser = { module = "io.github.huarangmeng:markdown-parser", version.ref = "markdown" }
 markdown-renderer = { module = "io.github.huarangmeng:markdown-renderer", version.ref = "markdown" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbineVersion" }
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBomVersion" }
+firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
+firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics", version.ref = "firebaseCrashlyticsVersion" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -101,3 +109,5 @@ kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintVersion" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
+google-services = { id = "com.google.gms.google-services", version.ref = "googleServicesVersion" }
+firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsPluginVersion" }

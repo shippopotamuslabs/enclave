@@ -13,4 +13,10 @@ interface LoggingPort {
     fun warning(tag: String, message: String)
 
     fun error(tag: String, message: String, throwable: Throwable? = null)
+
+    /**
+     * Records an exception specifically for remote crash reporting.
+     * Use this when you want to capture the stack trace and context without a human-readable log level.
+     */
+    fun recordException(tag: String, message: String, throwable: Throwable)
 }

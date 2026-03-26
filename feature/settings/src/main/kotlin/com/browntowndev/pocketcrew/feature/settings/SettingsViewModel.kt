@@ -57,8 +57,13 @@ class SettingsViewModel @Inject constructor(
     private val updateCustomPromptTextUseCase: UpdateCustomPromptTextUseCase,
     private val updateAllowMemoriesUseCase: UpdateAllowMemoriesUseCase,
     private val getModelConfigurationsUseCase: GetModelConfigurationsUseCase,
-    private val updateModelConfigurationUseCase: UpdateModelConfigurationUseCase
+    private val updateModelConfigurationUseCase: UpdateModelConfigurationUseCase,
+    private val errorHandler: com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "SettingsViewModel"
+    }
 
     private val _transientState = MutableStateFlow(TransientState())
 
@@ -109,20 +114,20 @@ class SettingsViewModel @Inject constructor(
 
     // Theme
     fun onThemeChange(theme: AppTheme) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update theme", "Failed to update theme")) {
             updateThemeUseCase(theme)
         }
     }
 
     // Haptic Feedback
     fun onHapticPressChange(enabled: Boolean) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update haptic press setting", "Failed to update setting")) {
             updateHapticPressUseCase(enabled)
         }
     }
 
     fun onHapticResponseChange(enabled: Boolean) {
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update haptic response setting", "Failed to update setting")) {
             updateHapticResponseUseCase(enabled)
         }
     }
@@ -134,14 +139,14 @@ class SettingsViewModel @Inject constructor(
 
     fun onCustomizationEnabledChange(enabled: Boolean) {
         _transientState.update { it.copy(customizationEnabled = enabled) }
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update customization setting", "Failed to update setting")) {
             updateCustomizationEnabledUseCase(enabled)
         }
     }
 
     fun onPromptOptionChange(option: SystemPromptOption) {
         _transientState.update { it.copy(selectedPromptOption = option) }
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update prompt option", "Failed to update setting")) {
             updateSelectedPromptOptionUseCase(option)
         }
     }
@@ -152,7 +157,7 @@ class SettingsViewModel @Inject constructor(
 
     fun onSaveCustomization() {
         val currentState = _transientState.value
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save customization", "Failed to save settings")) {
             updateCustomizationEnabledUseCase(currentState.customizationEnabled)
             updateSelectedPromptOptionUseCase(currentState.selectedPromptOption)
             updateCustomPromptTextUseCase(currentState.customPromptText)
@@ -167,7 +172,7 @@ class SettingsViewModel @Inject constructor(
 
     fun onAllowMemoriesChange(enabled: Boolean) {
         _transientState.update { it.copy(allowMemories = enabled) }
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update memory setting", "Failed to update setting")) {
             updateAllowMemoriesUseCase(enabled)
         }
     }
@@ -247,7 +252,7 @@ class SettingsViewModel @Inject constructor(
 
     fun onSaveModelConfig() {
         val config = _transientState.value.selectedModelConfig ?: return
-        viewModelScope.launch {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save model configuration", "Failed to save configuration")) {
             updateModelConfigurationUseCase(config)
         }
         onBackToModelList()

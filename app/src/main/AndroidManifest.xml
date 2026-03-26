@@ -57,6 +57,10 @@
                 value="androidx.startup"
                 tools:node="remove" />
         </provider>
+        <provider
+            android:name="com.browntowndev.pocketcrew.core.ui.error.ErrorHandlerContextProvider"
+            android:authorities="${applicationId}.error-handler-provider"
+            android:exported="false" />
     </application>
 
 </manifest>

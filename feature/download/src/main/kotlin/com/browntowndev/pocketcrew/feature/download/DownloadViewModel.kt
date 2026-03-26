@@ -16,6 +16,7 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
@@ -41,6 +42,7 @@ class DownloadViewModel @AssistedInject constructor(
     private val downloadWorkRepository: DownloadWorkRepository,
     private val modelRegistry: ModelRegistryPort,
     private val progressParser: WorkProgressParser,
+    private val errorHandler: ViewModelErrorHandler,
     @Assisted private val modelsResult: DownloadModelsResult,
     @Assisted private val initialErrorMessage: String?,
     @Assisted private val autoStartDownloads: Boolean = true,
@@ -156,6 +158,7 @@ class DownloadViewModel @AssistedInject constructor(
         // Don't try to download - let the user retry manually
         if (initialErrorMessage != null) {
             Log.d(TAG, "[TRACE] init: App initialization failed, setting error and skipping download")
+            errorHandler.handleError(TAG, "App initialization failed", Exception(initialErrorMessage), initialErrorMessage)
             modelDownloadOrchestrator.setError(initialErrorMessage)
         } else {
             viewModelScope.launch {

@@ -5,10 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.feature.inference.llama.SveDetector
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeModelsUseCase
 import com.browntowndev.pocketcrew.presentation.navigation.Routes
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,7 +28,7 @@ sealed interface AppStartupState {
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val initializeModelsUseCase: InitializeModelsUseCase,
-    private val logPort: LoggingPort
+    private val errorHandler: ViewModelErrorHandler
 ) : ViewModel() {
 
     private val _startupState = MutableStateFlow<AppStartupState>(AppStartupState.Loading)
@@ -42,17 +41,13 @@ class MainViewModel @Inject constructor(
     private fun initializeApp() {
         viewModelScope.launch {
             try {
-                // Detect SVE support for optimal native library selection
-                logPort.debug("MainViewModel", "SVE detected: ${SveDetector.shouldUseSve()}")
-
                 // Suspends until network fetch, DB update, and cache init complete
                 // Returns DownloadModelsResult with scan result to avoid duplicate scanning
                 val modelsResult = initializeModelsUseCase()
-                logPort.debug("MainViewModel", "Models result: $modelsResult")
 
                 _startupState.update { AppStartupState.Ready(modelsResult) }
             } catch (e: Exception) {
-                logPort.error("MainViewModel", "Critical failure during app initialization: ${e.message}", e)
+                errorHandler.handleError("MainViewModel", "Critical failure during app initialization", e, "Failed to initialize models")
                 // Fallback: direct to download screen with error to allow recovery/re-sync
                 // Return an empty modelsResult so DownloadViewModel can still function
                 _startupState.update {
