@@ -35,6 +35,7 @@ tags: [android, compose, api36, cfaw, cfa-w, contract-first]
 **Master Agent Contract v7.0 — Contract-First Agentic Workflow (CFAW)**
 
 ## 0. Droid Routing
+**IMPORTANT** ONLY USE DROID ROUTING WHEN OPERATING WITHIN FACTORY DROID CLI.
 
 Use Factory Droid subagents with specialized models for different tasks:
 

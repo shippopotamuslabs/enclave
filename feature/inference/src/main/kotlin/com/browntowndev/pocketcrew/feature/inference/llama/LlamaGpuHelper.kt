@@ -30,27 +30,33 @@ object LlamaGpuHelper {
      * and fall back to CPU mode.
      */
     fun isGpuAvailable(context: Context): Boolean {
-        // Emulators generally don't support GPU compute well
+        // 1. Emulators generally don't support GPU compute well
         if (isEmulator()) {
+            Log.i(TAG, "GPU check: Running on emulator, GPU disabled.")
             return false
         }
 
-        // Check if device has GPU memory (rough heuristic)
-        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
         if (activityManager != null) {
-            val memInfo = android.app.ActivityManager.MemoryInfo()
+            // 2. Check for OpenGL ES 3.1+ support (required for GPU compute shaders)
+            val configInfo = activityManager.deviceConfigurationInfo
+            if (configInfo.reqGlEsVersion < 0x30001) {
+                Log.i(TAG, "GPU check: OpenGL ES version ${configInfo.glEsVersion} < 3.1, GPU disabled.")
+                return false
+            }
+
+            // 3. Check if device has enough total RAM (rough heuristic for GPU capability)
+            val memInfo = ActivityManager.MemoryInfo()
             activityManager.getMemoryInfo(memInfo)
 
             // Require at least 3GB RAM for GPU inference
             if (memInfo.totalMem < 3L * 1024 * 1024 * 1024) {
+                Log.i(TAG, "GPU check: Total RAM ${memInfo.totalMem / 1024 / 1024}MB < 3GB, GPU disabled.")
                 return false
             }
         }
 
-        // Could also check for specific GPU features via OpenGL ES,
-        // but that requires a surface context. For now, assume
-        // most modern devices with enough RAM can handle GPU.
-
+        Log.i(TAG, "GPU check: Hardware meets requirements for GPU acceleration.")
         return true
     }
 
