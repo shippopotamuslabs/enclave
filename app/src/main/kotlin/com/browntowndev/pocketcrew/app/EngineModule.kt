@@ -18,6 +18,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.feature.inference.LiteRtInferenceServiceImpl
 import com.browntowndev.pocketcrew.feature.inference.LlamaInferenceServiceImpl
 import com.browntowndev.pocketcrew.feature.inference.MediaPipeInferenceServiceImpl
+import com.browntowndev.pocketcrew.feature.inference.LlmInferenceWrapper
 import com.browntowndev.pocketcrew.feature.inference.llama.GpuConfig
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
@@ -66,7 +67,7 @@ object EngineModule {
      * Creates LlmInference using the GPU backend. 
      * LiteRT 2.x handles the internal fallback to CPU if GPU is unavailable.
      */
-    private fun createLlmInference(context: Context, modelPath: String): LlmInference {
+    private fun createLlmInference(context: Context, modelPath: String): LlmInferenceWrapper {
         Log.i(TAG, "Creating LlmInference with GPU preference (auto-fallback handled by SDK).")
 
         val options = LlmInference.LlmInferenceOptions.builder()
@@ -75,7 +76,7 @@ object EngineModule {
             .setPreferredBackend(LlmInference.Backend.GPU)
             .build()
 
-        return LlmInference.createFromOptions(context, options)
+        return LlmInferenceWrapper(LlmInference.createFromOptions(context, options))
     }
 
     /**
