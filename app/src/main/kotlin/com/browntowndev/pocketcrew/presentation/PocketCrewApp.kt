@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -28,13 +29,21 @@ fun PocketCrewApp(
     errorMessage: String? = null
 ) {
     val themeUiState by viewModel.themeUiState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel.errorHandler) {
+        viewModel.errorHandler.errorEvents.collect { message ->
+            launch {
+                snackbarHostState.showSnackbar(message)
+            }
+        }
+    }
 
     PocketCrewTheme(
         darkTheme = themeUiState.darkTheme,
         dynamicColor = themeUiState.dynamicColor
     ) {
         val navController = rememberNavController()
-        val snackbarHostState = remember { SnackbarHostState() }
         val scope = rememberCoroutineScope()
 
         Box(Modifier.fillMaxSize()) {

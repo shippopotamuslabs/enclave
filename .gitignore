@@ -62,3 +62,9 @@ PHASE_10_HANDOFF.md
 plans/CFAW/
 
 .forge/
+
+app/google-services.json
+
+.vscode/
+
+android-dev-mcp

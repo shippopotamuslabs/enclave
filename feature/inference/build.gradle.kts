@@ -41,6 +41,7 @@ dependencies {
     implementation(libs.litert)
     implementation(libs.litertlm.android)
     implementation(libs.tasks.genai)
+    implementation(libs.firebase.crashlytics)
 
     // Testing
     testImplementation(libs.junit.jupiter)

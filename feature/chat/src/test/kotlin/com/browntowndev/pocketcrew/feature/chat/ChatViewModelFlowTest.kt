@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +34,7 @@ class ChatViewModelFlowTest {
     private lateinit var chatUseCases: ChatUseCases
     private lateinit var inferenceLockManager: InferenceLockManager
     private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
+    private lateinit var errorHandler: ViewModelErrorHandler
 
     @BeforeEach
     fun setup() {
@@ -40,6 +42,7 @@ class ChatViewModelFlowTest {
         chatUseCases = mockk(relaxed = true)
         inferenceLockManager = mockk(relaxed = true)
         modelDisplayNamesUseCase = mockk(relaxed = true)
+        errorHandler = mockk(relaxed = true)
 
         every { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
@@ -51,7 +54,8 @@ class ChatViewModelFlowTest {
             chatUseCases = chatUseCases,
             savedStateHandle = savedStateHandle,
             inferenceLockManager = inferenceLockManager,
-            modelDisplayNamesUseCase = modelDisplayNamesUseCase
+            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            errorHandler = errorHandler
         )
     }
 
