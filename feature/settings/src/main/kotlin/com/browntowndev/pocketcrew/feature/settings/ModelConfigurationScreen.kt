@@ -47,6 +47,7 @@ import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,6 +73,10 @@ fun ModelConfigurationRoute(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(modelType) {
+        viewModel.onSelectModelType(modelType)
+    }
 
     val handleBack: () -> Unit = {
         viewModel.onClearSelectedModel()
@@ -183,159 +188,183 @@ fun ModelConfigurationScreen(
                         }
                     }
 
-                    if (assignment.source == ModelSource.ON_DEVICE && config != null) {
-                        Text(
-                            text = "HuggingFace Model",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-
-                        ExposedDropdownMenuBox(
-                            expanded = huggingFaceDropdownExpanded,
-                            onExpandedChange = { huggingFaceDropdownExpanded = it }
-                        ) {
-                            OutlinedTextField(
-                                value = config.huggingFaceModelName,
-                                onValueChange = {},
-                                readOnly = true,
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = huggingFaceDropdownExpanded) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                                )
+                    if (assignment.source == ModelSource.ON_DEVICE) {
+                        if (config != null) {
+                            Text(
+                                text = "HuggingFace Model",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
                             )
-                            ExposedDropdownMenu(
+
+                            ExposedDropdownMenuBox(
                                 expanded = huggingFaceDropdownExpanded,
-                                onDismissRequest = { huggingFaceDropdownExpanded = false }
+                                onExpandedChange = { huggingFaceDropdownExpanded = it }
                             ) {
-                                uiState.availableHuggingFaceModels.forEach { modelName ->
-                                    DropdownMenuItem(
-                                        text = { Text(modelName) },
-                                        onClick = {
-                                            onHuggingFaceModelNameChange(modelName)
-                                            huggingFaceDropdownExpanded = false
-                                        }
+                                OutlinedTextField(
+                                    value = config.huggingFaceModelName,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = huggingFaceDropdownExpanded) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
                                     )
+                                )
+                                ExposedDropdownMenu(
+                                    expanded = huggingFaceDropdownExpanded,
+                                    onDismissRequest = { huggingFaceDropdownExpanded = false }
+                                ) {
+                                    uiState.availableHuggingFaceModels.forEach { modelName ->
+                                        DropdownMenuItem(
+                                            text = { Text(modelName) },
+                                            onClick = {
+                                                onHuggingFaceModelNameChange(modelName)
+                                                huggingFaceDropdownExpanded = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        var advancedExpanded by remember { mutableStateOf(false) }
-                        val rotation by animateFloatAsState(if (advancedExpanded) 180f else 0f)
+                            var advancedExpanded by remember { mutableStateOf(false) }
+                            val rotation by animateFloatAsState(if (advancedExpanded) 180f else 0f)
 
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            Row(
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { advancedExpanded = !advancedExpanded }
+                                        .padding(vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Advanced Configurations",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.rotate(rotation),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+
+                                if (advancedExpanded) {
+                                    Column(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            LabelWithInfo(
+                                                label = "Temperature: ${String.format(Locale.ROOT, "%.2f", config.temperature)}",
+                                                infoText = "Controls randomness: Higher values (e.g., 1.0) make output more creative, lower values (e.g., 0.2) make it more focused and deterministic."
+                                            )
+                                            Slider(
+                                                value = config.temperature.toFloat(),
+                                                onValueChange = { onTemperatureChange(it.toDouble()) },
+                                                valueRange = 0f..2f
+                                            )
+                                        }
+
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            LabelWithInfo(
+                                                label = "Top K: ${config.topK}",
+                                                infoText = "Limits the model to the top K most likely next tokens. Reduces the chance of low-probability 'garbage' tokens."
+                                            )
+                                            Slider(
+                                                value = config.topK.toFloat(),
+                                                onValueChange = { onTopKChange(it.toInt()) },
+                                                valueRange = 1f..100f
+                                            )
+                                        }
+
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            LabelWithInfo(
+                                                label = "Top P: ${String.format(Locale.ROOT, "%.2f", config.topP)}",
+                                                infoText = "Nucleus sampling: Limits the model to a subset of tokens whose cumulative probability is P. Another way to control diversity."
+                                            )
+                                            Slider(
+                                                value = config.topP.toFloat(),
+                                                onValueChange = { onTopPChange(it.toDouble()) },
+                                                valueRange = 0f..1f
+                                            )
+                                        }
+
+                                        OutlinedTextField(
+                                            value = config.maxTokens.toString(),
+                                            onValueChange = { newValue ->
+                                                newValue.toIntOrNull()?.let { onMaxTokensChange(it) }
+                                            },
+                                            label = {
+                                                LabelWithInfo(
+                                                    label = "Max Tokens",
+                                                    infoText = "The maximum number of tokens the model can generate in a single response.",
+                                                    showValue = false
+                                                )
+                                            },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                                            )
+                                        )
+
+                                        OutlinedTextField(
+                                            value = config.contextWindow.toString(),
+                                            onValueChange = { newValue ->
+                                                newValue.toIntOrNull()?.let { onContextWindowChange(it) }
+                                            },
+                                            label = {
+                                                LabelWithInfo(
+                                                    label = "Context Window",
+                                                    infoText = "The total number of tokens (input + output) the model can process at once. Larger windows allow for longer conversations.",
+                                                    showValue = false
+                                                )
+                                            },
+                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            // Fallback for when source is ON_DEVICE but config is missing
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { advancedExpanded = !advancedExpanded }
-                                    .padding(vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                    .padding(top = 32.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = "Advanced Configurations",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowDown,
-                                    contentDescription = null,
-                                    modifier = Modifier.rotate(rotation),
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            }
-
-                            if (advancedExpanded) {
-                                Column(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        LabelWithInfo(
-                                            label = "Temperature: ${String.format(Locale.ROOT, "%.2f", config.temperature)}",
-                                            infoText = "Controls randomness: Higher values (e.g., 1.0) make output more creative, lower values (e.g., 0.2) make it more focused and deterministic."
-                                        )
-                                        Slider(
-                                            value = config.temperature.toFloat(),
-                                            onValueChange = { onTemperatureChange(it.toDouble()) },
-                                            valueRange = 0f..2f
-                                        )
-                                    }
-
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        LabelWithInfo(
-                                            label = "Top K: ${config.topK}",
-                                            infoText = "Limits the model to the top K most likely next tokens. Reduces the chance of low-probability 'garbage' tokens."
-                                        )
-                                        Slider(
-                                            value = config.topK.toFloat(),
-                                            onValueChange = { onTopKChange(it.toInt()) },
-                                            valueRange = 1f..100f
-                                        )
-                                    }
-
-                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        LabelWithInfo(
-                                            label = "Top P: ${String.format(Locale.ROOT, "%.2f", config.topP)}",
-                                            infoText = "Nucleus sampling: Limits the model to a subset of tokens whose cumulative probability is P. Another way to control diversity."
-                                        )
-                                        Slider(
-                                            value = config.topP.toFloat(),
-                                            onValueChange = { onTopPChange(it.toDouble()) },
-                                            valueRange = 0f..1f
-                                        )
-                                    }
-
-                                    OutlinedTextField(
-                                        value = config.maxTokens.toString(),
-                                        onValueChange = { newValue ->
-                                            newValue.toIntOrNull()?.let { onMaxTokensChange(it) }
-                                        },
-                                        label = {
-                                            LabelWithInfo(
-                                                label = "Max Tokens",
-                                                infoText = "The maximum number of tokens the model can generate in a single response.",
-                                                showValue = false
-                                            )
-                                        },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                            focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                                        )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "On-device model not found",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-
-                                    OutlinedTextField(
-                                        value = config.contextWindow.toString(),
-                                        onValueChange = { newValue ->
-                                            newValue.toIntOrNull()?.let { onContextWindowChange(it) }
-                                        },
-                                        label = {
-                                            LabelWithInfo(
-                                                label = "Context Window",
-                                                infoText = "The total number of tokens (input + output) the model can process at once. Larger windows allow for longer conversations.",
-                                                showValue = false
-                                            )
-                                        },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        modifier = Modifier.fillMaxWidth(),
-                                        shape = RoundedCornerShape(12.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                            focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                            unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                                        )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Please ensure the model is downloaded.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
