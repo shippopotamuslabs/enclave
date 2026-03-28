@@ -88,21 +88,6 @@ fun HistoryScreen(
 ) {
     var optionsState by remember { mutableStateOf<HistoryOptionsState>(HistoryOptionsState.Hidden) }
     val sheetState = rememberModalBottomSheetState()
-    
-    val colorScheme = MaterialTheme.colorScheme
-    val shimmerBaseColor = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.05f) }
-    val shimmerHighlightColor = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.15f) }
-
-    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-    val shimmerProgress = infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1500, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerProgress"
-    )
 
     Scaffold(
         topBar = {
@@ -129,6 +114,21 @@ fun HistoryScreen(
             }
 
             if (uiState.isLoading) {
+                val colorScheme = MaterialTheme.colorScheme
+                val shimmerBaseColor = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.05f) }
+                val shimmerHighlightColor = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.15f) }
+
+                val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+                val shimmerProgress = infiniteTransition.animateFloat(
+                    initialValue = 0f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 1500, easing = LinearEasing),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "shimmerProgress"
+                )
+
                 items(5) {
                     HistoryChatSkeletonItem(
                         progressState = shimmerProgress,
