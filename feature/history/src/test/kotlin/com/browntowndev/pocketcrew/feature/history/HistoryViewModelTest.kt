@@ -17,16 +17,16 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
+import app.cash.turbine.test
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
 import java.util.Calendar
@@ -36,7 +36,7 @@ import java.util.TimeZone
 @OptIn(ExperimentalCoroutinesApi::class)
 class HistoryViewModelTest {
 
-    private val testDispatcher = UnconfinedTestDispatcher()
+    private val testDispatcher = StandardTestDispatcher()
 
     @JvmField
     @RegisterExtension
@@ -140,15 +140,17 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = testChats
-        advanceUntilIdle()
+            chatsFlow.value = testChats
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals(2, state.pinnedChats.size)
-        assertEquals(2, state.otherChats.size)
-        assertEquals(false, state.isLoading)
+            val state = expectMostRecentItem()
+            assertEquals(2, state.pinnedChats.size)
+            assertEquals(2, state.otherChats.size)
+            assertEquals(false, state.isLoading)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -158,18 +160,20 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = listOf(testChat)
-        advanceUntilIdle()
+            chatsFlow.value = listOf(testChat)
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals(1, state.otherChats.size)
-        val historyChat = state.otherChats.first()
-        assertEquals(42L, historyChat.id)
-        assertEquals("Test Chat", historyChat.name)
-        assertEquals("Today, 10:30 AM", historyChat.lastMessageDateTime)
-        assertFalse(historyChat.isPinned)
+            val state = expectMostRecentItem()
+            assertEquals(1, state.otherChats.size)
+            val historyChat = state.otherChats.first()
+            assertEquals(42L, historyChat.id)
+            assertEquals("Test Chat", historyChat.name)
+            assertEquals("Today, 10:30 AM", historyChat.lastMessageDateTime)
+            assertFalse(historyChat.isPinned)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -179,14 +183,16 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = listOf(pinnedChat)
-        advanceUntilIdle()
+            chatsFlow.value = listOf(pinnedChat)
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertTrue(state.pinnedChats.any { it.id == 1L })
-        assertEquals(1, state.pinnedChats.size)
+            val state = expectMostRecentItem()
+            assertTrue(state.pinnedChats.any { it.id == 1L })
+            assertEquals(1, state.pinnedChats.size)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -196,14 +202,16 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = listOf(unpinnedChat)
-        advanceUntilIdle()
+            chatsFlow.value = listOf(unpinnedChat)
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertTrue(state.otherChats.any { it.id == 1L })
-        assertEquals(1, state.otherChats.size)
+            val state = expectMostRecentItem()
+            assertTrue(state.otherChats.any { it.id == 1L })
+            assertEquals(1, state.otherChats.size)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -212,14 +220,16 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertTrue(state.pinnedChats.isEmpty())
-        assertTrue(state.otherChats.isEmpty())
-        assertFalse(state.isLoading)
+            val state = expectMostRecentItem()
+            assertTrue(state.pinnedChats.isEmpty())
+            assertTrue(state.otherChats.isEmpty())
+            assertFalse(state.isLoading)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -231,16 +241,18 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = listOf(chat1, chat2, chat3)
-        advanceUntilIdle()
+            chatsFlow.value = listOf(chat1, chat2, chat3)
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals(3, state.otherChats.size)
-        assertEquals(1L, state.otherChats[0].id)
-        assertEquals(2L, state.otherChats[1].id)
-        assertEquals(3L, state.otherChats[2].id)
+            val state = expectMostRecentItem()
+            assertEquals(3, state.otherChats.size)
+            assertEquals(1L, state.otherChats[0].id)
+            assertEquals(2L, state.otherChats[1].id)
+            assertEquals(3L, state.otherChats[2].id)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -260,13 +272,15 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = listOf(testChat)
-        advanceUntilIdle()
+            chatsFlow.value = listOf(testChat)
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertFalse(state.isLoading)
+            val state = expectMostRecentItem()
+            assertFalse(state.isLoading)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -277,15 +291,17 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = listOf(chat1, chat2)
-        advanceUntilIdle()
+            chatsFlow.value = listOf(chat1, chat2)
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals(2, state.pinnedChats.size)
-        assertEquals(2L, state.pinnedChats[0].id)
-        assertEquals(1L, state.pinnedChats[1].id)
+            val state = expectMostRecentItem()
+            assertEquals(2, state.pinnedChats.size)
+            assertEquals(2L, state.pinnedChats[0].id)
+            assertEquals(1L, state.pinnedChats[1].id)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -327,13 +343,15 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = listOf(testChat)
-        advanceUntilIdle()
+            chatsFlow.value = listOf(testChat)
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals("Today, 10:30 AM", state.otherChats.first().lastMessageDateTime)
+            val state = expectMostRecentItem()
+            assertEquals("Today, 10:30 AM", state.otherChats.first().lastMessageDateTime)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -350,13 +368,15 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = listOf(testChat)
-        advanceUntilIdle()
+            chatsFlow.value = listOf(testChat)
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals("Yesterday, 6:15 PM", state.otherChats.first().lastMessageDateTime)
+            val state = expectMostRecentItem()
+            assertEquals("Yesterday, 6:15 PM", state.otherChats.first().lastMessageDateTime)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -374,13 +394,15 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = listOf(testChat)
-        advanceUntilIdle()
+            chatsFlow.value = listOf(testChat)
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals("Oct 24, 2:00 PM", state.otherChats.first().lastMessageDateTime)
+            val state = expectMostRecentItem()
+            assertEquals("Oct 24, 2:00 PM", state.otherChats.first().lastMessageDateTime)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -404,17 +426,19 @@ class HistoryViewModelTest {
             every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
             viewModel = createViewModel()
-            backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
             
-            chatsFlow.value = listOf(testChat)
-            advanceUntilIdle()
+                chatsFlow.value = listOf(testChat)
+                advanceUntilIdle()
 
-            val state = viewModel.uiState.value
-            val formattedTime = state.otherChats.first().lastMessageDateTime
+                val state = expectMostRecentItem()
+                val formattedTime = state.otherChats.first().lastMessageDateTime
             
-            // In New York, 23:30 UTC is either 18:30 or 19:30
-            // The formatted string should NOT contain "11:30 PM" (which is 23:30)
-            assertFalse(formattedTime.contains("11:30 PM"), "Should reflect local time, not UTC. Got: $formattedTime")
+                // In New York, 23:30 UTC is either 18:30 or 19:30
+                // The formatted string should NOT contain "11:30 PM" (which is 23:30)
+                assertFalse(formattedTime.contains("11:30 PM"), "Should reflect local time, not UTC. Got: $formattedTime")
+                cancelAndIgnoreRemainingEvents()
+            }
         } finally {
             TimeZone.setDefault(originalTz)
         }
@@ -429,13 +453,15 @@ class HistoryViewModelTest {
         }
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
-        advanceUntilIdle()
+        viewModel.uiState.test {
+            advanceUntilIdle()
         
-        val state = viewModel.uiState.value
-        assertFalse(state.isLoading)
-        assertTrue(state.pinnedChats.isEmpty())
-        assertTrue(state.otherChats.isEmpty())
+            val state = expectMostRecentItem()
+            assertFalse(state.isLoading)
+            assertTrue(state.pinnedChats.isEmpty())
+            assertTrue(state.otherChats.isEmpty())
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -448,14 +474,16 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = unpinnedChats
-        advanceUntilIdle()
+            chatsFlow.value = unpinnedChats
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertTrue(state.pinnedChats.isEmpty())
-        assertEquals(2, state.otherChats.size)
+            val state = expectMostRecentItem()
+            assertTrue(state.pinnedChats.isEmpty())
+            assertEquals(2, state.otherChats.size)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -468,14 +496,16 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = pinnedChats
-        advanceUntilIdle()
+            chatsFlow.value = pinnedChats
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals(2, state.pinnedChats.size)
-        assertTrue(state.otherChats.isEmpty())
+            val state = expectMostRecentItem()
+            assertEquals(2, state.pinnedChats.size)
+            assertTrue(state.otherChats.isEmpty())
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -484,17 +514,19 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
-        advanceUntilIdle()
+        viewModel.uiState.test {
+            advanceUntilIdle()
         
-        coEvery { mockTogglePinChatUseCase.invoke(9999L) } throws IllegalArgumentException("Chat not found")
-        viewModel.pinChat(9999L)
-        viewModel.unpinChat(9999L)
-        advanceUntilIdle()
+            coEvery { mockTogglePinChatUseCase.invoke(9999L) } throws IllegalArgumentException("Chat not found")
+            viewModel.pinChat(9999L)
+            viewModel.unpinChat(9999L)
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals(0, state.pinnedChats.size)
-        assertEquals(0, state.otherChats.size)
+            val state = expectMostRecentItem()
+            assertEquals(0, state.pinnedChats.size)
+            assertEquals(0, state.otherChats.size)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -508,13 +540,15 @@ class HistoryViewModelTest {
         }
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
-        advanceUntilIdle()
+        viewModel.uiState.test {
+            advanceUntilIdle()
         
-        val state = viewModel.uiState.value
-        assertFalse(state.isLoading)
-        assertEquals(1, state.otherChats.size)
-        assertTrue(state.hapticPress) // verified from default emit
+            val state = expectMostRecentItem()
+            assertFalse(state.isLoading)
+            assertEquals(1, state.otherChats.size)
+            assertTrue(state.hapticPress) // verified from default emit
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     // Suite F: Integration Test
@@ -554,29 +588,31 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        chatsFlow.value = chats
-        advanceUntilIdle()
+            chatsFlow.value = chats
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
+            val state = expectMostRecentItem()
 
-        assertEquals(2, state.pinnedChats.size)
-        val pinnedNames = state.pinnedChats.map { it.name }.toSet()
-        assertTrue(pinnedNames.contains("Alpha"))
-        assertTrue(pinnedNames.contains("Gamma"))
+            assertEquals(2, state.pinnedChats.size)
+            val pinnedNames = state.pinnedChats.map { it.name }.toSet()
+            assertTrue(pinnedNames.contains("Alpha"))
+            assertTrue(pinnedNames.contains("Gamma"))
 
-        assertEquals(1, state.otherChats.size)
-        assertEquals("Beta", state.otherChats.first().name)
+            assertEquals(1, state.otherChats.size)
+            assertEquals("Beta", state.otherChats.first().name)
 
-        val alphaChat = state.pinnedChats.find { it.name == "Alpha" }
-        assertEquals("Today, 12:00 AM", alphaChat?.lastMessageDateTime)
+            val alphaChat = state.pinnedChats.find { it.name == "Alpha" }
+            assertEquals("Today, 12:00 AM", alphaChat?.lastMessageDateTime)
 
-        val betaChat = state.otherChats.find { it.name == "Beta" }
-        assertEquals("Yesterday, 12:00 AM", betaChat?.lastMessageDateTime)
+            val betaChat = state.otherChats.find { it.name == "Beta" }
+            assertEquals("Yesterday, 12:00 AM", betaChat?.lastMessageDateTime)
 
-        val gammaChat = state.pinnedChats.find { it.name == "Gamma" }
-        assertEquals("Oct 15, 12:00 AM", gammaChat?.lastMessageDateTime)
+            val gammaChat = state.pinnedChats.find { it.name == "Gamma" }
+            assertEquals("Oct 15, 12:00 AM", gammaChat?.lastMessageDateTime)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     // Suite S: Search Tests (from test_spec.md)
@@ -592,15 +628,17 @@ class HistoryViewModelTest {
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        // Initial state has empty search query
-        assertEquals("", viewModel.searchQuery.value)
-        advanceUntilIdle()
+            // Initial state has empty search query
+            assertEquals("", viewModel.searchQuery.value)
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertEquals(3, state.otherChats.size + state.pinnedChats.size)
-        assertFalse(state.isLoading)
+            val state = expectMostRecentItem()
+            assertEquals(3, state.otherChats.size + state.pinnedChats.size)
+            assertFalse(state.isLoading)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -613,16 +651,18 @@ class HistoryViewModelTest {
         every { mockSearchChatsUseCase.invoke("Project") } returns searchChatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        viewModel.onSearchQueryChange("Project")
-        advanceUntilIdle()
+            viewModel.onSearchQueryChange("Project")
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        val allVisibleChats = state.otherChats + state.pinnedChats
-        assertEquals(1, allVisibleChats.size)
-        assertEquals("Project Plan", allVisibleChats.first().name)
-        assertEquals(1L, allVisibleChats.first().id)
+            val state = expectMostRecentItem()
+            val allVisibleChats = state.otherChats + state.pinnedChats
+            assertEquals(1, allVisibleChats.size)
+            assertEquals("Project Plan", allVisibleChats.first().name)
+            assertEquals(1L, allVisibleChats.first().id)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -635,15 +675,17 @@ class HistoryViewModelTest {
         every { mockSearchChatsUseCase.invoke("coroutines") } returns searchChatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        viewModel.onSearchQueryChange("coroutines")
-        advanceUntilIdle()
+            viewModel.onSearchQueryChange("coroutines")
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        val allVisibleChats = state.otherChats + state.pinnedChats
-        assertEquals(1, allVisibleChats.size)
-        assertEquals(10L, allVisibleChats.first().id)
+            val state = expectMostRecentItem()
+            val allVisibleChats = state.otherChats + state.pinnedChats
+            assertEquals(1, allVisibleChats.size)
+            assertEquals(10L, allVisibleChats.first().id)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -655,14 +697,16 @@ class HistoryViewModelTest {
         every { mockSearchChatsUseCase.invoke("xyz123nonexistent") } returns searchChatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        viewModel.onSearchQueryChange("xyz123nonexistent")
-        advanceUntilIdle()
+            viewModel.onSearchQueryChange("xyz123nonexistent")
+            advanceUntilIdle()
 
-        val state = viewModel.uiState.value
-        assertTrue(state.pinnedChats.isEmpty(), "Pinned chats should be empty")
-        assertTrue(state.otherChats.isEmpty(), "Other chats should be empty")
+            val state = expectMostRecentItem()
+            assertTrue(state.pinnedChats.isEmpty(), "Pinned chats should be empty")
+            assertTrue(state.otherChats.isEmpty(), "Other chats should be empty")
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -674,23 +718,25 @@ class HistoryViewModelTest {
         every { mockSearchChatsUseCase.invoke(any()) } returns searchChatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        // Simulating rapid typing
-        viewModel.onSearchQueryChange("h")
-        viewModel.onSearchQueryChange("he")
-        viewModel.onSearchQueryChange("hel")
-        viewModel.onSearchQueryChange("hell")
-        viewModel.onSearchQueryChange("hello")
+            // Simulating rapid typing
+            viewModel.onSearchQueryChange("h")
+            viewModel.onSearchQueryChange("he")
+            viewModel.onSearchQueryChange("hel")
+            viewModel.onSearchQueryChange("hell")
+            viewModel.onSearchQueryChange("hello")
         
-        advanceUntilIdle()
+            advanceUntilIdle()
 
-        // Verify that the use case was only invoked exactly once with the final string
-        io.mockk.verify(exactly = 1) { mockSearchChatsUseCase.invoke("hello") }
-        io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("h") }
-        io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("he") }
-        io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("hel") }
-        io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("hell") }
+            // Verify that the use case was only invoked exactly once with the final string
+            io.mockk.verify(exactly = 1) { mockSearchChatsUseCase.invoke("hello") }
+            io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("h") }
+            io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("he") }
+            io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("hel") }
+            io.mockk.verify(exactly = 0) { mockSearchChatsUseCase.invoke("hell") }
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -711,23 +757,25 @@ class HistoryViewModelTest {
         every { mockSearchChatsUseCase.invoke("") } returns allChatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        viewModel.onSearchQueryChange("Project")
-        advanceUntilIdle()
+            viewModel.onSearchQueryChange("Project")
+            advanceUntilIdle()
         
-        var state = viewModel.uiState.value
-        assertEquals(1, state.otherChats.size + state.pinnedChats.size)
-        assertEquals("Project Chat", (state.otherChats + state.pinnedChats).first().name)
+            var state = viewModel.uiState.value
+            assertEquals(1, state.otherChats.size + state.pinnedChats.size)
+            assertEquals("Project Chat", (state.otherChats + state.pinnedChats).first().name)
         
-        // Clear search query
-        viewModel.onSearchQueryChange("")
-        advanceUntilIdle()
+            // Clear search query
+            viewModel.onSearchQueryChange("")
+            advanceUntilIdle()
         
-        state = viewModel.uiState.value
-        assertEquals(5, state.otherChats.size + state.pinnedChats.size)
-        val chatIds = (state.otherChats + state.pinnedChats).map { it.id }.toSet()
-        assertEquals(setOf(1L, 2L, 3L, 4L, 5L), chatIds)
+            state = viewModel.uiState.value
+            assertEquals(5, state.otherChats.size + state.pinnedChats.size)
+            val chatIds = (state.otherChats + state.pinnedChats).map { it.id }.toSet()
+            assertEquals(setOf(1L, 2L, 3L, 4L, 5L), chatIds)
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 
     @Test
@@ -742,14 +790,16 @@ class HistoryViewModelTest {
         every { mockSearchChatsUseCase.invoke(invalidQuery) } returns searchChatsFlow
 
         viewModel = createViewModel()
-        backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
+        viewModel.uiState.test {
         
-        viewModel.onSearchQueryChange(invalidQuery)
-        advanceUntilIdle()
+            viewModel.onSearchQueryChange(invalidQuery)
+            advanceUntilIdle()
         
-        // Ensure it reached the use case
-        io.mockk.verify { mockSearchChatsUseCase.invoke(invalidQuery) }
-        assertTrue(viewModel.uiState.value.otherChats.isEmpty())
+            // Ensure it reached the use case
+            io.mockk.verify { mockSearchChatsUseCase.invoke(invalidQuery) }
+            assertTrue(viewModel.uiState.value.otherChats.isEmpty())
+        cancelAndIgnoreRemainingEvents()
+        }
     }
 }
 
