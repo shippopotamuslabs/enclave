@@ -113,7 +113,7 @@ class DownloadProgressTrackerTest {
                 state.copy(status = FileStatus.DOWNLOADING)
             }
         }
-        assertTrue(exception.message!!.contains("Cannot update file state"))
+        assertTrue(requireNotNull(exception.message).contains("Cannot update file state"))
     }
 
     @Test
