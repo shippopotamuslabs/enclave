@@ -16,8 +16,10 @@ import io.mockk.Runs
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
-import io.mockk.slot
+import io.mockk.coEvery
+import io.mockk.mockkObject
 import io.mockk.verify
+import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -55,7 +57,7 @@ class InferenceServicePipelineExecutorTest {
 
     @Test
     fun `executePipeline forwards thinking chunks with newlines and spaces`() = runTest {
-        io.mockk.mockkObject(PipelineState.Companion)
+        mockkObject(PipelineState.Companion)
         val mockState = mockk<PipelineState>()
         every { mockState.toJson() } returns "{}"
         every { mockState.currentStep } returns PipelineStep.DRAFT_ONE
@@ -129,7 +131,7 @@ class InferenceServicePipelineExecutorTest {
 
     @Test
     fun `executePipeline forwards step output chunks with newlines and spaces`() = runTest {
-        io.mockk.mockkObject(PipelineState.Companion)
+        mockkObject(PipelineState.Companion)
         val mockState = mockk<PipelineState>()
         every { mockState.toJson() } returns "{}"
         every { mockState.currentStep } returns PipelineStep.DRAFT_ONE
@@ -203,13 +205,13 @@ class InferenceServicePipelineExecutorTest {
 
     @Test
     fun `resumeFromState forwards thinking chunks with newlines and spaces`() = runTest {
-        io.mockk.mockkObject(PipelineState.Companion)
+        mockkObject(PipelineState.Companion)
         val mockState = mockk<PipelineState>()
         every { mockState.toJson() } returns "{}"
         every { mockState.currentStep } returns PipelineStep.DRAFT_ONE
         
         // Mock the repository to return the state
-        io.mockk.coEvery { pipelineStateRepository.getPipelineState(any()) } returns mockState
+        coEvery { pipelineStateRepository.getPipelineState(any()) } returns mockState
 
         val receiverSlot = slot<BroadcastReceiver>()
         every {
@@ -255,4 +257,50 @@ class InferenceServicePipelineExecutorTest {
         assertEquals(1, thinkingEvents.size)
         assertEquals("\n", thinkingEvents[0].thinkingChunk)
     }
+
+    @Test
+    fun `executePipeline handles broadcast error and forwards it successfully`() = runTest {
+        mockkObject(PipelineState.Companion)
+        val mockState = mockk<PipelineState>()
+        every { mockState.toJson() } returns "{}"
+        every { mockState.currentStep } returns PipelineStep.DRAFT_ONE
+        every { PipelineState.createInitial(any(), any()) } returns mockState
+
+        val receiverSlot = slot<BroadcastReceiver>()
+        every {
+            context.registerReceiver(
+                capture(receiverSlot),
+                any<IntentFilter>(),
+                eq(Context.RECEIVER_NOT_EXPORTED)
+            )
+        } returns null
+
+        val events = mutableListOf<MessageGenerationState>()
+
+        val job = launch {
+            executor.executePipeline("chat1", "Hello").collect { state ->
+                events.add(state)
+            }
+        }
+
+        advanceUntilIdle()
+
+        val receiver = receiverSlot.captured
+
+        // Simulate receiving an error broadcast
+        val intentError = mockk<Intent>()
+        every { intentError.action } returns InferenceService.BROADCAST_ERROR
+        every { intentError.getStringExtra(InferenceService.EXTRA_ERROR_MESSAGE) } returns "Mock pipeline error"
+        every { intentError.getStringExtra(InferenceService.EXTRA_MODEL_TYPE) } returns ModelType.MAIN.name
+        receiver.onReceive(context, intentError)
+
+        job.join()
+
+        // We expect an error state
+        val errorEvents = events.filterIsInstance<MessageGenerationState.Failed>()
+        assertEquals(1, errorEvents.size)
+        assertEquals("Mock pipeline error", errorEvents[0].error.message)
+        assertEquals(ModelType.MAIN, errorEvents[0].modelType)
+    }
+
 }
