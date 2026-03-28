@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.feature.download
-
 import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,6 +36,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -64,18 +65,19 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.pocketcrew.core.data.util.formatBytes
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.core.ui.util.FeatureFlags
+import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
-import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.feature.download.DownloadViewModel.FileProgressUiModel
-import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
-import com.browntowndev.pocketcrew.core.ui.util.FeatureFlags
-import com.browntowndev.pocketcrew.core.data.util.formatBytes
+
 
 /**
  * Full-screen model download status page.
@@ -265,7 +267,7 @@ fun ModelDownloadScreen(
  */
 private fun Context.findActivity(): Activity? {
     var context = this
-    while (context is android.content.ContextWrapper) {
+    while (context is ContextWrapper) {
         if (context is Activity) {
             return context
         }
@@ -1161,7 +1163,7 @@ private fun PreviewBackgroundNotice() {
         ) {
             Text("With Permission", style = MaterialTheme.typography.titleMedium)
             BackgroundNotice(hasPermission = true)
-            androidx.compose.material3.HorizontalDivider()
+            HorizontalDivider()
             Text("Without Permission", style = MaterialTheme.typography.titleMedium)
             BackgroundNotice(hasPermission = false)
         }

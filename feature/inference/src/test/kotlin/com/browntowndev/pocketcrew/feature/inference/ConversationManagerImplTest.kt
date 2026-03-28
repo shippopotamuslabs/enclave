@@ -1,9 +1,10 @@
 package com.browntowndev.pocketcrew.feature.inference
-
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
+import com.google.ai.edge.litertlm.Content
+import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import io.mockk.MockKAnnotations
@@ -14,16 +15,17 @@ import io.mockk.slot
 import io.mockk.unmockkStatic
 import io.mockk.verify
 import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+
 
 class ConversationManagerImplTest {
 
     private lateinit var mockEngine: Engine
-    private lateinit var mockConversation: com.google.ai.edge.litertlm.Conversation
+    private lateinit var mockConversation: Conversation
 
     @BeforeEach
     fun setup() {
@@ -171,9 +173,9 @@ class ConversationManagerImplTest {
         assertEquals(2, initialMessages.size)
         // Verify mapping (role and content)
         assertEquals("user", initialMessages[0].role.name.lowercase())
-        assertEquals("Hello, what's up?", initialMessages[0].contents.contents.filterIsInstance<com.google.ai.edge.litertlm.Content.Text>().joinToString("") { it.text })
+        assertEquals("Hello, what's up?", initialMessages[0].contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text })
         assertEquals("model", initialMessages[1].role.name.lowercase())
-        assertEquals("Not much, how are you?", initialMessages[1].contents.contents.filterIsInstance<com.google.ai.edge.litertlm.Content.Text>().joinToString("") { it.text })
+        assertEquals("Not much, how are you?", initialMessages[1].contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text })
     }
 
     @Test

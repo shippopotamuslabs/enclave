@@ -1,12 +1,12 @@
 package com.browntowndev.pocketcrew.core.data.download
-
 import android.content.Context
-import com.browntowndev.pocketcrew.domain.model.download.DownloadState
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
+import com.browntowndev.pocketcrew.domain.model.download.DownloadState
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -15,12 +15,13 @@ import com.browntowndev.pocketcrew.domain.usecase.download.CheckModelEligibility
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeFileProgressUseCase
 import com.browntowndev.pocketcrew.domain.usecase.download.ValidateDownloadConditionsUseCase
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
 
 @Singleton
 class ModelDownloadOrchestratorImpl @Inject constructor(
@@ -161,7 +162,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
             try {
                 modelRegistry.setRegisteredModel(
                     model,
-                    com.browntowndev.pocketcrew.domain.model.config.ModelStatus.CURRENT,
+                    ModelStatus.CURRENT,
                     markExistingAsOld = false
                 )
                 logger.debug(TAG, "Updated registry: ${model.modelType} -> ${model.metadata.displayName}")

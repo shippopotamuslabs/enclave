@@ -1,10 +1,4 @@
 package com.browntowndev.pocketcrew.feature.settings
-
-import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
-import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -50,6 +44,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -60,7 +55,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
@@ -72,12 +66,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import java.util.Locale
+import kotlinx.coroutines.launch
+
+
 
 /**
  * Returns a user-friendly display name for a ModelType enum value.
@@ -117,15 +119,15 @@ fun SettingsScreen(
     onFeedbackTextChange: (String) -> Unit,
     onSubmitFeedback: () -> Unit,
     onNavigateToModelDownload: () -> Unit,
-    onNavigateToModelConfigure: (com.browntowndev.pocketcrew.domain.model.inference.ModelType) -> Unit,
+    onNavigateToModelConfigure: (ModelType) -> Unit,
     // Model Configuration
     onShowModelConfigSheet: (Boolean) -> Unit,
-    onSelectModelType: (com.browntowndev.pocketcrew.domain.model.inference.ModelType) -> Unit,
+    onSelectModelType: (ModelType) -> Unit,
     // BYOK
     onShowByokSheet: (Boolean) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
     onSelectApiModel: (Long?) -> Unit,
-    onSetDefaultModel: (com.browntowndev.pocketcrew.domain.model.inference.ModelType, com.browntowndev.pocketcrew.domain.model.inference.ModelSource, Long?) -> Unit,
+    onSetDefaultModel: (ModelType, ModelSource, Long?) -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -396,7 +398,7 @@ fun SettingsIcon(icon: Any) {
             modifier = Modifier.size(24.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        is androidx.compose.ui.graphics.painter.Painter -> Icon(
+        is Painter -> Icon(
             painter = icon,
             contentDescription = null,
             modifier = Modifier.size(24.dp),
@@ -708,8 +710,8 @@ fun FeedbackBottomSheet(
 fun ModelConfigurationBottomSheet(
     uiState: SettingsUiState,
     onDismiss: () -> Unit,
-    onSelectModelType: (com.browntowndev.pocketcrew.domain.model.inference.ModelType) -> Unit,
-    onNavigateToModelConfigure: (com.browntowndev.pocketcrew.domain.model.inference.ModelType) -> Unit,
+    onSelectModelType: (ModelType) -> Unit,
+    onNavigateToModelConfigure: (ModelType) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val scope = rememberCoroutineScope()
@@ -733,7 +735,7 @@ fun ModelConfigurationBottomSheet(
             Spacer(modifier = Modifier.height(16.dp))
 
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                val types = com.browntowndev.pocketcrew.domain.model.inference.ModelType.entries
+                val types = ModelType.entries
                 items(types) { modelType ->
                     val assignment = uiState.defaultAssignments.find { it.modelType == modelType }
                     val nameStr = assignment?.currentModelName ?: "Unknown"

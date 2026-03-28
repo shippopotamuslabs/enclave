@@ -1,18 +1,19 @@
 package com.browntowndev.pocketcrew.core.data.download
-
-import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import io.mockk.every
 import io.mockk.mockk
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+
 
 class DownloadProgressTrackerTest {
 
@@ -108,7 +109,7 @@ class DownloadProgressTrackerTest {
     fun updateFileState_throwsForUnknownFile() {
         tracker.initialize(listOf(createModelFile("main.litertlm", 1000L, sha256 = "sha256_main")))
 
-        val exception = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException::class.java) {
+        val exception = Assertions.assertThrows(IllegalStateException::class.java) {
             tracker.updateFileState("unknown_sha256") { state ->
                 state.copy(status = FileStatus.DOWNLOADING)
             }
