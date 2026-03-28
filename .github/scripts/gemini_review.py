@@ -79,7 +79,10 @@ Your objective is to identify general bugs, architectural flaws, performance bot
         },
         "generation_config": {
             "max_output_tokens": 32768,
-            "temperature": 0.0
+            "temperature": 0.0,
+            "thinking_config": {
+                "include_thoughts": True
+            }
         }
     }
 
@@ -111,15 +114,26 @@ Your objective is to identify general bugs, architectural flaws, performance bot
                     except json.JSONDecodeError:
                         pass
 
-        # Fallback extraction if thinking was embedded in text
+        # Fallback extraction if thinking was embedded in text or used other tags
         if not full_thinking:
             import re
-            thought_match = re.search(r"<thought>(.*?)</thought>", full_text, re.DOTALL | re.IGNORECASE)
-            if thought_match:
-                full_thinking = thought_match.group(1).strip()
-                full_text = full_text.replace(thought_match.group(0), "").strip()
+            # Check for <thought>, <thinking>, [THOUGHT], or Reasoning: patterns
+            patterns = [
+                r"<thought>(.*?)</thought>",
+                r"<thinking>(.*?)</thinking>",
+                r"\[THOUGHT\](.*?)(?=\[|$)",
+                r"^Reasoning:(.*?)(?=---|\n\n|\n#|$)"
+            ]
+            for pattern in patterns:
+                match = re.search(pattern, full_text, re.DOTALL | re.IGNORECASE | re.MULTILINE)
+                if match:
+                    full_thinking = match.group(1).strip()
+                    full_text = full_text.replace(match.group(0), "").strip()
+                    break
 
         # Format final output
+        # Use 4 backticks for the outer container to allow 3 backticks inside thinking
+        outer_md_code = "````"
         final_output = f"### 🤖 Gemini Architect Review\n"
         
         if full_thinking:
@@ -127,9 +141,9 @@ Your objective is to identify general bugs, architectural flaws, performance bot
 <details>
 <summary>🧠 View Gemini Reasoning Process</summary>
 
-````text
+{outer_md_code}text
 {full_thinking.strip()}
-````
+{outer_md_code}
 </details>
 
 ---
