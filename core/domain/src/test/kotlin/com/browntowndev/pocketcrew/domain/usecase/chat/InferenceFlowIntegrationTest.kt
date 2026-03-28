@@ -17,6 +17,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceFactory
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -96,7 +97,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `end-to-end flow from InferenceEvent to AccumulatedMessages`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -139,7 +140,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `flow completes and persists all messages`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -181,7 +182,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `lock acquired on start and released on completion`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -242,7 +243,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `error state is accumulated and persisted`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -277,7 +278,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `thinking state is accumulated correctly`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -315,7 +316,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `ThinkingLive event sets messageState to THINKING`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -350,7 +351,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `GeneratingText event sets messageState to GENERATING`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -385,7 +386,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `Finished event sets messageState to COMPLETE`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -420,7 +421,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `thinkingEndTime is set when GeneratingText first arrives after Thinking`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -460,7 +461,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `thinkingEndTime is not overwritten by subsequent GeneratingText`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -514,7 +515,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `messageState transitions correctly from THINKING to GENERATING to COMPLETE`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -569,7 +570,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `GeneratingText with DRAFT_ONE model sets pipelineStep to DRAFT_ONE`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.DRAFT_ONE) } returns mockConfig
 
         every { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -609,7 +610,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `GeneratingText with DRAFT_TWO model sets pipelineStep to DRAFT_TWO`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.DRAFT_TWO) } returns mockConfig
 
         every { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -649,7 +650,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `GeneratingText with MAIN model sets pipelineStep to SYNTHESIS`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.MAIN) } returns mockConfig
 
         every { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -689,7 +690,7 @@ class InferenceFlowIntegrationTest {
     @Test
     fun `GeneratingText with FINAL_SYNTHESIS model sets pipelineStep to FINAL`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FINAL_SYNTHESIS) } returns mockConfig
 
         every { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -720,4 +721,119 @@ class InferenceFlowIntegrationTest {
         assertNotNull(snapshot)
         assertEquals(PipelineStep.FINAL, snapshot!!.pipelineStep)
     }
+
+
+    // ========================================================================
+    // Test: Model Timeout
+    // Evidence: Ensures state is preserved correctly when a timeout occurs
+    // ========================================================================
+
+    @Test
+    fun `model timeout correctly produces Error state with specific timeout exception`() = runTest {
+        // Given
+        val mockConfig = mockk<ModelConfiguration>()
+        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+
+        val exception = Exception("Timed out waiting for model")
+
+        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+            InferenceEvent.Error(exception, ModelType.FAST)
+        )
+        coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
+
+        // When
+        val accumulatedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()
+        generateChatResponseUseCase(
+            prompt = "Hello",
+            userMessageId = 1L,
+            assistantMessageId = 2L,
+            chatId = 1L,
+            mode = Mode.FAST
+        ).collect { state ->
+            accumulatedMessages.add(state)
+        }
+
+        // Then
+        assertTrue(accumulatedMessages.isNotEmpty())
+        val finalState = accumulatedMessages.last()
+        val snapshot = finalState.messages[2L]
+        assertNotNull(snapshot)
+        assertEquals(MessageState.COMPLETE, snapshot?.messageState)
+        assertEquals("Error: Timed out waiting for model", snapshot?.content)
+    }
+
+
+    // ========================================================================
+    // Test: Empty Stream Responses
+    // Evidence: Checks whether the pipeline behaves correctly when flow returns zero real events
+    // ========================================================================
+
+    @Test
+    fun `empty stream responses completes gracefully without crashing`() = runTest {
+        // Given
+        val mockConfig = mockk<ModelConfiguration>()
+        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+
+        // Flow completes immediately without emitting anything
+        every { fastModelService.sendPrompt(any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
+        coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
+
+        // When
+        val accumulatedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()
+        generateChatResponseUseCase(
+            prompt = "Empty test",
+            userMessageId = 1L,
+            assistantMessageId = 2L,
+            chatId = 1L,
+            mode = Mode.FAST
+        ).collect { state ->
+            accumulatedMessages.add(state)
+        }
+
+        // Then
+        assertTrue(accumulatedMessages.isEmpty())
+    }
+
+
+    // ========================================================================
+    // Test: Concurrent Agent Failures
+    // Evidence: Verifies that multiple errors in rapid succession update the final state
+    // ========================================================================
+
+    @Test
+    fun `concurrent agent failures process the last error successfully`() = runTest {
+        // Given
+        val mockConfig = mockk<ModelConfiguration>()
+        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+
+        val firstException = Exception("Agent 1 failed")
+        val secondException = Exception("Agent 2 failed")
+
+        every { fastModelService.sendPrompt(any(), any()) } returns kotlinx.coroutines.flow.flowOf(
+            InferenceEvent.Error(firstException, ModelType.FAST),
+            InferenceEvent.Error(secondException, ModelType.FAST)
+        )
+        coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
+
+        // When
+        val accumulatedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()
+        generateChatResponseUseCase(
+            prompt = "Crash me",
+            userMessageId = 1L,
+            assistantMessageId = 2L,
+            chatId = 1L,
+            mode = Mode.FAST
+        ).collect { state ->
+            accumulatedMessages.add(state)
+        }
+
+        // Then
+        assertTrue(accumulatedMessages.isNotEmpty())
+        val finalState = accumulatedMessages.last()
+        val snapshot = finalState.messages[2L]
+        assertNotNull(snapshot)
+        assertEquals(MessageState.COMPLETE, snapshot?.messageState)
+        assertEquals("Error: Agent 2 failed", snapshot?.content)
+    }
+
 }
