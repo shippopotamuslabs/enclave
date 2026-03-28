@@ -14,6 +14,7 @@ import com.browntowndev.pocketcrew.feature.chat.ChatRoute
 import com.browntowndev.pocketcrew.feature.history.HistoryRoute
 import com.browntowndev.pocketcrew.feature.settings.SettingsRoute
 import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
+import com.browntowndev.pocketcrew.feature.settings.navigation.settingsGraph
 
 private const val ANIMATION_DURATION = 300
 
@@ -130,44 +131,14 @@ fun PocketCrewNavGraph(
                         navController.navigate(Routes.CHAT)
                     }
                 },
-                onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
+                onNavigateToSettings = { navController.navigate(Routes.SETTINGS_GRAPH) },
                 onShowSnackbar = onShowSnackbar,
             )
         }
-        composable(
-            route = Routes.SETTINGS,
-            enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
-            },
-            exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
-            },
-            popEnterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
-            },
-            popExitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
-            },
-        ) {
-            SettingsRoute(
-                onNavigateBack = { navController.popBackStack() },
-                onShowSnackbar = onShowSnackbar,
-                onNavigateToModelDownload = {
-                    navController.navigate(Routes.MODEL_DOWNLOAD)
-                }
-            )
-        }
+        
+        settingsGraph(
+            navController = navController,
+            onShowSnackbar = onShowSnackbar
+        )
     }
 }

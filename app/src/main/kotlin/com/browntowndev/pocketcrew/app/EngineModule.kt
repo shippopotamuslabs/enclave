@@ -471,4 +471,10 @@ object EngineModule {
             processThinkingTokens, llamaChatSessionManager, loggingPort
         )
     }
+
+    @Provides
+    @Singleton
+    fun provideInferenceFactory(
+        impl: com.browntowndev.pocketcrew.feature.inference.InferenceFactoryImpl
+    ): com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort = impl
 }

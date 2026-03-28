@@ -13,6 +13,8 @@ fun SettingsRoute(
     onNavigateBack: () -> Unit,
     onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
     onNavigateToModelDownload: () -> Unit,
+    onNavigateToByokConfigure: () -> Unit,
+    onNavigateToModelConfigure: (com.browntowndev.pocketcrew.domain.model.inference.ModelType) -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -52,13 +54,12 @@ fun SettingsRoute(
             onShowSnackbar("Feedback submitted. Thank you!", null)
         },
         onNavigateToModelDownload = onNavigateToModelDownload,
+        onNavigateToModelConfigure = onNavigateToModelConfigure,
         onShowModelConfigSheet = viewModel::onShowModelConfigSheet,
         onSelectModelType = viewModel::onSelectModelType,
-        onBackToModelList = viewModel::onBackToModelList,
-        onHuggingFaceModelNameChange = viewModel::onHuggingFaceModelNameChange,
-        onTemperatureChange = viewModel::onTemperatureChange,
-        onTopKChange = viewModel::onTopKChange,
-        onTopPChange = viewModel::onTopPChange,
-        onSaveModelConfig = viewModel::onSaveModelConfig
+        onShowByokSheet = viewModel::onShowByokSheet,
+        onNavigateToByokConfigure = onNavigateToByokConfigure,
+        onSelectApiModel = viewModel::onSelectApiModel,
+        onSetDefaultModel = viewModel::onSetDefaultModel
     )
 }
