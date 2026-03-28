@@ -174,18 +174,6 @@ class SettingsViewModel @Inject constructor(
         initialValue = SettingsUiState(),
     )
 
-    init {
-        // Initialize state from navigation arguments (survives process death)
-        savedStateHandle.get<String>("modelType")?.let { name ->
-            try {
-                onSelectModelType(ModelType.valueOf(name))
-            } catch (_: IllegalArgumentException) { }
-        }
-        savedStateHandle.get<String>("apiModelId")?.toLongOrNull()?.let { id ->
-            onSelectApiModel(id)
-        }
-    }
-
     private fun ApiModelConfig.toUi() = ApiModelConfigUi(
         id = id,
         displayName = displayName,
