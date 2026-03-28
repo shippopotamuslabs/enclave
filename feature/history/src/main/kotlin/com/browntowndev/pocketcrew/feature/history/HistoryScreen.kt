@@ -1,7 +1,14 @@
 package com.browntowndev.pocketcrew.feature.history
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -35,12 +43,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -51,6 +61,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.R
+import com.browntowndev.pocketcrew.core.ui.component.shimmerEffect
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
 private sealed interface HistoryOptionsState {
@@ -78,6 +89,26 @@ fun HistoryScreen(
     var optionsState by remember { mutableStateOf<HistoryOptionsState>(HistoryOptionsState.Hidden) }
     val sheetState = rememberModalBottomSheetState()
 
+    val colorScheme = MaterialTheme.colorScheme
+    val shimmerColors = if (uiState.isLoading) {
+        val base = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.05f) }
+        val highlight = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.15f) }
+        base to highlight
+    } else null
+
+    val shimmerProgress = if (uiState.isLoading) {
+        val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1500, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "shimmerProgress"
+        )
+    } else null
+
     Scaffold(
         topBar = {
             HistoryTopBar(
@@ -102,39 +133,49 @@ fun HistoryScreen(
                 )
             }
 
-            if (uiState.pinnedChats.isNotEmpty()) {
-                item {
-                    SectionHeader(text = "Pinned")
-                }
-                items(
-                    items = uiState.pinnedChats,
-                    key = { it.id }
-                ) { chat ->
-                    HistoryChatItem(
-                        chat = chat,
-                        onClick = { onChatClick(chat.id) },
-                        onShowOptions = {
-                            optionsState = HistoryOptionsState.Sheet(chat)
-                        }
+            if (uiState.isLoading && shimmerProgress != null && shimmerColors != null) {
+                items(5) {
+                    HistoryChatSkeletonItem(
+                        progressState = shimmerProgress,
+                        baseColor = shimmerColors.first,
+                        highlightColor = shimmerColors.second
                     )
                 }
-            }
+            } else {
+                if (uiState.pinnedChats.isNotEmpty()) {
+                    item {
+                        SectionHeader(text = "Pinned")
+                    }
+                    items(
+                        items = uiState.pinnedChats,
+                        key = { it.id }
+                    ) { chat ->
+                        HistoryChatItem(
+                            chat = chat,
+                            onClick = { onChatClick(chat.id) },
+                            onShowOptions = {
+                                optionsState = HistoryOptionsState.Sheet(chat)
+                            }
+                        )
+                    }
+                }
 
-            if (uiState.otherChats.isNotEmpty()) {
-                item {
-                    SectionHeader(text = "Recent")
-                }
-                items(
-                    items = uiState.otherChats,
-                    key = { it.id }
-                ) { chat ->
-                    HistoryChatItem(
-                        chat = chat,
-                        onClick = { onChatClick(chat.id) },
-                        onShowOptions = {
-                            optionsState = HistoryOptionsState.Sheet(chat)
-                        }
-                    )
+                if (uiState.otherChats.isNotEmpty()) {
+                    item {
+                        SectionHeader(text = "Recent")
+                    }
+                    items(
+                        items = uiState.otherChats,
+                        key = { it.id }
+                    ) { chat ->
+                        HistoryChatItem(
+                            chat = chat,
+                            onClick = { onChatClick(chat.id) },
+                            onShowOptions = {
+                                optionsState = HistoryOptionsState.Sheet(chat)
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -321,6 +362,69 @@ private fun HistoryChatItem(
 }
 
 @Composable
+private fun HistoryChatSkeletonItem(
+    progressState: State<Float>,
+    baseColor: Color,
+    highlightColor: Color,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(vertical = 4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.7f)
+                    .height(20.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmerEffect(
+                        progressState = progressState,
+                        baseColor = baseColor,
+                        highlightColor = highlightColor
+                    )
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.4f)
+                    .height(14.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .shimmerEffect(
+                        progressState = progressState,
+                        baseColor = baseColor,
+                        highlightColor = highlightColor
+                    )
+            )
+        }
+
+        Spacer(modifier = Modifier.width(16.dp))
+
+        Box(
+            modifier = Modifier
+                .size(48.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .shimmerEffect(
+                        progressState = progressState,
+                        baseColor = baseColor,
+                        highlightColor = highlightColor
+                    )
+            )
+        }
+    }
+}
+
+@Composable
 private fun ChatOptionsContent(
     isPinned: Boolean,
     onDelete: () -> Unit,
@@ -412,6 +516,27 @@ private fun BottomSheetOption(
 ) {
     BottomSheetOption(text, contentColor, onClick, modifier) {
         Icon(imageVector = icon, contentDescription = null)
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun PreviewHistoryScreenLoading() {
+    PocketCrewTheme {
+        HistoryScreen(
+            uiState = HistoryUiState(isLoading = true),
+            searchQuery = "",
+            onSearchQueryChange = {},
+            onBackClick = {},
+            onChatClick = {},
+            onNewChatClick = {},
+            onDeleteChat = {},
+            onRenameChat = { _, _ -> },
+            onPinChat = {},
+            onUnpinChat = {},
+            onSettingsClick = {},
+            onShowSnackbar = { _, _ -> }
+        )
     }
 }
 
