@@ -55,7 +55,7 @@ class WorkProgressParserTest {
 
         // Then
         assertNotNull(result)
-        result!!
+        requireNotNull(result)
         assertEquals("vision.litertlm", result.filename)
         assertEquals(50_000_000L, result.bytesDownloaded)
         assertEquals(100_000_000L, result.totalBytes)
@@ -75,7 +75,7 @@ class WorkProgressParserTest {
 
         // Then
         assertNotNull(result)
-        result!!
+        requireNotNull(result)
         assertEquals("main.litertlm", result.filename)
         assertEquals(2, result.modelTypes.size)
         assertTrue(result.modelTypes.contains(ModelType.MAIN))
@@ -92,7 +92,7 @@ class WorkProgressParserTest {
 
         // Then
         assertNotNull(result)
-        result!!
+        requireNotNull(result)
         assertEquals(5, result.modelTypes.size)
         assertTrue(result.modelTypes.contains(ModelType.FAST))
         assertTrue(result.modelTypes.contains(ModelType.VISION))
@@ -147,7 +147,7 @@ class WorkProgressParserTest {
 
         // Then
         assertNotNull(result)
-        result!!
+        requireNotNull(result)
         assertTrue(result.modelTypes.isEmpty())
     }
 
@@ -161,7 +161,7 @@ class WorkProgressParserTest {
 
         // Then
         assertNotNull(result)
-        result!!
+        requireNotNull(result)
         assertTrue(result.modelTypes.isNotEmpty())
         // Unknown values default to MAIN per ModelType.fromApiValue
         assertEquals(ModelType.MAIN, result.modelTypes.first())
@@ -247,14 +247,14 @@ class WorkProgressParserTest {
 
         // Then - the result should have both DRAFT and VISION modelTypes
         assertNotNull(result)
-        assertNotNull(result!!.currentDownloads)
-        assertTrue(result.currentDownloads!!.isNotEmpty())
+        assertNotNull(requireNotNull(result).currentDownloads)
+        assertTrue(requireNotNull(result.currentDownloads).isNotEmpty())
         
-        val visionFileProgress = result.currentDownloads!!.find { it.filename == "vision.litertlm" }
+        val visionFileProgress = requireNotNull(result.currentDownloads).find { it.filename == "vision.litertlm" }
         assertNotNull(visionFileProgress)
         
         // BUG FIX VERIFICATION: Should have BOTH modelTypes, not just one
-        assertTrue(visionFileProgress!!.modelTypes.contains(ModelType.DRAFT_ONE))
+        assertTrue(requireNotNull(visionFileProgress).modelTypes.contains(ModelType.DRAFT_ONE))
         assertTrue(visionFileProgress.modelTypes.contains(ModelType.VISION))
         assertEquals(2, visionFileProgress.modelTypes.size)
     }
@@ -295,13 +295,13 @@ class WorkProgressParserTest {
 
         // Then - should match "vision" against the multi-type download and merge modelTypes
         assertNotNull(result)
-        assertNotNull(result!!.currentDownloads)
+        assertNotNull(requireNotNull(result).currentDownloads)
 
-        val visionFileProgress = result.currentDownloads!!.find { it.filename == "vision.litertlm" }
+        val visionFileProgress = requireNotNull(result.currentDownloads).find { it.filename == "vision.litertlm" }
         assertNotNull(visionFileProgress)
 
         // BUG FIX VERIFICATION: Should have BOTH DRAFT and VISION from the matched download
-        assertTrue(visionFileProgress!!.modelTypes.contains(ModelType.DRAFT_ONE))
+        assertTrue(requireNotNull(visionFileProgress).modelTypes.contains(ModelType.DRAFT_ONE))
         assertTrue(visionFileProgress.modelTypes.contains(ModelType.VISION))
     }
 
@@ -332,13 +332,13 @@ class WorkProgressParserTest {
 
         // Then - should derive modelType from filename
         assertNotNull(result)
-        assertNotNull(result!!.currentDownloads)
+        assertNotNull(requireNotNull(result).currentDownloads)
 
-        val visionFileProgress = result.currentDownloads!!.find { it.filename == "vision.litertlm" }
+        val visionFileProgress = requireNotNull(result.currentDownloads).find { it.filename == "vision.litertlm" }
         assertNotNull(visionFileProgress)
 
         // Should derive VISION from filename "vision.litertlm"
-        assertEquals(listOf(ModelType.VISION), visionFileProgress!!.modelTypes)
+        assertEquals(listOf(ModelType.VISION), requireNotNull(visionFileProgress).modelTypes)
     }
 
     @Test
@@ -375,11 +375,11 @@ class WorkProgressParserTest {
 
         // Then - should match regardless of case
         assertNotNull(result)
-        assertNotNull(result!!.currentDownloads)
+        assertNotNull(requireNotNull(result).currentDownloads)
 
-        val mainFileProgress = result.currentDownloads!!.find { it.filename == "main.litertlm" }
+        val mainFileProgress = requireNotNull(result.currentDownloads).find { it.filename == "main.litertlm" }
         assertNotNull(mainFileProgress)
-        assertEquals(listOf(ModelType.MAIN), mainFileProgress!!.modelTypes)
+        assertEquals(listOf(ModelType.MAIN), requireNotNull(mainFileProgress).modelTypes)
     }
 
     // ===== parseSucceeded tests =====
@@ -414,7 +414,7 @@ class WorkProgressParserTest {
 
         // Then: Return READY status with clearSession=true
         assertNotNull(result)
-        assertEquals(DownloadStatus.READY, result!!.status)
+        assertEquals(DownloadStatus.READY, requireNotNull(result).status)
     }
 
     @Test
@@ -456,7 +456,7 @@ class WorkProgressParserTest {
 
         // Then: Return ERROR status with errorMessage
         assertNotNull(result)
-        assertEquals(DownloadStatus.ERROR, result!!.status)
+        assertEquals(DownloadStatus.ERROR, requireNotNull(result).status)
         assertEquals("Network error", result.errorMessage)
     }
 
@@ -497,7 +497,7 @@ class WorkProgressParserTest {
 
         // Then: Return default "Download failed" message
         assertNotNull(result)
-        assertEquals(DownloadStatus.ERROR, result!!.status)
+        assertEquals(DownloadStatus.ERROR, requireNotNull(result).status)
         assertEquals("Download failed", result.errorMessage)
     }
 
@@ -515,7 +515,7 @@ class WorkProgressParserTest {
 
         // Then: Return PAUSED status
         assertNotNull(result)
-        assertEquals(DownloadStatus.PAUSED, result!!.status)
+        assertEquals(DownloadStatus.PAUSED, requireNotNull(result).status)
     }
 
     // ===== Edge case tests for ENQUEUED and BLOCKED states =====
@@ -532,7 +532,7 @@ class WorkProgressParserTest {
 
         // Then: Return CHECKING status
         assertNotNull(result)
-        assertEquals(DownloadStatus.CHECKING, result!!.status)
+        assertEquals(DownloadStatus.CHECKING, requireNotNull(result).status)
     }
 
     @Test
@@ -547,7 +547,7 @@ class WorkProgressParserTest {
 
         // Then: Return CHECKING status
         assertNotNull(result)
-        assertEquals(DownloadStatus.CHECKING, result!!.status)
+        assertEquals(DownloadStatus.CHECKING, requireNotNull(result).status)
     }
 
     // ===== Edge case tests for stale session handling =====
@@ -639,13 +639,13 @@ class WorkProgressParserTest {
 
         // Then: Should still return result with derived modelTypes from filename
         assertNotNull(result)
-        assertNotNull(result!!.currentDownloads)
-        assertTrue(result.currentDownloads!!.isNotEmpty())
+        assertNotNull(requireNotNull(result).currentDownloads)
+        assertTrue(requireNotNull(result.currentDownloads).isNotEmpty())
 
-        val visionFile = result.currentDownloads!!.find { it.filename == "vision.litertlm" }
+        val visionFile = requireNotNull(result.currentDownloads).find { it.filename == "vision.litertlm" }
         assertNotNull(visionFile)
         // Should derive VISION from filename since currentDownloads is empty
-        assertEquals(listOf(ModelType.VISION), visionFile!!.modelTypes)
+        assertEquals(listOf(ModelType.VISION), requireNotNull(visionFile).modelTypes)
     }
 
     // ===== Additional edge case tests =====
@@ -671,8 +671,8 @@ class WorkProgressParserTest {
 
         // Then: Should return result with empty currentDownloads
         assertNotNull(result)
-        assertNotNull(result!!.currentDownloads)
-        assertTrue(result.currentDownloads!!.isEmpty())
+        assertNotNull(requireNotNull(result).currentDownloads)
+        assertTrue(requireNotNull(result.currentDownloads).isEmpty())
     }
 
     @Test
@@ -701,9 +701,9 @@ class WorkProgressParserTest {
 
         // Then: Should return result with only valid entries
         assertNotNull(result)
-        assertNotNull(result!!.currentDownloads)
-        assertEquals(1, result.currentDownloads!!.size)
-        assertEquals("valid.litertlm", result.currentDownloads!!.first().filename)
+        assertNotNull(requireNotNull(result).currentDownloads)
+        assertEquals(1, requireNotNull(result.currentDownloads).size)
+        assertEquals("valid.litertlm", requireNotNull(result.currentDownloads).first().filename)
     }
 }
 

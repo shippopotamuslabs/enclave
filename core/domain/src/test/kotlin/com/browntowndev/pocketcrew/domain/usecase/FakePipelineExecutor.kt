@@ -31,7 +31,7 @@ class FakePipelineExecutor : PipelineExecutorPort {
         lastUserMessage = userMessage
         
         if (shouldThrow != null) {
-            throw shouldThrow!!
+            throw requireNotNull(shouldThrow)
         }
         
         for (event in eventsToEmit) {

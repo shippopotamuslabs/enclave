@@ -136,7 +136,7 @@ class ChatViewModelTest {
         assertNotNull(chatMessage.indicatorState)
         assertEquals(
             IndicatorState.Thinking::class,
-            chatMessage.indicatorState!!::class,
+            requireNotNull(chatMessage.indicatorState)::class,
             "Indicator state should be Thinking"
         )
         // Verify it has 0 duration when null
@@ -227,8 +227,8 @@ class ChatViewModelTest {
         assertNotNull(chatMessage.indicatorState)
         val generatingState = chatMessage.indicatorState as IndicatorState.Generating
         assertNotNull(generatingState.thinkingData)
-        assertEquals(45L, generatingState.thinkingData!!.thinkingDurationSeconds)
-        assertEquals("Full thought", generatingState.thinkingData!!.thinkingRaw)
+        assertEquals(45L, requireNotNull(generatingState.thinkingData).thinkingDurationSeconds)
+        assertEquals("Full thought", requireNotNull(generatingState.thinkingData).thinkingRaw)
     }
 
     @Test
@@ -251,8 +251,8 @@ class ChatViewModelTest {
         assertNotNull(chatMessage.indicatorState)
         val completeState = chatMessage.indicatorState as IndicatorState.Complete
         assertNotNull(completeState.thinkingData)
-        assertEquals(60L, completeState.thinkingData!!.thinkingDurationSeconds)
-        assertEquals("Full thought content", completeState.thinkingData!!.thinkingRaw)
+        assertEquals(60L, requireNotNull(completeState.thinkingData).thinkingDurationSeconds)
+        assertEquals("Full thought content", requireNotNull(completeState.thinkingData).thinkingRaw)
     }
 
     @Test
