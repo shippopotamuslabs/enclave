@@ -44,8 +44,8 @@ class ApiModelRepositoryImpl @Inject constructor(
     }
 
     override suspend fun delete(id: Long) = withContext(Dispatchers.IO) {
-        apiKeyManager.delete(id) // Delete key first to prevent orphaned keys if DB write fails
         apiModelsDao.deleteById(id)
+        apiKeyManager.delete(id) // Delete key after entity to ensure database consistency
     }
 }
 

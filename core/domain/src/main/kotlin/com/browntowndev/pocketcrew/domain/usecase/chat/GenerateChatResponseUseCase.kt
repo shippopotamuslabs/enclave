@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
+import java.util.concurrent.CancellationException
 
 import javax.inject.Inject
 
@@ -87,6 +88,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                         prompt, userMessageId, assistantMessageId, chatId, service, ModelType.FAST
                     ))
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     emit(
                         MessageGenerationState.Failed(
                             modelType = ModelType.FAST,
@@ -103,6 +105,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                         prompt, userMessageId, assistantMessageId, chatId, service, ModelType.THINKING
                     ))
                 } catch (e: Exception) {
+                    if (e is CancellationException) throw e
                     emit(
                         MessageGenerationState.Failed(
                             modelType = ModelType.THINKING,
