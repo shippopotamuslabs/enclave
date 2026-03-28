@@ -40,7 +40,7 @@ data class SettingsUiState(
     val modelConfigurations: List<ModelConfigurationUi> = emptyList(),
     val selectedModelType: ModelType? = null,
     val selectedModelConfig: ModelConfigurationUi? = null,
-    val availableHuggingFaceModels: List<String> = emptyList(),
+    val availableHuggingFaceModels: List<ModelConfigurationUi> = emptyList(),
 
     // BYOK Sheet
     val showByokSheet: Boolean = false,

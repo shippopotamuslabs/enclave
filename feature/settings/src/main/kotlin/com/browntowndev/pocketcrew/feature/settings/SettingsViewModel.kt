@@ -142,8 +142,8 @@ class SettingsViewModel @Inject constructor(
             modelConfigurations = modelConfigs,
             selectedModelType = transientState.selectedModelType,
             selectedModelConfig = selectedConfig,
-            // Available HuggingFace models (currently just the registered one)
-            availableHuggingFaceModels = modelConfigs.map { it.huggingFaceModelName }.distinct(),
+            // Available HuggingFace models
+            availableHuggingFaceModels = modelConfigs.distinctBy { it.huggingFaceModelName },
             // BYOK Sheet
             showByokSheet = transientState.showByokSheet,
             apiModels = apiModels.map { it.toUi() },
