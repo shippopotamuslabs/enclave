@@ -89,6 +89,26 @@ fun HistoryScreen(
     var optionsState by remember { mutableStateOf<HistoryOptionsState>(HistoryOptionsState.Hidden) }
     val sheetState = rememberModalBottomSheetState()
 
+    val colorScheme = MaterialTheme.colorScheme
+    val shimmerColors = if (uiState.isLoading) {
+        val base = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.05f) }
+        val highlight = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.15f) }
+        base to highlight
+    } else null
+
+    val shimmerProgress = if (uiState.isLoading) {
+        val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1500, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "shimmerProgress"
+        )
+    } else null
+
     Scaffold(
         topBar = {
             HistoryTopBar(
@@ -113,27 +133,12 @@ fun HistoryScreen(
                 )
             }
 
-            if (uiState.isLoading) {
-                val colorScheme = MaterialTheme.colorScheme
-                val shimmerBaseColor = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.05f) }
-                val shimmerHighlightColor = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.15f) }
-
-                val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
-                val shimmerProgress = infiniteTransition.animateFloat(
-                    initialValue = 0f,
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(durationMillis = 1500, easing = LinearEasing),
-                        repeatMode = RepeatMode.Restart
-                    ),
-                    label = "shimmerProgress"
-                )
-
+            if (uiState.isLoading && shimmerProgress != null && shimmerColors != null) {
                 items(5) {
                     HistoryChatSkeletonItem(
                         progressState = shimmerProgress,
-                        baseColor = shimmerBaseColor,
-                        highlightColor = shimmerHighlightColor
+                        baseColor = shimmerColors.first,
+                        highlightColor = shimmerColors.second
                     )
                 }
             } else {
@@ -402,14 +407,20 @@ private fun HistoryChatSkeletonItem(
 
         Box(
             modifier = Modifier
-                .size(24.dp)
-                .clip(CircleShape)
-                .shimmerEffect(
-                    progressState = progressState,
-                    baseColor = baseColor,
-                    highlightColor = highlightColor
-                )
-        )
+                .size(48.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .shimmerEffect(
+                        progressState = progressState,
+                        baseColor = baseColor,
+                        highlightColor = highlightColor
+                    )
+            )
+        }
     }
 }
 
