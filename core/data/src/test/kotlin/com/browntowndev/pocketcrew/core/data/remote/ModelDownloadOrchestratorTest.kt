@@ -1,5 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.remote
 
+import org.junit.jupiter.api.extension.RegisterExtension
+import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
@@ -16,13 +18,10 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -31,6 +30,12 @@ import org.junit.jupiter.api.Test
 class ModelDownloadOrchestratorTest {
 
     private val testDispatcher = StandardTestDispatcher()
+
+    @JvmField
+    @RegisterExtension
+    val mainDispatcherExtension = MainDispatcherRule(testDispatcher)
+
+
 
     private lateinit var mockModelConfigFetcher: ModelConfigFetcherPort
     private lateinit var mockModelRegistry: ModelRegistryPort
@@ -43,8 +48,6 @@ class ModelDownloadOrchestratorTest {
         every { Log.d(any<String>(), any<String>()) } returns 0
         every { Log.e(any<String>(), any<String>()) } returns 0
 
-        Dispatchers.setMain(testDispatcher)
-
         mockModelConfigFetcher = mockk(relaxed = true)
         mockModelRegistry = mockk<ModelRegistryPort>(relaxed = true)
         mockDownloadSpeedTracker = mockk(relaxed = true)
@@ -53,7 +56,6 @@ class ModelDownloadOrchestratorTest {
     @AfterEach
     fun tearDown() {
         unmockkStatic(Log::class)
-        Dispatchers.resetMain()
     }
 
     @Test
