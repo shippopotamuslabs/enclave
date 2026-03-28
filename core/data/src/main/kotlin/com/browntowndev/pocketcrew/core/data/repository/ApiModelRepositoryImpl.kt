@@ -27,12 +27,12 @@ class ApiModelRepositoryImpl @Inject constructor(
         return apiModelsDao.observeAll().map { list -> list.map { it.toDomain() } }
     }
 
-    override suspend fun getAll(): List<ApiModelConfig> {
-        return apiModelsDao.getAll().map { it.toDomain() }
+    override suspend fun getAll(): List<ApiModelConfig> = withContext(Dispatchers.IO) {
+        apiModelsDao.getAll().map { it.toDomain() }
     }
 
-    override suspend fun getById(id: Long): ApiModelConfig? {
-        return apiModelsDao.getById(id)?.toDomain()
+    override suspend fun getById(id: Long): ApiModelConfig? = withContext(Dispatchers.IO) {
+        apiModelsDao.getById(id)?.toDomain()
     }
 
     override suspend fun save(config: ApiModelConfig, apiKey: String): Long = withContext(Dispatchers.IO) {
