@@ -9,6 +9,8 @@ import androidx.navigation.navArgument
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.runtime.remember
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.feature.settings.ByokConfigureRoute
 import com.browntowndev.pocketcrew.feature.settings.ModelConfigurationRoute
@@ -57,6 +59,9 @@ fun NavGraphBuilder.settingsGraph(
                 )
             },
         ) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(SettingsDestination.GRAPH)
+            }
             SettingsRoute(
                 onNavigateBack = { navController.popBackStack() },
                 onShowSnackbar = onShowSnackbar,
@@ -68,7 +73,8 @@ fun NavGraphBuilder.settingsGraph(
                 },
                 onNavigateToModelConfigure = { modelType ->
                     navController.navigate("model_configure/${modelType.name}")
-                }
+                },
+                viewModel = hiltViewModel(parentEntry)
             )
         }
 
@@ -106,11 +112,13 @@ fun NavGraphBuilder.settingsGraph(
                 )
             },
         ) { backStackEntry ->
-            val apiModelIdStr = backStackEntry.arguments?.getString("apiModelId")
-            val apiModelId = apiModelIdStr?.toLongOrNull()
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(SettingsDestination.GRAPH)
+            }
             ByokConfigureRoute(
-                apiModelId = apiModelId,
-                onNavigateBack = { navController.popBackStack() }
+                apiModelId = null, // Using shared view model, parameter is obsolete but kept to avoid signature breaking right now
+                onNavigateBack = { navController.popBackStack() },
+                viewModel = hiltViewModel(parentEntry)
             )
         }
 
@@ -153,9 +161,14 @@ fun NavGraphBuilder.settingsGraph(
             } catch (e: IllegalArgumentException) {
                 return@composable
             }
+            
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(SettingsDestination.GRAPH)
+            }
             ModelConfigurationRoute(
                 modelType = modelType,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                viewModel = hiltViewModel(parentEntry)
             )
         }
     }

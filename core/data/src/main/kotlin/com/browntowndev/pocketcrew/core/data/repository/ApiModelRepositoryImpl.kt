@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import org.json.JSONArray
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Implementation of ApiModelRepositoryPort.
@@ -33,13 +35,13 @@ class ApiModelRepositoryImpl @Inject constructor(
         return apiModelsDao.getById(id)?.toDomain()
     }
 
-    override suspend fun save(config: ApiModelConfig, apiKey: String): Long {
+    override suspend fun save(config: ApiModelConfig, apiKey: String): Long = withContext(Dispatchers.IO) {
         val entityId = apiModelsDao.upsert(config.toEntity())
         apiKeyManager.save(entityId, apiKey)
-        return entityId
+        entityId
     }
 
-    override suspend fun delete(id: Long) {
+    override suspend fun delete(id: Long) = withContext(Dispatchers.IO) {
         apiKeyManager.delete(id) // Delete key first to prevent orphaned keys if DB write fails
         apiModelsDao.deleteById(id)
     }

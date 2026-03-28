@@ -169,10 +169,13 @@ fun ModelConfigurationScreen(
                         SegmentedButton(
                             selected = assignment.source == ModelSource.API,
                             onClick = {
-                                val apiId = uiState.apiModels.firstOrNull()?.id
-                                onSetDefaultModel(modelType, ModelSource.API, apiId)
+                                if (assignment.source != ModelSource.API) {
+                                    val apiId = uiState.apiModels.firstOrNull()?.id
+                                    onSetDefaultModel(modelType, ModelSource.API, apiId)
+                                }
                             },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2)
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            enabled = uiState.apiModels.isNotEmpty()
                         ) {
                             Text("API (BYOK)")
                         }

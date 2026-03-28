@@ -70,7 +70,9 @@ object DataModule {
             context,
             PocketCrewDatabase::class.java,
             "pocket_crew_db"
-        ).build()
+        )
+        .fallbackToDestructiveMigration()
+        .build()
     }
 
     @Provides

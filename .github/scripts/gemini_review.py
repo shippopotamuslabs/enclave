@@ -32,6 +32,7 @@ def post_github_comment(comment):
     response = requests.post(url, headers=headers, json={"body": comment})
     if response.status_code != 201:
         print(f"Failed to post comment: {response.text}")
+        sys.exit(1)
 
 def main():
     if not VERTEX_API_KEY:

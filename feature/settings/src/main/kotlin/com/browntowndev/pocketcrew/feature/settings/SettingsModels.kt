@@ -62,6 +62,7 @@ data class ApiModelConfigUi(
     val contextWindow: Int = 4096,
     val temperature: Double = 0.7,
     val topP: Double = 0.95,
+    val topK: Int = 40,
 )
 
 data class DefaultModelAssignmentUi(
