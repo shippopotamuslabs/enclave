@@ -1,5 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.download
 
+import org.junit.jupiter.api.extension.RegisterExtension
+import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
@@ -20,12 +22,9 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -36,6 +35,12 @@ import java.io.File
 class ModelDownloadOrchestratorImplTest {
 
     private val testDispatcher = StandardTestDispatcher()
+
+    @JvmField
+    @RegisterExtension
+    val mainDispatcherExtension = MainDispatcherRule(testDispatcher)
+
+
 
     private lateinit var mockContext: Context
     private lateinit var mockSessionManager: DownloadSessionManager
@@ -60,8 +65,6 @@ class ModelDownloadOrchestratorImplTest {
         every { Log.e(any<String>(), any<String>()) } returns 0
         every { Log.i(any<String>(), any<String>()) } returns 0
         every { Log.w(any<String>(), any<String>()) } returns 0
-
-        Dispatchers.setMain(testDispatcher)
 
         mockContext = mockk(relaxed = true)
         mockSessionManager = mockk(relaxed = true)
@@ -92,7 +95,6 @@ class ModelDownloadOrchestratorImplTest {
     @AfterEach
     fun tearDown() {
         unmockkStatic(Log::class)
-        Dispatchers.resetMain()
     }
 
     private fun createModelConfig(

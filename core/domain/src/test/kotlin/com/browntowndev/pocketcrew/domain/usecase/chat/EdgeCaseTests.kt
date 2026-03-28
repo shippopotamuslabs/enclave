@@ -126,8 +126,8 @@ class EdgeCaseTests {
         // Then - should handle empty thinking gracefully
         assertTrue(accumulatedMessages.isNotEmpty())
         val finalState = accumulatedMessages.lastOrNull()
-        val snapshot = finalState!!.messages[2L]
-        assertEquals("Hello", snapshot!!.content)
+        val snapshot = requireNotNull(finalState).messages[2L]
+        assertEquals("Hello", requireNotNull(snapshot).content)
         assertTrue(snapshot.thinkingRaw.isEmpty())
     }
 
@@ -163,8 +163,8 @@ class EdgeCaseTests {
 
         // Then - all content should be accumulated
         val finalState = accumulatedMessages.lastOrNull()
-        val snapshot = finalState!!.messages[2L]
-        assertTrue(snapshot!!.content.contains("chunk1"))
+        val snapshot = requireNotNull(finalState).messages[2L]
+        assertTrue(requireNotNull(snapshot).content.contains("chunk1"))
         assertTrue(snapshot.content.contains("chunk100"))
     }
 
@@ -221,8 +221,8 @@ class EdgeCaseTests {
 
         // Then - should return blocked message
         val state = accumulatedMessages.firstOrNull()
-        val snapshot = state!!.messages[2L]
-        assertTrue(snapshot!!.content.contains("Another message is in progress"))
+        val snapshot = requireNotNull(state).messages[2L]
+        assertTrue(requireNotNull(snapshot).content.contains("Another message is in progress"))
     }
 
     // ========================================================================
@@ -256,8 +256,8 @@ class EdgeCaseTests {
         // Then - should contain blocked message
         assertTrue(accumulatedMessages.isNotEmpty())
         val finalState = accumulatedMessages.lastOrNull()
-        val snapshot = finalState!!.messages[2L]
-        assertTrue(snapshot!!.content.contains("Blocked"))
+        val snapshot = requireNotNull(finalState).messages[2L]
+        assertTrue(requireNotNull(snapshot).content.contains("Blocked"))
     }
 
     // ========================================================================
