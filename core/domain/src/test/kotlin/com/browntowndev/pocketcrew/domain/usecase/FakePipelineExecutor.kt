@@ -30,9 +30,7 @@ class FakePipelineExecutor : PipelineExecutorPort {
         lastChatId = chatId
         lastUserMessage = userMessage
         
-        if (shouldThrow != null) {
-            throw shouldThrow!!
-        }
+        shouldThrow?.let { throw it }
         
         for (event in eventsToEmit) {
             emit(event)

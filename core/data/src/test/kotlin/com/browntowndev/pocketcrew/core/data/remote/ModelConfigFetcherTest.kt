@@ -264,7 +264,7 @@ class ModelConfigFetcherTest {
 
         // Then
         assertTrue(result.isSuccess)
-        val configs = result.getOrNull()!!
+        val configs = requireNotNull(result.getOrNull())
         assertEquals(4, configs.size)
         assertTrue(configs.any { it.modelType == ModelType.MAIN })
         assertTrue(configs.any { it.modelType == ModelType.VISION })

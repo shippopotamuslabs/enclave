@@ -42,14 +42,22 @@ class FakeModelRegistry : ModelRegistryPort {
         return _modelsFlow.map { it[modelType]?.let { name -> modelsMap[modelType] } }
     }
 
+    private val defaultModelsSet = mutableSetOf<ModelType>()
+
     override suspend fun setRegisteredModel(
         config: ModelConfiguration,
         status: ModelStatus,
         markExistingAsOld: Boolean
     ) {
-        if (markExistingAsOld && modelsMap.containsKey(config.modelType)) {
+        if (status == ModelStatus.CURRENT && markExistingAsOld && modelsMap.containsKey(config.modelType)) {
             modelStatuses[config.modelType] = ModelStatus.OLD
         }
+
+        // Initialize default if not present
+        if (!defaultModelsSet.contains(config.modelType)) {
+            defaultModelsSet.add(config.modelType)
+        }
+
         modelsMap[config.modelType] = config
         modelStatuses[config.modelType] = status
         updateFlow()
@@ -91,5 +99,9 @@ class FakeModelRegistry : ModelRegistryPort {
 
     fun getModelStatus(modelType: ModelType): ModelStatus? {
         return modelStatuses[modelType]
+    }
+
+    fun isDefaultInitialized(modelType: ModelType): Boolean {
+        return defaultModelsSet.contains(modelType)
     }
 }

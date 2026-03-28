@@ -4,6 +4,8 @@ import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationUi
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 
 data class StoredMemory(
     val id: String,
@@ -38,5 +40,35 @@ data class SettingsUiState(
     val modelConfigurations: List<ModelConfigurationUi> = emptyList(),
     val selectedModelType: ModelType? = null,
     val selectedModelConfig: ModelConfigurationUi? = null,
-    val availableHuggingFaceModels: List<String> = emptyList()
+    val availableHuggingFaceModels: List<ModelConfigurationUi> = emptyList(),
+
+    // BYOK Sheet
+    val showByokSheet: Boolean = false,
+    val apiModels: List<ApiModelConfigUi> = emptyList(),
+    val selectedApiModel: ApiModelConfigUi? = null,
+
+    // Default model assignments (for Model Config sheet)
+    val defaultAssignments: List<DefaultModelAssignmentUi> = emptyList(),
+)
+
+data class ApiModelConfigUi(
+    val id: Long = 0,
+    val displayName: String = "",
+    val provider: ApiProvider = ApiProvider.ANTHROPIC,
+    val modelId: String = "",
+    val baseUrl: String = "",
+    val isVision: Boolean = false,
+    val thinkingEnabled: Boolean = false,
+    val maxTokens: String = "4096",
+    val contextWindow: String = "4096",
+    val temperature: Double = 0.7,
+    val topP: Double = 0.95,
+    val topK: Int = 40,
+)
+
+data class DefaultModelAssignmentUi(
+    val modelType: ModelType,
+    val source: ModelSource,
+    val currentModelName: String,     // Whichever model is currently assigned
+    val providerName: String? = null, // Non-null when source = API
 )

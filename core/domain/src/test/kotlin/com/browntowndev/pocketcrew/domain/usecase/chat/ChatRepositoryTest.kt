@@ -140,7 +140,7 @@ class ChatRepositoryTest {
         assertTrue(incompleteMessages.isNotEmpty())
         val message = incompleteMessages.first()
         assertNotNull(message.thinkingRaw)
-        assertTrue(message.thinkingRaw!!.contains("Partial thinking"))
+        assertTrue(requireNotNull(message.thinkingRaw).contains("Partial thinking"))
     }
 
     // ========================================================================
