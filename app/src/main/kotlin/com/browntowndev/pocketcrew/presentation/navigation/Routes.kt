@@ -4,7 +4,9 @@ object Routes {
     const val CHAT = "chat"
     const val CHAT_WITH_ID = "chat?chatId={chatId}"
     const val HISTORY = "history"
-    const val SETTINGS = "settings"
+    const val SETTINGS_GRAPH = "settings_graph"
+    const val SETTINGS_MAIN = "settings_main"
     const val MODEL_DOWNLOAD = "model_download"
+    const val BYOK_CONFIGURE = "byok_configure"
 }
 

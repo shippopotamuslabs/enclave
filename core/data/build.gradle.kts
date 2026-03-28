@@ -77,6 +77,9 @@ dependencies {
     // DataStore
     implementation(libs.androidx.datastore.preferences)
 
+    // Security — EncryptedSharedPreferences for BYOK API key storage
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Test dependencies - JUnit 5 (Jupiter)
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlin.test.junit5)

@@ -2,10 +2,14 @@ package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.core.data.local.ModelsDao
 import com.browntowndev.pocketcrew.core.data.local.ModelEntity
+import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
+import com.browntowndev.pocketcrew.core.data.local.DefaultModelEntity
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -17,6 +21,8 @@ import javax.inject.Singleton
 @Singleton
 class ModelRegistryImpl @Inject constructor(
     private val modelsDao: ModelsDao,
+    private val defaultModelsDao: DefaultModelsDao,
+    private val transactionProvider: TransactionProvider,
     private val logger: LoggingPort
 ) : ModelRegistryPort {
 
@@ -83,8 +89,8 @@ class ModelRegistryImpl @Inject constructor(
 
     override fun observeRegisteredModels(): Flow<Map<ModelType, String>> {
         return modelsDao.observeAll().map { entities ->
-            entities.associate {
-                ModelType.valueOf(it.modelType.name) to it.displayName
+            entities.associate { entity ->
+                entity.modelType to entity.displayName
             }
         }
     }
@@ -100,41 +106,56 @@ class ModelRegistryImpl @Inject constructor(
         status: ModelStatus,
         markExistingAsOld: Boolean
     ) {
-        // First, check if there's an existing CURRENT model for this type
-        val existingCurrent = modelsDao.getModelEntityByStatus(config.modelType, ModelStatus.CURRENT)
+        transactionProvider.runInTransaction {
+            // First, check if there's an existing CURRENT model for this type
+            if (status == ModelStatus.CURRENT && markExistingAsOld) {
+                val existingCurrent = modelsDao.getModelEntityByStatus(config.modelType, ModelStatus.CURRENT)
+                if (existingCurrent != null) {
+                    modelsDao.upsert(
+                        existingCurrent.copy(modelStatus = ModelStatus.OLD)
+                    )
+                    logger.debug("ModelRegistry", "Marked existing model as OLD: ${existingCurrent.displayName}")
+                }
+            }
 
-        // If we're setting a new CURRENT and there was an existing CURRENT, optionally update it to OLD
-        if (status == ModelStatus.CURRENT && existingCurrent != null && markExistingAsOld) {
+            // Ensure a default is configured for this model type
+            val currentDefault = defaultModelsDao.getDefault(config.modelType)
+            if (currentDefault == null) {
+                logger.info("ModelRegistry", "First time registration for ${config.modelType}. Initializing default to ON_DEVICE.")
+                defaultModelsDao.upsert(
+                    DefaultModelEntity(
+                        modelType = config.modelType,
+                        source = ModelSource.ON_DEVICE
+                    )
+                )
+            }
+
+            // Insert or update the new model with the specified status
+            logger.debug("ModelRegistry", "Saving model ${config.modelType} with ${status} status")
             modelsDao.upsert(
-                existingCurrent.copy(modelStatus = ModelStatus.OLD)
+                ModelEntity(
+                    modelType = config.modelType,
+                    modelStatus = status,
+                    remoteFilename = config.metadata.localFileName,
+                    huggingFaceModelName = config.metadata.huggingFaceModelName,
+                    displayName = config.metadata.displayName,
+                    modelFileFormat = config.metadata.modelFileFormat,
+                    sha256 = config.metadata.sha256,
+                    sizeInBytes = config.metadata.sizeInBytes,
+                    temperature = config.tunings.temperature,
+                    topK = config.tunings.topK,
+                    topP = config.tunings.topP,
+                    minP = config.tunings.minP,
+                    maxTokens = config.tunings.maxTokens,
+                    contextWindow = config.tunings.contextWindow,
+                    thinkingEnabled = config.tunings.thinkingEnabled,
+                    systemPrompt = config.persona.systemPrompt,
+                    repetitionPenalty = config.tunings.repetitionPenalty
+                )
             )
-            logger.debug("ModelRegistry", "Marked existing model as OLD: ${existingCurrent.displayName}")
         }
 
-        // Insert or update the new model with the specified status
-        logger.debug("ModelRegistry", "Saving model ${config.modelType} with thinkingEnabled=${config.tunings.thinkingEnabled}")
-        modelsDao.upsert(
-            ModelEntity(
-                modelType = config.modelType,
-                modelStatus = status,
-                remoteFilename = config.metadata.localFileName,
-                huggingFaceModelName = config.metadata.huggingFaceModelName,
-                displayName = config.metadata.displayName,
-                modelFileFormat = config.metadata.modelFileFormat,
-                sha256 = config.metadata.sha256,
-                sizeInBytes = config.metadata.sizeInBytes,
-                temperature = config.tunings.temperature,
-                topK = config.tunings.topK,
-                topP = config.tunings.topP,
-                minP = config.tunings.minP,
-                maxTokens = config.tunings.maxTokens,
-                contextWindow = config.tunings.contextWindow,
-                thinkingEnabled = config.tunings.thinkingEnabled,
-                systemPrompt = config.persona.systemPrompt,
-                repetitionPenalty = config.tunings.repetitionPenalty
-            )
-        )
-        // Update cache after DB update
+        // Update cache after successful DB update
         updateCache(config)
     }
 
