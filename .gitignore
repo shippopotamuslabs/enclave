@@ -72,3 +72,5 @@ android-dev-mcp
 firebase-debug.log
 
 .gemini/settings.json
+
+.geminiignore
