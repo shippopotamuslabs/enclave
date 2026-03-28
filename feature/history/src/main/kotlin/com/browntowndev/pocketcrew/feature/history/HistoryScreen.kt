@@ -1,5 +1,11 @@
 package com.browntowndev.pocketcrew.feature.history
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -37,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -81,6 +88,21 @@ fun HistoryScreen(
 ) {
     var optionsState by remember { mutableStateOf<HistoryOptionsState>(HistoryOptionsState.Hidden) }
     val sheetState = rememberModalBottomSheetState()
+    
+    val colorScheme = MaterialTheme.colorScheme
+    val shimmerBaseColor = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.05f) }
+    val shimmerHighlightColor = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.15f) }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerProgress = infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerProgress"
+    )
 
     Scaffold(
         topBar = {
@@ -107,8 +129,12 @@ fun HistoryScreen(
             }
 
             if (uiState.isLoading) {
-                items(7) {
-                    HistoryChatSkeletonItem()
+                items(5) {
+                    HistoryChatSkeletonItem(
+                        progressState = shimmerProgress,
+                        baseColor = shimmerBaseColor,
+                        highlightColor = shimmerHighlightColor
+                    )
                 }
             } else {
                 if (uiState.pinnedChats.isNotEmpty()) {
@@ -331,10 +357,11 @@ private fun HistoryChatItem(
 }
 
 @Composable
-private fun HistoryChatSkeletonItem() {
-    val shimmerBaseColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
-    val shimmerHighlightColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f)
-
+private fun HistoryChatSkeletonItem(
+    progressState: State<Float>,
+    baseColor: Color,
+    highlightColor: Color,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -351,7 +378,11 @@ private fun HistoryChatSkeletonItem() {
                     .fillMaxWidth(0.7f)
                     .height(20.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .shimmerEffect(baseColor = shimmerBaseColor, highlightColor = shimmerHighlightColor)
+                    .shimmerEffect(
+                        progressState = progressState,
+                        baseColor = baseColor,
+                        highlightColor = highlightColor
+                    )
             )
             Spacer(modifier = Modifier.height(8.dp))
             Box(
@@ -359,7 +390,11 @@ private fun HistoryChatSkeletonItem() {
                     .fillMaxWidth(0.4f)
                     .height(14.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .shimmerEffect(baseColor = shimmerBaseColor, highlightColor = shimmerHighlightColor)
+                    .shimmerEffect(
+                        progressState = progressState,
+                        baseColor = baseColor,
+                        highlightColor = highlightColor
+                    )
             )
         }
 
@@ -369,7 +404,11 @@ private fun HistoryChatSkeletonItem() {
             modifier = Modifier
                 .size(24.dp)
                 .clip(CircleShape)
-                .shimmerEffect(baseColor = shimmerBaseColor, highlightColor = shimmerHighlightColor)
+                .shimmerEffect(
+                    progressState = progressState,
+                    baseColor = baseColor,
+                    highlightColor = highlightColor
+                )
         )
     }
 }
