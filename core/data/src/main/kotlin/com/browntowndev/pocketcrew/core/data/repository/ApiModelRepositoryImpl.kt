@@ -56,6 +56,7 @@ internal fun ApiModelEntity.toDomain() = ApiModelConfig(
     modelId = modelId,
     baseUrl = baseUrl,
     isVision = isVision,
+    thinkingEnabled = thinkingEnabled,
     maxTokens = maxTokens,
     contextWindow = contextWindow,
     temperature = temperature,
@@ -64,6 +65,7 @@ internal fun ApiModelEntity.toDomain() = ApiModelConfig(
     frequencyPenalty = frequencyPenalty,
     presencePenalty = presencePenalty,
     stopSequences = parseStopSequences(stopSequences),
+    createdAt = createdAt,
 )
 
 internal fun ApiModelConfig.toEntity() = ApiModelEntity(
@@ -73,6 +75,7 @@ internal fun ApiModelConfig.toEntity() = ApiModelEntity(
     modelId = modelId,
     baseUrl = baseUrl,
     isVision = isVision,
+    thinkingEnabled = thinkingEnabled,
     maxTokens = maxTokens,
     contextWindow = contextWindow,
     temperature = temperature,
@@ -81,6 +84,7 @@ internal fun ApiModelConfig.toEntity() = ApiModelEntity(
     frequencyPenalty = frequencyPenalty,
     presencePenalty = presencePenalty,
     stopSequences = serializeStopSequences(stopSequences),
+    createdAt = createdAt,
     updatedAt = System.currentTimeMillis()
 )
 

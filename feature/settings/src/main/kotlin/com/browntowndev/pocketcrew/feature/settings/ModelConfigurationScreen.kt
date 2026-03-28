@@ -114,8 +114,8 @@ fun ModelConfigurationScreen(
     onTemperatureChange: (Double) -> Unit,
     onTopKChange: (Int) -> Unit,
     onTopPChange: (Double) -> Unit,
-    onMaxTokensChange: (Int) -> Unit,
-    onContextWindowChange: (Int) -> Unit,
+    onMaxTokensChange: (String) -> Unit,
+    onContextWindowChange: (String) -> Unit,
     onSave: () -> Unit,
     onSetDefaultModel: (ModelType, ModelSource, Long?) -> Unit,
 ) {
@@ -301,9 +301,9 @@ fun ModelConfigurationScreen(
                                         }
 
                                         OutlinedTextField(
-                                            value = config.maxTokens.toString(),
+                                            value = config.maxTokens,
                                             onValueChange = { newValue ->
-                                                newValue.toIntOrNull()?.let { onMaxTokensChange(it) }
+                                                onMaxTokensChange(newValue)
                                             },
                                             label = {
                                                 LabelWithInfo(
@@ -324,9 +324,9 @@ fun ModelConfigurationScreen(
                                         )
 
                                         OutlinedTextField(
-                                            value = config.contextWindow.toString(),
+                                            value = config.contextWindow,
                                             onValueChange = { newValue ->
-                                                newValue.toIntOrNull()?.let { onContextWindowChange(it) }
+                                                onContextWindowChange(newValue)
                                             },
                                             label = {
                                                 LabelWithInfo(

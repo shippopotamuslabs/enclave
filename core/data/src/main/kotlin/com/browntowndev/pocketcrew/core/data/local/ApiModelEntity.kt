@@ -29,6 +29,9 @@ data class ApiModelEntity(
     @ColumnInfo(name = "is_vision")
     val isVision: Boolean = false,
 
+    @ColumnInfo(name = "thinking_enabled")
+    val thinkingEnabled: Boolean = false,
+
     @ColumnInfo(name = "max_tokens")
     val maxTokens: Int = 4096,
 

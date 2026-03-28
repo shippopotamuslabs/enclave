@@ -96,8 +96,8 @@ fun ByokBottomSheet(
                 onSelectApiModel(id)
                 scope.launch {
                     sheetState.hide()
-                    onDismiss()
                     onNavigateToConfigure()
+                    onDismiss()
                 }
             }
         )

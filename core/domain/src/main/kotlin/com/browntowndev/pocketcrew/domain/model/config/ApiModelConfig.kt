@@ -15,6 +15,7 @@ data class ApiModelConfig(
     val modelId: String,
     val baseUrl: String? = null,
     val isVision: Boolean = false,
+    val thinkingEnabled: Boolean = false,
     val maxTokens: Int = 4096,
     val contextWindow: Int = 4096,
     val temperature: Double = 0.7,
@@ -23,4 +24,5 @@ data class ApiModelConfig(
     val frequencyPenalty: Double = 0.0,
     val presencePenalty: Double = 0.0,
     val stopSequences: List<String> = emptyList(),
+    val createdAt: Long = System.currentTimeMillis(),
 )
