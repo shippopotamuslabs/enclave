@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 2,
-    "identityHash": "89a54db3766cdb62699bb371548eddee",
+    "identityHash": "e1a4aa93b718373a22d68d2b9ef1cc87",
     "entities": [
       {
         "tableName": "chat",
@@ -334,7 +334,7 @@
       },
       {
         "tableName": "api_models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `display_name` TEXT NOT NULL, `provider` TEXT NOT NULL, `base_url` TEXT, `model_id` TEXT NOT NULL, `is_vision` INTEGER NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `stop_sequences` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `display_name` TEXT NOT NULL, `provider` TEXT NOT NULL, `base_url` TEXT, `model_id` TEXT NOT NULL, `is_vision` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `stop_sequences` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -368,6 +368,12 @@
           {
             "fieldPath": "isVision",
             "columnName": "is_vision",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "thinkingEnabled",
+            "columnName": "thinking_enabled",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -500,7 +506,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '89a54db3766cdb62699bb371548eddee')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'e1a4aa93b718373a22d68d2b9ef1cc87')"
     ]
   }
 }

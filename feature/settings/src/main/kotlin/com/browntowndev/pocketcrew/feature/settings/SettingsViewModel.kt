@@ -90,18 +90,6 @@ class SettingsViewModel @Inject constructor(
     private val _currentApiKey = MutableStateFlow("")
     val currentApiKey: StateFlow<String> = _currentApiKey
 
-    init {
-        // Initialize state from navigation arguments (survives process death)
-        savedStateHandle.get<String>("modelType")?.let { name ->
-            try {
-                // DON'T use onSelectModelType here, just update the state directly
-                _transientState.update { 
-                    it.copy(selectedModelType = ModelType.valueOf(name))
-                }
-            } catch (_: IllegalArgumentException) { }
-        }
-    }
-
     // Model configurations flow - follows 2026 Compose best practices
     private val modelConfigsFlow = getModelConfigurationsUseCase()
 
@@ -171,11 +159,12 @@ class SettingsViewModel @Inject constructor(
         modelId = modelId,
         baseUrl = baseUrl ?: "",
         isVision = isVision,
-        maxTokens = maxTokens,
-        contextWindow = contextWindow,
+        thinkingEnabled = thinkingEnabled,
+        maxTokens = maxTokens.toString(),
+        contextWindow = contextWindow.toString(),
         temperature = temperature,
         topP = topP,
-        topK = topK ?: 0
+        topK = topK ?: 40
     )
 
     // Theme
@@ -292,40 +281,46 @@ class SettingsViewModel @Inject constructor(
         _transientState.update { it.copy(selectedModelType = null, selectedModelConfig = null) }
     }
 
-    fun onHuggingFaceModelNameChange(modelName: String) {
-        val currentConfig = _transientState.value.selectedModelConfig ?: return
-        val updatedConfig = currentConfig.copy(huggingFaceModelName = modelName)
-        _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
+    fun onHuggingFaceModelNameChange(name: String) {
+        _transientState.update { state ->
+            val config = state.selectedModelConfig ?: return@update state
+            state.copy(selectedModelConfig = config.copy(huggingFaceModelName = name))
+        }
     }
 
-    fun onTemperatureChange(temperature: Double) {
-        val currentConfig = _transientState.value.selectedModelConfig ?: return
-        val updatedConfig = currentConfig.copy(temperature = temperature)
-        _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
+    fun onTemperatureChange(value: Double) {
+        _transientState.update { state ->
+            val config = state.selectedModelConfig ?: return@update state
+            state.copy(selectedModelConfig = config.copy(temperature = value))
+        }
     }
 
-    fun onTopKChange(topK: Int) {
-        val currentConfig = _transientState.value.selectedModelConfig ?: return
-        val updatedConfig = currentConfig.copy(topK = topK)
-        _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
+    fun onTopKChange(value: Int) {
+        _transientState.update { state ->
+            val config = state.selectedModelConfig ?: return@update state
+            state.copy(selectedModelConfig = config.copy(topK = value))
+        }
     }
 
-    fun onTopPChange(topP: Double) {
-        val currentConfig = _transientState.value.selectedModelConfig ?: return
-        val updatedConfig = currentConfig.copy(topP = topP)
-        _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
+    fun onTopPChange(value: Double) {
+        _transientState.update { state ->
+            val config = state.selectedModelConfig ?: return@update state
+            state.copy(selectedModelConfig = config.copy(topP = value))
+        }
     }
 
-    fun onMaxTokensChange(maxTokens: Int) {
-        val currentConfig = _transientState.value.selectedModelConfig ?: return
-        val updatedConfig = currentConfig.copy(maxTokens = maxTokens)
-        _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
+    fun onMaxTokensChange(value: String) {
+        _transientState.update { state ->
+            val config = state.selectedModelConfig ?: return@update state
+            state.copy(selectedModelConfig = config.copy(maxTokens = value))
+        }
     }
 
-    fun onContextWindowChange(contextWindow: Int) {
-        val currentConfig = _transientState.value.selectedModelConfig ?: return
-        val updatedConfig = currentConfig.copy(contextWindow = contextWindow)
-        _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
+    fun onContextWindowChange(value: String) {
+        _transientState.update { state ->
+            val config = state.selectedModelConfig ?: return@update state
+            state.copy(selectedModelConfig = config.copy(contextWindow = value))
+        }
     }
 
     fun onSaveModelConfig(onSuccess: () -> Unit) {
@@ -375,8 +370,9 @@ class SettingsViewModel @Inject constructor(
                 apiKey = apiKeyToSave,
                 baseUrl = config.baseUrl.takeIf { it.isNotBlank() },
                 isVision = config.isVision,
-                maxTokens = config.maxTokens,
-                contextWindow = config.contextWindow,
+                thinkingEnabled = config.thinkingEnabled,
+                maxTokens = config.maxTokens.toIntOrNull() ?: 4096,
+                contextWindow = config.contextWindow.toIntOrNull() ?: 4096,
                 temperature = config.temperature,
                 topP = config.topP,
                 topK = config.topK

@@ -746,8 +746,8 @@ fun ModelConfigurationBottomSheet(
                                 onSelectModelType(modelType)
                                 scope.launch {
                                     sheetState.hide()
-                                    onDismiss()
                                     onNavigateToModelConfigure(modelType)
+                                    onDismiss()
                                 }
                             }
                             .padding(vertical = 8.dp),

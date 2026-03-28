@@ -35,6 +35,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -301,11 +302,41 @@ fun ByokConfigureScreen(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                LabelWithInfo(
+                                    label = "Vision Capable",
+                                    infoText = "Enable if this model supports image input/analysis."
+                                )
+                                Switch(
+                                    checked = model.isVision,
+                                    onCheckedChange = { onApiModelFieldChange(model.copy(isVision = it)) }
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                LabelWithInfo(
+                                    label = "Reasoning Capable",
+                                    infoText = "Enable if this model has native reasoning/thinking output (like DeepSeek R1 or OpenAI o1)."
+                                )
+                                Switch(
+                                    checked = model.thinkingEnabled,
+                                    onCheckedChange = { onApiModelFieldChange(model.copy(thinkingEnabled = it)) }
+                                )
+                            }
+
                             // Max Tokens
                             OutlinedTextField(
-                                value = model.maxTokens.toString(),
+                                value = model.maxTokens,
                                 onValueChange = { newValue ->
-                                    newValue.toIntOrNull()?.let { onApiModelFieldChange(model.copy(maxTokens = it)) }
+                                    onApiModelFieldChange(model.copy(maxTokens = newValue))
                                 },
                                 label = { 
                                     LabelWithInfo(
@@ -327,9 +358,9 @@ fun ByokConfigureScreen(
 
                             // Context Window
                             OutlinedTextField(
-                                value = model.contextWindow.toString(),
+                                value = model.contextWindow,
                                 onValueChange = { newValue ->
-                                    newValue.toIntOrNull()?.let { onApiModelFieldChange(model.copy(contextWindow = it)) }
+                                    onApiModelFieldChange(model.copy(contextWindow = newValue))
                                 },
                                 label = { 
                                     LabelWithInfo(
@@ -359,6 +390,19 @@ fun ByokConfigureScreen(
                                     value = model.temperature.toFloat(),
                                     onValueChange = { onApiModelFieldChange(model.copy(temperature = it.toDouble())) },
                                     valueRange = 0f..2f
+                                )
+                            }
+
+                            // Top K
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                LabelWithInfo(
+                                    label = "Top K: ${model.topK}",
+                                    infoText = "Limits the model to the top K most likely next tokens. Reduces the chance of low-probability 'garbage' tokens."
+                                )
+                                Slider(
+                                    value = model.topK.toFloat(),
+                                    onValueChange = { onApiModelFieldChange(model.copy(topK = it.toInt())) },
+                                    valueRange = 1f..100f
                                 )
                             }
 
