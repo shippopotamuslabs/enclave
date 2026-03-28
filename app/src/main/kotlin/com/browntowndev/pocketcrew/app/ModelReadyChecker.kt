@@ -45,6 +45,7 @@ class ModelReadyChecker @Inject constructor(
      * Quick synchronous check - only checks filesystem without remote config.
      * Use this as a fast path when you need a quick check without network.
      */
+    @Suppress("ReturnCount")
     fun isReadyFastSync(): Boolean {
         val modelsDir = getModelsDirectory()
         if (!modelsDir.exists()) {
@@ -57,11 +58,21 @@ class ModelReadyChecker @Inject constructor(
         val configsByType = allConfigs.associateBy { it.modelType }
 
         val requiredFiles = listOfNotNull(
-            configsByType[ModelType.VISION]?.let { computeFilename(ModelType.VISION, it.metadata.modelFileFormat) },
-            configsByType[ModelType.DRAFT_ONE]?.let { computeFilename(ModelType.DRAFT_ONE, it.metadata.modelFileFormat) },
-            configsByType[ModelType.DRAFT_TWO]?.let { computeFilename(ModelType.DRAFT_TWO, it.metadata.modelFileFormat) },
-            configsByType[ModelType.MAIN]?.let { computeFilename(ModelType.MAIN, it.metadata.modelFileFormat) },
-            configsByType[ModelType.FAST]?.let { computeFilename(ModelType.FAST, it.metadata.modelFileFormat) }
+            configsByType[ModelType.VISION]?.let {
+                computeFilename(ModelType.VISION, it.metadata.modelFileFormat)
+            },
+            configsByType[ModelType.DRAFT_ONE]?.let {
+                computeFilename(ModelType.DRAFT_ONE, it.metadata.modelFileFormat)
+            },
+            configsByType[ModelType.DRAFT_TWO]?.let {
+                computeFilename(ModelType.DRAFT_TWO, it.metadata.modelFileFormat)
+            },
+            configsByType[ModelType.MAIN]?.let {
+                computeFilename(ModelType.MAIN, it.metadata.modelFileFormat)
+            },
+            configsByType[ModelType.FAST]?.let {
+                computeFilename(ModelType.FAST, it.metadata.modelFileFormat)
+            }
         )
 
         for (filename in requiredFiles) {
