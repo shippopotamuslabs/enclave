@@ -20,6 +20,10 @@ def get_pr_diff():
         sys.exit(1)
 
 def post_github_comment(comment):
+    # GitHub comment limit is 65,536 characters
+    if len(comment) > 65535:
+        comment = comment[:65500] + "\n\n... (Comment truncated due to length)"
+        
     url = f"https://api.github.com/repos/{REPO}/issues/{PR_NUMBER}/comments"
     headers = {
         "Authorization": f"Bearer {GITHUB_TOKEN}",
@@ -59,12 +63,9 @@ Your objective is to identify general bugs, architectural flaws, performance bot
 5. **On-Device LLM Constraints:** Strictly flag memory hoarding and unoptimized object allocations in hot loops that could disrupt local inference.
 </focus_areas>"""
 
-    # Using the simplified AI Platform endpoint structure from your curl example
-    # Adding alt=sse to ensure we get a stable stream of events including the reasoning parts
+    # Using the simplified AI Platform endpoint structure
     endpoint = f"https://aiplatform.googleapis.com/v1/publishers/google/models/{MODEL_ID}:streamGenerateContent?alt=sse&key={VERTEX_API_KEY}"
     
-    # Updated generation_config for Gemini 3.1 Pro Preview
-    # include_thoughts must be True to enable the reasoning stream
     payload = {
         "contents": [
             {
@@ -91,7 +92,6 @@ Your objective is to identify general bugs, architectural flaws, performance bot
     try:
         response = requests.post(endpoint, json=payload, stream=True)
         if response.status_code != 200:
-            # Safely handle potential non-string error bodies
             error_msg = response.reason
             try:
                 error_msg = response.text
@@ -100,7 +100,6 @@ Your objective is to identify general bugs, architectural flaws, performance bot
             print(f"Error calling Vertex AI: {response.status_code} - {error_msg}")
             sys.exit(1)
 
-        full_thinking = ""
         full_text = ""
         
         # Parse SSE (Server-Sent Events) stream
@@ -115,54 +114,30 @@ Your objective is to identify general bugs, architectural flaws, performance bot
                             for candidate in chunk["candidates"]:
                                 if "content" in candidate:
                                     for part in candidate["content"]["parts"]:
+                                        # Filter out reasoning/thinking parts
                                         if "thought" in part:
-                                            full_thinking += str(part["thought"])
+                                            continue
+                                        
                                         if "text" in part:
                                             full_text += str(part["text"])
                     except json.JSONDecodeError:
                         pass
 
-        # Fallback extraction if thinking was embedded in text or used other tags
-        if not full_thinking:
-            import re
-            # Check for <thought>, <thinking>, [THOUGHT], or Reasoning: patterns
-            patterns = [
-                r"<thought>(.*?)</thought>",
-                r"<thinking>(.*?)</thinking>",
-                r"\[THOUGHT\](.*?)(?=\[|$)",
-                r"^Reasoning:(.*?)(?=---|\n\n|\n#|$)"
-            ]
-            for pattern in patterns:
-                match = re.search(pattern, full_text, re.DOTALL | re.IGNORECASE | re.MULTILINE)
-                if match:
-                    full_thinking = match.group(1).strip()
-                    full_text = full_text.replace(match.group(0), "").strip()
-                    break
+        # Clean up potential leading reasoning blocks that weren't correctly flagged
+        # by the model as 'thought' parts. Gemini often outputs reasoning before the first ### header.
+        full_text = full_text.strip()
+        import re
+        parts = re.split(r"(?=### )", full_text, 1)
+        if len(parts) > 1 and "### " in parts[1]:
+            full_text = parts[1].strip()
+
+        # Clean up potential duplicate headers
+        header_to_strip = "### 🤖 Gemini Architect Review"
+        if full_text.startswith(header_to_strip):
+            full_text = full_text[len(header_to_strip):].strip()
 
         # Format final output
-        # Use 4 backticks for the outer container to allow 3 backticks inside thinking
-        outer_md_code = "````"
-        final_output = f"### 🤖 Gemini Architect Review\n"
-        
-        if full_thinking:
-            final_output += f"""
-<details>
-<summary>🧠 View Gemini Reasoning Process</summary>
-
-{outer_md_code}text
-{full_thinking.strip()}
-{outer_md_code}
-</details>
-
----
-"""
-        
-        # Clean up any duplicate headers that might have been included by the model
-        text_to_append = full_text.strip()
-        if text_to_append.startswith("### 🤖 Gemini Architect Review"):
-            text_to_append = text_to_append.replace("### 🤖 Gemini Architect Review", "", 1).strip()
-        
-        final_output += f"\n{text_to_append}"
+        final_output = f"### 🤖 Gemini Architect Review\n\n{full_text}"
         
         post_github_comment(final_output)
         
