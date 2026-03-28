@@ -54,15 +54,14 @@ class WorkProgressParserTest {
         val result = parser.parseFileProgress(progressString)
 
         // Then
-        assertNotNull(result)
-        result!!
-        assertEquals("vision.litertlm", result.filename)
-        assertEquals(50_000_000L, result.bytesDownloaded)
-        assertEquals(100_000_000L, result.totalBytes)
-        assertEquals(FileStatus.DOWNLOADING, result.status)
-        assertEquals(12.5, result.speedMBs)
-        assertTrue(result.modelTypes.isNotEmpty())
-        assertEquals(ModelType.VISION, result.modelTypes.first())
+        val safeResult = requireNotNull(result)
+        assertEquals("vision.litertlm", safeResult.filename)
+        assertEquals(50_000_000L, safeResult.bytesDownloaded)
+        assertEquals(100_000_000L, safeResult.totalBytes)
+        assertEquals(FileStatus.DOWNLOADING, safeResult.status)
+        assertEquals(12.5, safeResult.speedMBs)
+        assertTrue(safeResult.modelTypes.isNotEmpty())
+        assertEquals(ModelType.VISION, safeResult.modelTypes.first())
     }
 
     @Test
@@ -74,12 +73,11 @@ class WorkProgressParserTest {
         val result = parser.parseFileProgress(progressString)
 
         // Then
-        assertNotNull(result)
-        result!!
-        assertEquals("main.litertlm", result.filename)
-        assertEquals(2, result.modelTypes.size)
-        assertTrue(result.modelTypes.contains(ModelType.MAIN))
-        assertTrue(result.modelTypes.contains(ModelType.DRAFT_ONE))
+        val safeResult = requireNotNull(result)
+        assertEquals("main.litertlm", safeResult.filename)
+        assertEquals(2, safeResult.modelTypes.size)
+        assertTrue(safeResult.modelTypes.contains(ModelType.MAIN))
+        assertTrue(safeResult.modelTypes.contains(ModelType.DRAFT_ONE))
     }
 
     @Test
@@ -91,14 +89,13 @@ class WorkProgressParserTest {
         val result = parser.parseFileProgress(progressString)
 
         // Then
-        assertNotNull(result)
-        result!!
-        assertEquals(5, result.modelTypes.size)
-        assertTrue(result.modelTypes.contains(ModelType.FAST))
-        assertTrue(result.modelTypes.contains(ModelType.VISION))
-        assertTrue(result.modelTypes.contains(ModelType.MAIN))
-        assertTrue(result.modelTypes.contains(ModelType.DRAFT_ONE))
-        assertTrue(result.modelTypes.contains(ModelType.DRAFT_TWO))
+        val safeResult = requireNotNull(result)
+        assertEquals(5, safeResult.modelTypes.size)
+        assertTrue(safeResult.modelTypes.contains(ModelType.FAST))
+        assertTrue(safeResult.modelTypes.contains(ModelType.VISION))
+        assertTrue(safeResult.modelTypes.contains(ModelType.MAIN))
+        assertTrue(safeResult.modelTypes.contains(ModelType.DRAFT_ONE))
+        assertTrue(safeResult.modelTypes.contains(ModelType.DRAFT_TWO))
     }
 
     @Test
@@ -146,9 +143,8 @@ class WorkProgressParserTest {
         val result = parser.parseFileProgress(progressString)
 
         // Then
-        assertNotNull(result)
-        result!!
-        assertTrue(result.modelTypes.isEmpty())
+        val safeResult = requireNotNull(result)
+        assertTrue(safeResult.modelTypes.isEmpty())
     }
 
     @Test
@@ -160,11 +156,10 @@ class WorkProgressParserTest {
         val result = parser.parseFileProgress(progressString)
 
         // Then
-        assertNotNull(result)
-        result!!
-        assertTrue(result.modelTypes.isNotEmpty())
+        val safeResult = requireNotNull(result)
+        assertTrue(safeResult.modelTypes.isNotEmpty())
         // Unknown values default to MAIN per ModelType.fromApiValue
-        assertEquals(ModelType.MAIN, result.modelTypes.first())
+        assertEquals(ModelType.MAIN, safeResult.modelTypes.first())
     }
 
     @Test

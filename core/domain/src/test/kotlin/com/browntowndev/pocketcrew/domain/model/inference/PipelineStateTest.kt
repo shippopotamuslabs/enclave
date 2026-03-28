@@ -71,7 +71,7 @@ class PipelineStateTest {
         val next = state.withNextStep()
 
         assertNotNull(next)
-        assertEquals(PipelineStep.DRAFT_TWO, next!!.currentStep)
+        assertEquals(PipelineStep.DRAFT_TWO, requireNotNull(next).currentStep)
     }
 
     @Test
