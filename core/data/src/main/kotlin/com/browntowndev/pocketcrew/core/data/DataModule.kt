@@ -19,14 +19,12 @@ import com.browntowndev.pocketcrew.core.data.download.ModelFileScanner
 import com.browntowndev.pocketcrew.core.data.download.WorkProgressParser
 import com.browntowndev.pocketcrew.core.data.download.remote.HuggingFaceModelUrlProvider
 import com.browntowndev.pocketcrew.core.data.download.remote.HttpFileDownloader
-import com.browntowndev.pocketcrew.core.data.download.remote.R2ModelUrlProvider
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.ModelsDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.DeviceEnvironmentRepository
-import com.browntowndev.pocketcrew.core.data.repository.DownloadWorkRepository
 import com.browntowndev.pocketcrew.core.data.repository.MessageRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ModelConfigProviderImpl
 import com.browntowndev.pocketcrew.core.data.repository.ModelRegistryImpl
@@ -83,6 +81,12 @@ object DataModule {
 
     @Provides
     fun provideModelsDao(database: PocketCrewDatabase): ModelsDao = database.modelsDao()
+
+    @Provides
+    fun provideApiModelsDao(database: PocketCrewDatabase): com.browntowndev.pocketcrew.core.data.local.ApiModelsDao = database.apiModelsDao()
+
+    @Provides
+    fun provideDefaultModelsDao(database: PocketCrewDatabase): com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao = database.defaultModelsDao()
 
     @Provides
     @Singleton
@@ -178,4 +182,12 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindModelConfigFetcher(impl: ModelConfigFetcherImpl): com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
+
+    @Binds
+    @Singleton
+    abstract fun bindDefaultModelRepository(impl: com.browntowndev.pocketcrew.core.data.repository.DefaultModelRepositoryImpl): com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindApiModelRepository(impl: com.browntowndev.pocketcrew.core.data.repository.ApiModelRepositoryImpl): com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 }

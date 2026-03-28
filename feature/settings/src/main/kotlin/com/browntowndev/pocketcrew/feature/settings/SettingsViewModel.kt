@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.feature.settings
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
@@ -15,6 +16,14 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomPromptTex
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateHapticPressUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateHapticResponseUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateSelectedPromptOptionUseCase
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfig
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
+import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiModelUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.SaveApiModelUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateThemeUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -43,11 +53,16 @@ private data class TransientState(
     // Model Configuration
     val showModelConfigSheet: Boolean = false,
     val selectedModelType: ModelType? = null,
-    val selectedModelConfig: ModelConfigurationUi? = null
+    val selectedModelConfig: ModelConfigurationUi? = null,
+    // BYOK Sheet
+    val showByokSheet: Boolean = false,
+    val selectedApiModel: ApiModelConfigUi? = null,
+    val isEditingApiModel: Boolean = false
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    private val savedStateHandle: SavedStateHandle,
     private val getSettingsUseCase: GetSettingsUseCase,
     private val updateThemeUseCase: UpdateThemeUseCase,
     private val updateHapticPressUseCase: UpdateHapticPressUseCase,
@@ -58,6 +73,11 @@ class SettingsViewModel @Inject constructor(
     private val updateAllowMemoriesUseCase: UpdateAllowMemoriesUseCase,
     private val getModelConfigurationsUseCase: GetModelConfigurationsUseCase,
     private val updateModelConfigurationUseCase: UpdateModelConfigurationUseCase,
+    private val getApiModelsUseCase: GetApiModelsUseCase,
+    private val saveApiModelUseCase: SaveApiModelUseCase,
+    private val deleteApiModelUseCase: DeleteApiModelUseCase,
+    private val getDefaultModelsUseCase: GetDefaultModelsUseCase,
+    private val setDefaultModelUseCase: SetDefaultModelUseCase,
     private val errorHandler: com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 ) : ViewModel() {
 
@@ -67,19 +87,47 @@ class SettingsViewModel @Inject constructor(
 
     private val _transientState = MutableStateFlow(TransientState())
 
+    init {
+        // Initialize state from navigation arguments (survives process death)
+        savedStateHandle.get<String>("modelType")?.let { name ->
+            try {
+                // DON'T use onSelectModelType here, just update the state directly
+                _transientState.update { 
+                    it.copy(selectedModelType = ModelType.valueOf(name))
+                }
+            } catch (_: IllegalArgumentException) { }
+        }
+        savedStateHandle.get<String>("apiModelId")?.toLongOrNull()?.let { id ->
+            // DO NOT use onSelectApiModel, just wait for combine block
+            _transientState.update { 
+                it.copy(
+                    isEditingApiModel = true,
+                    // selectedApiModel will be null here, combine block needs to handle it!
+                ) 
+            }
+        }
+    }
+
     // Model configurations flow - follows 2026 Compose best practices
     private val modelConfigsFlow = getModelConfigurationsUseCase()
 
     val uiState: StateFlow<SettingsUiState> = combine(
         getSettingsUseCase(),
         modelConfigsFlow,
+        getApiModelsUseCase(),
+        getDefaultModelsUseCase(),
         _transientState,
-    ) { persistedSettings, modelConfigs, transientState ->
+    ) { persistedSettings, modelConfigs, apiModels, defaultModels, transientState ->
         // Use transient state's selectedModelConfig if available (for editing),
         // otherwise use the flow's selectedConfig (initial load)
         val selectedConfig = transientState.selectedModelConfig
             ?: transientState.selectedModelType?.let { type ->
                 modelConfigs.find { it.modelType == type }
+            }
+            
+        val selectedApiConfig = transientState.selectedApiModel
+            ?: savedStateHandle.get<String>("apiModelId")?.toLongOrNull()?.let { id ->
+                apiModels.find { it.id == id }?.toUi()
             }
 
         SettingsUiState(
@@ -104,12 +152,52 @@ class SettingsViewModel @Inject constructor(
             selectedModelType = transientState.selectedModelType,
             selectedModelConfig = selectedConfig,
             // Available HuggingFace models (currently just the registered one)
-            availableHuggingFaceModels = modelConfigs.map { it.huggingFaceModelName }.distinct()
+            availableHuggingFaceModels = modelConfigs.map { it.huggingFaceModelName }.distinct(),
+            // BYOK Sheet
+            showByokSheet = transientState.showByokSheet,
+            apiModels = apiModels.map { it.toUi() },
+            selectedApiModel = selectedApiConfig,
+            isEditingApiModel = transientState.isEditingApiModel,
+            // Default model assignments
+            defaultAssignments = defaultModels.map { def ->
+                DefaultModelAssignmentUi(
+                    modelType = def.modelType,
+                    source = def.source,
+                    currentModelName = def.onDeviceDisplayName ?: def.apiModelConfig?.displayName ?: "Unknown",
+                    providerName = def.apiModelConfig?.provider?.displayName
+                )
+            }
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.Eagerly,
         initialValue = SettingsUiState(),
+    )
+
+    init {
+        // Initialize state from navigation arguments (survives process death)
+        savedStateHandle.get<String>("modelType")?.let { name ->
+            try {
+                onSelectModelType(ModelType.valueOf(name))
+            } catch (_: IllegalArgumentException) { }
+        }
+        savedStateHandle.get<String>("apiModelId")?.toLongOrNull()?.let { id ->
+            onSelectApiModel(id)
+        }
+    }
+
+    private fun ApiModelConfig.toUi() = ApiModelConfigUi(
+        id = id,
+        displayName = displayName,
+        provider = provider,
+        modelId = modelId,
+        baseUrl = baseUrl ?: "",
+        apiKey = "",
+        isVision = isVision,
+        maxTokens = maxTokens,
+        contextWindow = contextWindow,
+        temperature = temperature,
+        topP = topP
     )
 
     // Theme
@@ -217,12 +305,12 @@ class SettingsViewModel @Inject constructor(
         _transientState.update {
             it.copy(
                 selectedModelType = modelType,
-                selectedModelConfig = null // Will be derived from modelConfigs in combine
+                selectedModelConfig = null // Derived in combine
             )
         }
     }
 
-    fun onBackToModelList() {
+    fun onClearSelectedModel() {
         _transientState.update { it.copy(selectedModelType = null, selectedModelConfig = null) }
     }
 
@@ -250,11 +338,94 @@ class SettingsViewModel @Inject constructor(
         _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
     }
 
-    fun onSaveModelConfig() {
+    fun onMaxTokensChange(maxTokens: Int) {
+        val currentConfig = _transientState.value.selectedModelConfig ?: return
+        val updatedConfig = currentConfig.copy(maxTokens = maxTokens)
+        _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
+    }
+
+    fun onContextWindowChange(contextWindow: Int) {
+        val currentConfig = _transientState.value.selectedModelConfig ?: return
+        val updatedConfig = currentConfig.copy(contextWindow = contextWindow)
+        _transientState.update { it.copy(selectedModelConfig = updatedConfig) }
+    }
+
+    fun onSaveModelConfig(onSuccess: () -> Unit) {
         val config = _transientState.value.selectedModelConfig ?: return
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save model configuration", "Failed to save configuration")) {
             updateModelConfigurationUseCase(config)
+            onSuccess()
         }
-        onBackToModelList()
+    }
+
+    // BYOK Setup
+    fun onShowByokSheet(show: Boolean) {
+        _transientState.update { it.copy(showByokSheet = show, isEditingApiModel = false, selectedApiModel = null) }
+    }
+
+    fun onSelectApiModel(modelId: Long?) {
+        if (modelId == null) {
+            _transientState.update { 
+                it.copy(
+                    isEditingApiModel = true, 
+                    selectedApiModel = ApiModelConfigUi() 
+                ) 
+            }
+        } else {
+            // Can't reliably read from uiState during init, so launch a coroutine to fetch or just use a dummy config until UI updates.
+            // Alternatively, since uiState is populated eventually, it might just need to wait.
+            // Wait, we can just launch a coroutine and collect the first emitted apiModel!
+            viewModelScope.launch {
+                val apiModels = getApiModelsUseCase().first()
+                val config = apiModels.find { it.id == modelId }?.toUi()
+                _transientState.update { 
+                    it.copy(
+                        isEditingApiModel = true, 
+                        selectedApiModel = config
+                    ) 
+                }
+            }
+        }
+    }
+
+    fun onApiModelFieldChange(updatedModel: ApiModelConfigUi) {
+        _transientState.update { it.copy(selectedApiModel = updatedModel) }
+    }
+
+    fun onSaveApiModel(onSuccess: () -> Unit) {
+        val config = _transientState.value.selectedApiModel ?: return
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API config", "Failed to save configuration")) {
+            saveApiModelUseCase(
+                id = config.id,
+                displayName = config.displayName,
+                provider = config.provider,
+                modelId = config.modelId,
+                apiKey = config.apiKey,
+                baseUrl = config.baseUrl.takeIf { it.isNotBlank() },
+                isVision = config.isVision,
+                maxTokens = config.maxTokens,
+                contextWindow = config.contextWindow,
+                temperature = config.temperature,
+                topP = config.topP
+            )
+            onSuccess()
+        }
+    }
+
+    fun onDeleteApiModel(id: Long, onSuccess: () -> Unit) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete API config", "Failed to delete configuration")) {
+            deleteApiModelUseCase(id)
+            onSuccess()
+        }
+    }
+
+    fun onBackToByokList() {
+        _transientState.update { it.copy(isEditingApiModel = false, selectedApiModel = null) }
+    }
+
+    fun onSetDefaultModel(modelType: ModelType, source: ModelSource, apiModelId: Long? = null) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to set default model", "Failed to update default model")) {
+            setDefaultModelUseCase(modelType, source, apiModelId)
+        }
     }
 }

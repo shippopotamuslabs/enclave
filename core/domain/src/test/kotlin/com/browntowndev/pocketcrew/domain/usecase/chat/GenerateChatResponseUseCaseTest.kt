@@ -17,6 +17,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceFactory
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
@@ -60,6 +61,7 @@ class GenerateChatResponseUseCaseTest {
 
     private lateinit var fastModelService: LlmInferencePort
     private lateinit var thinkingModelService: LlmInferencePort
+    private lateinit var inferenceFactory: FakeInferenceFactory
     private lateinit var pipelineExecutor: PipelineExecutorPort
     private lateinit var chatRepository: ChatRepository
     private lateinit var messageRepository: MessageRepository
@@ -72,6 +74,10 @@ class GenerateChatResponseUseCaseTest {
     fun setUp() {
         fastModelService = mockk(relaxed = true)
         thinkingModelService = mockk(relaxed = true)
+        inferenceFactory = FakeInferenceFactory().apply {
+            serviceMap[ModelType.FAST] = fastModelService
+            serviceMap[ModelType.THINKING] = thinkingModelService
+        }
         pipelineExecutor = mockk(relaxed = true)
         chatRepository = mockk(relaxed = true)
         messageRepository = mockk(relaxed = true)
@@ -80,8 +86,7 @@ class GenerateChatResponseUseCaseTest {
         modelRegistry = mockk(relaxed = true)
         
         generateChatResponseUseCase = GenerateChatResponseUseCase(
-            fastModelService = fastModelService,
-            thinkingModelService = thinkingModelService,
+            inferenceFactory = inferenceFactory,
             pipelineExecutor = pipelineExecutor,
             chatRepository = chatRepository,
             messageRepository = messageRepository,
@@ -327,8 +332,7 @@ class GenerateChatResponseUseCaseTest {
         
         // Create new use case with fake executor
         val useCase = GenerateChatResponseUseCase(
-            fastModelService = fastModelService,
-            thinkingModelService = thinkingModelService,
+            inferenceFactory = inferenceFactory,
             pipelineExecutor = fakePipelineExecutor,
             chatRepository = chatRepository,
             messageRepository = messageRepository,
@@ -385,8 +389,7 @@ class GenerateChatResponseUseCaseTest {
             coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns expectedMessageId
             
             val useCase = GenerateChatResponseUseCase(
-                fastModelService = fastModelService,
-                thinkingModelService = thinkingModelService,
+                inferenceFactory = inferenceFactory,
                 pipelineExecutor = fakePipelineExecutor,
                 chatRepository = chatRepository,
                 messageRepository = messageRepository,
@@ -435,8 +438,7 @@ class GenerateChatResponseUseCaseTest {
         fakePipelineExecutor.addProcessingEvent(ModelType.DRAFT_TWO)
         
         val useCase = GenerateChatResponseUseCase(
-            fastModelService = fastModelService,
-            thinkingModelService = thinkingModelService,
+            inferenceFactory = inferenceFactory,
             pipelineExecutor = fakePipelineExecutor,
             chatRepository = chatRepository,
             messageRepository = messageRepository,
@@ -485,8 +487,7 @@ class GenerateChatResponseUseCaseTest {
         fakePipelineExecutor.addProcessingEvent(ModelType.MAIN)
         
         val useCase = GenerateChatResponseUseCase(
-            fastModelService = fastModelService,
-            thinkingModelService = thinkingModelService,
+            inferenceFactory = inferenceFactory,
             pipelineExecutor = fakePipelineExecutor,
             chatRepository = chatRepository,
             messageRepository = messageRepository,
@@ -535,8 +536,7 @@ class GenerateChatResponseUseCaseTest {
         fakePipelineExecutor.addProcessingEvent(ModelType.FINAL_SYNTHESIS)
         
         val useCase = GenerateChatResponseUseCase(
-            fastModelService = fastModelService,
-            thinkingModelService = thinkingModelService,
+            inferenceFactory = inferenceFactory,
             pipelineExecutor = fakePipelineExecutor,
             chatRepository = chatRepository,
             messageRepository = messageRepository,
@@ -588,8 +588,7 @@ class GenerateChatResponseUseCaseTest {
         fakePipelineExecutor.configureCompleteCrewPipeline()
 
         val useCase = GenerateChatResponseUseCase(
-            fastModelService = fastModelService,
-            thinkingModelService = thinkingModelService,
+            inferenceFactory = inferenceFactory,
             pipelineExecutor = fakePipelineExecutor,
             chatRepository = chatRepository,
             messageRepository = messageRepository,
@@ -723,8 +722,7 @@ class GenerateChatResponseUseCaseTest {
             coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns 10L
 
             val useCase = GenerateChatResponseUseCase(
-                fastModelService = fastModelService,
-                thinkingModelService = thinkingModelService,
+                inferenceFactory = inferenceFactory,
                 pipelineExecutor = fakePipelineExecutor,
                 chatRepository = chatRepository,
                 messageRepository = messageRepository,
