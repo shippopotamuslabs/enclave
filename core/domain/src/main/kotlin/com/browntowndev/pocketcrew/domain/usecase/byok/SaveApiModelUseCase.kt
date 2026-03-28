@@ -30,7 +30,9 @@ class SaveApiModelUseCase @Inject constructor(
     ): Long {
         require(displayName.isNotBlank()) { "display name cannot be blank" }
         require(modelId.isNotBlank()) { "model ID cannot be blank" }
-        require(apiKey.isNotBlank()) { "API key cannot be blank" }
+        if (id == 0L) {
+            require(apiKey.isNotBlank()) { "API key cannot be blank for new models" }
+        }
         require(maxTokens > 0) { "max tokens must be > 0" }
         require(contextWindow > 0) { "context window must be > 0" }
         require(temperature in 0.0..2.0) { "temperature must be between 0.0 and 2.0" }

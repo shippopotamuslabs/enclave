@@ -37,7 +37,9 @@ class ApiModelRepositoryImpl @Inject constructor(
 
     override suspend fun save(config: ApiModelConfig, apiKey: String): Long = withContext(Dispatchers.IO) {
         val entityId = apiModelsDao.upsert(config.toEntity())
-        apiKeyManager.save(entityId, apiKey)
+        if (apiKey.isNotBlank()) {
+            apiKeyManager.save(entityId, apiKey)
+        }
         entityId
     }
 
