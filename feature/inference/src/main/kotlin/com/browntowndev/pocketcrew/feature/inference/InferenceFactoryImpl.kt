@@ -33,6 +33,7 @@ class InferenceFactoryImpl @Inject constructor(
     }
 
     override suspend fun getInferenceService(modelType: ModelType): LlmInferencePort {
+        // TODO(ticket:BYOK-1): Implement API routing checking DefaultModelRepositoryPort
         loggingPort.debug(TAG, "Resolving $modelType → ON_DEVICE (stub)")
         return when (modelType) {
             ModelType.FAST -> fastOnDevice

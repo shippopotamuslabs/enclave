@@ -21,6 +21,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
@@ -82,9 +83,9 @@ class GenerateChatResponseUseCase @Inject constructor(
             Mode.FAST -> flow {
                 try {
                     val service = inferenceFactory.getInferenceService(ModelType.FAST)
-                    generateWithService(
+                    emitAll(generateWithService(
                         prompt, userMessageId, assistantMessageId, chatId, service, ModelType.FAST
-                    ).collect { emit(it) }
+                    ))
                 } catch (e: Exception) {
                     emit(
                         MessageGenerationState.Failed(
@@ -98,9 +99,9 @@ class GenerateChatResponseUseCase @Inject constructor(
             Mode.THINKING -> flow {
                 try {
                     val service = inferenceFactory.getInferenceService(ModelType.THINKING)
-                    generateWithService(
+                    emitAll(generateWithService(
                         prompt, userMessageId, assistantMessageId, chatId, service, ModelType.THINKING
-                    ).collect { emit(it) }
+                    ))
                 } catch (e: Exception) {
                     emit(
                         MessageGenerationState.Failed(

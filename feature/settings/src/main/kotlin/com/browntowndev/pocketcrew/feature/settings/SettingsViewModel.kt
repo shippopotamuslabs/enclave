@@ -100,14 +100,6 @@ class SettingsViewModel @Inject constructor(
                 }
             } catch (_: IllegalArgumentException) { }
         }
-        savedStateHandle.get<String>("apiModelId")?.toLongOrNull()?.let { id ->
-            // DO NOT use onSelectApiModel, just wait for combine block
-            _transientState.update { 
-                it.copy(
-                    // removed isEditingApiModel = true
-                ) 
-            }
-        }
     }
 
     // Model configurations flow - follows 2026 Compose best practices
@@ -128,9 +120,6 @@ class SettingsViewModel @Inject constructor(
             }
             
         val selectedApiConfig = transientState.selectedApiModel
-            ?: savedStateHandle.get<String>("apiModelId")?.toLongOrNull()?.let { id ->
-                apiModels.find { it.id == id }?.toUi()
-            }
 
         SettingsUiState(
             // Persisted settings from repository
@@ -185,7 +174,8 @@ class SettingsViewModel @Inject constructor(
         maxTokens = maxTokens,
         contextWindow = contextWindow,
         temperature = temperature,
-        topP = topP
+        topP = topP,
+        topK = topK ?: 0
     )
 
     // Theme
@@ -388,7 +378,8 @@ class SettingsViewModel @Inject constructor(
                 maxTokens = config.maxTokens,
                 contextWindow = config.contextWindow,
                 temperature = config.temperature,
-                topP = config.topP
+                topP = config.topP,
+                topK = config.topK
             )
             _currentApiKey.value = "" // Clear immediately after save
             onSuccess()

@@ -34,7 +34,7 @@ class ApiKeyManager @VisibleForTesting internal constructor(
     private val prefs: SharedPreferences by lazy { prefsProvider() }
 
     fun save(apiModelId: Long, apiKey: String) {
-        prefs.edit().putString("api_key_$apiModelId", apiKey).apply()
+        prefs.edit().putString("api_key_$apiModelId", apiKey).commit()
     }
 
     fun get(apiModelId: Long): String? {
@@ -42,6 +42,6 @@ class ApiKeyManager @VisibleForTesting internal constructor(
     }
 
     fun delete(apiModelId: Long) {
-        prefs.edit().remove("api_key_$apiModelId").apply()
+        prefs.edit().remove("api_key_$apiModelId").commit()
     }
 }
