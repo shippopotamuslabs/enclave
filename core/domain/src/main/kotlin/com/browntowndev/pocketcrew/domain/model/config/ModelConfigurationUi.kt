@@ -15,8 +15,8 @@ data class ModelConfigurationUi(
     val topP: Double,
     val minP: Double,
     val repetitionPenalty: Double,
-    val maxTokens: Int,
-    val contextWindow: Int
+    val maxTokens: String,
+    val contextWindow: String
 )
 
 /**
@@ -31,8 +31,8 @@ fun ModelConfiguration.toUi(): ModelConfigurationUi = ModelConfigurationUi(
     topP = tunings.topP,
     minP = tunings.minP,
     repetitionPenalty = tunings.repetitionPenalty,
-    maxTokens = tunings.maxTokens,
-    contextWindow = tunings.contextWindow
+    maxTokens = tunings.maxTokens.toString(),
+    contextWindow = tunings.contextWindow.toString()
 )
 
 /**
@@ -50,7 +50,7 @@ fun ModelConfigurationUi.toModelConfiguration(
         topP = topP,
         minP = minP,
         repetitionPenalty = repetitionPenalty,
-        maxTokens = maxTokens,
-        contextWindow = contextWindow
+        maxTokens = maxTokens.toIntOrNull() ?: existingConfig.tunings.maxTokens,
+        contextWindow = contextWindow.toIntOrNull() ?: existingConfig.tunings.contextWindow
     )
 )

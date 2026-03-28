@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
+import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
@@ -20,9 +21,11 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
+import java.util.concurrent.CancellationException
 
 import javax.inject.Inject
 
@@ -36,8 +39,7 @@ import javax.inject.Inject
  * 4. Uses buffer(64) for backpressure handling
  */
 class GenerateChatResponseUseCase @Inject constructor(
-    @param:FastModelEngine private val fastModelService: LlmInferencePort,
-    @param:ThinkingModelEngine private val thinkingModelService: LlmInferencePort,
+    private val inferenceFactory: InferenceFactoryPort,
     private val pipelineExecutor: PipelineExecutorPort,
     private val chatRepository: ChatRepository,
     private val messageRepository: MessageRepository,
@@ -79,18 +81,39 @@ class GenerateChatResponseUseCase @Inject constructor(
         }
 
         val baseFlow: Flow<MessageGenerationState> = when (mode) {
-            Mode.FAST -> generateWithService(
-                prompt, userMessageId, assistantMessageId, chatId, fastModelService, ModelType.FAST
-            )
+            Mode.FAST -> flow {
+                try {
+                    val service = inferenceFactory.getInferenceService(ModelType.FAST)
+                    emitAll(generateWithService(
+                        prompt, userMessageId, assistantMessageId, chatId, service, ModelType.FAST
+                    ))
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    emit(
+                        MessageGenerationState.Failed(
+                            modelType = ModelType.FAST,
+                            error = e
+                        )
+                    )
+                }
+            }
 
-            Mode.THINKING -> generateWithService(
-                prompt,
-                userMessageId,
-                assistantMessageId,
-                chatId,
-                thinkingModelService,
-                ModelType.THINKING
-            )
+            Mode.THINKING -> flow {
+                try {
+                    val service = inferenceFactory.getInferenceService(ModelType.THINKING)
+                    emitAll(generateWithService(
+                        prompt, userMessageId, assistantMessageId, chatId, service, ModelType.THINKING
+                    ))
+                } catch (e: Exception) {
+                    if (e is CancellationException) throw e
+                    emit(
+                        MessageGenerationState.Failed(
+                            modelType = ModelType.THINKING,
+                            error = e
+                        )
+                    )
+                }
+            }
 
             Mode.CREW -> pipelineExecutor.executePipeline(
                 chatId = chatId.toString(),
