@@ -5,8 +5,6 @@ import requests
 
 # Environment variables injected by GitHub Actions
 VERTEX_API_KEY = os.getenv("VERTEX_API_KEY")
-GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-GCP_REGION = os.getenv("GCP_REGION", "us-central1")
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 REPO = os.getenv("REPO")
 PR_NUMBER = os.getenv("PR_NUMBER")
@@ -35,9 +33,6 @@ def main():
     if not VERTEX_API_KEY:
         print("Error: VERTEX_API_KEY is not set.")
         sys.exit(1)
-    if not GCP_PROJECT_ID:
-        print("Error: GCP_PROJECT_ID is not set. Required for Vertex AI API.")
-        sys.exit(1)
 
     diff = get_pr_diff()
     
@@ -64,8 +59,9 @@ Your objective is to identify general bugs, architectural flaws, performance bot
 5. **On-Device LLM Constraints:** Strictly flag memory hoarding and unoptimized object allocations in hot loops that could disrupt local inference.
 </focus_areas>"""
 
-    # Exactly for Vertex AI with API Key
-    endpoint = f"https://{GCP_REGION}-aiplatform.googleapis.com/v1/projects/{GCP_PROJECT_ID}/locations/{GCP_REGION}/publishers/google/models/{MODEL_ID}:streamGenerateContent?key={VERTEX_API_KEY}"
+    # Using the simplified AI Platform endpoint structure from your curl example
+    # Adding alt=sse to ensure we get a stable stream of events including the reasoning parts
+    endpoint = f"https://aiplatform.googleapis.com/v1/publishers/google/models/{MODEL_ID}:streamGenerateContent?alt=sse&key={VERTEX_API_KEY}"
     
     payload = {
         "contents": [
@@ -96,73 +92,26 @@ Your objective is to identify general bugs, architectural flaws, performance bot
         full_thinking = ""
         full_text = ""
         
-        # Vertex AI streamGenerateContent returns a JSON array of response objects.
-        # Format: [ { "candidates": [...] }, { "candidates": [...] } ]
-        # We need to parse this carefully as it's not standard newline-delimited JSON.
-        
-        buffer = ""
-        for chunk_bytes in response.iter_content(chunk_size=None):
-            if chunk_bytes:
-                buffer += chunk_bytes.decode("utf-8")
-                
-                # Try to extract JSON objects from the buffer
-                # Vertex AI format is usually:
-                # [
-                #   {...},
-                #   {...}
-                # ]
-                # We can strip the brackets and leading/trailing whitespace and commas.
-                
-                temp_buffer = buffer.strip()
-                if temp_buffer.startswith("["):
-                    temp_buffer = temp_buffer[1:].strip()
-                if temp_buffer.endswith("]"):
-                    temp_buffer = temp_buffer[:-1].strip()
-                
-                # Split by "}," and add the brace back
-                # This is a bit hacky but works for the standard Vertex response format
-                # A more robust way would be a character-by-character JSON boundary detector.
-                # Let's try to parse the whole thing at the end if it's not too large.
-        
-        # Final parse of the accumulated buffer
-        try:
-            raw_content = buffer.strip()
-            # Handle the case where the stream is a JSON array
-            if raw_content.startswith("[") and raw_content.endswith("]"):
-                data = json.loads(raw_content)
-                for chunk in data:
-                    if "candidates" in chunk:
-                        for candidate in chunk["candidates"]:
-                            if "content" in candidate:
-                                for part in candidate["content"]["parts"]:
-                                    if "thought" in part:
-                                        full_thinking += part["thought"]
-                                    if "text" in part:
-                                        full_text += part["text"]
-            else:
-                # Fallback to line-by-line if it's not an array
-                for line in raw_content.splitlines():
-                    line = line.strip()
-                    if line:
-                        # Strip commas at start or end
-                        if line.startswith(","): line = line[1:].strip()
-                        if line.endswith(","): line = line[:-1].strip()
-                        try:
-                            chunk = json.loads(line)
-                            if "candidates" in chunk:
-                                for candidate in chunk["candidates"]:
-                                    if "content" in candidate:
-                                        for part in candidate["content"]["parts"]:
-                                            if "thought" in part:
-                                                full_thinking += part["thought"]
-                                            if "text" in part:
-                                                full_text += part["text"]
-                        except:
-                            pass
-        except Exception as e:
-            print(f"Warning: Error parsing full buffer: {e}")
+        # Parse SSE (Server-Sent Events) stream
+        for line in response.iter_lines():
+            if line:
+                decoded_line = line.decode("utf-8")
+                if decoded_line.startswith("data: "):
+                    data_str = decoded_line[len("data: "):]
+                    try:
+                        chunk = json.loads(data_str)
+                        if "candidates" in chunk:
+                            for candidate in chunk["candidates"]:
+                                if "content" in candidate:
+                                    for part in candidate["content"]["parts"]:
+                                        if "thought" in part:
+                                            full_thinking += part["thought"]
+                                        if "text" in part:
+                                            full_text += part["text"]
+                    except json.JSONDecodeError:
+                        pass
 
-        # If thinking is empty, check if it was put in text with <thought> tags
+        # Fallback extraction if thinking was embedded in text
         if not full_thinking:
             import re
             thought_match = re.search(r"<thought>(.*?)</thought>", full_text, re.DOTALL | re.IGNORECASE)
