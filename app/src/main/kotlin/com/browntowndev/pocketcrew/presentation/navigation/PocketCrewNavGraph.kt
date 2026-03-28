@@ -16,6 +16,9 @@ import com.browntowndev.pocketcrew.feature.settings.SettingsRoute
 import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
 import com.browntowndev.pocketcrew.feature.settings.navigation.settingsGraph
 
+private const val ANIMATION_DURATION = 300
+
+@Suppress("FunctionNaming")
 @Composable
 fun PocketCrewNavGraph(
     navController: NavHostController,
@@ -33,13 +36,13 @@ fun PocketCrewNavGraph(
             enterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { it },
-                    animationSpec = tween(300),
+                    animationSpec = tween(ANIMATION_DURATION),
                 )
             },
             exitTransition = {
                 slideOutHorizontally(
                     targetOffsetX = { -it },
-                    animationSpec = tween(300),
+                    animationSpec = tween(ANIMATION_DURATION),
                 )
             },
         ) {
@@ -65,25 +68,25 @@ fun PocketCrewNavGraph(
             enterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { it },
-                    animationSpec = tween(300),
+                    animationSpec = tween(ANIMATION_DURATION),
                 )
             },
             exitTransition = {
                 slideOutHorizontally(
                     targetOffsetX = { it },
-                    animationSpec = tween(300),
+                    animationSpec = tween(ANIMATION_DURATION),
                 )
             },
             popEnterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { it },
-                    animationSpec = tween(300),
+                    animationSpec = tween(ANIMATION_DURATION),
                 )
             },
             popExitTransition = {
                 slideOutHorizontally(
                     targetOffsetX = { it },
-                    animationSpec = tween(300),
+                    animationSpec = tween(ANIMATION_DURATION),
                 )
             },
         ) {
@@ -97,25 +100,25 @@ fun PocketCrewNavGraph(
             enterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { -it },
-                    animationSpec = tween(300),
+                    animationSpec = tween(ANIMATION_DURATION),
                 )
             },
             exitTransition = {
                 slideOutHorizontally(
                     targetOffsetX = { -it },
-                    animationSpec = tween(300),
+                    animationSpec = tween(ANIMATION_DURATION),
                 )
             },
             popEnterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { -it },
-                    animationSpec = tween(300),
+                    animationSpec = tween(ANIMATION_DURATION),
                 )
             },
             popExitTransition = {
                 slideOutHorizontally(
                     targetOffsetX = { -it },
-                    animationSpec = tween(300),
+                    animationSpec = tween(ANIMATION_DURATION),
                 )
             },
         ) {

@@ -112,7 +112,7 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
         return startDownloads(modelsResult, wifiOnly)
     }
 
-    override suspend fun updateFromProgressUpdate(progressUpdate: com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate) {}
+    override suspend fun updateFromProgressUpdate(progressUpdate: com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate) { /* no-op */ }
 
     override fun pauseDownloads() {
         _downloadState.value = _downloadState.value.copy(status = DownloadStatus.PAUSED)
@@ -167,7 +167,7 @@ class FakeModelRegistry : ModelRegistryPort {
     }
 
     override suspend fun clearAll() { clearModels() }
-    override suspend fun clearOld() {}
+    override suspend fun clearOld() { /* no-op */ }
     override suspend fun getModelsPreferringOld(): List<ModelConfiguration> = _modelsCache.values.toList()
 }
 
@@ -180,6 +180,6 @@ class FakeSpeedTracker : DownloadSpeedTrackerPort {
         seconds < 3600 -> "${seconds / 60} min"
         else -> "${seconds / 3600.0} hours"
     }
-    override fun clear(filename: String) {}
-    override fun clearAll() {}
+    override fun clear(filename: String) { /* no-op */ }
+    override fun clearAll() { /* no-op */ }
 }
