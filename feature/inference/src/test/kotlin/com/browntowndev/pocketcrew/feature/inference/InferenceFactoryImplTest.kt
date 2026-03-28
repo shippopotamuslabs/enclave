@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.BeforeEach
@@ -145,4 +146,11 @@ class InferenceFactoryImplTest {
             }
         }
     }
+
+    @Test
+    fun `logs debug message when returning on-device engine`() = runTest {
+        factory.getInferenceService(ModelType.FAST)
+        verify { loggingPort.debug("InferenceFactory", "Resolving FAST → ON_DEVICE (stub)") }
+    }
+
 }
