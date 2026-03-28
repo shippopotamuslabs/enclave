@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.ui.component
 import androidx.compose.runtime.State
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.withTransform
@@ -30,8 +31,8 @@ fun Modifier.shimmerEffect(
             baseColor,
         ),
         // We define the brush to match the component size
-        start = androidx.compose.ui.geometry.Offset.Zero,
-        end = androidx.compose.ui.geometry.Offset(size.width, size.height)
+        start = Offset.Zero,
+        end = Offset(size.width, size.height)
     )
 
     onDrawBehind {
@@ -46,8 +47,13 @@ fun Modifier.shimmerEffect(
             translate(left = xOffset)
         }) {
             // 3. Draw the cached brush. 
-            // The canvas translation handles the movement.
-            drawRect(brush = brush, size = size)
+            // We draw at -xOffset to ensure the rectangle ALWAYS covers the component's visible area (0..width)
+            // while the brush (gradient) moves relative to it because of the canvas translation.
+            drawRect(
+                brush = brush,
+                topLeft = Offset(x = -xOffset, y = 0f),
+                size = size
+            )
         }
     }
 }
