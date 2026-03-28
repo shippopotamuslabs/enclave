@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.core.data.local.ModelsDao
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -48,15 +49,30 @@ class DefaultModelRepositoryImpl @Inject constructor(
         defaultModelsDao.delete(modelType)
     }
 
+    override suspend fun resetDefaultsForApiModel(apiModelId: Long) {
+        defaultModelsDao.resetAssignmentsForApiModel(apiModelId)
+    }
+
     private suspend fun toAssignment(entity: DefaultModelEntity): DefaultModelAssignment {
         return if (entity.source == ModelSource.API && entity.apiModelId != null) {
             val apiConfig = apiModelsDao.getById(entity.apiModelId)?.toDomain()
-            DefaultModelAssignment(
-                modelType = entity.modelType,
-                source = entity.source,
-                apiModelConfig = apiConfig,
-                onDeviceDisplayName = null
-            )
+            if (apiConfig == null) {
+                // Fallback to ON_DEVICE if the API config is missing (dangling reference)
+                val defaultOnDeviceModel = modelsDao.getModelEntityByStatus(entity.modelType, ModelStatus.CURRENT)
+                DefaultModelAssignment(
+                    modelType = entity.modelType,
+                    source = ModelSource.ON_DEVICE,
+                    apiModelConfig = null,
+                    onDeviceDisplayName = defaultOnDeviceModel?.displayName
+                )
+            } else {
+                DefaultModelAssignment(
+                    modelType = entity.modelType,
+                    source = entity.source,
+                    apiModelConfig = apiConfig,
+                    onDeviceDisplayName = null
+                )
+            }
         } else {
             val displayName = modelsDao.getDisplayName(entity.modelType)
             DefaultModelAssignment(

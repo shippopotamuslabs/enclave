@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.domain.usecase.byok
 
-import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
@@ -14,13 +13,10 @@ class DeleteApiModelUseCase @Inject constructor(
     private val defaultModelRepository: DefaultModelRepositoryPort,
 ) {
     suspend operator fun invoke(id: Long) {
+        // Reset any defaults pointing to this API model to ON_DEVICE
+        defaultModelRepository.resetDefaultsForApiModel(id)
+
+        // Then delete the API model configuration
         apiModelRepository.delete(id)
-        
-        ModelType.entries.forEach { modelType ->
-            val default = defaultModelRepository.getDefault(modelType)
-            if (default?.source == ModelSource.API && default.apiModelConfig?.id == id) {
-                defaultModelRepository.setDefault(modelType, ModelSource.ON_DEVICE)
-            }
-        }
     }
 }

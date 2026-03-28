@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 
 class FakeDefaultModelRepository : DefaultModelRepositoryPort {
     private val _defaults = MutableStateFlow<List<DefaultModelAssignment>>(emptyList())
@@ -23,7 +24,25 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
     }
 
     override suspend fun clearDefault(modelType: ModelType) {
-        _defaults.value = _defaults.value.filter { it.modelType != modelType }
+        _defaults.update { list -> list.filter { it.modelType != modelType } }
+    }
+
+    override suspend fun resetDefaultsForApiModel(apiModelId: Long) {
+        _defaults.update { list ->
+            list.map {
+                if (it.source == ModelSource.API && it.apiModelConfig?.id == apiModelId) {
+                    it.copy(source = ModelSource.ON_DEVICE, apiModelConfig = null)
+                } else {
+                    it
+                }
+            }
+        }
+    }
+
+    fun addAssignment(assignment: DefaultModelAssignment) {
+        _defaults.update { list ->
+            list.filter { it.modelType != assignment.modelType } + assignment
+        }
     }
 
     fun seed(assignments: List<DefaultModelAssignment>) {

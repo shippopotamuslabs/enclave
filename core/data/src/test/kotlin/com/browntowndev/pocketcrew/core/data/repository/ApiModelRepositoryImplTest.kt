@@ -73,7 +73,7 @@ class ApiModelRepositoryImplTest {
             topK = 40,
             frequencyPenalty = 0.5,
             presencePenalty = 0.3,
-            stopSequences = "stop1;;;stop2;;;stop3",
+            stopSequences = "[\"stop1\",\"stop2\",\"stop3\"]",
         )
         coEvery { dao.observeAll() } returns flowOf(listOf(entity))
 

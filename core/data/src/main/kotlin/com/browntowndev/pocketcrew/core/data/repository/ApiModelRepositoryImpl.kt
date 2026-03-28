@@ -8,11 +8,14 @@ import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
+import org.json.JSONArray
+import javax.inject.Singleton
 
 /**
  * Implementation of ApiModelRepositoryPort.
  * Persists entity to Room and key to EncryptedSharedPreferences.
  */
+@Singleton
 class ApiModelRepositoryImpl @Inject constructor(
     private val apiModelsDao: ApiModelsDao,
     private val apiKeyManager: ApiKeyManager,
@@ -37,8 +40,8 @@ class ApiModelRepositoryImpl @Inject constructor(
     }
 
     override suspend fun delete(id: Long) {
+        apiKeyManager.delete(id) // Delete key first to prevent orphaned keys if DB write fails
         apiModelsDao.deleteById(id)
-        apiKeyManager.delete(id)
     }
 }
 
@@ -56,7 +59,7 @@ internal fun ApiModelEntity.toDomain() = ApiModelConfig(
     topK = topK,
     frequencyPenalty = frequencyPenalty,
     presencePenalty = presencePenalty,
-    stopSequences = if (stopSequences.isEmpty()) emptyList() else stopSequences.split(";;;"),
+    stopSequences = parseStopSequences(stopSequences),
 )
 
 internal fun ApiModelConfig.toEntity() = ApiModelEntity(
@@ -73,6 +76,22 @@ internal fun ApiModelConfig.toEntity() = ApiModelEntity(
     topK = topK,
     frequencyPenalty = frequencyPenalty,
     presencePenalty = presencePenalty,
-    stopSequences = stopSequences.joinToString(";;;"),
+    stopSequences = serializeStopSequences(stopSequences),
     updatedAt = System.currentTimeMillis()
 )
+
+private fun parseStopSequences(jsonString: String): List<String> {
+    if (jsonString.isBlank()) return emptyList()
+    return try {
+        val array = JSONArray(jsonString)
+        List(array.length()) { array.getString(it) }
+    } catch (e: Exception) {
+        // Fallback for legacy format if any
+        if (jsonString.contains(";;;")) jsonString.split(";;;") else emptyList()
+    }
+}
+
+private fun serializeStopSequences(sequences: List<String>): String {
+    if (sequences.isEmpty()) return ""
+    return JSONArray(sequences).toString()
+}

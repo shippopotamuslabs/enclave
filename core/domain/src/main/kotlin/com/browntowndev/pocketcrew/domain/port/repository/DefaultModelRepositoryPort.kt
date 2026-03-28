@@ -13,4 +13,5 @@ interface DefaultModelRepositoryPort {
     fun observeDefaults(): Flow<List<DefaultModelAssignment>>
     suspend fun setDefault(modelType: ModelType, source: ModelSource, apiModelId: Long? = null)
     suspend fun clearDefault(modelType: ModelType)
+    suspend fun resetDefaultsForApiModel(apiModelId: Long)
 }
