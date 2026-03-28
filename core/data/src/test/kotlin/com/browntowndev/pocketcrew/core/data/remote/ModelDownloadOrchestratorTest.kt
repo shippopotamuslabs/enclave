@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.remote
 
-import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.extension.RegisterExtension
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
@@ -27,10 +27,15 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
-@ExtendWith(MainDispatcherRule::class)
 class ModelDownloadOrchestratorTest {
 
     private val testDispatcher = StandardTestDispatcher()
+
+    @JvmField
+    @RegisterExtension
+    val mainDispatcherExtension = MainDispatcherRule(testDispatcher)
+
+
 
     private lateinit var mockModelConfigFetcher: ModelConfigFetcherPort
     private lateinit var mockModelRegistry: ModelRegistryPort

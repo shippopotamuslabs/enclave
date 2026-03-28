@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.download
 
-import org.junit.jupiter.api.extension.ExtendWith
+import org.junit.jupiter.api.extension.RegisterExtension
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import android.content.Context
 import android.util.Log
@@ -32,10 +32,15 @@ import org.junit.jupiter.api.io.TempDir
 import java.io.File
 
 @OptIn(ExperimentalCoroutinesApi::class)
-@ExtendWith(MainDispatcherRule::class)
 class ModelDownloadOrchestratorImplTest {
 
     private val testDispatcher = StandardTestDispatcher()
+
+    @JvmField
+    @RegisterExtension
+    val mainDispatcherExtension = MainDispatcherRule(testDispatcher)
+
+
 
     private lateinit var mockContext: Context
     private lateinit var mockSessionManager: DownloadSessionManager
