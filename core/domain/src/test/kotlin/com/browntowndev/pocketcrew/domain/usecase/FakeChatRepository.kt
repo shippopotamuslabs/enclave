@@ -1,5 +1,4 @@
 package com.browntowndev.pocketcrew.domain.usecase
-
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.Message
@@ -10,6 +9,8 @@ import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import org.junit.jupiter.api.Assertions
+
 
 /**
  * Fake implementation of ChatRepository for testing.
@@ -116,11 +117,11 @@ class FakeChatRepository : ChatRepository {
     fun getCreatedChats(): List<Chat> = createdChats.toList()
 
     fun verifyChatCreated(times: Int) {
-        org.junit.jupiter.api.Assertions.assertEquals(times, createdChats.size)
+        Assertions.assertEquals(times, createdChats.size)
     }
 
     fun verifyChatName(expectedName: String) {
-        org.junit.jupiter.api.Assertions.assertTrue(
+        Assertions.assertTrue(
             createdChats.any { it.name == expectedName },
             "No chat was created with name: $expectedName"
         )

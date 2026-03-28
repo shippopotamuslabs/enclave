@@ -1,4 +1,5 @@
 package com.browntowndev.pocketcrew.domain.port.inference
+import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 
 /**
  * Domain port for managing LLM conversation lifecycle.
@@ -28,7 +29,7 @@ interface ConversationManagerPort {
      *
      * @param messages The list of historical messages.
      */
-    fun setHistory(messages: List<com.browntowndev.pocketcrew.domain.model.chat.ChatMessage>)
+    fun setHistory(messages: List<ChatMessage>)
 
     /**
      * Closes the underlying engine and releases all resources.

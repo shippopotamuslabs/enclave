@@ -1,7 +1,8 @@
 package com.browntowndev.pocketcrew.core.data.download
-
 import android.app.Notification
+import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import androidx.work.ForegroundInfo
 import io.mockk.mockk
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
+
 
 @Disabled("Requires Android runtime - use Robolectric for full testing")
 class DownloadNotificationManagerTest {
@@ -29,7 +31,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun createNotificationChannel_createsChannelWithCorrectSettings() {
-        val channelSlot = slot<android.app.NotificationChannel>()
+        val channelSlot = slot<NotificationChannel>()
 
         notificationManager.createNotificationChannel()
 
@@ -39,7 +41,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun createForegroundInfo_returnsValidForegroundInfo() {
-        val mockPendingIntent = mockk<android.app.PendingIntent>(relaxed = true)
+        val mockPendingIntent = mockk<PendingIntent>(relaxed = true)
 
         val foregroundInfo = notificationManager.createForegroundInfo(mockPendingIntent)
 
@@ -109,7 +111,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun createNotification_handlesCancelAction() {
-        val mockPendingIntent = mockk<android.app.PendingIntent>(relaxed = true)
+        val mockPendingIntent = mockk<PendingIntent>(relaxed = true)
 
         val notificationSlot = slot<Notification>()
 

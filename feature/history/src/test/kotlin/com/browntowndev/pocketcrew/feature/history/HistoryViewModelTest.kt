@@ -1,20 +1,23 @@
 package com.browntowndev.pocketcrew.feature.history
-
+import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
-import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.usecase.chat.DeleteChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetAllChatsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.RenameChatUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.SearchChatsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.TogglePinChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
-import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import java.util.Calendar
+import java.util.Date
+import java.util.TimeZone
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
@@ -29,9 +32,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
-import java.util.Calendar
-import java.util.Date
-import java.util.TimeZone
+
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HistoryViewModelTest {
@@ -43,7 +44,7 @@ class HistoryViewModelTest {
     val mainDispatcherRule = MainDispatcherRule(testDispatcher)
 
     private lateinit var mockGetAllChatsUseCase: GetAllChatsUseCase
-    private lateinit var mockSearchChatsUseCase: com.browntowndev.pocketcrew.domain.usecase.chat.SearchChatsUseCase
+    private lateinit var mockSearchChatsUseCase: SearchChatsUseCase
     private lateinit var mockDeleteChatUseCase: DeleteChatUseCase
     private lateinit var mockRenameChatUseCase: RenameChatUseCase
     private lateinit var mockTogglePinChatUseCase: TogglePinChatUseCase

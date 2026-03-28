@@ -1,5 +1,4 @@
 package com.browntowndev.pocketcrew.feature.chat.components
-
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
@@ -26,10 +25,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
 import kotlinx.coroutines.delay
+
 
 /**
  * Redesigned Thinking Indicator that matches the Grok-style thinking indicator.
@@ -141,7 +142,7 @@ private fun PreviewTheme(content: @Composable () -> Unit) {
     }
 }
 
-@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFF121212)
+@Preview(showBackground = true, backgroundColor = 0xFF121212)
 @Composable
 fun ThinkingIndicator_EmptyPreview() {
     PreviewTheme {
@@ -153,7 +154,7 @@ fun ThinkingIndicator_EmptyPreview() {
     }
 }
 
-@androidx.compose.ui.tooling.preview.Preview(showBackground = true, backgroundColor = 0xFF121212)
+@Preview(showBackground = true, backgroundColor = 0xFF121212)
 @Composable
 fun ThinkingIndicator_WithContentPreview() {
     PreviewTheme {

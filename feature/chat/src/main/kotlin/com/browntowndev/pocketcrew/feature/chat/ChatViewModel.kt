@@ -1,8 +1,8 @@
 package com.browntowndev.pocketcrew.feature.chat
-
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
@@ -14,8 +14,11 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
-import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -32,7 +35,7 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+
 
 /**
  * ViewModel for the Chat screen.
@@ -241,8 +244,8 @@ class ChatViewModel @Inject constructor(
         // Handle 0 timestamp (not set)
         if (timestamp == 0L) return "Now"
         // Simple timestamp formatting - could be enhanced
-        val sdf = java.text.SimpleDateFormat("h:mm a", java.util.Locale.getDefault())
-        return sdf.format(java.util.Date(timestamp))
+        val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
+        return sdf.format(Date(timestamp))
     }
 
     fun onInputChange(inputText: String) {

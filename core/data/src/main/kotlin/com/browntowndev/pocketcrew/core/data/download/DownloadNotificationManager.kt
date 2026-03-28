@@ -1,11 +1,10 @@
 package com.browntowndev.pocketcrew.core.data.download
-
 import android.Manifest
 import android.app.Notification
-import android.content.Context
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
@@ -13,6 +12,8 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import androidx.work.ForegroundInfo
+import java.util.Locale
+
 
 class DownloadNotificationManager(
     private val context: Context,
@@ -89,7 +90,7 @@ class DownloadNotificationManager(
         cancelPendingIntent: PendingIntent
     ): ForegroundInfo {
         val speedString = if (snapshot.currentSpeedMBps > 0) {
-            String.format(java.util.Locale.US, "%.1f MB/s", snapshot.currentSpeedMBps)
+            String.format(Locale.US, "%.1f MB/s", snapshot.currentSpeedMBps)
         } else ""
 
         val etaString = formatEta(snapshot.etaSeconds)

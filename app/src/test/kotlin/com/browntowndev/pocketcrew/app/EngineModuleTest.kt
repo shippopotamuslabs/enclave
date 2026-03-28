@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.app
-
 import android.content.Context
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import io.mockk.every
@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
+
 
 /**
  * Tests for EngineModule model provider behavior.
@@ -32,7 +33,7 @@ class EngineModuleTest {
         every { mockRegistry.getRegisteredModelSync(ModelType.DRAFT_ONE) } returns null
         every { mockRegistry.getRegisteredModelSync(ModelType.DRAFT_TWO) } returns null
 
-        val fastConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val fastConfig = mockk<ModelConfiguration>()
         every { fastConfig.metadata } returns mockk {
             every { localFileName } returns "fast.bin"
         }

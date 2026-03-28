@@ -1,5 +1,5 @@
 package com.browntowndev.pocketcrew.core.data
-
+import android.app.NotificationManager
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -17,35 +17,43 @@ import com.browntowndev.pocketcrew.core.data.download.ModelConfigFetcherImpl
 import com.browntowndev.pocketcrew.core.data.download.ModelDownloadOrchestratorImpl
 import com.browntowndev.pocketcrew.core.data.download.ModelFileScanner
 import com.browntowndev.pocketcrew.core.data.download.WorkProgressParser
-import com.browntowndev.pocketcrew.core.data.download.remote.HuggingFaceModelUrlProvider
 import com.browntowndev.pocketcrew.core.data.download.remote.HttpFileDownloader
+import com.browntowndev.pocketcrew.core.data.download.remote.HuggingFaceModelUrlProvider
+import com.browntowndev.pocketcrew.core.data.local.ApiModelsDao
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
+import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.ModelsDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
+import com.browntowndev.pocketcrew.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
+import com.browntowndev.pocketcrew.core.data.repository.DefaultModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.DeviceEnvironmentRepository
 import com.browntowndev.pocketcrew.core.data.repository.MessageRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ModelConfigProviderImpl
 import com.browntowndev.pocketcrew.core.data.repository.ModelRegistryImpl
+import com.browntowndev.pocketcrew.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.RoomTransactionProvider
 import com.browntowndev.pocketcrew.core.data.repository.SettingsRepositoryImpl
-import com.browntowndev.pocketcrew.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.HashingPort
-import com.browntowndev.pocketcrew.domain.qualifier.PipelineDataStore
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
+import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.port.repository.PipelineStateRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+import com.browntowndev.pocketcrew.domain.qualifier.PipelineDataStore
 import com.browntowndev.pocketcrew.domain.util.Clock
 import com.browntowndev.pocketcrew.domain.util.SystemClock
 import dagger.Binds
@@ -54,8 +62,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import okhttp3.OkHttpClient
 import javax.inject.Singleton
+import okhttp3.OkHttpClient
+
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 private val Context.pipelineDataStore: DataStore<Preferences> by preferencesDataStore(name = "pipeline_state")
@@ -85,10 +94,10 @@ object DataModule {
     fun provideModelsDao(database: PocketCrewDatabase): ModelsDao = database.modelsDao()
 
     @Provides
-    fun provideApiModelsDao(database: PocketCrewDatabase): com.browntowndev.pocketcrew.core.data.local.ApiModelsDao = database.apiModelsDao()
+    fun provideApiModelsDao(database: PocketCrewDatabase): ApiModelsDao = database.apiModelsDao()
 
     @Provides
-    fun provideDefaultModelsDao(database: PocketCrewDatabase): com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao = database.defaultModelsDao()
+    fun provideDefaultModelsDao(database: PocketCrewDatabase): DefaultModelsDao = database.defaultModelsDao()
 
     @Provides
     @Singleton
@@ -106,7 +115,7 @@ object DataModule {
     @Provides
     @Singleton
     fun provideNotificationManager(@ApplicationContext context: Context): DownloadNotificationManager {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         return DownloadNotificationManager(context, notificationManager)
     }
 
@@ -130,7 +139,7 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideHttpFileDownloader(okHttpClient: OkHttpClient, logger: com.browntowndev.pocketcrew.domain.port.inference.LoggingPort): FileDownloaderPort = HttpFileDownloader(okHttpClient, logger)
+    fun provideHttpFileDownloader(okHttpClient: OkHttpClient, logger: LoggingPort): FileDownloaderPort = HttpFileDownloader(okHttpClient, logger)
 
     @Provides
     @Singleton
@@ -183,13 +192,13 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindModelConfigFetcher(impl: ModelConfigFetcherImpl): com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
+    abstract fun bindModelConfigFetcher(impl: ModelConfigFetcherImpl): ModelConfigFetcherPort
 
     @Binds
     @Singleton
-    abstract fun bindDefaultModelRepository(impl: com.browntowndev.pocketcrew.core.data.repository.DefaultModelRepositoryImpl): com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
+    abstract fun bindDefaultModelRepository(impl: DefaultModelRepositoryImpl): DefaultModelRepositoryPort
 
     @Binds
     @Singleton
-    abstract fun bindApiModelRepository(impl: com.browntowndev.pocketcrew.core.data.repository.ApiModelRepositoryImpl): com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
+    abstract fun bindApiModelRepository(impl: ApiModelRepositoryImpl): ApiModelRepositoryPort
 }

@@ -1,5 +1,4 @@
 package com.browntowndev.pocketcrew.domain.usecase
-
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
@@ -7,6 +6,8 @@ import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.junit.jupiter.api.Assertions
+
 
 /**
  * Fake implementation of SettingsRepository for testing.
@@ -151,6 +152,6 @@ class FakeSettingsRepository : SettingsRepository {
     }
 
     private fun assertEquals(expected: Any?, actual: Any?) {
-        org.junit.jupiter.api.Assertions.assertEquals(expected, actual)
+        Assertions.assertEquals(expected, actual)
     }
 }
