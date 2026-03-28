@@ -178,8 +178,9 @@ fun ModelConfigurationScreen(
                             selected = assignment.source == ModelSource.API,
                             onClick = {
                                 if (assignment.source != ModelSource.API) {
-                                    val apiId = uiState.apiModels.firstOrNull()?.id
-                                    onSetDefaultModel(modelType, ModelSource.API, apiId)
+                                    uiState.apiModels.firstOrNull()?.id?.let { apiId ->
+                                        onSetDefaultModel(modelType, ModelSource.API, apiId)
+                                    }
                                 }
                             },
                             shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
