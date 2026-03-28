@@ -271,8 +271,6 @@ class InferenceService : Service() {
         userMessage: String,
         initialState: PipelineState
     ) {
-        // Get all services upfront (as Lazy to avoid loading until needed)
-        
         // Map steps to services using class-level lambdas
         val stepServices = mapOf(
             PipelineStep.DRAFT_ONE to draftOneService,

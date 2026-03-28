@@ -56,6 +56,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
@@ -252,7 +253,7 @@ fun ModelConfigurationScreen(
                                 ) {
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         LabelWithInfo(
-                                            label = "Temperature: ${String.format("%.2f", config.temperature)}",
+                                            label = "Temperature: ${String.format(Locale.ROOT, "%.2f", config.temperature)}",
                                             infoText = "Controls randomness: Higher values (e.g., 1.0) make output more creative, lower values (e.g., 0.2) make it more focused and deterministic."
                                         )
                                         Slider(
@@ -276,7 +277,7 @@ fun ModelConfigurationScreen(
 
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         LabelWithInfo(
-                                            label = "Top P: ${String.format("%.2f", config.topP)}",
+                                            label = "Top P: ${String.format(Locale.ROOT, "%.2f", config.topP)}",
                                             infoText = "Nucleus sampling: Limits the model to a subset of tokens whose cumulative probability is P. Another way to control diversity."
                                         )
                                         Slider(

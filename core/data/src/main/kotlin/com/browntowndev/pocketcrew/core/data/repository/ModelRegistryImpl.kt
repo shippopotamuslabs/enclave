@@ -153,10 +153,10 @@ class ModelRegistryImpl @Inject constructor(
                     repetitionPenalty = config.tunings.repetitionPenalty
                 )
             )
-        }
 
-        // Update cache after successful DB update
-        updateCache(config)
+            // Update cache inside the transaction for atomicity
+            updateCache(config)
+        }
     }
 
     override suspend fun clearAll() {

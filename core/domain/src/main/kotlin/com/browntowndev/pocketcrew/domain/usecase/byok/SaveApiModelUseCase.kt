@@ -37,7 +37,7 @@ class SaveApiModelUseCase @Inject constructor(
         require(topP in 0.0..1.0) { "top_p must be between 0.0 and 1.0" }
         require(frequencyPenalty in -2.0..2.0) { "frequency penalty must be between -2.0 and 2.0" }
         require(presencePenalty in -2.0..2.0) { "presence penalty must be between -2.0 and 2.0" }
-        require(topK == null || topK >= 1) { "top_k must be >= 1" }
+        require(topK == null || (topK >= 1 && topK <= 100)) { "top_k must be between 1 and 100" }
         require(stopSequences.size <= 5) { "max 5 stop sequences allowed" }
 
         val config = ApiModelConfig(
