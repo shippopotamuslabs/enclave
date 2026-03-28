@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase
-
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+import org.junit.jupiter.api.Assertions
+
 
 /**
  * Fake implementation of TransactionProvider for testing.
@@ -22,7 +23,7 @@ class FakeTransactionProvider : TransactionProvider {
     fun getTransactionCount(): Int = transactionCount
 
     fun verifyTransactionCalled(times: Int) {
-        org.junit.jupiter.api.Assertions.assertEquals(times, transactionCount)
+        Assertions.assertEquals(times, transactionCount)
     }
 
     fun setShouldThrowInTransaction(shouldThrow: Boolean) {

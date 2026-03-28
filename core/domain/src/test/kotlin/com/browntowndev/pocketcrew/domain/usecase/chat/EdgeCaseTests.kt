@@ -15,19 +15,18 @@
  */
 
 package com.browntowndev.pocketcrew.domain.usecase.chat
-
 import com.browntowndev.pocketcrew.domain.model.MessageState
-import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceFactory
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
-import kotlinx.coroutines.flow.flow
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceFactory
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManagerImpl
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
@@ -35,14 +34,16 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+
 
 /**
  * Edge case tests for GenerateChatResponseUseCase.
@@ -102,7 +103,7 @@ class EdgeCaseTests {
     @Test
     fun `empty thinking is handled correctly`() = runTest {
         // Given - response with no thinking
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -139,7 +140,7 @@ class EdgeCaseTests {
     @Test
     fun `long responses are handled correctly`() = runTest {
         // Given - response with many partial responses
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         val partialResponses = (1..100).map { i ->
@@ -176,7 +177,7 @@ class EdgeCaseTests {
     @Test
     fun `lock is acquired and released correctly`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -233,7 +234,7 @@ class EdgeCaseTests {
     @Test
     fun `safety blocked returns proper message`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(

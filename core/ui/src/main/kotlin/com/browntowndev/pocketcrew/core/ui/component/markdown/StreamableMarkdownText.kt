@@ -1,17 +1,18 @@
 package com.browntowndev.pocketcrew.core.ui.component.markdown
-
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import com.browntowndev.pocketcrew.core.ui.theme.darkMarkdownTheme
 import com.hrm.markdown.renderer.Markdown
+
 
 /**
  * A composable that renders markdown text with support for streaming updates.
@@ -86,7 +87,7 @@ fun SimpleMarkdownText(
     )
 }
 
-private fun parseSimpleMarkdown(text: String): androidx.compose.ui.text.AnnotatedString {
+private fun parseSimpleMarkdown(text: String): AnnotatedString {
     return buildAnnotatedString {
         var currentIndex = 0
         val processedText = text

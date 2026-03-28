@@ -1,9 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.download
-
-import org.junit.jupiter.api.extension.RegisterExtension
-import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import android.content.Context
 import android.util.Log
+import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
@@ -14,6 +12,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.usecase.download.FileProgressInitResult
+import com.browntowndev.pocketcrew.domain.usecase.download.InitializeFileProgressUseCase
+import com.browntowndev.pocketcrew.domain.usecase.download.ValidateDownloadConditionsUseCase
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -22,14 +23,16 @@ import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import java.io.File
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.RegisterExtension
 import org.junit.jupiter.api.io.TempDir
-import java.io.File
+
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ModelDownloadOrchestratorImplTest {
@@ -44,8 +47,8 @@ class ModelDownloadOrchestratorImplTest {
 
     private lateinit var mockContext: Context
     private lateinit var mockSessionManager: DownloadSessionManager
-    private lateinit var mockValidateConditions: com.browntowndev.pocketcrew.domain.usecase.download.ValidateDownloadConditionsUseCase
-    private lateinit var mockInitializeFileProgress: com.browntowndev.pocketcrew.domain.usecase.download.InitializeFileProgressUseCase
+    private lateinit var mockValidateConditions: ValidateDownloadConditionsUseCase
+    private lateinit var mockInitializeFileProgress: InitializeFileProgressUseCase
     private lateinit var mockWorkScheduler: DownloadWorkScheduler
     private lateinit var mockProgressParser: WorkProgressParser
     private lateinit var mockModelRegistry: ModelRegistryPort
@@ -179,7 +182,7 @@ class ModelDownloadOrchestratorImplTest {
         coEvery { mockValidateConditions.invoke(any(), any()) } returns mockk {
             every { canStart } returns true
         }
-        coEvery { mockInitializeFileProgress.invoke(any(), any(), any()) } returns com.browntowndev.pocketcrew.domain.usecase.download.FileProgressInitResult(
+        coEvery { mockInitializeFileProgress.invoke(any(), any(), any()) } returns FileProgressInitResult(
             fileProgressList = emptyList(),
             modelsTotal = 0,
             modelsComplete = 0,

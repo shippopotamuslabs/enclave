@@ -15,10 +15,9 @@
  */
 
 package com.browntowndev.pocketcrew.domain.usecase.chat
-
 import com.browntowndev.pocketcrew.domain.model.MessageState
-import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceFactory
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
@@ -28,6 +27,8 @@ import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceFactory
+import com.browntowndev.pocketcrew.domain.usecase.FakePipelineExecutor
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManagerImpl
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
@@ -36,15 +37,15 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import com.browntowndev.pocketcrew.domain.usecase.FakePipelineExecutor
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+
 
 /**
  * Tests for GenerateChatResponseUseCase - Real-Time Flow Architecture.
@@ -104,7 +105,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `FAST mode emits AccumulatedMessages with accumulated content`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -146,7 +147,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `content is accumulated across multiple PartialResponse events`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -186,7 +187,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `thinking content is accumulated across multiple Thinking events`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -223,7 +224,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `isComplete is set to true when inference finishes`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -258,7 +259,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `inference completes without error`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -288,7 +289,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `error in inference is handled gracefully`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -323,11 +324,11 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `Processing event sets currentState to PROCESSING`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.DRAFT_ONE) } returns mockConfig
 
         // Mock pipeline executor to emit Processing event
-        val fakePipelineExecutor = com.browntowndev.pocketcrew.domain.usecase.FakePipelineExecutor()
+        val fakePipelineExecutor = FakePipelineExecutor()
         fakePipelineExecutor.addProcessingEvent(ModelType.DRAFT_ONE)
         
         // Create new use case with fake executor
@@ -370,7 +371,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `Processing event sets pipelineStep correctly for each model type`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
 
         val testCases = listOf(
@@ -382,7 +383,7 @@ class GenerateChatResponseUseCaseTest {
 
         for ((modelType, expectedPipelineStep) in testCases) {
             // Given - fresh fake executor for each test case
-            val fakePipelineExecutor = com.browntowndev.pocketcrew.domain.usecase.FakePipelineExecutor()
+            val fakePipelineExecutor = FakePipelineExecutor()
             fakePipelineExecutor.addProcessingEvent(modelType)
             
             val expectedMessageId = if (modelType == ModelType.DRAFT_ONE) 2L else 3L
@@ -428,13 +429,13 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `Processing event creates new message for DRAFT_TWO in CREW mode`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
 
         // Mock createAssistantMessage to return specific IDs
         coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns 3L
 
-        val fakePipelineExecutor = com.browntowndev.pocketcrew.domain.usecase.FakePipelineExecutor()
+        val fakePipelineExecutor = FakePipelineExecutor()
         fakePipelineExecutor.addProcessingEvent(ModelType.DRAFT_TWO)
         
         val useCase = GenerateChatResponseUseCase(
@@ -477,13 +478,13 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `Processing event creates new message for SYNTHESIS in CREW mode`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
 
         // Mock createAssistantMessage to return specific IDs
         coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns 4L
 
-        val fakePipelineExecutor = com.browntowndev.pocketcrew.domain.usecase.FakePipelineExecutor()
+        val fakePipelineExecutor = FakePipelineExecutor()
         fakePipelineExecutor.addProcessingEvent(ModelType.MAIN)
         
         val useCase = GenerateChatResponseUseCase(
@@ -526,13 +527,13 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `Processing event creates new message for FINAL in CREW mode`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
 
         // Mock createAssistantMessage to return specific IDs
         coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns 5L
 
-        val fakePipelineExecutor = com.browntowndev.pocketcrew.domain.usecase.FakePipelineExecutor()
+        val fakePipelineExecutor = FakePipelineExecutor()
         fakePipelineExecutor.addProcessingEvent(ModelType.FINAL_SYNTHESIS)
         
         val useCase = GenerateChatResponseUseCase(
@@ -575,7 +576,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `complete CREW pipeline emits Processing state before each step`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
 
         // Mock createAssistantMessage to return sequential IDs
@@ -584,7 +585,7 @@ class GenerateChatResponseUseCaseTest {
             nextId++
         }
 
-        val fakePipelineExecutor = com.browntowndev.pocketcrew.domain.usecase.FakePipelineExecutor()
+        val fakePipelineExecutor = FakePipelineExecutor()
         fakePipelineExecutor.configureCompleteCrewPipeline()
 
         val useCase = GenerateChatResponseUseCase(
@@ -663,7 +664,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `pipelineStep is correctly persisted for FAST mode`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -700,7 +701,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `pipelineStep is correctly computed from modelType for CREW mode`() = runTest {
         // Given
-        val mockConfig = mockk<com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration>()
+        val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
 
         val testCases = listOf(

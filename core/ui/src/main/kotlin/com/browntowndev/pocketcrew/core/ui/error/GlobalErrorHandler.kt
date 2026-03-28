@@ -1,17 +1,18 @@
 package com.browntowndev.pocketcrew.core.ui.error
-
 import android.app.Application
 import android.content.ContentProvider
 import android.content.ContentValues
 import android.database.Cursor
 import android.net.Uri
+import android.util.Log
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineExceptionHandler
+
 
 /**
  * Global exception handler that catches uncaught coroutine exceptions.
@@ -40,8 +41,8 @@ class GlobalErrorHandler : CoroutineExceptionHandler {
             loggingPort.error("GlobalErrorHandler", "Uncaught coroutine exception", exception)
         } catch (e: Exception) {
             // Fallback if Hilt is not yet initialized or other issues
-            android.util.Log.e("GlobalErrorHandler", "Failed to log global exception", e)
-            android.util.Log.e("GlobalErrorHandler", "Original exception: ", exception)
+            Log.e("GlobalErrorHandler", "Failed to log global exception", e)
+            Log.e("GlobalErrorHandler", "Original exception: ", exception)
         }
     }
 }

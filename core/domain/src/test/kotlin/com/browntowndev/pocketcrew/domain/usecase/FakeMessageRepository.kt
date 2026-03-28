@@ -1,8 +1,9 @@
 package com.browntowndev.pocketcrew.domain.usecase
-
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
+import org.junit.jupiter.api.Assertions
+
 
 /**
  * Fake implementation of MessageRepository for testing.
@@ -40,11 +41,11 @@ class FakeMessageRepository : MessageRepository {
     fun getSavedMessages(): List<Message> = savedMessages.toList()
 
     fun verifySaveMessageCalled(times: Int) {
-        org.junit.jupiter.api.Assertions.assertEquals(times, savedMessages.size)
+        Assertions.assertEquals(times, savedMessages.size)
     }
 
     fun verifyMessageSaved(message: Message) {
-        org.junit.jupiter.api.Assertions.assertTrue(
+        Assertions.assertTrue(
             savedMessages.any { it.id == message.id && it.content == message.content && it.role == message.role },
             "Message was not saved: $message"
         )

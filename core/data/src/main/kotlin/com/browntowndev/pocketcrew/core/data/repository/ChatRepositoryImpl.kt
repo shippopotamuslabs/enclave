@@ -1,22 +1,23 @@
 package com.browntowndev.pocketcrew.core.data.repository
-
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
+import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
+import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
-import com.browntowndev.pocketcrew.domain.model.MessageState
-import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
 
 @Singleton
 class ChatRepositoryImpl @Inject constructor(
@@ -91,7 +92,7 @@ class ChatRepositoryImpl @Inject constructor(
         modelType: ModelType,
         pipelineStep: PipelineStep?
     ): Long {
-        val entity = com.browntowndev.pocketcrew.core.data.local.MessageEntity(
+        val entity = MessageEntity(
             chatId = chatId,
             content = "",
             role = Role.ASSISTANT,

@@ -15,10 +15,10 @@
  */
 
 package com.browntowndev.pocketcrew.testing
-
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
+import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+
 
 class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
     private val _downloadState = MutableStateFlow(DownloadState(status = DownloadStatus.CHECKING))
@@ -112,7 +113,7 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
         return startDownloads(modelsResult, wifiOnly)
     }
 
-    override suspend fun updateFromProgressUpdate(progressUpdate: com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate) { /* no-op */ }
+    override suspend fun updateFromProgressUpdate(progressUpdate: DownloadProgressUpdate) { /* no-op */ }
 
     override fun pauseDownloads() {
         _downloadState.value = _downloadState.value.copy(status = DownloadStatus.PAUSED)

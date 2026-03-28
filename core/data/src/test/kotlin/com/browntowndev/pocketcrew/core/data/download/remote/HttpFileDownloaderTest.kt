@@ -1,11 +1,15 @@
 package com.browntowndev.pocketcrew.core.data.download.remote
-
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import java.io.File
+import java.io.IOException
+import java.io.InputStream
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -17,10 +21,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import java.io.File
-import java.io.IOException
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
+
 
 class HttpFileDownloaderTest {
 
@@ -642,7 +643,7 @@ class HttpFileDownloaderTest {
         val mockCall = mockk<okhttp3.Call>(relaxed = true)
         val mockResponse = mockk<Response>(relaxed = true)
         val mockBody = mockk<ResponseBody>(relaxed = true)
-        val failingInputStream = object : java.io.InputStream() {
+        val failingInputStream = object : InputStream() {
             private var readCount = 0
             override fun read(): Int {
                 readCount++
