@@ -63,6 +63,8 @@ Your objective is to identify general bugs, architectural flaws, performance bot
     # Adding alt=sse to ensure we get a stable stream of events including the reasoning parts
     endpoint = f"https://aiplatform.googleapis.com/v1/publishers/google/models/{MODEL_ID}:streamGenerateContent?alt=sse&key={VERTEX_API_KEY}"
     
+    # Updated generation_config for Gemini 3.1 Pro Preview
+    # include_thoughts must be True to enable the reasoning stream
     payload = {
         "contents": [
             {
@@ -78,8 +80,8 @@ Your objective is to identify general bugs, architectural flaws, performance bot
             ]
         },
         "generation_config": {
-            "max_output_tokens": 32768,
-            "temperature": 0.0,
+            "max_output_tokens": 65536,
+            "temperature": 1.0,
             "thinking_config": {
                 "include_thoughts": True
             }
@@ -89,7 +91,13 @@ Your objective is to identify general bugs, architectural flaws, performance bot
     try:
         response = requests.post(endpoint, json=payload, stream=True)
         if response.status_code != 200:
-            print(f"Error calling Vertex AI: {response.status_code} - {response.text}")
+            # Safely handle potential non-string error bodies
+            error_msg = response.reason
+            try:
+                error_msg = response.text
+            except:
+                pass
+            print(f"Error calling Vertex AI: {response.status_code} - {error_msg}")
             sys.exit(1)
 
         full_thinking = ""
@@ -108,9 +116,9 @@ Your objective is to identify general bugs, architectural flaws, performance bot
                                 if "content" in candidate:
                                     for part in candidate["content"]["parts"]:
                                         if "thought" in part:
-                                            full_thinking += part["thought"]
+                                            full_thinking += str(part["thought"])
                                         if "text" in part:
-                                            full_text += part["text"]
+                                            full_text += str(part["text"])
                     except json.JSONDecodeError:
                         pass
 
