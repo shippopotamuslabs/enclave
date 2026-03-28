@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.FakeApiModelRepository
 import com.browntowndev.pocketcrew.domain.usecase.FakeDefaultModelRepository
+import com.browntowndev.pocketcrew.domain.usecase.FakeTransactionProvider
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -18,13 +19,15 @@ class DeleteApiModelUseCaseTest {
 
     private lateinit var apiRepo: FakeApiModelRepository
     private lateinit var defaultRepo: FakeDefaultModelRepository
+    private lateinit var transactionProvider: FakeTransactionProvider
     private lateinit var useCase: DeleteApiModelUseCase
 
     @BeforeEach
     fun setUp() {
         apiRepo = FakeApiModelRepository()
         defaultRepo = FakeDefaultModelRepository()
-        useCase = DeleteApiModelUseCase(apiRepo, defaultRepo)
+        transactionProvider = FakeTransactionProvider()
+        useCase = DeleteApiModelUseCase(apiRepo, defaultRepo, transactionProvider)
     }
 
     // ========================================================================

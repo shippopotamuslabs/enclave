@@ -4,6 +4,8 @@ import com.browntowndev.pocketcrew.core.data.local.ApiModelsDao
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelEntity
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.ModelsDao
+import com.browntowndev.pocketcrew.core.data.local.ApiModelEntity
+import com.browntowndev.pocketcrew.core.data.local.ModelEntity
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -29,8 +31,14 @@ class DefaultModelRepositoryImpl @Inject constructor(
     }
 
     override fun observeDefaults(): Flow<List<DefaultModelAssignment>> {
-        return defaultModelsDao.observeAll().map { list ->
-            list.map { toAssignment(it) }
+        return defaultModelsDao.observeAll().map { defaultEntities ->
+            // Optimize: Fetch all needed related data upfront to avoid N+1 queries in the map block
+            val apiConfigs = apiModelsDao.getAll().associateBy { it.id }
+            val localModels = modelsDao.getAll().associateBy { it.modelType }
+
+            defaultEntities.map { entity ->
+                mapToAssignment(entity, apiConfigs[entity.apiModelId], localModels[entity.modelType])
+            }
         }
     }
 
@@ -54,16 +62,25 @@ class DefaultModelRepositoryImpl @Inject constructor(
     }
 
     private suspend fun toAssignment(entity: DefaultModelEntity): DefaultModelAssignment {
+        val apiConfig = entity.apiModelId?.let { apiModelsDao.getById(it) }
+        val localModel = modelsDao.getModelEntityByStatus(entity.modelType, ModelStatus.CURRENT)
+        return mapToAssignment(entity, apiConfig, localModel)
+    }
+
+    private fun mapToAssignment(
+        entity: DefaultModelEntity,
+        apiConfigEntity: ApiModelEntity?,
+        localModelEntity: ModelEntity?
+    ): DefaultModelAssignment {
         return if (entity.source == ModelSource.API && entity.apiModelId != null) {
-            val apiConfig = apiModelsDao.getById(entity.apiModelId)?.toDomain()
+            val apiConfig = apiConfigEntity?.toDomain()
             if (apiConfig == null) {
                 // Fallback to ON_DEVICE if the API config is missing (dangling reference)
-                val defaultOnDeviceModel = modelsDao.getModelEntityByStatus(entity.modelType, ModelStatus.CURRENT)
                 DefaultModelAssignment(
                     modelType = entity.modelType,
                     source = ModelSource.ON_DEVICE,
                     apiModelConfig = null,
-                    onDeviceDisplayName = defaultOnDeviceModel?.displayName
+                    onDeviceDisplayName = localModelEntity?.displayName
                 )
             } else {
                 DefaultModelAssignment(
@@ -74,12 +91,11 @@ class DefaultModelRepositoryImpl @Inject constructor(
                 )
             }
         } else {
-            val displayName = modelsDao.getDisplayName(entity.modelType)
             DefaultModelAssignment(
                 modelType = entity.modelType,
                 source = ModelSource.ON_DEVICE, // Force on-device fallback if API missing
                 apiModelConfig = null,
-                onDeviceDisplayName = displayName
+                onDeviceDisplayName = localModelEntity?.displayName
             )
         }
     }
