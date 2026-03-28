@@ -30,6 +30,9 @@ class PocketCrewAppViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     val errorHandler: ViewModelErrorHandler
 ) : ViewModel() {
+    companion object {
+        private const val SUBSCRIBE_TIMEOUT_MS = 5000L
+    }
 
     val themeUiState: StateFlow<ThemeUiState> = settingsRepository.settingsFlow
         .map { settings ->
@@ -37,7 +40,7 @@ class PocketCrewAppViewModel @Inject constructor(
         }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.WhileSubscribed(SUBSCRIBE_TIMEOUT_MS),
             initialValue = ThemeUiState()
         )
 

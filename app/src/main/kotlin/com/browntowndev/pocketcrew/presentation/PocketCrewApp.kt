@@ -21,6 +21,7 @@ import com.browntowndev.pocketcrew.presentation.navigation.Routes
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import kotlinx.coroutines.launch
 
+@Suppress("FunctionNaming")
 @Composable
 fun PocketCrewApp(
     viewModel: PocketCrewAppViewModel = hiltViewModel(),
