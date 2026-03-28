@@ -374,13 +374,15 @@ class SettingsViewModel @Inject constructor(
 
     fun onSaveApiModel(onSuccess: () -> Unit) {
         val config = _transientState.value.selectedApiModel ?: return
+        val apiKeyToSave = _currentApiKey.value // Capture atomically before async work
+        
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API config", "Failed to save configuration")) {
             saveApiModelUseCase(
                 id = config.id,
                 displayName = config.displayName,
                 provider = config.provider,
                 modelId = config.modelId,
-                apiKey = _currentApiKey.value,
+                apiKey = apiKeyToSave,
                 baseUrl = config.baseUrl.takeIf { it.isNotBlank() },
                 isVision = config.isVision,
                 maxTokens = config.maxTokens,

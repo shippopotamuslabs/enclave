@@ -87,6 +87,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(project(":core:testing"))
+    testImplementation("org.json:json:20240303")
 
     // JUnit 5 Engine for test discovery
     testRuntimeOnly("org.junit.platform:junit-platform-engine")
