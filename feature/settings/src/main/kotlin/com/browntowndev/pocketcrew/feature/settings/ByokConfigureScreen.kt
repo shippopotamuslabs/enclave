@@ -70,7 +70,6 @@ import kotlin.math.roundToInt
 
 @Composable
 fun ByokConfigureRoute(
-    apiModelId: Long?,
     onNavigateBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {

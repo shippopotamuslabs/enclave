@@ -19,7 +19,7 @@ import com.browntowndev.pocketcrew.feature.settings.SettingsRoute
 object SettingsDestination {
     const val GRAPH = "settings_graph"
     const val MAIN = "settings_main"
-    const val BYOK_CONFIGURE = "byok_configure?apiModelId={apiModelId}"
+    const val BYOK_CONFIGURE = "byok_configure"
     const val MODEL_CONFIGURE = "model_configure/{modelType}"
     const val MODEL_DOWNLOAD = "model_download"
 }
@@ -80,13 +80,6 @@ fun NavGraphBuilder.settingsGraph(
 
         composable(
             route = SettingsDestination.BYOK_CONFIGURE,
-            arguments = listOf(
-                navArgument("apiModelId") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                }
-            ),
             enterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { it },
@@ -116,7 +109,6 @@ fun NavGraphBuilder.settingsGraph(
                 navController.getBackStackEntry(SettingsDestination.GRAPH)
             }
             ByokConfigureRoute(
-                apiModelId = null, // Using shared view model, parameter is obsolete but kept to avoid signature breaking right now
                 onNavigateBack = { navController.popBackStack() },
                 viewModel = hiltViewModel(parentEntry)
             )
