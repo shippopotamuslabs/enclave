@@ -38,7 +38,11 @@ class MainActivity : ComponentActivity() {
                 }
                 is AppStartupState.Ready -> {
                     // App renders only after initialRoute is verified
-                    PocketCrewApp(initialRoute = currentState.initialRoute, modelsResult = currentState.modelsResult, errorMessage = currentState.errorMessage)
+                    PocketCrewApp(
+                        initialRoute = currentState.initialRoute,
+                        modelsResult = currentState.modelsResult,
+                        errorMessage = currentState.errorMessage
+                    )
                 }
             }
         }

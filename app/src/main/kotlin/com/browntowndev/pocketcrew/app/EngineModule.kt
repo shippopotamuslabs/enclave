@@ -41,6 +41,8 @@ import javax.inject.Singleton
 object EngineModule {
 
     private const val TAG = "EngineModule"
+    private const val MAX_TOKENS = 16384
+    private const val MAX_GPU_LAYERS = 32
 
     /**
      * Resolves the model file path from the models directory.
@@ -72,7 +74,7 @@ object EngineModule {
 
         val options = LlmInference.LlmInferenceOptions.builder()
             .setModelPath(modelPath)
-            .setMaxTokens(16384)
+            .setMaxTokens(MAX_TOKENS)
             .setPreferredBackend(LlmInference.Backend.GPU)
             .build()
 
@@ -107,7 +109,9 @@ object EngineModule {
         modelRegistry: ModelRegistryPort
     ): Engine {
         val config = modelRegistry.getRegisteredModelSync(ModelType.MAIN)
-            ?: throw IllegalStateException("No model registered for ${ModelType.MAIN}. Please download a model first.")
+            ?: throw IllegalStateException(
+                "No model registered for ${ModelType.MAIN}. Please download a model first."
+            )
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
         return createEngine(modelPath)
@@ -121,7 +125,9 @@ object EngineModule {
         modelRegistry: ModelRegistryPort
     ): Engine {
         val config = modelRegistry.getRegisteredModelSync(ModelType.VISION)
-            ?: throw IllegalStateException("No model registered for ${ModelType.VISION}. Please download a model first.")
+            ?: throw IllegalStateException(
+                "No model registered for ${ModelType.VISION}. Please download a model first."
+            )
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
         return createEngine(modelPath)
@@ -135,7 +141,9 @@ object EngineModule {
         modelRegistry: ModelRegistryPort
     ): Engine {
         val config = modelRegistry.getRegisteredModelSync(ModelType.DRAFT_ONE)
-            ?: throw IllegalStateException("No model registered for ${ModelType.DRAFT_ONE}. Please download a model first.")
+            ?: throw IllegalStateException(
+                "No model registered for ${ModelType.DRAFT_ONE}. Please download a model first."
+            )
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
         return createEngine(modelPath)
@@ -149,7 +157,9 @@ object EngineModule {
         modelRegistry: ModelRegistryPort
     ): Engine {
         val config = modelRegistry.getRegisteredModelSync(ModelType.DRAFT_TWO)
-            ?: throw IllegalStateException("No model registered for ${ModelType.DRAFT_TWO}. Please download a model first.")
+            ?: throw IllegalStateException(
+                "No model registered for ${ModelType.DRAFT_TWO}. Please download a model first."
+            )
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
         return createEngine(modelPath)
@@ -163,7 +173,9 @@ object EngineModule {
         modelRegistry: ModelRegistryPort
     ): Engine {
         val config = modelRegistry.getRegisteredModelSync(ModelType.FAST)
-            ?: throw IllegalStateException("No model registered for ${ModelType.FAST}. Please download a model first.")
+            ?: throw IllegalStateException(
+                "No model registered for ${ModelType.FAST}. Please download a model first."
+            )
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
         return createEngine(modelPath)
@@ -177,7 +189,9 @@ object EngineModule {
         modelRegistry: ModelRegistryPort
     ): Engine {
         val config = modelRegistry.getRegisteredModelSync(ModelType.THINKING)
-            ?: throw IllegalStateException("No model registered for ${ModelType.THINKING}. Please download a model first.")
+            ?: throw IllegalStateException(
+                "No model registered for ${ModelType.THINKING}. Please download a model first."
+            )
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
         return createEngine(modelPath)
@@ -192,7 +206,9 @@ object EngineModule {
     ): Engine {
         // Uses the dedicated FINAL_SYNTHESIS model
         val config = modelRegistry.getRegisteredModelSync(ModelType.FINAL_SYNTHESIS)
-            ?: throw IllegalStateException("No model registered for ${ModelType.FINAL_SYNTHESIS}. Please download a model first.")
+            ?: throw IllegalStateException(
+                "No model registered for ${ModelType.FINAL_SYNTHESIS}. Please download a model first."
+            )
         val filename = config.metadata.localFileName
         val modelPath = getModelPath(context, filename)
         return createEngine(modelPath)
@@ -298,9 +314,14 @@ object EngineModule {
         return when {
             filename.endsWith(".gguf") -> {
                 // Use llama.cpp implementation for GGUF models
-                val service = LlamaInferenceServiceImpl(llamaChatSessionManager, processThinkingTokens, modelType, loggingPort)
+                val service = LlamaInferenceServiceImpl(
+                    llamaChatSessionManager,
+                    processThinkingTokens,
+                    modelType,
+                    loggingPort
+                )
                 val tunings = config.tunings
-                val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, 32)
+                val gpuConfig = GpuConfig.forDevice(context, config.metadata.sizeInBytes, MAX_GPU_LAYERS)
 
                 service.configure(
                     modelPath = modelPath,

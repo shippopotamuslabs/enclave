@@ -13,6 +13,9 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
+    private const val CONNECT_TIMEOUT_SECONDS = 30L
+    private const val READ_TIMEOUT_MINUTES = 5L
+    private const val WRITE_TIMEOUT_SECONDS = 60L
 
     @Provides
     @Singleton
@@ -24,9 +27,9 @@ object NetworkModule {
 
         return OkHttpClient.Builder()
             .dispatcher(dispatcher)
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(5, TimeUnit.MINUTES)  // 5 minutes for large downloads
-            .writeTimeout(60, TimeUnit.SECONDS)
+            .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(READ_TIMEOUT_MINUTES, TimeUnit.MINUTES)  // 5 minutes for large downloads
+            .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .build()
     }
 }
