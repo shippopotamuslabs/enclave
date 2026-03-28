@@ -1,40 +1,41 @@
 package com.browntowndev.pocketcrew.feature.settings
-
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationUi
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
-import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetModelConfigurationsUseCase
-import com.browntowndev.pocketcrew.domain.usecase.modelconfig.UpdateModelConfigurationUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateAllowMemoriesUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomizationEnabledUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomPromptTextUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateHapticPressUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateHapticResponseUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateSelectedPromptOptionUseCase
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationUi
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SaveApiModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetModelConfigurationsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.UpdateModelConfigurationUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateAllowMemoriesUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomPromptTextUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomizationEnabledUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateHapticPressUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateHapticResponseUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateSelectedPromptOptionUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateThemeUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import javax.inject.Inject
+
 
 /**
  * UI-only transient state that doesn't need persistence.
@@ -77,7 +78,7 @@ class SettingsViewModel @Inject constructor(
     private val deleteApiModelUseCase: DeleteApiModelUseCase,
     private val getDefaultModelsUseCase: GetDefaultModelsUseCase,
     private val setDefaultModelUseCase: SetDefaultModelUseCase,
-    private val errorHandler: com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
+    private val errorHandler: ViewModelErrorHandler
 ) : ViewModel() {
 
     companion object {

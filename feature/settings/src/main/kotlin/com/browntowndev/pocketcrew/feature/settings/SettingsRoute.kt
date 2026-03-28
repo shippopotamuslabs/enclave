@@ -1,5 +1,4 @@
 package com.browntowndev.pocketcrew.feature.settings
-
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
@@ -7,6 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+
 
 @Composable
 fun SettingsRoute(
@@ -14,7 +15,7 @@ fun SettingsRoute(
     onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
     onNavigateToModelDownload: () -> Unit,
     onNavigateToByokConfigure: () -> Unit,
-    onNavigateToModelConfigure: (com.browntowndev.pocketcrew.domain.model.inference.ModelType) -> Unit,
+    onNavigateToModelConfigure: (ModelType) -> Unit,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()

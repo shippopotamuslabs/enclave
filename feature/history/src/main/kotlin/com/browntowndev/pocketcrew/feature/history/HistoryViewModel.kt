@@ -1,15 +1,21 @@
 package com.browntowndev.pocketcrew.feature.history
-
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.chat.DeleteChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetAllChatsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.RenameChatUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.SearchChatsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.TogglePinChatUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
-import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -17,15 +23,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import com.browntowndev.pocketcrew.domain.usecase.chat.SearchChatsUseCase
+
 
 /**
  * ViewModel for the History screen.
@@ -58,7 +63,7 @@ class HistoryViewModel @Inject constructor(
         val other: List<HistoryChat>
     )
 
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class, kotlinx.coroutines.FlowPreview::class)
+    @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
     val uiState: StateFlow<HistoryUiState> = combine(
         _searchQuery.debounce(300L).flatMapLatest { query ->
             if (query.isBlank()) {
@@ -69,12 +74,12 @@ class HistoryViewModel @Inject constructor(
         },
         getSettingsUseCase().catch { 
             emit(
-                com.browntowndev.pocketcrew.domain.port.repository.SettingsData(
-                    theme = com.browntowndev.pocketcrew.domain.model.settings.AppTheme.SYSTEM,
+                SettingsData(
+                    theme = AppTheme.SYSTEM,
                     hapticPress = true,
                     hapticResponse = true,
                     customizationEnabled = false,
-                    selectedPromptOption = com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption.CONCISE,
+                    selectedPromptOption = SystemPromptOption.CONCISE,
                     customPromptText = "",
                     allowMemories = false
                 )

@@ -1,32 +1,34 @@
 package com.browntowndev.pocketcrew.app
-
 import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.FastModelEngine
-import com.browntowndev.pocketcrew.domain.model.inference.ThinkingModelEngine
-import com.browntowndev.pocketcrew.domain.model.inference.MainModelEngine
-import com.browntowndev.pocketcrew.domain.model.inference.VisionModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.DraftOneModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.DraftTwoModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.FastModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.FinalSynthesizerModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
+import com.browntowndev.pocketcrew.domain.model.inference.MainModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ThinkingModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.VisionModelEngine
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
-import com.browntowndev.pocketcrew.feature.inference.ConversationManagerImpl
+import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.browntowndev.pocketcrew.feature.inference.ConversationManagerImpl
+import com.browntowndev.pocketcrew.feature.inference.InferenceFactoryImpl
 import com.browntowndev.pocketcrew.feature.inference.LiteRtInferenceServiceImpl
 import com.browntowndev.pocketcrew.feature.inference.LlamaInferenceServiceImpl
-import com.browntowndev.pocketcrew.feature.inference.MediaPipeInferenceServiceImpl
 import com.browntowndev.pocketcrew.feature.inference.LlmInferenceWrapper
+import com.browntowndev.pocketcrew.feature.inference.MediaPipeInferenceServiceImpl
 import com.browntowndev.pocketcrew.feature.inference.llama.GpuConfig
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
-import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.ExperimentalApi
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import dagger.Module
 import dagger.Provides
@@ -35,6 +37,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import java.io.File
 import javax.inject.Singleton
+
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -84,7 +87,7 @@ object EngineModule {
     /**
      * Creates LiteRT Engine using explicit GPU preference.
      */
-    @OptIn(com.google.ai.edge.litertlm.ExperimentalApi::class)
+    @OptIn(ExperimentalApi::class)
     private fun createEngine(modelPath: String): Engine {
         Log.i(TAG, "Creating LiteRT Engine with GPU backend (NPU flags initialized in Application).")
 
@@ -475,6 +478,6 @@ object EngineModule {
     @Provides
     @Singleton
     fun provideInferenceFactory(
-        impl: com.browntowndev.pocketcrew.feature.inference.InferenceFactoryImpl
-    ): com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort = impl
+        impl: InferenceFactoryImpl
+    ): InferenceFactoryPort = impl
 }

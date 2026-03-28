@@ -15,29 +15,30 @@
  */
 
 package com.browntowndev.pocketcrew.feature.chat
-
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
+import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import io.mockk.*
+import java.io.IOException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.test.runTest
-
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+
+
 
 /**
  * Tests for ChatViewModel's mapping logic.
@@ -90,7 +91,7 @@ class ChatViewModelTest {
         val input = "Hello"
         chatViewModel.onInputChange(input)
         
-        val exception = java.io.IOException("Network error")
+        val exception = IOException("Network error")
         coEvery { chatUseCases.processPrompt(any()) } throws exception
         
         // When
