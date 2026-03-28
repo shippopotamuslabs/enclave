@@ -78,7 +78,7 @@ Your objective is to identify general bugs, architectural flaws, performance bot
             ]
         },
         "generation_config": {
-            "max_output_tokens": 8192,
+            "max_output_tokens": 32768,
             "temperature": 0.0
         }
     }
@@ -135,7 +135,12 @@ Your objective is to identify general bugs, architectural flaws, performance bot
 ---
 """
         
-        final_output += f"\n{full_text.strip()}"
+        # Clean up any duplicate headers that might have been included by the model
+        text_to_append = full_text.strip()
+        if text_to_append.startswith("### 🤖 Gemini Architect Review"):
+            text_to_append = text_to_append.replace("### 🤖 Gemini Architect Review", "", 1).strip()
+        
+        final_output += f"\n{text_to_append}"
         
         post_github_comment(final_output)
         
