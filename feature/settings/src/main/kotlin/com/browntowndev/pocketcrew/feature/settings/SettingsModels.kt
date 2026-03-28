@@ -46,7 +46,6 @@ data class SettingsUiState(
     val showByokSheet: Boolean = false,
     val apiModels: List<ApiModelConfigUi> = emptyList(),
     val selectedApiModel: ApiModelConfigUi? = null,
-    val isEditingApiModel: Boolean = false,
 
     // Default model assignments (for Model Config sheet)
     val defaultAssignments: List<DefaultModelAssignmentUi> = emptyList(),
@@ -58,7 +57,6 @@ data class ApiModelConfigUi(
     val provider: ApiProvider = ApiProvider.ANTHROPIC,
     val modelId: String = "",
     val baseUrl: String = "",
-    val apiKey: String = "",       // Only populated during editing, never persisted in UI state after save
     val isVision: Boolean = false,
     val maxTokens: Int = 4096,
     val contextWindow: Int = 4096,

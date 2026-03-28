@@ -59,6 +59,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import java.util.Locale
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
@@ -72,6 +73,7 @@ fun ByokConfigureRoute(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val apiKey by viewModel.currentApiKey.collectAsStateWithLifecycle()
 
     val handleBack: () -> Unit = {
         viewModel.onBackToByokList()
@@ -80,8 +82,10 @@ fun ByokConfigureRoute(
 
     ByokConfigureScreen(
         uiState = uiState,
+        apiKey = apiKey,
         onNavigateBack = handleBack,
         onApiModelFieldChange = viewModel::onApiModelFieldChange,
+        onApiKeyChange = viewModel::onApiKeyChange,
         onSaveApiModel = {
             viewModel.onSaveApiModel(onSuccess = {
                 viewModel.onBackToByokList()
@@ -104,8 +108,10 @@ fun ByokConfigureRoute(
 @Composable
 fun ByokConfigureScreen(
     uiState: SettingsUiState,
+    apiKey: String,
     onNavigateBack: () -> Unit,
     onApiModelFieldChange: (ApiModelConfigUi) -> Unit,
+    onApiKeyChange: (String) -> Unit,
     onSaveApiModel: () -> Unit,
     onDeleteApiModel: () -> Unit,
 ) {
@@ -240,8 +246,8 @@ fun ByokConfigureScreen(
                 )
 
                 OutlinedTextField(
-                    value = model.apiKey,
-                    onValueChange = { onApiModelFieldChange(model.copy(apiKey = it)) },
+                    value = apiKey,
+                    onValueChange = { onApiKeyChange(it) },
                     label = { Text("API Key" + if (!isNew) " (Leave blank to keep existing)" else "") },
                     visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -345,7 +351,7 @@ fun ByokConfigureScreen(
                             // Temperature
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 LabelWithInfo(
-                                    label = "Temperature: ${String.format("%.2f", model.temperature)}",
+                                    label = "Temperature: ${String.format(Locale.ROOT, "%.2f", model.temperature)}",
                                     infoText = "Controls randomness: Higher values (e.g., 1.0) make output more creative, lower values (e.g., 0.2) make it more focused and deterministic."
                                 )
                                 Slider(
@@ -358,7 +364,7 @@ fun ByokConfigureScreen(
                             // Top P
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 LabelWithInfo(
-                                    label = "Top P: ${String.format("%.2f", model.topP)}",
+                                    label = "Top P: ${String.format(Locale.ROOT, "%.2f", model.topP)}",
                                     infoText = "Nucleus sampling: Limits the model to a subset of tokens whose cumulative probability is P. Another way to control diversity."
                                 )
                                 Slider(
@@ -379,7 +385,7 @@ fun ByokConfigureScreen(
                 tonalElevation = 8.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                val isReady = model.displayName.isNotBlank() && model.modelId.isNotBlank() && (model.apiKey.isNotBlank() || !isNew)
+                val isReady = model.displayName.isNotBlank() && model.modelId.isNotBlank() && (apiKey.isNotBlank() || !isNew)
                 Button(
                     onClick = onSaveApiModel,
                     modifier = Modifier

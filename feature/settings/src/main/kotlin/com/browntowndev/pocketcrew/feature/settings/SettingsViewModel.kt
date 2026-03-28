@@ -56,8 +56,7 @@ private data class TransientState(
     val selectedModelConfig: ModelConfigurationUi? = null,
     // BYOK Sheet
     val showByokSheet: Boolean = false,
-    val selectedApiModel: ApiModelConfigUi? = null,
-    val isEditingApiModel: Boolean = false
+    val selectedApiModel: ApiModelConfigUi? = null
 )
 
 @HiltViewModel
@@ -87,6 +86,10 @@ class SettingsViewModel @Inject constructor(
 
     private val _transientState = MutableStateFlow(TransientState())
 
+    // Security: Keep API key in a separate flow cleared after save
+    private val _currentApiKey = MutableStateFlow("")
+    val currentApiKey: StateFlow<String> = _currentApiKey
+
     init {
         // Initialize state from navigation arguments (survives process death)
         savedStateHandle.get<String>("modelType")?.let { name ->
@@ -101,8 +104,7 @@ class SettingsViewModel @Inject constructor(
             // DO NOT use onSelectApiModel, just wait for combine block
             _transientState.update { 
                 it.copy(
-                    isEditingApiModel = true,
-                    // selectedApiModel will be null here, combine block needs to handle it!
+                    // removed isEditingApiModel = true
                 ) 
             }
         }
@@ -157,7 +159,6 @@ class SettingsViewModel @Inject constructor(
             showByokSheet = transientState.showByokSheet,
             apiModels = apiModels.map { it.toUi() },
             selectedApiModel = selectedApiConfig,
-            isEditingApiModel = transientState.isEditingApiModel,
             // Default model assignments
             defaultAssignments = defaultModels.map { def ->
                 DefaultModelAssignmentUi(
@@ -180,7 +181,6 @@ class SettingsViewModel @Inject constructor(
         provider = provider,
         modelId = modelId,
         baseUrl = baseUrl ?: "",
-        apiKey = "",
         isVision = isVision,
         maxTokens = maxTokens,
         contextWindow = contextWindow,
@@ -348,36 +348,28 @@ class SettingsViewModel @Inject constructor(
 
     // BYOK Setup
     fun onShowByokSheet(show: Boolean) {
-        _transientState.update { it.copy(showByokSheet = show, isEditingApiModel = false, selectedApiModel = null) }
+        _transientState.update { it.copy(showByokSheet = show, selectedApiModel = null) }
     }
 
     fun onSelectApiModel(modelId: Long?) {
         if (modelId == null) {
-            _transientState.update { 
-                it.copy(
-                    isEditingApiModel = true, 
-                    selectedApiModel = ApiModelConfigUi() 
-                ) 
-            }
-        } else {
-            // Can't reliably read from uiState during init, so launch a coroutine to fetch or just use a dummy config until UI updates.
-            // Alternatively, since uiState is populated eventually, it might just need to wait.
-            // Wait, we can just launch a coroutine and collect the first emitted apiModel!
-            viewModelScope.launch {
-                val apiModels = getApiModelsUseCase().first()
-                val config = apiModels.find { it.id == modelId }?.toUi()
-                _transientState.update { 
-                    it.copy(
-                        isEditingApiModel = true, 
-                        selectedApiModel = config
-                    ) 
-                }
-            }
+            _transientState.update { it.copy(selectedApiModel = ApiModelConfigUi()) }
+            return
+        }
+
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to load API model", "Failed to load configuration")) {
+            val apiModels = getApiModelsUseCase().first()
+            val config = apiModels.find { it.id == modelId }?.toUi()
+            _transientState.update { it.copy(selectedApiModel = config) }
         }
     }
 
-    fun onApiModelFieldChange(updatedModel: ApiModelConfigUi) {
-        _transientState.update { it.copy(selectedApiModel = updatedModel) }
+    fun onApiModelFieldChange(config: ApiModelConfigUi) {
+        _transientState.update { it.copy(selectedApiModel = config) }
+    }
+
+    fun onApiKeyChange(key: String) {
+        _currentApiKey.value = key
     }
 
     fun onSaveApiModel(onSuccess: () -> Unit) {
@@ -388,7 +380,7 @@ class SettingsViewModel @Inject constructor(
                 displayName = config.displayName,
                 provider = config.provider,
                 modelId = config.modelId,
-                apiKey = config.apiKey,
+                apiKey = _currentApiKey.value,
                 baseUrl = config.baseUrl.takeIf { it.isNotBlank() },
                 isVision = config.isVision,
                 maxTokens = config.maxTokens,
@@ -396,6 +388,7 @@ class SettingsViewModel @Inject constructor(
                 temperature = config.temperature,
                 topP = config.topP
             )
+            _currentApiKey.value = "" // Clear immediately after save
             onSuccess()
         }
     }
@@ -408,7 +401,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onBackToByokList() {
-        _transientState.update { it.copy(isEditingApiModel = false, selectedApiModel = null) }
+        _transientState.update { it.copy(selectedApiModel = null) }
     }
 
     fun onSetDefaultModel(modelType: ModelType, source: ModelSource, apiModelId: Long? = null) {
