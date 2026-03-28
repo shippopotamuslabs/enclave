@@ -14,6 +14,7 @@ import com.browntowndev.pocketcrew.feature.chat.ChatRoute
 import com.browntowndev.pocketcrew.feature.history.HistoryRoute
 import com.browntowndev.pocketcrew.feature.settings.SettingsRoute
 import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
+import com.browntowndev.pocketcrew.feature.settings.navigation.settingsGraph
 
 @Composable
 fun PocketCrewNavGraph(
@@ -127,44 +128,14 @@ fun PocketCrewNavGraph(
                         navController.navigate(Routes.CHAT)
                     }
                 },
-                onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
+                onNavigateToSettings = { navController.navigate(Routes.SETTINGS_GRAPH) },
                 onShowSnackbar = onShowSnackbar,
             )
         }
-        composable(
-            route = Routes.SETTINGS,
-            enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it },
-                    animationSpec = tween(300),
-                )
-            },
-            exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(300),
-                )
-            },
-            popEnterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it },
-                    animationSpec = tween(300),
-                )
-            },
-            popExitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(300),
-                )
-            },
-        ) {
-            SettingsRoute(
-                onNavigateBack = { navController.popBackStack() },
-                onShowSnackbar = onShowSnackbar,
-                onNavigateToModelDownload = {
-                    navController.navigate(Routes.MODEL_DOWNLOAD)
-                }
-            )
-        }
+        
+        settingsGraph(
+            navController = navController,
+            onShowSnackbar = onShowSnackbar
+        )
     }
 }

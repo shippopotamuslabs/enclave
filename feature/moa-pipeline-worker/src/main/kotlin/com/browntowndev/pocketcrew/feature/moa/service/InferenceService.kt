@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.feature.moa.service
 
 import android.app.Notification
+import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -82,26 +83,13 @@ class InferenceService : Service() {
     lateinit var logger: LoggingPort
 
     @Inject
-    @field:DraftOneModelEngine
-    lateinit var draftOneServiceProvider: dagger.Lazy<LlmInferencePort>
-
-    @Inject
-    @field:DraftTwoModelEngine
-    lateinit var draftTwoServiceProvider: dagger.Lazy<LlmInferencePort>
-
-    @Inject
-    @field:MainModelEngine
-    lateinit var mainServiceProvider: dagger.Lazy<LlmInferencePort>
-
-    @Inject
-    @field:FinalSynthesizerModelEngine
-    lateinit var finalSynthesizerServiceProvider: dagger.Lazy<LlmInferencePort>
+    lateinit var inferenceFactoryProvider: dagger.Lazy<InferenceFactoryPort>
 
     // Lambdas for service access (matching worker pattern)
-    private lateinit var draftOneService: () -> LlmInferencePort
-    private lateinit var draftTwoService: () -> LlmInferencePort
-    private lateinit var synthesisService: () -> LlmInferencePort
-    private lateinit var finalService: () -> LlmInferencePort
+    private lateinit var draftOneService: suspend () -> LlmInferencePort
+    private lateinit var draftTwoService: suspend () -> LlmInferencePort
+    private lateinit var synthesisService: suspend () -> LlmInferencePort
+    private lateinit var finalService: suspend () -> LlmInferencePort
 
     @Inject
     lateinit var modelRegistry: ModelRegistryPort
@@ -120,10 +108,10 @@ class InferenceService : Service() {
         createNotificationChannel()
 
         // Initialize service lambdas (matching worker pattern)
-        draftOneService = { draftOneServiceProvider.get() }
-        draftTwoService = { draftTwoServiceProvider.get() }
-        synthesisService = { mainServiceProvider.get() }
-        finalService = { finalSynthesizerServiceProvider.get() }
+        draftOneService = { inferenceFactoryProvider.get().getInferenceService(ModelType.DRAFT_ONE) }
+        draftTwoService = { inferenceFactoryProvider.get().getInferenceService(ModelType.DRAFT_TWO) }
+        synthesisService = { inferenceFactoryProvider.get().getInferenceService(ModelType.MAIN) }
+        finalService = { inferenceFactoryProvider.get().getInferenceService(ModelType.FINAL_SYNTHESIS) }
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -283,8 +271,6 @@ class InferenceService : Service() {
         userMessage: String,
         initialState: PipelineState
     ) {
-        // Get all services upfront (as Lazy to avoid loading until needed)
-        val draftOneServiceProvider = { draftOneServiceProvider.get() }
         // Map steps to services using class-level lambdas
         val stepServices = mapOf(
             PipelineStep.DRAFT_ONE to draftOneService,
