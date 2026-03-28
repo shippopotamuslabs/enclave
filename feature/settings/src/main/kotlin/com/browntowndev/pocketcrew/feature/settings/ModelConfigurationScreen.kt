@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.feature.settings
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -201,7 +202,7 @@ fun ModelConfigurationScreen(
                                 onExpandedChange = { huggingFaceDropdownExpanded = it }
                             ) {
                                 OutlinedTextField(
-                                    value = config.huggingFaceModelName,
+                                    value = config.displayName,
                                     onValueChange = {},
                                     readOnly = true,
                                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = huggingFaceDropdownExpanded) },
@@ -220,11 +221,11 @@ fun ModelConfigurationScreen(
                                     expanded = huggingFaceDropdownExpanded,
                                     onDismissRequest = { huggingFaceDropdownExpanded = false }
                                 ) {
-                                    uiState.availableHuggingFaceModels.forEach { modelName ->
+                                    uiState.availableHuggingFaceModels.forEach { availableConfig ->
                                         DropdownMenuItem(
-                                            text = { Text(modelName) },
+                                            text = { Text(availableConfig.displayName) },
                                             onClick = {
-                                                onHuggingFaceModelNameChange(modelName)
+                                                onHuggingFaceModelNameChange(availableConfig.huggingFaceModelName)
                                                 huggingFaceDropdownExpanded = false
                                             }
                                         )
@@ -452,7 +453,7 @@ fun ModelConfigurationScreen(
 
             Surface(
                 color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp,
+                tonalElevation = 0.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Button(

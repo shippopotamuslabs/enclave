@@ -383,7 +383,7 @@ fun ByokConfigureScreen(
 
             Surface(
                 color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp,
+                tonalElevation = 0.dp,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 val isReady = model.displayName.isNotBlank() && model.modelId.isNotBlank() && (apiKey.isNotBlank() || !isNew)

@@ -124,6 +124,7 @@ fun ByokListView(
                 color = MaterialTheme.colorScheme.primary
             )
             Text(
+                modifier = Modifier.padding(top = 5.dp),
                 text = "Configured API models can be set as your default in Model Configuration.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -164,7 +165,7 @@ fun ByokListView(
                 }
             }
 
-            FilledTonalButton(
+            Button(
                 onClick = { onSelectApiModel(null) },
                 modifier = Modifier
                     .fillMaxWidth()
