@@ -59,7 +59,7 @@ class DownloadViewModel @AssistedInject constructor(
     init {
         viewModelScope.launch {
             displayNameCache = ModelType.entries.associateWith { modelType ->
-                modelRegistry.getRegisteredModelSync(modelType)?.metadata?.displayName
+                modelRegistry.getRegisteredAssetSync(modelType)?.metadata?.displayName
                     ?: modelType.name.lowercase().replaceFirstChar { it.uppercase() }
             }
         }

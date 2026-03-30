@@ -18,6 +18,6 @@ class GetModelDisplayNameUseCase @Inject constructor(
      * @return The display name, or empty string if no model is registered
      */
     operator fun invoke(modelType: ModelType): String {
-        return modelRegistry.getRegisteredModelSync(modelType)?.metadata?.displayName ?: ""
+        return modelRegistry.getRegisteredAssetSync(modelType)?.metadata?.displayName ?: ""
     }
 }

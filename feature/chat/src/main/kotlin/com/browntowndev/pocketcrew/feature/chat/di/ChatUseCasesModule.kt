@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.feature.chat.di
 
-import com.browntowndev.pocketcrew.domain.usecase.chat.BreakIteratorSentenceBoundaryDetector
+import com.browntowndev.pocketcrew.data.chat.BreakIteratorSentenceBoundaryDetector
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetChatUseCase

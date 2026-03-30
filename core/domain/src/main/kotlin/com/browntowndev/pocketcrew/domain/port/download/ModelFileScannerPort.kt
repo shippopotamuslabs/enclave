@@ -1,7 +1,8 @@
 package com.browntowndev.pocketcrew.domain.port.download
 
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 /**
  * Port interface for scanning model files on disk.
@@ -12,11 +13,11 @@ interface ModelFileScannerPort {
      * Scan the models directory and create it if it doesn't exist.
      * Validates against cache (expected models) for MD5 and format changes.
      *
-     * @param downloadedModels List of models actually downloaded (from registry)
-     * @param expectedModels List of models expected from remote config (from cache)
+     * @param downloadedModels Map of model types to assets actually downloaded (from registry)
+     * @param expectedModels Map of model types to assets expected from remote config (from cache)
      */
     suspend fun scanAndCreateDirIfNotExist(
-        downloadedModels: List<ModelConfiguration> = emptyList(),
-        expectedModels: List<ModelConfiguration> = emptyList()
+        downloadedModels: Map<ModelType, LocalModelAsset> = emptyMap(),
+        expectedModels: Map<ModelType, LocalModelAsset> = emptyMap()
     ): ModelScanResult
 }
