@@ -1,21 +1,8 @@
-/*
- * Copyright 2022 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.browntowndev.pocketcrew.testing
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
@@ -32,7 +19,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
-
 
 class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
     private val _downloadState = MutableStateFlow(DownloadState(status = DownloadStatus.CHECKING))
@@ -104,6 +90,7 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
     override suspend fun startDownloads(wifiOnly: Boolean): Boolean {
         val modelsResult = _lastModelsResult ?: DownloadModelsResult(
             modelsToDownload = emptyList(),
+            allModels = emptyMap(),
             scanResult = ModelScanResult(
                 missingModels = emptyList(),
                 partialDownloads = emptyMap(),
@@ -141,35 +128,42 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
 }
 
 class FakeModelRegistry : ModelRegistryPort {
-    private val _registeredModels = MutableStateFlow<Map<ModelType, ModelConfiguration>>(emptyMap())
-    private val _modelsCache = mutableMapOf<ModelType, ModelConfiguration>()
+    private val _assets = MutableStateFlow<Map<ModelType, LocalModelAsset>>(emptyMap())
+    private val _configs = MutableStateFlow<Map<ModelType, LocalModelConfiguration>>(emptyMap())
 
-    fun registerModel(modelType: ModelType, config: ModelConfiguration) {
-        _modelsCache[modelType] = config
-        _registeredModels.value = _modelsCache.toMap()
+    override suspend fun getRegisteredAsset(modelType: ModelType): LocalModelAsset? = _assets.value[modelType]
+    override suspend fun getRegisteredConfiguration(modelType: ModelType): LocalModelConfiguration? = _configs.value[modelType]
+    override fun getRegisteredAssetSync(modelType: ModelType): LocalModelAsset? = _assets.value[modelType]
+    override fun getRegisteredConfigurationSync(modelType: ModelType): LocalModelConfiguration? = _configs.value[modelType]
+    
+    override suspend fun getRegisteredAssets(): List<LocalModelAsset> = _assets.value.values.toList()
+    override fun getRegisteredAssetsSync(): List<LocalModelAsset> = _assets.value.values.toList()
+    override suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration> = _configs.value.values.toList()
+    override fun getRegisteredConfigurationsSync(): List<LocalModelConfiguration> = _configs.value.values.toList()
+
+    override fun observeAsset(modelType: ModelType): Flow<LocalModelAsset?> = _assets.map { it[modelType] }
+    override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> = _configs.map { it[modelType] }
+    override fun observeAssets(): Flow<List<LocalModelAsset>> = _assets.map { it.values.toList() }
+
+    override suspend fun setRegisteredModel(modelType: ModelType, asset: LocalModelAsset, status: ModelStatus, markExistingAsOld: Boolean) {
+        _assets.value = _assets.value + (modelType to asset)
+        val config = asset.configurations.firstOrNull() ?: throw IllegalStateException("No configs")
+        _configs.value = _configs.value + (modelType to config)
     }
 
-    fun clearModels() {
-        _modelsCache.clear()
-        _registeredModels.value = emptyMap()
+    override suspend fun clearAll() {
+        _assets.value = emptyMap()
+        _configs.value = emptyMap()
     }
 
-    fun getConfig(modelType: ModelType): ModelConfiguration? = _modelsCache[modelType]
+    override suspend fun clearOld() {}
 
-    override suspend fun getRegisteredModel(modelType: ModelType): ModelConfiguration? = _modelsCache[modelType]
-    override fun getRegisteredModelSync(modelType: ModelType): ModelConfiguration? = _modelsCache[modelType]
-    override suspend fun getRegisteredModels(): List<ModelConfiguration> = _modelsCache.values.toList()
-    override fun getRegisteredModelsSync(): List<ModelConfiguration> = _modelsCache.values.toList()
-    override fun observeRegisteredModels(): Flow<Map<ModelType, String>> = _registeredModels.map { map -> map.mapValues { it.value.metadata.localFileName } }
-    override fun observeModel(modelType: ModelType): Flow<ModelConfiguration?> = _registeredModels.map { it[modelType] }
+    override suspend fun getAssetsPreferringOld(): Map<ModelType, LocalModelAsset> = _assets.value
 
-    override suspend fun setRegisteredModel(config: ModelConfiguration, status: ModelStatus, markExistingAsOld: Boolean) {
-        registerModel(config.modelType, config)
-    }
-
-    override suspend fun clearAll() { clearModels() }
-    override suspend fun clearOld() { /* no-op */ }
-    override suspend fun getModelsPreferringOld(): List<ModelConfiguration> = _modelsCache.values.toList()
+    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long = metadata.id
+    override suspend fun deleteLocalModelMetadata(id: Long) {}
+    override suspend fun saveConfiguration(config: LocalModelConfiguration): Long = config.id
+    override suspend fun deleteConfiguration(id: Long) {}
 }
 
 class FakeSpeedTracker : DownloadSpeedTrackerPort {

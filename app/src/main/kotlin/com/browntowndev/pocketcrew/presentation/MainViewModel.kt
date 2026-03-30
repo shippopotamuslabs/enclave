@@ -61,6 +61,7 @@ class MainViewModel @Inject constructor(
                     AppStartupState.Ready(
                         modelsResult = DownloadModelsResult(
                             modelsToDownload = emptyList(),
+                            allModels = emptyMap(),
                             scanResult = ModelScanResult(
                                 missingModels = emptyList(),
                                 partialDownloads = emptyMap(),
