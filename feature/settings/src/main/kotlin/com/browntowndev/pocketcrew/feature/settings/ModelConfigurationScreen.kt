@@ -1,71 +1,71 @@
 package com.browntowndev.pocketcrew.feature.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipAnchorPosition
-import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import java.util.Locale
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import kotlinx.coroutines.launch
 
 @Composable
 fun ModelConfigurationRoute(
@@ -75,442 +75,398 @@ fun ModelConfigurationRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(modelType) {
-        viewModel.onSelectModelType(modelType)
-    }
-
-    val handleBack: () -> Unit = {
-        viewModel.onClearSelectedModel()
-        onNavigateBack()
-    }
-
     ModelConfigurationScreen(
-        modelType = modelType,
         uiState = uiState,
-        onNavigateBack = handleBack,
-        onHuggingFaceModelNameChange = viewModel::onHuggingFaceModelNameChange,
-        onTemperatureChange = viewModel::onTemperatureChange,
-        onTopKChange = viewModel::onTopKChange,
-        onTopPChange = viewModel::onTopPChange,
-        onMaxTokensChange = viewModel::onMaxTokensChange,
-        onContextWindowChange = viewModel::onContextWindowChange,
-        onSave = {
-            viewModel.onSaveModelConfig(onSuccess = {
-                viewModel.onClearSelectedModel()
-                onNavigateBack()
-            })
-        },
+        onNavigateBack = onNavigateBack,
+        onSelectLocalModelAsset = { asset -> asset?.let { viewModel.onSelectLocalModelAsset(it) } },
+        onSelectLocalModelConfig = viewModel::onSelectLocalModelConfig,
+        onDeleteLocalModelAsset = viewModel::onDeleteLocalModelAsset,
+        onDeleteLocalModelConfig = { id -> viewModel.onDeleteLocalModelConfig(id, {}) },
         onSetDefaultModel = viewModel::onSetDefaultModel,
+        onShowAssignmentDialog = viewModel::onShowAssignmentDialog,
+        onNavigateToModelDownload = { /* Future: Navigate to download screen */ }
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelConfigurationScreen(
-    modelType: ModelType,
     uiState: SettingsUiState,
     onNavigateBack: () -> Unit,
-    onHuggingFaceModelNameChange: (String) -> Unit,
-    onTemperatureChange: (Double) -> Unit,
-    onTopKChange: (Int) -> Unit,
-    onTopPChange: (Double) -> Unit,
-    onMaxTokensChange: (String) -> Unit,
-    onContextWindowChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onSetDefaultModel: (ModelType, ModelSource, Long?) -> Unit,
+    onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
+    onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
+    onDeleteLocalModelAsset: (Long) -> Unit,
+    onDeleteLocalModelConfig: (Long) -> Unit,
+    onSetDefaultModel: (ModelType, Long?, Long?) -> Unit,
+    onShowAssignmentDialog: (Boolean, ModelType?) -> Unit,
+    onNavigateToModelDownload: () -> Unit
 ) {
-    val config = uiState.selectedModelConfig
-    val assignment = uiState.defaultAssignments.find { it.modelType == modelType }
-    var huggingFaceDropdownExpanded by remember { mutableStateOf(false) }
-    var apiDropdownExpanded by remember { mutableStateOf(false) }
-    val scrollState = rememberScrollState()
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        text = modelType.displayName(),
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+                title = { Text("Model Management", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back")
                     }
                 }
             )
         }
-    ) { innerPadding ->
-        Column(
+    ) { padding ->
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(padding)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            HorizontalDivider()
+            // Section 1: Default Assignments
+            item {
+                SectionHeader(text = "Default Pipeline Slots")
+                Spacer(modifier = Modifier.height(8.dp))
+                DefaultAssignmentsCard(
+                    assignments = uiState.defaultAssignments,
+                    onEditAssignment = { onShowAssignmentDialog(true, it) }
+                )
+            }
 
-            if (assignment != null) {
-                Column(
+            // Section 2: Local Model Assets
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SectionHeader(text = "Local Model Assets")
+                    IconButton(onClick = onNavigateToModelDownload) {
+                        Icon(
+                            imageVector = Icons.Default.Add, 
+                            contentDescription = "Download new model", 
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+
+            items(uiState.localModels, key = { it.metadataId }) { asset ->
+                val onEditAssetClick = remember(asset) {
+                    { onSelectLocalModelAsset(asset) }
+                }
+                val onAddConfigClick = remember(asset) {
+                    {
+                        onSelectLocalModelAsset(asset)
+                        onSelectLocalModelConfig(LocalModelConfigUi(localModelId = asset.metadataId))
+                    }
+                }
+
+                LocalModelAssetCard(
+                    asset = asset,
+                    onDeleteAsset = { onDeleteLocalModelAsset(asset.metadataId) },
+                    onEditConfig = { config -> onSelectLocalModelConfig(config) },
+                    onDeleteConfig = { id -> onDeleteLocalModelConfig(id) },
+                    onAddConfig = onAddConfigClick
+                )
+            }
+            
+            item { Spacer(modifier = Modifier.height(24.dp)) }
+        }
+
+        if (uiState.showAssignmentDialog && uiState.editingAssignmentSlot != null) {
+            AssignmentSelectionDialog(
+                slot = uiState.editingAssignmentSlot,
+                localAssets = uiState.localModels,
+                apiAssets = uiState.apiModels,
+                onDismiss = { onShowAssignmentDialog(false, null) },
+                onSelect = { localId, apiId -> 
+                    onSetDefaultModel(uiState.editingAssignmentSlot, localId, apiId)
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun DefaultAssignmentsCard(
+    assignments: List<DefaultModelAssignmentUi>,
+    onEditAssignment: (ModelType) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            assignments.forEach { assignment ->
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(scrollState)
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "Processing Engine",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    SingleChoiceSegmentedButtonRow(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        SegmentedButton(
-                            selected = assignment.source == ModelSource.ON_DEVICE,
-                            onClick = { onSetDefaultModel(modelType, ModelSource.ON_DEVICE, null) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                        ) {
-                            Text("On-Device")
-                        }
-                        SegmentedButton(
-                            selected = assignment.source == ModelSource.API,
-                            onClick = {
-                                if (assignment.source != ModelSource.API) {
-                                    uiState.apiModels.firstOrNull()?.id?.let { apiId ->
-                                        onSetDefaultModel(modelType, ModelSource.API, apiId)
-                                    }
-                                }
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            enabled = uiState.apiModels.isNotEmpty()
-                        ) {
-                            Text("API (BYOK)")
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = assignment.modelType.name,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = assignment.currentModelName,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        if (assignment.providerName != null) {
+                            Text(
+                                text = "Provider: ${assignment.providerName}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
-
-                    if (assignment.source == ModelSource.ON_DEVICE) {
-                        if (config != null) {
-                            Text(
-                                text = "HuggingFace Model",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-
-                            ExposedDropdownMenuBox(
-                                expanded = huggingFaceDropdownExpanded,
-                                onExpandedChange = { huggingFaceDropdownExpanded = it }
-                            ) {
-                                OutlinedTextField(
-                                    value = config.displayName,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = huggingFaceDropdownExpanded) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                                    )
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = huggingFaceDropdownExpanded,
-                                    onDismissRequest = { huggingFaceDropdownExpanded = false }
-                                ) {
-                                    uiState.availableHuggingFaceModels.forEach { availableConfig ->
-                                        DropdownMenuItem(
-                                            text = { Text(availableConfig.displayName) },
-                                            onClick = {
-                                                onHuggingFaceModelNameChange(availableConfig.huggingFaceModelName)
-                                                huggingFaceDropdownExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-
-                            var advancedExpanded by remember { mutableStateOf(false) }
-                            val rotation by animateFloatAsState(if (advancedExpanded) 180f else 0f)
-
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { advancedExpanded = !advancedExpanded }
-                                        .padding(vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "Advanced Configurations",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Default.KeyboardArrowDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.rotate(rotation),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-
-                                if (advancedExpanded) {
-                                    Column(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            LabelWithInfo(
-                                                label = "Temperature: ${String.format(Locale.ROOT, "%.2f", config.temperature)}",
-                                                infoText = "Controls randomness: Higher values (e.g., 1.0) make output more creative, lower values (e.g., 0.2) make it more focused and deterministic."
-                                            )
-                                            Slider(
-                                                value = config.temperature.toFloat(),
-                                                onValueChange = { onTemperatureChange(it.toDouble()) },
-                                                valueRange = 0f..2f
-                                            )
-                                        }
-
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            LabelWithInfo(
-                                                label = "Top K: ${config.topK}",
-                                                infoText = "Limits the model to the top K most likely next tokens. Reduces the chance of low-probability 'garbage' tokens."
-                                            )
-                                            Slider(
-                                                value = config.topK.toFloat(),
-                                                onValueChange = { onTopKChange(it.toInt()) },
-                                                valueRange = 1f..100f
-                                            )
-                                        }
-
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            LabelWithInfo(
-                                                label = "Top P: ${String.format(Locale.ROOT, "%.2f", config.topP)}",
-                                                infoText = "Nucleus sampling: Limits the model to a subset of tokens whose cumulative probability is P. Another way to control diversity."
-                                            )
-                                            Slider(
-                                                value = config.topP.toFloat(),
-                                                onValueChange = { onTopPChange(it.toDouble()) },
-                                                valueRange = 0f..1f
-                                            )
-                                        }
-
-                                        OutlinedTextField(
-                                            value = config.maxTokens,
-                                            onValueChange = { newValue ->
-                                                onMaxTokensChange(newValue)
-                                            },
-                                            label = {
-                                                LabelWithInfo(
-                                                    label = "Max Tokens",
-                                                    infoText = "The maximum number of tokens the model can generate in a single response.",
-                                                    showValue = false
-                                                )
-                                            },
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(12.dp),
-                                            colors = OutlinedTextFieldDefaults.colors(
-                                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                                            )
-                                        )
-
-                                        OutlinedTextField(
-                                            value = config.contextWindow,
-                                            onValueChange = { newValue ->
-                                                onContextWindowChange(newValue)
-                                            },
-                                            label = {
-                                                LabelWithInfo(
-                                                    label = "Context Window",
-                                                    infoText = "The total number of tokens (input + output) the model can process at once. Larger windows allow for longer conversations.",
-                                                    showValue = false
-                                                )
-                                            },
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(12.dp),
-                                            colors = OutlinedTextFieldDefaults.colors(
-                                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
-                            // Fallback for when source is ON_DEVICE but config is missing
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "On-device model not found",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = "Please ensure the model is downloaded.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    } else if (assignment.source == ModelSource.API) {
-                        Text(
-                            text = "Custom API Model",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
+                    IconButton(onClick = { onEditAssignment(assignment.modelType) }) {
+                        Icon(
+                            imageVector = Icons.Default.Edit, 
+                            contentDescription = "Change default model for ${assignment.modelType.name}", 
+                            modifier = Modifier.size(24.dp)
                         )
+                    }
+                }
+                if (assignment != assignments.last()) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                }
+            }
+        }
+    }
+}
 
-                        if (uiState.apiModels.isEmpty()) {
-                            Text(
-                                text = "No custom models configured. Please add one in 'API & Models'.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(vertical = 8.dp)
+@Composable
+fun AssignmentSelectionDialog(
+    slot: ModelType,
+    localAssets: List<LocalModelAssetUi>,
+    apiAssets: List<ApiModelAssetUi>,
+    onDismiss: () -> Unit,
+    onSelect: (localId: Long?, apiId: Long?) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Assign model to $slot") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (localAssets.isNotEmpty()) {
+                    Text("Local Models", style = MaterialTheme.typography.titleSmall)
+                    localAssets.forEach { asset ->
+                        asset.configurations.forEach { config ->
+                            SelectionRow(
+                                title = "${asset.displayName} - ${config.displayName}",
+                                onClick = { onSelect(config.id, null) }
                             )
-                        } else {
-                            ExposedDropdownMenuBox(
-                                expanded = apiDropdownExpanded,
-                                onExpandedChange = { apiDropdownExpanded = it }
-                            ) {
-                                val currentApiModelName =
-                                    assignment.currentModelName.takeIf { it.isNotBlank() }
-                                        ?: "Select Model"
-                                OutlinedTextField(
-                                    value = currentApiModelName,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    trailingIcon = {
-                                        ExposedDropdownMenuDefaults.TrailingIcon(
-                                            expanded = apiDropdownExpanded
-                                        )
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                                    )
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = apiDropdownExpanded,
-                                    onDismissRequest = { apiDropdownExpanded = false }
-                                ) {
-                                    uiState.apiModels.forEach { apiModel ->
-                                        DropdownMenuItem(
-                                            text = { Text(apiModel.displayName) },
-                                            onClick = {
-                                                onSetDefaultModel(
-                                                    modelType,
-                                                    ModelSource.API,
-                                                    apiModel.id
-                                                )
-                                                apiDropdownExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
                         }
                     }
                 }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
+
+                if (apiAssets.isNotEmpty()) {
+                    Text("API Models", style = MaterialTheme.typography.titleSmall)
+                    apiAssets.forEach { asset ->
+                        asset.configurations.forEach { config ->
+                            SelectionRow(
+                                title = "${asset.displayName} - ${config.displayName}",
+                                onClick = { onSelect(null, config.id) }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
+@Composable
+private fun SelectionRow(
+    title: String,
+    subtitle: String? = null,
+    onClick: () -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = subtitle?.let { { Text(it) } },
+        trailingContent = {
+            Icon(imageVector = Icons.Default.KeyboardArrowRight, contentDescription = null)
+        },
+        modifier = Modifier
+            .clip(RoundedCornerShape(12.dp))
+            .defaultMinSize(minHeight = 48.dp)
+            .clickable(onClick = onClick)
+    )
+}
+
+// ==================== PREVIEWS ====================
+
+@Preview(showBackground = true, name = "Model Configuration Screen - List")
+@Composable
+fun PreviewModelConfigurationScreen() {
+    PocketCrewTheme {
+        ModelConfigurationScreen(
+            uiState = MockSettingsData.baseUiState,
+            onNavigateBack = {},
+            onNavigateToModelDownload = {},
+            onSelectLocalModelAsset = {},
+            onSelectLocalModelConfig = {},
+            onDeleteLocalModelConfig = {},
+            onDeleteLocalModelAsset = {},
+            onSetDefaultModel = { _, _, _ -> },
+            onShowAssignmentDialog = { _, _ -> }
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Model Configuration Screen - Editing Config")
+@Composable
+fun PreviewModelConfigurationScreenEditing() {
+    PocketCrewTheme {
+        ModelConfigurationScreen(
+            uiState = MockSettingsData.baseUiState.copy(
+                selectedLocalModelAsset = MockSettingsData.localModels[0],
+                selectedLocalModelConfig = MockSettingsData.localModels[0].configurations[0]
+            ),
+            onNavigateBack = {},
+            onNavigateToModelDownload = {},
+            onSelectLocalModelAsset = {},
+            onSelectLocalModelConfig = {},
+            onDeleteLocalModelConfig = {},
+            onDeleteLocalModelAsset = {},
+            onSetDefaultModel = { _, _, _ -> },
+            onShowAssignmentDialog = { _, _ -> }
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Assignment Selection Dialog")
+@Composable
+fun PreviewAssignmentSelectionDialog() {
+    PocketCrewTheme {
+        AssignmentSelectionDialog(
+            slot = ModelType.MAIN,
+            localAssets = MockSettingsData.localModels,
+            apiAssets = MockSettingsData.apiModels,
+            onDismiss = {},
+            onSelect = { _, _ -> }
+        )
+    }
+}
+
+@Composable
+fun LocalModelAssetCard(
+    asset: LocalModelAssetUi,
+    onDeleteAsset: () -> Unit,
+    onEditConfig: (LocalModelConfigUi) -> Unit,
+    onDeleteConfig: (Long) -> Unit,
+    onAddConfig: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f)
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "No configuration found for ${modelType.displayName()}",
-                        style = MaterialTheme.typography.bodyLarge,
+                        text = asset.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${asset.huggingFaceModelName} • ${(asset.sizeInBytes / (1024 * 1024 * 1024.0)).format(1)} GB",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
 
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Button(
-                    onClick = onSave,
+                IconButton(onClick = onDeleteAsset) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete asset ${asset.displayName}",
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
                     modifier = Modifier
-                        .padding(16.dp)
+                        .rotate(rotation)
+                        .padding(start = 4.dp)
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .height(50.dp)
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp)
                 ) {
-                    Text("Save", fontWeight = FontWeight.Bold)
+                    HorizontalDivider(
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+
+                    asset.configurations.forEach { config ->
+                        PresetRow(
+                            name = config.displayName,
+                            summary = "Temp: ${config.temperature} | Max: ${config.maxTokens}",
+                            onEdit = { onEditConfig(config) },
+                            onDelete = { onDeleteConfig(config.id) }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clickable(onClick = onAddConfig)
+                            .padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Add Preset",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun LabelWithInfo(
-    label: String,
-    infoText: String,
-    showValue: Boolean = true
-) {
-    val tooltipState = rememberTooltipState(isPersistent = true)
-    val scope = rememberCoroutineScope()
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = if (showValue) Modifier.widthIn(min = 100.dp) else Modifier
-        )
-        TooltipBox(
-            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                positioning = TooltipAnchorPosition.Above
-            ),
-            tooltip = {
-                PlainTooltip {
-                    Text(infoText)
-                }
-            },
-            state = tooltipState
-        ) {
-            Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = "Info",
-                modifier = Modifier
-                    .size(16.dp)
-                    .clickable {
-                        scope.launch { tooltipState.show() }
-                    },
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            )
-        }
-    }
-}
+private fun Double.format(digits: Int) = "%.${digits}f".format(this)

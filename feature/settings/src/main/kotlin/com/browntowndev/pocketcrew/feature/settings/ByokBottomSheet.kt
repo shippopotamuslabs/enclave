@@ -1,20 +1,18 @@
 package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,215 +20,325 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.VpnKey
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
-import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ByokBottomSheet(
     uiState: SettingsUiState,
     onDismiss: () -> Unit,
-    onSelectApiModel: (Long?) -> Unit,
-    onNavigateToConfigure: () -> Unit,
+    onNavigateToByokConfigure: () -> Unit,
+    onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
+    onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
+    onDeleteApiModelAsset: (Long) -> Unit,
+    onDeleteApiModelConfig: (Long) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    val scope = rememberCoroutineScope()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
-        ByokListView(
-            uiState = uiState,
-            onSelectApiModel = { id ->
-                onSelectApiModel(id)
-                scope.launch {
-                    sheetState.hide()
-                    onNavigateToConfigure()
-                    onDismiss()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp)
+        ) {
+            Text(
+                text = "External AI Providers",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            
+            Text(
+                text = "Manage your own API keys and model configurations.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+
+            LazyColumn(
+                modifier = Modifier.weight(1f, fill = false),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(uiState.apiModels, key = { it.credentialsId }) { asset ->
+                    val onEditAssetClick = remember(asset) {
+                        {
+                            onSelectApiModelAsset(asset)
+                            onNavigateToByokConfigure()
+                        }
+                    }
+                    val onAddConfigClick = remember(asset) {
+                        {
+                            onSelectApiModelAsset(asset)
+                            onSelectApiModelConfig(ApiModelConfigUi(credentialsId = asset.credentialsId))
+                            onNavigateToByokConfigure()
+                        }
+                    }
+                    
+                    ApiModelAssetCard(
+                        asset = asset,
+                        onEditAsset = onEditAssetClick,
+                        onDeleteAsset = { onDeleteApiModelAsset(asset.credentialsId) },
+                        onEditConfig = { config ->
+                            onSelectApiModelConfig(config)
+                            onNavigateToByokConfigure()
+                        },
+                        onDeleteConfig = { id -> onDeleteApiModelConfig(id) },
+                        onAddConfig = onAddConfigClick
+                    )
                 }
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                onClick = { 
+                    onSelectApiModelAsset(null)
+                    onNavigateToByokConfigure()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add new API Provider")
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Add API Provider", fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+// ==================== PREVIEWS ====================
+
+@Preview(showBackground = true, name = "BYOK Bottom Sheet - Assets List")
+@Composable
+fun PreviewByokBottomSheetAssets() {
+    PocketCrewTheme {
+        ByokBottomSheet(
+            uiState = MockSettingsData.baseUiState,
+            onDismiss = {},
+            onNavigateToByokConfigure = {},
+            onSelectApiModelAsset = {},
+            onSelectApiModelConfig = {},
+            onDeleteApiModelAsset = {},
+            onDeleteApiModelConfig = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "BYOK Bottom Sheet - Quick Context")
+@Composable
+fun PreviewByokBottomSheetContext() {
+    PocketCrewTheme {
+        // Preview with some state
+        ByokBottomSheet(
+            uiState = MockSettingsData.baseUiState,
+            onDismiss = {},
+            onNavigateToByokConfigure = {},
+            onSelectApiModelAsset = {},
+            onSelectApiModelConfig = {},
+            onDeleteApiModelAsset = {},
+            onDeleteApiModelConfig = {}
         )
     }
 }
 
 @Composable
-fun ByokListView(
-    uiState: SettingsUiState,
-    onSelectApiModel: (Long?) -> Unit
+fun ApiModelAssetCard(
+    asset: ApiModelAssetUi,
+    onEditAsset: () -> Unit,
+    onDeleteAsset: () -> Unit,
+    onEditConfig: (ApiModelConfigUi) -> Unit,
+    onDeleteConfig: (Long) -> Unit,
+    onAddConfig: () -> Unit
 ) {
-    Box(
+    var expanded by remember { mutableStateOf(false) }
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f)
+
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(500.dp)
-            .padding(horizontal = 16.dp)
-            .padding(bottom = 16.dp)
+            .animateContentSize(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Text(
-                text = "Bring Your Own Key",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Text(
-                modifier = Modifier.padding(top = 5.dp),
-                text = "Configured API models can be set as your default in Model Configuration.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            if (uiState.apiModels.isEmpty()) {
-                Box(
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.VpnKey,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.surfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "No custom models configured",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(uiState.apiModels, key = { it.id }) { model ->
-                        ApiModelCard(
-                            model = model,
-                            onClick = { onSelectApiModel(model.id) }
-                        )
-                    }
-                }
-            }
-
-            Button(
-                onClick = { onSelectApiModel(null) },
+        Column {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 12.dp)
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp)
+                    .clickable { expanded = !expanded }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Add API Model", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                // Provider Info
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = asset.displayName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${asset.provider.displayName} • ${asset.modelId} • ${asset.configurations.size} Presets",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                IconButton(onClick = onEditAsset, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit Provider ${asset.displayName}",
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                IconButton(onClick = onDeleteAsset, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete Provider ${asset.displayName}",
+                        modifier = Modifier.size(24.dp),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowDown,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    modifier = Modifier
+                        .rotate(rotation)
+                        .padding(start = 4.dp)
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 16.dp)
+                ) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(bottom = 8.dp),
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                    )
+
+                    asset.configurations.forEach { config ->
+                        PresetRow(
+                            name = config.displayName,
+                            summary = "Temp: ${config.temperature} | Max: ${config.maxTokens}",
+                            onEdit = { onEditConfig(config) },
+                            onDelete = { onDeleteConfig(config.id) }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .defaultMinSize(minHeight = 48.dp)
+                            .clickable(onClick = onAddConfig)
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Add Preset",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-fun ApiModelCard(
-    model: ApiModelConfigUi,
-    onClick: () -> Unit
+fun PresetRow(
+    name: String,
+    summary: String,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
-    Card(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.VpnKey,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = model.displayName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "${model.provider.displayName} • ${model.modelId}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
             Icon(
-                imageVector = Icons.Default.Edit,
-                contentDescription = "Edit Configuration",
+                Icons.Default.Edit,
+                contentDescription = "Edit Preset $name",
+                modifier = Modifier.size(24.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = "Delete Preset $name",
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
             )
         }
     }
