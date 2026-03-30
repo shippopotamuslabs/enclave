@@ -215,28 +215,41 @@ fun ThemeSelection(
     selectedTheme: AppTheme,
     onThemeChange: (AppTheme) -> Unit
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        ThemeOption(
-            text = "System",
-            selected = selectedTheme == AppTheme.SYSTEM,
-            onClick = { onThemeChange(AppTheme.SYSTEM) },
-            modifier = Modifier.weight(1f)
-        )
-        ThemeOption(
-            text = "Light",
-            selected = selectedTheme == AppTheme.LIGHT,
-            onClick = { onThemeChange(AppTheme.LIGHT) },
-            modifier = Modifier.weight(1f)
-        )
-        ThemeOption(
-            text = "Dark",
-            selected = selectedTheme == AppTheme.DARK,
-            onClick = { onThemeChange(AppTheme.DARK) },
-            modifier = Modifier.weight(1f)
-        )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ThemeOption(
+                text = "System",
+                selected = selectedTheme == AppTheme.SYSTEM,
+                onClick = { onThemeChange(AppTheme.SYSTEM) },
+                modifier = Modifier.weight(1f)
+            )
+            ThemeOption(
+                text = "Dynamic",
+                selected = selectedTheme == AppTheme.DYNAMIC,
+                onClick = { onThemeChange(AppTheme.DYNAMIC) },
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ThemeOption(
+                text = "Light",
+                selected = selectedTheme == AppTheme.LIGHT,
+                onClick = { onThemeChange(AppTheme.LIGHT) },
+                modifier = Modifier.weight(1f)
+            )
+            ThemeOption(
+                text = "Dark",
+                selected = selectedTheme == AppTheme.DARK,
+                onClick = { onThemeChange(AppTheme.DARK) },
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 
