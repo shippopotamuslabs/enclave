@@ -63,13 +63,12 @@ fun NavGraphBuilder.settingsGraph(
                 navController.getBackStackEntry(SettingsDestination.GRAPH)
             }
             SettingsRoute(
-                onNavigateBack = { navController.popBackStack() },
-                onShowSnackbar = onShowSnackbar,
+                onCloseClick = { navController.popBackStack() },
                 onNavigateToModelDownload = {
                     navController.navigate(SettingsDestination.MODEL_DOWNLOAD)
                 },
                 onNavigateToByokConfigure = {
-                    navController.navigate("byok_configure")
+                    navController.navigate(SettingsDestination.BYOK_CONFIGURE)
                 },
                 onNavigateToModelConfigure = { modelType ->
                     navController.navigate("model_configure/${modelType.name}")
