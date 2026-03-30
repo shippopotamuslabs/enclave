@@ -122,7 +122,7 @@ fun ByokConfigureScreen(
         ) {
             if (isPresetMode) {
                 PresetConfigurationForm(
-                    config = uiState.selectedApiModelConfig!!,
+                    config = uiState.selectedApiModelConfig,
                     onConfigChange = onApiModelConfigFieldChange,
                     onSave = onSaveApiModelConfig
                 )
@@ -319,6 +319,44 @@ fun PresetConfigurationForm(
             value = config.temperature.toFloat(),
             range = 0f..2f,
             onValueChange = { onConfigChange(config.copy(temperature = it.toDouble())) }
+        )
+
+        TuningSlider(
+            label = "Top P",
+            value = config.topP.toFloat(),
+            range = 0f..1f,
+            onValueChange = { onConfigChange(config.copy(topP = it.toDouble())) }
+        )
+
+        OutlinedTextField(
+            value = config.topK,
+            onValueChange = { onConfigChange(config.copy(topK = it)) },
+            label = { Text("Top K") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+        )
+
+        TuningSlider(
+            label = "Frequency Penalty",
+            value = config.frequencyPenalty.toFloat(),
+            range = -2f..2f,
+            onValueChange = { onConfigChange(config.copy(frequencyPenalty = it.toDouble())) }
+        )
+
+        TuningSlider(
+            label = "Presence Penalty",
+            value = config.presencePenalty.toFloat(),
+            range = -2f..2f,
+            onValueChange = { onConfigChange(config.copy(presencePenalty = it.toDouble())) }
+        )
+
+        OutlinedTextField(
+            value = config.stopSequences,
+            onValueChange = { onConfigChange(config.copy(stopSequences = it)) },
+            label = { Text("Stop Sequences (comma-separated)") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
         )
 
         OutlinedTextField(

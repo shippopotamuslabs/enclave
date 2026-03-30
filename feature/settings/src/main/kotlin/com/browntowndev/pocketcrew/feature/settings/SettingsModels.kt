@@ -77,7 +77,11 @@ data class ApiModelConfigUi(
     val contextWindow: String = "4096",
     val temperature: Double = 0.7,
     val topP: Double = 0.95,
-    val topK: Int? = 40,
+    val topK: String = "40",
+    val frequencyPenalty: Double = 0.0,
+    val presencePenalty: Double = 0.0,
+    val stopSequences: String = "",
+    val customHeadersAndParams: String = "",
     val thinkingEnabled: Boolean = false
 )
 
@@ -88,7 +92,8 @@ data class LocalModelAssetUi(
     val huggingFaceModelName: String,
     val remoteFileName: String,
     val sizeInBytes: Long,
-    val configurations: List<LocalModelConfigUi>
+    val configurations: List<LocalModelConfigUi>,
+    val isExpanded: Boolean = false
 )
 
 @Immutable
@@ -100,7 +105,7 @@ data class LocalModelConfigUi(
     val contextWindow: String = "4096",
     val temperature: Double = 0.7,
     val topP: Double = 0.95,
-    val topK: Int? = 40,
+    val topK: String = "40",
     val minP: Double = 0.0,
     val repetitionPenalty: Double = 1.1,
     val systemPrompt: String = ""

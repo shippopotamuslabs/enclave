@@ -18,8 +18,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Feedback
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.automirrored.filled.Rule
+import androidx.compose.material.icons.filled.SettingsApplications
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -62,12 +74,18 @@ fun SettingsScreen(
     onOpenToS: () -> Unit,
     onShowFeedbackSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
+    onShowLocalModelsSheet: (Boolean) -> Unit,
     onShowByokSheet: (Boolean) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
     onDeleteApiModelAsset: (Long) -> Unit,
     onDeleteApiModelConfig: (Long) -> Unit,
+    onNavigateToLocalModelConfigure: () -> Unit,
+    onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
+    onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
+    onDeleteLocalModelAsset: (Long) -> Unit,
+    onDeleteLocalModelConfig: (Long) -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -106,11 +124,14 @@ fun SettingsScreen(
                 SectionHeader(text = "Experience")
                 SettingsToggle(
                     title = "Haptic Press",
+                    icon = Icons.Default.TouchApp,
                     checked = uiState.hapticPress,
                     onCheckedChange = onHapticPressChange
                 )
+                Spacer(modifier = Modifier.height(8.dp))
                 SettingsToggle(
                     title = "Haptic Response",
+                    icon = Icons.Default.Vibration,
                     checked = uiState.hapticResponse,
                     onCheckedChange = onHapticResponseChange
                 )
@@ -119,14 +140,24 @@ fun SettingsScreen(
             item {
                 SectionHeader(text = "Models")
                 SettingsNavigationItem(
+                    title = "Pipeline Assignments",
+                    subtitle = "Assign models to engines",
+                    icon = Icons.AutoMirrored.Filled.Rule,
+                    onClick = { onNavigateToModelConfigure(ModelType.MAIN) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsNavigationItem(
+                    title = "Local AI Models",
+                    subtitle = "Manage on-device models",
+                    icon = Icons.Default.Memory,
+                    onClick = { onShowLocalModelsSheet(true) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsNavigationItem(
                     title = "External AI Providers",
                     subtitle = "Manage API keys and presets",
+                    icon = Icons.Default.Cloud,
                     onClick = { onShowByokSheet(true) }
-                )
-                SettingsNavigationItem(
-                    title = "Model Management",
-                    subtitle = "Assign pipeline slots and tunings",
-                    onClick = { onNavigateToModelConfigure(ModelType.MAIN) }
                 )
             }
 
@@ -134,10 +165,13 @@ fun SettingsScreen(
                 SectionHeader(text = "Data & Privacy")
                 SettingsNavigationItem(
                     title = "Memories",
+                    icon = Icons.Default.SmartToy,
                     onClick = { onShowMemoriesSheet(true) }
                 )
+                Spacer(modifier = Modifier.height(8.dp))
                 SettingsNavigationItem(
                     title = "Data Controls",
+                    icon = Icons.Default.Shield,
                     onClick = { onShowDataControlsSheet(true) }
                 )
             }
@@ -146,10 +180,13 @@ fun SettingsScreen(
                 SectionHeader(text = "About")
                 SettingsNavigationItem(
                     title = "Terms of Service",
+                    icon = Icons.Default.Info,
                     onClick = onOpenToS
                 )
+                Spacer(modifier = Modifier.height(8.dp))
                 SettingsNavigationItem(
                     title = "Feedback",
+                    icon = Icons.Default.Feedback,
                     onClick = { onShowFeedbackSheet(true) }
                 )
             }
@@ -168,34 +205,18 @@ fun SettingsScreen(
                 onDeleteApiModelConfig = onDeleteApiModelConfig
             )
         }
-    }
-}
 
-// ==================== PREVIEWS ====================
-
-@Preview(showBackground = true, name = "Main Settings Screen")
-@Composable
-fun PreviewSettingsScreen() {
-    PocketCrewTheme {
-        SettingsScreen(
-            uiState = MockSettingsData.baseUiState,
-            onCloseClick = {},
-            onThemeChange = {},
-            onHapticPressChange = {},
-            onHapticResponseChange = {},
-            onShowCustomizationSheet = {},
-            onShowDataControlsSheet = {},
-            onShowMemoriesSheet = {},
-            onOpenToS = {},
-            onShowFeedbackSheet = {},
-            onNavigateToModelConfigure = {},
-            onShowByokSheet = {},
-            onNavigateToByokConfigure = {},
-            onSelectApiModelAsset = {},
-            onSelectApiModelConfig = {},
-            onDeleteApiModelAsset = {},
-            onDeleteApiModelConfig = {}
-        )
+        if (uiState.showModelConfigSheet) { // Reusing this state for Local Models Sheet
+            LocalModelsBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowLocalModelsSheet(false) },
+                onNavigateToLocalModelConfigure = onNavigateToLocalModelConfigure,
+                onSelectLocalModelAsset = onSelectLocalModelAsset,
+                onSelectLocalModelConfig = onSelectLocalModelConfig,
+                onDeleteLocalModelAsset = onDeleteLocalModelAsset,
+                onDeleteLocalModelConfig = onDeleteLocalModelConfig
+            )
+        }
     }
 }
 
@@ -285,10 +306,14 @@ fun ThemeOption(
 @Composable
 fun SettingsToggle(
     title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
     ListItem(
+        leadingContent = {
+            Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        },
         headlineContent = { Text(title) },
         trailingContent = {
             Switch(checked = checked, onCheckedChange = onCheckedChange)
@@ -303,16 +328,54 @@ fun SettingsToggle(
 fun SettingsNavigationItem(
     title: String,
     subtitle: String? = null,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit
 ) {
     ListItem(
+        leadingContent = {
+            Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        },
         headlineContent = { Text(title) },
         supportingContent = subtitle?.let { { Text(it) } },
         trailingContent = {
-            Icon(imageVector = Icons.Default.KeyboardArrowRight, contentDescription = null)
+            Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
         },
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
     )
+}
+
+// ==================== PREVIEWS ====================
+
+@Preview(showBackground = true, name = "Main Settings Screen")
+@Composable
+fun PreviewSettingsScreen() {
+    PocketCrewTheme {
+        SettingsScreen(
+            uiState = MockSettingsData.baseUiState,
+            onCloseClick = {},
+            onThemeChange = {},
+            onHapticPressChange = {},
+            onHapticResponseChange = {},
+            onShowCustomizationSheet = {},
+            onShowDataControlsSheet = {},
+            onShowMemoriesSheet = {},
+            onOpenToS = {},
+            onShowFeedbackSheet = {},
+            onNavigateToModelConfigure = {},
+            onShowLocalModelsSheet = {},
+            onShowByokSheet = {},
+            onNavigateToByokConfigure = {},
+            onSelectApiModelAsset = {},
+            onSelectApiModelConfig = {},
+            onDeleteApiModelAsset = {},
+            onDeleteApiModelConfig = {},
+            onNavigateToLocalModelConfigure = {},
+            onSelectLocalModelAsset = {},
+            onSelectLocalModelConfig = {},
+            onDeleteLocalModelAsset = {},
+            onDeleteLocalModelConfig = {}
+        )
+    }
 }
