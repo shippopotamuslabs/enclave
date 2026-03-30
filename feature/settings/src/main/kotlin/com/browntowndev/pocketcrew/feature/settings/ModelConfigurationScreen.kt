@@ -3,10 +3,8 @@ package com.browntowndev.pocketcrew.feature.settings
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,13 +24,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -43,12 +37,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,13 +70,8 @@ fun ModelConfigurationRoute(
     ModelConfigurationScreen(
         uiState = uiState,
         onNavigateBack = onNavigateBack,
-        onSelectLocalModelAsset = { asset -> asset?.let { viewModel.onSelectLocalModelAsset(it) } },
-        onSelectLocalModelConfig = viewModel::onSelectLocalModelConfig,
-        onDeleteLocalModelAsset = viewModel::onDeleteLocalModelAsset,
-        onDeleteLocalModelConfig = { id -> viewModel.onDeleteLocalModelConfig(id, {}) },
         onSetDefaultModel = viewModel::onSetDefaultModel,
-        onShowAssignmentDialog = viewModel::onShowAssignmentDialog,
-        onNavigateToModelDownload = { /* Future: Navigate to download screen */ }
+        onShowAssignmentDialog = viewModel::onShowAssignmentDialog
     )
 }
 
@@ -93,18 +80,13 @@ fun ModelConfigurationRoute(
 fun ModelConfigurationScreen(
     uiState: SettingsUiState,
     onNavigateBack: () -> Unit,
-    onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
-    onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
-    onDeleteLocalModelAsset: (Long) -> Unit,
-    onDeleteLocalModelConfig: (Long) -> Unit,
     onSetDefaultModel: (ModelType, Long?, Long?) -> Unit,
-    onShowAssignmentDialog: (Boolean, ModelType?) -> Unit,
-    onNavigateToModelDownload: () -> Unit
+    onShowAssignmentDialog: (Boolean, ModelType?) -> Unit
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Model Management", fontWeight = FontWeight.Bold) },
+                title = { Text("Pipeline Assignments", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back")
@@ -120,7 +102,6 @@ fun ModelConfigurationScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Section 1: Default Assignments
             item {
                 SectionHeader(text = "Default Pipeline Slots")
                 Spacer(modifier = Modifier.height(8.dp))
@@ -129,45 +110,6 @@ fun ModelConfigurationScreen(
                     onEditAssignment = { onShowAssignmentDialog(true, it) }
                 )
             }
-
-            // Section 2: Local Model Assets
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    SectionHeader(text = "Local Model Assets")
-                    IconButton(onClick = onNavigateToModelDownload) {
-                        Icon(
-                            imageVector = Icons.Default.Add, 
-                            contentDescription = "Download new model", 
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-
-            items(uiState.localModels, key = { it.metadataId }) { asset ->
-                val onEditAssetClick = remember(asset) {
-                    { onSelectLocalModelAsset(asset) }
-                }
-                val onAddConfigClick = remember(asset) {
-                    {
-                        onSelectLocalModelAsset(asset)
-                        onSelectLocalModelConfig(LocalModelConfigUi(localModelId = asset.metadataId))
-                    }
-                }
-
-                LocalModelAssetCard(
-                    asset = asset,
-                    onDeleteAsset = { onDeleteLocalModelAsset(asset.metadataId) },
-                    onEditConfig = { config -> onSelectLocalModelConfig(config) },
-                    onDeleteConfig = { id -> onDeleteLocalModelConfig(id) },
-                    onAddConfig = onAddConfigClick
-                )
-            }
-            
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }
 
@@ -297,7 +239,7 @@ private fun SelectionRow(
         headlineContent = { Text(title) },
         supportingContent = subtitle?.let { { Text(it) } },
         trailingContent = {
-            Icon(imageVector = Icons.Default.KeyboardArrowRight, contentDescription = null)
+            Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
         },
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
@@ -308,39 +250,13 @@ private fun SelectionRow(
 
 // ==================== PREVIEWS ====================
 
-@Preview(showBackground = true, name = "Model Configuration Screen - List")
+@Preview(showBackground = true, name = "Pipeline Assignments Screen")
 @Composable
 fun PreviewModelConfigurationScreen() {
     PocketCrewTheme {
         ModelConfigurationScreen(
             uiState = MockSettingsData.baseUiState,
             onNavigateBack = {},
-            onNavigateToModelDownload = {},
-            onSelectLocalModelAsset = {},
-            onSelectLocalModelConfig = {},
-            onDeleteLocalModelConfig = {},
-            onDeleteLocalModelAsset = {},
-            onSetDefaultModel = { _, _, _ -> },
-            onShowAssignmentDialog = { _, _ -> }
-        )
-    }
-}
-
-@Preview(showBackground = true, name = "Model Configuration Screen - Editing Config")
-@Composable
-fun PreviewModelConfigurationScreenEditing() {
-    PocketCrewTheme {
-        ModelConfigurationScreen(
-            uiState = MockSettingsData.baseUiState.copy(
-                selectedLocalModelAsset = MockSettingsData.localModels[0],
-                selectedLocalModelConfig = MockSettingsData.localModels[0].configurations[0]
-            ),
-            onNavigateBack = {},
-            onNavigateToModelDownload = {},
-            onSelectLocalModelAsset = {},
-            onSelectLocalModelConfig = {},
-            onDeleteLocalModelConfig = {},
-            onDeleteLocalModelAsset = {},
             onSetDefaultModel = { _, _, _ -> },
             onShowAssignmentDialog = { _, _ -> }
         )
@@ -360,113 +276,3 @@ fun PreviewAssignmentSelectionDialog() {
         )
     }
 }
-
-@Composable
-fun LocalModelAssetCard(
-    asset: LocalModelAssetUi,
-    onDeleteAsset: () -> Unit,
-    onEditConfig: (LocalModelConfigUi) -> Unit,
-    onDeleteConfig: (Long) -> Unit,
-    onAddConfig: () -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val rotation by animateFloatAsState(if (expanded) 180f else 0f)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded }
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = asset.displayName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${asset.huggingFaceModelName} • ${(asset.sizeInBytes / (1024 * 1024 * 1024.0)).format(1)} GB",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                IconButton(onClick = onDeleteAsset) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete asset ${asset.displayName}",
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier
-                        .rotate(rotation)
-                        .padding(start = 4.dp)
-                )
-            }
-
-            AnimatedVisibility(visible = expanded) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 16.dp)
-                ) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(bottom = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-
-                    asset.configurations.forEach { config ->
-                        PresetRow(
-                            name = config.displayName,
-                            summary = "Temp: ${config.temperature} | Max: ${config.maxTokens}",
-                            onEdit = { onEditConfig(config) },
-                            onDelete = { onDeleteConfig(config.id) }
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .defaultMinSize(minHeight = 48.dp)
-                            .clickable(onClick = onAddConfig)
-                            .padding(vertical = 12.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Add Preset",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun Double.format(digits: Int) = "%.${digits}f".format(this)

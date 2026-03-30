@@ -1,18 +1,12 @@
 package com.browntowndev.pocketcrew.feature.settings
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,16 +16,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -39,14 +32,8 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -77,68 +64,232 @@ fun ByokBottomSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp)
         ) {
-            Text(
-                text = "External AI Providers",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            
-            Text(
-                text = "Manage your own API keys and model configurations.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
+            val selectedAsset = uiState.selectedApiModelAsset
 
-            LazyColumn(
-                modifier = Modifier.weight(1f, fill = false),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(uiState.apiModels, key = { it.credentialsId }) { asset ->
-                    val onEditAssetClick = remember(asset) {
-                        {
-                            onSelectApiModelAsset(asset)
-                            onNavigateToByokConfigure()
-                        }
-                    }
-                    val onAddConfigClick = remember(asset) {
-                        {
-                            onSelectApiModelAsset(asset)
-                            onSelectApiModelConfig(ApiModelConfigUi(credentialsId = asset.credentialsId))
-                            onNavigateToByokConfigure()
-                        }
-                    }
-                    
-                    ApiModelAssetCard(
-                        asset = asset,
-                        onEditAsset = onEditAssetClick,
-                        onDeleteAsset = { onDeleteApiModelAsset(asset.credentialsId) },
+            AnimatedContent(targetState = selectedAsset != null, label = "ByokSheetTransition") { isConfigView ->
+                if (isConfigView && selectedAsset != null) {
+                    ByokConfigListView(
+                        asset = selectedAsset,
+                        onBack = { onSelectApiModelAsset(null) },
                         onEditConfig = { config ->
                             onSelectApiModelConfig(config)
                             onNavigateToByokConfigure()
+                            onDismiss()
                         },
                         onDeleteConfig = { id -> onDeleteApiModelConfig(id) },
-                        onAddConfig = onAddConfigClick
+                        onAddConfig = {
+                            onSelectApiModelConfig(null)
+                            onNavigateToByokConfigure()
+                            onDismiss()
+                        }
+                    )
+                } else {
+                    ByokAssetListView(
+                        apiModels = uiState.apiModels,
+                        onSelectAsset = { asset -> onSelectApiModelAsset(asset) },
+                        onDeleteAsset = { id -> onDeleteApiModelAsset(id) },
+                        onAddAsset = {
+                            onSelectApiModelAsset(null)
+                            onNavigateToByokConfigure()
+                            onDismiss()
+                        }
                     )
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(16.dp))
+@Composable
+private fun ByokAssetListView(
+    apiModels: List<ApiModelAssetUi>,
+    onSelectAsset: (ApiModelAssetUi) -> Unit,
+    onDeleteAsset: (Long) -> Unit,
+    onAddAsset: () -> Unit
+) {
+    Column {
+        Text(
+            text = "External AI Providers",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+        
+        Text(
+            text = "Manage your own API keys and model configurations.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 24.dp)
+        )
 
-            Button(
-                onClick = { 
-                    onSelectApiModelAsset(null)
-                    onNavigateToByokConfigure()
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add new API Provider")
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Add API Provider", fontWeight = FontWeight.SemiBold)
+        LazyColumn(
+            modifier = Modifier.weight(1f, fill = false),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(apiModels, key = { it.credentialsId }) { asset ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSelectAsset(asset) },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = asset.displayName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${asset.provider.displayName} • ${asset.modelId} • ${asset.configurations.size} Presets",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        IconButton(onClick = { onDeleteAsset(asset.credentialsId) }, modifier = Modifier.size(48.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete Provider ${asset.displayName}",
+                                modifier = Modifier.size(24.dp),
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = "View configurations",
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = onAddAsset,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Add new API Provider")
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Add API Provider", fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun ByokConfigListView(
+    asset: ApiModelAssetUi,
+    onBack: () -> Unit,
+    onEditConfig: (ApiModelConfigUi) -> Unit,
+    onDeleteConfig: (Long) -> Unit,
+    onAddConfig: () -> Unit
+) {
+    Column {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(bottom = 16.dp)
+        ) {
+            IconButton(onClick = onBack, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to providers")
+            }
+            Column {
+                Text(
+                    text = asset.displayName,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Presets",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        LazyColumn(
+            modifier = Modifier.weight(1f, fill = false),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(asset.configurations, key = { it.id }) { config ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onEditConfig(config) }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = config.displayName,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Temp: ${config.temperature} | Max: ${config.maxTokens}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    IconButton(onClick = { onEditConfig(config) }, modifier = Modifier.size(40.dp)) {
+                        Icon(
+                            Icons.Default.Edit,
+                            contentDescription = "Edit Preset ${config.displayName}",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    IconButton(onClick = { onDeleteConfig(config.id) }, modifier = Modifier.size(40.dp)) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = "Delete Preset ${config.displayName}",
+                            modifier = Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 48.dp)
+                        .clickable(onClick = onAddConfig)
+                        .padding(vertical = 12.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Add Preset",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }
@@ -162,13 +313,14 @@ fun PreviewByokBottomSheetAssets() {
     }
 }
 
-@Preview(showBackground = true, name = "BYOK Bottom Sheet - Quick Context")
+@Preview(showBackground = true, name = "BYOK Bottom Sheet - Config List")
 @Composable
 fun PreviewByokBottomSheetContext() {
     PocketCrewTheme {
-        // Preview with some state
         ByokBottomSheet(
-            uiState = MockSettingsData.baseUiState,
+            uiState = MockSettingsData.baseUiState.copy(
+                selectedApiModelAsset = MockSettingsData.apiModels[0]
+            ),
             onDismiss = {},
             onNavigateToByokConfigure = {},
             onSelectApiModelAsset = {},
@@ -176,170 +328,5 @@ fun PreviewByokBottomSheetContext() {
             onDeleteApiModelAsset = {},
             onDeleteApiModelConfig = {}
         )
-    }
-}
-
-@Composable
-fun ApiModelAssetCard(
-    asset: ApiModelAssetUi,
-    onEditAsset: () -> Unit,
-    onDeleteAsset: () -> Unit,
-    onEditConfig: (ApiModelConfigUi) -> Unit,
-    onDeleteConfig: (Long) -> Unit,
-    onAddConfig: () -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val rotation by animateFloatAsState(if (expanded) 180f else 0f)
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
-    ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded }
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Provider Info
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = asset.displayName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = "${asset.provider.displayName} • ${asset.modelId} • ${asset.configurations.size} Presets",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                IconButton(onClick = onEditAsset, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Edit Provider ${asset.displayName}",
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                IconButton(onClick = onDeleteAsset, modifier = Modifier.size(48.dp)) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete Provider ${asset.displayName}",
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    modifier = Modifier
-                        .rotate(rotation)
-                        .padding(start = 4.dp)
-                )
-            }
-
-            AnimatedVisibility(visible = expanded) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .padding(bottom = 16.dp)
-                ) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(bottom = 8.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                    )
-
-                    asset.configurations.forEach { config ->
-                        PresetRow(
-                            name = config.displayName,
-                            summary = "Temp: ${config.temperature} | Max: ${config.maxTokens}",
-                            onEdit = { onEditConfig(config) },
-                            onDelete = { onDeleteConfig(config.id) }
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .defaultMinSize(minHeight = 48.dp)
-                            .clickable(onClick = onAddConfig)
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Add Preset",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PresetRow(
-    name: String,
-    summary: String,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = summary,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
-            Icon(
-                Icons.Default.Edit,
-                contentDescription = "Edit Preset $name",
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        IconButton(onClick = onDelete, modifier = Modifier.size(48.dp)) {
-            Icon(
-                Icons.Default.Delete,
-                contentDescription = "Delete Preset $name",
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
-            )
-        }
     }
 }

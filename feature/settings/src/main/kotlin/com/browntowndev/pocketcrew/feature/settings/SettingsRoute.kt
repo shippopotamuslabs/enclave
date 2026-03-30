@@ -15,6 +15,7 @@ fun SettingsRoute(
     onNavigateToModelDownload: () -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
+    onNavigateToLocalModelConfigure: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -35,11 +36,17 @@ fun SettingsRoute(
         },
         onShowFeedbackSheet = viewModel::onShowFeedbackSheet,
         onNavigateToModelConfigure = onNavigateToModelConfigure,
+        onShowLocalModelsSheet = viewModel::onShowModelConfigSheet, // Reuse this state flag
         onShowByokSheet = viewModel::onShowByokSheet,
         onNavigateToByokConfigure = onNavigateToByokConfigure,
         onSelectApiModelAsset = viewModel::onSelectApiModelAsset,
         onSelectApiModelConfig = viewModel::onSelectApiModelConfig,
         onDeleteApiModelAsset = viewModel::onDeleteApiModelAsset,
-        onDeleteApiModelConfig = { id -> viewModel.onDeleteApiModelConfig(id, {}) }
+        onDeleteApiModelConfig = { id -> viewModel.onDeleteApiModelConfig(id, {}) },
+        onNavigateToLocalModelConfigure = onNavigateToLocalModelConfigure,
+        onSelectLocalModelAsset = { asset -> asset?.let { viewModel.onSelectLocalModelAsset(it) } },
+        onSelectLocalModelConfig = viewModel::onSelectLocalModelConfig,
+        onDeleteLocalModelAsset = viewModel::onDeleteLocalModelAsset,
+        onDeleteLocalModelConfig = { id -> viewModel.onDeleteLocalModelConfig(id, {}) }
     )
 }

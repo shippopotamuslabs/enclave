@@ -188,7 +188,11 @@ class SettingsViewModel @Inject constructor(
         contextWindow = contextWindow.toString(),
         temperature = temperature,
         topP = topP,
-        topK = topK,
+        topK = topK?.toString() ?: "",
+        frequencyPenalty = frequencyPenalty,
+        presencePenalty = presencePenalty,
+        stopSequences = stopSequences.joinToString(","),
+        customHeadersAndParams = "", // Complex mapping, skipped in UI mapping for simplicity unless needed
         thinkingEnabled = false
     )
 
@@ -209,7 +213,7 @@ class SettingsViewModel @Inject constructor(
         contextWindow = contextWindow.toString(),
         temperature = temperature,
         topP = topP,
-        topK = topK,
+        topK = topK?.toString() ?: "",
         minP = minP,
         repetitionPenalty = repetitionPenalty,
         systemPrompt = systemPrompt
@@ -388,7 +392,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onTopKChange(topK: Int) {
+    fun onTopKChange(topK: String) {
         _transientState.update { 
             it.copy(
                 selectedLocalModelConfig = it.selectedLocalModelConfig?.copy(topK = topK),
@@ -446,7 +450,7 @@ class SettingsViewModel @Inject constructor(
             contextWindow = configUi.contextWindow.toIntOrNull() ?: 4096,
             temperature = configUi.temperature,
             topP = configUi.topP,
-            topK = configUi.topK,
+            topK = configUi.topK.toIntOrNull(),
             minP = configUi.minP,
             repetitionPenalty = configUi.repetitionPenalty,
             systemPrompt = configUi.systemPrompt
@@ -548,7 +552,11 @@ class SettingsViewModel @Inject constructor(
             contextWindow = configUi.contextWindow.toIntOrNull() ?: 4096,
             temperature = configUi.temperature,
             topP = configUi.topP,
-            topK = configUi.topK
+            topK = configUi.topK.toIntOrNull(),
+            frequencyPenalty = configUi.frequencyPenalty,
+            presencePenalty = configUi.presencePenalty,
+            stopSequences = configUi.stopSequences.split(",").map { it.trim() }.filter { it.isNotEmpty() },
+            customHeadersAndParams = emptyMap() // Map from JSON string if needed later
         )
 
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API configuration", "Failed to save configuration")) {

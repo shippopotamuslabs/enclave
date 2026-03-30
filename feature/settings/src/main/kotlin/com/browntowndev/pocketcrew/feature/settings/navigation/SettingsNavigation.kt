@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.feature.settings.ByokConfigureRoute
+import com.browntowndev.pocketcrew.feature.settings.LocalModelConfigureRoute
 import com.browntowndev.pocketcrew.feature.settings.ModelConfigurationRoute
 import com.browntowndev.pocketcrew.feature.settings.SettingsRoute
 
@@ -20,6 +21,7 @@ object SettingsDestination {
     const val GRAPH = "settings_graph"
     const val MAIN = "settings_main"
     const val BYOK_CONFIGURE = "byok_configure"
+    const val LOCAL_MODEL_CONFIGURE = "local_model_configure"
     const val MODEL_CONFIGURE = "model_configure/{modelType}"
     const val MODEL_DOWNLOAD = "model_download"
 }
@@ -70,6 +72,9 @@ fun NavGraphBuilder.settingsGraph(
                 onNavigateToByokConfigure = {
                     navController.navigate(SettingsDestination.BYOK_CONFIGURE)
                 },
+                onNavigateToLocalModelConfigure = {
+                    navController.navigate(SettingsDestination.LOCAL_MODEL_CONFIGURE)
+                },
                 onNavigateToModelConfigure = { modelType ->
                     navController.navigate("model_configure/${modelType.name}")
                 },
@@ -108,8 +113,13 @@ fun NavGraphBuilder.settingsGraph(
                 navController.getBackStackEntry(SettingsDestination.GRAPH)
             }
             ByokConfigureRoute(
-                onNavigateBack = { navController.popBackStack() },
-                viewModel = hiltViewModel(parentEntry)
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(route = SettingsDestination.LOCAL_MODEL_CONFIGURE) {
+            LocalModelConfigureRoute(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
