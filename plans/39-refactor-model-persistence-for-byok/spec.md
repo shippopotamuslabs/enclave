@@ -1,206 +1,324 @@
-# Technical Specification: Room Database Schema Refactoring — Hybrid LLM Architecture
-## 1. System Architecture
-### Target Files
-**New Files (`:data`):**
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/LocalModelEntity.kt`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/LocalModelConfigurationEntity.kt`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/ApiCredentialsEntity.kt`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/ApiModelConfigurationEntity.kt`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/LocalModelsDao.kt`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/LocalModelConfigurationsDao.kt`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/ApiCredentialsDao.kt`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/ApiModelConfigurationsDao.kt`
-**Modify Files (`:data`):**
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/DefaultModelEntity.kt` — Replace FK to `ApiModelEntity` with dual FKs to config entities, remove `source` column, add XOR `init` block
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/DefaultModelsDao.kt` — Remove `resetAssignmentsForApiModel()`, add queries by config ID
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/PocketCrewDatabase.kt` — Version 3, replace entity/DAO registration, remove `ModelSourceConverters`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/repository/ModelRegistryImpl.kt` — Major refactor to use `LocalModelsDao` + `LocalModelConfigurationsDao`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/repository/ApiModelRepositoryImpl.kt` — Rewrite for `ApiCredentialsDao` + `ApiModelConfigurationsDao`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/repository/DefaultModelRepositoryImpl.kt` — Update joins for dual FK config tables
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/security/ApiKeyManager.kt` — Refactor key lookup from `Long` to `String` (credentialAlias)
-**Delete Files (`:data`):**
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/ModelEntity.kt` — Replaced by `LocalModelEntity` + `LocalModelConfigurationEntity`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/ApiModelEntity.kt` — Replaced by `ApiCredentialsEntity` + `ApiModelConfigurationEntity`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/ApiModelsDao.kt` — Replaced by `ApiCredentialsDao` + `ApiModelConfigurationsDao`
-- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/ModelsDao.kt` — Replaced by `LocalModelsDao` + `LocalModelConfigurationsDao`
-**Modify Files (`:domain`):**
-- `core/domain/src/main/kotlin/com/browntowndev/pocketcrew/domain/model/inference/ApiProvider.kt` — Add `SELF_HOSTED`, `SUBSCRIPTION` variants
-- `core/domain/src/main/kotlin/com/browntowndev/pocketcrew/domain/model/config/DefaultModelAssignment.kt` — Refactor to reference config IDs, remove `ModelSource` dependency
-- `core/domain/src/main/kotlin/com/browntowndev/pocketcrew/domain/model/config/ApiModelConfig.kt` — Split into `ApiCredentials` + `ApiModelConfiguration` domain models
-- `core/domain/src/main/kotlin/com/browntowndev/pocketcrew/domain/port/repository/ApiModelRepositoryPort.kt` — Update to accept credential + config separately
-- `core/domain/src/main/kotlin/com/browntowndev/pocketcrew/domain/port/repository/DefaultModelRepositoryPort.kt` — Update signature for dual-FK model
-**Delete Files (`:domain`):**
-- `core/domain/src/main/kotlin/com/browntowndev/pocketcrew/domain/model/inference/ModelSource.kt` — Redundant; source is implicit from which FK is populated in `DefaultModelEntity`
-### Component Boundaries
-```
-:domain (Pure Kotlin — no framework deps)
-├── ApiProvider enum (+ SELF_HOSTED, SUBSCRIPTION)
-├── ApiCredentials domain model (NEW — identity + auth)
-├── ApiModelConfiguration domain model (NEW — tuning preset)
-├── DefaultModelAssignment (refactored — config IDs, no ModelSource)
-├── ModelRegistryPort (existing — updated for local asset/config)
-├── ApiModelRepositoryPort (updated — credential + config pair)
-└── DefaultModelRepositoryPort (updated — dual FK model)
-:data (Room + Hilt — implements domain ports)
-├── LocalModelEntity + LocalModelsDao (NEW — file asset)
-├── LocalModelConfigurationEntity + LocalModelConfigurationsDao (NEW — local tuning preset)
-├── ApiCredentialsEntity + ApiCredentialsDao (NEW — replaces ApiModelEntity)
-├── ApiModelConfigurationEntity + ApiModelConfigurationsDao (NEW — API tuning preset)
-├── DefaultModelEntity + DefaultModelsDao (REFACTORED — dual FK XOR)
-├── ApiKeyManager (REFACTORED — credentialAlias-based lookup)
-├── ModelRegistryImpl (REFACTORED — uses asset + config DAOs)
-├── ApiModelRepositoryImpl (REWRITTEN — credentials + configs)
-└── DefaultModelRepositoryImpl (REFACTORED — dual FK joins)
-```
-## 2. Data Models & Schemas
-### Entity Relationship Diagram
-```
-local_models (1) ──CASCADE──→ (N) local_model_configurations
-                                         │
-                                     RESTRICT
-                                         ↓
-                               default_models ←── PK: model_type (ModelType)
-                                         ↑
-                                     RESTRICT
-                                         │
-api_credentials (1) ──CASCADE──→ (N) api_model_configurations
-```
-### New Entities (defined in discovery_and_spec.md)
-| Entity | Table | PK | Key FKs | Cascade |
-|--------|-------|----|---------|---------|
-| `LocalModelEntity` | `local_models` | `id` (autoGenerate) | — | — |
-| `LocalModelConfigurationEntity` | `local_model_configurations` | `id` (autoGenerate) | `local_model_id` → `local_models.id` | CASCADE |
-| `ApiCredentialsEntity` | `api_credentials` | `id` (autoGenerate) | — | — |
-| `ApiModelConfigurationEntity` | `api_model_configurations` | `id` (autoGenerate) | `api_credentials_id` → `api_credentials.id` | CASCADE |
-| `DefaultModelEntity` | `default_models` | `model_type` (ModelType) | `local_config_id` → `local_model_configurations.id`, `api_config_id` → `api_model_configurations.id` | RESTRICT (both) |
-### Reused Existing Models
-- `ModelType` enum — unchanged, used as PK for `default_models`
-- `ModelFileFormat` enum — unchanged, used in `LocalModelEntity`
-- `ModelStatus` enum — unchanged, used in `LocalModelEntity`
-- `ModelConfiguration` domain model — unchanged, still used for local model registry
-- `TransactionProvider` port + `RoomTransactionProvider` impl — reused for multi-DAO transactions
-- `LoggingPort` — reused in `ModelRegistryImpl` for debug logging
-### Deleted Models
-- `ModelSource` enum — redundant, source is implicit from which FK column is populated in `DefaultModelEntity`
-- `ModelEntity` — replaced by `LocalModelEntity` (asset) + `LocalModelConfigurationEntity` (preset)
-- `ApiModelEntity` — replaced by `ApiCredentialsEntity` (identity) + `ApiModelConfigurationEntity` (preset)
-### New Domain Models (`:domain`)
+# Technical Specification: 39-refactor-model-persistence-for-byok
+
+## 1. Objective
+
+Implement a soft-delete mechanism for local AI models that satisfies four invariants:
+
+1. **Re-downloadability**: When a local model is deleted, the user can re-download it from the remote R2 bucket
+2. **No auto re-download on startup**: `InitializeModelsUseCase` must NOT add soft-deleted models to the download queue
+3. **Minimum model count**: At least one BYOK or local model must always exist; deletion of the last model is blocked with a modal alert
+4. **Default model reassignment**: When deleting a model that IS a default, the user must pick a replacement from a DIFFERENT model before deletion
+
+**Core Strategy**: 
+- Soft-delete = preserve `LocalModelEntity` row (metadata for re-download), hard-delete configs
+- XOR constraint means reassignment updates `DefaultModelEntity`, never deletes it
+- `InitializeModelsUseCase` simplified: if `DefaultModelEntity` exists for ModelType, skip (don't auto-download)
+
+## 2. System Architecture
+
+### Entity Relationships (Critical)
+
+- `LocalModelEntity` = the model FILE (sha256, size, filename, etc.) — ONE per downloaded model
+- `LocalModelConfigurationEntity` = a tuning CONFIG attached to a model — MANY per LocalModelEntity
+- `DefaultModelEntity` = maps ModelType → configId (XOR: local OR api, never both)
+
+**One LocalModelEntity can have MULTIPLE configs (different tuning presets).**
+
+### Target Files (10 files)
+
+**Data Layer (5 files):**
+- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/DefaultModelsDao.kt` — ADD `getModelIdsWithDefaults()`
+- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/LocalModelsDao.kt` — ADD `getSoftDeletedModels()`
+- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/LocalModelConfigurationsDao.kt` — ADD `getAllForAsset()`, `deleteAllForAsset()`
+- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/repository/ModelRegistryImpl.kt` — ADD `getSoftDeletedModels()`, MODIFY `deleteModel()`
+- `core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/PocketCrewDatabase.kt` — ADD Room migration for `isDefault` column
+
+**Domain Layer (2 files):**
+- `core/domain/src/main/kotlin/com/browntowndev/pocketcrew/domain/port/repository/ModelRegistryPort.kt` — ADD `getSoftDeletedModels()`, MODIFY `deleteModel()`
+- `core/domain/src/main/kotlin/com/browntowndev/pocketcrew/domain/usecase/download/DeleteLocalModelUseCase.kt` — NEW use case
+
+**UI Layer (3 files):**
+- `feature/settings/src/main/kotlin/com/browntowndev/pocketcrew/feature/settings/SettingsUiState.kt` — ADD `availableToDownloadModels`, deletion safety state
+- `feature/settings/src/main/kotlin/com/browntowndev/pocketcrew/feature/settings/LocalModelsBottomSheet.kt` — ADD "Available for Download" section
+- `feature/settings/src/main/kotlin/com/browntowndev/pocketcrew/feature/settings/SettingsViewModel.kt` — ADD deletion flow state machine, reassignment handling
+
+## 3. Data Models & Schemas
+
+### Schema Changes
+
+**LocalModelConfigurationEntity — ADD `isDefault` field:**
 ```kotlin
-// Replaces ApiModelConfig — split into identity + configuration
-data class ApiCredentials(
-    val id: Long = 0,
-    val displayName: String,
-    val provider: ApiProvider,
-    val modelId: String,
-    val baseUrl: String? = null,
-    val isVision: Boolean = false,
-    val credentialAlias: String,
-)
-data class ApiModelConfiguration(
-    val id: Long = 0,
-    val apiCredentialsId: Long,
-    val displayName: String,
-    val maxTokens: Int = 4096,
-    val contextWindow: Int = 4096,
-    val temperature: Double = 0.7,
-    val topP: Double = 0.95,
-    val topK: Int? = null,
-    val frequencyPenalty: Double = 0.0,
-    val presencePenalty: Double = 0.0,
-    val stopSequences: List<String> = emptyList(),
-    val customHeadersAndParams: Map<String, String> = emptyMap(),
-)
+@ColumnInfo(name = "is_default")
+val isDefault: Boolean = false
 ```
-### Refactored Domain Models
+- `isDefault = true` → config came from R2 download (read-only in UI)
+- `isDefault = false` → user-created config (editable in UI)
+- User can NEVER change `isDefault`
+
+**No other schema changes needed.**
+
+### State Model
+
+| State | LocalModelEntity | LocalModelConfigurationEntity | DefaultModelEntity |
+|-------|-----------------|-------------------------------|-------------------|
+| Active | EXISTS | EXISTS (isDefault may be true) | Points to one of the configs |
+| Soft-deleted | EXISTS (metadata preserved) | DELETED (hard deleted all configs) | NOT points to this model |
+| Never downloaded | DOES NOT EXIST | DOES NOT EXIST | DOES NOT EXIST |
+
+### Query: "Available for Download"
+
 ```kotlin
-// DefaultModelAssignment — no longer uses ModelSource
-data class DefaultModelAssignment(
-    val modelType: ModelType,
-    val localConfigId: Long? = null,
-    val apiConfigId: Long? = null,
-    // Resolved display data for the UI
-    val displayName: String? = null,
-    val providerName: String? = null,
-)
+// LocalModelsDao
+@Query("""
+    SELECT m.* FROM local_models m
+    WHERE m.id NOT IN (
+        SELECT c.local_model_id FROM local_model_configurations c
+    )
+    AND m.model_status = 'CURRENT'
+""")
+suspend fun getSoftDeletedModels(): List<LocalModelEntity>
 ```
-## 3. API Contracts & Interfaces
-### ApiModelRepositoryPort (Updated)
+
+Returns `LocalModelEntity` rows where NO configs exist. Since soft-deletion hard-deletes all configs, a model with zero configs is definitively soft-deleted.
+
+### Query: "Does this model have any config that is a default?"
+
 ```kotlin
-interface ApiModelRepositoryPort {
-    fun observeAllCredentials(): Flow<List<ApiCredentials>>
-    suspend fun getAllCredentials(): List<ApiCredentials>
-    suspend fun getCredentialsById(id: Long): ApiCredentials?
-    suspend fun saveCredentials(credentials: ApiCredentials, apiKey: String): Long
-    suspend fun deleteCredentials(id: Long)
-    suspend fun getConfigurationsForCredentials(credentialsId: Long): List<ApiModelConfiguration>
-    suspend fun getConfigurationById(id: Long): ApiModelConfiguration?
-    suspend fun saveConfiguration(config: ApiModelConfiguration): Long
-    suspend fun deleteConfigurationsForCredentials(credentialsId: Long)
+// DefaultModelsDao
+@Query("""
+    SELECT local_model_id FROM local_model_configurations
+    WHERE id IN (SELECT local_config_id FROM default_models WHERE local_config_id IS NOT NULL)
+""")
+suspend fun getModelIdsWithDefaults(): List<Long>
+```
+
+Returns LocalModelEntity IDs that have at least one config pointed to by DefaultModelEntity.
+
+## 4. Deletion Flow (Detailed)
+
+### Step 1: User initiates delete on LocalModelEntity (id=42)
+
+### Step 2: Check if reassignment needed
+```kotlin
+val modelConfigIds = localModelConfigurationsDao.getAllForAsset(42).map { it.id }
+val defaultConfigIds = defaultModelsDao.getAll().mapNotNull { it.localConfigId }
+val intersection = modelConfigIds.intersect(defaultConfigIds.toSet())
+
+if (intersection.isNotEmpty()) {
+    // Model has a config that IS a default → must reassign FIRST
+    // Show ReassignDefaultModelDialog with configs from OTHER models
+    // User picks replacementConfigId
+} else {
+    // No config is a default → proceed directly to soft-delete
+    replacementConfigId = null
 }
 ```
-### DefaultModelRepositoryPort (Updated)
+
+### Step 3: If reassignment needed
 ```kotlin
-interface DefaultModelRepositoryPort {
-    suspend fun getDefault(modelType: ModelType): DefaultModelAssignment?
-    fun observeDefaults(): Flow<List<DefaultModelAssignment>>
-    suspend fun setDefault(modelType: ModelType, localConfigId: Long?, apiConfigId: Long?)
-    suspend fun clearDefault(modelType: ModelType)
+// User selected replacementConfigId (from a DIFFERENT model)
+val modelTypeToUpdate = defaultModelsDao.getAll().find { 
+    it.localConfigId in intersection 
+}?.modelType
+
+// UPDATE DefaultModelEntity to point to replacement
+defaultModelsDao.upsert(DefaultModelEntity(
+    modelType = modelTypeToUpdate,
+    localConfigId = replacementConfigId,
+    apiConfigId = null
+))
+```
+
+### Step 4: Soft-delete the model
+```kotlin
+// Delete physical file
+modelFileScanner.deleteModelFile(42)
+
+// Hard delete ALL configs for this model
+localModelConfigurationsDao.deleteAllForAsset(42)
+
+// Preserve LocalModelEntity (soft-delete - metadata for re-download)
+modelRegistry.preserveModelMetadata(modelId = 42)
+```
+
+### Step 5: On re-download
+```kotlin
+// Reuse existing LocalModelEntity row
+val modelId = modelRegistry.reuseModel(modelId = 42, newSha256 = remoteConfig.sha256)
+
+// Create new config with isDefault = true
+val configId = localModelConfigurationsDao.upsert(
+    LocalModelConfigurationEntity(
+        localModelId = modelId,
+        displayName = remoteConfig.displayName,
+        isDefault = true,  // NEW - marks this as R2 config
+        // ... other fields ...
+    )
+)
+
+// Create DefaultModelEntity
+defaultModelsDao.upsert(DefaultModelEntity(
+    modelType = remoteConfig.modelType,
+    localConfigId = configId,
+    apiConfigId = null
+))
+```
+
+## 5. InitializeModelsUseCase — Simplified (No SHA256)
+
+### New Logic:
+```kotlin
+suspend fun checkModelsResult(): DownloadModelsResult {
+    // 1. Fetch remote configs
+    val remoteConfigs = modelConfigFetcher.fetchRemoteConfig().getOrElse { ... }
+
+    // 2. For each remote config:
+    //    - Check if LocalModelEntity exists by SHA256
+    //    - If exists and has configs (active) -> check file integrity
+    //    - If exists and has NO configs -> soft-deleted, add to Available for Download
+    //    - If does NOT exist -> never downloaded (or new version), add to download queue
+    
+    val modelsToDownload = mutableListOf<LocalModelAsset>()
+    val availableToRedownload = mutableListOf<LocalModelAsset>()
+
+    for ((modelType, remoteAsset) in remoteConfigs) {
+        val existingModel = modelsDao.getBySha256(remoteAsset.metadata.sha256)
+        
+        if (existingModel != null) {
+            val configs = localModelConfigurationsDao.getAllForAsset(existingModel.id)
+            if (configs.isEmpty()) {
+                // Soft-deleted! Do not auto-download.
+                availableToRedownload.add(remoteAsset)
+            } else {
+                // Active model - verify file exists and size matches
+                val file = modelFileScanner.getModelFile(remoteAsset.metadata.localFileName)
+                if (file == null || file.length() != remoteAsset.metadata.sizeInBytes) {
+                    // File missing or wrong size → redownload
+                    modelsToDownload.add(remoteAsset)
+                }
+            }
+        } else {
+            // Never downloaded (or remote updated to new sha256) → add to download queue
+            modelsToDownload.add(remoteAsset)
+        }
+    }
+    
+    // Return result with both lists
+    return DownloadModelsResult(
+        modelsToDownload = modelsToDownload,
+        availableToRedownload = availableToRedownload,
+        // ...
+    )
 }
 ```
-### ApiKeyManager (Refactored)
+
+### Key Simplification:
+- NO SHA256 computation on startup
+- We completely decoupled auto-download logic from `DefaultModelEntity`. Whether a model is the default or not doesn't matter for its file integrity.
+- Soft-deleted models are perfectly identified by having 0 configs.
+- If a model is active (has configs) but its file is missing, it is queued for re-download.
+
+## 6. SettingsViewModel State Machine
+
 ```kotlin
-class ApiKeyManager {
-    fun save(credentialAlias: String, apiKey: String)
-    fun get(credentialAlias: String): String?
-    fun delete(credentialAlias: String)
+data class SettingsUiState {
+    val downloadedModels: List<LocalModelAssetUi> = emptyList()
+    val availableToDownloadModels: List<LocalModelAssetUi> = emptyList()  // soft-deleted
+    val showCannotDeleteLastModelAlert: Boolean = false
+    val pendingDeletionModelId: Long? = null
+    val modelTypesNeedingReassignment: List<ModelType> = emptyList()
+    val reassignmentOptions: List<ReassignmentOption> = emptyList()  // configs from OTHER models
 }
 ```
-### Error Handling
-- **RESTRICT FK violation on delete:** When attempting to delete a configuration that is currently a default, SQLite will throw `SQLiteConstraintException`. The repository must catch this and surface a typed domain error (e.g., `ConfigInUseException`).
-- **XOR init violation:** `IllegalArgumentException` thrown if both or neither FK is set on `DefaultModelEntity`. This is a programming error, not a user-facing error.
-- **Dangling credential alias:** If `ApiKeyManager.get(alias)` returns `null`, the credential is treated as having an expired/missing key. UI should prompt re-entry.
-## 4. Environment & Config
-### build.gradle.kts
-No new dependencies required. Uses existing:
-- Room (KSP)
-- `org.json.JSONObject` (Android built-in, already used)
-- Hilt for DI
-### PocketCrewDatabase Changes
+
+## 7. API Contracts & Interfaces
+
+### ModelRegistryPort — MODIFY/ADD
+
 ```kotlin
-@Database(
-    entities = [
-        ChatEntity::class,
-        MessageEntity::class,
-        MessageSearch::class,
-        LocalModelEntity::class,
-        LocalModelConfigurationEntity::class,
-        ApiCredentialsEntity::class,
-        ApiModelConfigurationEntity::class,
-        DefaultModelEntity::class
-    ],
-    version = 3,
-    exportSchema = true
-)
-@TypeConverters(
-    DateConverters::class,
-    RoleConverters::class,
-    ModelTypeConverters::class,
-    MessageStateConverters::class,
-    PipelineStepConverters::class,
-    ApiProviderConverters::class
-    // ModelSourceConverters REMOVED — ModelSource enum deleted
-    // CustomHeadersTypeConverter NOT NEEDED — stored as raw String
-)
+/**
+ * Returns models that user downloaded but deleted (LocalModelEntity exists, no DefaultEntity).
+ */
+suspend fun getSoftDeletedModels(): List<LocalModelAsset>
+
+/**
+ * Deletes a model: hard-deletes configs, preserves LocalModelEntity for re-download.
+ */
+suspend fun deleteModel(modelId: Long, replacementConfigId: Long?): Result<Unit>
+
+/**
+ * Reuses existing LocalModelEntity row for re-download.
+ */
+suspend fun reuseModelForRedownload(modelId: Long, newAsset: LocalModelAsset): Long
 ```
-### Migration
-- `fallbackToDestructiveMigration()` — App is unreleased, no production data to preserve
-- Version bump: 2 → 3
-### Manifest
-No manifest changes required.
-## 5. Constitution Audit
-This design strictly adheres to the project's Clean Architecture rules:
-- `:domain` contains only pure Kotlin models, interfaces, and enums — zero framework imports
-- Entity ↔ Domain mapping is exclusively in `:data` (repository layer)
-- All new entities live in `:data` only, never exposed to `:app` or `:domain`
-- `TransactionProvider` port pattern is reused for multi-DAO atomicity
-- No `@TypeConverter` proliferation — `customHeadersAndParams` mapped in the repository layer per DATA_LAYER_RULES.md §2 preference for normalized over TypeConverter
+
+### DeleteLocalModelUseCase (NEW)
+
+```kotlin
+class DeleteLocalModelUseCase @Inject constructor(
+    private val modelRegistry: ModelRegistryPort,
+    private val modelFileScanner: ModelFileScannerPort,
+    private val defaultModelsDao: DefaultModelsDao,
+    private val localModelConfigurationsDao: LocalModelConfigurationsDao
+) {
+    suspend operator fun invoke(modelId: Long, replacementConfigId: Long?): Result<Unit>
+}
+```
+
+## 8. Permissions & Config Delta
+
+**No AndroidManifest changes required.**
+**No new permissions required.**
+**Room migration:** Add `is_default` column to `local_model_configurations` table.
+**No ProGuard rules changes required.**
+
+## 9. Constitution Audit
+
+This design adheres to the project's core architectural rules:
+- **Single Responsibility**: `DeleteLocalModelUseCase` handles deletion logic
+- **Dependency Inversion**: UI depends on domain interfaces, not implementations
+- **Repository Pattern**: `ModelRegistryPort` abstracts data access
+- **No Layer Boundary Breaches**: All database logic stays in data layer
+
+## 10. Cross-Spec Dependencies
+
+No cross-spec dependencies. This feature is self-contained.
+
+### InitializeModelsUseCase — MODIFIED Logic (CRITICAL)
+
+**BUG FIX REQUIRED**: The current `InitializeModelsUseCase` calls `setRegisteredModel` for ALL `remoteConfigs` unconditionally, which would re-create `DefaultModelEntity` entries for soft-deleted models on every startup, violating Invariant #2.
+
+The revised logic in section 5 completely resolves this by decoupling the auto-download decision from the `DefaultModelEntity` and relying strictly on `LocalModelEntity` existence + config count.
+
+### SettingsViewModel State Machine
+
+```kotlin
+data class SettingsUiState {
+    val downloadedModels: List<LocalModelAssetUi> = emptyList()
+    val availableToDownloadModels: List<LocalModelAssetUi> = emptyList()  // soft-deleted
+    val showCannotDeleteLastModelAlert: Boolean = false
+    val pendingDeletionModelId: Long? = null
+    val modelTypesNeedingReassignment: List<ModelType> = emptyList()
+}
+```
+
+## 5. Permissions & Config Delta
+
+**No AndroidManifest changes required.**
+**No new permissions required.**
+**No Room migration needed** (soft-delete uses row deletion, not schema changes).
+**No ProGuard rules changes required.**
+
+## 6. Constitution Audit
+
+This design adheres to the project's core architectural rules:
+
+- **Single Responsibility**: `SoftDeleteLocalModelUseCase` handles only soft deletion logic
+- **Dependency Inversion**: UI depends on domain interfaces, not implementations
+- **Repository Pattern**: `ModelRegistryPort` abstracts data access
+- **No Layer Boundary Breaches**: All database logic stays in data layer
+- **XOR Constraint as Signal**: Leverages existing database constraint for state management
+
+## 7. Cross-Spec Dependencies
+
+No cross-spec dependencies. This feature is self-contained within the model deletion flow.
