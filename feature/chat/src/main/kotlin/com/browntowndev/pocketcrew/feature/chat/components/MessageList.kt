@@ -56,7 +56,8 @@ fun MessageList(
     isPreview: Boolean = false,
 ) {
     val listState = rememberLazyListState()
-    val hasActiveIndicator = messages.any { it.indicatorState != null }
+    // Bolt Optimization: Cache the result of this O(N) operation to avoid recalculating on every recomposition
+    val hasActiveIndicator = remember(messages) { messages.any { it.indicatorState != null } }
 
     // Auto-scroll to bottom (index 0 in reverseLayout) when messages are added
     LaunchedEffect(messages.size) {

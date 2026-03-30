@@ -90,11 +90,14 @@ fun HistoryScreen(
     val sheetState = rememberModalBottomSheetState()
 
     val colorScheme = MaterialTheme.colorScheme
-    val shimmerColors = if (uiState.isLoading) {
-        val base = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.05f) }
-        val highlight = remember(colorScheme) { colorScheme.onSurface.copy(alpha = 0.15f) }
-        base to highlight
-    } else null
+    // Bolt Optimization: Group conditional remember into a single block with keys to ensure proper positional memoization
+    val shimmerColors = remember(colorScheme, uiState.isLoading) {
+        if (uiState.isLoading) {
+            val base = colorScheme.onSurface.copy(alpha = 0.05f)
+            val highlight = colorScheme.onSurface.copy(alpha = 0.15f)
+            base to highlight
+        } else null
+    }
 
     val shimmerProgress = if (uiState.isLoading) {
         val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
