@@ -1,7 +1,9 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import com.browntowndev.pocketcrew.domain.exception.ModelsDirectoryException
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
@@ -9,26 +11,15 @@ import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import io.mockk.coEvery
-import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
-/**
- * Tests for CheckModelsUseCase.
- * 
- * REF: CLARIFIED_REQUIREMENTS.md - Section 8 (CheckModelsUseCase - Directory Error)
- * 
- * Desired Behavior:
- * - Directory creation failure should throw ModelsDirectoryException (domain-specific)
- * - UI should show snackbar with recovery option
- */
 class CheckModelsUseCaseTest {
 
     private lateinit var fileScanner: ModelFileScannerPort
@@ -36,9 +27,8 @@ class CheckModelsUseCaseTest {
     private lateinit var logger: LoggingPort
     private lateinit var checkModelsUseCase: CheckModelsUseCase
 
-    private val testModel = ModelConfiguration(
-        modelType = ModelType.FAST,
-        metadata = ModelConfiguration.Metadata(
+    private val testAsset = LocalModelAsset(
+        metadata = LocalModelMetadata(
             huggingFaceModelName = "TheBloke/Mistral-7B-v0.1-GGUF",
             remoteFileName = "mistral-7b-v0.1.Q4_K_M.gguf",
             localFileName = "mistral-7b-v0.1.Q4_K_M.gguf",
@@ -47,16 +37,18 @@ class CheckModelsUseCaseTest {
             sizeInBytes = 1024L,
             modelFileFormat = ModelFileFormat.GGUF
         ),
-        tunings = ModelConfiguration.Tunings(
-            temperature = 0.7,
-            topK = 40,
-            topP = 0.9,
-            repetitionPenalty = 1.1,
-            maxTokens = 2048,
-            contextWindow = 4096
-        ),
-        persona = ModelConfiguration.Persona(
-            systemPrompt = "Test prompt"
+        configurations = listOf(
+            LocalModelConfiguration(
+                localModelId = 1L,
+                displayName = "Test Config",
+                maxTokens = 2048,
+                contextWindow = 4096,
+                temperature = 0.7,
+                topP = 0.9,
+                topK = 40,
+                repetitionPenalty = 1.1,
+                systemPrompt = "Test prompt"
+            )
         )
     )
 
@@ -75,11 +67,6 @@ class CheckModelsUseCaseTest {
         checkModelsUseCase = CheckModelsUseCase(fileScanner, checkModelEligibilityUseCase, logger)
     }
 
-    // ========================================================================
-    // Test: All Models Present - Returns Empty List
-    // Evidence: When all models are downloaded, should return empty modelsToDownload
-    // ========================================================================
-
     @Test
     fun `all models ready returns empty models to download`() = runTest {
         // Given
@@ -97,23 +84,21 @@ class CheckModelsUseCaseTest {
         } returns emptyList()
 
         // When
-        val result = checkModelsUseCase(listOf(testModel), listOf(testModel))
+        val result = checkModelsUseCase(
+            mapOf(ModelType.FAST to testAsset),
+            mapOf(ModelType.FAST to testAsset)
+        )
 
         // Then
         assertTrue(result.modelsToDownload.isEmpty())
         verify { logger.info(any(), "All 1 models are ready") }
     }
 
-    // ========================================================================
-    // Test: Some Models Missing - Returns Missing Models
-    // Evidence: Should return models that need downloading
-    // ========================================================================
-
     @Test
     fun `some models missing returns missing models`() = runTest {
         // Given
         val scanResult = ModelScanResult(
-            missingModels = listOf(testModel),
+            missingModels = listOf(testAsset),
             partialDownloads = emptyMap(),
             invalidModels = emptyList(),
             allValid = false
@@ -128,22 +113,16 @@ class CheckModelsUseCaseTest {
 
         coEvery {
             checkModelEligibilityUseCase.check(any(), any(), any())
-        } returns listOf(testModel)
+        } returns listOf(testAsset)
 
         // When
-        val result = checkModelsUseCase(emptyList(), listOf(testModel))
+        val result = checkModelsUseCase(emptyMap(), mapOf(ModelType.FAST to testAsset))
 
         // Then
         assertEquals(1, result.modelsToDownload.size)
-        assertEquals(testModel.modelType, result.modelsToDownload.first().modelType)
-        verify { logger.info(any(), "1 models need download: [Test Model]") }
+        assertEquals("Test Model", result.modelsToDownload.first().metadata.displayName)
+        verify { logger.info(any(), match { it.contains("1 assets need download: [Test Model]") }) }
     }
-
-    // ========================================================================
-    // Test: Directory Creation Error - Throws Domain Exception
-    // Evidence: Should throw ModelsDirectoryException (not generic Exception)
-    // REF: CLARIFIED_REQUIREMENTS.md - Section 8
-    // ========================================================================
 
     @Test
     fun `directory error throws ModelsDirectoryException`() = runTest {
@@ -166,7 +145,7 @@ class CheckModelsUseCaseTest {
         // When/Then - Should throw ModelsDirectoryException
         var exception: ModelsDirectoryException? = null
         try {
-            checkModelsUseCase(emptyList(), listOf(testModel))
+            checkModelsUseCase(emptyMap(), mapOf(ModelType.FAST to testAsset))
         } catch (e: ModelsDirectoryException) {
             exception = e
         }
@@ -174,11 +153,6 @@ class CheckModelsUseCaseTest {
         assertNotNull(exception)
         assertTrue(exception!!.message!!.contains("models directory"))
     }
-
-    // ========================================================================
-    // Test: Logging Verification
-    // Evidence: Results should be logged for debugging
-    // ========================================================================
 
     @Test
     fun `logs results for debugging`() = runTest {
@@ -192,22 +166,17 @@ class CheckModelsUseCaseTest {
 
         coEvery {
             checkModelEligibilityUseCase.check(any(), any(), any())
-        } returns listOf(testModel)
+        } returns listOf(testAsset)
 
         // When
-        checkModelsUseCase(emptyList(), listOf(testModel))
+        checkModelsUseCase(emptyMap(), mapOf(ModelType.FAST to testAsset))
 
         // Then
-        verify { logger.info(eq("CheckModelsUseCase"), eq("1 models need download: [Test Model]")) }
+        verify { logger.info(eq("CheckModelsUseCase"), match { it.contains("1 assets need download: [Test Model]") }) }
     }
 
-    // ========================================================================
-    // Test: Logging When All Ready
-    // Evidence: Should log when all models are ready
-    // ========================================================================
-
     @Test
-    fun `logs when all models are ready`() = runTest {
+    fun `logs when all ready`() = runTest {
         // Given
         coEvery {
             fileScanner.scanAndCreateDirIfNotExist(
@@ -221,7 +190,7 @@ class CheckModelsUseCaseTest {
         } returns emptyList()
 
         // When
-        checkModelsUseCase(listOf(testModel), listOf(testModel))
+        checkModelsUseCase(mapOf(ModelType.FAST to testAsset), mapOf(ModelType.FAST to testAsset))
 
         // Then
         verify { logger.info(eq("CheckModelsUseCase"), eq("All 1 models are ready")) }

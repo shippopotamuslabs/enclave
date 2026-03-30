@@ -1,10 +1,10 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
-import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import javax.inject.Inject
 
 data class FileProgressInitResult(
@@ -16,37 +16,31 @@ data class FileProgressInitResult(
 
 class InitializeFileProgressUseCase @Inject constructor() {
 
-    companion object {
-        private const val TAG = "InitializeFileProgress"
-    }
-
     operator fun invoke(
         scanResult: ModelScanResult,
-        allModels: List<ModelConfiguration>,
+        allModels: Map<ModelType, LocalModelAsset>,
         existingDownloads: List<FileProgress> = emptyList()
     ): FileProgressInitResult {
         val existingFailedFiles = existingDownloads
             .filter { it.status == FileStatus.FAILED }
             .associateBy { it.filename }
 
-        val allModelsToDownload = buildList {
-            addAll(scanResult.missingModels)
-            scanResult.partialDownloads.keys
-                .filter { filename -> scanResult.missingModels.none { filename == it.metadata.localFileName } }
-                .mapNotNull { filename ->
-                    allModels.find { filename == it.metadata.localFileName }
-                }
-                .let { addAll(it) }
-        }
+        val missingAssets = scanResult.missingModels
+        val partialDownloadAssets = scanResult.partialDownloads.keys
+            .filter { filename -> missingAssets.none { filename == it.metadata.localFileName } }
+            .mapNotNull { filename ->
+                allModels.values.find { filename == it.metadata.localFileName }
+            }
 
-        // Group models by remote filename to combine multiple modelTypes
-        // that share the same remote file (e.g., VISION + FAST both use gemma_3n_e4b_it_int4.litertlm)
-        val modelsByRemoteFile = allModelsToDownload.groupBy { it.metadata.remoteFileName }
+        val allAssetsToDownload = (missingAssets + partialDownloadAssets).distinctBy { it.metadata.sha256 }
 
-        val fileProgressList = modelsByRemoteFile.map { (remoteFilename, models) ->
-            val model = models.first() // All models in this group share the same remote filename
-            val combinedModelTypes = models.map { it.modelType }.distinct()
-            val trackingKey = model.metadata.localFileName
+        // Map SHA256 to list of ModelTypes that use it
+        val sha256ToModelTypes = allModels.entries
+            .groupBy({ it.value.metadata.sha256 }, { it.key })
+
+        val fileProgressList = allAssetsToDownload.map { asset ->
+            val combinedModelTypes = sha256ToModelTypes[asset.metadata.sha256] ?: emptyList()
+            val trackingKey = asset.metadata.localFileName
             val partialBytes = scanResult.partialDownloads[trackingKey] ?: 0L
             val existingFailed = existingFailedFiles[trackingKey]
             val resumeBytes = when {
@@ -59,19 +53,23 @@ class InitializeFileProgressUseCase @Inject constructor() {
                 filename = trackingKey,
                 modelTypes = combinedModelTypes,
                 bytesDownloaded = resumeBytes,
-                totalBytes = model.metadata.sizeInBytes,
+                totalBytes = asset.metadata.sizeInBytes,
                 status = if (partialBytes > 0) FileStatus.DOWNLOADING else FileStatus.QUEUED,
                 speedMBs = null
-            ).also { Log.d("InitializeFileProgress", "[DEBUG] Created FileProgress: filename=${it.filename}, modelTypes=${it.modelTypes}") }
+            )
         }
 
         // Calculate totals based on unique model types (not files), since multiple modelTypes can share a file
-        val uniqueModelTypes = allModelsToDownload.map { it.modelType }.distinct()
-        val totalModels = uniqueModelTypes.size
+        val allMissingModelTypes = allAssetsToDownload.flatMap { asset ->
+            sha256ToModelTypes[asset.metadata.sha256] ?: emptyList()
+        }.distinct()
+        
+        val totalModels = allModels.size
+        val modelsMissing = allMissingModelTypes.size
+        val modelsComplete = totalModels - modelsMissing
+        
         val totalBytes = fileProgressList.sumOf { it.totalBytes }
         val downloadedBytes = fileProgressList.sumOf { it.bytesDownloaded }
-        val modelsComplete = fileProgressList.filter { it.status == FileStatus.COMPLETE }
-            .sumOf { it.modelTypes.size }
         val overallProgress = if (totalBytes > 0) downloadedBytes.toFloat() / totalBytes else 0f
 
         return FileProgressInitResult(

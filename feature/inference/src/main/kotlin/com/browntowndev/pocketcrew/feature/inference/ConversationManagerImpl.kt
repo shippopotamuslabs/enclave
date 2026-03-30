@@ -2,7 +2,7 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.google.ai.edge.litertlm.Contents
@@ -24,7 +24,7 @@ import javax.inject.Inject
  */
 class ConversationManagerImpl @Inject constructor(
     private val engine: Engine,
-    private val modelConfig: ModelConfiguration? = null
+    private val modelConfig: LocalModelConfiguration? = null
 ) : ConversationManagerPort {
 
     private val defaultSystemPrompt = """
@@ -34,9 +34,9 @@ class ConversationManagerImpl @Inject constructor(
     """.trimIndent()
 
     private val samplerConfig = SamplerConfig(
-        temperature = modelConfig?.tunings?.temperature ?: 0.55,
-        topP = modelConfig?.tunings?.topP ?: 0.92,
-        topK = modelConfig?.tunings?.topK ?: 40
+        temperature = modelConfig?.temperature ?: 0.55,
+        topP = modelConfig?.topP ?: 0.92,
+        topK = modelConfig?.topK ?: 40
     )
 
     // Conversation is stateful and maintains context for multi-turn chats.
@@ -79,7 +79,7 @@ class ConversationManagerImpl @Inject constructor(
             }
 
             val conversationConfig = ConversationConfig(
-                systemInstruction = Contents.of(modelConfig?.persona?.systemPrompt ?: defaultSystemPrompt),
+                systemInstruction = Contents.of(modelConfig?.systemPrompt ?: defaultSystemPrompt),
                 initialMessages = history.map { domainMsg ->
                     when (domainMsg.role) {
                         Role.USER -> Message.user(domainMsg.content)

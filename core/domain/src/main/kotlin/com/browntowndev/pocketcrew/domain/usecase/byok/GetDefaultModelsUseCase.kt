@@ -5,13 +5,14 @@ import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepository
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
-/**
- * Returns an observable stream of all default model assignments.
- */
-class GetDefaultModelsUseCase @Inject constructor(
+interface GetDefaultModelsUseCase {
+    operator fun invoke(): Flow<List<DefaultModelAssignment>>
+}
+
+class GetDefaultModelsUseCaseImpl @Inject constructor(
     private val defaultModelRepository: DefaultModelRepositoryPort,
-) {
-    operator fun invoke(): Flow<List<DefaultModelAssignment>> {
+) : GetDefaultModelsUseCase {
+    override fun invoke(): Flow<List<DefaultModelAssignment>> {
         return defaultModelRepository.observeDefaults()
     }
 }

@@ -368,28 +368,28 @@ class GenerateChatResponseUseCase @Inject constructor(
     private fun determineInferenceType(mode: Mode): InferenceType {
         return when (mode) {
             Mode.FAST -> {
-                if (modelRegistry.getRegisteredModelSync(ModelType.FAST) != null) {
+                if (modelRegistry.getRegisteredAssetSync(ModelType.FAST) != null) {
                     InferenceType.ON_DEVICE
                 } else {
-                    InferenceType.ON_DEVICE
+                    InferenceType.BYOK
                 }
             }
             Mode.THINKING -> {
-                if (modelRegistry.getRegisteredModelSync(ModelType.THINKING) != null) {
+                if (modelRegistry.getRegisteredAssetSync(ModelType.THINKING) != null) {
                     InferenceType.ON_DEVICE
                 } else {
-                    InferenceType.ON_DEVICE
+                    InferenceType.BYOK
                 }
             }
             Mode.CREW -> {
-                val draftOneOnDevice = modelRegistry.getRegisteredModelSync(ModelType.DRAFT_ONE) != null
-                val draftTwoOnDevice = modelRegistry.getRegisteredModelSync(ModelType.DRAFT_TWO) != null
-                val mainOnDevice = modelRegistry.getRegisteredModelSync(ModelType.MAIN) != null
+                val draftOneOnDevice = modelRegistry.getRegisteredAssetSync(ModelType.DRAFT_ONE) != null
+                val draftTwoOnDevice = modelRegistry.getRegisteredAssetSync(ModelType.DRAFT_TWO) != null
+                val mainOnDevice = modelRegistry.getRegisteredAssetSync(ModelType.MAIN) != null
 
                 if (draftOneOnDevice || draftTwoOnDevice || mainOnDevice) {
                     InferenceType.ON_DEVICE
                 } else {
-                    InferenceType.ON_DEVICE
+                    InferenceType.BYOK
                 }
             }
         }

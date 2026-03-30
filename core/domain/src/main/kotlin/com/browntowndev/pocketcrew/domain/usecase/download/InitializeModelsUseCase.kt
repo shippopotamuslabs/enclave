@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
-import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
@@ -40,17 +39,17 @@ class InitializeModelsUseCase @Inject constructor(
      */
     private suspend fun checkModelsResult(): DownloadModelsResult {
         // Get models preferring OLD if it exists (for handling failed downloads)
-        val currentModels = modelRegistry.getModelsPreferringOld()
+        val currentModels = modelRegistry.getAssetsPreferringOld()
         logPort.debug(TAG, "Current downloaded/fallback models: ${
-            currentModels.map { cfg -> 
-                cfg.copy(persona = cfg.persona.copy(systemPrompt = if (cfg.persona.systemPrompt.isNotEmpty()) "TRUNCATED FOR LOGS" else "EMPTY")) 
+            currentModels.map { (type, asset) -> 
+                "$type: ${asset.metadata.displayName}"
             }
         }")
 
         // Fetch remote config
         val remoteConfigResult = modelConfigFetcher.fetchRemoteConfig()
         val remoteConfigs = remoteConfigResult.getOrElse {
-            Log.e(TAG, "Failed to fetch remote config: ${it.message}")
+            logPort.error(TAG, "Failed to fetch remote config: ${it.message}")
 
             // If there are no current models, throw the error
             if (currentModels.isEmpty()) throw it
@@ -74,22 +73,21 @@ class InitializeModelsUseCase @Inject constructor(
         // 1. SHA256 changed, AND
         // 2. No other model configuration still uses the OLD SHA256 (shared file case).
         //    If another modelType still uses that SHA256, the file is still needed.
-        val currentModelsByType = currentModels.associateBy { it.modelType }
-
+        
         // Build a map of SHA256 -> count of modelTypes using it
         // This helps detect if a file is shared (used by multiple models)
-        val sha256UsageCount = currentModels
+        val sha256UsageCount = currentModels.values
             .groupBy { it.metadata.sha256 }
             .mapValues { it.value.size }
 
-        remoteConfigs.forEach { remoteConfig ->
-            val existingConfig = currentModelsByType[remoteConfig.modelType]
-            val oldSha256 = existingConfig?.metadata?.sha256
-            val newSha256 = remoteConfig.metadata.sha256
+        remoteConfigs.forEach { (modelType, remoteAsset) ->
+            val existingAsset = currentModels[modelType]
+            val oldSha256 = existingAsset?.metadata?.sha256
+            val newSha256 = remoteAsset.metadata.sha256
 
             // SHA256 changed if the old config has a different SHA256 than remote
-            val sha256Changed = existingConfig == null ||
-                existingConfig.metadata.sha256 != newSha256
+            val sha256Changed = existingAsset == null ||
+                existingAsset.metadata.sha256 != newSha256
 
             // Mark as OLD only if SHA256 changed AND no other model type
             // still uses the old SHA256 (file would be orphaned otherwise)
@@ -97,7 +95,8 @@ class InitializeModelsUseCase @Inject constructor(
                 (sha256UsageCount[oldSha256] ?: 0) <= 1
 
             modelRegistry.setRegisteredModel(
-                remoteConfig,
+                modelType = modelType,
+                asset = remoteAsset,
                 status = ModelStatus.CURRENT,
                 markExistingAsOld = markAsOld
             )

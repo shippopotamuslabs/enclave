@@ -3,8 +3,6 @@ package com.browntowndev.pocketcrew.app
 import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
-import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -13,30 +11,22 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Checks if model files are ready using ModelDownloadOrchestrator.
- * This validates against both filesystem and ModelRegistry for full integrity checking.
- *
- * Checks for standardized model files: vision.litertlm, draft.litertlm, main.litertlm
+ * Utility to check if all required model files are present on disk.
+ * Used during app startup and initialization to decide whether to show download screen.
  */
 @Singleton
 class ModelReadyChecker @Inject constructor(
-    @param:ApplicationContext private val context: Context,
+    @ApplicationContext private val context: Context,
     private val modelRegistry: ModelRegistryPort
 ) {
     companion object {
         private const val TAG = "ModelReadyChecker"
     }
 
-    /**
-     * Get the directory where models are stored.
-     */
     private fun getModelsDirectory(): File {
-        return File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+        return File(context.filesDir, "models")
     }
 
-    /**
-     * Compute filename from modelType and modelFileFormat.
-     */
     private fun computeFilename(modelType: ModelType, format: ModelFileFormat): String {
         return "${modelType.name.lowercase()}.${format.extension.removePrefix(".")}"
     }
@@ -53,37 +43,31 @@ class ModelReadyChecker @Inject constructor(
             return false
         }
 
-        // Get dynamic filenames from registry, or throw if not configured
-        val allConfigs = modelRegistry.getRegisteredModelsSync()
-        val configsByType = allConfigs.associateBy { it.modelType }
-
-        val requiredFiles = listOfNotNull(
-            configsByType[ModelType.VISION]?.let {
-                computeFilename(ModelType.VISION, it.metadata.modelFileFormat)
-            },
-            configsByType[ModelType.DRAFT_ONE]?.let {
-                computeFilename(ModelType.DRAFT_ONE, it.metadata.modelFileFormat)
-            },
-            configsByType[ModelType.DRAFT_TWO]?.let {
-                computeFilename(ModelType.DRAFT_TWO, it.metadata.modelFileFormat)
-            },
-            configsByType[ModelType.MAIN]?.let {
-                computeFilename(ModelType.MAIN, it.metadata.modelFileFormat)
-            },
-            configsByType[ModelType.FAST]?.let {
-                computeFilename(ModelType.FAST, it.metadata.modelFileFormat)
-            }
+        // Check if all primary slots have an asset registered and that file exists
+        val slotsToCheck = listOf(
+            ModelType.VISION,
+            ModelType.DRAFT_ONE,
+            ModelType.DRAFT_TWO,
+            ModelType.MAIN,
+            ModelType.FAST
         )
 
-        for (filename in requiredFiles) {
+        for (slot in slotsToCheck) {
+            val asset = modelRegistry.getRegisteredAssetSync(slot)
+            if (asset == null) {
+                Log.d(TAG, "No asset registered for slot $slot")
+                return false
+            }
+
+            val filename = computeFilename(slot, asset.metadata.modelFileFormat)
             val file = File(modelsDir, filename)
             if (!file.exists() || file.length() == 0L) {
-                Log.d(TAG, "Model $filename not ready: exists=${file.exists()}, size=${file.length()}")
+                Log.d(TAG, "Model $filename for slot $slot not ready: exists=${file.exists()}, size=${file.length()}")
                 return false
             }
         }
 
-        Log.d(TAG, "All models are ready (fast check)")
+        Log.d(TAG, "All required models are ready (fast check)")
         return true
     }
 }
