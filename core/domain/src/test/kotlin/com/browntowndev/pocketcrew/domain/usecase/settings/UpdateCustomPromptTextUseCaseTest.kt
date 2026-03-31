@@ -1,6 +1,6 @@
-package com.browntowndev.pocketcrew.domain.usecase
+package com.browntowndev.pocketcrew.domain.usecase.settings
 
-import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomPromptTextUseCase
+import com.browntowndev.pocketcrew.domain.usecase.FakeSettingsRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
