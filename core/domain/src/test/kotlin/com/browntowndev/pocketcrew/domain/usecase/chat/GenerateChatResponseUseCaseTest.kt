@@ -858,4 +858,74 @@ class GenerateChatResponseUseCaseTest {
         assertFalse(snapshot.isComplete)
         assertEquals(MessageState.THINKING, snapshot.messageState)
     }
+
+    // ========================================================================
+    // Test: toMessagesState returns accurate snapshot of accumulated messages
+    // Evidence: Ensures state representation generated for UI updates is correct
+    // ========================================================================
+
+    @Test
+    fun `toMessagesState returns accurate snapshot of accumulated messages`() = runTest {
+        // Given
+        val mockConfig = mockk<ModelConfiguration>()
+        every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
+
+        val assistantMessageId = 2L
+        coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns assistantMessageId
+
+        val fakePipelineExecutor = FakePipelineExecutor()
+        // Add multiple events to accumulate state
+        fakePipelineExecutor.addProcessingEvent(ModelType.DRAFT_ONE)
+        fakePipelineExecutor.addThinkingLiveEvent("Let me think... ", ModelType.DRAFT_ONE)
+        fakePipelineExecutor.addGeneratingTextEvent("Here is the ", ModelType.DRAFT_ONE)
+        fakePipelineExecutor.addGeneratingTextEvent("answer.", ModelType.DRAFT_ONE)
+
+        val useCase = GenerateChatResponseUseCase(
+            inferenceFactory = inferenceFactory,
+            pipelineExecutor = fakePipelineExecutor,
+            chatRepository = chatRepository,
+            messageRepository = messageRepository,
+            loggingPort = loggingPort,
+            inferenceLockManager = InferenceLockManagerImpl(),
+            modelRegistry = modelRegistry
+        )
+
+        // When
+        val accumulatedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()
+        useCase(
+            prompt = "Hello",
+            userMessageId = 1L,
+            assistantMessageId = assistantMessageId,
+            chatId = 1L,
+            mode = Mode.CREW
+        ).collect { state ->
+            accumulatedMessages.add(state)
+        }
+
+        // Then - verify the final snapshot accurately reflects the accumulated state
+        val finalState = accumulatedMessages.lastOrNull() ?: throw AssertionError("No accumulated messages")
+        assertNotNull(finalState)
+        assertTrue(finalState.messages.containsKey(assistantMessageId))
+
+        val snapshot = finalState.messages[assistantMessageId]!!
+        assertEquals(assistantMessageId, snapshot.messageId)
+        assertEquals(ModelType.DRAFT_ONE, snapshot.modelType)
+        assertEquals("Here is the answer.", snapshot.content)
+        assertEquals("Let me think... ", snapshot.thinkingRaw)
+        assertEquals(MessageState.GENERATING, snapshot.messageState)
+        assertEquals(PipelineStep.DRAFT_ONE, snapshot.pipelineStep)
+        assertFalse(snapshot.isComplete)
+
+        // Ensure another event correctly updates the snapshot properties independently
+        // by verifying intermediate states
+        val intermediateState = accumulatedMessages.find {
+            it.messages[assistantMessageId]?.messageState == MessageState.THINKING
+        }
+        assertNotNull(intermediateState)
+        val intermediateSnapshot = intermediateState!!.messages[assistantMessageId]!!
+        assertEquals("", intermediateSnapshot.content) // text generation hasn't started yet
+        assertEquals("Let me think... ", intermediateSnapshot.thinkingRaw)
+        assertEquals(MessageState.THINKING, intermediateSnapshot.messageState)
+        assertFalse(intermediateSnapshot.isComplete)
+    }
 }
