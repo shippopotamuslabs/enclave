@@ -13,7 +13,6 @@ import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import kotlin.system.measureTimeMillis
 
 class ModelRegistryImplBenchmarkTest {
 
@@ -85,11 +84,11 @@ class ModelRegistryImplBenchmarkTest {
         modelRegistry.getModelsPreferringOld()
 
         val runs = 10
-        val totalTime = measureTimeMillis {
-            for (i in 1..runs) {
-                modelRegistry.getModelsPreferringOld()
-            }
+        val startTime = testScheduler.currentTime
+        for (i in 1..runs) {
+            modelRegistry.getModelsPreferringOld()
         }
+        val totalTime = testScheduler.currentTime - startTime
 
         println("Baseline Benchmark (Average over $runs runs): ${totalTime / runs.toDouble()} ms")
     }
