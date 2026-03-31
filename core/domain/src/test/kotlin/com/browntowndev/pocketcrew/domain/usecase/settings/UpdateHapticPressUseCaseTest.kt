@@ -1,47 +1,59 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
-import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
-import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.mockk
+import com.browntowndev.pocketcrew.domain.usecase.FakeSettingsRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.*
 
 class UpdateHapticPressUseCaseTest {
 
-    private lateinit var useCase: UpdateHapticPressUseCase
-    private lateinit var mockRepository: SettingsRepository
+    private lateinit var fakeRepository: FakeSettingsRepository
+    private lateinit var updateHapticPressUseCase: UpdateHapticPressUseCase
 
     @BeforeEach
     fun setup() {
-        mockRepository = mockk(relaxed = true)
-        useCase = UpdateHapticPressUseCase(mockRepository)
+        fakeRepository = FakeSettingsRepository()
+        updateHapticPressUseCase = UpdateHapticPressUseCase(fakeRepository)
     }
 
     @Test
-    fun `invoke calls repository with true when enabled is true`() = runTest {
-        // Arrange
-        val isEnabled = true
-        coEvery { mockRepository.updateHapticPress(isEnabled) } returns Unit
+    fun `invoke updates haptic press to true`() = runTest {
+        // When
+        updateHapticPressUseCase(true)
 
-        // Act
-        useCase(isEnabled)
-
-        // Assert
-        coVerify(exactly = 1) { mockRepository.updateHapticPress(isEnabled) }
+        // Then
+        fakeRepository.verifyUpdateHapticPressCalled(1, true)
     }
 
     @Test
-    fun `invoke calls repository with false when enabled is false`() = runTest {
-        // Arrange
-        val isEnabled = false
-        coEvery { mockRepository.updateHapticPress(isEnabled) } returns Unit
+    fun `invoke updates haptic press to false`() = runTest {
+        // When
+        updateHapticPressUseCase(false)
 
-        // Act
-        useCase(isEnabled)
+        // Then
+        fakeRepository.verifyUpdateHapticPressCalled(1, false)
+    }
 
-        // Assert
-        coVerify(exactly = 1) { mockRepository.updateHapticPress(isEnabled) }
+    @Test
+    fun `invoke can toggle haptic press multiple times`() = runTest {
+        // When
+        updateHapticPressUseCase(false)
+        updateHapticPressUseCase(true)
+        updateHapticPressUseCase(false)
+
+        // Then
+        fakeRepository.verifyUpdateHapticPressCalled(3, false)
+    }
+
+    @Test
+    fun `invoke throws exception when repository fails`() = runTest {
+        // Given
+        fakeRepository.shouldThrowOnUpdateHapticPress = true
+
+        // When/Then
+        assertThrows(RuntimeException::class.java) {
+            runTest { updateHapticPressUseCase(true) }
+        }
     }
 }
