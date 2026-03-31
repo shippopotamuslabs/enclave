@@ -54,6 +54,7 @@ fun MessageList(
     messages: List<ChatMessage>,
     modifier: Modifier = Modifier,
     isPreview: Boolean = false,
+    onEditMessage: (String) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     // Bolt Optimization: Cache the result of this O(N) operation to avoid recalculating on every recomposition
@@ -90,6 +91,7 @@ fun MessageList(
                     MessageBubble(
                         modifier = Modifier.padding(horizontal = 10.dp),
                         message = message,
+                        onEditClick = onEditMessage,
                     )
                 } else {
                     AssistantResponse(

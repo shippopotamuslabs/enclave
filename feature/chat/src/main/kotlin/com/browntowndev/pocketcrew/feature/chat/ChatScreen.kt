@@ -52,6 +52,7 @@ fun ChatScreen(
                 MessageList(
                     modifier = Modifier.fillMaxSize(),
                     messages = uiState.messages,
+                    onEditMessage = onInputChange,
                 )
 
                 if (uiState.shieldReason != null) {
