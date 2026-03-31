@@ -9,12 +9,14 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
-class ModelRegistryImplBenchmarkTest {
+class ModelRegistryImplOptimizeTest {
 
     private lateinit var modelsDao: ModelsDao
     private lateinit var defaultModelsDao: DefaultModelsDao
@@ -58,38 +60,32 @@ class ModelRegistryImplBenchmarkTest {
     )
 
     @Test
-    fun benchmarkGetModelsPreferringOld() = runTest {
-        // Setup mock delays to simulate DB access (e.g. 5ms per query)
+    fun getModelsPreferringOld_usesSingleQueryAndReturnsCorrectModels() = runTest {
         val allEntities = mutableListOf<ModelEntity>()
-        for (modelType in ModelType.entries) {
-            // Randomly assign some to OLD and some to CURRENT
-            val status = if (modelType.ordinal % 2 == 0) ModelStatus.OLD else ModelStatus.CURRENT
-            allEntities.add(createEntity(modelType, status))
-        }
+        // Give MAIN model an OLD and CURRENT entity. We should prefer OLD.
+        allEntities.add(createEntity(ModelType.MAIN, ModelStatus.OLD))
+        allEntities.add(createEntity(ModelType.MAIN, ModelStatus.CURRENT))
 
-        coEvery { modelsDao.getModelEntityByStatus(any(), any()) } coAnswers {
-            kotlinx.coroutines.delay(5) // Simulate 5ms db access
-            val requestedType = it.invocation.args[0] as ModelType
-            val requestedStatus = it.invocation.args[1] as ModelStatus
-            allEntities.find { e -> e.modelType == requestedType && e.modelStatus == requestedStatus }
-        }
+        // Give VISION model just a CURRENT entity. We should get CURRENT.
+        allEntities.add(createEntity(ModelType.VISION, ModelStatus.CURRENT))
 
-        coEvery { modelsDao.getModelsByStatuses(any()) } coAnswers {
-            kotlinx.coroutines.delay(10) // Simulate a slightly longer 10ms single query
-            allEntities
-        }
+        coEvery { modelsDao.getModelsByStatuses(any()) } returns allEntities
 
-        // Warmup
-        modelRegistry.getModelsPreferringOld()
-        modelRegistry.getModelsPreferringOld()
+        val result = modelRegistry.getModelsPreferringOld()
 
-        val runs = 10
-        val startTime = testScheduler.currentTime
-        for (i in 1..runs) {
-            modelRegistry.getModelsPreferringOld()
-        }
-        val totalTime = testScheduler.currentTime - startTime
+        // Assert we only queried once
+        coVerify(exactly = 1) { modelsDao.getModelsByStatuses(any()) }
+        coVerify(exactly = 0) { modelsDao.getModelEntityByStatus(any(), any()) }
 
-        println("Baseline Benchmark (Average over $runs runs): ${totalTime / runs.toDouble()} ms")
+        // Assert size
+        assertEquals(2, result.size)
+
+        // Assert MAIN is OLD
+        val mainConfig = result.find { it.modelType == ModelType.MAIN }
+        assertEquals(ModelType.MAIN, mainConfig?.modelType)
+
+        // Assert VISION is CURRENT
+        val visionConfig = result.find { it.modelType == ModelType.VISION }
+        assertEquals(ModelType.VISION, visionConfig?.modelType)
     }
 }

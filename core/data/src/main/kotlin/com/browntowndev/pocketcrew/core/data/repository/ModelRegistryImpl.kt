@@ -170,26 +170,17 @@ class ModelRegistryImpl @Inject constructor(
     }
 
     override suspend fun getModelsPreferringOld(): List<ModelConfiguration> {
-        // For each ModelType, prefer OLD if it exists, otherwise use CURRENT
         val entities = modelsDao.getModelsByStatuses(listOf(ModelStatus.OLD, ModelStatus.CURRENT))
         val grouped = entities.groupBy { it.modelType }
 
-        val result = mutableListOf<ModelConfiguration>()
-        for (modelType in ModelType.entries) {
-            val group = grouped[modelType]
-            if (group != null) {
-                val oldEntity = group.find { it.modelStatus == ModelStatus.OLD }
-                if (oldEntity != null) {
-                    result.add(entityToModelConfiguration(oldEntity))
-                } else {
-                    val currentEntity = group.find { it.modelStatus == ModelStatus.CURRENT }
-                    if (currentEntity != null) {
-                        result.add(entityToModelConfiguration(currentEntity))
-                    }
-                }
+        return ModelType.entries.mapNotNull { modelType ->
+            grouped[modelType]?.let { group ->
+                val bestEntity = group.find { it.modelStatus == ModelStatus.OLD }
+                    ?: group.find { it.modelStatus == ModelStatus.CURRENT }
+
+                bestEntity?.let { entityToModelConfiguration(it) }
             }
         }
-        return result
     }
 
     private fun entityToModelConfiguration(entity: ModelEntity): ModelConfiguration {
