@@ -762,6 +762,104 @@ class GenerateChatResponseUseCaseTest {
     }
 
     // ========================================================================
+
+    // ========================================================================
+    // Test: toSnapshot maps properties correctly and calculates thinkingDurationSeconds
+    // Evidence: Properties in AccumulatedMessages.MessageSnapshot match expected values
+    // ========================================================================
+
+    @Test
+    fun `toSnapshot maps properties correctly and calculates thinkingDurationSeconds`() = runTest {
+        // Given
+        val mockConfig = mockk<ModelConfiguration>()
+        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+
+        // Wait, System.currentTimeMillis() was causing StackOverflowError due to mockkStatic.
+        // Instead of mockkStatic, let's just use the real time and verify duration is correctly calculated
+        // based on thinkingStartTime and thinkingEndTime within the AccumulatedMessages response.
+
+        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+            InferenceEvent.Thinking("Think 1 ", ModelType.FAST),
+            InferenceEvent.PartialResponse("Response 1 ", ModelType.FAST),
+            InferenceEvent.Finished(ModelType.FAST)
+        )
+        coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
+
+        // When
+        val accumulatedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()
+        generateChatResponseUseCase(
+            prompt = "Hello",
+            userMessageId = 1L,
+            assistantMessageId = 2L,
+            chatId = 1L,
+            mode = Mode.FAST
+        ).collect { state ->
+            accumulatedMessages.add(state)
+        }
+
+        // Then
+        assertTrue(accumulatedMessages.isNotEmpty())
+
+        // The last emission should be for Finished
+        val finalState = accumulatedMessages.lastOrNull()
+        assertNotNull(finalState)
+        val snapshot = finalState!!.messages[2L]
+        assertNotNull(snapshot)
+
+        assertEquals(2L, snapshot!!.messageId)
+        assertEquals(ModelType.FAST, snapshot.modelType)
+        assertEquals("Response 1 ", snapshot.content)
+        assertEquals("Think 1 ", snapshot.thinkingRaw)
+
+        assertTrue(snapshot.thinkingStartTime > 0)
+        assertTrue(snapshot.thinkingEndTime >= snapshot.thinkingStartTime)
+        val expectedDuration = (snapshot.thinkingEndTime - snapshot.thinkingStartTime) / 1000
+        assertEquals(expectedDuration, snapshot.thinkingDurationSeconds)
+
+        assertTrue(snapshot.isComplete)
+        assertEquals(MessageState.COMPLETE, snapshot.messageState)
+        assertEquals(PipelineStep.FINAL, snapshot.pipelineStep)
+    }
+
+    @Test
+    fun `toSnapshot handles zero thinking duration correctly`() = runTest {
+        // Given
+        val mockConfig = mockk<ModelConfiguration>()
+        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+
+        // Emitting ONLY Thinking events means thinkingEndTime remains null
+        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+            InferenceEvent.Thinking("Quick think", ModelType.FAST)
+        )
+        coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
+
+        // When
+        val accumulatedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()
+        generateChatResponseUseCase(
+            prompt = "Hello",
+            userMessageId = 1L,
+            assistantMessageId = 2L,
+            chatId = 1L,
+            mode = Mode.FAST
+        ).collect { state ->
+            accumulatedMessages.add(state)
+        }
+
+        // Then
+        assertTrue(accumulatedMessages.isNotEmpty())
+        val finalState = accumulatedMessages.lastOrNull()
+        val snapshot = finalState!!.messages[2L]
+        assertNotNull(snapshot)
+
+        // Starts thinking, but hasn't ended, so duration should be 0 because endTime is null
+        assertTrue(snapshot!!.thinkingStartTime > 0)
+        assertEquals(0L, snapshot.thinkingEndTime) // Snapshot constructor defaults null to 0L
+        assertEquals(0L, snapshot.thinkingDurationSeconds) // Backing property correctly calculates 0
+        assertFalse(snapshot.isComplete)
+        assertEquals(MessageState.THINKING, snapshot.messageState)
+    }
+
+    // ========================================================================
     // Test: toMessagesState returns accurate snapshot of accumulated messages
     // Evidence: Ensures state representation generated for UI updates is correct
     // ========================================================================
@@ -772,25 +870,34 @@ class GenerateChatResponseUseCaseTest {
         val mockConfig = mockk<ModelConfiguration>()
         every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
 
-        val assistantMessageId = 5L
+        val assistantMessageId = 2L
         coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns assistantMessageId
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
-            InferenceEvent.Thinking("Let me think... ", ModelType.FAST),
-            InferenceEvent.PartialResponse("Here is the ", ModelType.FAST),
-            InferenceEvent.PartialResponse("answer.", ModelType.FAST),
-            InferenceEvent.Finished(ModelType.FAST)
+        val fakePipelineExecutor = FakePipelineExecutor()
+        // Add multiple events to accumulate state
+        fakePipelineExecutor.addProcessingEvent(ModelType.DRAFT_ONE)
+        fakePipelineExecutor.addThinkingLiveEvent("Let me think... ", ModelType.DRAFT_ONE)
+        fakePipelineExecutor.addGeneratingTextEvent("Here is the ", ModelType.DRAFT_ONE)
+        fakePipelineExecutor.addGeneratingTextEvent("answer.", ModelType.DRAFT_ONE)
+
+        val useCase = GenerateChatResponseUseCase(
+            inferenceFactory = inferenceFactory,
+            pipelineExecutor = fakePipelineExecutor,
+            chatRepository = chatRepository,
+            messageRepository = messageRepository,
+            loggingPort = loggingPort,
+            inferenceLockManager = InferenceLockManagerImpl(),
+            modelRegistry = modelRegistry
         )
-        coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
 
         // When
         val accumulatedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()
-        generateChatResponseUseCase(
+        useCase(
             prompt = "Hello",
             userMessageId = 1L,
             assistantMessageId = assistantMessageId,
             chatId = 1L,
-            mode = Mode.FAST
+            mode = Mode.CREW
         ).collect { state ->
             accumulatedMessages.add(state)
         }
@@ -802,12 +909,12 @@ class GenerateChatResponseUseCaseTest {
 
         val snapshot = finalState.messages[assistantMessageId]!!
         assertEquals(assistantMessageId, snapshot.messageId)
-        assertEquals(ModelType.FAST, snapshot.modelType)
+        assertEquals(ModelType.DRAFT_ONE, snapshot.modelType)
         assertEquals("Here is the answer.", snapshot.content)
         assertEquals("Let me think... ", snapshot.thinkingRaw)
-        assertEquals(MessageState.COMPLETE, snapshot.messageState)
-        assertEquals(PipelineStep.FINAL, snapshot.pipelineStep)
-        assertTrue(snapshot.isComplete)
+        assertEquals(MessageState.GENERATING, snapshot.messageState)
+        assertEquals(PipelineStep.DRAFT_ONE, snapshot.pipelineStep)
+        assertFalse(snapshot.isComplete)
 
         // Ensure another event correctly updates the snapshot properties independently
         // by verifying intermediate states
