@@ -45,12 +45,13 @@ data class ChatUiState(
     val hapticResponse: Boolean = false,
     val chatId: Long? = null,
 ) {
-    val isGenerating: Boolean
-        get() = messages.any {
-            it.indicatorState is IndicatorState.Generating ||
-                    it.indicatorState is IndicatorState.Thinking ||
-                    it.indicatorState is IndicatorState.Processing
-        }
+    // Bolt Optimization: Calculate isGenerating at instantiation rather than on every access.
+    // This prevents an O(N) list traversal every time the UI accesses this property during recomposition.
+    val isGenerating: Boolean = messages.any {
+        it.indicatorState is IndicatorState.Generating ||
+                it.indicatorState is IndicatorState.Thinking ||
+                it.indicatorState is IndicatorState.Processing
+    }
 }
 
 /**
