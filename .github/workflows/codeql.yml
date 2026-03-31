@@ -41,7 +41,7 @@ jobs:
       run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@v4
       with:
         languages: 'java-kotlin'
         # Optional: Add security-extended or security-and-quality queries
@@ -52,9 +52,9 @@ jobs:
       # We use assembleDebug to ensure all Kotlin/Java code is compiled
       run: |
         chmod +x gradlew
-        ./gradlew assembleDebug --no-daemon --parallel --build-cache -Pandroid.builder.sdk.download=true
+        ./gradlew clean assembleDebug --no-daemon --parallel --no-build-cache -Pandroid.builder.sdk.download=true
 
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@v4
       with:
         category: "/language:java-kotlin"
