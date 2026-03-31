@@ -13,6 +13,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.verify
+
 import kotlinx.coroutines.flow.flowOf
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -70,17 +71,18 @@ class LlamaChatSessionManagerTest {
     fun `sendUserMessage creates DomainChatMessage and appends to engine`() = runTest {
         // Given
         val text = "Hello"
-        val expectedMessage = ChatMessage(
-            role = Role.USER,
-            content = text
-        )
-        coEvery { engine.appendMessage(expectedMessage) } returns Unit
+
+        coEvery { engine.appendMessage(any()) } returns Unit
 
         // When
         sessionManager.sendUserMessage(text)
 
         // Then
-        coVerify { engine.appendMessage(expectedMessage) }
+        coVerify {
+            engine.appendMessage(match {
+                it.content == text && it.role == Role.USER
+            })
+        }
     }
 
     @Test
