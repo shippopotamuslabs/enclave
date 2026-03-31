@@ -63,6 +63,7 @@ jobs:
     - name: Build with Gradle
       # Manual build step to replace 'autobuild'
       # We use assembleDebug to ensure all Kotlin/Java code is compiled
+      # --no-daemon and --no-build-cache are important so CodeQL can trace the full build
       run: |
         chmod +x gradlew
         ./gradlew clean assembleDebug --no-daemon --no-build-cache --parallel -Pandroid.builder.sdk.download=true
