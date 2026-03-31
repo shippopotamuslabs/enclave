@@ -50,6 +50,21 @@ class DownloadNotificationManagerTest {
     }
 
     @Test
+    fun createForegroundInfoForProgress_returnsValidForegroundInfo() {
+        val mockPendingIntent = mockk<PendingIntent>(relaxed = true)
+
+        val foregroundInfo = notificationManager.createForegroundInfoForProgress(
+            progress = 0.5f,
+            currentFile = "test.litertlm",
+            subText = "50%",
+            cancelPendingIntent = mockPendingIntent
+        )
+
+        assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
+        assertNotNull(foregroundInfo.notification)
+    }
+
+    @Test
     fun updateNotification_doesNothing_whenPermissionDenied() {
         notificationManager.updateNotification(
             notificationId = 1001,
