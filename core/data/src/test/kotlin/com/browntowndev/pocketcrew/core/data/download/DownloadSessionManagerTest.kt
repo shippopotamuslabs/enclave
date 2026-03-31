@@ -7,7 +7,9 @@ import io.mockk.mockk
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import io.mockk.verify
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
@@ -74,5 +76,17 @@ class DownloadSessionManagerTest {
         val result = sessionManager.isSessionStale(sessionId)
 
         assertFalse(result)
+    }
+
+    @Test
+    fun clearSession_clearsCachedSessionAndRemovesFromPrefs() {
+        val sessionId = sessionManager.createNewSession()
+
+
+        sessionManager.clearSession()
+
+        assertNull(sessionManager.currentSessionId)
+        verify { mockEditor.remove("download_session_id") }
+        verify { mockEditor.apply() }
     }
 }

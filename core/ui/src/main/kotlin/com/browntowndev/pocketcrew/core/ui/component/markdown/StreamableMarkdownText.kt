@@ -14,6 +14,9 @@ import com.browntowndev.pocketcrew.core.ui.theme.darkMarkdownTheme
 import com.hrm.markdown.renderer.Markdown
 
 
+private val boldRegex = Regex("\\*\\*(.+?)\\*\\*")
+private val codeRegex = Regex("`([^`]+)`")
+
 /**
  * A composable that renders markdown text with support for streaming updates.
  * Uses the huarangmeng Markdown library for full markdown parsing and rendering.
@@ -91,9 +94,6 @@ private fun parseSimpleMarkdown(text: String): AnnotatedString {
     return buildAnnotatedString {
         var currentIndex = 0
         val processedText = text
-        
-        val boldRegex = Regex("\\*\\*(.+?)\\*\\*")
-        val codeRegex = Regex("`([^`]+)`")
         
         val allMatches = mutableListOf<Pair<IntRange, () -> Unit>>()
         
