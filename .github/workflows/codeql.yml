@@ -52,7 +52,7 @@ jobs:
       # We use assembleDebug to ensure all Kotlin/Java code is compiled
       run: |
         chmod +x gradlew
-        ./gradlew assembleDebug --no-daemon --parallel --build-cache -Pandroid.builder.sdk.download=true
+        ./gradlew clean assembleDebug --no-daemon --parallel --no-build-cache -Pandroid.builder.sdk.download=true
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
