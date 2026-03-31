@@ -20,6 +20,7 @@ fun ChatRoute(
         onSendMessage = { viewModel.onSendMessage() },
         onModeChange = viewModel::onModeChange,
         onInputChange = viewModel::onInputChange,
+        onEditMessage = viewModel::onEditMessage,
         onAttach = viewModel::onAttach,
         onShieldTap = {
             val reason = viewModel.getShieldReason()
