@@ -1,3 +1,6 @@
-## 2025-02-12 - Missing remember in Jetpack Compose
-**Learning:** Found an un-remembered list computation (`messages.any { ... }`) inside `MessageList.kt` which caused it to be re-evaluated on every single recomposition of the message list. This can become a performance bottleneck when the list of messages grows, especially during message generation when recomposition happens frequently.
-**Action:** Always wrap derived state computations or heavy collection operations in `remember` (e.g. `remember(messages) { messages.any { ... } }`) in Jetpack Compose to prevent unnecessary work on recomposition.
+## Testing learnings
+When testing coroutine based UseCases using mocking with `mockk` library, prefer `coEvery` and `coVerify` rather than standard `every` and `verify`.
+
+The project requires `google-services.json` inside the `/app/` directory to run full unit tests `./gradlew testDebugUnitTest`. Without it `processDebugGoogleServices` task fails. We bypassed this by providing a dummy `google-services.json`.
+
+Use `@BeforeEach` instead of `@Before` to execute initializations.
