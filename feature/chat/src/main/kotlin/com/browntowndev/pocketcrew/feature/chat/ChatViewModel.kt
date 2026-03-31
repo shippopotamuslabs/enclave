@@ -252,6 +252,10 @@ class ChatViewModel @Inject constructor(
         _inputText.value = inputText
     }
 
+    fun onEditMessage(message: String) {
+        _inputText.value = message
+    }
+
     fun onModeChange(mode: ChatModeUi) {
         _selectedMode.value = mode
     }
