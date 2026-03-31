@@ -44,15 +44,8 @@ data class ChatUiState(
     val hapticPress: Boolean = false,
     val hapticResponse: Boolean = false,
     val chatId: Long? = null,
-) {
-    // Bolt Optimization: Calculate isGenerating at instantiation rather than on every access.
-    // This prevents an O(N) list traversal every time the UI accesses this property during recomposition.
-    val isGenerating: Boolean = messages.any {
-        it.indicatorState is IndicatorState.Generating ||
-                it.indicatorState is IndicatorState.Thinking ||
-                it.indicatorState is IndicatorState.Processing
-    }
-}
+    val isGenerating: Boolean = false,
+)
 
 /**
  * Used in previews - various indicator states.
