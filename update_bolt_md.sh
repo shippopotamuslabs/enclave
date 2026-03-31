@@ -1,0 +1,1 @@
+echo "- Added `core/domain/src/test/kotlin/com/browntowndev/pocketcrew/domain/usecase/settings/UpdateThemeUseCaseTest.kt` to ensure `UpdateThemeUseCase` has basic test coverage and catches real bugs. Tests check if changing themes actually delegates the action to settings repository correctly." >> .jules/bolt.md
