@@ -1,0 +1,9 @@
+--- .github/workflows/codeql.yml
++++ .github/workflows/codeql.yml
+@@ -34,6 +34,7 @@
+       uses: github/codeql-action/init@v3
+       with:
+         languages: 'java-kotlin'
++        build-mode: none
+         # Optional: Add security-extended or security-and-quality queries
+         # queries: security-extended,security-and-quality
