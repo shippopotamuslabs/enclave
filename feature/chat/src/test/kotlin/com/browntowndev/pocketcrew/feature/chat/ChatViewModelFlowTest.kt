@@ -71,7 +71,8 @@ class ChatViewModelFlowTest {
                     formattedTimestamp = "Now",
                     indicatorState = IndicatorState.Generating(null)
                 )
-            )
+            ),
+            isGenerating = true
         )
 
         assertTrue(stateWithGenerating.isGenerating)
@@ -89,7 +90,8 @@ class ChatViewModelFlowTest {
                     formattedTimestamp = "Now",
                     indicatorState = IndicatorState.Complete(null)
                 )
-            )
+            ),
+            isGenerating = false
         )
 
         assertFalse(stateWithComplete.isGenerating)
@@ -98,7 +100,8 @@ class ChatViewModelFlowTest {
     @Test
     fun `isGenerating is false when messages are empty`() {
         val emptyState = ChatUiState(
-            messages = emptyList()
+            messages = emptyList(),
+            isGenerating = false
         )
 
         assertFalse(emptyState.isGenerating)
@@ -116,7 +119,8 @@ class ChatViewModelFlowTest {
                     formattedTimestamp = "Now",
                     indicatorState = IndicatorState.Thinking("Thinking...", 0L)
                 )
-            )
+            ),
+            isGenerating = true
         )
 
         assertTrue(stateWithThinking.isGenerating)
@@ -134,7 +138,8 @@ class ChatViewModelFlowTest {
                     formattedTimestamp = "Now",
                     indicatorState = IndicatorState.Processing
                 )
-            )
+            ),
+            isGenerating = true
         )
 
         assertTrue(stateWithProcessing.isGenerating)
