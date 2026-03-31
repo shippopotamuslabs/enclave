@@ -82,6 +82,7 @@ class DownloadSessionManagerTest {
     fun clearSession_clearsCachedSessionAndRemovesFromPrefs() {
         val sessionId = sessionManager.createNewSession()
 
+
         sessionManager.clearSession()
 
         assertNull(sessionManager.currentSessionId)
