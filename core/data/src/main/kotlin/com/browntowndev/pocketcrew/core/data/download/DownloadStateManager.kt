@@ -36,23 +36,14 @@ class DownloadStateManager(
                 overallProgress = update.overallProgress ?: it.overallProgress,
                 modelsComplete = update.modelsComplete ?: it.modelsComplete,
                 modelsTotal = update.modelsTotal ?: it.modelsTotal,
-                // FIX: Preserve existing currentDownloads when update returns empty list
+                // Preserves existing currentDownloads when update returns empty list
                 // This prevents UI flicker when transitioning from waiting to downloading
                 // Empty list means parser couldn't find currentDownloads but has parsed data
                 // Null means no update was provided, empty list means explicit clear (which we ignore)
-                currentDownloads = run {
-                    val updateDownloads = update.currentDownloads
-                    if (updateDownloads.isNullOrEmpty()) {
-                        // Only preserve if we actually have existing downloads
-                        // and the update is explicitly trying to clear (empty list, not null)
-                        if (updateDownloads != null && it.currentDownloads.isNotEmpty()) {
-                            it.currentDownloads
-                        } else {
-                            updateDownloads ?: it.currentDownloads
-                        }
-                    } else {
-                        updateDownloads
-                    }
+                currentDownloads = if (update.currentDownloads?.isEmpty() == true && it.currentDownloads.isNotEmpty()) {
+                    it.currentDownloads
+                } else {
+                    update.currentDownloads ?: it.currentDownloads
                 },
                 estimatedTimeRemaining = update.estimatedTimeRemaining ?: it.estimatedTimeRemaining,
                 currentSpeedMBs = update.currentSpeedMBs ?: it.currentSpeedMBs,
