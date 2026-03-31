@@ -189,7 +189,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         if (!modelsDir.exists()) return
 
         // Get filenames of current models
-        val currentFilenames = currentModels.map { it.metadata.localFileName }.toSet()
+        val currentFilenamesSet = currentModels.mapTo(mutableSetOf()) { it.metadata.localFileName }
 
         // Get all model files in the directory (excluding temp files)
         val existingFiles = modelsDir.listFiles { file ->
@@ -199,7 +199,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         // Delete any file that is not in the current configuration
         var deletedCount = 0
         for (file in existingFiles) {
-            if (file.name !in currentFilenames) {
+            if (file.name !in currentFilenamesSet) {
                 val deleted = file.delete()
                 if (deleted) {
                     deletedCount++

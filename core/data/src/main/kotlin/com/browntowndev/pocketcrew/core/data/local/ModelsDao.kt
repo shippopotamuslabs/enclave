@@ -30,6 +30,9 @@ interface ModelsDao {
     @Query("SELECT * FROM models WHERE model_status = 'OLD'")
     suspend fun getAllOld(): List<ModelEntity>
 
+    @Query("SELECT * FROM models WHERE model_status IN (:statuses)")
+    suspend fun getModelsByStatuses(statuses: List<ModelStatus>): List<ModelEntity>
+
     @Query("SELECT * FROM models WHERE model_type = :modelType")
     suspend fun getAllByModelType(modelType: ModelType): List<ModelEntity>
 
