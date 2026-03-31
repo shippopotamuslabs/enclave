@@ -27,6 +27,7 @@ fun ChatScreen(
     onSendMessage: (String) -> Unit,
     onModeChange: (ChatModeUi) -> Unit,
     onInputChange: (String) -> Unit,
+    onEditMessage: (String) -> Unit,
     onAttach: () -> Unit,
     onShieldTap: () -> Unit,
 ) {
@@ -52,6 +53,7 @@ fun ChatScreen(
                 MessageList(
                     modifier = Modifier.fillMaxSize(),
                     messages = uiState.messages,
+                    onEditMessage = onEditMessage,
                 )
 
                 if (uiState.shieldReason != null) {
@@ -94,6 +96,7 @@ private fun PreviewChatScreenLight() {
             onSendMessage = {},
             onModeChange = {},
             onInputChange = {},
+            onEditMessage = {},
             onAttach = {},
             onShieldTap = {},
         )
@@ -130,6 +133,7 @@ private fun PreviewChatScreenWithMessages() {
             onSendMessage = {},
             onModeChange = {},
             onInputChange = {},
+            onEditMessage = {},
             onAttach = {},
             onShieldTap = {},
         )
@@ -149,6 +153,7 @@ private fun PreviewChatScreenThinking() {
             onSendMessage = {},
             onModeChange = {},
             onInputChange = {},
+            onEditMessage = {},
             onAttach = {},
             onShieldTap = {},
         )
@@ -168,6 +173,7 @@ private fun PreviewChatScreenShield() {
             onSendMessage = {},
             onModeChange = {},
             onInputChange = {},
+            onEditMessage = {},
             onAttach = {},
             onShieldTap = {},
         )
@@ -187,6 +193,7 @@ private fun PreviewChatScreenExpandedInput() {
             onSendMessage = {},
             onModeChange = {},
             onInputChange = {},
+            onEditMessage = {},
             onAttach = {},
             onShieldTap = {},
         )

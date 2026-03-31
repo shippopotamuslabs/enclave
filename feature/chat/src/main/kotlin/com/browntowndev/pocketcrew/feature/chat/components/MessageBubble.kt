@@ -54,6 +54,7 @@ import kotlinx.coroutines.launch
 fun MessageBubble(
     modifier: Modifier = Modifier,
     message: ChatMessage,
+    onEditClick: (String) -> Unit = {},
 ) {
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
@@ -145,7 +146,7 @@ fun MessageBubble(
                 ) {
                     // Edit
                     IconButton(
-                        onClick = { /* TODO: wire edit callback */ },
+                        onClick = { onEditClick(message.content.text) },
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
