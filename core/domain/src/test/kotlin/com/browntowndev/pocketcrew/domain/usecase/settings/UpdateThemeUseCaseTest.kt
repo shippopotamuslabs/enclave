@@ -1,7 +1,7 @@
-package com.browntowndev.pocketcrew.domain.usecase
+package com.browntowndev.pocketcrew.domain.usecase.settings
 
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
-import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateThemeUseCase
+import com.browntowndev.pocketcrew.domain.usecase.FakeSettingsRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
