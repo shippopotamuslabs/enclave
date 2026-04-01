@@ -6,6 +6,7 @@ import androidx.work.WorkManager
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
@@ -104,8 +105,8 @@ class DownloadWorkRepository @Inject constructor(
     /**
      * Check if there's active download work.
      */
-    fun isWorkRunning(): Boolean {
-        return try {
+    suspend fun isWorkRunning(): Boolean = withContext(Dispatchers.IO) {
+        try {
             val workInfo = workManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get().firstOrNull()
             workInfo?.state == WorkInfo.State.ENQUEUED ||
                    workInfo?.state == WorkInfo.State.RUNNING ||
