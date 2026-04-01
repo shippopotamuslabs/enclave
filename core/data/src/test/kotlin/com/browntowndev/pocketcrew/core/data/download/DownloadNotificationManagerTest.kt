@@ -12,13 +12,13 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
+import androidx.test.core.app.ApplicationProvider
 import org.robolectric.Shadows.shadowOf
 import android.Manifest
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(manifest=Config.NONE)
+@Config(manifest=Config.NONE, sdk = [34])
 class DownloadNotificationManagerTest {
 
     private lateinit var context: Context
@@ -27,7 +27,7 @@ class DownloadNotificationManagerTest {
 
     @Before
     fun setup() {
-        context = RuntimeEnvironment.getApplication()
+        context = ApplicationProvider.getApplicationContext()
         systemNotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager = DownloadNotificationManager(context, systemNotificationManager)
     }
@@ -88,7 +88,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun updateNotification_doesNothing_whenPermissionDenied() {
-        shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -104,7 +104,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun updateNotification_callsNotify_whenPermissionGranted() {
-        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -120,7 +120,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun updateNotification_calculatesProgressPercentage() {
-        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -136,7 +136,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun createNotification_buildsCorrectNotification() {
-        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -152,7 +152,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun createNotification_handlesCancelAction() {
-        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
 
         notificationManager.updateNotification(
