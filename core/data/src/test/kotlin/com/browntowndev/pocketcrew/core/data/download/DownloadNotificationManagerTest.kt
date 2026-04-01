@@ -89,7 +89,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun updateNotification_doesNothing_whenPermissionDenied() {
-        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        shadowOf(context as android.app.Application).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -105,7 +105,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun updateNotification_callsNotify_whenPermissionGranted() {
-        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        shadowOf(context as android.app.Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -121,7 +121,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun updateNotification_calculatesProgressPercentage() {
-        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        shadowOf(context as android.app.Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -137,7 +137,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun createNotification_buildsCorrectNotification() {
-        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        shadowOf(context as android.app.Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -153,7 +153,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun createNotification_handlesCancelAction() {
-        shadowOf(ApplicationProvider.getApplicationContext<android.app.Application>()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        shadowOf(context as android.app.Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
 
         notificationManager.updateNotification(
