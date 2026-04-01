@@ -14,8 +14,10 @@ import com.browntowndev.pocketcrew.core.ui.theme.darkMarkdownTheme
 import com.hrm.markdown.renderer.Markdown
 
 
-private val boldRegex = Regex("\\*\\*(.+?)\\*\\*")
-private val codeRegex = Regex("`([^`]+)`")
+private object MarkdownRegex {
+    val boldRegex = Regex("\\*\\*(.+?)\\*\\*")
+    val codeRegex = Regex("`([^`]+)`")
+}
 
 /**
  * A composable that renders markdown text with support for streaming updates.
@@ -97,7 +99,7 @@ private fun parseSimpleMarkdown(text: String): AnnotatedString {
         
         val allMatches = mutableListOf<Pair<IntRange, () -> Unit>>()
         
-        boldRegex.findAll(processedText).forEach { match ->
+        MarkdownRegex.boldRegex.findAll(processedText).forEach { match ->
             allMatches.add(match.range to {
                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
                     append(match.groupValues[1])
@@ -105,7 +107,7 @@ private fun parseSimpleMarkdown(text: String): AnnotatedString {
             })
         }
         
-        codeRegex.findAll(processedText).forEach { match ->
+        MarkdownRegex.codeRegex.findAll(processedText).forEach { match ->
             allMatches.add(match.range to {
                 withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) {
                     append(match.groupValues[1])
