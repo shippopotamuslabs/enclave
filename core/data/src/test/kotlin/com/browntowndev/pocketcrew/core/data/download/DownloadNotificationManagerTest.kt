@@ -193,8 +193,10 @@ class DownloadNotificationManagerTest {
             cancelPendingIntent = pendingIntent
         )
 
-        assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
-        assertNotNull(foregroundInfo.notification)
+                assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
+        val notification = foregroundInfo.notification
+        val subText = notification.extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+        assertEquals("5 MB / 10 MB • 1.5 MB/s • ETA: 60 s", subText)
     }
 
     @Test
@@ -222,8 +224,10 @@ class DownloadNotificationManagerTest {
             cancelPendingIntent = pendingIntent
         )
 
-        assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
-        assertNotNull(foregroundInfo.notification)
+                assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
+        val notification = foregroundInfo.notification
+        val subText = notification.extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+        assertEquals("5 MB / 10 MB • ETA: 60 s", subText)
     }
 
     @Test
@@ -251,7 +255,9 @@ class DownloadNotificationManagerTest {
             cancelPendingIntent = pendingIntent
         )
 
-        assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
-        assertNotNull(foregroundInfo.notification)
+                assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
+        val notification = foregroundInfo.notification
+        val subText = notification.extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+        assertEquals("5 MB / 10 MB • 1.5 MB/s", subText)
     }
 }
