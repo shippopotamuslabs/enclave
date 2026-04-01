@@ -13,13 +13,22 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.AfterEach
 
 
+
+import io.mockk.just
+import io.mockk.runs
 class DownloadNotificationManagerTest {
+
 
     private lateinit var mockContext: Context
     private lateinit var mockNotificationManager: NotificationManager
     private lateinit var notificationManager: DownloadNotificationManager
+
+
+
+
 
 
     @BeforeEach
@@ -27,27 +36,20 @@ class DownloadNotificationManagerTest {
         mockContext = mockk(relaxed = true)
         mockNotificationManager = mockk(relaxed = true)
         notificationManager = DownloadNotificationManager(mockContext, mockNotificationManager)
-
-        io.mockk.mockkConstructor(Notification.Builder::class)
-        io.mockk.every { anyConstructed<Notification.Builder>().setContentTitle(any()) } returns mockk(relaxed=true)
-        io.mockk.every { anyConstructed<Notification.Builder>().build() } returns mockk(relaxed=true)
-
-        io.mockk.mockkConstructor(androidx.core.app.NotificationCompat.Builder::class)
-        io.mockk.every { anyConstructed<androidx.core.app.NotificationCompat.Builder>().setContentTitle(any()) } returns mockk(relaxed=true)
-        io.mockk.every { anyConstructed<androidx.core.app.NotificationCompat.Builder>().build() } returns mockk(relaxed=true)
-
-        io.mockk.mockkStatic(android.graphics.drawable.Icon::class)
-        io.mockk.every { android.graphics.drawable.Icon.createWithResource(any<Context>(), any<Int>()) } returns mockk(relaxed=true)
     }
 
-    @org.junit.jupiter.api.AfterEach
+
+
+
+    @AfterEach
     fun teardown() {
         io.mockk.unmockkAll()
     }
 
 
+
+
     @Test
-    @Disabled
     fun createNotificationChannel_createsChannelWithCorrectSettings() {
         val channelSlot = slot<NotificationChannel>()
 
@@ -58,7 +60,6 @@ class DownloadNotificationManagerTest {
     }
 
     @Test
-    @Disabled
     fun createForegroundInfo_returnsValidForegroundInfo() {
         val mockPendingIntent = mockk<PendingIntent>(relaxed = true)
 
@@ -69,7 +70,6 @@ class DownloadNotificationManagerTest {
     }
 
     @Test
-    @Disabled
     fun createForegroundInfoForProgress_returnsValidForegroundInfo() {
         val mockPendingIntent = mockk<PendingIntent>(relaxed = true)
 
@@ -85,7 +85,6 @@ class DownloadNotificationManagerTest {
     }
 
     @Test
-    @Disabled
     fun updateNotification_doesNothing_whenPermissionDenied() {
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -99,7 +98,6 @@ class DownloadNotificationManagerTest {
     }
 
     @Test
-    @Disabled
     fun updateNotification_callsNotify_whenPermissionGranted() {
         val notificationSlot = slot<Notification>()
 
@@ -116,7 +114,6 @@ class DownloadNotificationManagerTest {
     }
 
     @Test
-    @Disabled
     fun updateNotification_calculatesProgressPercentage() {
         val notificationSlot = slot<Notification>()
 
@@ -132,7 +129,6 @@ class DownloadNotificationManagerTest {
     }
 
     @Test
-    @Disabled
     fun createNotification_buildsCorrectNotification() {
         val notificationSlot = slot<Notification>()
 
@@ -149,7 +145,6 @@ class DownloadNotificationManagerTest {
     }
 
     @Test
-    @Disabled
     fun createNotification_handlesCancelAction() {
         val mockPendingIntent = mockk<PendingIntent>(relaxed = true)
 
