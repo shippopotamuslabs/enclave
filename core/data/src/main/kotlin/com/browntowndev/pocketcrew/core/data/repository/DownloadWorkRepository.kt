@@ -5,12 +5,14 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.firstOrNull
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -107,11 +109,15 @@ class DownloadWorkRepository @Inject constructor(
      */
     suspend fun isWorkRunning(): Boolean = withContext(Dispatchers.IO) {
         try {
-            val workInfo = workManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get().firstOrNull()
+            // Using getWorkInfosForUniqueWorkFlow().firstOrNull() avoids blocking the thread completely.
+            val workInfo = workManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
+                .firstOrNull()?.firstOrNull()
+
             workInfo?.state == WorkInfo.State.ENQUEUED ||
                    workInfo?.state == WorkInfo.State.RUNNING ||
                    workInfo?.state == WorkInfo.State.BLOCKED
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             Log.e(TAG, "Error checking if work is running: ${e.message}")
             false
         }
