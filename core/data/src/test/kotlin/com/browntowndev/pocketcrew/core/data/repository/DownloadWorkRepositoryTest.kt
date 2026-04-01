@@ -14,6 +14,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.EnumSource
 import java.util.UUID
 
 class DownloadWorkRepositoryTest {
@@ -149,94 +152,27 @@ class DownloadWorkRepositoryTest {
         verify { mockWorkManager.cancelUniqueWork(ModelConfig.WORK_TAG) }
     }
 
-    @Test
-    fun isWorkRunning_returnsTrue_whenStateIsEnqueued() {
+    @ParameterizedTest
+    @CsvSource(
+        "ENQUEUED, true",
+        "RUNNING, true",
+        "BLOCKED, true",
+        "SUCCEEDED, false",
+        "FAILED, false",
+        "CANCELLED, false"
+    )
+    fun isWorkRunning_returnsExpectedResult_basedOnState(state: WorkInfo.State, expected: Boolean) {
         // Arrange
-        val workInfoEnqueued = createMockWorkInfo(WorkInfo.State.ENQUEUED)
+        val workInfo = createMockWorkInfo(state)
         every {
             mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
-        } returns listOf(workInfoEnqueued)
+        } returns listOf(workInfo)
 
         // Act
         val result = repository.isWorkRunning()
 
         // Assert
-        assertEquals(true, result)
-    }
-
-    @Test
-    fun isWorkRunning_returnsTrue_whenStateIsRunning() {
-        // Arrange
-        val workInfoRunning = createMockWorkInfo(WorkInfo.State.RUNNING)
-        every {
-            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
-        } returns listOf(workInfoRunning)
-
-        // Act
-        val result = repository.isWorkRunning()
-
-        // Assert
-        assertEquals(true, result)
-    }
-
-    @Test
-    fun isWorkRunning_returnsTrue_whenStateIsBlocked() {
-        // Arrange
-        val workInfoBlocked = createMockWorkInfo(WorkInfo.State.BLOCKED)
-        every {
-            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
-        } returns listOf(workInfoBlocked)
-
-        // Act
-        val result = repository.isWorkRunning()
-
-        // Assert
-        assertEquals(true, result)
-    }
-
-    @Test
-    fun isWorkRunning_returnsFalse_whenStateIsSucceeded() {
-        // Arrange
-        val workInfoSucceeded = createMockWorkInfo(WorkInfo.State.SUCCEEDED)
-        every {
-            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
-        } returns listOf(workInfoSucceeded)
-
-        // Act
-        val result = repository.isWorkRunning()
-
-        // Assert
-        assertEquals(false, result)
-    }
-
-    @Test
-    fun isWorkRunning_returnsFalse_whenStateIsFailed() {
-        // Arrange
-        val workInfoFailed = createMockWorkInfo(WorkInfo.State.FAILED)
-        every {
-            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
-        } returns listOf(workInfoFailed)
-
-        // Act
-        val result = repository.isWorkRunning()
-
-        // Assert
-        assertEquals(false, result)
-    }
-
-    @Test
-    fun isWorkRunning_returnsFalse_whenStateIsCancelled() {
-        // Arrange
-        val workInfoCancelled = createMockWorkInfo(WorkInfo.State.CANCELLED)
-        every {
-            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
-        } returns listOf(workInfoCancelled)
-
-        // Act
-        val result = repository.isWorkRunning()
-
-        // Assert
-        assertEquals(false, result)
+        assertEquals(expected, result)
     }
 
     @Test
@@ -251,5 +187,20 @@ class DownloadWorkRepositoryTest {
 
         // Assert
         assertEquals(false, result)
+    }
+
+    @Test
+    fun isWorkRunning_returnsFalse_whenExceptionThrown() {
+        // Arrange
+        every {
+            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
+        } throws RuntimeException("WorkManager error")
+
+        // Act
+        val result = repository.isWorkRunning()
+
+        // Assert
+        assertEquals(false, result)
+        verify { Log.e("DownloadWorkRepository", "Error checking if work is running: WorkManager error") }
     }
 }

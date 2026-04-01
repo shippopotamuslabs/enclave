@@ -105,9 +105,14 @@ class DownloadWorkRepository @Inject constructor(
      * Check if there's active download work.
      */
     fun isWorkRunning(): Boolean {
-        val workInfo = workManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get().firstOrNull()
-        return workInfo?.state == WorkInfo.State.ENQUEUED ||
-               workInfo?.state == WorkInfo.State.RUNNING ||
-               workInfo?.state == WorkInfo.State.BLOCKED
+        return try {
+            val workInfo = workManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get().firstOrNull()
+            workInfo?.state == WorkInfo.State.ENQUEUED ||
+                   workInfo?.state == WorkInfo.State.RUNNING ||
+                   workInfo?.state == WorkInfo.State.BLOCKED
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking if work is running: ${e.message}")
+            false
+        }
     }
 }
