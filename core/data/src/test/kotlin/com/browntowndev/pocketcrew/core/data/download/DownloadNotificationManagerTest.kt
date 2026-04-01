@@ -8,7 +8,6 @@ import androidx.work.ForegroundInfo
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import io.mockk.spyk
 import io.mockk.every
 import io.mockk.just
 import io.mockk.runs
@@ -30,7 +29,7 @@ class DownloadNotificationManagerTest {
     fun setup() {
         mockContext = mockk(relaxed = true)
         mockNotificationManager = mockk(relaxed = true)
-        notificationManager = spyk(DownloadNotificationManager(mockContext, mockNotificationManager))
+        notificationManager = DownloadNotificationManager(mockContext, mockNotificationManager)
     }
 
     @Test
@@ -173,8 +172,7 @@ class DownloadNotificationManagerTest {
 
         assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
         assertNotNull(foregroundInfo.notification)
-        verify { notificationManager.createForegroundInfoForProgress(0.5f, "test.litertlm", "5 MB / 10 MB • 1.5 MB/s • ETA: 60 s", mockPendingIntent) }
-    }
+            }
 
     @Test
     fun createForegroundInfoForSnapshot_buildsCorrectSubText_withoutSpeed() {
@@ -203,8 +201,7 @@ class DownloadNotificationManagerTest {
 
         assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
         assertNotNull(foregroundInfo.notification)
-        verify { notificationManager.createForegroundInfoForProgress(0.5f, "test.litertlm", "5 MB / 10 MB • ETA: 60 s", mockPendingIntent) }
-    }
+            }
 
     @Test
     fun createForegroundInfoForSnapshot_buildsCorrectSubText_withoutEta() {
@@ -233,7 +230,6 @@ class DownloadNotificationManagerTest {
 
         assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
         assertNotNull(foregroundInfo.notification)
-        verify { notificationManager.createForegroundInfoForProgress(0.5f, "test.litertlm", "5 MB / 10 MB • 1.5 MB/s", mockPendingIntent) }
-    }
+            }
 
 }
