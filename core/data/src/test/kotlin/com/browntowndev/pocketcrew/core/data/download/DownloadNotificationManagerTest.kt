@@ -1,57 +1,52 @@
 package com.browntowndev.pocketcrew.core.data.download
-import android.Manifest
+
+import android.app.Application
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import androidx.work.ForegroundInfo
-import io.mockk.mockk
-import io.mockk.slot
-import io.mockk.verify
-import org.robolectric.Shadows
-import org.robolectric.shadows.ShadowNotification
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
-import org.robolectric.annotation.Config
 import androidx.test.core.app.ApplicationProvider
+import org.robolectric.Shadows.shadowOf
+import android.Manifest
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34])
+@Config(manifest=Config.NONE, sdk = [34])
 class DownloadNotificationManagerTest {
 
-    private lateinit var appContext: android.app.Application
-    private lateinit var mockNotificationManager: NotificationManager
+    private lateinit var context: Context
     private lateinit var notificationManager: DownloadNotificationManager
+    private lateinit var systemNotificationManager: NotificationManager
 
     @Before
     fun setup() {
-        appContext = ApplicationProvider.getApplicationContext<android.app.Application>()
-        val shadowApp = Shadows.shadowOf(appContext)
-        shadowApp.grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
-        mockNotificationManager = mockk(relaxed = true)
-        notificationManager = DownloadNotificationManager(appContext, mockNotificationManager)
+        context = ApplicationProvider.getApplicationContext()
+        systemNotificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager = DownloadNotificationManager(context, systemNotificationManager)
     }
 
     @Test
     fun createNotificationChannel_createsChannelWithCorrectSettings() {
-        val channelSlot = slot<NotificationChannel>()
-
         notificationManager.createNotificationChannel()
 
-        verify { mockNotificationManager.createNotificationChannel(capture(channelSlot)) }
-        assertEquals("model_download_channel", channelSlot.captured.id)
+        val channels = systemNotificationManager.notificationChannels
+        assertEquals(1, channels.size)
+        assertEquals("model_download_channel", channels[0].id)
     }
 
     @Test
     fun createForegroundInfo_returnsValidForegroundInfo() {
-        val mockPendingIntent = mockk<PendingIntent>(relaxed = true)
+        val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
 
-        val foregroundInfo = notificationManager.createForegroundInfo(mockPendingIntent)
+        val foregroundInfo = notificationManager.createForegroundInfo(pendingIntent)
 
         assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
         assertNotNull(foregroundInfo.notification)
@@ -59,13 +54,13 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun createForegroundInfoForProgress_returnsValidForegroundInfo() {
-        val mockPendingIntent = mockk<PendingIntent>(relaxed = true)
+        val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
 
         val foregroundInfo = notificationManager.createForegroundInfoForProgress(
             progress = 0.5f,
             currentFile = "test.litertlm",
             subText = "50%",
-            cancelPendingIntent = mockPendingIntent
+            cancelPendingIntent = pendingIntent
         )
 
         assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
@@ -73,9 +68,28 @@ class DownloadNotificationManagerTest {
     }
 
     @Test
+    fun createForegroundInfoForProgress_calculatesProgressPercentage() {
+        val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
+
+        val foregroundInfo = notificationManager.createForegroundInfoForProgress(
+            progress = 0.75f,
+            currentFile = "test.litertlm",
+            subText = "75%",
+            cancelPendingIntent = pendingIntent
+        )
+
+        assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
+        val notification = foregroundInfo.notification
+        val progress = notification.extras.getInt(Notification.EXTRA_PROGRESS)
+        val progressMax = notification.extras.getInt(Notification.EXTRA_PROGRESS_MAX)
+
+        assertEquals(75, progress)
+        assertEquals(100, progressMax)
+    }
+
+    @Test
     fun updateNotification_doesNothing_whenPermissionDenied() {
-        val shadowApp = Shadows.shadowOf(appContext)
-        shadowApp.denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        shadowOf(context as android.app.Application).denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -85,12 +99,13 @@ class DownloadNotificationManagerTest {
             cancelPendingIntent = null
         )
 
-        verify(exactly = 0) { mockNotificationManager.notify(any(), any<Notification>()) }
+        val notifications = shadowOf(systemNotificationManager).allNotifications
+        assertEquals(0, notifications.size)
     }
 
     @Test
     fun updateNotification_callsNotify_whenPermissionGranted() {
-        val notificationSlot = slot<Notification>()
+        shadowOf(context as android.app.Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -100,13 +115,13 @@ class DownloadNotificationManagerTest {
             cancelPendingIntent = null
         )
 
-        verify { mockNotificationManager.notify(1001, capture(notificationSlot)) }
-        assertNotNull(notificationSlot.captured)
+        val notifications = shadowOf(systemNotificationManager).allNotifications
+        assertEquals(1, notifications.size)
     }
 
     @Test
     fun updateNotification_calculatesProgressPercentage() {
-        val notificationSlot = slot<Notification>()
+        shadowOf(context as android.app.Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -116,13 +131,13 @@ class DownloadNotificationManagerTest {
             cancelPendingIntent = null
         )
 
-        verify { mockNotificationManager.notify(1001, capture(notificationSlot)) }
-        // We can optionally verify the notification content here as well
+        val notifications = shadowOf(systemNotificationManager).allNotifications
+        assertEquals(1, notifications.size)
     }
 
     @Test
     fun createNotification_buildsCorrectNotification() {
-        val notificationSlot = slot<Notification>()
+        shadowOf(context as android.app.Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
             notificationId = 1001,
@@ -132,43 +147,117 @@ class DownloadNotificationManagerTest {
             cancelPendingIntent = null
         )
 
-        verify { mockNotificationManager.notify(1001, capture(notificationSlot)) }
-        assertNotNull(notificationSlot.captured)
+        val notifications = shadowOf(systemNotificationManager).allNotifications
+        assertEquals(1, notifications.size)
     }
 
     @Test
     fun createNotification_handlesCancelAction() {
-        val mockPendingIntent = mockk<PendingIntent>(relaxed = true)
-
-        val notificationSlot = slot<Notification>()
+        shadowOf(context as android.app.Application).grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
+        val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
 
         notificationManager.updateNotification(
             notificationId = 1001,
             progress = 0.5f,
             currentFile = "test.litertlm",
             subText = "50%",
-            cancelPendingIntent = mockPendingIntent
+            cancelPendingIntent = pendingIntent
         )
 
-        verify { mockNotificationManager.notify(1001, capture(notificationSlot)) }
-        assertNotNull(notificationSlot.captured)
+        val notifications = shadowOf(systemNotificationManager).allNotifications
+        assertEquals(1, notifications.size)
     }
 
     @Test
-    fun createForegroundInfoForProgress_calculatesProgressPercentage() {
-        val mockPendingIntent = mockk<PendingIntent>(relaxed = true)
-
-        val foregroundInfo = notificationManager.createForegroundInfoForProgress(
-            progress = 0.75f,
+    fun createForegroundInfoForSnapshot_buildsCorrectSubText_withSpeedAndEta() {
+        val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
+        val snapshot = ProgressSnapshot(
+            overallProgress = 0.5f,
+            totalBytesDownloaded = 5242880L, // 5 MB
+            totalSize = 10485760L, // 10 MB
+            completedFiles = 0,
+            totalFiles = 1,
             currentFile = "test.litertlm",
-            subText = "75%",
-            cancelPendingIntent = mockPendingIntent
+            currentSpeedMBps = 1.5,
+            etaSeconds = 60L,
+            filesProgress = emptyList()
         )
 
-        val notification = foregroundInfo.notification
+        val formatBytes: (Long) -> String = { bytes -> "${bytes / 1024 / 1024} MB" }
+        val formatEta: (Long) -> String = { secs -> "$secs s" }
 
-        // Progress max is typically 100, current progress should be 75
-        assertEquals(100, notification.extras.getInt(Notification.EXTRA_PROGRESS_MAX))
-        assertEquals(75, notification.extras.getInt(Notification.EXTRA_PROGRESS))
+        val foregroundInfo = notificationManager.createForegroundInfoForSnapshot(
+            snapshot = snapshot,
+            formatBytes = formatBytes,
+            formatEta = formatEta,
+            cancelPendingIntent = pendingIntent
+        )
+
+                assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
+        val notification = foregroundInfo.notification
+        val subText = notification.extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+        assertEquals("5 MB / 10 MB • 1.5 MB/s • ETA: 60 s", subText)
+    }
+
+    @Test
+    fun createForegroundInfoForSnapshot_buildsCorrectSubText_withoutSpeed() {
+        val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
+        val snapshot = ProgressSnapshot(
+            overallProgress = 0.5f,
+            totalBytesDownloaded = 5242880L, // 5 MB
+            totalSize = 10485760L, // 10 MB
+            completedFiles = 0,
+            totalFiles = 1,
+            currentFile = "test.litertlm",
+            currentSpeedMBps = 0.0, // No speed
+            etaSeconds = 60L,
+            filesProgress = emptyList()
+        )
+
+        val formatBytes: (Long) -> String = { bytes -> "${bytes / 1024 / 1024} MB" }
+        val formatEta: (Long) -> String = { secs -> "$secs s" }
+
+        val foregroundInfo = notificationManager.createForegroundInfoForSnapshot(
+            snapshot = snapshot,
+            formatBytes = formatBytes,
+            formatEta = formatEta,
+            cancelPendingIntent = pendingIntent
+        )
+
+                assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
+        val notification = foregroundInfo.notification
+        val subText = notification.extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+        assertEquals("5 MB / 10 MB • ETA: 60 s", subText)
+    }
+
+    @Test
+    fun createForegroundInfoForSnapshot_buildsCorrectSubText_withoutEta() {
+        val pendingIntent = PendingIntent.getActivity(context, 0, android.content.Intent(), PendingIntent.FLAG_IMMUTABLE)
+        val snapshot = ProgressSnapshot(
+            overallProgress = 0.5f,
+            totalBytesDownloaded = 5242880L, // 5 MB
+            totalSize = 10485760L, // 10 MB
+            completedFiles = 0,
+            totalFiles = 1,
+            currentFile = "test.litertlm",
+            currentSpeedMBps = 1.5,
+            etaSeconds = -1L, // No ETA
+            filesProgress = emptyList()
+        )
+
+        val formatBytes: (Long) -> String = { bytes -> "${bytes / 1024 / 1024} MB" }
+        val formatEta: (Long) -> String = { secs -> "$secs s" }
+
+        val foregroundInfo = notificationManager.createForegroundInfoForSnapshot(
+            snapshot = snapshot,
+            formatBytes = formatBytes,
+            formatEta = formatEta,
+            cancelPendingIntent = pendingIntent
+        )
+
+                assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
+        val notification = foregroundInfo.notification
+        val subText = notification.extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+        assertEquals("5 MB / 10 MB • 1.5 MB/s", subText)
     }
 }

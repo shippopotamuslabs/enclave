@@ -28,6 +28,8 @@ class ProcessThinkingTokensUseCaseWhitespaceTest {
 
         val thinkingText = state.thinkingTextToEmit
 
+        println("DEBUG thinking: '$thinkingText'")
+
         // Should preserve space after "2018" and "2020"
         assertFalse(
             thinkingText.contains("2018paper"),
@@ -48,6 +50,8 @@ class ProcessThinkingTokensUseCaseWhitespaceTest {
 
         val thinkingText = state.thinkingTextToEmit
 
+        println("DEBUG list thinking: '$thinkingText'")
+
         // Should preserve "1. First item" with space after period
         assertTrue(
             thinkingText.contains("1. First"),
@@ -67,6 +71,8 @@ class ProcessThinkingTokensUseCaseWhitespaceTest {
         val state = useCase("", "<think>The year is 2024 and counting.</think>", false)
 
         val thinkingText = state.thinkingTextToEmit
+
+        println("DEBUG year: '$thinkingText'")
 
         assertFalse(
             thinkingText.contains("2024and"),
