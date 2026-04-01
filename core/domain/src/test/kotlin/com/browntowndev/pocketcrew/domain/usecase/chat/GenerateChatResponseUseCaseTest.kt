@@ -928,14 +928,4 @@ class GenerateChatResponseUseCaseTest {
         assertEquals(MessageState.THINKING, intermediateSnapshot.messageState)
         assertFalse(intermediateSnapshot.isComplete)
     }
-
-    @org.junit.jupiter.api.Nested
-    inner class StateMapping {
-
-        @org.junit.jupiter.api.Test
-        fun `toMessagesState maps all current accumulators to snapshots`() {
-            // Add test body logic later
-        }
-    }
-
 }
