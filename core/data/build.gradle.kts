@@ -85,6 +85,8 @@ dependencies {
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
+    testImplementation(libs.robolectric)
+    testImplementation("org.robolectric:robolectric:4.13")
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(project(":core:testing"))
     testImplementation("org.json:json:20240303")
