@@ -146,7 +146,10 @@ fun MessageBubble(
                 ) {
                     // Edit
                     IconButton(
-                        onClick = { onEditClick(message.content.text) },
+                        onClick = {
+                            onEditClick(message.content.text)
+                            showActions = false
+                        },
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
@@ -157,8 +160,11 @@ fun MessageBubble(
                     }
 
                     // Copy
-                    IconButton (
-                        onClick = { copyToClipboard(message.content.text) },
+                    IconButton(
+                        onClick = {
+                            copyToClipboard(message.content.text)
+                            showActions = false
+                        },
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.content_copy),
