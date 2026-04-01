@@ -8,9 +8,6 @@ import androidx.work.ForegroundInfo
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
-import io.mockk.every
-import io.mockk.just
-import io.mockk.runs
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
@@ -18,11 +15,6 @@ import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 
 
-import android.graphics.drawable.Icon
-import androidx.core.app.NotificationCompat
-import io.mockk.mockkConstructor
-import org.junit.jupiter.api.AfterEach
-import android.os.Build
 class DownloadNotificationManagerTest {
 
     private lateinit var mockContext: Context
@@ -36,16 +28,21 @@ class DownloadNotificationManagerTest {
         mockNotificationManager = mockk(relaxed = true)
         notificationManager = DownloadNotificationManager(mockContext, mockNotificationManager)
 
-        mockkConstructor(Notification.Builder::class)
-        every { anyConstructed<Notification.Builder>().setContentTitle(any()) } returns mockk(relaxed=true)
-        every { anyConstructed<Notification.Builder>().build() } returns mockk(relaxed=true)
+        io.mockk.mockkConstructor(Notification.Builder::class)
+        io.mockk.every { anyConstructed<Notification.Builder>().setContentTitle(any()) } returns mockk(relaxed=true)
+        io.mockk.every { anyConstructed<Notification.Builder>().build() } returns mockk(relaxed=true)
 
-        mockkConstructor(NotificationCompat.Builder::class)
-        every { anyConstructed<NotificationCompat.Builder>().setContentTitle(any()) } returns mockk(relaxed=true)
-        every { anyConstructed<NotificationCompat.Builder>().build() } returns mockk(relaxed=true)
+        io.mockk.mockkConstructor(androidx.core.app.NotificationCompat.Builder::class)
+        io.mockk.every { anyConstructed<androidx.core.app.NotificationCompat.Builder>().setContentTitle(any()) } returns mockk(relaxed=true)
+        io.mockk.every { anyConstructed<androidx.core.app.NotificationCompat.Builder>().build() } returns mockk(relaxed=true)
 
-        io.mockk.mockkStatic(Icon::class)
-        every { Icon.createWithResource(any<Context>(), any<Int>()) } returns mockk(relaxed=true)
+        io.mockk.mockkStatic(android.graphics.drawable.Icon::class)
+        io.mockk.every { android.graphics.drawable.Icon.createWithResource(any<Context>(), any<Int>()) } returns mockk(relaxed=true)
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    fun teardown() {
+        io.mockk.unmockkAll()
     }
 
 
@@ -197,7 +194,7 @@ class DownloadNotificationManagerTest {
 
         assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
         assertNotNull(foregroundInfo.notification)
-            }
+    }
 
     @Test
     fun createForegroundInfoForSnapshot_buildsCorrectSubText_withoutSpeed() {
@@ -226,7 +223,7 @@ class DownloadNotificationManagerTest {
 
         assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
         assertNotNull(foregroundInfo.notification)
-            }
+    }
 
     @Test
     fun createForegroundInfoForSnapshot_buildsCorrectSubText_withoutEta() {
@@ -255,6 +252,6 @@ class DownloadNotificationManagerTest {
 
         assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
         assertNotNull(foregroundInfo.notification)
-            }
+    }
 
 }
