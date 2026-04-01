@@ -24,17 +24,17 @@ import androidx.test.core.app.ApplicationProvider
 @Config(sdk = [34])
 class DownloadNotificationManagerTest {
 
-    private lateinit var mockContext: Context
+    private lateinit var appContext: android.app.Application
     private lateinit var mockNotificationManager: NotificationManager
     private lateinit var notificationManager: DownloadNotificationManager
 
     @Before
     fun setup() {
-        mockContext = ApplicationProvider.getApplicationContext()
-        val shadowApp = Shadows.shadowOf(mockContext as android.app.Application)
+        appContext = ApplicationProvider.getApplicationContext<android.app.Application>()
+        val shadowApp = Shadows.shadowOf(appContext)
         shadowApp.grantPermissions(Manifest.permission.POST_NOTIFICATIONS)
         mockNotificationManager = mockk(relaxed = true)
-        notificationManager = DownloadNotificationManager(mockContext, mockNotificationManager)
+        notificationManager = DownloadNotificationManager(appContext, mockNotificationManager)
     }
 
     @Test
@@ -74,7 +74,7 @@ class DownloadNotificationManagerTest {
 
     @Test
     fun updateNotification_doesNothing_whenPermissionDenied() {
-        val shadowApp = Shadows.shadowOf(mockContext as android.app.Application)
+        val shadowApp = Shadows.shadowOf(appContext)
         shadowApp.denyPermissions(Manifest.permission.POST_NOTIFICATIONS)
 
         notificationManager.updateNotification(
