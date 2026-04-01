@@ -1,0 +1,8 @@
+🎯 **What:** The testing gap addressed
+The `isWorkRunning` function was not testing the exception scenarios that can occur when `ListenableFuture.get()` throws an `InterruptedException` or `ExecutionException`. Also, the repetitive tests were refactored.
+
+📊 **Coverage:** What scenarios are now tested
+The `isWorkRunning` function now safely catches exceptions. A parameterized test handles all 6 WorkInfo states (`ENQUEUED`, `RUNNING`, `BLOCKED`, `SUCCEEDED`, `FAILED`, `CANCELLED`), and tests exist for empty returns and exception handling.
+
+✨ **Result:** The improvement in test coverage
+More robust execution of the `isWorkRunning` function, with full coverage and a parameterized testing approach that reduces code bloat.
