@@ -148,6 +148,12 @@ class ChatViewModel @Inject constructor(
             mapToChatMessage(message)
         }
 
+        val isGenerating = chatMessages.any {
+            it.indicatorState is IndicatorState.Generating ||
+            it.indicatorState is IndicatorState.Thinking ||
+            it.indicatorState is IndicatorState.Processing
+        }
+
         ChatUiState(
             messages = chatMessages,
             inputText = inputText,
@@ -155,7 +161,8 @@ class ChatViewModel @Inject constructor(
             isGlobalInferenceBlocked = isBlocked,
             hapticPress = settings.hapticPress,
             hapticResponse = settings.hapticResponse,
-            chatId = _currentChatId.value ?: initialChatId ?: -1L
+            chatId = _currentChatId.value ?: initialChatId ?: -1L,
+            isGenerating = isGenerating
         )
     }.stateIn(
         scope = viewModelScope,

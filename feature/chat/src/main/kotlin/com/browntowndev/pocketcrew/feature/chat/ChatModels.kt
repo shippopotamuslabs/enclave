@@ -44,14 +44,8 @@ data class ChatUiState(
     val hapticPress: Boolean = false,
     val hapticResponse: Boolean = false,
     val chatId: Long? = null,
-) {
-    val isGenerating: Boolean
-        get() = messages.any {
-            it.indicatorState is IndicatorState.Generating ||
-                    it.indicatorState is IndicatorState.Thinking ||
-                    it.indicatorState is IndicatorState.Processing
-        }
-}
+    val isGenerating: Boolean = false,
+)
 
 /**
  * Used in previews - various indicator states.
