@@ -27,6 +27,10 @@ import javax.inject.Inject
  * @param messageRepository Handles message persistence
  * @param chatRepository Handles chat persistence
  */
+private object CreateUserMessageConstants {
+    val whitespaceRegex = Regex("\\s+")
+}
+
 class CreateUserMessageUseCase @Inject constructor(
     private val transactionProvider: TransactionProvider,
     private val messageRepository: MessageRepository,
@@ -112,7 +116,7 @@ class CreateUserMessageUseCase @Inject constructor(
             return "New Chat"
         }
         
-        val words = content.split("\\s+".toRegex())
+        val words = content.split(CreateUserMessageConstants.whitespaceRegex)
         
         // If we have words, take up to 5
         if (words.isNotEmpty()) {

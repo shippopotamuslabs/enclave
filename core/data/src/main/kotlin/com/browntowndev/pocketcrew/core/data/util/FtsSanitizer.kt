@@ -1,5 +1,11 @@
 package com.browntowndev.pocketcrew.core.data.util
 
+private object FtsConstants {
+    val invalidCharsRegex = Regex("""[^\p{L}\p{N}\p{M}\s_]""")
+    val multipleSpacesRegex = Regex("""\s+""")
+    val reservedKeywords = setOf("AND", "OR", "NOT", "NEAR")
+}
+
 object FtsSanitizer {
     /**
      * Sanitizes a search query for SQLite FTS MATCH clauses.
@@ -12,15 +18,15 @@ object FtsSanitizer {
         // Remove special characters while preserving Unicode word characters, spaces and underscores.
         // We use explicit Unicode properties \p{L} (Letters), \p{N} (Numbers), and \p{M} (Marks)
         // instead of (?U)\w to avoid PatternSyntaxException on Android.
-        val sanitized = query.replace(Regex("""[^\p{L}\p{N}\p{M}\s_]"""), " ")
-            .replace(Regex("""\s+"""), " ")
+        val sanitized = query.replace(FtsConstants.invalidCharsRegex, " ")
+            .replace(FtsConstants.multipleSpacesRegex, " ")
             .trim()
             
         if (sanitized.isEmpty()) return ""
         
         // Filter out SQLite FTS reserved keywords that could cause syntax errors if standalone.
-        val keywords = setOf("AND", "OR", "NOT", "NEAR")
-        val words = sanitized.split(" ").filter { it.uppercase() !in keywords }
+        val keywordsSet = FtsConstants.reservedKeywords
+        val words = sanitized.split(" ").filter { it.uppercase() !in keywordsSet }
         
         if (words.isEmpty()) return ""
         
