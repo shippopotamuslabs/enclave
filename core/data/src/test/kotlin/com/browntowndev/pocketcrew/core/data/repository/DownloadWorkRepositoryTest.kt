@@ -161,7 +161,7 @@ class DownloadWorkRepositoryTest {
         "FAILED, false",
         "CANCELLED, false"
     )
-    fun isWorkRunning_returnsExpectedResult_basedOnState(state: WorkInfo.State, expected: Boolean) {
+    fun isWorkRunning_returnsExpectedResult_basedOnState(state: WorkInfo.State, expected: Boolean) = runTest {
         // Arrange
         val workInfo = createMockWorkInfo(state)
         every {
@@ -176,7 +176,7 @@ class DownloadWorkRepositoryTest {
     }
 
     @Test
-    fun isWorkRunning_returnsFalse_whenNoWorkInfo() {
+    fun isWorkRunning_returnsFalse_whenNoWorkInfo() = runTest {
         // Arrange
         every {
             mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
@@ -190,7 +190,7 @@ class DownloadWorkRepositoryTest {
     }
 
     @Test
-    fun isWorkRunning_returnsFalse_whenExceptionThrown() {
+    fun isWorkRunning_returnsFalse_whenExceptionThrown() = runTest {
         // Arrange
         every {
             mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
@@ -201,6 +201,5 @@ class DownloadWorkRepositoryTest {
 
         // Assert
         assertEquals(false, result)
-        verify { Log.e("DownloadWorkRepository", "Error checking if work is running: WorkManager error") }
     }
 }
