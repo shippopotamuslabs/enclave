@@ -85,15 +85,11 @@ dependencies {
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
-    testImplementation(libs.robolectric)
-    testImplementation(libs.junit)
-    testImplementation(libs.androidx.test.core)
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(project(":core:testing"))
     testImplementation("org.json:json:20240303")
 
     // JUnit 5 Engine for test discovery
     testRuntimeOnly("org.junit.platform:junit-platform-engine")
-    testRuntimeOnly(libs.junit.vintage.engine)
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
