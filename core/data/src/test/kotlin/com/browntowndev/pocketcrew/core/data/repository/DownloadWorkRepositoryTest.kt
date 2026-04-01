@@ -10,6 +10,7 @@ import io.mockk.mockkStatic
 import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -165,8 +166,8 @@ class DownloadWorkRepositoryTest {
         // Arrange
         val workInfo = createMockWorkInfo(state)
         every {
-            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
-        } returns listOf(workInfo)
+            mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
+        } returns flowOf(listOf(workInfo))
 
         // Act
         val result = repository.isWorkRunning()
@@ -179,8 +180,8 @@ class DownloadWorkRepositoryTest {
     fun isWorkRunning_returnsFalse_whenNoWorkInfo() = runTest {
         // Arrange
         every {
-            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
-        } returns emptyList()
+            mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
+        } returns flowOf(emptyList())
 
         // Act
         val result = repository.isWorkRunning()
@@ -193,7 +194,7 @@ class DownloadWorkRepositoryTest {
     fun isWorkRunning_returnsFalse_whenExceptionThrown() = runTest {
         // Arrange
         every {
-            mockWorkManager.getWorkInfosForUniqueWork(ModelConfig.WORK_TAG).get()
+            mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
         } throws RuntimeException("WorkManager error")
 
         // Act
