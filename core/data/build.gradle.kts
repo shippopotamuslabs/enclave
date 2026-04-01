@@ -87,6 +87,8 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.robolectric)
     testImplementation(libs.junit)
+    testRuntimeOnly(libs.junit.vintage.engine)
+    testImplementation(libs.androidx.test.core)
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(project(":core:testing"))
     testImplementation("org.json:json:20240303")
