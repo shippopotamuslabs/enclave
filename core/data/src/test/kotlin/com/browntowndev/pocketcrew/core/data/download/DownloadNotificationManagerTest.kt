@@ -78,12 +78,12 @@ class DownloadNotificationManagerTest {
         )
 
         assertEquals(DownloadNotificationManager.NOTIFICATION_ID, foregroundInfo.notificationId)
-        // Progress assert depending on OS version
-        // In Robolectric, it's mapped to the shadow
         val notification = foregroundInfo.notification
-        val shadowNotification = shadowOf(notification)
-        // we could just assert it's not null for now since that test just checked percentage logic in mockk
-        assertNotNull(notification)
+        val progress = notification.extras.getInt(Notification.EXTRA_PROGRESS)
+        val progressMax = notification.extras.getInt(Notification.EXTRA_PROGRESS_MAX)
+
+        assertEquals(75, progress)
+        assertEquals(100, progressMax)
     }
 
     @Test
