@@ -74,3 +74,4 @@ firebase-debug.log
 .gemini/settings.json
 
 .geminiignore
+.jules/
