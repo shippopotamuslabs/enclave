@@ -108,8 +108,8 @@ class ModelDownloadWorkerTest {
         @Test
         @DisplayName("Input data can be retrieved from worker parameters")
         fun inputData_canBeRetrieved() {
-            // New format: modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|maxTokens|systemPrompt
-            val modelData = "MAIN|test-remote.gguf|test-local.gguf|Test Model|TheBloke/TestModel|1000|abc123def456|LITERTLM|0.0|40|0.95|2048|You are a helpful assistant"
+            // New format: modelType|remoteFileName|localFileName|presetName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt
+            val modelData = "MAIN|test-remote.gguf|test-local.gguf|Test Preset|TheBloke/TestModel|1000|abc123def456|LITERTLM|0.7|40|0.95|0.0|1.1|2048|2048|You are a helpful assistant"
             every { mockWorkerParams.inputData } returns workDataOf(
                 "model_files" to arrayOf(modelData),
                 "session_id" to testSessionId
@@ -130,5 +130,4 @@ class ModelDownloadWorkerTest {
             assertNotNull(mockWorkerParams.runAttemptCount)
         }
     }
-
 }

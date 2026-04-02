@@ -9,7 +9,9 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
@@ -89,9 +91,9 @@ class ModelDownloadWorker @AssistedInject constructor(
         )
 
         val sessionId = inputData.getString(DownloadWorkScheduler.KEY_SESSION_ID)
-        val models = filesData.mapNotNull { parseModelData(it) }
+        val modelsMap = filesData.mapNotNull { parseModelData(it) }.toMap()
 
-        if (models.isEmpty()) {
+        if (modelsMap.isEmpty()) {
             logger.warning(TAG, "No valid models to download from ${filesData.size} input entries")
             return if (sessionId != null) {
                 Result.success(workDataOf(DownloadWorkScheduler.KEY_SESSION_ID to sessionId))
@@ -100,30 +102,31 @@ class ModelDownloadWorker @AssistedInject constructor(
             }
         }
 
-        logger.info(TAG, "Starting download of ${models.size} models: ${models.joinToString { it.metadata.remoteFileName }}")
+        val uniqueAssets = modelsMap.values.distinctBy { it.metadata.sha256 }
+        logger.info(TAG, "Starting download of ${uniqueAssets.size} unique assets (${modelsMap.size} model slots): ${uniqueAssets.joinToString { it.metadata.remoteFileName }}")
 
-        // Initialize progress tracker with models
-        progressTracker.initialize(models)
+        // Initialize progress tracker with model map
+        progressTracker.initialize(modelsMap)
 
-        val totalSize = models.sumOf { it.metadata.sizeInBytes }
-        val totalFiles = models.size
+        val totalSize = uniqueAssets.sumOf { it.metadata.sizeInBytes }
+        val totalFiles = uniqueAssets.size
 
         return try {
             val completedCount = AtomicInteger(0)
             val failedCount = AtomicInteger(0)
 
             coroutineScope {
-                models.map { model ->
+                uniqueAssets.map { asset ->
                     async {
                         try {
-                            downloadFile(model)
+                            downloadFile(asset)
                             completedCount.incrementAndGet()
-                            logger.debug(TAG, "Successfully downloaded ${model.metadata.localFileName}")
+                            logger.debug(TAG, "Successfully downloaded ${asset.metadata.localFileName}")
                         } catch (e: CancellationException) {
                             throw e
                         } catch (e: Exception) {
                             failedCount.incrementAndGet()
-                            logger.error(TAG, "Failed to download ${model.metadata.localFileName}: ${e.message}", e)
+                            logger.error(TAG, "Failed to download ${asset.metadata.localFileName}: ${e.message}", e)
 
                             val errorMessage = when (e) {
                                 is SocketException -> "Connection reset: ${e.message}"
@@ -131,7 +134,7 @@ class ModelDownloadWorker @AssistedInject constructor(
                                 else -> e.message
                             }
                             // Use tracking key (SHA256) for state updates
-                            val trackingKey = model.metadata.sha256
+                            val trackingKey = asset.metadata.sha256
                             progressTracker.updateFileState(trackingKey) {
                                 it.copy(status = FileStatus.FAILED, error = errorMessage)
                             }
@@ -157,11 +160,11 @@ class ModelDownloadWorker @AssistedInject constructor(
                     logger.error(TAG, "Max retry attempts ($currentAttempt) exceeded, failing permanently")
                     Result.failure(workDataOf("error_message" to "Download failed after $currentAttempt attempts"))
                 } else {
-                    logger.warning(TAG, "Download completed with $failedCount failed out of ${models.size}, will retry (attempt $currentAttempt)")
+                    logger.warning(TAG, "Download completed with $failedCount failed out of ${uniqueAssets.size}, will retry (attempt $currentAttempt)")
                     Result.retry()
                 }
             } else {
-                logger.info(TAG, "All ${models.size} models downloaded successfully")
+                logger.info(TAG, "All ${uniqueAssets.size} unique assets downloaded successfully")
 
                 // Read session ID from input (needed for both success and failure paths)
                 val sessionId = inputData.getString(DownloadWorkScheduler.KEY_SESSION_ID)
@@ -181,22 +184,22 @@ class ModelDownloadWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun downloadFile(model: ModelConfiguration): Result {
+    private suspend fun downloadFile(asset: LocalModelAsset): Result {
         val targetDir = File(applicationContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
         if (!targetDir.exists()) targetDir.mkdirs()
 
         // Get the download URL using the ModelUrlProviderPort
-        val downloadUrl = modelUrlProvider.getModelDownloadUrl(model)
+        val downloadUrl = modelUrlProvider.getModelDownloadUrl(asset)
 
         // Use tracking key (SHA256) for state updates
-        val trackingKey = model.metadata.sha256
+        val trackingKey = asset.metadata.sha256
 
         // Log the actual URL being used
-        logger.info(TAG, "[DOWNLOAD] Starting download: url=$downloadUrl, remoteFileName=${model.metadata.remoteFileName}, localFileName=${model.metadata.localFileName}")
+        logger.info(TAG, "[DOWNLOAD] Starting download: url=$downloadUrl, remoteFileName=${asset.metadata.remoteFileName}, localFileName=${asset.metadata.localFileName}")
 
         // Check if target file already exists - will verify with MD5 later
         // Skip size validation - rely 100% on MD5 verification for integrity
-        val targetFile = File(targetDir, model.metadata.localFileName)
+        val targetFile = File(targetDir, asset.metadata.localFileName)
         if (targetFile.exists()) {
             progressTracker.updateFileState(trackingKey) {
                 it.copy(
@@ -218,15 +221,15 @@ class ModelDownloadWorker @AssistedInject constructor(
         setProgress(progressTracker.serializeToWorkData())
 
         // Get existing bytes for resume support
-        val tempFile = File(targetDir, "${model.metadata.localFileName}${ModelConfig.TEMP_EXTENSION}")
+        val tempFile = File(targetDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_EXTENSION}")
         val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
 
         try {
             // Create download config with just the fields needed for generic file downloading
             val downloadConfig = FileDownloaderPort.FileDownloadConfig(
-                filename = model.metadata.localFileName,
-                expectedSha256 = model.metadata.sha256,
-                expectedSizeBytes = model.metadata.sizeInBytes
+                filename = asset.metadata.localFileName,
+                expectedSha256 = asset.metadata.sha256,
+                expectedSizeBytes = asset.metadata.sizeInBytes
             )
 
             // Delegate download to FileDownloaderPort with progress callback
@@ -242,7 +245,7 @@ class ModelDownloadWorker @AssistedInject constructor(
                         progressTracker.updateFileState(trackingKey) {
                             it.copy(
                                 bytesDownloaded = bytesDownloaded,
-                                totalBytes = totalBytes.coerceAtLeast(model.metadata.sizeInBytes),
+                                totalBytes = totalBytes.coerceAtLeast(asset.metadata.sizeInBytes),
                                 status = FileStatus.DOWNLOADING
                             )
                         }
@@ -286,10 +289,9 @@ class ModelDownloadWorker @AssistedInject constructor(
         }
     }
 
-    private fun parseModelData(data: String): ModelConfiguration? {
+    private fun parseModelData(data: String): Pair<ModelType, LocalModelAsset>? {
         // Expected format:
-        // modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt
-        // Note: 13 parts is legacy (contextWindow is optional, defaults to 32768)
+        // modelType|remoteFileName|localFileName|presetName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt|isSystemPreset
         val parts = data.split("|")
         if (parts.size < 14) {
             logger.warning(TAG, "Invalid model data format: expected at least 14 parts, got ${parts.size}")
@@ -304,11 +306,10 @@ class ModelDownloadWorker @AssistedInject constructor(
                 return null
             }
 
-            val metadata = ModelConfiguration.Metadata(
+            val metadata = LocalModelMetadata(
                 huggingFaceModelName = parts[4],
                 remoteFileName = parts[1],
                 localFileName = parts[2],
-                displayName = parts[3],
                 sha256 = parts[6],
                 sizeInBytes = parts[5].toLongOrNull() ?: 0L,
                 modelFileFormat = try {
@@ -318,28 +319,26 @@ class ModelDownloadWorker @AssistedInject constructor(
                 }
             )
 
-            val tunings = ModelConfiguration.Tunings(
-                temperature = parts[8].toDoubleOrNull() ?: 0.0,
+            val configuration = LocalModelConfiguration(
+                localModelId = 0, // Assigned later by repository
+                displayName = parts[3],
+                temperature = parts[8].toDoubleOrNull() ?: 0.7,
                 topK = parts[9].toIntOrNull() ?: 40,
                 topP = parts[10].toDoubleOrNull() ?: 0.95,
                 minP = parts[11].toDoubleOrNull() ?: 0.0,
-                repetitionPenalty = parts[12].toDoubleOrNull() ?: 1.0,
-                maxTokens = parts[13].toIntOrNull() ?: 2048,
-                contextWindow = parts[14].toIntOrNull() ?: 32768
-            )
-
-            val persona = ModelConfiguration.Persona(
-                systemPrompt = parts.getOrNull(14) ?: ""
+                repetitionPenalty = parts[12].toDoubleOrNull() ?: 1.1,
+                maxTokens = parts[13].toIntOrNull() ?: 4096,
+                contextWindow = parts[14].toIntOrNull() ?: 4096,
+                systemPrompt = parts.getOrNull(15) ?: "",
+                isSystemPreset = parts.getOrNull(16)?.toBoolean() ?: true
             )
 
             // DIAGNOSTIC: Log parsed data
             logger.info(TAG, "[DIAGNOSTIC] parseModelData: modelType=$modelType, remoteFileName=${metadata.remoteFileName}, sha256=${metadata.sha256}, size=${metadata.sizeInBytes}")
 
-            ModelConfiguration(
-                modelType = modelType,
+            modelType to LocalModelAsset(
                 metadata = metadata,
-                tunings = tunings,
-                persona = persona
+                configurations = listOf(configuration)
             )
         } catch (e: Exception) {
             logger.error(TAG, "Failed to parse model data: ${e.message}", e)

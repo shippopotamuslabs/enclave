@@ -59,7 +59,7 @@ class DownloadViewModel @AssistedInject constructor(
     init {
         viewModelScope.launch {
             displayNameCache = ModelType.entries.associateWith { modelType ->
-                modelRegistry.getRegisteredModelSync(modelType)?.metadata?.displayName
+                modelRegistry.getRegisteredAsset(modelType)?.metadata?.huggingFaceModelName
                     ?: modelType.name.lowercase().replaceFirstChar { it.uppercase() }
             }
         }
@@ -95,7 +95,7 @@ class DownloadViewModel @AssistedInject constructor(
     // Convert FileProgress to UI model with display names from ModelRegistry
     internal fun FileProgress.toUiModel(): FileProgressUiModel {
         val displayName = if (modelTypes.isNotEmpty()) {
-            val names = modelTypes.map { it.toDisplayName() }
+            val names = modelTypes.map { it.toDisplayName() }.distinct()
             if (names.size == 1) {
                 names.first()
             } else {

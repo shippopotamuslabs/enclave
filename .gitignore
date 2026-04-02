@@ -75,3 +75,11 @@ firebase-debug.log
 
 .geminiignore
 .jules/
+
+test_output.txt
+
+diff.txt
+
+.factory/
+
+.codex

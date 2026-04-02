@@ -5,7 +5,8 @@ import androidx.work.workDataOf
 import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.core.data.util.formatBytes
@@ -16,13 +17,13 @@ import java.util.Locale
  * This is moved from ModelDownloadWorker to enable centralized progress tracking.
  */
 data class FileDownloadState(
-    val data: ModelConfiguration,
+    val metadata: LocalModelMetadata,
     val status: FileStatus = FileStatus.QUEUED,
     val bytesDownloaded: Long = 0L,
-    val totalBytes: Long = data.metadata.sizeInBytes,
+    val totalBytes: Long = metadata.sizeInBytes,
     val error: String? = null,
     // All model types that use this file (grouped by SHA256)
-    val allModelTypesForFile: List<ModelType> = listOf(data.modelType)
+    val allModelTypesForFile: List<ModelType>
 )
 
 /**
@@ -62,20 +63,20 @@ class DownloadProgressTracker(
      * Groups models by SHA256 hash to track ALL model types that use each file.
      * Uses SHA256 as the tracking key since it's unique per file content.
      */
-    fun initialize(models: List<ModelConfiguration>) {
+    fun initialize(models: Map<ModelType, LocalModelAsset>) {
         // Group models by SHA256 to combine multiple modelTypes that share the same file
-        val groupedBySha256 = models.groupBy { it.metadata.sha256 }
+        val groupedBySha256 = models.entries.groupBy { it.value.metadata.sha256 }
 
-        val initialStates = groupedBySha256.map { (sha256, groupedModels) ->
-            val primaryModel = groupedModels.first()
+        val initialStates = groupedBySha256.map { (sha256, entries) ->
+            val primaryAsset = entries.first().value
             // Collect ALL model types that use this file
-            val allModelTypes = groupedModels.map { it.modelType }.distinct()
+            val allModelTypes = entries.map { it.key }.distinct()
 
             sha256 to FileDownloadState(
-                data = primaryModel,
+                metadata = primaryAsset.metadata,
                 status = FileStatus.QUEUED,
                 bytesDownloaded = 0L,
-                totalBytes = primaryModel.metadata.sizeInBytes,
+                totalBytes = primaryAsset.metadata.sizeInBytes,
                 error = null,
                 // Store all model types that use this file
                 allModelTypesForFile = allModelTypes
@@ -118,11 +119,11 @@ class DownloadProgressTracker(
             completedFiles.toFloat() / totalFiles.coerceAtLeast(1)
         }
 
-        val currentFile = fileStates.values.find { it.status == FileStatus.DOWNLOADING }?.data?.metadata?.remoteFileName ?: ""
+        val currentFile = fileStates.values.find { it.status == FileStatus.DOWNLOADING }?.metadata?.remoteFileName ?: ""
 
         // Calculate PER-FILE speed for each file
         val filesProgress = fileStates.values.map { state ->
-            val filename = state.data.metadata.remoteFileName
+            val filename = state.metadata.remoteFileName
             val (fileSpeed, fileEta) = if (state.status == FileStatus.DOWNLOADING) {
                 speedTracker.calculateSpeedAndEta(
                     filename,
@@ -242,7 +243,7 @@ class DownloadProgressTracker(
         val filesProgressMap = snapshot.filesProgress.associateBy { it.filename }
 
         val filesProgressArray = fileStates.values.map { state ->
-            val trackingFilename = state.data.metadata.remoteFileName
+            val trackingFilename = state.metadata.remoteFileName
             val fileSpeed = if (state.status == FileStatus.DOWNLOADING) {
                 filesProgressMap[trackingFilename]?.speedMBs ?: 0.0
             } else {
@@ -325,5 +326,5 @@ class DownloadProgressTracker(
      * Get current downloading file name.
      */
     fun getCurrentDownloadingFile(): String? = fileStates.values
-        .find { it.status == FileStatus.DOWNLOADING }?.data?.metadata?.remoteFileName
+        .find { it.status == FileStatus.DOWNLOADING }?.metadata?.remoteFileName
 }

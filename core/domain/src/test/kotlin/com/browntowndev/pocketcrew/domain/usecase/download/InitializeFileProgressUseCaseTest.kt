@@ -1,7 +1,9 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
@@ -39,38 +41,21 @@ class InitializeFileProgressUseCaseTest {
     @Test
     fun invoke_createsFileProgressList_fromMissingModels() {
         // Given
-        val modelConfig = ModelConfiguration(
+        val asset = createLocalModelAsset(
             modelType = ModelType.MAIN,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "test/model",
-                remoteFileName = "main.litertlm",
-                localFileName = "main.litertlm",
-                displayName = "Main Model",
-                sha256 = "abc123",
-                sizeInBytes = 1000000L,
-                modelFileFormat = ModelFileFormat.LITERTLM
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.7,
-                topK = 40,
-                topP = 0.9,
-                repetitionPenalty = 1.0,
-                maxTokens = 2048,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(
-                systemPrompt = "You are a helpful assistant."
-            )
+            localFileName = "main.litertlm",
+            sha256 = "abc123",
+            sizeInBytes = 1000000L
         )
 
         val scanResult = ModelScanResult(
-            missingModels = listOf(modelConfig),
+            missingModels = listOf(asset),
             partialDownloads = emptyMap(),
             allValid = false,
             directoryError = false
         )
 
-        val allModels = listOf(modelConfig)
+        val allModels = mapOf(ModelType.MAIN to asset)
 
         // When
         val result = useCase(scanResult, allModels)
@@ -86,28 +71,11 @@ class InitializeFileProgressUseCaseTest {
     @Test
     fun invoke_handlesPartialDownloads() {
         // Given
-        val modelConfig = ModelConfiguration(
+        val asset = createLocalModelAsset(
             modelType = ModelType.MAIN,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "test/model",
-                remoteFileName = "main.litertlm",
-                localFileName = "main.litertlm",
-                displayName = "Main Model",
-                sha256 = "abc123",
-                sizeInBytes = 1000000L,
-                modelFileFormat = ModelFileFormat.LITERTLM
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.7,
-                topK = 40,
-                topP = 0.9,
-                repetitionPenalty = 1.0,
-                maxTokens = 2048,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(
-                systemPrompt = "You are a helpful assistant."
-            )
+            localFileName = "main.litertlm",
+            sha256 = "abc123",
+            sizeInBytes = 1000000L
         )
 
         val scanResult = ModelScanResult(
@@ -117,7 +85,7 @@ class InitializeFileProgressUseCaseTest {
             directoryError = false
         )
 
-        val allModels = listOf(modelConfig)
+        val allModels = mapOf(ModelType.MAIN to asset)
 
         // When
         val result = useCase(scanResult, allModels)
@@ -131,62 +99,31 @@ class InitializeFileProgressUseCaseTest {
     @Test
     fun invoke_calculatesOverallProgress() {
         // Given
-        val mainModel = ModelConfiguration(
+        val mainAsset = createLocalModelAsset(
             modelType = ModelType.MAIN,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "test/model",
-                remoteFileName = "main.litertlm",
-                localFileName = "main.litertlm",
-                displayName = "Main Model",
-                sha256 = "abc123",
-                sizeInBytes = 1000000L,
-                modelFileFormat = ModelFileFormat.LITERTLM
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.7,
-                topK = 40,
-                topP = 0.9,
-                repetitionPenalty = 1.0,
-                maxTokens = 2048,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(
-                systemPrompt = "You are a helpful assistant."
-            )
+            localFileName = "main.litertlm",
+            sha256 = "abc123",
+            sizeInBytes = 1000000L
         )
 
-        val visionModel = ModelConfiguration(
+        val visionAsset = createLocalModelAsset(
             modelType = ModelType.VISION,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "test/vision",
-                remoteFileName = "vision.litertlm",
-                localFileName = "vision.litertlm",
-                displayName = "Vision Model",
-                sha256 = "vision123",
-                sizeInBytes = 2000000L,
-                modelFileFormat = ModelFileFormat.LITERTLM
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.7,
-                topK = 40,
-                topP = 0.9,
-                repetitionPenalty = 1.0,
-                maxTokens = 2048,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(
-                systemPrompt = "You are a vision assistant."
-            )
+            localFileName = "vision.litertlm",
+            sha256 = "vision123",
+            sizeInBytes = 2000000L
         )
 
         val scanResult = ModelScanResult(
-            missingModels = listOf(mainModel, visionModel),
+            missingModels = listOf(mainAsset, visionAsset),
             partialDownloads = emptyMap(),
             allValid = false,
             directoryError = false
         )
 
-        val allModels = listOf(mainModel, visionModel)
+        val allModels = mapOf(
+            ModelType.MAIN to mainAsset,
+            ModelType.VISION to visionAsset
+        )
 
         // When
         val result = useCase(scanResult, allModels)
@@ -199,38 +136,21 @@ class InitializeFileProgressUseCaseTest {
     @Test
     fun invoke_handlesExistingFailedDownloads() {
         // Given
-        val modelConfig = ModelConfiguration(
+        val asset = createLocalModelAsset(
             modelType = ModelType.MAIN,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "test/model",
-                remoteFileName = "main.litertlm",
-                localFileName = "main.litertlm",
-                displayName = "Main Model",
-                sha256 = "abc123",
-                sizeInBytes = 1000000L,
-                modelFileFormat = ModelFileFormat.LITERTLM
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.7,
-                topK = 40,
-                topP = 0.9,
-                repetitionPenalty = 1.0,
-                maxTokens = 2048,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(
-                systemPrompt = "You are a helpful assistant."
-            )
+            localFileName = "main.litertlm",
+            sha256 = "abc123",
+            sizeInBytes = 1000000L
         )
 
         val scanResult = ModelScanResult(
-            missingModels = listOf(modelConfig),
+            missingModels = listOf(asset),
             partialDownloads = emptyMap(),
             allValid = false,
             directoryError = false
         )
 
-        val allModels = listOf(modelConfig)
+        val allModels = mapOf(ModelType.MAIN to asset)
 
         val existingDownloads = listOf(
             FileProgress(
@@ -253,62 +173,31 @@ class InitializeFileProgressUseCaseTest {
     @Test
     fun invoke_handlesMultipleModelTypes() {
         // Given - Multiple configurations with same remote file
-        val mainModel = ModelConfiguration(
+        val mainAsset = createLocalModelAsset(
             modelType = ModelType.MAIN,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "test/model",
-                remoteFileName = "shared.litertlm",
-                localFileName = "main.litertlm",
-                displayName = "Main Model",
-                sha256 = "abc123",
-                sizeInBytes = 1000000L,
-                modelFileFormat = ModelFileFormat.LITERTLM
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.7,
-                topK = 40,
-                topP = 0.9,
-                repetitionPenalty = 1.0,
-                maxTokens = 2048,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(
-                systemPrompt = "You are a helpful assistant."
-            )
+            localFileName = "shared.litertlm",
+            sha256 = "abc123",
+            sizeInBytes = 1000000L
         )
 
-        val fastModel = ModelConfiguration(
+        val fastAsset = createLocalModelAsset(
             modelType = ModelType.FAST,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = "test/model",
-                remoteFileName = "shared.litertlm",
-                localFileName = "fast.litertlm",
-                displayName = "Fast Model",
-                sha256 = "abc123",
-                sizeInBytes = 1000000L,
-                modelFileFormat = ModelFileFormat.LITERTLM
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.7,
-                topK = 40,
-                topP = 0.9,
-                repetitionPenalty = 1.0,
-                maxTokens = 2048,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(
-                systemPrompt = "You are a fast assistant."
-            )
+            localFileName = "shared.litertlm",
+            sha256 = "abc123",
+            sizeInBytes = 1000000L
         )
 
         val scanResult = ModelScanResult(
-            missingModels = listOf(mainModel, fastModel),
+            missingModels = listOf(mainAsset), // Only need one in missingModels since they share SHA
             partialDownloads = emptyMap(),
             allValid = false,
             directoryError = false
         )
 
-        val allModels = listOf(mainModel, fastModel)
+        val allModels = mapOf(
+            ModelType.MAIN to mainAsset,
+            ModelType.FAST to fastAsset
+        )
 
         // When
         val result = useCase(scanResult, allModels)
@@ -317,5 +206,36 @@ class InitializeFileProgressUseCaseTest {
         assertEquals(1, result.fileProgressList.size)
         assertTrue(result.fileProgressList.first().modelTypes.contains(ModelType.MAIN))
         assertTrue(result.fileProgressList.first().modelTypes.contains(ModelType.FAST))
+    }
+
+    private fun createLocalModelAsset(
+        modelType: ModelType,
+        localFileName: String,
+        sha256: String,
+        sizeInBytes: Long
+    ): LocalModelAsset {
+        return LocalModelAsset(
+            metadata = LocalModelMetadata(
+                huggingFaceModelName = "test/model",
+                remoteFileName = localFileName,
+                localFileName = localFileName,
+                sha256 = sha256,
+                sizeInBytes = sizeInBytes,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            configurations = listOf(
+                LocalModelConfiguration(
+                    localModelId = 1L,
+                    displayName = "${modelType.name} Config",
+                    maxTokens = 2048,
+                    contextWindow = 2048,
+                    temperature = 0.7,
+                    topP = 0.9,
+                    topK = 40,
+                    repetitionPenalty = 1.0,
+                    systemPrompt = "You are a helpful assistant."
+                )
+            )
+        )
     }
 }

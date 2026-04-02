@@ -1,31 +1,84 @@
 package com.browntowndev.pocketcrew.feature.inference
+
+import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
+import com.google.ai.edge.litertlm.EngineConfig
 import io.mockk.MockKAnnotations
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkConstructor
 import io.mockk.mockkStatic
 import io.mockk.slot
+import io.mockk.unmockkConstructor
 import io.mockk.unmockkStatic
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.io.File
 
 
 class ConversationManagerImplTest {
 
+    private lateinit var mockContext: Context
+    private lateinit var mockModelRegistry: ModelRegistryPort
     private lateinit var mockEngine: Engine
     private lateinit var mockConversation: Conversation
+    private lateinit var testScope: CoroutineScope
+    private lateinit var assetFlow: MutableStateFlow<LocalModelAsset?>
+    private lateinit var configFlow: MutableStateFlow<LocalModelConfiguration?>
+
+    private val fakeAsset = LocalModelAsset(
+        metadata = LocalModelMetadata(
+            id = 1L,
+            huggingFaceModelName = "test/model",
+            remoteFileName = "model.gguf",
+            localFileName = "model.gguf",
+            sha256 = "dummy-hash",
+            sizeInBytes = 1000L,
+            modelFileFormat = ModelFileFormat.GGUF
+        ),
+        configurations = emptyList()
+    )
+
+    private val fakeConfig = LocalModelConfiguration(
+        id = 1L,
+        localModelId = 1L,
+        displayName = "Test Config",
+        temperature = 0.7,
+        topK = 40,
+        topP = 0.9,
+        minP = 0.1,
+        repetitionPenalty = 1.1,
+        maxTokens = 4096,
+        contextWindow = 4096,
+        thinkingEnabled = false,
+        systemPrompt = "You are a helpful assistant.",
+        isSystemPreset = true
+    )
 
     @BeforeEach
     fun setup() {
@@ -34,26 +87,51 @@ class ConversationManagerImplTest {
         every { Log.d(any<String>(), any<String>()) } returns 0
         every { Log.e(any<String>(), any<String>()) } returns 0
         every { Log.w(any<String>(), any<String>()) } returns 0
+        every { Log.i(any<String>(), any<String>()) } returns 0
 
+        mockContext = mockk(relaxed = true)
+        mockModelRegistry = mockk(relaxed = true)
         mockEngine = mockk(relaxed = true)
         mockConversation = mockk(relaxed = true)
 
-        every { mockEngine.isInitialized() } returns false
-        every { mockEngine.createConversation(any()) } returns mockConversation
+        // Test scope uses Unconfined to run flow collection synchronously
+        testScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+
+        // Hot flows that immediately emit values - MutableStateFlow is always active
+        assetFlow = MutableStateFlow(fakeAsset)
+        configFlow = MutableStateFlow(fakeConfig)
+
+        // Mock Engine constructor
+        mockkConstructor(Engine::class)
+        every { anyConstructed<Engine>().isInitialized() } returns false
+        every { anyConstructed<Engine>().createConversation(any()) } returns mockConversation
+        every { anyConstructed<Engine>().close() } returns Unit
+        every { anyConstructed<Engine>().initialize() } returns Unit
+
         every { mockConversation.isAlive } returns true
+        every { mockConversation.close() } returns Unit
+
+        // Mock file operations for model path
+        val mockFilesDir = File("/fake/files/dir")
+        every { mockContext.getExternalFilesDir(null) } returns mockFilesDir
+
+        // Model registry flows - hot StateFlows that always have a value
+        every { mockModelRegistry.observeAsset(ModelType.MAIN) } returns assetFlow.asStateFlow()
+        every { mockModelRegistry.observeConfiguration(ModelType.MAIN) } returns configFlow.asStateFlow()
     }
 
     @AfterEach
     fun tearDown() {
         unmockkStatic(Log::class)
+        unmockkConstructor(Engine::class)
     }
 
     // ========== Thread-Safe Engine Lifecycle ==========
 
     @Test
-    fun `getConversation returns ConversationPort wrapper on first call`() {
+    fun `getConversation returns ConversationPort wrapper on first call`() = runTest {
         // Given
-        val manager = ConversationManagerImpl(engine = mockEngine)
+        val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
 
         // When
         val conversation = manager.getConversation()
@@ -61,16 +139,15 @@ class ConversationManagerImplTest {
         // Then
         assertNotNull(conversation)
         assertTrue(conversation is ConversationPort, "Should return ConversationPort wrapper")
-        verify { mockEngine.isInitialized() }
-        verify { mockEngine.createConversation(any()) }
+        verify { anyConstructed<Engine>().createConversation(any()) }
     }
 
     @Test
-    fun `getConversation recreates dead conversation`() {
+    fun `getConversation recreates dead conversation`() = runTest {
         // Given - conversation exists but is not alive
         every { mockConversation.isAlive } returns false
 
-        val manager = ConversationManagerImpl(engine = mockEngine)
+        val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
         manager.getConversation() // First call creates conversation
 
         // When - call again
@@ -82,9 +159,9 @@ class ConversationManagerImplTest {
     }
 
     @Test
-    fun `closeConversation clears reference`() {
+    fun `closeConversation clears reference`() = runTest {
         // Given
-        val manager = ConversationManagerImpl(engine = mockEngine)
+        val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
         manager.getConversation()
 
         // When
@@ -95,10 +172,10 @@ class ConversationManagerImplTest {
     }
 
     @Test
-    fun `closeEngine releases resources`() {
+    fun `closeEngine releases resources`() = runTest {
         // Given
-        every { mockEngine.isInitialized() } returns true
-        val manager = ConversationManagerImpl(engine = mockEngine)
+        every { anyConstructed<Engine>().isInitialized() } returns true
+        val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
         manager.getConversation()
 
         // When
@@ -106,27 +183,13 @@ class ConversationManagerImplTest {
 
         // Then
         verify { mockConversation.close() }
-        verify { mockEngine.close() }
+        verify { anyConstructed<Engine>().close() }
     }
 
     @Test
-    fun `getConversation reinitializes engine if not initialized`() {
-        // Given - engine is not initialized
-        every { mockEngine.isInitialized() } returns false
-
-        val manager = ConversationManagerImpl(engine = mockEngine)
-
-        // When
-        manager.getConversation()
-
-        // Then
-        verify { mockEngine.initialize() }
-    }
-
-    @Test
-    fun `concurrent access returns same ConversationPort wrapper`() {
+    fun `concurrent access returns same ConversationPort wrapper`() = runTest {
         // Given
-        val manager = ConversationManagerImpl(engine = mockEngine)
+        val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
 
         // When - get conversation twice
         val conv1 = manager.getConversation()
@@ -137,9 +200,9 @@ class ConversationManagerImplTest {
     }
 
     @Test
-    fun `getConversation returns different wrapper after closeConversation`() {
+    fun `getConversation returns different wrapper after closeConversation`() = runTest {
         // Given
-        val manager = ConversationManagerImpl(engine = mockEngine)
+        val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
         val conv1 = manager.getConversation()
 
         // When - close and get again
@@ -153,9 +216,9 @@ class ConversationManagerImplTest {
     // ========== Conversation History (setHistory) ==========
 
     @Test
-    fun `setHistory seeds initialMessages in ConversationConfig`() {
+    fun `setHistory seeds initialMessages in ConversationConfig`() = runTest {
         // Given
-        val manager = ConversationManagerImpl(engine = mockEngine)
+        val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
         val history = listOf(
             ChatMessage(Role.USER, "Hello, what's up?"),
             ChatMessage(Role.ASSISTANT, "Not much, how are you?")
@@ -167,7 +230,7 @@ class ConversationManagerImplTest {
 
         // Then
         val configSlot = slot<ConversationConfig>()
-        verify { mockEngine.createConversation(capture(configSlot)) }
+        verify { anyConstructed<Engine>().createConversation(capture(configSlot)) }
 
         val initialMessages = configSlot.captured.initialMessages
         assertEquals(2, initialMessages.size)
@@ -179,9 +242,9 @@ class ConversationManagerImplTest {
     }
 
     @Test
-    fun `setting different history invalidates current conversation`() {
+    fun `setting different history invalidates current conversation`() = runTest {
         // Given
-        val manager = ConversationManagerImpl(engine = mockEngine)
+        val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
         val conv1 = manager.getConversation()
 
         val history = listOf(ChatMessage(Role.USER, "New history"))
@@ -196,9 +259,9 @@ class ConversationManagerImplTest {
     }
 
     @Test
-    fun `setHistory with empty list seeds empty initialMessages`() {
+    fun `setHistory with empty list seeds empty initialMessages`() = runTest {
         // Given
-        val manager = ConversationManagerImpl(engine = mockEngine)
+        val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
         val history = emptyList<ChatMessage>()
 
         // When
@@ -207,7 +270,7 @@ class ConversationManagerImplTest {
 
         // Then
         val configSlot = slot<ConversationConfig>()
-        verify { mockEngine.createConversation(capture(configSlot)) }
+        verify { anyConstructed<Engine>().createConversation(capture(configSlot)) }
         assertTrue(configSlot.captured.initialMessages.isEmpty())
     }
 }

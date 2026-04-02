@@ -2,10 +2,10 @@ package com.browntowndev.pocketcrew.core.data.download
 import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
-import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -15,6 +15,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.usecase.download.FileProgressInitResult
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeFileProgressUseCase
 import com.browntowndev.pocketcrew.domain.usecase.download.ValidateDownloadConditionsUseCase
+import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -25,9 +26,13 @@ import io.mockk.unmockkStatic
 import io.mockk.verify
 import java.io.File
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.RegisterExtension
@@ -100,38 +105,41 @@ class ModelDownloadOrchestratorImplTest {
         unmockkStatic(Log::class)
     }
 
-    private fun createModelConfig(
-        modelType: ModelType = ModelType.MAIN,
+    private fun createModelAsset(
         sha256: String = "testSha256",
         localFileName: String = "test.bin"
-    ): ModelConfiguration {
-        return ModelConfiguration(
-            modelType = modelType,
-            metadata = ModelConfiguration.Metadata(
+    ): LocalModelAsset {
+        return LocalModelAsset(
+            metadata = LocalModelMetadata(
                 huggingFaceModelName = "test/model",
                 remoteFileName = localFileName,
                 localFileName = localFileName,
-                displayName = "Test Model",
                 sha256 = sha256,
                 sizeInBytes = 1024,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.0,
-                topK = 40,
-                topP = 0.95,
-                repetitionPenalty = 1.0,
-                maxTokens = 2048,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(
-                systemPrompt = "You are a helpful assistant."
+            configurations = listOf(
+                LocalModelConfiguration(
+                    localModelId = 0,
+                    displayName = "Test Model",
+                    maxTokens = 2048,
+                    contextWindow = 2048,
+                    temperature = 0.0,
+                    topP = 0.95,
+                    topK = 40,
+                    repetitionPenalty = 1.0,
+                    systemPrompt = "You are a helpful assistant."
+                )
             )
         )
     }
 
-    private fun createDownloadModelsResult(modelsToDownload: List<ModelConfiguration> = emptyList()): DownloadModelsResult {
+    private fun createDownloadModelsResult(
+        modelsToDownload: List<LocalModelAsset> = emptyList(),
+        allModels: Map<ModelType, LocalModelAsset> = emptyMap()
+    ): DownloadModelsResult {
         return DownloadModelsResult(
+            allModels = allModels,
             modelsToDownload = modelsToDownload,
             scanResult = ModelScanResult(
                 missingModels = modelsToDownload,
@@ -167,34 +175,69 @@ class ModelDownloadOrchestratorImplTest {
     }
 
     @Test
-    fun `initializeWithStartupResult sets startupModelsResult`() = runTest {
-        // Given
-        val modelConfig = createModelConfig()
-        val downloadResult = createDownloadModelsResult(listOf(modelConfig))
-
-        // When
+    fun `updateFromProgressUpdate READY status triggers registry update for new assets`() = runTest {
+        // Given - initialized with a new remote model
+        val remoteAsset = createModelAsset(sha256 = "new-sha")
+        val downloadResult = createDownloadModelsResult(
+            modelsToDownload = listOf(remoteAsset),
+            allModels = mapOf(ModelType.FAST to remoteAsset)
+        )
         orchestrator.initializeWithStartupResult(downloadResult)
 
-        // Then - the orchestrator should be initialized
-        // We can verify this by checking that startDownloads would work without throwing
-        // IllegalStateException (which would happen if startupModelsResult was null)
-        coEvery { mockSessionManager.createNewSession() } returns "test-session"
-        coEvery { mockValidateConditions.invoke(any(), any()) } returns mockk {
-            every { canStart } returns true
-        }
-        coEvery { mockInitializeFileProgress.invoke(any(), any(), any()) } returns FileProgressInitResult(
-            fileProgressList = emptyList(),
-            modelsTotal = 0,
-            modelsComplete = 0,
-            overallProgress = 0f
+        // When - download completes successfully
+        val update = com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate(
+            status = com.browntowndev.pocketcrew.domain.model.download.DownloadStatus.READY,
+            clearSession = true
         )
+        orchestrator.updateFromProgressUpdate(update)
 
-        // This should not throw IllegalStateException - proves startupModelsResult is set
-        // It may return false due to other mocks, but shouldn't throw
-        try {
-            orchestrator.startDownloads(wifiOnly = false)
-        } catch (e: IllegalStateException) {
-            throw AssertionError("startupModelsResult should be set, but got: ${e.message}")
+        // Then - registry should be updated with the NEW asset (this replaces current logic)
+        coVerify {
+            mockModelRegistry.setRegisteredModel(
+                modelType = ModelType.FAST,
+                asset = remoteAsset,
+                status = ModelStatus.CURRENT,
+                markExistingAsOld = true
+            )
         }
+    }
+
+    @Test
+    fun `updateFromProgressUpdate ERROR status emits fallback snackbar if local model exists`() = runTest {
+        // Given - initialized with a model that has an existing local version
+        val remoteAsset = createModelAsset(sha256 = "new-sha")
+        val localAsset = createModelAsset(sha256 = "old-sha")
+        val downloadResult = createDownloadModelsResult(
+            modelsToDownload = listOf(remoteAsset),
+            allModels = mapOf(ModelType.FAST to remoteAsset)
+        )
+        orchestrator.initializeWithStartupResult(downloadResult)
+
+        // Mock that there's a local model for FAST in the registry
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns localAsset
+
+        // When - download fails
+        val update = com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate(
+            status = com.browntowndev.pocketcrew.domain.model.download.DownloadStatus.ERROR,
+            clearSession = true
+        )
+        
+        val messages = mutableListOf<String>()
+        val collectJob = backgroundScope.launch {
+            orchestrator.snackbarMessages.collect { messages.add(it) }
+        }
+        
+        orchestrator.updateFromProgressUpdate(update)
+        
+        // Wait for the message to appear
+        var attempts = 0
+        while (messages.isEmpty() && attempts < 10) {
+            testDispatcher.scheduler.advanceTimeBy(100)
+            testDispatcher.scheduler.runCurrent()
+            attempts++
+        }
+
+        // Then - should emit a fallback snackbar
+        assertTrue(messages.any { it.contains("Using existing model") })
     }
 }

@@ -1,213 +1,367 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
-import com.browntowndev.pocketcrew.core.data.local.ModelsDao
-import com.browntowndev.pocketcrew.core.data.local.ModelEntity
-import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelEntity
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
+import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationEntity
+import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
+import com.browntowndev.pocketcrew.core.data.local.LocalModelEntity
+import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class ModelRegistryImpl @Inject constructor(
-    private val modelsDao: ModelsDao,
+    private val modelsDao: LocalModelsDao,
+    private val configsDao: LocalModelConfigurationsDao,
     private val defaultModelsDao: DefaultModelsDao,
     private val transactionProvider: TransactionProvider,
     private val logger: LoggingPort
 ) : ModelRegistryPort {
 
-    private val mutex = Mutex()
-
-    @Volatile
-    private var cache: Map<ModelType, ModelConfiguration> = emptyMap()
-
-    private fun isCacheInitialized(): Boolean = cache.isNotEmpty()
-
-    private fun getFromCache(modelType: ModelType): ModelConfiguration? = cache[modelType]
-
-    private fun getAllFromCache(): List<ModelConfiguration> = cache.values.toList()
-
-    private suspend fun updateCache(config: ModelConfiguration) {
-        mutex.withLock {
-            cache = cache.toMutableMap().apply {
-                put(config.modelType, config)
-            }
-        }
-        logger.debug("ModelRegistry", "Updated cache for ${config.modelType}: ${config.metadata.displayName}")
+    override suspend fun getRegisteredAsset(modelType: ModelType): LocalModelAsset? {
+        val config = getRegisteredConfiguration(modelType) ?: return null
+        return loadAsset(config.localModelId)
     }
 
-    private suspend fun clearCache() {
-        mutex.withLock {
-            cache = emptyMap()
-        }
-        logger.debug("ModelRegistry", "Cache cleared")
+    override suspend fun getRegisteredConfiguration(modelType: ModelType): LocalModelConfiguration? {
+        val defaultEntity = defaultModelsDao.getDefault(modelType)
+        if (defaultEntity == null || defaultEntity.localConfigId == null) return null
+        val configEntity = configsDao.getById(defaultEntity.localConfigId) ?: return null
+        return entityToConfiguration(configEntity)
     }
 
-    override suspend fun getRegisteredModel(modelType: ModelType): ModelConfiguration? {
-        // Check cache first
-        getFromCache(modelType)?.let { return it }
-
-        // Cache miss - load from DAO (only CURRENT)
-        val entity = modelsDao.getModelEntity(modelType) ?: return null
-        val config = entityToModelConfiguration(entity)
-
-        // Update cache
-        updateCache(config)
-        return config
+    override suspend fun getRegisteredAssets(): List<LocalModelAsset> {
+        return modelsDao.getAllCurrent().mapNotNull { loadAsset(it.id) }
     }
 
-    override fun getRegisteredModelSync(modelType: ModelType): ModelConfiguration? {
-        // Just return from cache - assumes cache has been initialized
-        return getFromCache(modelType)
-    }
-
-    override suspend fun getRegisteredModels(): List<ModelConfiguration> {
-        // If cache is empty, populate from DAO (only CURRENT)
-        if (!isCacheInitialized()) {
-            val entities = modelsDao.getAll()
-            val configs = entities.map { entityToModelConfiguration(it) }
-            // Initialize cache with all configs
-            configs.forEach { updateCache(it) }
-        }
-        return getAllFromCache()
-    }
-
-    override fun getRegisteredModelsSync(): List<ModelConfiguration> {
-        // Just return from cache - assumes cache has been initialized
-        return getAllFromCache()
-    }
-
-    override fun observeRegisteredModels(): Flow<Map<ModelType, String>> {
-        return modelsDao.observeAll().map { entities ->
-            entities.associate { entity ->
-                entity.modelType to entity.displayName
-            }
+    override suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration> {
+        val defaults = defaultModelsDao.getAll()
+        return defaults.mapNotNull { defaultEntity ->
+            if (defaultEntity.localConfigId != null) {
+                configsDao.getById(defaultEntity.localConfigId)?.let { entityToConfiguration(it) }
+            } else null
         }
     }
 
-    override fun observeModel(modelType: ModelType): Flow<ModelConfiguration?> {
-        return modelsDao.observeModelEntity(modelType).map { entity ->
-            entity?.let { entityToModelConfiguration(it) }
+    override fun observeAsset(modelType: ModelType): Flow<LocalModelAsset?> {
+        return defaultModelsDao.observeAll().map { defaults ->
+            val defaultEntity = defaults.find { it.modelType == modelType }
+            if (defaultEntity != null && defaultEntity.localConfigId != null) {
+                val configEntity = configsDao.getById(defaultEntity.localConfigId)
+                if (configEntity != null) loadAsset(configEntity.localModelId) else null
+            } else null
+        }
+    }
+
+    override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> {
+        return defaultModelsDao.observeAll().map { defaults ->
+            val defaultEntity = defaults.find { it.modelType == modelType }
+            if (defaultEntity != null && defaultEntity.localConfigId != null) {
+                val configEntity = configsDao.getById(defaultEntity.localConfigId)
+                if (configEntity != null) entityToConfiguration(configEntity) else null
+            } else null
+        }
+    }
+
+    override fun observeAssets(): Flow<List<LocalModelAsset>> {
+        return modelsDao.observeAllCurrent().map { entities ->
+            entities.mapNotNull { loadAsset(it.id) }
         }
     }
 
     override suspend fun setRegisteredModel(
-        config: ModelConfiguration,
+        modelType: ModelType,
+        asset: LocalModelAsset,
         status: ModelStatus,
         markExistingAsOld: Boolean
     ) {
         transactionProvider.runInTransaction {
-            // First, check if there's an existing CURRENT model for this type
+            // If we are setting a CURRENT model and want to mark the existing one as OLD,
+            // we must target the model currently assigned to this slot (modelType).
             if (status == ModelStatus.CURRENT && markExistingAsOld) {
-                val existingCurrent = modelsDao.getModelEntityByStatus(config.modelType, ModelStatus.CURRENT)
-                if (existingCurrent != null) {
-                    modelsDao.upsert(
-                        existingCurrent.copy(modelStatus = ModelStatus.OLD)
-                    )
-                    logger.debug("ModelRegistry", "Marked existing model as OLD: ${existingCurrent.displayName}")
+                val currentDefault = defaultModelsDao.getDefault(modelType)
+                if (currentDefault?.localConfigId != null) {
+                    val currentConfig = configsDao.getById(currentDefault.localConfigId)
+                    if (currentConfig != null) {
+                        val currentModel = modelsDao.getById(currentConfig.localModelId)
+                        if (currentModel != null && currentModel.sha256 != asset.metadata.sha256) {
+                            // Only demote if the model is not shared with another slot.
+                            // We check if any other slot still points to a config on this same model.
+                            val otherDefaults = defaultModelsDao.getAll().filter { it.modelType != modelType }
+                            val isShared = otherDefaults.any { other ->
+                                if (other.localConfigId != null) {
+                                    val otherConfig = configsDao.getById(other.localConfigId)
+                                    otherConfig?.localModelId == currentModel.id
+                                } else false
+                            }
+
+                            if (!isShared) {
+                                modelsDao.upsert(currentModel.copy(modelStatus = ModelStatus.OLD))
+                                logger.debug("ModelRegistry", "Demoted ${currentModel.huggingFaceModelName} to OLD for slot $modelType")
+                            }
+                        }
+                    }
                 }
             }
 
-            // Ensure a default is configured for this model type
-            val currentDefault = defaultModelsDao.getDefault(config.modelType)
-            if (currentDefault == null) {
-                logger.info("ModelRegistry", "First time registration for ${config.modelType}. Initializing default to ON_DEVICE.")
-                defaultModelsDao.upsert(
-                    DefaultModelEntity(
-                        modelType = config.modelType,
-                        source = ModelSource.ON_DEVICE
+            val existingModel = modelsDao.getBySha256(asset.metadata.sha256)
+            val modelId = if (existingModel != null) {
+                 if (existingModel.modelStatus != status) {
+                     modelsDao.upsert(existingModel.copy(modelStatus = status))
+                 }
+                 existingModel.id
+            } else {
+                 modelsDao.upsert(
+                    LocalModelEntity(
+                        modelFileFormat = asset.metadata.modelFileFormat,
+                        huggingFaceModelName = asset.metadata.huggingFaceModelName,
+                        remoteFilename = asset.metadata.remoteFileName,
+                        localFilename = asset.metadata.localFileName,
+                        sha256 = asset.metadata.sha256,
+                        sizeInBytes = asset.metadata.sizeInBytes,
+                        visionCapable = asset.metadata.visionCapable,
+                        modelStatus = status,
+                        thinkingEnabled = asset.configurations.any { it.thinkingEnabled },
+                        isVision = modelType == ModelType.VISION
                     )
-                )
+                 )
             }
 
-            // Insert or update the new model with the specified status
-            logger.debug("ModelRegistry", "Saving model ${config.modelType} with ${status} status")
-            modelsDao.upsert(
-                ModelEntity(
-                    modelType = config.modelType,
-                    modelStatus = status,
-                    remoteFilename = config.metadata.localFileName,
-                    huggingFaceModelName = config.metadata.huggingFaceModelName,
-                    displayName = config.metadata.displayName,
-                    modelFileFormat = config.metadata.modelFileFormat,
-                    sha256 = config.metadata.sha256,
-                    sizeInBytes = config.metadata.sizeInBytes,
-                    temperature = config.tunings.temperature,
-                    topK = config.tunings.topK,
-                    topP = config.tunings.topP,
-                    minP = config.tunings.minP,
-                    maxTokens = config.tunings.maxTokens,
-                    contextWindow = config.tunings.contextWindow,
-                    thinkingEnabled = config.tunings.thinkingEnabled,
-                    systemPrompt = config.persona.systemPrompt,
-                    repetitionPenalty = config.tunings.repetitionPenalty
+            var registeredConfigId: Long? = null
+            for (config in asset.configurations) {
+                // Determine the correct ID to use (if it already exists, use its ID so we update the correct row instead of inserting)
+                val existingConfig = configsDao.getAllForAsset(modelId).find { it.displayName == config.displayName }
+                val configIdToUse = existingConfig?.id ?: config.id
+                
+                var configId = configsDao.upsert(
+                    LocalModelConfigurationEntity(
+                        id = configIdToUse,
+                        localModelId = modelId,
+                        displayName = config.displayName,
+                        temperature = config.temperature,
+                        topK = config.topK ?: 40,
+                        topP = config.topP,
+                        minP = config.minP,
+                        repetitionPenalty = config.repetitionPenalty,
+                        maxTokens = config.maxTokens,
+                        contextWindow = config.contextWindow,
+                        thinkingEnabled = config.thinkingEnabled,
+                        systemPrompt = config.systemPrompt,
+                        isSystemPreset = config.isSystemPreset
+                    )
                 )
-            )
+                
+                // Room's @Upsert returns -1 when it falls back to an UPDATE on conflict
+                if (configId == -1L && existingConfig != null) {
+                    configId = existingConfig.id
+                }
+                
+                if (registeredConfigId == null) registeredConfigId = configId
+            }
 
-            // Update cache inside the transaction for atomicity
-            updateCache(config)
+            if (registeredConfigId == null && asset.configurations.isNotEmpty()) {
+                registeredConfigId = configsDao.getAllForAsset(modelId).firstOrNull()?.id
+            }
+
+            if (registeredConfigId != null) {
+                defaultModelsDao.upsert(DefaultModelEntity(modelType, registeredConfigId, null))
+            }
         }
     }
 
     override suspend fun clearAll() {
-        modelsDao.deleteAll()
-        clearCache()
+        val defaults = defaultModelsDao.getAll()
+        defaults.forEach { defaultModelsDao.delete(it.modelType) }
+        val allModels = modelsDao.getAllCurrent()
+        allModels.forEach { modelsDao.deleteById(it.id) }
     }
 
     override suspend fun clearOld() {
-        modelsDao.deleteAllOld()
-        logger.debug("ModelRegistry", "Cleared all OLD entries")
+        modelsDao.deleteOld()
+        logger.debug("ModelRegistry", "Cleared all OLD entries from database")
     }
 
-    override suspend fun getModelsPreferringOld(): List<ModelConfiguration> {
-        val entities = modelsDao.getModelsByStatuses(listOf(ModelStatus.OLD, ModelStatus.CURRENT))
-        val grouped = entities.groupBy { it.modelType }
-
-        return ModelType.entries.mapNotNull { modelType ->
-            grouped[modelType]?.let { group ->
-                val bestEntity = group.find { it.modelStatus == ModelStatus.OLD }
-                    ?: group.find { it.modelStatus == ModelStatus.CURRENT }
-
-                bestEntity?.let { entityToModelConfiguration(it) }
-            }
-        }
-    }
-
-    private fun entityToModelConfiguration(entity: ModelEntity): ModelConfiguration {
-        return ModelConfiguration(
-            modelType = entity.modelType,
-            metadata = ModelConfiguration.Metadata(
-                huggingFaceModelName = entity.huggingFaceModelName,
-                remoteFileName = entity.remoteFilename,
-                localFileName = entity.remoteFilename, // Save as-is
-                displayName = entity.displayName,
-                sha256 = entity.sha256,
-                sizeInBytes = entity.sizeInBytes,
-                modelFileFormat = entity.modelFileFormat
-            ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = entity.temperature,
-                topK = entity.topK,
-                topP = entity.topP,
-                minP = entity.minP,
-                repetitionPenalty = entity.repetitionPenalty,
-                maxTokens = entity.maxTokens,
-                contextWindow = entity.contextWindow,
-                thinkingEnabled = entity.thinkingEnabled
-            ),
-            persona = ModelConfiguration.Persona(
-                systemPrompt = entity.systemPrompt ?: ""
+    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long {
+        return modelsDao.upsert(
+            LocalModelEntity(
+                id = metadata.id,
+                modelFileFormat = metadata.modelFileFormat,
+                huggingFaceModelName = metadata.huggingFaceModelName,
+                remoteFilename = metadata.remoteFileName,
+                localFilename = metadata.localFileName,
+                sha256 = metadata.sha256,
+                sizeInBytes = metadata.sizeInBytes,
+                visionCapable = metadata.visionCapable,
+                modelStatus = ModelStatus.CURRENT
             )
         )
+    }
+
+    override suspend fun deleteLocalModelMetadata(id: Long) {
+        modelsDao.deleteById(id)
+    }
+
+    override suspend fun saveConfiguration(config: LocalModelConfiguration): Long {
+        return configsDao.upsert(
+            LocalModelConfigurationEntity(
+                id = config.id,
+                localModelId = config.localModelId,
+                displayName = config.displayName,
+                temperature = config.temperature,
+                topK = config.topK ?: 40,
+                topP = config.topP,
+                minP = config.minP,
+                repetitionPenalty = config.repetitionPenalty,
+                maxTokens = config.maxTokens,
+                contextWindow = config.contextWindow,
+                thinkingEnabled = config.thinkingEnabled,
+                systemPrompt = config.systemPrompt,
+                isSystemPreset = config.isSystemPreset
+            )
+        )
+    }
+
+    override suspend fun deleteConfiguration(id: Long) {
+        configsDao.deleteById(id)
+    }
+
+    private suspend fun loadAsset(modelId: Long): LocalModelAsset? {
+        val modelEntity = modelsDao.getById(modelId) ?: return null
+        val configEntities = configsDao.getAllForAsset(modelId)
+        return LocalModelAsset(
+            metadata = LocalModelMetadata(
+                id = modelEntity.id,
+                huggingFaceModelName = modelEntity.huggingFaceModelName,
+                remoteFileName = modelEntity.remoteFilename,
+                localFileName = modelEntity.localFilename,
+                sha256 = modelEntity.sha256,
+                sizeInBytes = modelEntity.sizeInBytes,
+                modelFileFormat = modelEntity.modelFileFormat,
+                visionCapable = modelEntity.visionCapable
+            ),
+            configurations = configEntities.map { entityToConfiguration(it) }
+        )
+    }
+
+    private fun entityToConfiguration(entity: LocalModelConfigurationEntity): LocalModelConfiguration {
+        return LocalModelConfiguration(
+            id = entity.id,
+            localModelId = entity.localModelId,
+            displayName = entity.displayName,
+            temperature = entity.temperature,
+            topK = entity.topK,
+            topP = entity.topP,
+            minP = entity.minP,
+            repetitionPenalty = entity.repetitionPenalty,
+            maxTokens = entity.maxTokens,
+            contextWindow = entity.contextWindow,
+            thinkingEnabled = entity.thinkingEnabled,
+            systemPrompt = entity.systemPrompt ?: "",
+            isSystemPreset = entity.isSystemPreset
+        )
+    }
+
+    override suspend fun getSoftDeletedModels(): List<LocalModelAsset> {
+        // Returns LOCALMODEL rows that are CURRENT but have zero configurations.
+        // These are models that were downloaded but soft-deleted (configs hard-deleted).
+        return modelsDao.getSoftDeletedModels().mapNotNull { loadAsset(it.id) }
+    }
+
+    override suspend fun reuseModelForRedownload(modelId: Long, newAsset: LocalModelAsset): Long {
+        // Reuse existing LocalModelEntity row for re-download.
+        // The entity should already exist (soft-deleted state).
+        // We update the metadata to reflect the new asset and create a new config.
+        val existingEntity = modelsDao.getById(modelId)
+            ?: throw IllegalStateException("Model $modelId not found for reuse")
+
+        // Update the entity with the new asset metadata (same ID, new sha256/size/etc.)
+        val updatedEntity = existingEntity.copy(
+            modelFileFormat = newAsset.metadata.modelFileFormat,
+            huggingFaceModelName = newAsset.metadata.huggingFaceModelName,
+            remoteFilename = newAsset.metadata.remoteFileName,
+            localFilename = newAsset.metadata.localFileName,
+            sha256 = newAsset.metadata.sha256,
+            sizeInBytes = newAsset.metadata.sizeInBytes,
+            modelStatus = ModelStatus.CURRENT
+        )
+        modelsDao.upsert(updatedEntity)
+
+        // Create new configuration(s) with isSystemPreset=true for each config in the new asset
+        // Use the first config's modelType to determine which DefaultModelEntity to create/update
+        val firstConfig = newAsset.configurations.firstOrNull()
+            ?: throw IllegalStateException("Asset must have at least one configuration")
+
+        val modelType = ModelType.entries.find {
+            newAsset.metadata.huggingFaceModelName.contains(it.name, ignoreCase = true)
+        } ?: ModelType.FAST
+
+        // Determine which ModelType this asset represents based on DefaultModelEntity
+        // Check if there's an existing DefaultModelEntity pointing to a config on this model
+        val existingDefaults = defaultModelsDao.getAll()
+        val existingDefault = existingDefaults.find { default ->
+            val config = configsDao.getById(default.localConfigId ?: -1)
+            config?.localModelId == modelId
+        }
+        val targetModelType = existingDefault?.modelType ?: modelType
+
+        // Save the new configs and find/create the primary config
+        var primaryConfigId: Long? = null
+        for (config in newAsset.configurations) {
+            val existingConfig = configsDao.getAllForAsset(modelId).find { it.displayName == config.displayName }
+            val configIdToUse = existingConfig?.id ?: 0L
+            
+            var configId = configsDao.upsert(
+                LocalModelConfigurationEntity(
+                    id = configIdToUse,
+                    localModelId = modelId,
+                    displayName = config.displayName,
+                    temperature = config.temperature,
+                    topK = config.topK ?: 40,
+                    topP = config.topP,
+                    minP = config.minP,
+                    repetitionPenalty = config.repetitionPenalty,
+                    maxTokens = config.maxTokens,
+                    contextWindow = config.contextWindow,
+                    thinkingEnabled = config.thinkingEnabled,
+                    systemPrompt = config.systemPrompt,
+                    isSystemPreset = true // Always true for re-downloaded configs
+                )
+            )
+            
+            if (configId == -1L && existingConfig != null) {
+                configId = existingConfig.id
+            }
+            
+            if (primaryConfigId == null) {
+                primaryConfigId = configId
+            }
+        }
+
+        // Update or create DefaultModelEntity for this modelType
+        if (primaryConfigId != null) {
+            defaultModelsDao.upsert(
+                DefaultModelEntity(
+                    modelType = targetModelType,
+                    localConfigId = primaryConfigId,
+                    apiConfigId = null
+                )
+            )
+        }
+
+        return modelId
+    }
+
+    override suspend fun getAssetById(id: Long): LocalModelAsset? {
+        return loadAsset(id)
     }
 }

@@ -1,71 +1,59 @@
 package com.browntowndev.pocketcrew.feature.settings
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipAnchorPosition
-import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberTooltipState
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import java.util.Locale
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
+import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
+import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import kotlinx.coroutines.launch
 
 @Composable
 fun ModelConfigurationRoute(
@@ -75,396 +63,157 @@ fun ModelConfigurationRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(modelType) {
-        viewModel.onSelectModelType(modelType)
-    }
-
-    val handleBack: () -> Unit = {
-        viewModel.onClearSelectedModel()
-        onNavigateBack()
-    }
-
     ModelConfigurationScreen(
-        modelType = modelType,
         uiState = uiState,
-        onNavigateBack = handleBack,
-        onHuggingFaceModelNameChange = viewModel::onHuggingFaceModelNameChange,
-        onTemperatureChange = viewModel::onTemperatureChange,
-        onTopKChange = viewModel::onTopKChange,
-        onTopPChange = viewModel::onTopPChange,
-        onMaxTokensChange = viewModel::onMaxTokensChange,
-        onContextWindowChange = viewModel::onContextWindowChange,
-        onSave = {
-            viewModel.onSaveModelConfig(onSuccess = {
-                viewModel.onClearSelectedModel()
-                onNavigateBack()
-            })
-        },
+        onNavigateBack = onNavigateBack,
         onSetDefaultModel = viewModel::onSetDefaultModel,
+        onShowAssignmentDialog = viewModel::onShowAssignmentDialog
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelConfigurationScreen(
-    modelType: ModelType,
     uiState: SettingsUiState,
     onNavigateBack: () -> Unit,
-    onHuggingFaceModelNameChange: (String) -> Unit,
-    onTemperatureChange: (Double) -> Unit,
-    onTopKChange: (Int) -> Unit,
-    onTopPChange: (Double) -> Unit,
-    onMaxTokensChange: (String) -> Unit,
-    onContextWindowChange: (String) -> Unit,
-    onSave: () -> Unit,
-    onSetDefaultModel: (ModelType, ModelSource, Long?) -> Unit,
+    onSetDefaultModel: (ModelType, Long?, Long?) -> Unit,
+    onShowAssignmentDialog: (Boolean, ModelType?) -> Unit
 ) {
-    val config = uiState.selectedModelConfig
-    val assignment = uiState.defaultAssignments.find { it.modelType == modelType }
-    var huggingFaceDropdownExpanded by remember { mutableStateOf(false) }
-    var apiDropdownExpanded by remember { mutableStateOf(false) }
-    val scrollState = rememberScrollState()
-
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        text = modelType.displayName(),
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+                title = { Text("Model Role Assignments", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Go back")
                     }
                 }
             )
         }
-    ) { innerPadding ->
-        Column(
+    ) { padding ->
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(padding)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            HorizontalDivider()
+            val generalChatTypes = listOf(ModelType.FAST, ModelType.THINKING, ModelType.VISION)
+            val crewModeTypes = listOf(ModelType.DRAFT_ONE, ModelType.DRAFT_TWO, ModelType.MAIN, ModelType.FINAL_SYNTHESIS)
 
-            if (assignment != null) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(scrollState)
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Text(
-                        text = "Processing Engine",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+            item {
+                DefaultAssignmentsCard(
+                    title = "General Chat",
+                    assignments = uiState.defaultAssignments.filter { it.modelType in generalChatTypes },
+                    onEditAssignment = { onShowAssignmentDialog(true, it) }
+                )
+            }
+            item {
+                DefaultAssignmentsCard(
+                    title = "Crew Mode",
+                    assignments = uiState.defaultAssignments.filter { it.modelType in crewModeTypes },
+                    onEditAssignment = { onShowAssignmentDialog(true, it) }
+                )
+            }
+            item { Spacer(modifier = Modifier.height(24.dp)) }
+        }
 
-                    SingleChoiceSegmentedButtonRow(
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        SegmentedButton(
-                            selected = assignment.source == ModelSource.ON_DEVICE,
-                            onClick = { onSetDefaultModel(modelType, ModelSource.ON_DEVICE, null) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2)
-                        ) {
-                            Text("On-Device")
-                        }
-                        SegmentedButton(
-                            selected = assignment.source == ModelSource.API,
-                            onClick = {
-                                if (assignment.source != ModelSource.API) {
-                                    uiState.apiModels.firstOrNull()?.id?.let { apiId ->
-                                        onSetDefaultModel(modelType, ModelSource.API, apiId)
-                                    }
-                                }
-                            },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            enabled = uiState.apiModels.isNotEmpty()
-                        ) {
-                            Text("API (BYOK)")
-                        }
-                    }
-
-                    if (assignment.source == ModelSource.ON_DEVICE) {
-                        if (config != null) {
-                            Text(
-                                text = "HuggingFace Model",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-
-                            ExposedDropdownMenuBox(
-                                expanded = huggingFaceDropdownExpanded,
-                                onExpandedChange = { huggingFaceDropdownExpanded = it }
-                            ) {
-                                OutlinedTextField(
-                                    value = config.displayName,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = huggingFaceDropdownExpanded) },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                                    )
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = huggingFaceDropdownExpanded,
-                                    onDismissRequest = { huggingFaceDropdownExpanded = false }
-                                ) {
-                                    uiState.availableHuggingFaceModels.forEach { availableConfig ->
-                                        DropdownMenuItem(
-                                            text = { Text(availableConfig.displayName) },
-                                            onClick = {
-                                                onHuggingFaceModelNameChange(availableConfig.huggingFaceModelName)
-                                                huggingFaceDropdownExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-
-                            var advancedExpanded by remember { mutableStateOf(false) }
-                            val rotation by animateFloatAsState(if (advancedExpanded) 180f else 0f)
-
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { advancedExpanded = !advancedExpanded }
-                                        .padding(vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        text = "Advanced Configurations",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Default.KeyboardArrowDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.rotate(rotation),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-
-                                if (advancedExpanded) {
-                                    Column(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            LabelWithInfo(
-                                                label = "Temperature: ${String.format(Locale.ROOT, "%.2f", config.temperature)}",
-                                                infoText = "Controls randomness: Higher values (e.g., 1.0) make output more creative, lower values (e.g., 0.2) make it more focused and deterministic."
-                                            )
-                                            Slider(
-                                                value = config.temperature.toFloat(),
-                                                onValueChange = { onTemperatureChange(it.toDouble()) },
-                                                valueRange = 0f..2f
-                                            )
-                                        }
-
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            LabelWithInfo(
-                                                label = "Top K: ${config.topK}",
-                                                infoText = "Limits the model to the top K most likely next tokens. Reduces the chance of low-probability 'garbage' tokens."
-                                            )
-                                            Slider(
-                                                value = config.topK.toFloat(),
-                                                onValueChange = { onTopKChange(it.toInt()) },
-                                                valueRange = 1f..100f
-                                            )
-                                        }
-
-                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            LabelWithInfo(
-                                                label = "Top P: ${String.format(Locale.ROOT, "%.2f", config.topP)}",
-                                                infoText = "Nucleus sampling: Limits the model to a subset of tokens whose cumulative probability is P. Another way to control diversity."
-                                            )
-                                            Slider(
-                                                value = config.topP.toFloat(),
-                                                onValueChange = { onTopPChange(it.toDouble()) },
-                                                valueRange = 0f..1f
-                                            )
-                                        }
-
-                                        OutlinedTextField(
-                                            value = config.maxTokens,
-                                            onValueChange = { newValue ->
-                                                onMaxTokensChange(newValue)
-                                            },
-                                            label = {
-                                                LabelWithInfo(
-                                                    label = "Max Tokens",
-                                                    infoText = "The maximum number of tokens the model can generate in a single response.",
-                                                    showValue = false
-                                                )
-                                            },
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(12.dp),
-                                            colors = OutlinedTextFieldDefaults.colors(
-                                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                                            )
-                                        )
-
-                                        OutlinedTextField(
-                                            value = config.contextWindow,
-                                            onValueChange = { newValue ->
-                                                onContextWindowChange(newValue)
-                                            },
-                                            label = {
-                                                LabelWithInfo(
-                                                    label = "Context Window",
-                                                    infoText = "The total number of tokens (input + output) the model can process at once. Larger windows allow for longer conversations.",
-                                                    showValue = false
-                                                )
-                                            },
-                                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(12.dp),
-                                            colors = OutlinedTextFieldDefaults.colors(
-                                                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                                focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                                unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
-                            // Fallback for when source is ON_DEVICE but config is missing
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = "On-device model not found",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text(
-                                        text = "Please ensure the model is downloaded.",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    } else if (assignment.source == ModelSource.API) {
-                        Text(
-                            text = "Custom API Model",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-
-                        if (uiState.apiModels.isEmpty()) {
-                            Text(
-                                text = "No custom models configured. Please add one in 'API & Models'.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.padding(vertical = 8.dp)
-                            )
-                        } else {
-                            ExposedDropdownMenuBox(
-                                expanded = apiDropdownExpanded,
-                                onExpandedChange = { apiDropdownExpanded = it }
-                            ) {
-                                val currentApiModelName =
-                                    assignment.currentModelName.takeIf { it.isNotBlank() }
-                                        ?: "Select Model"
-                                OutlinedTextField(
-                                    value = currentApiModelName,
-                                    onValueChange = {},
-                                    readOnly = true,
-                                    trailingIcon = {
-                                        ExposedDropdownMenuDefaults.TrailingIcon(
-                                            expanded = apiDropdownExpanded
-                                        )
-                                    },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                                    shape = RoundedCornerShape(12.dp),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                        focusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                        unfocusedBorderColor = MaterialTheme.colorScheme.outlineVariant,
-                                    )
-                                )
-                                ExposedDropdownMenu(
-                                    expanded = apiDropdownExpanded,
-                                    onDismissRequest = { apiDropdownExpanded = false }
-                                ) {
-                                    uiState.apiModels.forEach { apiModel ->
-                                        DropdownMenuItem(
-                                            text = { Text(apiModel.displayName) },
-                                            onClick = {
-                                                onSetDefaultModel(
-                                                    modelType,
-                                                    ModelSource.API,
-                                                    apiModel.id
-                                                )
-                                                apiDropdownExpanded = false
-                                            }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+        if (uiState.showAssignmentDialog && uiState.editingAssignmentSlot != null) {
+            val assignmentSlot = uiState.editingAssignmentSlot
+            val slotLabel = uiState.defaultAssignments
+                .find { it.modelType == assignmentSlot }
+                ?.displayLabel ?: assignmentSlot.name
+            
+            val isVisionSlot = assignmentSlot == ModelType.VISION
+            val localAssets = if (isVisionSlot) {
+                uiState.localModels.filter { it.visionCapable }
             } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "No configuration found for ${modelType.displayName()}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                uiState.localModels
+            }
+            val apiAssets = if (isVisionSlot) {
+                uiState.apiModels.filter { it.isVision }
+            } else {
+                uiState.apiModels
             }
 
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 0.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Button(
-                    onClick = onSave,
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth()
-                        .height(50.dp)
-                ) {
-                    Text("Save", fontWeight = FontWeight.Bold)
+            AssignmentSelectionBottomSheet(
+                slotLabel = slotLabel,
+                localAssets = localAssets,
+                apiAssets = apiAssets,
+                onDismiss = { onShowAssignmentDialog(false, null) },
+                onSelect = { localId, apiId -> 
+                    onSetDefaultModel(assignmentSlot, localId, apiId)
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DefaultAssignmentsCard(
+    title: String,
+    assignments: List<DefaultModelAssignmentUi>,
+    onEditAssignment: (ModelType) -> Unit
+) {
+    Column {
+        Text(
+            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                assignments.forEach { assignment ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = assignment.displayLabel,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                
+                                PersistentTooltip(description = assignment.modelType.description)
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = assignment.currentModelName,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            if (assignment.providerName != null) {
+                                Text(
+                                    text = "Provider: ${assignment.providerName}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        IconButton(onClick = { onEditAssignment(assignment.modelType) }) {
+                            Icon(
+                                imageVector = Icons.Default.Edit, 
+                                contentDescription = "Change default model for ${assignment.displayLabel}", 
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    if (assignment != assignments.last()) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    }
                 }
             }
         }
@@ -473,44 +222,226 @@ fun ModelConfigurationScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LabelWithInfo(
-    label: String,
-    infoText: String,
-    showValue: Boolean = true
+fun AssignmentSelectionBottomSheet(
+    slotLabel: String,
+    localAssets: List<LocalModelAssetUi>,
+    apiAssets: List<ApiModelAssetUi>,
+    onDismiss: () -> Unit,
+    onSelect: (localId: Long?, apiId: Long?) -> Unit
 ) {
-    val tooltipState = rememberTooltipState(isPersistent = true)
-    val scope = rememberCoroutineScope()
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    JumpFreeModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        AssignmentSelectionContent(
+            modifier = Modifier
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 32.dp),
+            slotLabel = slotLabel,
+            localAssets = localAssets,
+            apiAssets = apiAssets,
+            onDismiss = onDismiss,
+            onSelect = onSelect
+        )
+    }
+}
+
+@Composable
+fun AssignmentSelectionContent(
+    modifier: Modifier = Modifier,
+    slotLabel: String,
+    localAssets: List<LocalModelAssetUi>,
+    apiAssets: List<ApiModelAssetUi>,
+    onDismiss: () -> Unit,
+    onSelect: (localId: Long?, apiId: Long?) -> Unit
+) {
+    var selectedLocalId by remember { mutableStateOf<Long?>(null) }
+    var selectedApiId by remember { mutableStateOf<Long?>(null) }
+    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Local Models", "API Models")
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
     ) {
         Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = if (showValue) Modifier.widthIn(min = 100.dp) else Modifier
+            text = "Assign model to $slotLabel",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 16.dp)
         )
-        TooltipBox(
-            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                positioning = TooltipAnchorPosition.Above
-            ),
-            tooltip = {
-                PlainTooltip {
-                    Text(infoText)
-                }
-            },
-            state = tooltipState
+
+        TabRow(
+            selectedTabIndex = selectedTabIndex,
+            modifier = Modifier.padding(bottom = 16.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = "Info",
-                modifier = Modifier
-                    .size(16.dp)
-                    .clickable {
-                        scope.launch { tooltipState.show() }
-                    },
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            )
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTabIndex == index,
+                    onClick = { selectedTabIndex = index },
+                    text = {
+                        Text(
+                            text = title,
+                            color = if (selectedTabIndex == index) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal
+                        )
+                    }
+                )
+            }
         }
+
+        AnimatedContent(
+            targetState = selectedTabIndex,
+            label = "AssignmentSelectionTabTransition",
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
+        ) { tabIndex ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (tabIndex == 0) {
+                    if (localAssets.isNotEmpty()) {
+                        localAssets.forEach { asset ->
+                            items(asset.configurations) { config ->
+                                ModelCard(
+                                    title = asset.huggingFaceModelName,
+                                    subtitle = "Config: ${config.displayName}",
+                                    isSelected = selectedLocalId == config.id,
+                                    onClick = {
+                                        selectedLocalId = config.id
+                                        selectedApiId = null
+                                    }
+                                )
+                            }
+                        }
+                    } else {
+                        item {
+                            Text(
+                                text = "No local models available.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 16.dp)
+                            )
+                        }
+                    }
+                } else {
+                    if (apiAssets.isNotEmpty()) {
+                        apiAssets.forEach { asset ->
+                            items(asset.configurations) { config ->
+                                ModelCard(
+                                    title = asset.displayName,
+                                    subtitle = "Config: ${config.displayName}",
+                                    isSelected = selectedApiId == config.id,
+                                    onClick = {
+                                        selectedApiId = config.id
+                                        selectedLocalId = null
+                                    }
+                                )
+                            }
+                        }
+                    } else {
+                        item {
+                            Text(
+                                text = "No API providers configured.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(vertical = 16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("Cancel")
+            }
+            Button(
+                onClick = { onSelect(selectedLocalId, selectedApiId) },
+                enabled = selectedLocalId != null || selectedApiId != null,
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Text("Confirm")
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelCard(
+    title: String,
+    subtitle: String? = null,
+    isSelected: Boolean = false,
+    onClick: () -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(title) },
+        supportingContent = subtitle?.let { { Text(it) } },
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .let { m ->
+                if (isSelected) {
+                    m.border(
+                        width = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                } else {
+                    m
+                }
+            }
+            .clickable(onClick = onClick)
+            .defaultMinSize(minHeight = 48.dp)
+    )
+}
+
+// ==================== PREVIEWS ====================
+
+@Preview(showBackground = true, name = "Model Role Assignments Screen")
+@Composable
+fun PreviewModelConfigurationScreen() {
+    PocketCrewTheme {
+        ModelConfigurationScreen(
+            uiState = MockSettingsData.baseUiState,
+            onNavigateBack = {},
+            onSetDefaultModel = { _, _, _ -> },
+            onShowAssignmentDialog = { _, _ -> }
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Assignment Selection Bottom Sheet")
+@Composable
+fun PreviewAssignmentSelectionBottomSheet() {
+    PocketCrewTheme {
+        AssignmentSelectionContent(
+            modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 32.dp),
+            slotLabel = "Main",
+            localAssets = MockSettingsData.localModels,
+            apiAssets = MockSettingsData.apiModels,
+            onDismiss = {},
+            onSelect = { _, _ -> }
+        )
     }
 }

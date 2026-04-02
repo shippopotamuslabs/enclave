@@ -1,7 +1,9 @@
 package com.browntowndev.pocketcrew.core.data.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.config.RemoteModelConfig
@@ -12,11 +14,16 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 class ModelConfigFetcherImplTest {
 
@@ -47,7 +54,7 @@ class ModelConfigFetcherImplTest {
     }
 
     @Test
-    fun toModelConfigurations_preservesAllTuningsFields() = runTest {
+    fun toLocalModelAssets_preservesAllTuningsFields() = runTest {
         // Given
         val remoteConfigs = listOf(
             RemoteModelConfig(
@@ -70,21 +77,127 @@ class ModelConfigFetcherImplTest {
         )
 
         // When
-        val modelConfigs = fetcher.toModelConfigurations(remoteConfigs)
+        val modelAssets = fetcher.toLocalModelAssets(remoteConfigs)
 
         // Then
-        val config = modelConfigs.first()
-        assertEquals(0.8, config.tunings.temperature)
-        assertEquals(50, config.tunings.topK)
-        assertEquals(0.9, config.tunings.topP)
-        assertEquals(1.2, config.tunings.repetitionPenalty)
-        assertEquals(4096, config.tunings.maxTokens)
-        assertEquals(8192, config.tunings.contextWindow)
-        assertTrue(config.tunings.thinkingEnabled)
+        val asset = modelAssets[ModelType.MAIN]!!
+        val config = asset.configurations.first()
+        assertEquals(0.8, config.temperature)
+        assertEquals(50, config.topK)
+        assertEquals(0.9, config.topP)
+        assertEquals(1.2, config.repetitionPenalty)
+        assertEquals(4096, config.maxTokens)
+        assertEquals(8192, config.contextWindow)
+        assertTrue(config.thinkingEnabled)
     }
 
     @Test
-    fun toModelConfigurations_convertsAllModelTypes() = runTest {
+    fun toLocalModelAssets_preservesVisionCapable() = runTest {
+        // Given
+        val remoteConfigs = listOf(
+            RemoteModelConfig(
+                modelType = ModelType.VISION,
+                fileName = "vision.gguf",
+                huggingFaceModelName = "test/vision",
+                displayName = "Vision Model",
+                sha256 = "def456",
+                sizeInBytes = 2000000L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.95,
+                repetitionPenalty = 1.1,
+                maxTokens = 2048,
+                contextWindow = 4096,
+                systemPrompt = "You are a vision assistant.",
+                visionCapable = true
+            )
+        )
+
+        // When
+        val modelAssets = fetcher.toLocalModelAssets(remoteConfigs)
+
+        // Then
+        val asset = modelAssets[ModelType.VISION]!!
+        assertTrue(asset.metadata.visionCapable)
+    }
+
+    @Test
+    fun toLocalModelAssets_setsIsSystemPresetToTrue() = runTest {
+        // Given
+        val remoteConfigs = listOf(
+            RemoteModelConfig(
+                modelType = ModelType.MAIN,
+                fileName = "model.gguf",
+                huggingFaceModelName = "test/model",
+                displayName = "Test Model",
+                sha256 = "abc123",
+                sizeInBytes = 1000000L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                temperature = 0.8,
+                topK = 50,
+                topP = 0.9,
+                repetitionPenalty = 1.2,
+                maxTokens = 4096,
+                contextWindow = 8192,
+                systemPrompt = "You are helpful."
+            )
+        )
+
+        // When
+        val modelAssets = fetcher.toLocalModelAssets(remoteConfigs)
+
+        // Then
+        val asset = modelAssets[ModelType.MAIN]!!
+        val config = asset.configurations.first()
+        assertTrue(config.isSystemPreset)
+    }
+
+    @Test
+    fun fetchRemoteConfig_failsIfVisionSlotModelNotVisionCapable() = runTest {
+        // Given
+        val json = """
+            {
+                "vision": {
+                    "fileName": "not_vision.gguf",
+                    "displayName": "Not Vision Model",
+                    "sha256": "abc123",
+                    "sizeInBytes": 1000000,
+                    "temperature": 0.7,
+                    "topK": 40,
+                    "topP": 0.95,
+                    "minP": 0.05,
+                    "repetitionPenalty": 1.1,
+                    "maxTokens": 2048,
+                    "contextWindow": 4096,
+                    "systemPrompt": "Hi",
+                    "visionCapable": false
+                }
+            }
+        """.trimIndent()
+
+        val mockCall = mockk<okhttp3.Call>()
+        val response = Response.Builder()
+            .request(mockk())
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body(json.toResponseBody())
+            .build()
+
+        every { mockOkHttpClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns response
+
+        // When
+        val result = fetcher.fetchRemoteConfig()
+
+        // Then
+        assertTrue(result.isFailure)
+        assertEquals("Model configured for 'vision' slot must have 'visionCapable' set to true", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun toLocalModelAssets_convertsAllModelTypes() = runTest {
         // Given
         val remoteConfigs = listOf(
             RemoteModelConfig(
@@ -186,24 +299,24 @@ class ModelConfigFetcherImplTest {
         )
 
         // When
-        val modelConfigs = fetcher.toModelConfigurations(remoteConfigs)
+        val modelAssets = fetcher.toLocalModelAssets(remoteConfigs)
 
         // Then
-        assertEquals(6, modelConfigs.size)
+        assertEquals(6, modelAssets.size)
 
-        val mainConfig = modelConfigs.first { it.modelType == ModelType.MAIN }
-        val visionConfig = modelConfigs.first { it.modelType == ModelType.VISION }
-        val draftOneConfig = modelConfigs.first { it.modelType == ModelType.DRAFT_ONE }
-        val draftTwoConfig = modelConfigs.first { it.modelType == ModelType.DRAFT_TWO }
-        val fastConfig = modelConfigs.first { it.modelType == ModelType.FAST }
-        val finalSynthesisConfig = modelConfigs.first { it.modelType == ModelType.FINAL_SYNTHESIS }
+        val mainConfig = modelAssets[ModelType.MAIN]!!.configurations.first()
+        val visionConfig = modelAssets[ModelType.VISION]!!.configurations.first()
+        val draftOneConfig = modelAssets[ModelType.DRAFT_ONE]!!.configurations.first()
+        val draftTwoConfig = modelAssets[ModelType.DRAFT_TWO]!!.configurations.first()
+        val fastConfig = modelAssets[ModelType.FAST]!!.configurations.first()
+        val finalSynthesisConfig = modelAssets[ModelType.FINAL_SYNTHESIS]!!.configurations.first()
 
-        assertEquals(0.7, mainConfig.tunings.temperature)
-        assertEquals(0.7, visionConfig.tunings.temperature)
-        assertEquals(0.5, draftOneConfig.tunings.temperature)
-        assertEquals(0.5, draftTwoConfig.tunings.temperature)
-        assertEquals(0.3, fastConfig.tunings.temperature)
-        assertEquals(0.3, finalSynthesisConfig.tunings.temperature)
-        assertEquals("You are a final synthesizer.", finalSynthesisConfig.persona.systemPrompt)
+        assertEquals(0.7, mainConfig.temperature)
+        assertEquals(0.7, visionConfig.temperature)
+        assertEquals(0.5, draftOneConfig.temperature)
+        assertEquals(0.5, draftTwoConfig.temperature)
+        assertEquals(0.3, fastConfig.temperature)
+        assertEquals(0.3, finalSynthesisConfig.temperature)
+        assertEquals("You are a final synthesizer.", finalSynthesisConfig.systemPrompt)
     }
 }

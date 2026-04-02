@@ -81,6 +81,12 @@ dependencies {
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // Test dependencies - JUnit 5 (Jupiter)
+    testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.core.ktx)
+    testImplementation("androidx.test:core:1.5.0")
+    testImplementation("androidx.test.ext:junit:1.1.5")
+    testImplementation("androidx.room:room-testing:2.6.1")
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)

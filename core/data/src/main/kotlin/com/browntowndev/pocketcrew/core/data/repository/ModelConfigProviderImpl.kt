@@ -16,14 +16,12 @@ import javax.inject.Singleton
  * Handles Android-specific Context internally to construct the models directory path.
  *
  * @param context Android Context for accessing external files directory
- * @param modelConfig The data model configuration object
  */
 @Singleton
 class ModelConfigProviderImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val modelConfig: ModelConfig
+    @ApplicationContext private val context: Context
 ) : ModelConfigProvider {
 
     override val modelsDirectory: File
-        get() = File(context.getExternalFilesDir(null), modelConfig.MODELS_DIR)
+        get() = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
 }
