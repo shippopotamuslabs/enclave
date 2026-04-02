@@ -59,41 +59,132 @@ class ModelRegistryImplTest {
     }
 
     @Test
-    fun `setRegisteredModel preserves visionCapable metadata through persistence`() = runTest {
-        val asset = LocalModelAsset(
+    fun `setRegisteredModel demotes previous slot model to OLD`() = runTest {
+        val oldAsset = LocalModelAsset(
             metadata = LocalModelMetadata(
-                huggingFaceModelName = "model/vision",
-                remoteFileName = "vision.task",
-                localFileName = "vision.task",
-                sha256 = "vision-sha",
-                sizeInBytes = 2048L,
-                modelFileFormat = ModelFileFormat.TASK,
-                visionCapable = true
+                huggingFaceModelName = "old/model",
+                remoteFileName = "old.bin",
+                localFileName = "old.bin",
+                sha256 = "old-sha",
+                sizeInBytes = 1024L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                visionCapable = false
             ),
             configurations = listOf(
                 LocalModelConfiguration(
+                    displayName = "Old Config", 
                     localModelId = 0,
-                    displayName = "Vision",
                     maxTokens = 4096,
                     contextWindow = 4096,
                     temperature = 0.7,
-                    topP = 0.95,
+                    topP = 0.9,
                     topK = 40,
-                    repetitionPenalty = 1.1,
+                    repetitionPenalty = 1.0,
                     systemPrompt = ""
                 )
             )
         )
-
-        repository.setRegisteredModel(
-            modelType = ModelType.VISION,
-            asset = asset,
-            status = ModelStatus.CURRENT
+        
+        repository.setRegisteredModel(ModelType.FAST, oldAsset, ModelStatus.CURRENT)
+        
+        val newAsset = LocalModelAsset(
+            metadata = LocalModelMetadata(
+                huggingFaceModelName = "new/model",
+                remoteFileName = "new.bin",
+                localFileName = "new.bin",
+                sha256 = "new-sha",
+                sizeInBytes = 1024L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                visionCapable = false
+            ),
+            configurations = listOf(
+                LocalModelConfiguration(
+                    displayName = "New Config", 
+                    localModelId = 0,
+                    maxTokens = 4096,
+                    contextWindow = 4096,
+                    temperature = 0.7,
+                    topP = 0.9,
+                    topK = 40,
+                    repetitionPenalty = 1.0,
+                    systemPrompt = ""
+                )
+            )
         )
+        
+        repository.setRegisteredModel(ModelType.FAST, newAsset, ModelStatus.CURRENT, markExistingAsOld = true)
+        
+        // Verify old model is now OLD
+        val oldModelEntity = database.localModelsDao().getBySha256("old-sha")
+        assertNotNull(oldModelEntity)
+        assertTrue(oldModelEntity!!.modelStatus == ModelStatus.OLD)
+    }
 
-        val persisted = repository.getRegisteredAsset(ModelType.VISION)
-
-        assertNotNull(persisted)
-        assertTrue(persisted!!.metadata.visionCapable)
+    @Test
+    fun `clearOld deletes OLD models from database`() = runTest {
+        val oldAsset = LocalModelAsset(
+            metadata = LocalModelMetadata(
+                huggingFaceModelName = "old/model",
+                remoteFileName = "old.bin",
+                localFileName = "old.bin",
+                sha256 = "old-sha",
+                sizeInBytes = 1024L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                visionCapable = false
+            ),
+            configurations = listOf(
+                LocalModelConfiguration(
+                    displayName = "Old", 
+                    localModelId = 0,
+                    maxTokens = 4096,
+                    contextWindow = 4096,
+                    temperature = 0.7,
+                    topP = 0.9,
+                    topK = 40,
+                    repetitionPenalty = 1.0,
+                    systemPrompt = ""
+                )
+            )
+        )
+        // 1. Register as CURRENT
+        repository.setRegisteredModel(ModelType.FAST, oldAsset, ModelStatus.CURRENT)
+        
+        // 2. Replace with new asset, demoting old to OLD
+        val newAsset = LocalModelAsset(
+            metadata = LocalModelMetadata(
+                huggingFaceModelName = "new/model",
+                remoteFileName = "new.bin",
+                localFileName = "new.bin",
+                sha256 = "new-sha",
+                sizeInBytes = 1024L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                visionCapable = false
+            ),
+            configurations = listOf(
+                LocalModelConfiguration(
+                    displayName = "New", 
+                    localModelId = 0,
+                    maxTokens = 4096,
+                    contextWindow = 4096,
+                    temperature = 0.7,
+                    topP = 0.9,
+                    topK = 40,
+                    repetitionPenalty = 1.0,
+                    systemPrompt = ""
+                )
+            )
+        )
+        repository.setRegisteredModel(ModelType.FAST, newAsset, ModelStatus.CURRENT, markExistingAsOld = true)
+        
+        // Verify old exists as OLD
+        assertNotNull(database.localModelsDao().getBySha256("old-sha"))
+        assertTrue(database.localModelsDao().getBySha256("old-sha")!!.modelStatus == ModelStatus.OLD)
+        
+        // 3. Clear old
+        repository.clearOld()
+        
+        // 4. Verify deleted
+        val deletedModel = database.localModelsDao().getBySha256("old-sha")
+        assertTrue(deletedModel == null)
     }
 }

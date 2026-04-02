@@ -38,9 +38,13 @@ class InitializeModelsUseCase @Inject constructor(
      * This allows passing scan results downstream to avoid duplicate scanning.
      */
     private suspend fun checkModelsResult(): DownloadModelsResult {
-        // Get models preferring OLD if it exists (for handling failed downloads)
-        val currentModels = modelRegistry.getAssetsPreferringOld()
-        logPort.debug(TAG, "Current downloaded/fallback models: ${
+        // Get currently active models from registry
+        val currentModels = com.browntowndev.pocketcrew.domain.model.inference.ModelType.entries
+            .associateWith { modelRegistry.getRegisteredAsset(it) }
+            .filterValues { it != null }
+            .mapValues { it.value!! }
+
+        logPort.debug(TAG, "Current active models: ${
             currentModels.map { (type, asset) -> 
                 "$type: ${asset.metadata.huggingFaceModelName}"
             }
@@ -60,76 +64,57 @@ class InitializeModelsUseCase @Inject constructor(
 
         logPort.debug(TAG, "Fetched ${remoteConfigs.size} remote configs")
 
-        // Filter out soft-deleted models (those with 0 configs) before scanning.
-        // Soft-deleted models have their entity preserved but no configs.
-        // They should NOT be passed to CheckModelsUseCase because the missing file
-        // would trigger an unwanted re-download. Instead, they go to availableToRedownload.
-        val (activeModels, softDeletedModels) = currentModels
-            .filter { (_, asset) -> asset.configurations.isNotEmpty() }
-            .let { active -> 
-                val softDeleted = currentModels.filter { (type, asset) -> 
-                    asset.configurations.isEmpty() && !active.containsKey(type) 
-                }
-                active to softDeleted
-            }
+        // Source of truth for soft-deleted models is getSoftDeletedModels()
+        val softDeletedAssets = modelRegistry.getSoftDeletedModels()
         
-        if (softDeletedModels.isNotEmpty()) {
-            logPort.debug(TAG, "Found ${softDeletedModels.size} soft-deleted models available for re-download: ${
-                softDeletedModels.map { (type, asset) -> "$type: ${asset.metadata.huggingFaceModelName}" }
+        if (softDeletedAssets.isNotEmpty()) {
+            logPort.debug(TAG, "Found ${softDeletedAssets.size} soft-deleted models available for re-download: ${
+                softDeletedAssets.map { it.metadata.huggingFaceModelName }
             }")
         }
 
         // Exclude soft-deleted model types from remote configs so CheckModelsUseCase
-        // doesn't queue them for download. This fixes the pristine install bug (since 
-        // softDeletedModels will be empty in that case) while respecting user's explicit deletion.
-        val filteredRemoteConfigs = remoteConfigs.filterKeys { it !in softDeletedModels.keys }
+        // doesn't queue them for download. We identify soft-deleted model types
+        // by looking for remote configs that match a soft-deleted asset SHA.
+        val softDeletedShaSet = softDeletedAssets.mapTo(mutableSetOf()) { it.metadata.sha256 }
+        val filteredRemoteConfigs = remoteConfigs.filter { (_, remoteAsset) ->
+            remoteAsset.metadata.sha256 !in softDeletedShaSet
+        }
 
         // Check if models are ready using CheckModelsUseCase
         val modelsResult = checkModelsUseCase(
-            downloadedModels = activeModels,
+            downloadedModels = currentModels,
             expectedModels = filteredRemoteConfigs
         )
 
         // Include soft-deleted models in availableToRedownload ONLY if they are still on remote.
-        val availableSoftDeleted = softDeletedModels.filterKeys { it in remoteConfigs.keys }
-        val availableToRedownload = (modelsResult.availableToRedownload + availableSoftDeleted.values.toList())
+        val remoteShaSet = remoteConfigs.values.mapTo(mutableSetOf()) { it.metadata.sha256 }
+        val availableSoftDeleted = softDeletedAssets.filter { it.metadata.sha256 in remoteShaSet }
+        val availableToRedownload = (modelsResult.availableToRedownload + availableSoftDeleted)
             .distinctBy { it.metadata.sha256 }
 
-        // Now register each remote config in the registry with CURRENT status.
-        //
-        // CRITICAL: Only mark existing config as OLD if:
-        // 1. SHA256 changed, AND
-        // 2. No other model configuration still uses the OLD SHA256 (shared file case).
-        //    If another modelType still uses that SHA256, the file is still needed.
+        // Deferred Activation Strategy:
+        // 1. If remote SHA matches existing: Update registry immediately (tuning-only change).
+        // 2. If remote SHA differs: DO NOT update registry yet. Activation happens after download success.
         
-        // Build a map of SHA256 -> count of modelTypes using it
-        // This helps detect if a file is shared (used by multiple models)
-        val sha256UsageCount = currentModels.values
-            .groupBy { it.metadata.sha256 }
-            .mapValues { it.value.size }
-
         remoteConfigs.forEach { (modelType, remoteAsset) ->
             val existingAsset = currentModels[modelType]
-            val oldSha256 = existingAsset?.metadata?.sha256
-            val newSha256 = remoteAsset.metadata.sha256
+            val shaUnchanged = existingAsset != null &&
+                existingAsset.metadata.sha256 == remoteAsset.metadata.sha256
 
-            // SHA256 changed if the old config has a different SHA256 than remote
-            val sha256Changed = existingAsset == null ||
-                existingAsset.metadata.sha256 != newSha256
-
-            // Mark as OLD only if SHA256 changed AND no other model type
-            // still uses the old SHA256 (file would be orphaned otherwise)
-            val markAsOld = sha256Changed && oldSha256 != null &&
-                (sha256UsageCount[oldSha256] ?: 0) <= 1
-
-            modelRegistry.setRegisteredModel(
-                modelType = modelType,
-                asset = remoteAsset,
-                status = ModelStatus.CURRENT,
-                markExistingAsOld = markAsOld
-            )
+            if (shaUnchanged) {
+                // SHA is same, tuning might have changed. Safe to update immediately.
+                modelRegistry.setRegisteredModel(
+                    modelType = modelType,
+                    asset = remoteAsset,
+                    status = ModelStatus.CURRENT,
+                    markExistingAsOld = false // SHA same, file still in use
+                )
+                logPort.debug(TAG, "Applied tuning-only update for $modelType immediately")
+            } else {
+                logPort.debug(TAG, "Deferring registration for $modelType until download success")
+            }
         }
-        logPort.debug(TAG, "Registered ${remoteConfigs.size} remote configs in registry")
 
         // Initialize the orchestrator with the startup result
         modelDownloadOrchestrator.initializeWithStartupResult(modelsResult)

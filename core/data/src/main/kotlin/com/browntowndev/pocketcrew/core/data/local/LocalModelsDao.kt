@@ -13,6 +13,9 @@ interface LocalModelsDao {
     @Query("SELECT * FROM local_models WHERE sha256 = :sha256")
     suspend fun getBySha256(sha256: String): LocalModelEntity?
 
+    @Query("SELECT * FROM local_models")
+    suspend fun getAll(): List<LocalModelEntity>
+
     /**
      * Returns all active local models (CURRENT status) that have at least one configuration.
      * Excludes soft-deleted models (models with 0 configs).
@@ -54,4 +57,7 @@ interface LocalModelsDao {
 
     @Query("DELETE FROM local_models WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM local_models WHERE model_status = 'OLD'")
+    suspend fun deleteOld()
 }

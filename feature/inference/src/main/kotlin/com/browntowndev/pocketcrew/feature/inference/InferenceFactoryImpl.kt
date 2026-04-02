@@ -53,7 +53,7 @@ class InferenceFactoryImpl @Inject constructor(
     }
 
     private val cachedServices = mutableMapOf<ModelType, LlmInferencePort>()
-    private val cachedFileExtensions = mutableMapOf<ModelType, String?>()
+    private val cachedAssetIdentities = mutableMapOf<ModelType, String?>()
     private val mutex = Mutex()
 
     override suspend fun getInferenceService(modelType: ModelType): LlmInferencePort {
@@ -72,7 +72,7 @@ class InferenceFactoryImpl @Inject constructor(
                     oldService?.closeSession()
                     val newService = NoOpInferenceService(modelType)
                     cachedServices[modelType] = newService
-                    cachedFileExtensions[modelType] = null
+                    cachedAssetIdentities[modelType] = null
                     return@withLock newService
                 }
                 return@withLock oldService
@@ -80,16 +80,17 @@ class InferenceFactoryImpl @Inject constructor(
 
             val filename = asset.metadata.localFileName
             val extension = filename.substringAfterLast('.', "")
+            val assetIdentity = "${asset.metadata.sha256}-$extension"
 
             val currentService = cachedServices[modelType]
-            val currentExtension = cachedFileExtensions[modelType]
+            val currentIdentity = cachedAssetIdentities[modelType]
 
-            // If we already have a service and the extension hasn't changed, return it
-            if (currentService != null && currentExtension == extension && currentService !is NoOpInferenceService) {
+            // If we already have a service and the identity (SHA + extension) hasn't changed, return it
+            if (currentService != null && currentIdentity == assetIdentity && currentService !is NoOpInferenceService) {
                 return@withLock currentService
             }
 
-            // Implementation type needs to change (or it's the first time)
+            // Implementation type or model file changed (or it's the first time)
             currentService?.closeSession()
 
             val newService = when (extension) {
@@ -117,7 +118,7 @@ class InferenceFactoryImpl @Inject constructor(
             }
 
             cachedServices[modelType] = newService
-            cachedFileExtensions[modelType] = extension
+            cachedAssetIdentities[modelType] = assetIdentity
             newService
         }
     }

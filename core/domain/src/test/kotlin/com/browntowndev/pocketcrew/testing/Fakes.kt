@@ -38,6 +38,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 
@@ -94,6 +95,9 @@ fun createFakeLocalModelConfiguration(
 class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
     private val _downloadState = MutableStateFlow(DownloadState(status = DownloadStatus.CHECKING))
     override val downloadState: StateFlow<DownloadState> = _downloadState.asStateFlow()
+
+    private val _snackbarMessages = kotlinx.coroutines.flow.MutableSharedFlow<String>()
+    override val snackbarMessages: Flow<String> = _snackbarMessages.asSharedFlow()
 
     private val _speedTracker = MutableStateFlow<FakeSpeedTracker?>(null)
     override val speedTracker: DownloadSpeedTrackerPort
@@ -236,7 +240,6 @@ class FakeModelRegistry : ModelRegistryPort {
 
     override suspend fun clearAll() { clearModels() }
     override suspend fun clearOld() {}
-    override suspend fun getAssetsPreferringOld(): Map<ModelType, LocalModelAsset> = _assets.value
 
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long {
         // Find existing asset or create new one

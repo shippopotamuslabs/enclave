@@ -3,11 +3,13 @@ package com.browntowndev.pocketcrew.domain.port.download
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 interface ModelDownloadOrchestratorPort {
     val downloadState: StateFlow<DownloadState>
     val speedTracker: DownloadSpeedTrackerPort
+    val snackbarMessages: Flow<String>
 
     /**
      * Called exactly once during app startup after model checking completes.

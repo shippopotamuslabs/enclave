@@ -143,9 +143,42 @@ class InferenceFactoryImplTest {
     }
 
     @Test
-    fun `returns NoOpInferenceService when no asset is assigned`() = runTest {
-        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns null
-        val service = factory.getInferenceService(ModelType.FAST)
-        assertTrue(service is NoOpInferenceService)
+    fun `forces service recreation when same-extension model changes SHA`() = runTest {
+        val oldAsset = LocalModelAsset(
+            metadata = LocalModelMetadata(
+                id = 1L,
+                huggingFaceModelName = "test/llama-old",
+                remoteFileName = "model.gguf",
+                localFileName = "model.gguf",
+                sha256 = "old-sha",
+                sizeInBytes = 1000L,
+                modelFileFormat = ModelFileFormat.GGUF
+            ),
+            configurations = emptyList()
+        )
+        val newAsset = LocalModelAsset(
+            metadata = LocalModelMetadata(
+                id = 2L,
+                huggingFaceModelName = "test/llama-new",
+                remoteFileName = "model.gguf",
+                localFileName = "model.gguf",
+                sha256 = "new-sha",
+                sizeInBytes = 1000L,
+                modelFileFormat = ModelFileFormat.GGUF
+            ),
+            configurations = emptyList()
+        )
+
+        // Initial assignment is old SHA
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns oldAsset
+        val firstService = factory.getInferenceService(ModelType.FAST)
+        assertTrue(firstService is LlamaInferenceServiceImpl)
+
+        // Model file changes to new SHA (but same extension .gguf)
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns newAsset
+        val secondService = factory.getInferenceService(ModelType.FAST)
+        
+        // They should be DIFFERENT instances because SHA changed
+        assertTrue(firstService !== secondService)
     }
 }
