@@ -191,7 +191,9 @@ fun SettingsScreen(
                 onSelectApiModelAsset = onSelectApiModelAsset,
                 onSelectApiModelConfig = onSelectApiModelConfig,
                 onDeleteApiModelAsset = onDeleteApiModelAsset,
-                onDeleteApiModelConfig = onDeleteApiModelConfig
+                onDeleteApiModelConfig = onDeleteApiModelConfig,
+                onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
+                onDismissDeletionSafety = onDismissDeletionSafety
             )
         }
 

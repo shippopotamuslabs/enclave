@@ -84,10 +84,7 @@ object DataModule {
             context,
             PocketCrewDatabase::class.java,
             "pocket_crew_db"
-        ).addMigrations(
-            PocketCrewDatabase.MIGRATION_1_2,
-            PocketCrewDatabase.MIGRATION_2_3
-        ).fallbackToDestructiveMigration()
+        ).fallbackToDestructiveMigration(false)
         .build()
     }
 

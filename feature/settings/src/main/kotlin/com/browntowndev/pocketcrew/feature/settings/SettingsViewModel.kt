@@ -70,6 +70,8 @@ private data class TransientState(
     val showCannotDeleteLastModelAlert: Boolean = false,
     val pendingDeletionModelId: Long? = null,
     val pendingDeletionConfigId: Long? = null,
+    val pendingDeletionApiCredentialsId: Long? = null,
+    val pendingDeletionApiConfigId: Long? = null,
     val modelTypesNeedingReassignment: List<ModelType> = emptyList(),
     val reassignmentOptions: List<ReassignmentOptionUi> = emptyList(),
     // Assignment Selection Dialog
@@ -599,6 +601,9 @@ class SettingsViewModel @Inject constructor(
     fun onConfirmDeletionWithReassignment(replacementLocalConfigId: Long?, replacementApiConfigId: Long?) {
         val modelId = _transientState.value.pendingDeletionModelId
         val configId = _transientState.value.pendingDeletionConfigId
+        val apiCredentialsId = _transientState.value.pendingDeletionApiCredentialsId
+        val apiConfigId = _transientState.value.pendingDeletionApiConfigId
+
         if (_transientState.value.modelTypesNeedingReassignment.isNotEmpty() &&
             replacementLocalConfigId == null &&
             replacementApiConfigId == null
@@ -607,15 +612,24 @@ class SettingsViewModel @Inject constructor(
         }
 
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to complete deletion with reassignment", "Failed to delete")) {
-            if (modelId != null) {
-                deleteLocalModelUseCase(modelId, replacementLocalConfigId, replacementApiConfigId).getOrThrow()
-            } else if (configId != null) {
-                // If we are deleting a single config that is a default, we must reassign FIRST
-                val needingReassignment = _transientState.value.modelTypesNeedingReassignment
-                needingReassignment.forEach { modelType ->
-                    setDefaultModelUseCase(modelType, replacementLocalConfigId, replacementApiConfigId)
+            when {
+                modelId != null -> {
+                    deleteLocalModelUseCase(modelId, replacementLocalConfigId, replacementApiConfigId).getOrThrow()
                 }
-                deleteLocalModelConfigurationUseCase(configId).getOrThrow()
+                configId != null -> {
+                    // Reassign slots first
+                    val needingReassignment = _transientState.value.modelTypesNeedingReassignment
+                    needingReassignment.forEach { modelType ->
+                        setDefaultModelUseCase(modelType, replacementLocalConfigId, replacementApiConfigId)
+                    }
+                    deleteLocalModelConfigurationUseCase(configId).getOrThrow()
+                }
+                apiCredentialsId != null -> {
+                    deleteApiCredentialsUseCase(apiCredentialsId, replacementLocalConfigId, replacementApiConfigId).getOrThrow()
+                }
+                apiConfigId != null -> {
+                    deleteApiModelConfigurationUseCase(apiConfigId, replacementLocalConfigId, replacementApiConfigId).getOrThrow()
+                }
             }
             onDismissDeletionSafety()
         }
@@ -626,6 +640,8 @@ class SettingsViewModel @Inject constructor(
             showCannotDeleteLastModelAlert = false,
             pendingDeletionModelId = null,
             pendingDeletionConfigId = null,
+            pendingDeletionApiCredentialsId = null,
+            pendingDeletionApiConfigId = null,
             modelTypesNeedingReassignment = emptyList(),
             reassignmentOptions = emptyList()
         ) }
@@ -758,6 +774,8 @@ class SettingsViewModel @Inject constructor(
         apiAssets: List<ApiModelAsset>,
         excludeLocalModelId: Long? = null,
         excludeLocalConfigId: Long? = null,
+        excludeApiCredentialsId: Long? = null,
+        excludeApiConfigId: Long? = null,
         requireVisionCompatibility: Boolean
     ): List<ReassignmentOptionUi> {
         val options = mutableListOf<ReassignmentOptionUi>()
@@ -780,9 +798,11 @@ class SettingsViewModel @Inject constructor(
         }
 
         apiAssets.forEach { asset ->
+            if (asset.credentials.id == excludeApiCredentialsId) return@forEach
             if (requireVisionCompatibility && !asset.credentials.isVision) return@forEach
 
             asset.configurations.forEach { config ->
+                if (config.id == excludeApiConfigId) return@forEach
                 val displayName = if (asset.credentials.displayName == config.displayName) {
                     asset.credentials.displayName
                 } else {
@@ -833,15 +853,71 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onDeleteApiModelConfig(id: Long, onSuccess: () -> Unit) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete API configuration", "Failed to delete configuration")) {
-            deleteApiModelConfigurationUseCase(id).getOrThrow()
-            onSuccess()
+        viewModelScope.launch {
+            val needingReassignment = deleteApiModelConfigurationUseCase.getModelTypesNeedingReassignment(id)
+
+            if (needingReassignment.isNotEmpty()) {
+                val localAssets = localModelAssetsFlow.first()
+                val apiAssets = apiModelAssetsFlow.first()
+                val deletedAsset = apiAssets.find { asset ->
+                    asset.configurations.any { config -> config.id == id }
+                }
+                val requiresVisionCompatibility =
+                    ModelType.VISION in needingReassignment ||
+                        deletedAsset?.isVision == true
+                val options = buildReassignmentOptions(
+                    localAssets = localAssets,
+                    apiAssets = apiAssets,
+                    excludeApiConfigId = id,
+                    requireVisionCompatibility = requiresVisionCompatibility
+                )
+
+                _transientState.update { it.copy(
+                    pendingDeletionApiConfigId = id,
+                    modelTypesNeedingReassignment = needingReassignment,
+                    reassignmentOptions = options
+                ) }
+            } else {
+                viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete API configuration", "Failed to delete configuration")) {
+                    deleteApiModelConfigurationUseCase(id).getOrThrow()
+                    onSuccess()
+                }
+            }
         }
     }
 
     fun onDeleteApiModelAsset(id: Long) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete API provider", "Failed to delete provider")) {
-            deleteApiCredentialsUseCase(id)
+        viewModelScope.launch {
+            if (deleteApiCredentialsUseCase.isLastModel(id)) {
+                _transientState.update { it.copy(showCannotDeleteLastModelAlert = true) }
+                return@launch
+            }
+
+            val needingReassignment = deleteApiCredentialsUseCase.getModelTypesNeedingReassignment(id)
+            if (needingReassignment.isNotEmpty()) {
+                val localAssets = localModelAssetsFlow.first()
+                val apiAssets = apiModelAssetsFlow.first()
+                val deletedAsset = apiAssets.find { it.credentialsId == id }
+                val requiresVisionCompatibility =
+                    ModelType.VISION in needingReassignment ||
+                        deletedAsset?.isVision == true
+                val options = buildReassignmentOptions(
+                    localAssets = localAssets,
+                    apiAssets = apiAssets,
+                    excludeApiCredentialsId = id,
+                    requireVisionCompatibility = requiresVisionCompatibility
+                )
+
+                _transientState.update { it.copy(
+                    pendingDeletionApiCredentialsId = id,
+                    modelTypesNeedingReassignment = needingReassignment,
+                    reassignmentOptions = options
+                ) }
+            } else {
+                viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete API provider", "Failed to delete provider")) {
+                    deleteApiCredentialsUseCase(id).getOrThrow()
+                }
+            }
         }
     }
 
