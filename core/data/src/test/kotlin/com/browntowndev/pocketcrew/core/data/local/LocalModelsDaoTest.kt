@@ -14,8 +14,10 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class LocalModelsDaoTest {
     private lateinit var database: PocketCrewDatabase
     private lateinit var dao: LocalModelsDao
@@ -71,6 +73,7 @@ class LocalModelsDaoTest {
 
     @Test
     fun `observe only CURRENT models`() = runTest {
+        val configDao = database.localModelConfigurationsDao()
         val currentEntity = LocalModelEntity(
             modelFileFormat = ModelFileFormat.GGUF,
             huggingFaceModelName = "qwen",
@@ -89,8 +92,14 @@ class LocalModelsDaoTest {
             sizeInBytes = 200L,
             modelStatus = ModelStatus.OLD
         )
-        dao.upsert(currentEntity)
+        val currentId = dao.upsert(currentEntity)
         dao.upsert(oldEntity)
+        configDao.upsert(
+            LocalModelConfigurationEntity(
+                localModelId = currentId,
+                displayName = "Default"
+            )
+        )
         val currentList = dao.observeAllCurrent().first()
         assertEquals(1, currentList.size)
         assertEquals("sha1", currentList[0].sha256)

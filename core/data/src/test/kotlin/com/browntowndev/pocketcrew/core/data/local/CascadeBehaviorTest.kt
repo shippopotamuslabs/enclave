@@ -13,9 +13,11 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import android.database.sqlite.SQLiteConstraintException
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class CascadeBehaviorTest {
     private lateinit var database: PocketCrewDatabase
 

@@ -12,8 +12,10 @@ import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class ApiCredentialsDaoTest {
     private lateinit var database: PocketCrewDatabase
     private lateinit var dao: ApiCredentialsDao
@@ -78,14 +80,14 @@ class ApiCredentialsDaoTest {
             modelId = "gpt-4o",
             credentialAlias = "key1",
             displayName = "GPT-4o",
-            baseUrl = null
+            baseUrl = "https://api.openai.com/v1"
         )
         val entity2 = ApiCredentialsEntity(
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "key2",
             displayName = "GPT-4o Duplicate",
-            baseUrl = null
+            baseUrl = "https://api.openai.com/v1"
         )
         dao.upsert(entity1)
         dao.upsert(entity2)
