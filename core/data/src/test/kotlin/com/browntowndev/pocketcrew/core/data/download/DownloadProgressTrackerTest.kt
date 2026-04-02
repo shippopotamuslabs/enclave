@@ -1,5 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.download
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -9,7 +11,6 @@ import io.mockk.mockk
 import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -30,9 +31,9 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun initialize_setsInitialFileStates() {
-        val models = listOf(
-            createModelFile("main.litertlm", 1000L, sha256 = "sha256_main"),
-            createModelFile("vocab.bin", 500L, sha256 = "sha256_vocab")
+        val models = mapOf(
+            ModelType.MAIN to createModelFile("main.litertlm", 1000L, sha256 = "sha256_main"),
+            ModelType.FAST to createModelFile("vocab.bin", 500L, sha256 = "sha256_vocab")
         )
 
         tracker.initialize(models)
@@ -43,9 +44,9 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun initialize_mapsFilesBySha256() {
-        val models = listOf(
-            createModelFile("main.litertlm", 1000L, sha256 = "sha256_main"),
-            createModelFile("vocab.bin", 500L, sha256 = "sha256_vocab")
+        val models = mapOf(
+            ModelType.MAIN to createModelFile("main.litertlm", 1000L, sha256 = "sha256_main"),
+            ModelType.FAST to createModelFile("vocab.bin", 500L, sha256 = "sha256_vocab")
         )
 
         tracker.initialize(models)
@@ -58,9 +59,9 @@ class DownloadProgressTrackerTest {
     @Test
     fun initialize_combinesMultipleModelTypesWithSameSha256() {
         // Create models with same SHA256 but different model types (simulating shared files)
-        val models = listOf(
-            createModelFile("shared.gguf", 1000L, sha256 = "shared_sha256", modelType = ModelType.MAIN),
-            createModelFile("shared.gguf", 1000L, sha256 = "shared_sha256", modelType = ModelType.FAST)
+        val models = mapOf(
+            ModelType.MAIN to createModelFile("shared.gguf", 1000L, sha256 = "shared_sha256"),
+            ModelType.FAST to createModelFile("shared.gguf", 1000L, sha256 = "shared_sha256")
         )
 
         tracker.initialize(models)
@@ -77,9 +78,9 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun serializeToWorkData_includesAllModelTypesForSharedFile() {
-        val models = listOf(
-            createModelFile("shared.gguf", 1000L, sha256 = "shared_sha256", modelType = ModelType.MAIN),
-            createModelFile("shared.gguf", 1000L, sha256 = "shared_sha256", modelType = ModelType.FAST)
+        val models = mapOf(
+            ModelType.MAIN to createModelFile("shared.gguf", 1000L, sha256 = "shared_sha256"),
+            ModelType.FAST to createModelFile("shared.gguf", 1000L, sha256 = "shared_sha256")
         )
 
         tracker.initialize(models)
@@ -94,7 +95,7 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun updateFileState_changesFileStatus() {
-        tracker.initialize(listOf(createModelFile("main.litertlm", 1000L, sha256 = "sha256_main")))
+        tracker.initialize(mapOf(ModelType.MAIN to createModelFile("main.litertlm", 1000L, sha256 = "sha256_main")))
 
         tracker.updateFileState("sha256_main") { state ->
             state.copy(status = FileStatus.DOWNLOADING, bytesDownloaded = 500L)
@@ -107,7 +108,7 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun updateFileState_throwsForUnknownFile() {
-        tracker.initialize(listOf(createModelFile("main.litertlm", 1000L, sha256 = "sha256_main")))
+        tracker.initialize(mapOf(ModelType.MAIN to createModelFile("main.litertlm", 1000L, sha256 = "sha256_main")))
 
         val exception = Assertions.assertThrows(IllegalStateException::class.java) {
             tracker.updateFileState("unknown_sha256") { state ->
@@ -119,9 +120,9 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun computeOverallProgress_aggregatesMultipleFiles() {
-        tracker.initialize(listOf(
-            createModelFile("file1.litertlm", 1000L, sha256 = "sha256_file1"),
-            createModelFile("file2.litertlm", 1000L, sha256 = "sha256_file2")
+        tracker.initialize(mapOf(
+            ModelType.MAIN to createModelFile("file1.litertlm", 1000L, sha256 = "sha256_file1"),
+            ModelType.FAST to createModelFile("file2.litertlm", 1000L, sha256 = "sha256_file2")
         ))
 
         tracker.updateFileState("sha256_file1") { it.copy(status = FileStatus.COMPLETE, bytesDownloaded = 1000L) }
@@ -137,7 +138,7 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun computeOverallProgress_calculatesCorrectPercentage() {
-        tracker.initialize(listOf(createModelFile("main.litertlm", 1000L, sha256 = "sha256_main")))
+        tracker.initialize(mapOf(ModelType.MAIN to createModelFile("main.litertlm", 1000L, sha256 = "sha256_main")))
 
         tracker.updateFileState("sha256_main") { it.copy(bytesDownloaded = 250L) }
 
@@ -148,7 +149,7 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun computeOverallProgress_returnsZero_whenNoFiles() {
-        tracker.initialize(emptyList())
+        tracker.initialize(emptyMap())
 
         val snapshot = tracker.computeOverallProgress()
 
@@ -158,10 +159,10 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun getCompletedCount_returnsCorrectCount() {
-        tracker.initialize(listOf(
-            createModelFile("file1.litertlm", 1000L, sha256 = "sha256_file1"),
-            createModelFile("file2.litertlm", 1000L, sha256 = "sha256_file2"),
-            createModelFile("file3.litertlm", 1000L, sha256 = "sha256_file3")
+        tracker.initialize(mapOf(
+            ModelType.MAIN to createModelFile("file1.litertlm", 1000L, sha256 = "sha256_file1"),
+            ModelType.FAST to createModelFile("file2.litertlm", 1000L, sha256 = "sha256_file2"),
+            ModelType.VISION to createModelFile("file3.litertlm", 1000L, sha256 = "sha256_file3")
         ))
 
         tracker.updateFileState("sha256_file1") { it.copy(status = FileStatus.COMPLETE) }
@@ -172,7 +173,7 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun isAllComplete_returnsTrue_whenAllComplete() {
-        tracker.initialize(listOf(createModelFile("file1.litertlm", 1000L, sha256 = "sha256_file1")))
+        tracker.initialize(mapOf(ModelType.MAIN to createModelFile("file1.litertlm", 1000L, sha256 = "sha256_file1")))
 
         tracker.updateFileState("sha256_file1") { it.copy(status = FileStatus.COMPLETE) }
 
@@ -181,9 +182,9 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun isAllComplete_returnsFalse_whenNotAllComplete() {
-        tracker.initialize(listOf(
-            createModelFile("file1.litertlm", 1000L, sha256 = "sha256_file1"),
-            createModelFile("file2.litertlm", 1000L, sha256 = "sha256_file2")
+        tracker.initialize(mapOf(
+            ModelType.MAIN to createModelFile("file1.litertlm", 1000L, sha256 = "sha256_file1"),
+            ModelType.FAST to createModelFile("file2.litertlm", 1000L, sha256 = "sha256_file2")
         ))
 
         tracker.updateFileState("sha256_file1") { it.copy(status = FileStatus.COMPLETE) }
@@ -193,9 +194,9 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun getCurrentDownloadingFile_returnsDownloadingFile() {
-        tracker.initialize(listOf(
-            createModelFile("file1.litertlm", 1000L, sha256 = "sha256_file1"),
-            createModelFile("file2.litertlm", 1000L, sha256 = "sha256_file2")
+        tracker.initialize(mapOf(
+            ModelType.MAIN to createModelFile("file1.litertlm", 1000L, sha256 = "sha256_file1"),
+            ModelType.FAST to createModelFile("file2.litertlm", 1000L, sha256 = "sha256_file2")
         ))
 
         tracker.updateFileState("sha256_file2") { it.copy(status = FileStatus.DOWNLOADING) }
@@ -205,7 +206,7 @@ class DownloadProgressTrackerTest {
 
     @Test
     fun getCurrentDownloadingFile_returnsNull_whenNoneDownloading() {
-        tracker.initialize(listOf(createModelFile("file1.litertlm", 1000L, sha256 = "sha256_file1")))
+        tracker.initialize(mapOf(ModelType.MAIN to createModelFile("file1.litertlm", 1000L, sha256 = "sha256_file1")))
 
         tracker.updateFileState("sha256_file1") { it.copy(status = FileStatus.COMPLETE) }
 
@@ -230,10 +231,9 @@ class DownloadProgressTrackerTest {
         assertFalse(tracker.shouldLogTrace())
     }
 
-    private fun createModelFile(filename: String, sizeBytes: Long, sha256: String = "abc123", modelType: ModelType = ModelType.MAIN): ModelConfiguration {
-        return ModelConfiguration(
-            modelType = modelType,
-            metadata = ModelConfiguration.Metadata(
+    private fun createModelFile(filename: String, sizeBytes: Long, sha256: String = "abc123"): LocalModelAsset {
+        return LocalModelAsset(
+            metadata = LocalModelMetadata(
                 huggingFaceModelName = "model/name",
                 remoteFileName = filename,
                 localFileName = filename,
@@ -242,15 +242,7 @@ class DownloadProgressTrackerTest {
                 sizeInBytes = sizeBytes,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.0,
-                topK = 40,
-                topP = 0.95,
-                maxTokens = 2048,
-                contextWindow = 2048,
-                repetitionPenalty = 1.1
-            ),
-            persona = ModelConfiguration.Persona(systemPrompt = "You are helpful")
+            configurations = emptyList()
         )
     }
 }

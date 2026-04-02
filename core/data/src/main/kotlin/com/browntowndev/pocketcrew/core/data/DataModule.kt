@@ -1,4 +1,5 @@
 package com.browntowndev.pocketcrew.core.data
+
 import android.app.NotificationManager
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -19,11 +20,13 @@ import com.browntowndev.pocketcrew.core.data.download.ModelFileScanner
 import com.browntowndev.pocketcrew.core.data.download.WorkProgressParser
 import com.browntowndev.pocketcrew.core.data.download.remote.HttpFileDownloader
 import com.browntowndev.pocketcrew.core.data.download.remote.HuggingFaceModelUrlProvider
-import com.browntowndev.pocketcrew.core.data.local.ApiModelsDao
+import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
+import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
+import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
+import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
-import com.browntowndev.pocketcrew.core.data.local.ModelsDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
@@ -65,9 +68,9 @@ import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 import okhttp3.OkHttpClient
 
-
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 private val Context.pipelineDataStore: DataStore<Preferences> by preferencesDataStore(name = "pipeline_state")
+
 @Module
 @InstallIn(SingletonComponent::class)
 object DataModule {
@@ -91,10 +94,16 @@ object DataModule {
     fun provideMessageDao(database: PocketCrewDatabase): MessageDao = database.messageDao()
 
     @Provides
-    fun provideModelsDao(database: PocketCrewDatabase): ModelsDao = database.modelsDao()
+    fun provideLocalModelsDao(database: PocketCrewDatabase): LocalModelsDao = database.localModelsDao()
 
     @Provides
-    fun provideApiModelsDao(database: PocketCrewDatabase): ApiModelsDao = database.apiModelsDao()
+    fun provideLocalModelConfigurationsDao(database: PocketCrewDatabase): LocalModelConfigurationsDao = database.localModelConfigurationsDao()
+
+    @Provides
+    fun provideApiCredentialsDao(database: PocketCrewDatabase): ApiCredentialsDao = database.apiCredentialsDao()
+
+    @Provides
+    fun provideApiModelConfigurationsDao(database: PocketCrewDatabase): ApiModelConfigurationsDao = database.apiModelConfigurationsDao()
 
     @Provides
     fun provideDefaultModelsDao(database: PocketCrewDatabase): DefaultModelsDao = database.defaultModelsDao()

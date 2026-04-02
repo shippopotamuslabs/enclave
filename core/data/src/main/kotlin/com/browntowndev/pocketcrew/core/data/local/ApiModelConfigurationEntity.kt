@@ -2,35 +2,36 @@ package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
-import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 
-/**
- * Room entity for API model configurations.
- * API keys are NOT stored here — managed by ApiKeyManager via EncryptedSharedPreferences.
- */
-@Entity(tableName = "api_models")
-data class ApiModelEntity(
+@Entity(
+    tableName = "api_model_configurations",
+    foreignKeys = [
+        ForeignKey(
+            entity = ApiCredentialsEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["api_credentials_id"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
+    indices = [
+        Index(value = ["api_credentials_id", "display_name"], unique = true)
+    ]
+)
+data class ApiModelConfigurationEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
+
+    @ColumnInfo(name = "api_credentials_id")
+    val apiCredentialsId: Long,
 
     @ColumnInfo(name = "display_name")
     val displayName: String,
 
-    @ColumnInfo(name = "provider")
-    val provider: ApiProvider,
-
-    @ColumnInfo(name = "base_url")
-    val baseUrl: String? = null,
-
-    @ColumnInfo(name = "model_id")
-    val modelId: String,
-
-    @ColumnInfo(name = "is_vision")
-    val isVision: Boolean = false,
-
-    @ColumnInfo(name = "thinking_enabled")
-    val thinkingEnabled: Boolean = false,
+    @ColumnInfo(name = "custom_headers_and_params")
+    val customHeadersAndParams: String = "{}",
 
     @ColumnInfo(name = "max_tokens")
     val maxTokens: Int = 4096,
@@ -56,9 +57,6 @@ data class ApiModelEntity(
     @ColumnInfo(name = "stop_sequences")
     val stopSequences: String = "",
 
-    @ColumnInfo(name = "created_at")
-    val createdAt: Long = System.currentTimeMillis(),
-
     @ColumnInfo(name = "updated_at")
-    val updatedAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )

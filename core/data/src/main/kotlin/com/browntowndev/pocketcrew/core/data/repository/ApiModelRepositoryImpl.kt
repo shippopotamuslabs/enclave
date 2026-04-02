@@ -1,105 +1,119 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
-import com.browntowndev.pocketcrew.core.data.local.ApiModelEntity
-import com.browntowndev.pocketcrew.core.data.local.ApiModelsDao
+import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
+import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
+import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationEntity
+import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
+import com.browntowndev.pocketcrew.core.data.mapper.ApiModelMapper
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
-import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
-import org.json.JSONArray
 import javax.inject.Singleton
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
-/**
- * Implementation of ApiModelRepositoryPort.
- * Persists entity to Room and key to EncryptedSharedPreferences.
- */
 @Singleton
 class ApiModelRepositoryImpl @Inject constructor(
-    private val apiModelsDao: ApiModelsDao,
-    private val apiKeyManager: ApiKeyManager,
+    private val apiCredentialsDao: ApiCredentialsDao,
+    private val apiModelConfigurationsDao: ApiModelConfigurationsDao,
+    private val apiKeyManager: ApiKeyManager
 ) : ApiModelRepositoryPort {
 
-    override fun observeAll(): Flow<List<ApiModelConfig>> {
-        return apiModelsDao.observeAll().map { list -> list.map { it.toDomain() } }
-    }
-
-    override suspend fun getAll(): List<ApiModelConfig> = withContext(Dispatchers.IO) {
-        apiModelsDao.getAll().map { it.toDomain() }
-    }
-
-    override suspend fun getById(id: Long): ApiModelConfig? = withContext(Dispatchers.IO) {
-        apiModelsDao.getById(id)?.toDomain()
-    }
-
-    override suspend fun save(config: ApiModelConfig, apiKey: String): Long = withContext(Dispatchers.IO) {
-        val entityId = apiModelsDao.upsert(config.toEntity())
-        if (apiKey.isNotBlank()) {
-            apiKeyManager.save(entityId, apiKey)
+    override fun observeAllCredentials(): Flow<List<ApiCredentials>> =
+        apiCredentialsDao.observeAll().map { entities ->
+            entities.map { it.toDomain() }
         }
-        entityId
+
+    override suspend fun getAllCredentials(): List<ApiCredentials> =
+        apiCredentialsDao.getAll().map { it.toDomain() }
+
+    override suspend fun getCredentialsById(id: Long): ApiCredentials? =
+        apiCredentialsDao.getById(id)?.toDomain()
+
+    override suspend fun saveCredentials(credentials: ApiCredentials, apiKey: String): Long {
+        val entity = ApiCredentialsEntity(
+            id = credentials.id,
+            displayName = credentials.displayName,
+            provider = credentials.provider,
+            modelId = credentials.modelId,
+            baseUrl = credentials.baseUrl,
+            isVision = credentials.isVision,
+            credentialAlias = credentials.credentialAlias,
+            updatedAt = System.currentTimeMillis()
+        )
+        
+        val id = apiCredentialsDao.upsert(entity)
+        
+        if (apiKey.isNotBlank()) {
+            apiKeyManager.save(credentials.credentialAlias, apiKey)
+        }
+        
+        return id
     }
 
-    override suspend fun delete(id: Long) = withContext(Dispatchers.IO) {
-        apiModelsDao.deleteById(id)
-        apiKeyManager.delete(id) // Delete key after entity to ensure database consistency
+    override suspend fun deleteCredentials(id: Long) {
+        apiCredentialsDao.getById(id)?.let { entity ->
+            apiCredentialsDao.deleteById(id)
+            apiKeyManager.delete(entity.credentialAlias)
+        }
     }
-}
 
-internal fun ApiModelEntity.toDomain() = ApiModelConfig(
-    id = id,
-    displayName = displayName,
-    provider = provider,
-    modelId = modelId,
-    baseUrl = baseUrl,
-    isVision = isVision,
-    thinkingEnabled = thinkingEnabled,
-    maxTokens = maxTokens,
-    contextWindow = contextWindow,
-    temperature = temperature,
-    topP = topP,
-    topK = topK,
-    frequencyPenalty = frequencyPenalty,
-    presencePenalty = presencePenalty,
-    stopSequences = parseStopSequences(stopSequences),
-    createdAt = createdAt,
-)
+    override suspend fun getConfigurationsForCredentials(credentialsId: Long): List<ApiModelConfiguration> =
+        apiModelConfigurationsDao.getAllForCredentials(credentialsId).map { it.toDomain() }
 
-internal fun ApiModelConfig.toEntity() = ApiModelEntity(
-    id = id,
-    displayName = displayName,
-    provider = provider,
-    modelId = modelId,
-    baseUrl = baseUrl,
-    isVision = isVision,
-    thinkingEnabled = thinkingEnabled,
-    maxTokens = maxTokens,
-    contextWindow = contextWindow,
-    temperature = temperature,
-    topP = topP,
-    topK = topK,
-    frequencyPenalty = frequencyPenalty,
-    presencePenalty = presencePenalty,
-    stopSequences = serializeStopSequences(stopSequences),
-    createdAt = createdAt,
-    updatedAt = System.currentTimeMillis()
-)
+    override suspend fun getConfigurationById(id: Long): ApiModelConfiguration? =
+        apiModelConfigurationsDao.getById(id)?.toDomain()
 
-private fun parseStopSequences(jsonString: String): List<String> {
-    if (jsonString.isBlank()) return emptyList()
-    return try {
-        val array = JSONArray(jsonString)
-        List(array.length()) { array.getString(it) }
-    } catch (e: Exception) {
-        // Fallback for legacy format if any
-        if (jsonString.contains(";;;")) jsonString.split(";;;") else emptyList()
+    override suspend fun saveConfiguration(config: ApiModelConfiguration): Long {
+        val entity = ApiModelConfigurationEntity(
+            id = config.id,
+            apiCredentialsId = config.apiCredentialsId,
+            displayName = config.displayName,
+            maxTokens = config.maxTokens,
+            contextWindow = config.contextWindow,
+            temperature = config.temperature,
+            topP = config.topP,
+            topK = config.topK,
+            frequencyPenalty = config.frequencyPenalty,
+            presencePenalty = config.presencePenalty,
+            stopSequences = config.stopSequences.joinToString(","),
+            customHeadersAndParams = ApiModelMapper.serializeCustomHeadersAndParams(config.customHeadersAndParams)
+        )
+        return apiModelConfigurationsDao.upsert(entity)
     }
-}
 
-private fun serializeStopSequences(sequences: List<String>): String {
-    if (sequences.isEmpty()) return ""
-    return JSONArray(sequences).toString()
+    override suspend fun deleteConfiguration(id: Long) {
+        apiModelConfigurationsDao.deleteById(id)
+    }
+
+    override suspend fun deleteConfigurationsForCredentials(credentialsId: Long) {
+        apiModelConfigurationsDao.deleteAllForCredentials(credentialsId)
+    }
+    
+    private fun ApiCredentialsEntity.toDomain() = ApiCredentials(
+        id = id,
+        displayName = displayName,
+        provider = provider,
+        modelId = modelId,
+        baseUrl = baseUrl,
+        isVision = isVision,
+        credentialAlias = credentialAlias
+    )
+    
+    private fun ApiModelConfigurationEntity.toDomain() = ApiModelConfiguration(
+        id = id,
+        apiCredentialsId = apiCredentialsId,
+        displayName = displayName,
+        maxTokens = maxTokens,
+        contextWindow = contextWindow,
+        temperature = temperature,
+        topP = topP,
+        topK = topK,
+        frequencyPenalty = frequencyPenalty,
+        presencePenalty = presencePenalty,
+        stopSequences = if (stopSequences.isBlank()) emptyList() else stopSequences.split(","),
+        customHeadersAndParams = ApiModelMapper.deserializeCustomHeadersAndParams(customHeadersAndParams)
+    )
 }
