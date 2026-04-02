@@ -45,6 +45,7 @@ data class ChatUiState(
     val hapticResponse: Boolean = false,
     val chatId: Long? = null,
     val isGenerating: Boolean = false,
+    val hasActiveIndicator: Boolean = false,
 )
 
 /**

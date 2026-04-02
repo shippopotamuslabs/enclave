@@ -52,13 +52,12 @@ import com.browntowndev.pocketcrew.feature.chat.fakeLongMessages
 @Composable
 fun MessageList(
     messages: List<ChatMessage>,
+    hasActiveIndicator: Boolean,
     modifier: Modifier = Modifier,
     isPreview: Boolean = false,
     onEditMessage: (String) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
-    // Bolt Optimization: Cache the result of this O(N) operation to avoid recalculating on every recomposition
-    val hasActiveIndicator = remember(messages) { messages.any { it.indicatorState != null } }
 
     // Auto-scroll to bottom (index 0 in reverseLayout) when messages are added
     LaunchedEffect(messages.size) {
@@ -309,7 +308,7 @@ private fun formatThinkingDuration(seconds: Int): String = when {
 @Composable
 private fun PreviewMessageListEmpty() {
     PocketCrewTheme {
-        MessageList(emptyList(), isPreview =  true)
+        MessageList(emptyList(), hasActiveIndicator = false, isPreview =  true)
     }
 }
 
@@ -317,7 +316,7 @@ private fun PreviewMessageListEmpty() {
 @Composable
 private fun PreviewMessageListLong() {
     PocketCrewTheme(darkTheme = true) {
-        MessageList(fakeLongMessages, isPreview =  true)
+        MessageList(fakeLongMessages, hasActiveIndicator = true, isPreview =  true)
     }
 }
 
@@ -327,6 +326,7 @@ private fun PreviewMessageListThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview =  true,
+            hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
                     id = 1,
@@ -369,6 +369,7 @@ private fun PreviewMessageListProcessing() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview =  true,
+            hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
                     id = 1,
@@ -397,6 +398,7 @@ private fun PreviewMessageListGenerating() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview =  true,
+            hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
                     id = 1,
@@ -434,6 +436,7 @@ private fun PreviewPipelineDraftOneGeneratingWithThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview =  true,
+            hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
                     id = 1,
@@ -470,6 +473,7 @@ private fun PreviewPipelineDraftOneThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview =  true,
+            hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
                     id = 1,
@@ -508,6 +512,7 @@ private fun PreviewPipelineDraftOneProcessing() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview =  true,
+            hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
                     id = 1,
@@ -537,6 +542,7 @@ private fun PreviewPipelineFullChainWithFinalThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview =  true,
+            hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
                     id = 1,
@@ -636,6 +642,7 @@ private fun PreviewPipelineFullChainNoFinalThinking() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview =  true,
+            hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
                     id = 1,
@@ -724,6 +731,7 @@ private fun PreviewPipelineVariousStepsInProgress() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview =  true,
+            hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
                     id = 1,
@@ -796,6 +804,7 @@ private fun PreviewPipelineDraftOneAllStates() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview =  true,
+            hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(id = 1, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Task 1"), formattedTimestamp = "10:30 AM"),
                 ChatMessage(id = 2, chatId = 1L, role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:29 AM", indicatorState = IndicatorState.Thinking(thinkingRaw = "Thinking...", thinkingDurationSeconds = 5), modelDisplayName = "Model"),
@@ -819,6 +828,7 @@ private fun PreviewPipelineFinalAllStates() {
     PocketCrewTheme(darkTheme = true) {
         MessageList(
             isPreview =  true,
+            hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(id = 1, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Q1"), formattedTimestamp = "10:30 AM"),
                 ChatMessage(id = 2, chatId = 1L, role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:29 AM", indicatorState = IndicatorState.Thinking(thinkingRaw = "Final thinking...", thinkingDurationSeconds = 10), modelDisplayName = "Model"),
