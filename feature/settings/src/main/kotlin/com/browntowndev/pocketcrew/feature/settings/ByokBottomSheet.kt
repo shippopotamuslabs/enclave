@@ -426,31 +426,6 @@ private sealed interface ByokDeleteTarget {
     ) : ByokDeleteTarget
 }
 
-@Composable
-private fun DeleteConfirmationDialog(
-    title: String,
-    message: String,
-    confirmLabel: String,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = { Text(message) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text(confirmLabel)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
 // ==================== PREVIEWS ====================
 
 @Preview(showBackground = true, name = "BYOK Bottom Sheet - Assets List")
@@ -464,7 +439,9 @@ fun PreviewByokBottomSheetAssets() {
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
             onDeleteApiModelAsset = {},
-            onDeleteApiModelConfig = {}
+            onDeleteApiModelConfig = {},
+            onDismissDeletionSafety = {},
+            onConfirmDeletionWithReassignment = {_, _ -> },
         )
     }
 }
@@ -482,7 +459,9 @@ fun PreviewByokBottomSheetContext() {
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
             onDeleteApiModelAsset = {},
-            onDeleteApiModelConfig = {}
+            onDeleteApiModelConfig = {},
+            onDismissDeletionSafety = {},
+            onConfirmDeletionWithReassignment = {_, _ -> },
         )
     }
 }
