@@ -21,6 +21,8 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.channels.Channel
 
 
 @Singleton
@@ -39,6 +41,9 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         private const val TAG = "ModelDownloadOrchestrator"
         private const val TRACE_THROTTLE_MS = 5000L
     }
+
+    private val _snackbarMessages = Channel<String>(Channel.BUFFERED)
+    override val snackbarMessages = _snackbarMessages.receiveAsFlow()
 
     private val _downloadState = MutableStateFlow(DownloadState(status = DownloadStatus.CHECKING))
     override val downloadState: StateFlow<DownloadState> = _downloadState.asStateFlow()
@@ -144,15 +149,36 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
 
         if (update.clearSession) {
             sessionManager.clearSession()
-            // After successful download, update the registry with the downloaded models
-            if (update.status == DownloadStatus.READY) {
-                updateModelRegistry()
+            // Handle post-download state transitions
+            when (update.status) {
+                DownloadStatus.READY -> updateModelRegistry()
+                DownloadStatus.ERROR -> handleDownloadFailure()
+                else -> {}
             }
         }
         stateManager.applyProgressUpdate(update)
     }
 
     private suspend fun updateModelRegistry() {
+        // Deferred Activation: Commit the models that were just downloaded
+        // (and any other remote configs that were deferred).
+        startupModelsResult?.modelsToDownload?.forEach { asset ->
+            val modelType = startupModelsResult?.allModels?.entries
+                ?.find { it.value.metadata.sha256 == asset.metadata.sha256 }?.key ?: return@forEach
+
+            try {
+                modelRegistry.setRegisteredModel(
+                    modelType = modelType,
+                    asset = asset,
+                    status = ModelStatus.CURRENT,
+                    markExistingAsOld = true
+                )
+                logger.debug(TAG, "Successfully activated model $modelType post-download")
+            } catch (e: Exception) {
+                logger.error(TAG, "Failed to activate model $modelType: ${e.message}")
+            }
+        }
+
         // Clear old entries after successful download. This removes fallback versions
         // that were kept during the download process.
         try {
@@ -169,6 +195,29 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
             cleanupOrphanedModelFiles(allRegisteredAssets)
         } catch (e: Exception) {
             logger.error(TAG, "Failed during filesystem cleanup: ${e.message}")
+        }
+    }
+
+    private suspend fun handleDownloadFailure() {
+        // Check if we have any fallback models to use
+        val modelsToDownload = startupModelsResult?.modelsToDownload ?: emptyList()
+        val allModels = startupModelsResult?.allModels ?: emptyMap()
+        
+        val affectedModelTypes = modelsToDownload.mapNotNull { asset -> 
+            allModels.entries.find { it.value.metadata.sha256 == asset.metadata.sha256 }?.key
+        }
+
+        var fallbackAvailable = false
+        for (type in affectedModelTypes) {
+            if (modelRegistry.getRegisteredAsset(type) != null) {
+                fallbackAvailable = true
+                break
+            }
+        }
+
+        if (fallbackAvailable) {
+            _snackbarMessages.send("Download failed. Using existing model versions.")
+            logger.info(TAG, "Emitted fallback snackbar message after download failure")
         }
     }
 

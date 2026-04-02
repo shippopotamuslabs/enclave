@@ -31,6 +31,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -128,7 +129,7 @@ class ConversationManagerImplTest {
     // ========== Thread-Safe Engine Lifecycle ==========
 
     @Test
-    fun `getConversation returns ConversationPort wrapper on first call`() {
+    fun `getConversation returns ConversationPort wrapper on first call`() = runTest {
         // Given
         val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
 
@@ -142,7 +143,7 @@ class ConversationManagerImplTest {
     }
 
     @Test
-    fun `getConversation recreates dead conversation`() {
+    fun `getConversation recreates dead conversation`() = runTest {
         // Given - conversation exists but is not alive
         every { mockConversation.isAlive } returns false
 
@@ -158,7 +159,7 @@ class ConversationManagerImplTest {
     }
 
     @Test
-    fun `closeConversation clears reference`() {
+    fun `closeConversation clears reference`() = runTest {
         // Given
         val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
         manager.getConversation()
@@ -171,7 +172,7 @@ class ConversationManagerImplTest {
     }
 
     @Test
-    fun `closeEngine releases resources`() {
+    fun `closeEngine releases resources`() = runTest {
         // Given
         every { anyConstructed<Engine>().isInitialized() } returns true
         val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
@@ -186,7 +187,7 @@ class ConversationManagerImplTest {
     }
 
     @Test
-    fun `concurrent access returns same ConversationPort wrapper`() {
+    fun `concurrent access returns same ConversationPort wrapper`() = runTest {
         // Given
         val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
 
@@ -199,7 +200,7 @@ class ConversationManagerImplTest {
     }
 
     @Test
-    fun `getConversation returns different wrapper after closeConversation`() {
+    fun `getConversation returns different wrapper after closeConversation`() = runTest {
         // Given
         val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
         val conv1 = manager.getConversation()
@@ -215,7 +216,7 @@ class ConversationManagerImplTest {
     // ========== Conversation History (setHistory) ==========
 
     @Test
-    fun `setHistory seeds initialMessages in ConversationConfig`() {
+    fun `setHistory seeds initialMessages in ConversationConfig`() = runTest {
         // Given
         val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
         val history = listOf(
@@ -241,7 +242,7 @@ class ConversationManagerImplTest {
     }
 
     @Test
-    fun `setting different history invalidates current conversation`() {
+    fun `setting different history invalidates current conversation`() = runTest {
         // Given
         val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
         val conv1 = manager.getConversation()
@@ -258,7 +259,7 @@ class ConversationManagerImplTest {
     }
 
     @Test
-    fun `setHistory with empty list seeds empty initialMessages`() {
+    fun `setHistory with empty list seeds empty initialMessages`() = runTest {
         // Given
         val manager = ConversationManagerImpl(mockContext, ModelType.MAIN, mockModelRegistry, testScope)
         val history = emptyList<ChatMessage>()

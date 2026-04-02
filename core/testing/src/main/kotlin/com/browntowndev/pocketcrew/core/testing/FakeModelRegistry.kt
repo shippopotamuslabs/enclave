@@ -83,10 +83,6 @@ class FakeModelRegistry : ModelRegistryPort {
         // Simple implementation for fakes
     }
 
-    override suspend fun getAssetsPreferringOld(): Map<ModelType, LocalModelAsset> {
-        return modelsMap.mapValues { it.value.first }
-    }
-
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long {
         return metadata.id
     }

@@ -18,7 +18,6 @@ interface ModelRegistryPort {
     suspend fun setRegisteredModel(modelType: ModelType, asset: LocalModelAsset, status: ModelStatus = ModelStatus.CURRENT, markExistingAsOld: Boolean = true)
     suspend fun clearAll()
     suspend fun clearOld()
-    suspend fun getAssetsPreferringOld(): Map<ModelType, LocalModelAsset>
 
     suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long
     suspend fun deleteLocalModelMetadata(id: Long)

@@ -20,6 +20,7 @@ import com.google.ai.edge.litertlm.SamplerConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 /**
@@ -138,6 +139,8 @@ class ConversationManagerImpl @Inject constructor(
         }
     }
 
+    private val mutex = kotlinx.coroutines.sync.Mutex()
+
     /**
      * Returns the active conversation, initializing it if needed.
      * Thread-safe: concurrent calls will return the same conversation instance.
@@ -145,19 +148,28 @@ class ConversationManagerImpl @Inject constructor(
      * @return The active ConversationPort instance wrapping the LiteRT Conversation
      * @throws IllegalStateException if no model is registered for this model type
      */
-    @Synchronized
-    override fun getConversation(): ConversationPort {
-        // Check if cached wrapper exists AND underlying conversation is still alive
-        conversationPort?.let { cachedWrapper ->
-            if (conversation?.isAlive == true) {
-                return cachedWrapper
+    override suspend fun getConversation(): ConversationPort {
+        // Fast path
+        synchronized(this) {
+            conversationPort?.let { cachedWrapper ->
+                if (conversation?.isAlive == true) {
+                    return cachedWrapper
+                }
+                conversationPort = null
             }
-            conversationPort = null
         }
 
         // Read from async cache (populated by Flow observation in init)
-        val asset = cachedAsset
-        val config = cachedConfig
+        var asset = cachedAsset
+        var config = cachedConfig
+
+        if (asset == null) {
+            // Cold start fallback: Perform suspend read from registry if async flow hasn't emitted yet.
+            asset = modelRegistry.getRegisteredAsset(modelType)
+            config = modelRegistry.getRegisteredConfiguration(modelType)
+            cachedAsset = asset
+            cachedConfig = config
+        }
 
         if (asset == null) {
             throw IllegalStateException(
@@ -167,41 +179,52 @@ class ConversationManagerImpl @Inject constructor(
 
         val modelId = asset.metadata.id
 
-        // Check if model or config changed and reload if needed
-        reloadIfNeeded(config, modelId)
-
-        // Ensure engine is initialized (lazy initialization)
-        ensureEngineInitialized(asset)
-        val eng = engine ?: throw IllegalStateException("Engine not initialized")
-
-        // Check if conversation needs to be created or recreated
-        if (conversation == null || conversation?.isAlive != true) {
-            conversation?.close()
-
-            if (!eng.isInitialized()) {
-                eng.initialize()
+        // Lock to avoid concurrent initializations
+        return mutex.withLock {
+            // Double-check
+            synchronized(this) {
+                conversationPort?.let { cachedWrapper ->
+                    if (conversation?.isAlive == true) {
+                        return@withLock cachedWrapper
+                    }
+                    conversationPort = null
+                }
             }
 
-            val conversationConfig = ConversationConfig(
-                systemInstruction = Contents.of(currentSystemPrompt),
-                initialMessages = history.map { domainMsg ->
-                    when (domainMsg.role) {
-                        Role.USER -> Message.user(domainMsg.content)
-                        Role.ASSISTANT -> Message.model(domainMsg.content)
-                        Role.SYSTEM -> Message.system(domainMsg.content)
+            reloadIfNeeded(config, modelId)
+            ensureEngineInitialized(asset!!)
+            val eng = engine ?: throw IllegalStateException("Engine not initialized")
+
+            synchronized(this) {
+                if (conversation == null || conversation?.isAlive != true) {
+                    conversation?.close()
+
+                    if (!eng.isInitialized()) {
+                        eng.initialize()
                     }
-                },
-                samplerConfig = currentSamplerConfig ?: SamplerConfig(temperature = 0.7, topP = 0.95, topK = 40),
-                automaticToolCalling = false,
-            )
 
-            conversation = eng.createConversation(conversationConfig)
+                    val conversationConfig = ConversationConfig(
+                        systemInstruction = Contents.of(currentSystemPrompt),
+                        initialMessages = history.map { domainMsg ->
+                            when (domainMsg.role) {
+                                Role.USER -> Message.user(domainMsg.content)
+                                Role.ASSISTANT -> Message.model(domainMsg.content)
+                                Role.SYSTEM -> Message.system(domainMsg.content)
+                            }
+                        },
+                        samplerConfig = currentSamplerConfig ?: SamplerConfig(temperature = 0.7, topP = 0.95, topK = 40),
+                        automaticToolCalling = false,
+                    )
+
+                    conversation = eng.createConversation(conversationConfig)
+                }
+
+                val liteRtConversation = conversation ?: throw IllegalStateException("Conversation not initialized")
+                val wrapper = ConversationImpl(liteRtConversation)
+                conversationPort = wrapper
+                return@withLock wrapper
+            }
         }
-
-        val liteRtConversation = conversation ?: throw IllegalStateException("Conversation not initialized")
-        val wrapper = ConversationImpl(liteRtConversation)
-        conversationPort = wrapper
-        return wrapper
     }
 
     @Synchronized

@@ -86,11 +86,37 @@ class ModelRegistryImpl @Inject constructor(
         markExistingAsOld: Boolean
     ) {
         transactionProvider.runInTransaction {
+            // If we are setting a CURRENT model and want to mark the existing one as OLD,
+            // we must target the model currently assigned to this slot (modelType).
+            if (status == ModelStatus.CURRENT && markExistingAsOld) {
+                val currentDefault = defaultModelsDao.getDefault(modelType)
+                if (currentDefault?.localConfigId != null) {
+                    val currentConfig = configsDao.getById(currentDefault.localConfigId)
+                    if (currentConfig != null) {
+                        val currentModel = modelsDao.getById(currentConfig.localModelId)
+                        if (currentModel != null && currentModel.sha256 != asset.metadata.sha256) {
+                            // Only demote if the model is not shared with another slot.
+                            // We check if any other slot still points to a config on this same model.
+                            val otherDefaults = defaultModelsDao.getAll().filter { it.modelType != modelType }
+                            val isShared = otherDefaults.any { other ->
+                                if (other.localConfigId != null) {
+                                    val otherConfig = configsDao.getById(other.localConfigId)
+                                    otherConfig?.localModelId == currentModel.id
+                                } else false
+                            }
+
+                            if (!isShared) {
+                                modelsDao.upsert(currentModel.copy(modelStatus = ModelStatus.OLD))
+                                logger.debug("ModelRegistry", "Demoted ${currentModel.huggingFaceModelName} to OLD for slot $modelType")
+                            }
+                        }
+                    }
+                }
+            }
+
             val existingModel = modelsDao.getBySha256(asset.metadata.sha256)
             val modelId = if (existingModel != null) {
-                 if (status == ModelStatus.CURRENT && markExistingAsOld && existingModel.modelStatus == ModelStatus.CURRENT) {
-                     modelsDao.upsert(existingModel.copy(modelStatus = ModelStatus.OLD))
-                 } else if (existingModel.modelStatus != status) {
+                 if (existingModel.modelStatus != status) {
                      modelsDao.upsert(existingModel.copy(modelStatus = status))
                  }
                  existingModel.id
@@ -161,26 +187,8 @@ class ModelRegistryImpl @Inject constructor(
     }
 
     override suspend fun clearOld() {
-        logger.debug("ModelRegistry", "Cleared all OLD entries")
-    }
-
-    override suspend fun getAssetsPreferringOld(): Map<ModelType, LocalModelAsset> {
-        val result = mutableMapOf<ModelType, LocalModelAsset>()
-        val defaults = defaultModelsDao.getAll()
-        for (default in defaults) {
-            if (default.localConfigId != null) {
-                val configEntity = configsDao.getById(default.localConfigId)
-                if (configEntity != null) {
-                    val currentModel = modelsDao.getById(configEntity.localModelId)
-                    if (currentModel != null) {
-                        val asset = loadAsset(currentModel.id)
-                        if (asset != null) result[default.modelType] = asset
-                    }
-                }
-            }
-        }
-
-        return result
+        modelsDao.deleteOld()
+        logger.debug("ModelRegistry", "Cleared all OLD entries from database")
     }
 
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long {

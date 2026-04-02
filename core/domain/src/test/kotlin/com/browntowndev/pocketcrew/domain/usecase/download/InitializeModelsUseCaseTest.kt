@@ -166,13 +166,11 @@ class InitializeModelsUseCaseTest {
         )
 
         // Mock existing models in registry (this triggers the fallback path)
-        val existingModels = mapOf(
-            ModelType.FAST to createFakeLocalModelAsset(
-                configurations = listOf(createFakeLocalModelConfiguration())
-            )
+        val existingAsset = createFakeLocalModelAsset(
+            configurations = listOf(createFakeLocalModelConfiguration())
         )
-        // getAssetsPreferringOld is a suspend function
-        coEvery { mockModelRegistry.getAssetsPreferringOld() } returns existingModels
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns existingAsset
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.failure(Exception("Network error"))
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
 
@@ -206,7 +204,8 @@ class InitializeModelsUseCaseTest {
         )
 
         // Registry has existing CURRENT config
-        coEvery { mockModelRegistry.getAssetsPreferringOld() } returns mapOf(ModelType.MAIN to existingConfig)
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.MAIN) } returns existingConfig
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(mapOf(ModelType.MAIN to remoteConfig))
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
 
@@ -221,7 +220,7 @@ class InitializeModelsUseCaseTest {
     }
 
     @Test
-    fun `invoke calls setRegisteredModel for remote config regardless of SHA256 changes`() = runTest {
+    fun `invoke does NOT call setRegisteredModel for changed-SHA assets immediately`() = runTest {
         // Given - remote config has different SHA256 (new model file)
         val existingConfig = createFakeLocalModelAsset(
             sha256 = "oldSha256",
@@ -235,8 +234,8 @@ class InitializeModelsUseCaseTest {
         )
 
         val downloadResult = DownloadModelsResult(
-            allModels = emptyMap(),
-            modelsToDownload = listOf(remoteConfig), // New SHA256 = needs download
+            allModels = mapOf(ModelType.MAIN to remoteConfig),
+            modelsToDownload = listOf(remoteConfig),
             scanResult = ModelScanResult(
                 missingModels = listOf(remoteConfig),
                 partialDownloads = emptyMap(),
@@ -244,18 +243,52 @@ class InitializeModelsUseCaseTest {
             )
         )
 
-        // Registry has existing CURRENT config
-        coEvery { mockModelRegistry.getAssetsPreferringOld() } returns mapOf(ModelType.MAIN to existingConfig)
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.MAIN) } returns existingConfig
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(mapOf(ModelType.MAIN to remoteConfig))
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns downloadResult
 
         // When
         useCase.invoke()
 
-        // Then - setRegisteredModel is called with the new config
-        // The repository internally handles marking the old one as OLD
+        // Then - setRegisteredModel should NOT be called because SHA changed
+        coVerify(exactly = 0) {
+            mockModelRegistry.setRegisteredModel(any(), any(), any(), any())
+        }
+    }
+
+    @Test
+    fun `invoke calls setRegisteredModel only for unchanged-SHA config-only updates`() = runTest {
+        // Given - SHA same, but tuning changed
+        val existingConfig = createFakeLocalModelAsset(
+            sha256 = "sameSha256",
+            configurations = listOf(createFakeLocalModelConfiguration(temperature = 0.0))
+        )
+        val remoteConfig = existingConfig.copy(
+            configurations = listOf(existingConfig.configurations.first().copy(temperature = 0.5))
+        )
+
+        val emptyResult = DownloadModelsResult(
+            allModels = mapOf(ModelType.MAIN to remoteConfig),
+            modelsToDownload = emptyList(),
+            scanResult = ModelScanResult(
+                missingModels = emptyList(),
+                partialDownloads = emptyMap(),
+                allValid = true
+            )
+        )
+
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.MAIN) } returns existingConfig
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(mapOf(ModelType.MAIN to remoteConfig))
+        coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
+
+        // When
+        useCase.invoke()
+
+        // Then - setRegisteredModel should be called for config-only update
         coVerify(exactly = 1) {
-            mockModelRegistry.setRegisteredModel(ModelType.MAIN, remoteConfig, ModelStatus.CURRENT)
+            mockModelRegistry.setRegisteredModel(ModelType.MAIN, remoteConfig, ModelStatus.CURRENT, markExistingAsOld = false)
         }
     }
 
@@ -288,7 +321,8 @@ class InitializeModelsUseCaseTest {
         )
 
         // Registry has existing CURRENT config
-        coEvery { mockModelRegistry.getAssetsPreferringOld() } returns mapOf(ModelType.MAIN to existingConfig)
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.MAIN) } returns existingConfig
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(mapOf(ModelType.MAIN to remoteConfig))
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
 
@@ -345,7 +379,9 @@ class InitializeModelsUseCaseTest {
         )
 
         // Registry has both models with shared SHA256
-        coEvery { mockModelRegistry.getAssetsPreferringOld() } returns mapOf(ModelType.DRAFT_ONE to existingDraftOne, ModelType.FAST to existingFast)
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.DRAFT_ONE) } returns existingDraftOne
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns existingFast
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(mapOf(ModelType.DRAFT_ONE to remoteDraftOne, ModelType.FAST to remoteFast))
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns downloadResult
 
@@ -354,14 +390,6 @@ class InitializeModelsUseCaseTest {
 
         // Then - DRAFT_ONE's old config should NOT be marked as OLD because FAST still uses that SHA256
         // The fix: markExistingAsOld should be FALSE for DRAFT_ONE since FAST still references "sharedSha256"
-        coVerify(exactly = 1) {
-            mockModelRegistry.setRegisteredModel(
-                ModelType.DRAFT_ONE,
-                remoteDraftOne,
-                ModelStatus.CURRENT,
-                markExistingAsOld = false  // NOT true! Because FAST still uses sharedSha256
-            )
-        }
         coVerify(exactly = 1) {
             mockModelRegistry.setRegisteredModel(
                 ModelType.FAST,
@@ -402,21 +430,17 @@ class InitializeModelsUseCaseTest {
         )
 
         // Registry has only DRAFT_ONE (no other models)
-        coEvery { mockModelRegistry.getAssetsPreferringOld() } returns mapOf(ModelType.DRAFT_ONE to existingDraftOne)
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.DRAFT_ONE) } returns existingDraftOne
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(mapOf(ModelType.DRAFT_ONE to remoteDraftOne))
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns downloadResult
 
         // When
         useCase.invoke()
 
-        // Then - DRAFT_ONE's old config SHOULD be marked as OLD because no other model uses oldSha256
-        coVerify(exactly = 1) {
-            mockModelRegistry.setRegisteredModel(
-                ModelType.DRAFT_ONE,
-                remoteDraftOne,
-                ModelStatus.CURRENT,
-                markExistingAsOld = true  // TRUE! No other model uses oldSha256
-            )
+        // Then - registerModel should NOT be called for changed-SHA immediately
+        coVerify(exactly = 0) {
+            mockModelRegistry.setRegisteredModel(any(), any(), any(), any())
         }
     }
 
@@ -465,7 +489,9 @@ class InitializeModelsUseCaseTest {
 
         // Registry returns the soft-deleted model (it still has an entity row)
         val remoteConfigs = mapOf(ModelType.FAST to remoteFast)
-        coEvery { mockModelRegistry.getAssetsPreferringOld() } returns mapOf(ModelType.FAST to softDeletedModel)
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns softDeletedModel
+        coEvery { mockModelRegistry.getSoftDeletedModels() } returns listOf(softDeletedModel)
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(remoteConfigs)
         // CheckModelsUseCase should NOT be called for soft-deleted models
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
@@ -486,8 +512,8 @@ class InitializeModelsUseCaseTest {
         // VERIFY: CheckModelsUseCase was called WITHOUT the soft-deleted model in expectedModels
         coVerify(exactly = 1) {
             mockCheckModelsUseCase.invoke(
-                downloadedModels = emptyMap(),
-                expectedModels = remoteConfigs.filterKeys { it != ModelType.FAST }
+                downloadedModels = mapOf(ModelType.FAST to softDeletedModel),
+                expectedModels = emptyMap()
             )
         }
     }
@@ -521,7 +547,9 @@ class InitializeModelsUseCaseTest {
             )
         )
 
-        coEvery { mockModelRegistry.getAssetsPreferringOld() } returns mapOf(ModelType.FAST to softDeletedModel)
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns softDeletedModel
+        coEvery { mockModelRegistry.getSoftDeletedModels() } returns listOf(softDeletedModel)
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(remoteConfigs)
         coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
 
@@ -542,7 +570,8 @@ class InitializeModelsUseCaseTest {
     @Test
     fun `invoke throws exception when remote fetch fails on pristine install`() = runTest {
         // Given - Registry is empty
-        coEvery { mockModelRegistry.getAssetsPreferringOld() } returns emptyMap()
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getSoftDeletedModels() } returns emptyList()
         
         // Remote fetch fails
         val error = Exception("Network unavailable")
@@ -570,7 +599,8 @@ class InitializeModelsUseCaseTest {
     @Test
     fun `BUG REPRO - invoke passes ALL remote configs even if registry is empty`() = runTest {
         // Given - Registry is empty (pristine install)
-        coEvery { mockModelRegistry.getAssetsPreferringOld() } returns emptyMap()
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getSoftDeletedModels() } returns emptyList()
 
         // Remote config has one model
         val remoteModel = createFakeLocalModelAsset(
@@ -591,6 +621,8 @@ class InitializeModelsUseCaseTest {
             )
         )
         
+        coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns downloadResult
+
         // When
         useCase.invoke()
 
@@ -598,7 +630,7 @@ class InitializeModelsUseCaseTest {
         coVerify(exactly = 1) {
             mockCheckModelsUseCase.invoke(
                 downloadedModels = emptyMap(),
-                expectedModels = remoteConfigs // FAILS: Currently called with emptyMap()
+                expectedModels = remoteConfigs
             )
         }
     }

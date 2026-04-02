@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import io.mockk.MockKAnnotations
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -41,7 +42,7 @@ class LiteRtInferenceServiceImplTest {
         mockConversation = mockk(relaxed = true)
         processThinkingTokens = ProcessThinkingTokensUseCase()
 
-        every { mockConversationManager.getConversation() } returns mockConversation
+        coEvery { mockConversationManager.getConversation() } returns mockConversation
     }
 
     @AfterEach

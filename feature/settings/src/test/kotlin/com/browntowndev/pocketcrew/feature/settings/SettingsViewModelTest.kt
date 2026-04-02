@@ -780,23 +780,55 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `onSaveLocalModelConfig should NOT call repository when isSystemPreset is true`() = runTest {
-        val assetUi = LocalModelAssetUi(
-            metadataId = 20, huggingFaceModelName = "hf", remoteFileName = "f", sizeInBytes = 1000, configurations = emptyList()
+    fun `onSaveApiCredentials generates deterministic slug-based alias for new credentials`() = runTest {
+        // Given - new credential draft with empty alias
+        val assetUi = ApiModelAssetUi(
+            credentialsId = 0, displayName = "OpenAI GPT-4", provider = ApiProvider.OPENAI, modelId = "gpt-4", baseUrl = null, isVision = false, credentialAlias = "", configurations = emptyList()
         )
-        val systemConfig = LocalModelConfigUi(id = 1, localModelId = 20, displayName = "System", isSystemPreset = true)
+        viewModel.onSelectApiModelAsset(assetUi)
+        viewModel.onApiKeyChange("sk-test")
         
-        viewModel.onSelectLocalModelAsset(assetUi)
-        viewModel.onSelectLocalModelConfig(systemConfig)
+        coEvery { apiModelRepository.saveCredentials(any(), any()) } returns 123L
+        
+        // When
+        viewModel.onSaveApiCredentials { _, _ -> }
         testDispatcher.scheduler.advanceUntilIdle()
         
-        var successCalled = false
-        viewModel.onSaveLocalModelConfig { successCalled = true }
+        // Then - alias should be generated as provider-modelId slug
+        coVerify { 
+            apiModelRepository.saveCredentials(match { 
+                it.credentialAlias == "openai-gpt-4" 
+            }, "sk-test") 
+        }
+    }
+
+    @Test
+    fun `onSaveApiCredentials appends numeric suffix for duplicate aliases`() = runTest {
+        // Given - "openai-gpt-4" already exists in repository
+        val existingCred = ApiCredentials(id = 1, displayName = "Existing", provider = ApiProvider.OPENAI, modelId = "gpt-4", credentialAlias = "openai-gpt-4")
+        every { apiModelRepository.observeAllCredentials() } returns flowOf(listOf(existingCred))
+        
+        // New credential draft that would generate same slug
+        val assetUi = ApiModelAssetUi(
+            credentialsId = 0, displayName = "OpenAI GPT-4 New", provider = ApiProvider.OPENAI, modelId = "gpt-4", baseUrl = null, isVision = false, credentialAlias = "", configurations = emptyList()
+        )
+        
+        viewModel = createViewModel() // Refresh to pick up existing creds
+        viewModel.onSelectApiModelAsset(assetUi)
+        viewModel.onApiKeyChange("sk-test")
+        
+        coEvery { apiModelRepository.saveCredentials(any(), any()) } returns 124L
+        
+        // When
+        viewModel.onSaveApiCredentials { _, _ -> }
         testDispatcher.scheduler.advanceUntilIdle()
         
-        // Should NOT call repository and should NOT call success callback
-        coVerify(exactly = 0) { modelRegistry.saveConfiguration(any()) }
-        assertFalse(successCalled)
+        // Then - alias should have -2 suffix
+        coVerify { 
+            apiModelRepository.saveCredentials(match { 
+                it.credentialAlias == "openai-gpt-4-2" 
+            }, "sk-test") 
+        }
     }
 
     @Test

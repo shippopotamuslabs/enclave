@@ -696,17 +696,23 @@ class SettingsViewModel @Inject constructor(
         val apiKeyToSave = _currentApiKey.value
         val isNewAsset = assetUi.credentialsId == 0L
         
-        val credentials = com.browntowndev.pocketcrew.domain.model.config.ApiCredentials(
-            id = assetUi.credentialsId,
-            displayName = assetUi.displayName,
-            provider = assetUi.provider,
-            modelId = assetUi.modelId,
-            baseUrl = assetUi.baseUrl.takeIf { !it.isNullOrBlank() },
-            isVision = assetUi.isVision,
-            credentialAlias = assetUi.credentialAlias
-        )
-
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API credentials", "Failed to save credentials")) {
+            val finalAlias = if (assetUi.credentialAlias.isBlank()) {
+                generateUniqueAlias(assetUi.provider.name, assetUi.modelId)
+            } else {
+                assetUi.credentialAlias
+            }
+
+            val credentials = com.browntowndev.pocketcrew.domain.model.config.ApiCredentials(
+                id = assetUi.credentialsId,
+                displayName = assetUi.displayName,
+                provider = assetUi.provider,
+                modelId = assetUi.modelId,
+                baseUrl = assetUi.baseUrl.takeIf { !it.isNullOrBlank() },
+                isVision = assetUi.isVision,
+                credentialAlias = finalAlias
+            )
+
             val id = saveApiCredentialsUseCase(credentials, apiKeyToSave)
             
             var configUi: ApiModelConfigUi? = null
@@ -722,12 +728,30 @@ class SettingsViewModel @Inject constructor(
             
             val updatedAsset = assetUi.copy(
                 credentialsId = id,
+                credentialAlias = finalAlias,
                 configurations = configUi?.let { listOf(it) } ?: assetUi.configurations
             )
             
             _currentApiKey.value = "" // Clear immediately after save
             onSuccess(updatedAsset, configUi)
         }
+    }
+
+    private suspend fun generateUniqueAlias(provider: String, modelId: String): String {
+        val baseSlug = "${provider.lowercase()}-${modelId.lowercase()}"
+            .replace(Regex("[^a-z0-9]"), "-")
+            .replace(Regex("-+"), "-")
+            .trim('-')
+        
+        val existingAliases = apiModelAssetsFlow.first().map { it.credentials.credentialAlias }.toSet()
+        
+        if (baseSlug !in existingAliases) return baseSlug
+        
+        var counter = 2
+        while ("$baseSlug-$counter" in existingAliases) {
+            counter++
+        }
+        return "$baseSlug-$counter"
     }
 
     fun onSaveApiModelConfig(onSuccess: () -> Unit) {
