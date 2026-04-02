@@ -32,6 +32,7 @@ import com.browntowndev.pocketcrew.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.DefaultModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.DeviceEnvironmentRepository
+import com.browntowndev.pocketcrew.core.data.repository.LocalModelConfigurationsRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.MessageRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ModelConfigProviderImpl
 import com.browntowndev.pocketcrew.core.data.repository.ModelRegistryImpl
@@ -49,6 +50,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DeviceEnvironmentRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelConfigurationsRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
@@ -82,8 +84,10 @@ object DataModule {
             context,
             PocketCrewDatabase::class.java,
             "pocket_crew_db"
-        )
-        .fallbackToDestructiveMigration()
+        ).addMigrations(
+            PocketCrewDatabase.MIGRATION_1_2,
+            PocketCrewDatabase.MIGRATION_2_3
+        ).fallbackToDestructiveMigration()
         .build()
     }
 
@@ -210,4 +214,8 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindApiModelRepository(impl: ApiModelRepositoryImpl): ApiModelRepositoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindLocalModelConfigurationsRepository(impl: LocalModelConfigurationsRepositoryImpl): LocalModelConfigurationsRepositoryPort
 }

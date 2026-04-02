@@ -25,10 +25,11 @@ class GetApiModelAssetsUseCaseTest {
     @Test
     fun `invoke returns stream of api model assets`() = runTest {
         val creds = mockk<ApiCredentials> { every { id } returns 1L }
-        val configs = listOf(mockk<ApiModelConfiguration>())
+        val config = mockk<ApiModelConfiguration> { every { apiCredentialsId } returns 1L }
+        val configs = listOf(config)
         
         every { repository.observeAllCredentials() } returns flowOf(listOf(creds))
-        io.mockk.coEvery { repository.getConfigurationsForCredentials(1L) } returns configs
+        every { repository.observeAllConfigurations() } returns flowOf(configs)
 
         val result = useCase().first()
 

@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
+import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
@@ -44,7 +45,6 @@ class CheckModelEligibilityUseCaseTest {
 
     private fun createModelAsset(
         sha256: String,
-        displayName: String,
         sizeInBytes: Long = 1000000L,
         modelFileFormat: ModelFileFormat = ModelFileFormat.LITERTLM,
         localFileName: String = "model.litertlm"
@@ -54,7 +54,6 @@ class CheckModelEligibilityUseCaseTest {
                 huggingFaceModelName = "test/model",
                 remoteFileName = localFileName,
                 localFileName = localFileName,
-                displayName = displayName,
                 sha256 = sha256,
                 sizeInBytes = sizeInBytes,
                 modelFileFormat = modelFileFormat
@@ -79,7 +78,6 @@ class CheckModelEligibilityUseCaseTest {
     fun `check returns models for missing files`() {
         val asset = createModelAsset(
             sha256 = "abc123",
-            displayName = "Test Model",
             localFileName = "main.litertlm"
         )
         val scanResult = ModelScanResult(
@@ -102,7 +100,7 @@ class CheckModelEligibilityUseCaseTest {
 
     @Test
     fun `check handles empty original models list`() {
-        val asset = createModelAsset(sha256 = "abc123", displayName = "Test Model")
+        val asset = createModelAsset(sha256 = "abc123")
         val scanResult = ModelScanResult(
             missingModels = emptyList(),
             partialDownloads = emptyMap(),
@@ -125,12 +123,10 @@ class CheckModelEligibilityUseCaseTest {
     fun `check handles multiple missing models`() {
         val asset1 = createModelAsset(
             sha256 = "abc123",
-            displayName = "Test Model 1",
             localFileName = "main1.litertlm"
         )
         val asset2 = createModelAsset(
             sha256 = "def456",
-            displayName = "Test Model 2",
             localFileName = "vision.litertlm"
         )
         val scanResult = ModelScanResult(
@@ -154,7 +150,6 @@ class CheckModelEligibilityUseCaseTest {
     fun `check returns empty list when no missing partial or invalid`() {
         val asset = createModelAsset(
             sha256 = "abc123",
-            displayName = "Test Model",
             localFileName = "main.litertlm"
         )
         val scanResult = ModelScanResult(
@@ -178,7 +173,6 @@ class CheckModelEligibilityUseCaseTest {
     fun `check includes models with partial downloads`() {
         val asset = createModelAsset(
             sha256 = "abc123",
-            displayName = "Test Model",
             localFileName = "main.litertlm"
         )
         val scanResult = ModelScanResult(
@@ -202,7 +196,6 @@ class CheckModelEligibilityUseCaseTest {
     fun `check includes invalid models due to format change`() {
         val originalAsset = createModelAsset(
             sha256 = "abc123",
-            displayName = "Test Model",
             localFileName = "main.litertlm"
         )
 
@@ -233,12 +226,10 @@ class CheckModelEligibilityUseCaseTest {
     fun `check groups models with same SHA256`() {
         val asset1 = createModelAsset(
             sha256 = "shared-sha256",
-            displayName = "Shared Model",
             localFileName = "shared.litertlm"
         )
         val asset2 = createModelAsset(
             sha256 = "shared-sha256",
-            displayName = "Shared Model",
             localFileName = "shared.litertlm"
         )
         val scanResult = ModelScanResult(

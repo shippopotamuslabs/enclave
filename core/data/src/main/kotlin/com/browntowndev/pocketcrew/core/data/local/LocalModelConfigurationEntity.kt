@@ -57,6 +57,9 @@ data class LocalModelConfigurationEntity(
     @ColumnInfo(name = "system_prompt")
     val systemPrompt: String? = null,
 
+    @ColumnInfo(name = "is_system_preset")
+    val isSystemPreset: Boolean = false,
+
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis()
 )

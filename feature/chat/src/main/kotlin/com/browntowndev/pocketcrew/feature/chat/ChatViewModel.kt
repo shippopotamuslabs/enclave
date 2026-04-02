@@ -11,6 +11,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
@@ -76,8 +77,22 @@ class ChatViewModel @Inject constructor(
     // Merged with database messages in uiState for real-time UI updates
     private val _inFlightMessages = MutableStateFlow<Map<Long, MessageSnapshot>>(emptyMap())
 
+    // Holds dynamically loaded display names
+    private val _modelDisplayNames = MutableStateFlow<Map<ModelType, String>>(emptyMap())
+
     // Job for tracking inference flow collection (for cancellation in onCleared)
     private var inferenceJob: Job? = null
+
+    init {
+        // Load display names asynchronously
+        viewModelScope.launch {
+            val names = mutableMapOf<ModelType, String>()
+            for (type in ModelType.entries) {
+                names[type] = modelDisplayNamesUseCase(type)
+            }
+            _modelDisplayNames.value = names
+        }
+    }
 
     /**
      * Main UI state flow.
@@ -180,7 +195,7 @@ class ChatViewModel @Inject constructor(
             Role.SYSTEM -> MessageRole.Assistant // Map SYSTEM to Assistant for display
         }
         val modelDisplayName = message.modelType?.let { modelType ->
-            modelDisplayNamesUseCase(modelType)
+            _modelDisplayNames.value[modelType]
         } ?: "Agent"
 
         return ChatMessage(

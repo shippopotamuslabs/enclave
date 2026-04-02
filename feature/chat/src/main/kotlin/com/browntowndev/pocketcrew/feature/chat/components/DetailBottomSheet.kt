@@ -30,6 +30,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
 
@@ -108,15 +109,12 @@ fun DetailBottomSheet(
             config.durationSeconds
         } else 0L
 
-        ModalBottomSheet(
+        JumpFreeModalBottomSheet(
             onDismissRequest = config.onDismiss,
             sheetState = sheetState,
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.onSurface,
-            contentWindowInsets = { WindowInsets.safeDrawing },
-            modifier = Modifier
-                .statusBarsPadding()
-                .padding(top = 64.dp) // Capped below TopAppBar
+            modifier = Modifier.padding(top = 64.dp) // Capped below TopAppBar
         ) {
             Column(
                 modifier = Modifier

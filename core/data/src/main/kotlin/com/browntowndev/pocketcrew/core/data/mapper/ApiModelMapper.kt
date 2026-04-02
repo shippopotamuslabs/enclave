@@ -4,7 +4,7 @@ import org.json.JSONObject
 import org.json.JSONException
 
 object ApiModelMapper {
-    fun serializeCustomHeadersAndParams(map: Map<String, String>): String {
+    fun serializeCustomHeaders(map: Map<String, String>): String {
         val jsonObject = JSONObject()
         for ((key, value) in map) {
             jsonObject.put(key, value)
@@ -12,7 +12,7 @@ object ApiModelMapper {
         return jsonObject.toString()
     }
 
-    fun deserializeCustomHeadersAndParams(json: String): Map<String, String> {
+    fun deserializeCustomHeaders(json: String): Map<String, String> {
         if (json.isBlank()) return emptyMap()
         val map = mutableMapOf<String, String>()
         try {

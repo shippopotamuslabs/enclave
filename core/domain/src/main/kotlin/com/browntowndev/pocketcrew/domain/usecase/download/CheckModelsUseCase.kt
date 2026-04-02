@@ -57,7 +57,7 @@ class CheckModelsUseCase @Inject constructor(
         if (missingAssets.isEmpty()) {
             logger.info(TAG, "All ${expectedModels.size} models are ready")
         } else {
-            logger.info(TAG, "${missingAssets.size} assets need download: ${missingAssets.map { it.metadata.displayName }}")
+            logger.info(TAG, "${missingAssets.size} assets need download: ${missingAssets.map { it.metadata.huggingFaceModelName }}")
         }
 
         // Return both the scan result and models that need downloading

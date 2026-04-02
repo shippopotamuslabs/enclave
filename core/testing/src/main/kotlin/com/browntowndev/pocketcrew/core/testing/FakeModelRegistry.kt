@@ -8,7 +8,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 
 /**
@@ -21,6 +20,10 @@ class FakeModelRegistry : ModelRegistryPort {
     private val modelStatuses = mutableMapOf<String, ModelStatus>() // SHA256 -> Status
     private val _registeredModelsFlow = MutableStateFlow<Map<ModelType, String>>(emptyMap())
 
+    // Soft-deleted models: LocalModelEntity rows with no configs
+    // Key = model ID, Value = LocalModelAsset (metadata only, no configs)
+    private val softDeletedModels = mutableMapOf<Long, LocalModelAsset>()
+
     override suspend fun getRegisteredAsset(modelType: ModelType): LocalModelAsset? {
         return modelsMap[modelType]?.first
     }
@@ -29,27 +32,11 @@ class FakeModelRegistry : ModelRegistryPort {
         return modelsMap[modelType]?.second
     }
 
-    override fun getRegisteredConfigurationSync(modelType: ModelType): LocalModelConfiguration? {
-        return modelsMap[modelType]?.second
-    }
-
-    override fun getRegisteredAssetSync(modelType: ModelType): LocalModelAsset? {
-        return modelsMap[modelType]?.first
-    }
-
     override suspend fun getRegisteredAssets(): List<LocalModelAsset> {
         return modelsMap.values.map { it.first }.distinctBy { it.metadata.sha256 }
     }
 
-    override fun getRegisteredAssetsSync(): List<LocalModelAsset> {
-        return modelsMap.values.map { it.first }.distinctBy { it.metadata.sha256 }
-    }
-
     override suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration> {
-        return modelsMap.values.map { it.second }
-    }
-
-    override fun getRegisteredConfigurationsSync(): List<LocalModelConfiguration> {
         return modelsMap.values.map { it.second }
     }
 
@@ -77,7 +64,7 @@ class FakeModelRegistry : ModelRegistryPort {
         }
 
         // Use the first configuration as the one being registered for the slot.
-        val config = asset.configurations.firstOrNull() 
+        val config = asset.configurations.firstOrNull()
             ?: throw IllegalStateException("Asset must have at least one configuration")
 
         modelsMap[modelType] = asset to config
@@ -88,6 +75,7 @@ class FakeModelRegistry : ModelRegistryPort {
     override suspend fun clearAll() {
         modelsMap.clear()
         modelStatuses.clear()
+        softDeletedModels.clear()
         updateFlow()
     }
 
@@ -120,6 +108,7 @@ class FakeModelRegistry : ModelRegistryPort {
     fun reset() {
         modelsMap.clear()
         modelStatuses.clear()
+        softDeletedModels.clear()
         _registeredModelsFlow.value = emptyMap()
     }
 
@@ -130,5 +119,50 @@ class FakeModelRegistry : ModelRegistryPort {
 
     fun getStatusBySha256(sha256: String): ModelStatus? {
         return modelStatuses[sha256]
+    }
+
+    override suspend fun getSoftDeletedModels(): List<LocalModelAsset> {
+        return softDeletedModels.values.toList()
+    }
+
+    override suspend fun getAssetById(id: Long): LocalModelAsset? {
+        // First check active models
+        modelsMap.values.find { it.first.metadata.id == id }?.let { return it.first }
+        // Then check soft-deleted models
+        return softDeletedModels[id]
+    }
+
+    override suspend fun reuseModelForRedownload(modelId: Long, newAsset: LocalModelAsset): Long {
+        // Reuse the existing model row if it was soft-deleted
+        // The fake just returns the same ID
+        val existingModel = softDeletedModels[modelId]
+            ?: throw IllegalStateException("Model $modelId not found in soft-deleted models")
+
+        // Remove from soft-deleted and register as active
+        softDeletedModels.remove(modelId)
+
+        // Register with the new asset (which has configs with isSystemPreset=true)
+        val config = newAsset.configurations.firstOrNull()
+            ?: throw IllegalStateException("Asset must have at least one configuration")
+
+        // Find the modelType from the asset (using huggingFaceModelName)
+        val modelType = ModelType.entries.find { newAsset.metadata.huggingFaceModelName.contains(it.name, ignoreCase = true) }
+            ?: ModelType.FAST
+
+        modelsMap[modelType] = newAsset to config
+        modelStatuses[newAsset.metadata.sha256] = ModelStatus.CURRENT
+        updateFlow()
+
+        return modelId
+    }
+
+    /**
+     * Test helper: registers a model as soft-deleted (metadata preserved, no configs).
+     * This simulates the state after a soft-delete operation.
+     */
+    fun registerSoftDeletedModel(modelId: Long, asset: LocalModelAsset) {
+        softDeletedModels[modelId] = asset.copy(
+            metadata = asset.metadata.copy(id = modelId)
+        )
     }
 }

@@ -10,5 +10,15 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 data class DownloadModelsResult(
     val allModels: Map<ModelType, LocalModelAsset>,
     val modelsToDownload: List<LocalModelAsset>,
-    val scanResult: ModelScanResult
+    val scanResult: ModelScanResult,
+    /**
+     * Models that were previously downloaded but soft-deleted by the user.
+     * These are available for re-download and should be shown in the UI
+     * as "Available for Download" (separate from "Needs Download").
+     *
+     * A soft-deleted model is identified by: LocalModelEntity exists but has 0 configs.
+     * The model is NOT passed to CheckModelsUseCase for file scanning because
+     * the missing file would trigger an unwanted re-download.
+     */
+    val availableToRedownload: List<LocalModelAsset> = emptyList()
 )

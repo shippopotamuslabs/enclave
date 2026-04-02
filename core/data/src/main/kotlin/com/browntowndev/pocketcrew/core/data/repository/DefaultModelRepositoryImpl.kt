@@ -56,7 +56,7 @@ class DefaultModelRepositoryImpl @Inject constructor(
             if (config != null) {
                 val model = localModelsDao.getById(config.localModelId)
                 displayName = config.displayName
-                providerName = model?.displayName
+                providerName = model?.huggingFaceModelName
             }
         } else if (entity.apiConfigId != null) {
             val config = apiModelConfigurationsDao.getById(entity.apiConfigId)

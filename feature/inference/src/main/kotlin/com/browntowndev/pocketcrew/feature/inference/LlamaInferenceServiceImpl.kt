@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
@@ -15,88 +16,130 @@ import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManag
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 /**
  * Implementation of LlmInferencePort using llama.cpp via JNI.
  * Bridges the llama.cpp GenerationEvent to the domain's InferenceEvent.
+ * Resolves the active model from [ModelRegistryPort] at runtime, eliminating
+ * the need for explicit configure() calls at provision time.
  */
 class LlamaInferenceServiceImpl @Inject constructor(
     private val sessionManager: LlamaChatSessionManager,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
     private val modelType: ModelType,
-    private val loggingPort: LoggingPort
+    private val loggingPort: LoggingPort,
+    private val modelRegistry: ModelRegistryPort,
+    @ApplicationContext private val context: Context
 ) : LlmInferencePort {
 
     companion object {
         private const val TAG = "LlamaInferenceService"
     }
 
-    private var modelPath: String? = null
     private var systemPrompt: String = "You are a helpful assistant."
     private var samplingConfig: LlamaSamplingConfig = LlamaSamplingConfig(minP = 0.0f)
     private var isInitialized = false
     private var hasTriedCpuFallback = false
+    private var currentModelId: Long? = null
+    private var currentConfigId: Long? = null
 
-    /**
-     * Configure the service with model path and optional parameters.
-     * Must be called before sending prompts.
-     */
-    fun configure(
-        modelPath: String,
-        systemPrompt: String = "You are a helpful assistant.",
-        samplingConfig: LlamaSamplingConfig = LlamaSamplingConfig(minP = 0.0f)
-    ) {
-        this.modelPath = modelPath
-        this.systemPrompt = systemPrompt
-        this.samplingConfig = samplingConfig
+    private fun getModelPath(filename: String): String {
+        // Use getExternalFilesDir to match ModelFileScanner's directory choice
+        val modelsDir = java.io.File(context.getExternalFilesDir(null), "models")
+        return java.io.File(modelsDir, filename).absolutePath
     }
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = flow {
-        val path = modelPath
-        if (path == null) {
-            emit(InferenceEvent.Error(IllegalStateException("Model not configured. Call configure() first."), modelType))
-            return@flow
+    /**
+     * Ensures the engine is loaded with the current model from registry.
+     * If the model or config has changed since last load, tears down and reloads.
+     */
+    private suspend fun ensureModelLoaded() {
+        val asset = modelRegistry.getRegisteredAsset(modelType)
+        val config = modelRegistry.getRegisteredConfiguration(modelType)
+
+        if (asset == null) {
+            throw IllegalStateException("No registered asset for $modelType. Download a model first.")
         }
 
-        // Initialize engine if not yet done
-        if (!isInitialized) {
-            try {
+        val modelId = asset.metadata.id
+        val configId = config?.id
+
+        val modelChanged = currentModelId != modelId
+        val configChanged = currentConfigId != configId
+
+        if (!modelChanged && !configChanged && isInitialized) {
+            return
+        }
+
+        // Model or config changed - need to reinitialize
+        sessionManager.shutdown()
+        isInitialized = false
+        hasTriedCpuFallback = false
+
+        val modelPath = getModelPath(asset.metadata.localFileName)
+        systemPrompt = config?.systemPrompt ?: "You are a helpful assistant."
+        samplingConfig = LlamaSamplingConfig(
+            temperature = config?.temperature?.toFloat() ?: 0.7f,
+            topP = config?.topP?.toFloat() ?: 0.9f,
+            topK = config?.topK ?: 40,
+            minP = config?.minP?.toFloat() ?: 0.0f,
+            maxTokens = config?.maxTokens ?: 4096,
+            contextWindow = config?.contextWindow ?: 4096,
+            batchSize = 256,
+            gpuLayers = 32, // Will be adjusted by GpuConfig.forDevice
+            thinkingEnabled = config?.thinkingEnabled ?: false,
+            repeatPenalty = config?.repetitionPenalty?.toFloat() ?: 1.1f
+        )
+
+        try {
+            sessionManager.initializeEngine(
+                LlamaModelConfig(
+                    modelPath = modelPath,
+                    systemPrompt = systemPrompt,
+                    sampling = samplingConfig
+                )
+            )
+            sessionManager.startNewConversation()
+            isInitialized = true
+            currentModelId = modelId
+            currentConfigId = configId
+        } catch (e: Exception) {
+            // GPU initialization failed, try falling back to CPU
+            if (!hasTriedCpuFallback && samplingConfig.gpuLayers > 0) {
+                Log.w(TAG, "GPU initialization failed, falling back to CPU: ${e.message}")
+                hasTriedCpuFallback = true
+                val cpuConfig = samplingConfig.copy(gpuLayers = 0)
                 sessionManager.initializeEngine(
                     LlamaModelConfig(
-                        modelPath = path,
+                        modelPath = modelPath,
                         systemPrompt = systemPrompt,
-                        sampling = samplingConfig
+                        sampling = cpuConfig
                     )
                 )
                 sessionManager.startNewConversation()
                 isInitialized = true
-            } catch (e: Exception) {
-                // GPU initialization failed, try falling back to CPU
-                if (!hasTriedCpuFallback && samplingConfig.gpuLayers > 0) {
-                    Log.w(TAG, "GPU initialization failed, falling back to CPU: ${e.message}")
-                    hasTriedCpuFallback = true
-                    // Retry with CPU (gpuLayers = 0)
-                    val cpuConfig = samplingConfig.copy(gpuLayers = 0)
-                    sessionManager.initializeEngine(
-                        LlamaModelConfig(
-                            modelPath = path,
-                            systemPrompt = systemPrompt,
-                            sampling = cpuConfig
-                        )
-                    )
-                    sessionManager.startNewConversation()
-                    isInitialized = true
-                    Log.i(TAG, "Successfully initialized with CPU fallback")
-                } else {
-                    // CPU also failed or already tried fallback, propagate error
-                    throw e
-                }
+                currentModelId = modelId
+                currentConfigId = configId
+                Log.i(TAG, "Successfully initialized with CPU fallback")
+            } else {
+                throw e
             }
+        }
+    }
+
+    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = flow {
+        // Ensure the engine is loaded with the current model from registry
+        try {
+            ensureModelLoaded()
+        } catch (e: Exception) {
+            emit(InferenceEvent.Error(e, modelType))
+            return@flow
         }
 
         var isThinking = false
@@ -171,13 +214,15 @@ class LlamaInferenceServiceImpl @Inject constructor(
     }
 
     override fun closeSession() {
-        runBlocking {
-            try {
+        try {
+            kotlinx.coroutines.runBlocking {
                 sessionManager.shutdown()
-                isInitialized = false
-            } catch (e: Exception) {
-                Log.w(TAG, "Error shutting down session", e)
             }
+            isInitialized = false
+            currentModelId = null
+            currentConfigId = null
+        } catch (e: Exception) {
+            Log.w(TAG, "Error shutting down session", e)
         }
     }
 
@@ -186,54 +231,18 @@ class LlamaInferenceServiceImpl @Inject constructor(
      * Used between pipeline steps to avoid reloading the model.
      */
     fun clearConversation() {
-        runBlocking {
-            try {
+        try {
+            kotlinx.coroutines.runBlocking {
                 sessionManager.clearConversation()
-            } catch (e: Exception) {
-                Log.w(TAG, "Error clearing conversation", e)
             }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error clearing conversation", e)
         }
     }
 
     override suspend fun setHistory(messages: List<DomainChatMessage>) {
-        // Ensure the engine is initialized before setting history
-        if (!isInitialized) {
-            val path = modelPath
-            if (path != null) {
-                try {
-                    sessionManager.initializeEngine(
-                        LlamaModelConfig(
-                            modelPath = path,
-                            systemPrompt = systemPrompt,
-                            sampling = samplingConfig
-                        )
-                    )
-                    isInitialized = true
-                } catch (e: Exception) {
-                    // GPU initialization failed, try falling back to CPU
-                    if (!hasTriedCpuFallback && samplingConfig.gpuLayers > 0) {
-                        Log.w(TAG, "GPU initialization failed in setHistory, falling back to CPU: ${e.message}")
-                        hasTriedCpuFallback = true
-                        // Retry with CPU (gpuLayers = 0)
-                        val cpuConfig = samplingConfig.copy(gpuLayers = 0)
-                        sessionManager.initializeEngine(
-                            LlamaModelConfig(
-                                modelPath = path,
-                                systemPrompt = systemPrompt,
-                                sampling = cpuConfig
-                            )
-                        )
-                        isInitialized = true
-                        Log.i(TAG, "Successfully initialized with CPU fallback in setHistory")
-                    } else {
-                        throw e
-                    }
-                }
-            } else {
-                throw IllegalStateException("Model not configured. Call configure() first.")
-            }
-        }
-        // Pass domain ChatMessage directly - conversion to inference format happens in LlamaChatSessionManager
+        // Ensure model is loaded before setting history
+        ensureModelLoaded()
         sessionManager.setHistory(messages)
     }
 }

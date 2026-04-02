@@ -1,10 +1,11 @@
 package com.browntowndev.pocketcrew.app
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -25,24 +26,24 @@ class EngineModuleTest {
      * Current behavior: Throws IllegalStateException at startup
      */
     @Test
-    fun `model registry returns null for unregistered model types`() {
+    fun `model registry returns null for unregistered model types`() = runTest {
         // Mock registry that returns null for DRAFT models
         val mockRegistry = mockk<ModelRegistryPort>()
 
         // When DRAFT_ONE is not registered
-        every { mockRegistry.getRegisteredAssetSync(ModelType.DRAFT_ONE) } returns null
-        every { mockRegistry.getRegisteredAssetSync(ModelType.DRAFT_TWO) } returns null
+        coEvery { mockRegistry.getRegisteredAsset(ModelType.DRAFT_ONE) } returns null
+        coEvery { mockRegistry.getRegisteredAsset(ModelType.DRAFT_TWO) } returns null
 
         val fastAsset = mockk<LocalModelAsset>()
         every { fastAsset.metadata } returns mockk {
             every { localFileName } returns "fast.bin"
         }
-        every { mockRegistry.getRegisteredAssetSync(ModelType.FAST) } returns fastAsset
+        coEvery { mockRegistry.getRegisteredAsset(ModelType.FAST) } returns fastAsset
 
         // Verify null handling
-        val draftOneAsset = mockRegistry.getRegisteredAssetSync(ModelType.DRAFT_ONE)
-        val draftTwoAsset = mockRegistry.getRegisteredAssetSync(ModelType.DRAFT_TWO)
-        val fastResult = mockRegistry.getRegisteredAssetSync(ModelType.FAST)
+        val draftOneAsset = mockRegistry.getRegisteredAsset(ModelType.DRAFT_ONE)
+        val draftTwoAsset = mockRegistry.getRegisteredAsset(ModelType.DRAFT_TWO)
+        val fastResult = mockRegistry.getRegisteredAsset(ModelType.FAST)
 
         assertNull(draftOneAsset, "DRAFT_ONE should return null when not registered")
         assertNull(draftTwoAsset, "DRAFT_TWO should return null when not registered")

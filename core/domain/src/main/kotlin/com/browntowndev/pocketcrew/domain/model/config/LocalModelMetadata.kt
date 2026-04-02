@@ -7,8 +7,8 @@ data class LocalModelMetadata(
     val huggingFaceModelName: String,
     val remoteFileName: String,
     val localFileName: String,
-    val displayName: String,
     val sha256: String,
     val sizeInBytes: Long,
-    val modelFileFormat: ModelFileFormat
+    val modelFileFormat: ModelFileFormat,
+    val visionCapable: Boolean = false
 )

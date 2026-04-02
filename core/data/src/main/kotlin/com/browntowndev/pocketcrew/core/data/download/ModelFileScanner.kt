@@ -209,6 +209,41 @@ class ModelFileScanner @Inject constructor(
     }
 
     /**
+     * Deletes the physical model file from disk for the given local model ID.
+     * Called during soft-delete of a local model.
+     */
+    override suspend fun deleteModelFile(localModelId: Long) {
+        withContext(Dispatchers.IO) {
+            val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+
+            // Look up the model to get its filename
+            val asset = modelRegistry.getAssetById(localModelId)
+            val filename = asset?.metadata?.localFileName
+
+            if (filename != null && filename.isNotBlank()) {
+                val file = File(modelsDir, filename)
+                if (file.exists()) {
+                    val deleted = file.delete()
+                    if (!deleted) {
+                        Log.w(TAG, "Failed to delete model file: ${file.absolutePath}")
+                    }
+                }
+
+                // Also clean up any partial download temp file for this model
+                val tempFile = File(modelsDir, "$filename${ModelConfig.TEMP_EXTENSION}")
+                if (tempFile.exists()) {
+                    val tempDeleted = tempFile.delete()
+                    if (!tempDeleted) {
+                        Log.w(TAG, "Failed to delete temp file: ${tempFile.absolutePath}")
+                    }
+                }
+            } else {
+                Log.w(TAG, "Could not find model with ID $localModelId to delete file")
+            }
+        }
+    }
+
+    /**
      * Quick scan to check if all models are present.
      * Used for fast path checking without fetching remote config.
      */
@@ -216,7 +251,7 @@ class ModelFileScanner @Inject constructor(
         val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
 
         // Get dynamic filenames from registry
-        val assetsByType = ModelType.entries.associateWith { modelRegistry.getRegisteredAssetSync(it) }
+        val assetsByType = ModelType.entries.associateWith { modelRegistry.getRegisteredAsset(it) }
 
         // Check for model files - use localFileName from config
         val requiredFiles = listOfNotNull(

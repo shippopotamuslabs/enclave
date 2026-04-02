@@ -108,7 +108,6 @@ class ModelDownloadOrchestratorImplTest {
                 huggingFaceModelName = "test/model",
                 remoteFileName = localFileName,
                 localFileName = localFileName,
-                displayName = "Test Model",
                 sha256 = sha256,
                 sizeInBytes = 1024,
                 modelFileFormat = ModelFileFormat.LITERTLM

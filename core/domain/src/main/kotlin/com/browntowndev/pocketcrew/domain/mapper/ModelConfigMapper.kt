@@ -34,7 +34,8 @@ class ModelConfigMapper @Inject constructor() {
                     topK = first.topK,
                     topP = first.topP,
                     maxTokens = first.maxTokens,
-                    systemPrompt = first.systemPrompt
+                    systemPrompt = first.systemPrompt,
+                    visionCapable = first.visionCapable
                 )
             }
     }

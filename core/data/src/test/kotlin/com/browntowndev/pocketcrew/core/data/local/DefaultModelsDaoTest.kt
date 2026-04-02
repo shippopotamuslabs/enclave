@@ -39,7 +39,7 @@ class DefaultModelsDaoTest {
     @Test
     fun `assign a local config as default for a ModelType`() = runTest {
         val modelId = database.localModelsDao().upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, displayName = "q", modelStatus = ModelStatus.CURRENT
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, modelStatus = ModelStatus.CURRENT
         ))
         val configId = database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
             localModelId = modelId, displayName = "c"
@@ -69,7 +69,7 @@ class DefaultModelsDaoTest {
     @Test
     fun `switch default from local to API`() = runTest {
         val modelId = database.localModelsDao().upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, displayName = "q", modelStatus = ModelStatus.CURRENT
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, modelStatus = ModelStatus.CURRENT
         ))
         val localConfigId = database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
             localModelId = modelId, displayName = "c"
@@ -92,7 +92,7 @@ class DefaultModelsDaoTest {
     @Test
     fun `observe all defaults`() = runTest {
         val modelId = database.localModelsDao().upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, displayName = "q", modelStatus = ModelStatus.CURRENT
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, modelStatus = ModelStatus.CURRENT
         ))
         val localConfigId = database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
             localModelId = modelId, displayName = "c"

@@ -41,7 +41,7 @@ class DownloadWorkScheduler @Inject constructor(
             .build()
 
         // Serialize LocalModelAsset to pipe-delimited string:
-        // modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt
+        // modelType|remoteFileName|localFileName|presetName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt|isSystemPreset
         val inputData = models.entries
             .map { (modelType, asset) ->
                 val config = asset.configurations.firstOrNull()
@@ -49,7 +49,7 @@ class DownloadWorkScheduler @Inject constructor(
                     modelType.name,
                     asset.metadata.remoteFileName,
                     asset.metadata.localFileName,
-                    asset.metadata.displayName,
+                    config?.displayName ?: asset.metadata.huggingFaceModelName,
                     asset.metadata.huggingFaceModelName,
                     asset.metadata.sizeInBytes.toString(),
                     asset.metadata.sha256,
@@ -61,7 +61,8 @@ class DownloadWorkScheduler @Inject constructor(
                     config?.repetitionPenalty?.toString() ?: "1.1",
                     config?.maxTokens?.toString() ?: "4096",
                     config?.contextWindow?.toString() ?: "4096",
-                    config?.systemPrompt ?: ""
+                    config?.systemPrompt ?: "",
+                    config?.isSystemPreset?.toString() ?: "true"
                 ).joinToString("|")
             }
             .toTypedArray()

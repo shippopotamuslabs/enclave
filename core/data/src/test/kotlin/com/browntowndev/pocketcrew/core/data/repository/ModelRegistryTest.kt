@@ -32,7 +32,6 @@ class ModelRegistryTest {
             huggingFaceModelName = "model/main",
             remoteFileName = "main.bin",
             localFileName = "main.bin",
-            displayName = "Main Model",
             sha256 = "abc123",
             sizeInBytes = 1024,
             modelFileFormat = ModelFileFormat.LITERTLM
@@ -57,7 +56,6 @@ class ModelRegistryTest {
             huggingFaceModelName = "model/vision",
             remoteFileName = "vision.bin",
             localFileName = "vision.bin",
-            displayName = "Vision Model",
             sha256 = "def456",
             sizeInBytes = 2048,
             modelFileFormat = ModelFileFormat.LITERTLM
@@ -149,31 +147,85 @@ class ModelRegistryTest {
         assertEquals(2, allAssets.size)
     }
 
+    // ============================================================
+    // SOFT-DELETE SCENARIOS (TDD Red)
+    // ============================================================
+
+    /**
+     * Risk #3: Creating new LocalModelEntity on re-download instead of reusing
+     * Defense: reuseModelForRedownload() reuses the same LocalModelEntity ID
+     *
+     * TDD Red: This test FAILS against current implementation because
+     * reuseModelForRedownload is NotImplementedError in FakeModelRegistry
+     * until the feature is implemented.
+     */
     @Test
-    fun getRegisteredAsset_syncVersion_returnsSameAsSuspend() = runTest {
-        // Given
-        val asset = createMainModelAsset()
-        fakeRegistry.setRegisteredModel(ModelType.MAIN, asset)
+    fun `reuseModelForRedownload reuses same LocalModelEntity ID`() = runTest {
+        // Given: a soft-deleted model exists (model with no configs, stored in softDeletedModels)
+        val modelId = 42L
+        val softDeletedAsset = createMainModelAsset().copy(configurations = emptyList())
+        // Manually add to soft-deleted (simulates soft-delete state)
+        fakeRegistry.registerSoftDeletedModel(modelId, softDeletedAsset)
+
+        // Given: new remote asset with matching sha256
+        val newAsset = createMainModelAsset().copy(
+            configurations = listOf(
+                LocalModelConfiguration(
+                    localModelId = modelId,
+                    displayName = "Main Model",
+                    maxTokens = 2048,
+                    contextWindow = 2048,
+                    temperature = 0.0,
+                    topP = 0.95,
+                    topK = 40,
+                    repetitionPenalty = 1.1,
+                    systemPrompt = "",
+                    isSystemPreset = true
+                )
+            )
+        )
 
         // When
-        val syncResult = fakeRegistry.getRegisteredAssetSync(ModelType.MAIN)
-        val suspendResult = fakeRegistry.getRegisteredAsset(ModelType.MAIN)
+        val reusedId = fakeRegistry.reuseModelForRedownload(modelId, newAsset)
 
-        // Then
-        assertEquals(syncResult?.metadata?.sha256, suspendResult?.metadata?.sha256)
+        // Then: same model ID is returned
+        assertEquals(modelId, reusedId)
     }
 
+    /**
+     * Risk #4: InitializeModelsUseCase re-downloads soft-deleted models
+     * Defense: getSoftDeletedModels() returns only models with no configs
+     */
     @Test
-    fun getRegisteredAssetsSync_returnsSameAsSuspend() = runTest {
-        // Given
-        fakeRegistry.setRegisteredModel(ModelType.MAIN, createMainModelAsset())
+    fun `getSoftDeletedModels returns only soft-deleted models with zero configs`() = runTest {
+        // Given: an active model with configs
+        fakeRegistry.setRegisteredModel(ModelType.FAST, createMainModelAsset())
+
+        // Given: a soft-deleted model (no configs)
+        val softDeletedId = 99L
+        fakeRegistry.registerSoftDeletedModel(softDeletedId, createMainModelAsset().copy(configurations = emptyList()))
+
+        // When
+        val softDeleted = fakeRegistry.getSoftDeletedModels()
+
+        // Then: only the soft-deleted model is returned
+        assertEquals(1, softDeleted.size)
+        assertEquals(softDeletedId, softDeleted.first().metadata.id)
+    }
+
+    /**
+     * getSoftDeletedModels returns empty when no models are soft-deleted
+     */
+    @Test
+    fun `getSoftDeletedModels returns empty when no soft-deleted models exist`() = runTest {
+        // Given: only active models
+        fakeRegistry.setRegisteredModel(ModelType.FAST, createMainModelAsset())
         fakeRegistry.setRegisteredModel(ModelType.VISION, createVisionModelAsset())
 
         // When
-        val syncResult = fakeRegistry.getRegisteredAssetsSync()
-        val suspendResult = fakeRegistry.getRegisteredAssets()
+        val softDeleted = fakeRegistry.getSoftDeletedModels()
 
-        // Then
-        assertEquals(syncResult.size, suspendResult.size)
+        // Then: empty
+        assertEquals(0, softDeleted.size)
     }
 }

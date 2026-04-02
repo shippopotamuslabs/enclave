@@ -44,9 +44,11 @@ fun SettingsRoute(
         onDeleteApiModelAsset = viewModel::onDeleteApiModelAsset,
         onDeleteApiModelConfig = { id -> viewModel.onDeleteApiModelConfig(id, {}) },
         onNavigateToLocalModelConfigure = onNavigateToLocalModelConfigure,
-        onSelectLocalModelAsset = { asset -> asset?.let { viewModel.onSelectLocalModelAsset(it) } },
+        onSelectLocalModelAsset = viewModel::onSelectLocalModelAsset,
         onSelectLocalModelConfig = viewModel::onSelectLocalModelConfig,
         onDeleteLocalModelAsset = viewModel::onDeleteLocalModelAsset,
-        onDeleteLocalModelConfig = { id -> viewModel.onDeleteLocalModelConfig(id, {}) }
+        onDeleteLocalModelConfig = { id -> viewModel.onDeleteLocalModelConfig(id, {}) },
+        onConfirmDeletionWithReassignment = viewModel::onConfirmDeletionWithReassignment,
+        onDismissDeletionSafety = viewModel::onDismissDeletionSafety
     )
 }

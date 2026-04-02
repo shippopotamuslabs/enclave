@@ -28,11 +28,11 @@ class DeleteApiModelConfigurationUseCaseTest {
     @Test
     fun `invoke deletes specific configuration`() = runTest {
         val configId = 1L
-        coEvery { apiRepository.deleteConfigurationsForCredentials(configId) } returns Unit // Assuming this name for now, update if plural
+        coEvery { apiRepository.deleteConfiguration(configId) } returns Unit
 
         val result = useCase(configId)
 
         assertTrue(result.isSuccess)
-        coVerify(exactly = 1) { apiRepository.deleteConfigurationsForCredentials(configId) }
+        coVerify(exactly = 1) { apiRepository.deleteConfiguration(configId) }
     }
 }

@@ -75,7 +75,7 @@ class CheckModelEligibilityUseCase @Inject constructor(
 
     /**
      * Determines which assets need downloading based on registry comparison.
-     * Checks for unregistered assets and config changes (displayName, SHA256, format).
+     * Checks for unregistered assets and config changes (huggingFaceModelName, SHA256, format).
      */
     private fun determineAssetsNeedingDownload(
         originalModels: Map<ModelType, LocalModelAsset>,
@@ -93,7 +93,7 @@ class CheckModelEligibilityUseCase @Inject constructor(
                 registeredAsset.metadata.modelFileFormat != asset.metadata.modelFileFormat
 
             if (assetFileUpdated) {
-                logger.debug(TAG, "[ASSET UPDATED] Asset updated: ${asset.metadata.displayName}. Registered: $registeredAsset")
+                logger.debug(TAG, "[ASSET UPDATED] Asset updated: ${asset.metadata.huggingFaceModelName}. Registered: $registeredAsset")
                 assetsToDownload.add(asset)
             }
         }

@@ -35,7 +35,7 @@ class CascadeBehaviorTest {
     @Test
     fun `deleting a local model cascades to its configurations`() = runTest {
         val modelId = database.localModelsDao().upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, displayName = "q", modelStatus = ModelStatus.CURRENT
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, modelStatus = ModelStatus.CURRENT
         ))
         database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(localModelId = modelId, displayName = "c1"))
         database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(localModelId = modelId, displayName = "c2"))
@@ -63,7 +63,7 @@ class CascadeBehaviorTest {
     @Test(expected = SQLiteConstraintException::class)
     fun `deleting a local config that is currently a default is blocked`() = runTest {
         val modelId = database.localModelsDao().upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, displayName = "q", modelStatus = ModelStatus.CURRENT
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, modelStatus = ModelStatus.CURRENT
         ))
         val configId = database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(localModelId = modelId, displayName = "c1"))
         database.defaultModelsDao().upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = configId, apiConfigId = null))

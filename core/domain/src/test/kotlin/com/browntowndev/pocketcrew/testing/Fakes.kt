@@ -43,20 +43,20 @@ import kotlinx.coroutines.flow.map
 
 
 fun createFakeLocalModelAsset(
+    id: Long = 0,
     huggingFaceModelName: String = "test/model",
     remoteFileName: String = "model.bin",
     localFileName: String = "model.bin",
-    displayName: String = "Test Model",
     sha256: String = "abc123",
     sizeInBytes: Long = 1024,
     modelFileFormat: ModelFileFormat = ModelFileFormat.LITERTLM,
     configurations: List<LocalModelConfiguration> = emptyList()
 ) = LocalModelAsset(
     metadata = LocalModelMetadata(
+        id = id,
         huggingFaceModelName = huggingFaceModelName,
         remoteFileName = remoteFileName,
         localFileName = localFileName,
-        displayName = displayName,
         sha256 = sha256,
         sizeInBytes = sizeInBytes,
         modelFileFormat = modelFileFormat
@@ -74,7 +74,8 @@ fun createFakeLocalModelConfiguration(
     topP: Double = 0.95,
     topK: Int? = 40,
     repetitionPenalty: Double = 1.0,
-    systemPrompt: String = "You are a helpful assistant."
+    systemPrompt: String = "You are a helpful assistant.",
+    isSystemPreset: Boolean = false
 ) = LocalModelConfiguration(
     id = id,
     localModelId = localModelId,
@@ -85,7 +86,8 @@ fun createFakeLocalModelConfiguration(
     topP = topP,
     topK = topK,
     repetitionPenalty = repetitionPenalty,
-    systemPrompt = systemPrompt
+    systemPrompt = systemPrompt,
+    isSystemPreset = isSystemPreset
 )
 
 
@@ -164,7 +166,8 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
                 missingModels = emptyList(),
                 partialDownloads = emptyMap(),
                 allValid = true
-            )
+            ),
+            availableToRedownload = emptyList()
         )
         return startDownloads(modelsResult, wifiOnly)
     }
@@ -216,13 +219,8 @@ class FakeModelRegistry : ModelRegistryPort {
     override suspend fun getRegisteredConfiguration(modelType: ModelType): LocalModelConfiguration? =
         _configs.value[modelType]
 
-    override fun getRegisteredConfigurationSync(modelType: ModelType): LocalModelConfiguration? =
-        _configs.value[modelType]
-    override fun getRegisteredAssetSync(modelType: ModelType): LocalModelAsset? = _assets.value[modelType]
     override suspend fun getRegisteredAssets(): List<LocalModelAsset> = _assets.value.values.toList()
-    override fun getRegisteredAssetsSync(): List<LocalModelAsset> = _assets.value.values.toList()
     override suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration> = _configs.value.values.toList()
-    override fun getRegisteredConfigurationsSync(): List<LocalModelConfiguration> = _configs.value.values.toList()
     override fun observeAsset(modelType: ModelType): Flow<LocalModelAsset?> = _assets.map { it[modelType] }
     override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> = _configs.map { it[modelType] }
     override fun observeAssets(): Flow<List<LocalModelAsset>> = _assets.map { it.values.toList() }
@@ -273,6 +271,18 @@ class FakeModelRegistry : ModelRegistryPort {
             _configs.value = _configs.value - entryToDelete.key
         }
     }
+
+    override suspend fun getSoftDeletedModels(): List<LocalModelAsset> {
+        throw NotImplementedError("TDD Red - getSoftDeletedModels not yet implemented")
+    }
+
+    override suspend fun reuseModelForRedownload(modelId: Long, newAsset: LocalModelAsset): Long {
+        throw NotImplementedError("TDD Red - reuseModelForRedownload not yet implemented")
+    }
+
+    override suspend fun getAssetById(id: Long): LocalModelAsset? {
+        return _assets.value.values.find { it.metadata.id == id }
+    }
 }
 
 class FakeApiModelRepository : ApiModelRepositoryPort {
@@ -283,6 +293,7 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     val savedKeys = mutableMapOf<Long, String>()
 
     override fun observeAllCredentials(): Flow<List<ApiCredentials>> = _credentials
+    override fun observeAllConfigurations(): Flow<List<ApiModelConfiguration>> = _configs
     override suspend fun getAllCredentials(): List<ApiCredentials> = _credentials.value
     override suspend fun getCredentialsById(id: Long): ApiCredentials? = _credentials.value.find { it.id == id }
 
@@ -315,6 +326,10 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
 
     override suspend fun deleteConfigurationsForCredentials(credentialsId: Long) {
         _configs.value = _configs.value.filter { it.apiCredentialsId != credentialsId }
+    }
+
+    override suspend fun deleteConfiguration(id: Long) {
+        _configs.value = _configs.value.filter { it.id != id }
     }
 }
 
