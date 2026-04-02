@@ -144,14 +144,20 @@ class ChatViewModel @Inject constructor(
         val allMergedMessages = mergedMessages + inFlightMessagesMap.filterKeys { it !in mergedMessages }
         
         // Map domain messages to UI messages
+        var isGenerating = false
+        var hasActiveIndicator = false
         val chatMessages: List<ChatMessage> = allMergedMessages.values.map { message: Message ->
-            mapToChatMessage(message)
-        }
-
-        val isGenerating = chatMessages.any {
-            it.indicatorState is IndicatorState.Generating ||
-            it.indicatorState is IndicatorState.Thinking ||
-            it.indicatorState is IndicatorState.Processing
+            val chatMessage = mapToChatMessage(message)
+            if (chatMessage.indicatorState != null && chatMessage.indicatorState !is IndicatorState.None) {
+                hasActiveIndicator = true
+                if (chatMessage.indicatorState is IndicatorState.Generating ||
+                    chatMessage.indicatorState is IndicatorState.Thinking ||
+                    chatMessage.indicatorState is IndicatorState.Processing
+                ) {
+                    isGenerating = true
+                }
+            }
+            chatMessage
         }
 
         ChatUiState(
@@ -162,7 +168,8 @@ class ChatViewModel @Inject constructor(
             hapticPress = settings.hapticPress,
             hapticResponse = settings.hapticResponse,
             chatId = _currentChatId.value ?: initialChatId ?: -1L,
-            isGenerating = isGenerating
+            isGenerating = isGenerating,
+            hasActiveIndicator = hasActiveIndicator
         )
     }.stateIn(
         scope = viewModelScope,
