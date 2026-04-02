@@ -80,7 +80,9 @@ fun MessageBubble(
                 modifier = Modifier
                     .fillMaxWidth(fraction = .75f)
                     .zIndex(1f)
-                    .clickable { showActions = !showActions },
+                    .clickable(
+                        onClickLabel = if (showActions) "Hide message actions" else "Show message actions",
+                    ) { showActions = !showActions },
                 shape = RoundedCornerShape(
                     topStart = 20.dp,
                     topEnd = 20.dp,
