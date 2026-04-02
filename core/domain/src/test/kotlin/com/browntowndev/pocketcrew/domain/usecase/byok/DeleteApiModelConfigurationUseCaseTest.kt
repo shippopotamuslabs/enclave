@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -23,6 +24,7 @@ class DeleteApiModelConfigurationUseCaseTest {
         coEvery { transactionProvider.runInTransaction<Unit>(any()) } coAnswers {
             (args[0] as suspend () -> Unit).invoke()
         }
+        coEvery { defaultRepository.observeDefaults() } returns flowOf(emptyList())
     }
 
     @Test

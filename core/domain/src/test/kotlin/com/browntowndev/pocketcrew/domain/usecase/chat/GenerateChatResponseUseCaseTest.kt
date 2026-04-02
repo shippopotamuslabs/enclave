@@ -771,8 +771,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `toSnapshot maps properties correctly and calculates thinkingDurationSeconds`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockk<LocalModelAsset>()
 
         // Wait, System.currentTimeMillis() was causing StackOverflowError due to mockkStatic.
         // Instead of mockkStatic, let's just use the real time and verify duration is correctly calculated
@@ -824,8 +823,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `toSnapshot handles zero thinking duration correctly`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockk<LocalModelAsset>()
 
         // Emitting ONLY Thinking events means thinkingEndTime remains null
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -867,8 +865,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `toMessagesState returns accurate snapshot of accumulated messages`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(any()) } returns mockk<LocalModelAsset>()
 
         val assistantMessageId = 2L
         coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns assistantMessageId

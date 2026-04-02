@@ -883,7 +883,12 @@ class SettingsViewModelTest {
         deleteLocalModelUseCase = deleteLocalModelUseCase,
         getApiModelAssetsUseCase = GetApiModelAssetsUseCaseImpl(apiModelRepository),
         saveApiCredentialsUseCase = SaveApiCredentialsUseCaseImpl(apiModelRepository),
-        deleteApiCredentialsUseCase = DeleteApiCredentialsUseCaseImpl(apiModelRepository, defaultModelRepository, transactionProvider),
+        deleteApiCredentialsUseCase = DeleteApiCredentialsUseCaseImpl(
+            apiModelRepository = apiModelRepository,
+            modelRegistry = modelRegistry,
+            defaultModelRepository = defaultModelRepository,
+            transactionProvider = transactionProvider
+        ),
         saveApiModelConfigurationUseCase = SaveApiModelConfigurationUseCaseImpl(apiModelRepository),
         deleteApiModelConfigurationUseCase = DeleteApiModelConfigurationUseCaseImpl(apiModelRepository, defaultModelRepository, transactionProvider),
         getDefaultModelsUseCase = GetDefaultModelsUseCaseImpl(defaultModelRepository),
