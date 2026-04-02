@@ -1,80 +1,53 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.Flow
 
-/**
- * Port (interface) for model registry operations.
- * Tracks which model is currently installed for each model slot.
- */
 interface ModelRegistryPort {
-    /**
-     * Get registered model for a given type (suspend version).
-     * Returns null if no model is registered for that type.
-     */
-    suspend fun getRegisteredModel(modelType: ModelType): ModelConfiguration?
-
-    /**
-     * Get registered model for a given type (non-suspend version).
-     * Uses internal cache - suitable for use in DI provider methods.
-     * Returns null if no model is registered for that type.
-     */
-    fun getRegisteredModelSync(modelType: ModelType): ModelConfiguration?
-
-    /**
-     * Get all registered models (suspend version).
-     */
-    suspend fun getRegisteredModels(): List<ModelConfiguration>
-
-    /**
-     * Get all registered models (non-suspend version).
-     * Uses internal cache - suitable for use in DI provider methods.
-     */
-    fun getRegisteredModelsSync(): List<ModelConfiguration>
-
-    /**
-     * Get all registered models as a Flow for reactive updates.
-     */
-    fun observeRegisteredModels(): Flow<Map<ModelType, String>>
-
-    /**
-     * Observe a single model's configuration as a Flow for reactive updates.
-     */
-    fun observeModel(modelType: ModelType): Flow<ModelConfiguration?>
-
-    /**
-     * Update (or insert) the model for a given type with full config.
-     * Called after a successful download.
-     *
-     * @param config The model configuration to save
-     * @param status The status (CURRENT or OLD)
-     * @param markExistingAsOld If true and there's an existing CURRENT, it will be marked as OLD.
-     *                          If false, existing CURRENT will be updated in place (no OLD entry created).
-     */
-    suspend fun setRegisteredModel(
-        config: ModelConfiguration,
-        status: ModelStatus = ModelStatus.CURRENT,
-        markExistingAsOld: Boolean = true
-    )
-
-    /**
-     * Clear all registered models.
-     * Useful for factory reset or clean reinstall.
-     */
+    suspend fun getRegisteredAsset(modelType: ModelType): LocalModelAsset?
+    suspend fun getRegisteredConfiguration(modelType: ModelType): LocalModelConfiguration?
+    suspend fun getRegisteredAssets(): List<LocalModelAsset>
+    suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration>
+    fun observeAsset(modelType: ModelType): Flow<LocalModelAsset?>
+    fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?>
+    fun observeAssets(): Flow<List<LocalModelAsset>>
+    suspend fun setRegisteredModel(modelType: ModelType, asset: LocalModelAsset, status: ModelStatus = ModelStatus.CURRENT, markExistingAsOld: Boolean = true)
     suspend fun clearAll()
-
-    /**
-     * Clear all OLD entries from the database.
-     * Called after successful download completion.
-     */
     suspend fun clearOld()
 
+    suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long
+    suspend fun deleteLocalModelMetadata(id: Long)
+    suspend fun saveConfiguration(config: LocalModelConfiguration): Long
+    suspend fun deleteConfiguration(id: Long)
+
     /**
-     * Get models for all ModelTypes, preferring OLD if it exists, otherwise CURRENT.
-     * Used during initialization to handle failed downloads - if a download failed,
-     * the OLD entry should be used so the download is retried on restart.
+     * Returns models that were previously downloaded but have been soft-deleted.
+     * A soft-deleted model has a LocalModelEntity row but has zero configurations.
+     * These models are available for re-download.
      */
-    suspend fun getModelsPreferringOld(): List<ModelConfiguration>
+    suspend fun getSoftDeletedModels(): List<LocalModelAsset>
+
+    /**
+     * Reuses an existing soft-deleted LocalModelEntity row for re-download.
+     * Updates the metadata with the new asset information and creates a new
+     * configuration with isSystemPreset=true.
+     *
+     * @param modelId The existing LocalModelEntity ID to reuse
+     * @param newAsset The new asset data from the remote config
+     * @return The LocalModelEntity ID (same as input modelId)
+     */
+    suspend fun reuseModelForRedownload(modelId: Long, newAsset: LocalModelAsset): Long
+
+    /**
+     * Gets a LocalModelAsset by its database ID.
+     * Used by ModelFileScanner to locate the file to delete during soft-delete.
+     *
+     * @param id The LocalModelEntity database ID
+     * @return The LocalModelAsset if found, null otherwise
+     */
+    suspend fun getAssetById(id: Long): LocalModelAsset?
 }

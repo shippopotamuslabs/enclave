@@ -1,7 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
-import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.download.DownloadCheckResult
 import com.browntowndev.pocketcrew.domain.port.repository.DeviceEnvironmentRepositoryPort
 import javax.inject.Inject
@@ -14,32 +13,27 @@ class ValidateDownloadConditionsUseCase @Inject constructor(
     }
 
     suspend operator fun invoke(
-        missingModels: List<ModelConfiguration>,
+        missingModels: List<LocalModelAsset>,
         wifiOnly: Boolean
     ): DownloadCheckResult {
         if (missingModels.isEmpty()) {
-            Log.d(TAG, "No missing models, can start")
             return DownloadCheckResult(true, null, missingModels)
         }
 
         val isWifi = deviceEnvironmentRepository.isWifiConnected()
-        Log.d(TAG, "wifiOnly=$wifiOnly, isWifiConnected=$isWifi")
 
         if (wifiOnly && !isWifi) {
-            Log.w(TAG, "WiFi-only mode enabled but not connected to WiFi")
             return DownloadCheckResult(
                 false, "WiFi-only mode enabled but not connected to WiFi", missingModels
             )
         }
 
         if (!deviceEnvironmentRepository.hasRequiredStorage(15L * 1024 * 1024 * 1024)) {
-            Log.w(TAG, "Insufficient storage space")
             return DownloadCheckResult(
                 false, "Insufficient storage space. Need at least 15 GB free.", missingModels
             )
         }
 
-        Log.d(TAG, "All conditions met, can start")
         return DownloadCheckResult(true, null, missingModels)
     }
 }

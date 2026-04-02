@@ -1,7 +1,9 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.DeviceEnvironmentRepositoryPort
@@ -59,28 +61,28 @@ class ValidateDownloadConditionsUseCaseTest {
         assertEquals(null, result.errorMessage)
     }
 
-    private fun createModelConfig(modelType: ModelType, sha256: String): ModelConfiguration {
-        return ModelConfiguration(
-            modelType = modelType,
-            metadata = ModelConfiguration.Metadata(
+    private fun createLocalModelAsset(modelType: ModelType, sha256: String): LocalModelAsset {
+        return LocalModelAsset(
+            metadata = LocalModelMetadata(
                 huggingFaceModelName = "test/model",
                 remoteFileName = "${modelType.name.lowercase()}.litertlm",
                 localFileName = "${modelType.name.lowercase()}.litertlm",
-                displayName = "Test Model",
                 sha256 = sha256,
                 sizeInBytes = 1000000L,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.7,
-                topK = 40,
-                topP = 0.9,
-                repetitionPenalty = 1.0,
-                maxTokens = 2048,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(
-                systemPrompt = "You are helpful."
+            configurations = listOf(
+                LocalModelConfiguration(
+                    localModelId = 1L,
+                    displayName = "Test Config",
+                    maxTokens = 2048,
+                    contextWindow = 2048,
+                    temperature = 0.7,
+                    topP = 0.9,
+                    topK = 40,
+                    repetitionPenalty = 1.0,
+                    systemPrompt = "You are helpful."
+                )
             )
         )
     }
@@ -91,7 +93,7 @@ class ValidateDownloadConditionsUseCaseTest {
         coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
 
-        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+        val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = true)
@@ -107,7 +109,7 @@ class ValidateDownloadConditionsUseCaseTest {
         coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns true
         coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
 
-        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+        val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = true)
@@ -123,7 +125,7 @@ class ValidateDownloadConditionsUseCaseTest {
         coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns true
         coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns false
 
-        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+        val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = false)
@@ -139,7 +141,7 @@ class ValidateDownloadConditionsUseCaseTest {
         coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
 
-        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+        val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = false)
@@ -155,8 +157,8 @@ class ValidateDownloadConditionsUseCaseTest {
         coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
 
         val missingModels = listOf(
-            createModelConfig(ModelType.MAIN, "abc123"),
-            createModelConfig(ModelType.FAST, "def456")
+            createLocalModelAsset(ModelType.MAIN, "abc123"),
+            createLocalModelAsset(ModelType.FAST, "def456")
         )
 
         // When
@@ -174,7 +176,7 @@ class ValidateDownloadConditionsUseCaseTest {
         coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         // Storage check should not be called if WiFi check fails
 
-        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+        val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = true)
@@ -189,7 +191,7 @@ class ValidateDownloadConditionsUseCaseTest {
         // Given - wifiOnly is false so we shouldn't care about wifi status
         coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
 
-        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+        val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
         // When
         val result = useCase(missingModels, wifiOnly = false)
@@ -214,7 +216,7 @@ class ValidateDownloadConditionsUseCaseTest {
         coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
 
-        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+        val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
         // When - wifiOnly=true but no network
         val result = useCase(missingModels, wifiOnly = true)
@@ -234,7 +236,7 @@ class ValidateDownloadConditionsUseCaseTest {
         coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
 
-        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+        val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
         // When - wifiOnly=true
         val result = useCase(missingModels, wifiOnly = true)
@@ -254,7 +256,7 @@ class ValidateDownloadConditionsUseCaseTest {
         coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns true
 
-        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+        val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
         // When - wifiOnly=false (user allowed mobile)
         val result = useCase(missingModels, wifiOnly = false)
@@ -273,7 +275,7 @@ class ValidateDownloadConditionsUseCaseTest {
         coEvery { mockDeviceEnvironmentRepository.isWifiConnected() } returns false
         coEvery { mockDeviceEnvironmentRepository.hasRequiredStorage(any()) } returns false
 
-        val missingModels = listOf(createModelConfig(ModelType.MAIN, "abc123"))
+        val missingModels = listOf(createLocalModelAsset(ModelType.MAIN, "abc123"))
 
         // When - wifiOnly=false
         val result = useCase(missingModels, wifiOnly = false)

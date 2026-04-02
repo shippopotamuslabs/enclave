@@ -11,56 +11,44 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 @Composable
 fun SettingsRoute(
-    onNavigateBack: () -> Unit,
-    onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
+    onCloseClick: () -> Unit,
     onNavigateToModelDownload: () -> Unit,
-    onNavigateToByokConfigure: () -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel(),
+    onNavigateToByokConfigure: () -> Unit,
+    onNavigateToLocalModelConfigure: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     SettingsScreen(
         uiState = uiState,
-        onCloseClick = onNavigateBack,
+        onCloseClick = onCloseClick,
         onThemeChange = viewModel::onThemeChange,
         onHapticPressChange = viewModel::onHapticPressChange,
         onHapticResponseChange = viewModel::onHapticResponseChange,
         onShowCustomizationSheet = viewModel::onShowCustomizationSheet,
-        onCustomizationEnabledChange = viewModel::onCustomizationEnabledChange,
-        onPromptOptionChange = viewModel::onPromptOptionChange,
-        onCustomPromptTextChange = viewModel::onCustomPromptTextChange,
-        onSaveCustomization = viewModel::onSaveCustomization,
         onShowDataControlsSheet = viewModel::onShowDataControlsSheet,
-        onAllowMemoriesChange = viewModel::onAllowMemoriesChange,
-        onDeleteAllConversations = {
-            viewModel.onDeleteAllConversations()
-            onShowSnackbar("All conversations deleted", null)
-        },
-        onDeleteAllMemories = {
-            viewModel.onDeleteAllMemories()
-            onShowSnackbar("All memories deleted", null)
-        },
         onShowMemoriesSheet = viewModel::onShowMemoriesSheet,
-        onDeleteMemory = viewModel::onDeleteMemory,
         onOpenToS = {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://pocketcrew.ai/terms"))
             context.startActivity(intent)
         },
         onShowFeedbackSheet = viewModel::onShowFeedbackSheet,
-        onFeedbackTextChange = viewModel::onFeedbackTextChange,
-        onSubmitFeedback = {
-            viewModel.onSubmitFeedback()
-            onShowSnackbar("Feedback submitted. Thank you!", null)
-        },
-        onNavigateToModelDownload = onNavigateToModelDownload,
         onNavigateToModelConfigure = onNavigateToModelConfigure,
-        onShowModelConfigSheet = viewModel::onShowModelConfigSheet,
-        onSelectModelType = viewModel::onSelectModelType,
+        onShowLocalModelsSheet = viewModel::onShowModelConfigSheet, // Reuse this state flag
         onShowByokSheet = viewModel::onShowByokSheet,
         onNavigateToByokConfigure = onNavigateToByokConfigure,
-        onSelectApiModel = viewModel::onSelectApiModel,
-        onSetDefaultModel = viewModel::onSetDefaultModel
+        onSelectApiModelAsset = viewModel::onSelectApiModelAsset,
+        onSelectApiModelConfig = viewModel::onSelectApiModelConfig,
+        onDeleteApiModelAsset = viewModel::onDeleteApiModelAsset,
+        onDeleteApiModelConfig = { id -> viewModel.onDeleteApiModelConfig(id, {}) },
+        onNavigateToLocalModelConfigure = onNavigateToLocalModelConfigure,
+        onSelectLocalModelAsset = viewModel::onSelectLocalModelAsset,
+        onSelectLocalModelConfig = viewModel::onSelectLocalModelConfig,
+        onDeleteLocalModelAsset = viewModel::onDeleteLocalModelAsset,
+        onDeleteLocalModelConfig = { id -> viewModel.onDeleteLocalModelConfig(id, {}) },
+        onConfirmDeletionWithReassignment = viewModel::onConfirmDeletionWithReassignment,
+        onDismissDeletionSafety = viewModel::onDismissDeletionSafety
     )
 }

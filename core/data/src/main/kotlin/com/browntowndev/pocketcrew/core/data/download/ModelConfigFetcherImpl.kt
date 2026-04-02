@@ -1,7 +1,9 @@
 package com.browntowndev.pocketcrew.core.data.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.config.RemoteModelConfig
@@ -26,9 +28,9 @@ class ModelConfigFetcherImpl @Inject constructor(
     }
 
     /**
-     * Fetches model_config.json from the config URL and parses it into ModelConfiguration list.
+     * Fetches model_config.json from the config URL and parses it into LocalModelAsset map.
      */
-    override suspend fun fetchRemoteConfig(): Result<List<ModelConfiguration>> = withContext(Dispatchers.IO) {
+    override suspend fun fetchRemoteConfig(): Result<Map<ModelType, LocalModelAsset>> = withContext(Dispatchers.IO) {
         try {
             val configUrl = modelUrlProvider.getConfigUrl()
             Log.i(TAG, "Fetching config from URL: $configUrl")
@@ -50,7 +52,13 @@ class ModelConfigFetcherImpl @Inject constructor(
 
                 // Parse vision model
                 json.optJSONObject("vision")?.let { vision ->
-                    configs.add(parseModelConfig(vision, ModelType.VISION))
+                    val config = parseModelConfig(vision, ModelType.VISION)
+                    if (!config.visionCapable) {
+                        return@withContext Result.failure(
+                            Exception("Model configured for 'vision' slot must have 'visionCapable' set to true")
+                        )
+                    }
+                    configs.add(config)
                 }
 
                 // Parse draft_one model
@@ -85,8 +93,8 @@ class ModelConfigFetcherImpl @Inject constructor(
 
                 Log.i(TAG, "Fetched ${configs.size} model configs from server")
 
-                // Convert to ModelConfiguration
-                val modelConfigs = toModelConfigurations(configs)
+                // Convert to LocalModelAsset
+                val modelConfigs = toLocalModelAssets(configs)
                 Result.success(modelConfigs)
             }
         } catch (e: Exception) {
@@ -123,7 +131,8 @@ class ModelConfigFetcherImpl @Inject constructor(
             maxTokens = json.getInt("maxTokens"),
             contextWindow = json.getInt("contextWindow"),
             systemPrompt = json.getString("systemPrompt"),
-            thinkingEnabled = json.optBoolean("thinkingEnabled", false)
+            thinkingEnabled = json.optBoolean("thinkingEnabled", false),
+            visionCapable = json.optBoolean("visionCapable", false)
         )
     }
 
@@ -145,7 +154,7 @@ class ModelConfigFetcherImpl @Inject constructor(
     }
 
     /**
-     * Converts RemoteModelConfig list to ModelConfiguration list.
+     * Converts RemoteModelConfig list to a map of ModelType to LocalModelAsset.
      * Uses ModelUrlProvider to compute download URLs.
      *
      * Note: The download URL is computed on-the-fly by ModelUrlProviderPort when needed,
@@ -153,34 +162,38 @@ class ModelConfigFetcherImpl @Inject constructor(
      * Grouping by SHA256 (for files shared across multiple model types) happens in
      * DownloadProgressTracker, not here.
      */
-    override fun toModelConfigurations(configs: List<RemoteModelConfig>): List<ModelConfiguration> {
-        return configs.map { config ->
+    override fun toLocalModelAssets(configs: List<RemoteModelConfig>): Map<ModelType, LocalModelAsset> {
+        return configs.associate { config ->
             Log.d(TAG, "Model Config File: ${config.fileName}, modelType: ${config.modelType}")
 
-            ModelConfiguration(
-                modelType = config.modelType,
-                metadata = ModelConfiguration.Metadata(
-                    huggingFaceModelName = config.huggingFaceModelName,
-                    remoteFileName = config.fileName,
-                    localFileName = config.fileName,
-                    displayName = config.displayName,
-                    sha256 = config.sha256,
-                    sizeInBytes = config.sizeInBytes,
-                    modelFileFormat = config.modelFileFormat
-                ),
-                tunings = ModelConfiguration.Tunings(
-                    temperature = config.temperature,
-                    topK = config.topK,
-                    topP = config.topP,
-                    minP = config.minP,
-                    repetitionPenalty = config.repetitionPenalty,
-                    maxTokens = config.maxTokens,
-                    contextWindow = config.contextWindow,
-                    thinkingEnabled = config.thinkingEnabled
-                ),
-                persona = ModelConfiguration.Persona(
-                    systemPrompt = config.systemPrompt
-                )
+            val metadata = LocalModelMetadata(
+                huggingFaceModelName = config.huggingFaceModelName,
+                remoteFileName = config.fileName,
+                localFileName = config.fileName,
+                sha256 = config.sha256,
+                sizeInBytes = config.sizeInBytes,
+                modelFileFormat = config.modelFileFormat,
+                visionCapable = config.visionCapable
+            )
+
+            val configuration = LocalModelConfiguration(
+                localModelId = 0, // Will be set by Room
+                displayName = config.displayName,
+                maxTokens = config.maxTokens,
+                contextWindow = config.contextWindow,
+                temperature = config.temperature,
+                topP = config.topP,
+                topK = config.topK,
+                minP = config.minP,
+                repetitionPenalty = config.repetitionPenalty,
+                thinkingEnabled = config.thinkingEnabled,
+                systemPrompt = config.systemPrompt,
+                isSystemPreset = true
+            )
+
+            config.modelType to LocalModelAsset(
+                metadata = metadata,
+                configurations = listOf(configuration)
             )
         }
     }

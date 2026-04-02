@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.port.download
 
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 
 /**
  * Port (interface) for providing model download URLs.
@@ -18,8 +18,8 @@ interface ModelUrlProviderPort {
 
     /**
      * Get the download URL for a specific model configuration.
-     * @param config The model configuration containing remote file info
+     * @param asset The model asset containing remote file info
      * @return The full URL to download the model file
      */
-    fun getModelDownloadUrl(config: ModelConfiguration): String
+    fun getModelDownloadUrl(asset: LocalModelAsset): String
 }

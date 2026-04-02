@@ -43,7 +43,7 @@ class ChatViewModelNavigationTest {
 
         every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-        every { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
+        coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
         every { chatUseCases.mergeMessagesUseCase(any(), any()) } answers { firstArg() }
     }
 

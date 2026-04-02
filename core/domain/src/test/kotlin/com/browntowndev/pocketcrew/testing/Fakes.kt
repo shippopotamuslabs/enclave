@@ -15,7 +15,12 @@
  */
 
 package com.browntowndev.pocketcrew.testing
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
@@ -23,20 +28,76 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadState
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
+import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+
+
+fun createFakeLocalModelAsset(
+    id: Long = 0,
+    huggingFaceModelName: String = "test/model",
+    remoteFileName: String = "model.bin",
+    localFileName: String = "model.bin",
+    sha256: String = "abc123",
+    sizeInBytes: Long = 1024,
+    modelFileFormat: ModelFileFormat = ModelFileFormat.LITERTLM,
+    configurations: List<LocalModelConfiguration> = emptyList()
+) = LocalModelAsset(
+    metadata = LocalModelMetadata(
+        id = id,
+        huggingFaceModelName = huggingFaceModelName,
+        remoteFileName = remoteFileName,
+        localFileName = localFileName,
+        sha256 = sha256,
+        sizeInBytes = sizeInBytes,
+        modelFileFormat = modelFileFormat
+    ),
+    configurations = configurations
+)
+
+fun createFakeLocalModelConfiguration(
+    id: Long = 0,
+    localModelId: Long = 0,
+    displayName: String = "Default Configuration",
+    maxTokens: Int = 2048,
+    contextWindow: Int = 2048,
+    temperature: Double = 0.7,
+    topP: Double = 0.95,
+    topK: Int? = 40,
+    repetitionPenalty: Double = 1.0,
+    systemPrompt: String = "You are a helpful assistant.",
+    isSystemPreset: Boolean = false
+) = LocalModelConfiguration(
+    id = id,
+    localModelId = localModelId,
+    displayName = displayName,
+    maxTokens = maxTokens,
+    contextWindow = contextWindow,
+    temperature = temperature,
+    topP = topP,
+    topK = topK,
+    repetitionPenalty = repetitionPenalty,
+    systemPrompt = systemPrompt,
+    isSystemPreset = isSystemPreset
+)
 
 
 class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
     private val _downloadState = MutableStateFlow(DownloadState(status = DownloadStatus.CHECKING))
     override val downloadState: StateFlow<DownloadState> = _downloadState.asStateFlow()
+
+    private val _snackbarMessages = kotlinx.coroutines.flow.MutableSharedFlow<String>()
+    override val snackbarMessages: Flow<String> = _snackbarMessages.asSharedFlow()
 
     private val _speedTracker = MutableStateFlow<FakeSpeedTracker?>(null)
     override val speedTracker: DownloadSpeedTrackerPort
@@ -103,12 +164,14 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
 
     override suspend fun startDownloads(wifiOnly: Boolean): Boolean {
         val modelsResult = _lastModelsResult ?: DownloadModelsResult(
+            allModels = emptyMap(),
             modelsToDownload = emptyList(),
             scanResult = ModelScanResult(
                 missingModels = emptyList(),
                 partialDownloads = emptyMap(),
                 allValid = true
-            )
+            ),
+            availableToRedownload = emptyList()
         )
         return startDownloads(modelsResult, wifiOnly)
     }
@@ -141,35 +204,158 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
 }
 
 class FakeModelRegistry : ModelRegistryPort {
-    private val _registeredModels = MutableStateFlow<Map<ModelType, ModelConfiguration>>(emptyMap())
-    private val _modelsCache = mutableMapOf<ModelType, ModelConfiguration>()
+    private val _assets = MutableStateFlow<Map<ModelType, LocalModelAsset>>(emptyMap())
+    private val _configs = MutableStateFlow<Map<ModelType, LocalModelConfiguration>>(emptyMap())
 
-    fun registerModel(modelType: ModelType, config: ModelConfiguration) {
-        _modelsCache[modelType] = config
-        _registeredModels.value = _modelsCache.toMap()
+    fun registerAsset(modelType: ModelType, asset: LocalModelAsset) {
+        _assets.value = _assets.value + (modelType to asset)
+        if (asset.configurations.isNotEmpty()) {
+            _configs.value = _configs.value + (modelType to asset.configurations.first())
+        }
     }
 
     fun clearModels() {
-        _modelsCache.clear()
-        _registeredModels.value = emptyMap()
+        _assets.value = emptyMap()
+        _configs.value = emptyMap()
     }
 
-    fun getConfig(modelType: ModelType): ModelConfiguration? = _modelsCache[modelType]
+    override suspend fun getRegisteredAsset(modelType: ModelType): LocalModelAsset? = _assets.value[modelType]
+    override suspend fun getRegisteredConfiguration(modelType: ModelType): LocalModelConfiguration? =
+        _configs.value[modelType]
 
-    override suspend fun getRegisteredModel(modelType: ModelType): ModelConfiguration? = _modelsCache[modelType]
-    override fun getRegisteredModelSync(modelType: ModelType): ModelConfiguration? = _modelsCache[modelType]
-    override suspend fun getRegisteredModels(): List<ModelConfiguration> = _modelsCache.values.toList()
-    override fun getRegisteredModelsSync(): List<ModelConfiguration> = _modelsCache.values.toList()
-    override fun observeRegisteredModels(): Flow<Map<ModelType, String>> = _registeredModels.map { map -> map.mapValues { it.value.metadata.localFileName } }
-    override fun observeModel(modelType: ModelType): Flow<ModelConfiguration?> = _registeredModels.map { it[modelType] }
+    override suspend fun getRegisteredAssets(): List<LocalModelAsset> = _assets.value.values.toList()
+    override suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration> = _configs.value.values.toList()
+    override fun observeAsset(modelType: ModelType): Flow<LocalModelAsset?> = _assets.map { it[modelType] }
+    override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> = _configs.map { it[modelType] }
+    override fun observeAssets(): Flow<List<LocalModelAsset>> = _assets.map { it.values.toList() }
 
-    override suspend fun setRegisteredModel(config: ModelConfiguration, status: ModelStatus, markExistingAsOld: Boolean) {
-        registerModel(config.modelType, config)
+    override suspend fun setRegisteredModel(
+        modelType: ModelType,
+        asset: LocalModelAsset,
+        status: ModelStatus,
+        markExistingAsOld: Boolean
+    ) {
+        registerAsset(modelType, asset)
     }
 
     override suspend fun clearAll() { clearModels() }
     override suspend fun clearOld() {}
-    override suspend fun getModelsPreferringOld(): List<ModelConfiguration> = _modelsCache.values.toList()
+
+    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long {
+        // Find existing asset or create new one
+        val existingEntry = _assets.value.entries.find { it.value.metadata.sha256 == metadata.sha256 }
+        if (existingEntry != null) {
+            val updatedAsset = existingEntry.value.copy(metadata = metadata)
+            _assets.value = _assets.value + (existingEntry.key to updatedAsset)
+            return metadata.id
+        }
+        // Simplified for fake: just return ID
+        return metadata.id
+    }
+
+    override suspend fun deleteLocalModelMetadata(id: Long) {
+        val entryToDelete = _assets.value.entries.find { it.value.metadata.id == id }
+        if (entryToDelete != null) {
+            _assets.value = _assets.value - entryToDelete.key
+        }
+    }
+
+    override suspend fun saveConfiguration(config: LocalModelConfiguration): Long {
+        val modelType = _assets.value.entries.find { it.value.metadata.id == config.localModelId }?.key
+        if (modelType != null) {
+            _configs.value = _configs.value + (modelType to config)
+        }
+        return config.id
+    }
+
+    override suspend fun deleteConfiguration(id: Long) {
+        val entryToDelete = _configs.value.entries.find { it.value.id == id }
+        if (entryToDelete != null) {
+            _configs.value = _configs.value - entryToDelete.key
+        }
+    }
+
+    override suspend fun getSoftDeletedModels(): List<LocalModelAsset> {
+        throw NotImplementedError("TDD Red - getSoftDeletedModels not yet implemented")
+    }
+
+    override suspend fun reuseModelForRedownload(modelId: Long, newAsset: LocalModelAsset): Long {
+        throw NotImplementedError("TDD Red - reuseModelForRedownload not yet implemented")
+    }
+
+    override suspend fun getAssetById(id: Long): LocalModelAsset? {
+        return _assets.value.values.find { it.metadata.id == id }
+    }
+}
+
+class FakeApiModelRepository : ApiModelRepositoryPort {
+    private val _credentials = MutableStateFlow<List<ApiCredentials>>(emptyList())
+    private val _configs = MutableStateFlow<List<ApiModelConfiguration>>(emptyList())
+    private var nextCredId = 1L
+    private var nextConfigId = 1L
+    val savedKeys = mutableMapOf<Long, String>()
+
+    override fun observeAllCredentials(): Flow<List<ApiCredentials>> = _credentials
+    override fun observeAllConfigurations(): Flow<List<ApiModelConfiguration>> = _configs
+    override suspend fun getAllCredentials(): List<ApiCredentials> = _credentials.value
+    override suspend fun getCredentialsById(id: Long): ApiCredentials? = _credentials.value.find { it.id == id }
+
+    override suspend fun saveCredentials(credentials: ApiCredentials, apiKey: String): Long {
+        val id = if (credentials.id == 0L) nextCredId++ else credentials.id
+        val saved = credentials.copy(id = id)
+        _credentials.value = _credentials.value.filter { it.id != id } + saved
+        savedKeys[id] = apiKey
+        return id
+    }
+
+    override suspend fun deleteCredentials(id: Long) {
+        _credentials.value = _credentials.value.filter { it.id != id }
+        savedKeys.remove(id)
+        deleteConfigurationsForCredentials(id)
+    }
+
+    override suspend fun getConfigurationsForCredentials(credentialsId: Long): List<ApiModelConfiguration> =
+        _configs.value.filter { it.apiCredentialsId == credentialsId }
+
+    override suspend fun getConfigurationById(id: Long): ApiModelConfiguration? =
+        _configs.value.find { it.id == id }
+
+    override suspend fun saveConfiguration(config: ApiModelConfiguration): Long {
+        val id = if (config.id == 0L) nextConfigId++ else config.id
+        val saved = config.copy(id = id)
+        _configs.value = _configs.value.filter { it.id != id } + saved
+        return id
+    }
+
+    override suspend fun deleteConfigurationsForCredentials(credentialsId: Long) {
+        _configs.value = _configs.value.filter { it.apiCredentialsId != credentialsId }
+    }
+
+    override suspend fun deleteConfiguration(id: Long) {
+        _configs.value = _configs.value.filter { it.id != id }
+    }
+}
+
+class FakeDefaultModelRepository : DefaultModelRepositoryPort {
+    private val _defaults = MutableStateFlow<List<DefaultModelAssignment>>(emptyList())
+
+    override suspend fun getDefault(modelType: ModelType): DefaultModelAssignment? =
+        _defaults.value.find { it.modelType == modelType }
+
+    override fun observeDefaults(): Flow<List<DefaultModelAssignment>> = _defaults
+
+    override suspend fun setDefault(modelType: ModelType, localConfigId: Long?, apiConfigId: Long?) {
+        val assignment = DefaultModelAssignment(modelType, localConfigId, apiConfigId)
+        _defaults.value = _defaults.value.filter { it.modelType != modelType } + assignment
+    }
+
+    override suspend fun clearDefault(modelType: ModelType) {
+        _defaults.value = _defaults.value.filter { it.modelType != modelType }
+    }
+
+    fun seed(assignments: List<DefaultModelAssignment>) {
+        _defaults.value = assignments
+    }
 }
 
 class FakeSpeedTracker : DownloadSpeedTrackerPort {

@@ -15,7 +15,7 @@ interface ConversationManagerPort {
      *
      * @return The active ConversationPort instance
      */
-    fun getConversation(): ConversationPort
+    suspend fun getConversation(): ConversationPort
 
     /**
      * Closes the current conversation and releases resources.

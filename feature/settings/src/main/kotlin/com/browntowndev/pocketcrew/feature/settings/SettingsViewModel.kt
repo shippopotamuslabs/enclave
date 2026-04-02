@@ -3,20 +3,26 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
-import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfig
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationUi
-import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
-import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
-import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiModelUseCase
-import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiCredentialsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiModelConfigurationUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.pocketcrew.domain.usecase.byok.SaveApiModelUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.SaveApiCredentialsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.SaveApiModelConfigurationUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
-import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetModelConfigurationsUseCase
-import com.browntowndev.pocketcrew.domain.usecase.modelconfig.UpdateModelConfigurationUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.DeleteLocalModelConfigurationUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.DeleteLocalModelMetadataUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.DeleteLocalModelUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SaveLocalModelConfigurationUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateAllowMemoriesUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomPromptTextUseCase
@@ -53,11 +59,24 @@ private data class TransientState(
     val feedbackText: String = "",
     // Model Configuration
     val showModelConfigSheet: Boolean = false,
-    val selectedModelType: ModelType? = null,
-    val selectedModelConfig: ModelConfigurationUi? = null,
+    val availableToDownloadModels: List<LocalModelAsset> = emptyList(),
+    val selectedLocalModelAsset: LocalModelAssetUi? = null,
+    val selectedLocalModelConfig: LocalModelConfigUi? = null,
     // BYOK Sheet
     val showByokSheet: Boolean = false,
-    val selectedApiModel: ApiModelConfigUi? = null
+    val selectedApiModelAsset: ApiModelAssetUi? = null,
+    val selectedApiModelConfig: ApiModelConfigUi? = null,
+    // Deletion Flow
+    val showCannotDeleteLastModelAlert: Boolean = false,
+    val pendingDeletionModelId: Long? = null,
+    val pendingDeletionConfigId: Long? = null,
+    val pendingDeletionApiCredentialsId: Long? = null,
+    val pendingDeletionApiConfigId: Long? = null,
+    val modelTypesNeedingReassignment: List<ModelType> = emptyList(),
+    val reassignmentOptions: List<ReassignmentOptionUi> = emptyList(),
+    // Assignment Selection Dialog
+    val showAssignmentDialog: Boolean = false,
+    val editingAssignmentSlot: ModelType? = null
 )
 
 @HiltViewModel
@@ -71,11 +90,16 @@ class SettingsViewModel @Inject constructor(
     private val updateSelectedPromptOptionUseCase: UpdateSelectedPromptOptionUseCase,
     private val updateCustomPromptTextUseCase: UpdateCustomPromptTextUseCase,
     private val updateAllowMemoriesUseCase: UpdateAllowMemoriesUseCase,
-    private val getModelConfigurationsUseCase: GetModelConfigurationsUseCase,
-    private val updateModelConfigurationUseCase: UpdateModelConfigurationUseCase,
-    private val getApiModelsUseCase: GetApiModelsUseCase,
-    private val saveApiModelUseCase: SaveApiModelUseCase,
-    private val deleteApiModelUseCase: DeleteApiModelUseCase,
+    private val getLocalModelAssetsUseCase: GetLocalModelAssetsUseCase,
+    private val saveLocalModelConfigurationUseCase: SaveLocalModelConfigurationUseCase,
+    private val deleteLocalModelConfigurationUseCase: DeleteLocalModelConfigurationUseCase,
+    private val deleteLocalModelMetadataUseCase: DeleteLocalModelMetadataUseCase,
+    private val deleteLocalModelUseCase: DeleteLocalModelUseCase,
+    private val getApiModelAssetsUseCase: GetApiModelAssetsUseCase,
+    private val saveApiCredentialsUseCase: SaveApiCredentialsUseCase,
+    private val deleteApiCredentialsUseCase: DeleteApiCredentialsUseCase,
+    private val saveApiModelConfigurationUseCase: SaveApiModelConfigurationUseCase,
+    private val deleteApiModelConfigurationUseCase: DeleteApiModelConfigurationUseCase,
     private val getDefaultModelsUseCase: GetDefaultModelsUseCase,
     private val setDefaultModelUseCase: SetDefaultModelUseCase,
     private val errorHandler: ViewModelErrorHandler
@@ -92,24 +116,16 @@ class SettingsViewModel @Inject constructor(
     val currentApiKey: StateFlow<String> = _currentApiKey
 
     // Model configurations flow - follows 2026 Compose best practices
-    private val modelConfigsFlow = getModelConfigurationsUseCase()
+    private val localModelAssetsFlow = getLocalModelAssetsUseCase()
+    private val apiModelAssetsFlow = getApiModelAssetsUseCase()
 
     val uiState: StateFlow<SettingsUiState> = combine(
         getSettingsUseCase(),
-        modelConfigsFlow,
-        getApiModelsUseCase(),
+        localModelAssetsFlow,
+        apiModelAssetsFlow,
         getDefaultModelsUseCase(),
         _transientState,
-    ) { persistedSettings, modelConfigs, apiModels, defaultModels, transientState ->
-        // Use transient state's selectedModelConfig if available (for editing),
-        // otherwise use the flow's selectedConfig (initial load)
-        val selectedConfig = transientState.selectedModelConfig
-            ?: transientState.selectedModelType?.let { type ->
-                modelConfigs.find { it.modelType == type }
-            }
-            
-        val selectedApiConfig = transientState.selectedApiModel
-
+    ) { persistedSettings, localAssets, apiAssets, defaultModels, transientState ->
         SettingsUiState(
             // Persisted settings from repository
             theme = persistedSettings.theme,
@@ -128,24 +144,67 @@ class SettingsViewModel @Inject constructor(
             memories = transientState.memories,
             // Model Configuration state
             showModelConfigSheet = transientState.showModelConfigSheet,
-            modelConfigurations = modelConfigs,
-            selectedModelType = transientState.selectedModelType,
-            selectedModelConfig = selectedConfig,
-            // Available HuggingFace models
-            availableHuggingFaceModels = modelConfigs.distinctBy { it.huggingFaceModelName },
+            localModels = localAssets.map { it.toUi() },
+            availableToDownloadModels = transientState.availableToDownloadModels.map { it.toUi() },
+            selectedLocalModelAsset = transientState.selectedLocalModelAsset?.let { selected ->
+                if (selected.metadataId != 0L) {
+                    localAssets.find { it.metadata.id == selected.metadataId }?.toUi() ?: selected
+                } else {
+                    selected
+                }
+            },
+            selectedLocalModelConfig = transientState.selectedLocalModelConfig?.let { selected ->
+                if (selected.id != 0L) {
+                    val asset = localAssets.find { it.metadata.id == selected.localModelId }
+                    asset?.configurations?.find { it.id == selected.id }?.toUi() ?: selected
+                } else {
+                    selected
+                }
+            },
+            // Available HuggingFace models for new configurations
+            availableHuggingFaceModels = localAssets.map {
+                LocalModelMetadataUi(
+                    id = it.metadata.id,
+                    huggingFaceModelName = it.metadata.huggingFaceModelName
+                )
+            }.distinctBy { it.huggingFaceModelName },
             // BYOK Sheet
             showByokSheet = transientState.showByokSheet,
-            apiModels = apiModels.map { it.toUi() },
-            selectedApiModel = selectedApiConfig,
+            apiModels = apiAssets.map { it.toUi() },
+            selectedApiModelAsset = transientState.selectedApiModelAsset?.let { selected ->
+                if (selected.credentialsId != 0L) {
+                    apiAssets.find { it.credentials.id == selected.credentialsId }?.toUi() ?: selected
+                } else {
+                    selected
+                }
+            },
+            selectedApiModelConfig = transientState.selectedApiModelConfig?.let { selected ->
+                if (selected.id != 0L) {
+                    val asset = apiAssets.find { it.credentials.id == selected.credentialsId }
+                    asset?.configurations?.find { it.id == selected.id }?.toUi() ?: selected
+                } else {
+                    selected
+                }
+            },
             // Default model assignments
             defaultAssignments = defaultModels.map { def ->
                 DefaultModelAssignmentUi(
                     modelType = def.modelType,
-                    source = def.source,
-                    currentModelName = def.onDeviceDisplayName ?: def.apiModelConfig?.displayName ?: "Unknown",
-                    providerName = def.apiModelConfig?.provider?.displayName
+                    source = if (def.apiConfigId != null) ModelSource.API else ModelSource.ON_DEVICE,
+                    currentModelName = def.displayName ?: "Unknown",
+                    displayLabel = def.modelType.displayLabel,
+                    providerName = def.providerName
                 )
-            }
+            },
+            // Deletion Flow
+            showCannotDeleteLastModelAlert = transientState.showCannotDeleteLastModelAlert,
+            pendingDeletionModelId = transientState.pendingDeletionModelId,
+            pendingDeletionConfigId = transientState.pendingDeletionConfigId,
+            modelTypesNeedingReassignment = transientState.modelTypesNeedingReassignment,
+            reassignmentOptions = transientState.reassignmentOptions,
+            // Assignment Dialog
+            showAssignmentDialog = transientState.showAssignmentDialog,
+            editingAssignmentSlot = transientState.editingAssignmentSlot
         )
     }.stateIn(
         scope = viewModelScope,
@@ -153,19 +212,56 @@ class SettingsViewModel @Inject constructor(
         initialValue = SettingsUiState(),
     )
 
-    private fun ApiModelConfig.toUi() = ApiModelConfigUi(
+    private fun ApiModelAsset.toUi() = ApiModelAssetUi(
+        credentialsId = credentials.id,
+        displayName = credentials.displayName,
+        provider = credentials.provider,
+        modelId = credentials.modelId,
+        baseUrl = credentials.baseUrl,
+        isVision = credentials.isVision,
+        credentialAlias = credentials.credentialAlias,
+        configurations = configurations.map { it.toUi() }
+    )
+
+    private fun ApiModelConfiguration.toUi() = ApiModelConfigUi(
         id = id,
+        credentialsId = apiCredentialsId,
         displayName = displayName,
-        provider = provider,
-        modelId = modelId,
-        baseUrl = baseUrl ?: "",
-        isVision = isVision,
-        thinkingEnabled = thinkingEnabled,
         maxTokens = maxTokens.toString(),
         contextWindow = contextWindow.toString(),
         temperature = temperature,
         topP = topP,
-        topK = topK ?: 40
+        topK = topK?.toString() ?: "40",
+        minP = minP,
+        frequencyPenalty = frequencyPenalty,
+        presencePenalty = presencePenalty,
+        customHeaders = customHeaders.map { CustomHeaderUi(it.key, it.value) },
+        thinkingEnabled = false,
+        systemPrompt = systemPrompt
+    )
+
+    private fun LocalModelAsset.toUi() = LocalModelAssetUi(
+        metadataId = metadata.id,
+        huggingFaceModelName = metadata.huggingFaceModelName,
+        remoteFileName = metadata.remoteFileName,
+        sizeInBytes = metadata.sizeInBytes,
+        configurations = configurations.map { it.toUi() },
+        visionCapable = metadata.visionCapable
+    )
+
+    private fun LocalModelConfiguration.toUi() = LocalModelConfigUi(
+        id = id,
+        localModelId = localModelId,
+        displayName = displayName,
+        maxTokens = maxTokens.toString(),
+        contextWindow = contextWindow.toString(),
+        temperature = temperature,
+        topP = topP,
+        topK = topK?.toString() ?: "",
+        minP = minP,
+        repetitionPenalty = repetitionPenalty,
+        systemPrompt = systemPrompt,
+        isSystemPreset = isSystemPreset
     )
 
     // Theme
@@ -264,139 +360,610 @@ class SettingsViewModel @Inject constructor(
         _transientState.update { it.copy(feedbackText = "", showFeedbackSheet = false) }
     }
 
-    // Model Configuration
+    // Model Configuration (Local Models)
     fun onShowModelConfigSheet(show: Boolean) {
-        _transientState.update { it.copy(showModelConfigSheet = show, selectedModelType = null) }
+        if (show) {
+            viewModelScope.launch {
+                val softDeleted = getLocalModelAssetsUseCase.getSoftDeletedModels()
+                _transientState.update { it.copy(
+                    showModelConfigSheet = true,
+                    availableToDownloadModels = softDeleted,
+                    selectedLocalModelAsset = null,
+                    selectedLocalModelConfig = null
+                ) }
+            }
+        } else {
+            _transientState.update { it.copy(showModelConfigSheet = false) }
+        }
     }
 
     fun onSelectModelType(modelType: ModelType) {
-        _transientState.update {
-            it.copy(
-                selectedModelType = modelType,
-                selectedModelConfig = null // Derived in combine
-            )
+        viewModelScope.launch {
+            val defaults = getDefaultModelsUseCase().first()
+            val assignment = defaults.find { it.modelType == modelType }
+
+            if (assignment != null) {
+                if (assignment.localConfigId != null) {
+                    val localAssets = localModelAssetsFlow.first()
+                    val asset = localAssets.find { asset ->
+                        asset.configurations.any { it.id == assignment.localConfigId }
+                    }
+                    asset?.let {
+                        onSelectLocalModelAsset(it.toUi())
+                        val config = it.configurations.find { it.id == assignment.localConfigId }
+                        onSelectLocalModelConfig(config?.toUi())
+                    }
+                } else if (assignment.apiConfigId != null) {
+                    val apiAssets = apiModelAssetsFlow.first()
+                    val asset = apiAssets.find { asset ->
+                        asset.configurations.any { it.id == assignment.apiConfigId }
+                    }
+                    asset?.let {
+                        onSelectApiModelAsset(it.toUi())
+                        val config = it.configurations.find { it.id == assignment.apiConfigId }
+                        onSelectApiModelConfig(config?.toUi())
+                    }
+                }
+            }
         }
     }
 
     fun onClearSelectedModel() {
-        _transientState.update { it.copy(selectedModelType = null, selectedModelConfig = null) }
-    }
-
-    fun onHuggingFaceModelNameChange(name: String) {
-        _transientState.update { state ->
-            val config = state.selectedModelConfig ?: return@update state
-            state.copy(selectedModelConfig = config.copy(huggingFaceModelName = name))
+        _transientState.update {
+            it.copy(
+                selectedLocalModelAsset = null,
+                selectedLocalModelConfig = null,
+                selectedApiModelAsset = null,
+                selectedApiModelConfig = null
+            )
         }
     }
 
-    fun onTemperatureChange(value: Double) {
-        _transientState.update { state ->
-            val config = state.selectedModelConfig ?: return@update state
-            state.copy(selectedModelConfig = config.copy(temperature = value))
+    fun onSelectLocalModelAsset(asset: LocalModelAssetUi?) {
+        _transientState.update { it.copy(selectedLocalModelAsset = asset, selectedLocalModelConfig = null) }
+    }
+
+    fun onSelectLocalModelConfig(config: LocalModelConfigUi?) {
+        _transientState.update { it.copy(selectedLocalModelConfig = config ?: LocalModelConfigUi()) }
+    }
+
+    fun onClearSelectedLocalModel() {
+        _transientState.update { it.copy(selectedLocalModelAsset = null, selectedLocalModelConfig = null) }
+    }
+
+    fun onLocalModelConfigFieldChange(config: LocalModelConfigUi) {
+        if (_transientState.value.selectedLocalModelConfig?.isSystemPreset == true) return
+        _transientState.update { it.copy(selectedLocalModelConfig = config) }
+    }
+
+    fun onHuggingFaceModelNameChange(huggingFaceModelName: String) {
+        val asset = uiState.value.localModels.find { it.huggingFaceModelName == huggingFaceModelName }
+        asset?.let { onSelectLocalModelAsset(it) }
+    }
+
+    fun onTemperatureChange(temperature: Double) {
+        if (_transientState.value.selectedLocalModelConfig?.isSystemPreset == true) return
+        _transientState.update { 
+            it.copy(
+                selectedLocalModelConfig = it.selectedLocalModelConfig?.copy(temperature = temperature),
+                selectedApiModelConfig = it.selectedApiModelConfig?.copy(temperature = temperature)
+            )
         }
     }
 
-    fun onTopKChange(value: Int) {
-        _transientState.update { state ->
-            val config = state.selectedModelConfig ?: return@update state
-            state.copy(selectedModelConfig = config.copy(topK = value))
+    fun onTopKChange(topK: String) {
+        if (_transientState.value.selectedLocalModelConfig?.isSystemPreset == true) return
+        _transientState.update { 
+            it.copy(
+                selectedLocalModelConfig = it.selectedLocalModelConfig?.copy(topK = topK),
+                selectedApiModelConfig = it.selectedApiModelConfig?.copy(topK = topK)
+            )
         }
     }
 
-    fun onTopPChange(value: Double) {
-        _transientState.update { state ->
-            val config = state.selectedModelConfig ?: return@update state
-            state.copy(selectedModelConfig = config.copy(topP = value))
+    fun onTopPChange(topP: Double) {
+        if (_transientState.value.selectedLocalModelConfig?.isSystemPreset == true) return
+        _transientState.update { 
+            it.copy(
+                selectedLocalModelConfig = it.selectedLocalModelConfig?.copy(topP = topP),
+                selectedApiModelConfig = it.selectedApiModelConfig?.copy(topP = topP)
+            )
         }
     }
 
-    fun onMaxTokensChange(value: String) {
-        _transientState.update { state ->
-            val config = state.selectedModelConfig ?: return@update state
-            state.copy(selectedModelConfig = config.copy(maxTokens = value))
+    fun onMaxTokensChange(maxTokens: String) {
+        if (_transientState.value.selectedLocalModelConfig?.isSystemPreset == true) return
+        _transientState.update { 
+            it.copy(
+                selectedLocalModelConfig = it.selectedLocalModelConfig?.copy(maxTokens = maxTokens),
+                selectedApiModelConfig = it.selectedApiModelConfig?.copy(maxTokens = maxTokens)
+            )
         }
     }
 
-    fun onContextWindowChange(value: String) {
-        _transientState.update { state ->
-            val config = state.selectedModelConfig ?: return@update state
-            state.copy(selectedModelConfig = config.copy(contextWindow = value))
+    fun onContextWindowChange(contextWindow: String) {
+        if (_transientState.value.selectedLocalModelConfig?.isSystemPreset == true) return
+        _transientState.update { 
+            it.copy(
+                selectedLocalModelConfig = it.selectedLocalModelConfig?.copy(contextWindow = contextWindow),
+                selectedApiModelConfig = it.selectedApiModelConfig?.copy(contextWindow = contextWindow)
+            )
         }
     }
 
     fun onSaveModelConfig(onSuccess: () -> Unit) {
-        val config = _transientState.value.selectedModelConfig ?: return
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save model configuration", "Failed to save configuration")) {
-            updateModelConfigurationUseCase(config)
+        if (_transientState.value.selectedLocalModelConfig != null) {
+            onSaveLocalModelConfig(onSuccess)
+        } else if (_transientState.value.selectedApiModelConfig != null) {
+            onSaveApiModelConfig(onSuccess)
+        } else {
             onSuccess()
         }
     }
 
-    // BYOK Setup
-    fun onShowByokSheet(show: Boolean) {
-        _transientState.update { it.copy(showByokSheet = show, selectedApiModel = null) }
+    fun onSaveLocalModelConfig(onSuccess: () -> Unit) {
+        val configUi = _transientState.value.selectedLocalModelConfig ?: return
+        val assetUi = _transientState.value.selectedLocalModelAsset ?: return
+        
+        if (configUi.isSystemPreset) return
+        
+        val config = LocalModelConfiguration(
+            id = configUi.id,
+            localModelId = assetUi.metadataId,
+            displayName = configUi.displayName,
+            maxTokens = configUi.maxTokens.toIntOrNull() ?: 4096,
+            contextWindow = configUi.contextWindow.toIntOrNull() ?: 4096,
+            temperature = configUi.temperature,
+            topP = configUi.topP,
+            topK = configUi.topK.toIntOrNull(),
+            minP = configUi.minP,
+            repetitionPenalty = configUi.repetitionPenalty,
+            systemPrompt = configUi.systemPrompt
+        )
+
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save local model configuration", "Failed to save configuration")) {
+            saveLocalModelConfigurationUseCase(config)
+            onSuccess()
+        }
     }
 
-    fun onSelectApiModel(modelId: Long?) {
-        if (modelId == null) {
-            _transientState.update { it.copy(selectedApiModel = ApiModelConfigUi()) }
+    fun onDeleteLocalModelConfig(id: Long, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            // Check if this config is a default
+            val defaults = getDefaultModelsUseCase().first()
+            val needingReassignment = defaults.filter { it.localConfigId == id }.map { it.modelType }
+
+            if (needingReassignment.isNotEmpty()) {
+                val localAssets = localModelAssetsFlow.first()
+                val apiAssets = apiModelAssetsFlow.first()
+                val deletedAsset = localAssets.find { asset ->
+                    asset.configurations.any { config -> config.id == id }
+                }
+                val requiresVisionCompatibility =
+                    ModelType.VISION in needingReassignment ||
+                        deletedAsset?.metadata?.visionCapable == true
+                val options = buildReassignmentOptions(
+                    localAssets = localAssets,
+                    apiAssets = apiAssets,
+                    excludeLocalConfigId = id,
+                    requireVisionCompatibility = requiresVisionCompatibility
+                )
+
+                _transientState.update { it.copy(
+                    pendingDeletionConfigId = id,
+                    modelTypesNeedingReassignment = needingReassignment,
+                    reassignmentOptions = options
+                ) }
+            } else {
+                viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete local model configuration", "Failed to delete configuration")) {
+                    deleteLocalModelConfigurationUseCase(id).getOrThrow()
+                    onSuccess()
+                }
+            }
+        }
+    }
+
+    fun onDeleteLocalModelAsset(id: Long) {
+        viewModelScope.launch {
+            if (deleteLocalModelUseCase.isLastModel(id)) {
+                _transientState.update { it.copy(showCannotDeleteLastModelAlert = true) }
+                return@launch
+            }
+
+            val needingReassignment = deleteLocalModelUseCase.getModelTypesNeedingReassignment(id)
+            if (needingReassignment.isNotEmpty()) {
+                val localAssets = localModelAssetsFlow.first()
+                val apiAssets = apiModelAssetsFlow.first()
+                val deletedAsset = localAssets.find { it.metadata.id == id }
+                val requiresVisionCompatibility =
+                    ModelType.VISION in needingReassignment ||
+                        deletedAsset?.metadata?.visionCapable == true
+                val options = buildReassignmentOptions(
+                    localAssets = localAssets,
+                    apiAssets = apiAssets,
+                    excludeLocalModelId = id,
+                    requireVisionCompatibility = requiresVisionCompatibility
+                )
+
+                _transientState.update { it.copy(
+                    pendingDeletionModelId = id,
+                    modelTypesNeedingReassignment = needingReassignment,
+                    reassignmentOptions = options
+                ) }
+            } else {
+                viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete local model asset", "Failed to delete asset")) {
+                    deleteLocalModelUseCase(id).getOrThrow()
+                }
+            }
+        }
+    }
+
+    fun onConfirmDeletionWithReassignment(replacementLocalConfigId: Long?, replacementApiConfigId: Long?) {
+        val modelId = _transientState.value.pendingDeletionModelId
+        val configId = _transientState.value.pendingDeletionConfigId
+        val apiCredentialsId = _transientState.value.pendingDeletionApiCredentialsId
+        val apiConfigId = _transientState.value.pendingDeletionApiConfigId
+
+        if (_transientState.value.modelTypesNeedingReassignment.isNotEmpty() &&
+            replacementLocalConfigId == null &&
+            replacementApiConfigId == null
+        ) {
             return
         }
 
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to load API model", "Failed to load configuration")) {
-            val apiModels = getApiModelsUseCase().first()
-            val config = apiModels.find { it.id == modelId }?.toUi()
-            _transientState.update { it.copy(selectedApiModel = config) }
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to complete deletion with reassignment", "Failed to delete")) {
+            when {
+                modelId != null -> {
+                    deleteLocalModelUseCase(modelId, replacementLocalConfigId, replacementApiConfigId).getOrThrow()
+                }
+                configId != null -> {
+                    // Reassign slots first
+                    val needingReassignment = _transientState.value.modelTypesNeedingReassignment
+                    needingReassignment.forEach { modelType ->
+                        setDefaultModelUseCase(modelType, replacementLocalConfigId, replacementApiConfigId)
+                    }
+                    deleteLocalModelConfigurationUseCase(configId).getOrThrow()
+                }
+                apiCredentialsId != null -> {
+                    deleteApiCredentialsUseCase(apiCredentialsId, replacementLocalConfigId, replacementApiConfigId).getOrThrow()
+                }
+                apiConfigId != null -> {
+                    deleteApiModelConfigurationUseCase(apiConfigId, replacementLocalConfigId, replacementApiConfigId).getOrThrow()
+                }
+            }
+            onDismissDeletionSafety()
         }
     }
 
-    fun onApiModelFieldChange(config: ApiModelConfigUi) {
-        _transientState.update { it.copy(selectedApiModel = config) }
+    fun onDismissDeletionSafety() {
+        _transientState.update { it.copy(
+            showCannotDeleteLastModelAlert = false,
+            pendingDeletionModelId = null,
+            pendingDeletionConfigId = null,
+            pendingDeletionApiCredentialsId = null,
+            pendingDeletionApiConfigId = null,
+            modelTypesNeedingReassignment = emptyList(),
+            reassignmentOptions = emptyList()
+        ) }
+    }
+
+    fun onShowByokSheet(show: Boolean) {
+        _transientState.update {
+            if (show) {
+                it.copy(
+                    showByokSheet = true,
+                    selectedApiModelAsset = null,
+                    selectedApiModelConfig = null
+                )
+            } else {
+                it.copy(showByokSheet = false)
+            }
+        }
+    }
+
+    fun onSelectApiModelAsset(id: Long?) {
+        val asset = uiState.value.apiModels.find { it.credentialsId == id }
+        onSelectApiModelAsset(asset)
+    }
+
+    fun onSelectApiModelAsset(asset: ApiModelAssetUi?) {
+        _transientState.update { 
+            it.copy(
+                selectedApiModelAsset = asset, 
+                selectedApiModelConfig = null 
+            ) 
+        }
+    }
+
+    fun onSelectApiModelConfig(config: ApiModelConfigUi?) {
+        _transientState.update { it.copy(selectedApiModelConfig = config) }
+    }
+
+    fun onApiModelAssetFieldChange(asset: ApiModelAssetUi) {
+        _transientState.update { it.copy(selectedApiModelAsset = asset) }
+    }
+
+    fun onApiModelConfigFieldChange(config: ApiModelConfigUi) {
+        _transientState.update { it.copy(selectedApiModelConfig = config) }
     }
 
     fun onApiKeyChange(key: String) {
         _currentApiKey.value = key
     }
 
-    fun onSaveApiModel(onSuccess: () -> Unit) {
-        val config = _transientState.value.selectedApiModel ?: return
-        val apiKeyToSave = _currentApiKey.value // Capture atomically before async work
+    fun onSaveApiCredentials(onSuccess: (ApiModelAssetUi, ApiModelConfigUi?) -> Unit) {
+        val assetUi = _transientState.value.selectedApiModelAsset ?: return
+        val apiKeyToSave = _currentApiKey.value
+        val isNewAsset = assetUi.credentialsId == 0L
         
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API config", "Failed to save configuration")) {
-            saveApiModelUseCase(
-                id = config.id,
-                displayName = config.displayName,
-                provider = config.provider,
-                modelId = config.modelId,
-                apiKey = apiKeyToSave,
-                baseUrl = config.baseUrl.takeIf { it.isNotBlank() },
-                isVision = config.isVision,
-                thinkingEnabled = config.thinkingEnabled,
-                maxTokens = config.maxTokens.toIntOrNull() ?: 4096,
-                contextWindow = config.contextWindow.toIntOrNull() ?: 4096,
-                temperature = config.temperature,
-                topP = config.topP,
-                topK = config.topK
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API credentials", "Failed to save credentials")) {
+            val finalAlias = if (assetUi.credentialAlias.isBlank()) {
+                generateUniqueAlias(assetUi.provider.name, assetUi.modelId)
+            } else {
+                assetUi.credentialAlias
+            }
+
+            val credentials = com.browntowndev.pocketcrew.domain.model.config.ApiCredentials(
+                id = assetUi.credentialsId,
+                displayName = assetUi.displayName,
+                provider = assetUi.provider,
+                modelId = assetUi.modelId,
+                baseUrl = assetUi.baseUrl.takeIf { !it.isNullOrBlank() },
+                isVision = assetUi.isVision,
+                credentialAlias = finalAlias
             )
+
+            val id = saveApiCredentialsUseCase(credentials, apiKeyToSave)
+            
+            var configUi: ApiModelConfigUi? = null
+            if (isNewAsset) {
+                val defaultConfig = ApiModelConfiguration(
+                    apiCredentialsId = id,
+                    displayName = "Default Preset"
+                )
+                saveApiModelConfigurationUseCase(defaultConfig).onSuccess { configId ->
+                    configUi = defaultConfig.copy(id = configId).toUi()
+                }
+            }
+            
+            val updatedAsset = assetUi.copy(
+                credentialsId = id,
+                credentialAlias = finalAlias,
+                configurations = configUi?.let { listOf(it) } ?: assetUi.configurations
+            )
+            
             _currentApiKey.value = "" // Clear immediately after save
+            onSuccess(updatedAsset, configUi)
+        }
+    }
+
+    private suspend fun generateUniqueAlias(provider: String, modelId: String): String {
+        val baseSlug = "${provider.lowercase()}-${modelId.lowercase()}"
+            .replace(Regex("[^a-z0-9]"), "-")
+            .replace(Regex("-+"), "-")
+            .trim('-')
+        
+        val existingAliases = apiModelAssetsFlow.first().map { it.credentials.credentialAlias }.toSet()
+        
+        if (baseSlug !in existingAliases) return baseSlug
+        
+        var counter = 2
+        while ("$baseSlug-$counter" in existingAliases) {
+            counter++
+        }
+        return "$baseSlug-$counter"
+    }
+
+    fun onSaveApiModelConfig(onSuccess: () -> Unit) {
+        val configUi = _transientState.value.selectedApiModelConfig ?: return
+        val assetUi = _transientState.value.selectedApiModelAsset ?: return
+
+        val config = ApiModelConfiguration(
+            id = configUi.id,
+            apiCredentialsId = assetUi.credentialsId,
+            displayName = configUi.displayName,
+            maxTokens = configUi.maxTokens.toIntOrNull() ?: 4096,
+            contextWindow = configUi.contextWindow.toIntOrNull() ?: 4096,
+            temperature = configUi.temperature,
+            topP = configUi.topP,
+            topK = configUi.topK.toIntOrNull() ?: 40,
+            minP = configUi.minP,
+            frequencyPenalty = configUi.frequencyPenalty,
+            presencePenalty = configUi.presencePenalty,
+            systemPrompt = configUi.systemPrompt,
+            customHeaders = configUi.customHeaders
+                .filter { it.key.isNotBlank() && it.value.isNotBlank() }
+                .associate { it.key to it.value }
+        )
+
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API configuration", "Failed to save configuration")) {
+            saveApiModelConfigurationUseCase(config)
             onSuccess()
         }
     }
 
-    fun onDeleteApiModel(id: Long, onSuccess: () -> Unit) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete API config", "Failed to delete configuration")) {
-            deleteApiModelUseCase(id)
+    fun onAddCustomHeader() {
+        _transientState.update { state ->
+            val config = state.selectedApiModelConfig ?: return@update state
+            state.copy(
+                selectedApiModelConfig = config.copy(
+                    customHeaders = config.customHeaders + CustomHeaderUi()
+                )
+            )
+        }
+    }
+
+    private fun buildReassignmentOptions(
+        localAssets: List<LocalModelAsset>,
+        apiAssets: List<ApiModelAsset>,
+        excludeLocalModelId: Long? = null,
+        excludeLocalConfigId: Long? = null,
+        excludeApiCredentialsId: Long? = null,
+        excludeApiConfigId: Long? = null,
+        requireVisionCompatibility: Boolean
+    ): List<ReassignmentOptionUi> {
+        val options = mutableListOf<ReassignmentOptionUi>()
+
+        localAssets.forEach { asset ->
+            if (asset.metadata.id == excludeLocalModelId) return@forEach
+            if (requireVisionCompatibility && !asset.metadata.visionCapable) return@forEach
+
+            asset.configurations.forEach { config ->
+                if (config.id == excludeLocalConfigId) return@forEach
+                options.add(
+                    ReassignmentOptionUi(
+                        configId = config.id,
+                        displayName = config.displayName.ifBlank { asset.metadata.huggingFaceModelName },
+                        source = ModelSource.ON_DEVICE,
+                        localModelId = asset.metadata.id
+                    )
+                )
+            }
+        }
+
+        apiAssets.forEach { asset ->
+            if (asset.credentials.id == excludeApiCredentialsId) return@forEach
+            if (requireVisionCompatibility && !asset.credentials.isVision) return@forEach
+
+            asset.configurations.forEach { config ->
+                if (config.id == excludeApiConfigId) return@forEach
+                val displayName = if (asset.credentials.displayName == config.displayName) {
+                    asset.credentials.displayName
+                } else {
+                    "${asset.credentials.displayName} - ${config.displayName}"
+                }
+                options.add(
+                    ReassignmentOptionUi(
+                        configId = config.id,
+                        displayName = displayName,
+                        source = ModelSource.API,
+                        providerName = asset.credentials.provider.name,
+                        apiCredentialsId = asset.credentials.id
+                    )
+                )
+            }
+        }
+
+        return options
+    }
+
+    fun onDeleteCustomHeader(index: Int) {
+        _transientState.update { state ->
+            val config = state.selectedApiModelConfig ?: return@update state
+            state.copy(
+                selectedApiModelConfig = config.copy(
+                    customHeaders = config.customHeaders.toMutableList().apply { removeAt(index) }
+                )
+            )
+        }
+    }
+
+    fun onCustomHeaderChange(index: Int, header: CustomHeaderUi) {
+        _transientState.update { state ->
+            val config = state.selectedApiModelConfig ?: return@update state
+            state.copy(
+                selectedApiModelConfig = config.copy(
+                    customHeaders = config.customHeaders.toMutableList().apply { this[index] = header }
+                )
+            )
+        }
+    }
+
+    fun onDeleteApiCredentials(id: Long, onSuccess: () -> Unit) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete API credentials", "Failed to delete credentials")) {
+            deleteApiCredentialsUseCase(id)
             onSuccess()
+        }
+    }
+
+    fun onDeleteApiModelConfig(id: Long, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            val needingReassignment = deleteApiModelConfigurationUseCase.getModelTypesNeedingReassignment(id)
+
+            if (needingReassignment.isNotEmpty()) {
+                val localAssets = localModelAssetsFlow.first()
+                val apiAssets = apiModelAssetsFlow.first()
+                val deletedAsset = apiAssets.find { asset ->
+                    asset.configurations.any { config -> config.id == id }
+                }
+                val options = buildReassignmentOptions(
+                    localAssets = localAssets,
+                    apiAssets = apiAssets,
+                    excludeApiConfigId = id,
+                    requireVisionCompatibility = false
+                )
+
+                _transientState.update { it.copy(
+                    pendingDeletionApiConfigId = id,
+                    modelTypesNeedingReassignment = needingReassignment,
+                    reassignmentOptions = options
+                ) }
+            } else {
+                viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete API configuration", "Failed to delete configuration")) {
+                    deleteApiModelConfigurationUseCase(id).getOrThrow()
+                    onSuccess()
+                }
+            }
+        }
+    }
+
+    fun onDeleteApiModelAsset(id: Long) {
+        viewModelScope.launch {
+            if (deleteApiCredentialsUseCase.isLastModel(id)) {
+                _transientState.update { it.copy(showCannotDeleteLastModelAlert = true) }
+                return@launch
+            }
+
+            val needingReassignment = deleteApiCredentialsUseCase.getModelTypesNeedingReassignment(id)
+            if (needingReassignment.isNotEmpty()) {
+                val localAssets = localModelAssetsFlow.first()
+                val apiAssets = apiModelAssetsFlow.first()
+                
+                val options = buildReassignmentOptions(
+                    localAssets = localAssets,
+                    apiAssets = apiAssets,
+                    excludeApiCredentialsId = id,
+                    requireVisionCompatibility = false
+                )
+
+                _transientState.update { it.copy(
+                    pendingDeletionApiCredentialsId = id,
+                    modelTypesNeedingReassignment = needingReassignment,
+                    reassignmentOptions = options
+                ) }
+            } else {
+                viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete API provider", "Failed to delete provider")) {
+                    deleteApiCredentialsUseCase(id).getOrThrow()
+                }
+            }
         }
     }
 
     fun onBackToByokList() {
-        _transientState.update { it.copy(selectedApiModel = null) }
+        _transientState.update { it.copy(selectedApiModelAsset = null, selectedApiModelConfig = null) }
     }
 
-    fun onSetDefaultModel(modelType: ModelType, source: ModelSource, apiModelId: Long? = null) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to set default model", "Failed to update default model")) {
-            setDefaultModelUseCase(modelType, source, apiModelId)
+    fun onCleanupCustomHeaders() {
+        _transientState.update { state ->
+            val config = state.selectedApiModelConfig ?: return@update state
+            state.copy(
+                selectedApiModelConfig = config.copy(
+                    customHeaders = config.customHeaders.filter {
+                        it.key.isNotBlank() && it.value.isNotBlank()
+                    }
+                )
+            )
         }
+    }
+
+    fun onSetDefaultModel(modelType: ModelType, localConfigId: Long?, apiConfigId: Long?) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to set default model", "Failed to update default model")) {
+            setDefaultModelUseCase(modelType, localConfigId, apiConfigId)
+            onShowAssignmentDialog(false, null)
+        }
+    }
+
+    fun onShowAssignmentDialog(show: Boolean, modelType: ModelType?) {
+        _transientState.update { it.copy(showAssignmentDialog = show, editingAssignmentSlot = modelType) }
     }
 }

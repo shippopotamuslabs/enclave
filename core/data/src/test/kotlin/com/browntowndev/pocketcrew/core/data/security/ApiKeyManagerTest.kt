@@ -1,76 +1,57 @@
 package com.browntowndev.pocketcrew.core.data.security
 
-import android.content.SharedPreferences
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
-import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Test
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
-/**
- * Tests for ApiKeyManager.
- * Uses a mocked SharedPreferences (since EncryptedSharedPreferences
- * requires Android Keystore which is not available in unit tests).
- */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class ApiKeyManagerTest {
+    private lateinit var apiKeyManager: ApiKeyManager
 
-    private lateinit var prefs: SharedPreferences
-    private lateinit var editor: SharedPreferences.Editor
-    private val storage = mutableMapOf<String, String?>()
-
-    @BeforeEach
-    fun setUp() {
-        storage.clear()
-        editor = mockk(relaxed = true)
-        prefs = mockk(relaxed = true)
-
-        every { prefs.edit() } returns editor
-        every { editor.putString(any(), any()) } answers {
-            storage[firstArg()] = secondArg()
-            editor
-        }
-        every { editor.remove(any()) } answers {
-            storage.remove(firstArg<String>())
-            editor
-        }
-        every { prefs.getString(any(), any()) } answers {
-            storage[firstArg()]
-        }
+    @Before
+    fun setup() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val prefs = context.getSharedPreferences("test_prefs", Context.MODE_PRIVATE)
+        apiKeyManager = ApiKeyManager { prefs }
     }
 
     @Test
-    fun `save and retrieve a key`() {
-        val keyManager = createApiKeyManagerWithMockedPrefs()
-
-        keyManager.save(1L, "sk-ant-secret")
-        val result = keyManager.get(1L)
-
-        assertEquals("sk-ant-secret", result)
+    fun `save and retrieve key by credentialAlias`() {
+        assertNull(apiKeyManager.get("my_openai_key"))
+        apiKeyManager.save("my_openai_key", "sk-abc123")
+        assertEquals("sk-abc123", apiKeyManager.get("my_openai_key"))
     }
 
     @Test
-    fun `delete removes the key`() {
-        val keyManager = createApiKeyManagerWithMockedPrefs()
-        keyManager.save(1L, "sk-ant-secret")
-
-        keyManager.delete(1L)
-        val result = keyManager.get(1L)
-
-        assertNull(result)
+    fun `delete key by credentialAlias`() {
+        apiKeyManager.save("my_openai_key", "sk-abc123")
+        apiKeyManager.delete("my_openai_key")
+        assertNull(apiKeyManager.get("my_openai_key"))
     }
 
     @Test
-    fun `get returns null for non-existent key`() {
-        val keyManager = createApiKeyManagerWithMockedPrefs()
-
-        val result = keyManager.get(999L)
-
-        assertNull(result)
+    fun `retrieve key for non-existent alias returns null`() {
+        assertNull(apiKeyManager.get("nonexistent_alias"))
     }
 
-    private fun createApiKeyManagerWithMockedPrefs(): ApiKeyManager {
-        return ApiKeyManager({ prefs })
+    @Test
+    fun `overwrite existing key for same alias`() {
+        apiKeyManager.save("my_key", "old_key")
+        apiKeyManager.save("my_key", "new_key")
+        assertEquals("new_key", apiKeyManager.get("my_key"))
+    }
+
+    @Test
+    fun `ApiKeyManager must use credentialAlias string not numeric ID`() {
+        apiKeyManager.save("my_key", "sk-secret")
+        assertEquals("sk-secret", apiKeyManager.get("my_key"))
+        assertNull(apiKeyManager.get("42"))
     }
 }

@@ -22,7 +22,4 @@ interface DefaultModelsDao {
 
     @Query("DELETE FROM default_models WHERE model_type = :modelType")
     suspend fun delete(modelType: ModelType)
-
-    @Query("UPDATE default_models SET source = 'ON_DEVICE', api_model_id = NULL WHERE api_model_id = :apiModelId")
-    suspend fun resetAssignmentsForApiModel(apiModelId: Long)
 }

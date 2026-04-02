@@ -1,10 +1,10 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import com.browntowndev.pocketcrew.domain.exception.ModelsDirectoryException
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
-import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import javax.inject.Inject
 
@@ -31,13 +31,13 @@ class CheckModelsUseCase @Inject constructor(
     /**
      * Performs filesystem scan and eligibility check for the given models.
      *
-     * @param downloadedModels The list of models that are actually downloaded (from registry)
-     * @param expectedModels The list of models expected from remote config (from cache)
+     * @param downloadedModels The map of model types to assets that are actually downloaded (from registry)
+     * @param expectedModels The map of model types to assets expected from remote config (from cache)
      * @return DownloadModelsResult containing models that need downloading and scan result
      */
     suspend operator fun invoke(
-        downloadedModels: List<ModelConfiguration>,
-        expectedModels: List<ModelConfiguration>
+        downloadedModels: Map<ModelType, LocalModelAsset>,
+        expectedModels: Map<ModelType, LocalModelAsset>
     ): DownloadModelsResult {
         // Scan filesystem comparing what's downloaded vs what's expected
         val scan = fileScanner.scanAndCreateDirIfNotExist(
@@ -51,16 +51,20 @@ class CheckModelsUseCase @Inject constructor(
         }
 
         // Use CheckModelEligibilityUseCase to determine which models need downloading
-        val missingModels = checkModelEligibilityUseCase.check(downloadedModels, expectedModels, scanResult = scan)
+        val missingAssets = checkModelEligibilityUseCase.check(downloadedModels, expectedModels, scanResult = scan)
 
         // Log results
-        if (missingModels.isEmpty()) {
+        if (missingAssets.isEmpty()) {
             logger.info(TAG, "All ${expectedModels.size} models are ready")
         } else {
-            logger.info(TAG, "${missingModels.size} models need download: ${missingModels.map { it.metadata.displayName }}")
+            logger.info(TAG, "${missingAssets.size} assets need download: ${missingAssets.map { it.metadata.huggingFaceModelName }}")
         }
 
         // Return both the scan result and models that need downloading
-        return DownloadModelsResult(modelsToDownload = missingModels, scanResult = scan)
+        return DownloadModelsResult(
+            allModels = expectedModels,
+            modelsToDownload = missingAssets,
+            scanResult = scan
+        )
     }
 }

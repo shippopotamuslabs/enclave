@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.download
 import android.content.Context
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
@@ -21,6 +21,8 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.channels.Channel
 
 
 @Singleton
@@ -39,6 +41,9 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         private const val TAG = "ModelDownloadOrchestrator"
         private const val TRACE_THROTTLE_MS = 5000L
     }
+
+    private val _snackbarMessages = Channel<String>(Channel.BUFFERED)
+    override val snackbarMessages = _snackbarMessages.receiveAsFlow()
 
     private val _downloadState = MutableStateFlow(DownloadState(status = DownloadStatus.CHECKING))
     override val downloadState: StateFlow<DownloadState> = _downloadState.asStateFlow()
@@ -74,7 +79,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         if (result.modelsToDownload.isEmpty()) {
             stateManager.updateStatus(DownloadStatus.READY)
         } else {
-            val initResult = initializeFileProgress(scan, result.modelsToDownload, _downloadState.value.currentDownloads)
+            val initResult = initializeFileProgress(scan, result.allModels, _downloadState.value.currentDownloads)
             stateManager.applyProgressInit(initResult)
             stateManager.updateStatus(DownloadStatus.IDLE)
         }
@@ -108,7 +113,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
 
         if (!check.canStart) {
             logger.info(TAG, "Validation failed - ${check.errorMessage}")
-            val initResult = initializeFileProgress(scan, modelsToDownload, _downloadState.value.currentDownloads)
+            val initResult = initializeFileProgress(scan, modelsResult.allModels, _downloadState.value.currentDownloads)
             stateManager.applyProgressInit(initResult)
             if (check.errorMessage?.contains("WiFi") == true) {
                 stateManager.updateState { copy(wifiBlocked = true) }
@@ -121,10 +126,11 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         logger.info(TAG, "Starting downloads for ${modelsToDownload.size} models (wifiOnly=$wifiOnly)")
         speedTracker.clearAll()
 
-        val initResult = initializeFileProgress(scan, modelsToDownload, _downloadState.value.currentDownloads)
+        val initResult = initializeFileProgress(scan, modelsResult.allModels, _downloadState.value.currentDownloads)
         stateManager.applyProgressInit(initResult)
 
-        workScheduler.enqueue(modelsToDownload, sessionId, wifiOnly)
+        val modelsToEnqueue = modelsResult.allModels.filter { it.value in modelsToDownload }
+        workScheduler.enqueue(modelsToEnqueue, sessionId, wifiOnly)
         stateManager.updateStatus(DownloadStatus.DOWNLOADING)
         return true
     }
@@ -143,53 +149,88 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
 
         if (update.clearSession) {
             sessionManager.clearSession()
-            // After successful download, update the registry with the downloaded models
-            if (update.status == DownloadStatus.READY) {
-                updateModelRegistry()
+            // Handle post-download state transitions
+            when (update.status) {
+                DownloadStatus.READY -> updateModelRegistry()
+                DownloadStatus.ERROR -> handleDownloadFailure()
+                else -> {}
             }
         }
         stateManager.applyProgressUpdate(update)
     }
 
     private suspend fun updateModelRegistry() {
-        // Update the registry with the successfully downloaded models
-        // Note: markExistingAsOld=false because the file is already downloaded.
-        // If there was an OLD entry from startup (when SHA256 changed), it will be
-        // replaced with CURRENT for the newly downloaded file.
-        val modelsToDownload = startupModelsResult?.modelsToDownload ?: return
+        // Deferred Activation: Commit the models that were just downloaded
+        // (and any other remote configs that were deferred).
+        startupModelsResult?.modelsToDownload?.forEach { asset ->
+            val modelType = startupModelsResult?.allModels?.entries
+                ?.find { it.value.metadata.sha256 == asset.metadata.sha256 }?.key ?: return@forEach
 
-        for (model in modelsToDownload) {
             try {
                 modelRegistry.setRegisteredModel(
-                    model,
-                    ModelStatus.CURRENT,
-                    markExistingAsOld = false
+                    modelType = modelType,
+                    asset = asset,
+                    status = ModelStatus.CURRENT,
+                    markExistingAsOld = true
                 )
-                logger.debug(TAG, "Updated registry: ${model.modelType} -> ${model.metadata.displayName}")
+                logger.debug(TAG, "Successfully activated model $modelType post-download")
             } catch (e: Exception) {
-                logger.error(TAG, "Failed to update registry for ${model.modelType}: ${e.message}")
+                logger.error(TAG, "Failed to activate model $modelType: ${e.message}")
             }
+        }
+
+        // Clear old entries after successful download. This removes fallback versions
+        // that were kept during the download process.
+        try {
+            modelRegistry.clearOld()
+            logger.debug(TAG, "Cleared OLD registry entries after successful download")
+        } catch (e: Exception) {
+            logger.error(TAG, "Failed to clear OLD registry entries: ${e.message}")
         }
 
         // Clean up old files on filesystem - use ALL registered models, not just downloaded ones
         // This is critical: if we only pass modelsToDownload, valid files will be incorrectly deleted
-        val allRegisteredModels = modelRegistry.getRegisteredModels()
-        cleanupOrphanedModelFiles(allRegisteredModels)
+        try {
+            val allRegisteredAssets = modelRegistry.getRegisteredAssets()
+            cleanupOrphanedModelFiles(allRegisteredAssets)
+        } catch (e: Exception) {
+            logger.error(TAG, "Failed during filesystem cleanup: ${e.message}")
+        }
+    }
 
-        // Clear old entries after successful download
-        modelRegistry.clearOld()
+    private suspend fun handleDownloadFailure() {
+        // Check if we have any fallback models to use
+        val modelsToDownload = startupModelsResult?.modelsToDownload ?: emptyList()
+        val allModels = startupModelsResult?.allModels ?: emptyMap()
+        
+        val affectedModelTypes = modelsToDownload.mapNotNull { asset -> 
+            allModels.entries.find { it.value.metadata.sha256 == asset.metadata.sha256 }?.key
+        }
+
+        var fallbackAvailable = false
+        for (type in affectedModelTypes) {
+            if (modelRegistry.getRegisteredAsset(type) != null) {
+                fallbackAvailable = true
+                break
+            }
+        }
+
+        if (fallbackAvailable) {
+            _snackbarMessages.send("Download failed. Using existing model versions.")
+            logger.info(TAG, "Emitted fallback snackbar message after download failure")
+        }
     }
 
     /**
      * Delete any model files on the filesystem that are not in the current model configurations.
      * This handles cases where a model was removed from the remote config.
      */
-    private fun cleanupOrphanedModelFiles(currentModels: List<ModelConfiguration>) {
+    private fun cleanupOrphanedModelFiles(currentAssets: List<LocalModelAsset>) {
         val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
         if (!modelsDir.exists()) return
 
-        // Get filenames of current models
-        val currentFilenamesSet = currentModels.mapTo(mutableSetOf()) { it.metadata.localFileName }
+        // Get filenames of current assets
+        val currentFilenamesSet = currentAssets.mapTo(mutableSetOf()) { it.metadata.localFileName }
 
         // Get all model files in the directory (excluding temp files)
         val existingFiles = modelsDir.listFiles { file ->

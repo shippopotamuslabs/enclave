@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCas
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,7 +45,7 @@ class ChatViewModelFlowTest {
         modelDisplayNamesUseCase = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
 
-        every { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
+        coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
 
         val savedStateHandle = SavedStateHandle()

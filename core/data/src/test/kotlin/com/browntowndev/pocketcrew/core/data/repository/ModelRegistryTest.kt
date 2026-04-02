@@ -1,7 +1,9 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.core.testing.FakeModelRegistry
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -25,191 +27,205 @@ class ModelRegistryTest {
         fakeRegistry = FakeModelRegistry()
     }
 
-    private fun createMainModelConfig() = ModelConfiguration(
-        modelType = ModelType.MAIN,
-        metadata = ModelConfiguration.Metadata(
+    private fun createMainModelAsset() = LocalModelAsset(
+        metadata = LocalModelMetadata(
             huggingFaceModelName = "model/main",
             remoteFileName = "main.bin",
             localFileName = "main.bin",
-            displayName = "Main Model",
             sha256 = "abc123",
             sizeInBytes = 1024,
             modelFileFormat = ModelFileFormat.LITERTLM
         ),
-        tunings = ModelConfiguration.Tunings(
-            temperature = 0.0,
-            topK = 40,
-            topP = 0.95,
-            maxTokens = 2048,
-            repetitionPenalty = 1.1,
-            contextWindow = 2048
-        ),
-        persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
+        configurations = listOf(
+            LocalModelConfiguration(
+                localModelId = 0,
+                displayName = "Main Model",
+                maxTokens = 2048,
+                contextWindow = 2048,
+                temperature = 0.0,
+                topP = 0.95,
+                topK = 40,
+                repetitionPenalty = 1.1,
+                systemPrompt = ""
+            )
+        )
     )
 
-    private fun createVisionModelConfig() = ModelConfiguration(
-        modelType = ModelType.VISION,
-        metadata = ModelConfiguration.Metadata(
+    private fun createVisionModelAsset() = LocalModelAsset(
+        metadata = LocalModelMetadata(
             huggingFaceModelName = "model/vision",
             remoteFileName = "vision.bin",
             localFileName = "vision.bin",
-            displayName = "Vision Model",
-            sha256 = "vision123",
-            sizeInBytes = 1024,
+            sha256 = "def456",
+            sizeInBytes = 2048,
             modelFileFormat = ModelFileFormat.LITERTLM
         ),
-        tunings = ModelConfiguration.Tunings(
-            temperature = 0.0,
-            topK = 40,
-            topP = 0.95,
-            maxTokens = 2048,
-            repetitionPenalty = 1.1,
-            contextWindow = 2048
-        ),
-        persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
-    )
-
-    private fun createFastModelConfig() = ModelConfiguration(
-        modelType = ModelType.FAST,
-        metadata = ModelConfiguration.Metadata(
-            huggingFaceModelName = "model/fast",
-            remoteFileName = "fast.bin",
-            localFileName = "fast.bin",
-            displayName = "Fast Model",
-            sha256 = "fast123",
-            sizeInBytes = 512,
-            modelFileFormat = ModelFileFormat.LITERTLM
-        ),
-        tunings = ModelConfiguration.Tunings(
-            temperature = 0.0,
-            topK = 40,
-            topP = 0.95,
-            maxTokens = 1024,
-            repetitionPenalty = 1.1,
-            contextWindow = 2048
-        ),
-        persona = ModelConfiguration.Persona(systemPrompt = "")
+        configurations = listOf(
+            LocalModelConfiguration(
+                localModelId = 0,
+                displayName = "Vision Model",
+                maxTokens = 4096,
+                contextWindow = 4096,
+                temperature = 0.7,
+                topP = 0.95,
+                topK = 40,
+                repetitionPenalty = 1.1,
+                systemPrompt = ""
+            )
+        )
     )
 
     @Test
-    fun getRegisteredModel_returnsNull_whenNotRegistered() = runTest {
-        // When - querying for a model that was never registered
-        val result = fakeRegistry.getRegisteredModel(ModelType.MAIN)
+    fun getRegisteredAsset_returnsCorrectAsset_whenRegistered() = runTest {
+        // Given
+        val asset = createMainModelAsset()
+        fakeRegistry.setRegisteredModel(ModelType.MAIN, asset)
 
-        // Then - should return null
+        // When
+        val retrieved = fakeRegistry.getRegisteredAsset(ModelType.MAIN)
+
+        // Then
+        assertEquals(asset.metadata.sha256, retrieved?.metadata?.sha256)
+    }
+
+    @Test
+    fun getRegisteredAsset_returnsNull_whenNotRegistered() = runTest {
+        // When
+        val result = fakeRegistry.getRegisteredAsset(ModelType.MAIN)
+
+        // Then
         assertNull(result)
     }
 
     @Test
-    fun setRegisteredModel_persistsModel_andCanBeRetrieved() = runTest {
+    fun setRegisteredModel_marksExistingAsOld_whenRequested() = runTest {
         // Given
-        val mainConfig = createMainModelConfig()
+        val oldAsset = createMainModelAsset()
+        fakeRegistry.setRegisteredModel(ModelType.MAIN, oldAsset)
 
         // When
-        fakeRegistry.setRegisteredModel(mainConfig)
+        val newAsset = createMainModelAsset().copy(
+            metadata = oldAsset.metadata.copy(sha256 = "new_sha")
+        )
+        fakeRegistry.setRegisteredModel(
+            modelType = ModelType.MAIN,
+            asset = newAsset,
+            status = ModelStatus.CURRENT,
+            markExistingAsOld = true
+        )
 
-        // Then - verify the model can be retrieved with correct properties
-        val retrieved = fakeRegistry.getRegisteredModel(ModelType.MAIN)
-        assertEquals(ModelType.MAIN, retrieved?.modelType)
-        assertEquals("Main Model", retrieved?.metadata?.displayName)
-        assertEquals(ModelFileFormat.LITERTLM, retrieved?.metadata?.modelFileFormat)
+        // Then
+        assertEquals(ModelStatus.OLD, fakeRegistry.getStatusBySha256(oldAsset.metadata.sha256))
+        assertEquals(ModelStatus.CURRENT, fakeRegistry.getStatusBySha256(newAsset.metadata.sha256))
     }
 
     @Test
-    fun observeRegisteredModels_emitsUpdatedMap_whenModelsAdded() = runTest {
-        // Given - start with empty registry
-        val initialFlow = fakeRegistry.observeRegisteredModels().first()
-        assertEquals(0, initialFlow.size)
-
-        // When - register models
-        fakeRegistry.setRegisteredModel(createMainModelConfig())
-        fakeRegistry.setRegisteredModel(createVisionModelConfig())
-
-        // Then - verify the flow emits updated map
-        val updatedFlow = fakeRegistry.observeRegisteredModels().first()
-        assertEquals(2, updatedFlow.size)
-        assertEquals("Main Model", updatedFlow[ModelType.MAIN])
-        assertEquals("Vision Model", updatedFlow[ModelType.VISION])
-    }
-
-    @Test
-    fun clearAll_removesAllModels() = runTest {
-        // Given - register multiple models
-        fakeRegistry.setRegisteredModel(createMainModelConfig())
-        fakeRegistry.setRegisteredModel(createVisionModelConfig())
+    fun clearAll_removesAllRegisteredModels() = runTest {
+        // Given
+        fakeRegistry.setRegisteredModel(ModelType.MAIN, createMainModelAsset())
+        fakeRegistry.setRegisteredModel(ModelType.VISION, createVisionModelAsset())
 
         // When
         fakeRegistry.clearAll()
 
-        // Then - verify registry is empty
-        assertEquals(0, fakeRegistry.getRegisteredModels().size)
-        assertNull(fakeRegistry.getRegisteredModel(ModelType.MAIN))
-        assertNull(fakeRegistry.getRegisteredModel(ModelType.VISION))
+        // Then
+        assertEquals(0, fakeRegistry.getRegisteredAssets().size)
+        assertNull(fakeRegistry.getRegisteredAsset(ModelType.MAIN))
+        assertNull(fakeRegistry.getRegisteredAsset(ModelType.VISION))
     }
 
     @Test
-    fun setRegisteredModel_withMarkExistingAsOld_marksPreviousAsOld() = runTest {
-        // Given - register initial MAIN model
-        val initialMain = createMainModelConfig()
-        fakeRegistry.setRegisteredModel(initialMain)
+    fun getRegisteredAssets_returnsAllRegisteredAssets() = runTest {
+        // Given
+        fakeRegistry.setRegisteredModel(ModelType.MAIN, createMainModelAsset())
+        fakeRegistry.setRegisteredModel(ModelType.VISION, createVisionModelAsset())
 
-        // When - register new MAIN model with markExistingAsOld
-        val updatedMain = createMainModelConfig().copy(
-            metadata = createMainModelConfig().metadata.copy(
-                displayName = "Updated Main Model",
-                sha256 = "new123"
+        // When
+        val allAssets = fakeRegistry.getRegisteredAssets()
+
+        // Then
+        assertEquals(2, allAssets.size)
+    }
+
+    // ============================================================
+    // SOFT-DELETE SCENARIOS (TDD Red)
+    // ============================================================
+
+    /**
+     * Risk #3: Creating new LocalModelEntity on re-download instead of reusing
+     * Defense: reuseModelForRedownload() reuses the same LocalModelEntity ID
+     *
+     * TDD Red: This test FAILS against current implementation because
+     * reuseModelForRedownload is NotImplementedError in FakeModelRegistry
+     * until the feature is implemented.
+     */
+    @Test
+    fun `reuseModelForRedownload reuses same LocalModelEntity ID`() = runTest {
+        // Given: a soft-deleted model exists (model with no configs, stored in softDeletedModels)
+        val modelId = 42L
+        val softDeletedAsset = createMainModelAsset().copy(configurations = emptyList())
+        // Manually add to soft-deleted (simulates soft-delete state)
+        fakeRegistry.registerSoftDeletedModel(modelId, softDeletedAsset)
+
+        // Given: new remote asset with matching sha256
+        val newAsset = createMainModelAsset().copy(
+            configurations = listOf(
+                LocalModelConfiguration(
+                    localModelId = modelId,
+                    displayName = "Main Model",
+                    maxTokens = 2048,
+                    contextWindow = 2048,
+                    temperature = 0.0,
+                    topP = 0.95,
+                    topK = 40,
+                    repetitionPenalty = 1.1,
+                    systemPrompt = "",
+                    isSystemPreset = true
+                )
             )
         )
-        fakeRegistry.setRegisteredModel(updatedMain, markExistingAsOld = true)
-
-        // Then - verify new model is registered and status is tracked
-        val retrieved = fakeRegistry.getRegisteredModel(ModelType.MAIN)
-        assertEquals("Updated Main Model", retrieved?.metadata?.displayName)
-        assertEquals("new123", retrieved?.metadata?.sha256)
-    }
-
-    @Test
-    fun getRegisteredModels_returnsAllRegisteredModels() = runTest {
-        // Given
-        fakeRegistry.setRegisteredModel(createMainModelConfig())
-        fakeRegistry.setRegisteredModel(createVisionModelConfig())
-        fakeRegistry.setRegisteredModel(createFastModelConfig())
 
         // When
-        val allModels = fakeRegistry.getRegisteredModels()
+        val reusedId = fakeRegistry.reuseModelForRedownload(modelId, newAsset)
 
-        // Then
-        assertEquals(3, allModels.size)
-        assertEquals(
-            setOf(ModelType.MAIN, ModelType.VISION, ModelType.FAST),
-            allModels.map { it.modelType }.toSet()
-        )
+        // Then: same model ID is returned
+        assertEquals(modelId, reusedId)
     }
 
+    /**
+     * Risk #4: InitializeModelsUseCase re-downloads soft-deleted models
+     * Defense: getSoftDeletedModels() returns only models with no configs
+     */
     @Test
-    fun getRegisteredModel_syncVersion_returnsSameAsSuspend() = runTest {
-        // Given
-        fakeRegistry.setRegisteredModel(createMainModelConfig())
+    fun `getSoftDeletedModels returns only soft-deleted models with zero configs`() = runTest {
+        // Given: an active model with configs
+        fakeRegistry.setRegisteredModel(ModelType.FAST, createMainModelAsset())
 
-        // When - both sync and suspend versions
-        val syncResult = fakeRegistry.getRegisteredModelSync(ModelType.MAIN)
-        val suspendResult = fakeRegistry.getRegisteredModel(ModelType.MAIN)
-
-        // Then - both should return the same model
-        assertEquals(syncResult?.metadata?.displayName, suspendResult?.metadata?.displayName)
-    }
-
-    @Test
-    fun getRegisteredModelsSync_returnsSameAsSuspend() = runTest {
-        // Given
-        fakeRegistry.setRegisteredModel(createMainModelConfig())
-        fakeRegistry.setRegisteredModel(createVisionModelConfig())
+        // Given: a soft-deleted model (no configs)
+        val softDeletedId = 99L
+        fakeRegistry.registerSoftDeletedModel(softDeletedId, createMainModelAsset().copy(configurations = emptyList()))
 
         // When
-        val syncResult = fakeRegistry.getRegisteredModelsSync()
-        val suspendResult = fakeRegistry.getRegisteredModels()
+        val softDeleted = fakeRegistry.getSoftDeletedModels()
 
-        // Then
-        assertEquals(syncResult.size, suspendResult.size)
+        // Then: only the soft-deleted model is returned
+        assertEquals(1, softDeleted.size)
+        assertEquals(softDeletedId, softDeleted.first().metadata.id)
+    }
+
+    /**
+     * getSoftDeletedModels returns empty when no models are soft-deleted
+     */
+    @Test
+    fun `getSoftDeletedModels returns empty when no soft-deleted models exist`() = runTest {
+        // Given: only active models
+        fakeRegistry.setRegisteredModel(ModelType.FAST, createMainModelAsset())
+        fakeRegistry.setRegisteredModel(ModelType.VISION, createVisionModelAsset())
+
+        // When
+        val softDeleted = fakeRegistry.getSoftDeletedModels()
+
+        // Then: empty
+        assertEquals(0, softDeleted.size)
     }
 }

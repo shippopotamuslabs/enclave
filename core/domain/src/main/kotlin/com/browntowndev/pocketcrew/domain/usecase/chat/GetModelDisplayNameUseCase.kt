@@ -6,7 +6,6 @@ import javax.inject.Inject
 
 /**
  * Use case for getting the display name of a model.
- * Wraps ModelRegistryPort.getRegisteredModelSync() for use in ViewModels.
  */
 class GetModelDisplayNameUseCase @Inject constructor(
     private val modelRegistry: ModelRegistryPort
@@ -17,7 +16,7 @@ class GetModelDisplayNameUseCase @Inject constructor(
      * @param modelType The type of model to get display name for
      * @return The display name, or empty string if no model is registered
      */
-    operator fun invoke(modelType: ModelType): String {
-        return modelRegistry.getRegisteredModelSync(modelType)?.metadata?.displayName ?: ""
+    suspend operator fun invoke(modelType: ModelType): String {
+        return modelRegistry.getRegisteredAsset(modelType)?.metadata?.huggingFaceModelName ?: ""
     }
 }

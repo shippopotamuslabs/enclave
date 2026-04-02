@@ -17,7 +17,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
@@ -105,8 +105,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `FAST mode emits AccumulatedMessages with accumulated content`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Thinking("Thinking...", ModelType.FAST),
@@ -147,8 +147,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `content is accumulated across multiple PartialResponse events`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
@@ -187,8 +187,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `thinking content is accumulated across multiple Thinking events`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Thinking("Step 1...", ModelType.FAST),
@@ -224,8 +224,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `isComplete is set to true when inference finishes`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
@@ -259,8 +259,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `inference completes without error`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
@@ -289,8 +289,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `error in inference is handled gracefully`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Error(RuntimeException("Test error"), ModelType.FAST)
@@ -324,8 +324,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `Processing event sets currentState to PROCESSING`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.DRAFT_ONE) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.DRAFT_ONE) } returns mockConfig
 
         // Mock pipeline executor to emit Processing event
         val fakePipelineExecutor = FakePipelineExecutor()
@@ -371,8 +371,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `Processing event sets pipelineStep correctly for each model type`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(any()) } returns mockConfig
 
         val testCases = listOf(
             ModelType.DRAFT_ONE to PipelineStep.DRAFT_ONE,
@@ -429,8 +429,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `Processing event creates new message for DRAFT_TWO in CREW mode`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(any()) } returns mockConfig
 
         // Mock createAssistantMessage to return specific IDs
         coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns 3L
@@ -478,8 +478,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `Processing event creates new message for SYNTHESIS in CREW mode`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(any()) } returns mockConfig
 
         // Mock createAssistantMessage to return specific IDs
         coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns 4L
@@ -527,8 +527,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `Processing event creates new message for FINAL in CREW mode`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(any()) } returns mockConfig
 
         // Mock createAssistantMessage to return specific IDs
         coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns 5L
@@ -576,8 +576,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `complete CREW pipeline emits Processing state before each step`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(any()) } returns mockConfig
 
         // Mock createAssistantMessage to return sequential IDs
         var nextId = 3L
@@ -664,8 +664,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `pipelineStep is correctly persisted for FAST mode`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
@@ -701,8 +701,8 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `pipelineStep is correctly computed from modelType for CREW mode`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
+        val mockConfig = mockk<LocalModelAsset>()
+        coEvery { modelRegistry.getRegisteredAsset(any()) } returns mockConfig
 
         val testCases = listOf(
             ModelType.DRAFT_ONE to PipelineStep.DRAFT_ONE,
@@ -771,8 +771,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `toSnapshot maps properties correctly and calculates thinkingDurationSeconds`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockk<LocalModelAsset>()
 
         // Wait, System.currentTimeMillis() was causing StackOverflowError due to mockkStatic.
         // Instead of mockkStatic, let's just use the real time and verify duration is correctly calculated
@@ -824,8 +823,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `toSnapshot handles zero thinking duration correctly`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockk<LocalModelAsset>()
 
         // Emitting ONLY Thinking events means thinkingEndTime remains null
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
@@ -867,8 +865,7 @@ class GenerateChatResponseUseCaseTest {
     @Test
     fun `toMessagesState returns accurate snapshot of accumulated messages`() = runTest {
         // Given
-        val mockConfig = mockk<ModelConfiguration>()
-        every { modelRegistry.getRegisteredModelSync(any()) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(any()) } returns mockk<LocalModelAsset>()
 
         val assistantMessageId = 2L
         coEvery { chatRepository.createAssistantMessage(any(), any(), any(), any()) } returns assistantMessageId

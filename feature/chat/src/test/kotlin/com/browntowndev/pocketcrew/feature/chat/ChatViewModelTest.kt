@@ -71,7 +71,7 @@ class ChatViewModelTest {
 
         // Create a simple fake for GetModelDisplayNameUseCase
         modelDisplayNamesUseCase = mockk(relaxed = true)
-        every { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
+        coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
 
         val savedStateHandle = SavedStateHandle()
 
