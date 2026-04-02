@@ -1,8 +1,9 @@
 package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,28 +18,37 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,8 +62,18 @@ fun ByokBottomSheet(
     onDeleteApiModelConfig: (Long) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var pendingDeleteTarget by remember { mutableStateOf<ByokDeleteTarget?>(null) }
+    val scope = rememberCoroutineScope()
 
-    ModalBottomSheet(
+    val hideAndNavigate: (() -> Unit) -> Unit = { onNavigate ->
+        scope.launch {
+            sheetState.hide()
+            onNavigate()
+            onDismiss()
+        }
+    }
+
+    JumpFreeModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
@@ -73,29 +93,54 @@ fun ByokBottomSheet(
                         onBack = { onSelectApiModelAsset(null) },
                         onEditConfig = { config ->
                             onSelectApiModelConfig(config)
-                            onNavigateToByokConfigure()
-                            onDismiss()
+                            hideAndNavigate(onNavigateToByokConfigure)
                         },
-                        onDeleteConfig = { id -> onDeleteApiModelConfig(id) },
+                        onRequestDeleteConfig = { config ->
+                            pendingDeleteTarget = ByokDeleteTarget.Config(config.id, config.displayName)
+                        },
                         onAddConfig = {
-                            onSelectApiModelConfig(null)
-                            onNavigateToByokConfigure()
-                            onDismiss()
+                            onSelectApiModelConfig(ApiModelConfigUi())
+                            hideAndNavigate(onNavigateToByokConfigure)
                         }
                     )
                 } else {
                     ByokAssetListView(
                         apiModels = uiState.apiModels,
                         onSelectAsset = { asset -> onSelectApiModelAsset(asset) },
-                        onDeleteAsset = { id -> onDeleteApiModelAsset(id) },
+                        onRequestDeleteAsset = { asset ->
+                            pendingDeleteTarget = ByokDeleteTarget.Asset(asset.credentialsId, asset.displayName)
+                        },
                         onAddAsset = {
                             onSelectApiModelAsset(null)
-                            onNavigateToByokConfigure()
-                            onDismiss()
+                            hideAndNavigate(onNavigateToByokConfigure)
                         }
                     )
                 }
             }
+        }
+
+        pendingDeleteTarget?.let { deleteTarget ->
+            DeleteConfirmationDialog(
+                title = if (deleteTarget is ByokDeleteTarget.Asset) {
+                    "Delete Provider?"
+                } else {
+                    "Delete Preset?"
+                },
+                message = if (deleteTarget is ByokDeleteTarget.Asset) {
+                    "Delete ${deleteTarget.displayName}? This removes the provider and all of its presets."
+                } else {
+                    "Delete ${deleteTarget.displayName}? This preset will be removed."
+                },
+                confirmLabel = "Delete",
+                onConfirm = {
+                    when (deleteTarget) {
+                        is ByokDeleteTarget.Asset -> onDeleteApiModelAsset(deleteTarget.id)
+                        is ByokDeleteTarget.Config -> onDeleteApiModelConfig(deleteTarget.id)
+                    }
+                    pendingDeleteTarget = null
+                },
+                onDismiss = { pendingDeleteTarget = null }
+            )
         }
     }
 }
@@ -104,7 +149,7 @@ fun ByokBottomSheet(
 private fun ByokAssetListView(
     apiModels: List<ApiModelAssetUi>,
     onSelectAsset: (ApiModelAssetUi) -> Unit,
-    onDeleteAsset: (Long) -> Unit,
+    onRequestDeleteAsset: (ApiModelAssetUi) -> Unit,
     onAddAsset: () -> Unit
 ) {
     Column {
@@ -114,7 +159,7 @@ private fun ByokAssetListView(
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 8.dp)
         )
-        
+
         Text(
             text = "Manage your own API keys and model configurations.",
             style = MaterialTheme.typography.bodyMedium,
@@ -127,49 +172,60 @@ private fun ByokAssetListView(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(apiModels, key = { it.credentialsId }) { asset ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelectAsset(asset) },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    )
-                ) {
-                    Row(
+                var menuExpanded by remember { mutableStateOf(false) }
+
+                Box {
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .combinedClickable(
+                                onClick = { onSelectAsset(asset) },
+                                onLongClick = { menuExpanded = true }
+                            ),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = asset.displayName,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = "${asset.provider.displayName} • ${asset.modelId} • ${asset.configurations.size} Presets",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = asset.displayName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "${asset.provider.displayName} • ${asset.modelId} • ${asset.configurations.size} Presets",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
 
-                        IconButton(onClick = { onDeleteAsset(asset.credentialsId) }, modifier = Modifier.size(48.dp)) {
                             Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete Provider ${asset.displayName}",
-                                modifier = Modifier.size(24.dp),
-                                tint = MaterialTheme.colorScheme.error
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = "View configurations",
+                                modifier = Modifier.padding(start = 4.dp)
                             )
                         }
+                    }
 
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = "View configurations",
-                            modifier = Modifier.padding(start = 4.dp)
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            onClick = {
+                                menuExpanded = false
+                                onRequestDeleteAsset(asset)
+                            }
                         )
                     }
                 }
@@ -197,7 +253,7 @@ private fun ByokConfigListView(
     asset: ApiModelAssetUi,
     onBack: () -> Unit,
     onEditConfig: (ApiModelConfigUi) -> Unit,
-    onDeleteConfig: (Long) -> Unit,
+    onRequestDeleteConfig: (ApiModelConfigUi) -> Unit,
     onAddConfig: () -> Unit
 ) {
     Column {
@@ -227,72 +283,124 @@ private fun ByokConfigListView(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(asset.configurations, key = { it.id }) { config ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onEditConfig(config) }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = config.displayName,
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Temp: ${config.temperature} | Max: ${config.maxTokens}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                var menuExpanded by remember { mutableStateOf(false) }
+                val isDeleteEnabled = asset.configurations.size > 1
+
+                Box {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                onClick = { onEditConfig(config) },
+                                onLongClick = { menuExpanded = true }
+                            )
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = config.displayName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Temp: ${config.temperature} | Max: ${config.maxTokens}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+
+                        IconButton(onClick = { onEditConfig(config) }, modifier = Modifier.size(40.dp)) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = "Edit Preset ${config.displayName}",
+                                modifier = Modifier.size(20.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
 
-                    IconButton(onClick = { onEditConfig(config) }, modifier = Modifier.size(40.dp)) {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = "Edit Preset ${config.displayName}",
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    IconButton(onClick = { onDeleteConfig(config.id) }, modifier = Modifier.size(40.dp)) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = "Delete Preset ${config.displayName}",
-                            modifier = Modifier.size(20.dp),
-                            tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            enabled = isDeleteEnabled,
+                            onClick = {
+                                menuExpanded = false
+                                onRequestDeleteConfig(config)
+                            }
                         )
                     }
                 }
             }
 
             item {
-                Row(
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = onAddConfig,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .defaultMinSize(minHeight = 48.dp)
-                        .clickable(onClick = onAddConfig)
-                        .padding(vertical = 12.dp),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
+                        .height(52.dp),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Add,
                         contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = MaterialTheme.colorScheme.primary
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onPrimary
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "Add Preset",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
         }
     }
+}
+
+private sealed interface ByokDeleteTarget {
+    val id: Long
+    val displayName: String
+
+    data class Asset(
+        override val id: Long,
+        override val displayName: String
+    ) : ByokDeleteTarget
+
+    data class Config(
+        override val id: Long,
+        override val displayName: String
+    ) : ByokDeleteTarget
+}
+
+@Composable
+private fun DeleteConfirmationDialog(
+    title: String,
+    message: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(confirmLabel)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 // ==================== PREVIEWS ====================

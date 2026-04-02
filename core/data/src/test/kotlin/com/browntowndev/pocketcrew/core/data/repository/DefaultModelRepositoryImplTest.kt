@@ -62,7 +62,6 @@ class DefaultModelRepositoryImplTest {
             localFilename = "qwen.gguf",
             sha256 = "abc",
             sizeInBytes = 100,
-            displayName = "Qwen3-4B",
             modelStatus = ModelStatus.CURRENT
         )
 
@@ -71,7 +70,7 @@ class DefaultModelRepositoryImplTest {
         assertEquals(5L, result?.localConfigId)
         assertNull(result?.apiConfigId)
         assertEquals("Precise", result?.displayName)
-        assertEquals("Qwen3-4B", result?.providerName) // Using model name as provider for local
+        assertEquals("qwen", result?.providerName) // Using huggingFaceModelName as provider for local models
     }
 
     @Test

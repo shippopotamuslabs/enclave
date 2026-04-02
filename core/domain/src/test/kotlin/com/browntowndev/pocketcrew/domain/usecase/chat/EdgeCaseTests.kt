@@ -104,7 +104,7 @@ class EdgeCaseTests {
     fun `empty thinking is handled correctly`() = runTest {
         // Given - response with no thinking
         val mockAsset = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockAsset
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockAsset
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
@@ -141,7 +141,7 @@ class EdgeCaseTests {
     fun `long responses are handled correctly`() = runTest {
         // Given - response with many partial responses
         val mockAsset = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockAsset
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockAsset
 
         val partialResponses = (1..100).map { i ->
             InferenceEvent.PartialResponse("chunk$i ", ModelType.FAST)
@@ -178,7 +178,7 @@ class EdgeCaseTests {
     fun `lock is acquired and released correctly`() = runTest {
         // Given
         val mockAsset = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockAsset
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockAsset
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Finished(ModelType.FAST)
@@ -235,7 +235,7 @@ class EdgeCaseTests {
     fun `safety blocked returns proper message`() = runTest {
         // Given
         val mockAsset = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockAsset
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockAsset
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.SafetyBlocked("Content policy violation", ModelType.FAST)

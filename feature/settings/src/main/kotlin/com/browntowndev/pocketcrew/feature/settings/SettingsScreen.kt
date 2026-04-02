@@ -14,51 +14,38 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.automirrored.filled.Rule
-import androidx.compose.material.icons.filled.SettingsApplications
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Vibration
-import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
-import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,7 +72,9 @@ fun SettingsScreen(
     onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
     onDeleteLocalModelAsset: (Long) -> Unit,
-    onDeleteLocalModelConfig: (Long) -> Unit
+    onDeleteLocalModelConfig: (Long) -> Unit,
+    onConfirmDeletionWithReassignment: (Long?, Long?) -> Unit,
+    onDismissDeletionSafety: () -> Unit
 ) {
     Scaffold(
         topBar = {
@@ -140,8 +129,8 @@ fun SettingsScreen(
             item {
                 SectionHeader(text = "Models")
                 SettingsNavigationItem(
-                    title = "Pipeline Assignments",
-                    subtitle = "Assign models to engines",
+                    title = "Model Role Assignments",
+                    subtitle = "Set models for chat and pipeline roles",
                     icon = Icons.AutoMirrored.Filled.Rule,
                     onClick = { onNavigateToModelConfigure(ModelType.MAIN) }
                 )
@@ -206,7 +195,7 @@ fun SettingsScreen(
             )
         }
 
-        if (uiState.showModelConfigSheet) { // Reusing this state for Local Models Sheet
+        if (uiState.showModelConfigSheet) {
             LocalModelsBottomSheet(
                 uiState = uiState,
                 onDismiss = { onShowLocalModelsSheet(false) },
@@ -214,7 +203,9 @@ fun SettingsScreen(
                 onSelectLocalModelAsset = onSelectLocalModelAsset,
                 onSelectLocalModelConfig = onSelectLocalModelConfig,
                 onDeleteLocalModelAsset = onDeleteLocalModelAsset,
-                onDeleteLocalModelConfig = onDeleteLocalModelConfig
+                onDeleteLocalModelConfig = onDeleteLocalModelConfig,
+                onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
+                onDismissDeletionSafety = onDismissDeletionSafety
             )
         }
     }
@@ -375,7 +366,9 @@ fun PreviewSettingsScreen() {
             onSelectLocalModelAsset = {},
             onSelectLocalModelConfig = {},
             onDeleteLocalModelAsset = {},
-            onDeleteLocalModelConfig = {}
+            onDeleteLocalModelConfig = {},
+            onConfirmDeletionWithReassignment = { _, _ -> },
+            onDismissDeletionSafety = {}
         )
     }
 }

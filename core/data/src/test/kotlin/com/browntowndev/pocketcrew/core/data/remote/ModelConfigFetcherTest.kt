@@ -33,7 +33,6 @@ class ModelConfigFetcherTest {
                     huggingFaceModelName = "model/main",
                     remoteFileName = "main.bin",
                     localFileName = "main.bin",
-                    displayName = "Main Model",
                     sha256 = "abc123",
                     sizeInBytes = 1000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
@@ -122,7 +121,6 @@ class ModelConfigFetcherTest {
                     huggingFaceModelName = "model/main",
                     remoteFileName = "main.bin",
                     localFileName = "main.bin",
-                    displayName = "Main Model",
                     sha256 = "abc123",
                     sizeInBytes = 1000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
@@ -146,7 +144,6 @@ class ModelConfigFetcherTest {
                     huggingFaceModelName = "model/vision",
                     remoteFileName = "vision.bin",
                     localFileName = "vision.bin",
-                    displayName = "Vision Model",
                     sha256 = "def456",
                     sizeInBytes = 2000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
@@ -187,7 +184,6 @@ class ModelConfigFetcherTest {
                     huggingFaceModelName = "model/main",
                     remoteFileName = "main.bin",
                     localFileName = "main.bin",
-                    displayName = "Main Model",
                     sha256 = "abc123",
                     sizeInBytes = 1000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
@@ -211,7 +207,6 @@ class ModelConfigFetcherTest {
                     huggingFaceModelName = "model/vision",
                     remoteFileName = "vision.bin",
                     localFileName = "vision.bin",
-                    displayName = "Vision Model",
                     sha256 = "def456",
                     sizeInBytes = 2000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
@@ -235,7 +230,6 @@ class ModelConfigFetcherTest {
                     huggingFaceModelName = "model/fast",
                     remoteFileName = "fast.bin",
                     localFileName = "fast.bin",
-                    displayName = "Fast Model",
                     sha256 = "ghi789",
                     sizeInBytes = 500000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
@@ -259,7 +253,6 @@ class ModelConfigFetcherTest {
                     huggingFaceModelName = "model/draft",
                     remoteFileName = "draft.bin",
                     localFileName = "draft.bin",
-                    displayName = "Draft Model",
                     sha256 = "jkl012",
                     sizeInBytes = 300000L,
                     modelFileFormat = ModelFileFormat.TASK

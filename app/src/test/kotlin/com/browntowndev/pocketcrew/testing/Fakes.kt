@@ -133,13 +133,9 @@ class FakeModelRegistry : ModelRegistryPort {
 
     override suspend fun getRegisteredAsset(modelType: ModelType): LocalModelAsset? = _assets.value[modelType]
     override suspend fun getRegisteredConfiguration(modelType: ModelType): LocalModelConfiguration? = _configs.value[modelType]
-    override fun getRegisteredAssetSync(modelType: ModelType): LocalModelAsset? = _assets.value[modelType]
-    override fun getRegisteredConfigurationSync(modelType: ModelType): LocalModelConfiguration? = _configs.value[modelType]
     
     override suspend fun getRegisteredAssets(): List<LocalModelAsset> = _assets.value.values.toList()
-    override fun getRegisteredAssetsSync(): List<LocalModelAsset> = _assets.value.values.toList()
     override suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration> = _configs.value.values.toList()
-    override fun getRegisteredConfigurationsSync(): List<LocalModelConfiguration> = _configs.value.values.toList()
 
     override fun observeAsset(modelType: ModelType): Flow<LocalModelAsset?> = _assets.map { it[modelType] }
     override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> = _configs.map { it[modelType] }
@@ -158,12 +154,16 @@ class FakeModelRegistry : ModelRegistryPort {
 
     override suspend fun clearOld() {}
 
-    override suspend fun getAssetsPreferringOld(): Map<ModelType, LocalModelAsset> = _assets.value
+    override suspend fun getAssetsPreferringOld(): Map<ModelType, LocalModelAsset> = emptyMap()
 
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long = metadata.id
     override suspend fun deleteLocalModelMetadata(id: Long) {}
     override suspend fun saveConfiguration(config: LocalModelConfiguration): Long = config.id
     override suspend fun deleteConfiguration(id: Long) {}
+
+    override suspend fun getSoftDeletedModels(): List<LocalModelAsset> = emptyList()
+    override suspend fun reuseModelForRedownload(modelId: Long, newAsset: LocalModelAsset): Long = modelId
+    override suspend fun getAssetById(id: Long): LocalModelAsset? = _assets.value.values.find { it.metadata.id == id }
 }
 
 class FakeSpeedTracker : DownloadSpeedTrackerPort {

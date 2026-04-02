@@ -30,8 +30,8 @@ data class ApiModelConfigurationEntity(
     @ColumnInfo(name = "display_name")
     val displayName: String,
 
-    @ColumnInfo(name = "custom_headers_and_params")
-    val customHeadersAndParams: String = "{}",
+    @ColumnInfo(name = "custom_headers")
+    val customHeaders: String = "{}",
 
     @ColumnInfo(name = "max_tokens")
     val maxTokens: Int = 4096,
@@ -48,14 +48,17 @@ data class ApiModelConfigurationEntity(
     @ColumnInfo(name = "top_k")
     val topK: Int? = null,
 
+    @ColumnInfo(name = "min_p")
+    val minP: Double = 0.05,
+
     @ColumnInfo(name = "frequency_penalty")
     val frequencyPenalty: Double = 0.0,
 
     @ColumnInfo(name = "presence_penalty")
     val presencePenalty: Double = 0.0,
 
-    @ColumnInfo(name = "stop_sequences")
-    val stopSequences: String = "",
+    @ColumnInfo(name = "system_prompt")
+    val systemPrompt: String = "",
 
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis()

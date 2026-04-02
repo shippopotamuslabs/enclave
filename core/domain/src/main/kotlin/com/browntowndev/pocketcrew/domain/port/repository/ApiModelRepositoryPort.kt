@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 
 interface ApiModelRepositoryPort {
     fun observeAllCredentials(): Flow<List<ApiCredentials>>
+    fun observeAllConfigurations(): Flow<List<ApiModelConfiguration>>
     suspend fun getAllCredentials(): List<ApiCredentials>
     suspend fun getCredentialsById(id: Long): ApiCredentials?
     suspend fun saveCredentials(credentials: ApiCredentials, apiKey: String): Long

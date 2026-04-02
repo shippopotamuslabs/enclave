@@ -14,11 +14,16 @@ import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
+import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 class ModelConfigFetcherImplTest {
 
@@ -84,6 +89,111 @@ class ModelConfigFetcherImplTest {
         assertEquals(4096, config.maxTokens)
         assertEquals(8192, config.contextWindow)
         assertTrue(config.thinkingEnabled)
+    }
+
+    @Test
+    fun toLocalModelAssets_preservesVisionCapable() = runTest {
+        // Given
+        val remoteConfigs = listOf(
+            RemoteModelConfig(
+                modelType = ModelType.VISION,
+                fileName = "vision.gguf",
+                huggingFaceModelName = "test/vision",
+                displayName = "Vision Model",
+                sha256 = "def456",
+                sizeInBytes = 2000000L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.95,
+                repetitionPenalty = 1.1,
+                maxTokens = 2048,
+                contextWindow = 4096,
+                systemPrompt = "You are a vision assistant.",
+                visionCapable = true
+            )
+        )
+
+        // When
+        val modelAssets = fetcher.toLocalModelAssets(remoteConfigs)
+
+        // Then
+        val asset = modelAssets[ModelType.VISION]!!
+        assertTrue(asset.metadata.visionCapable)
+    }
+
+    @Test
+    fun toLocalModelAssets_setsIsSystemPresetToTrue() = runTest {
+        // Given
+        val remoteConfigs = listOf(
+            RemoteModelConfig(
+                modelType = ModelType.MAIN,
+                fileName = "model.gguf",
+                huggingFaceModelName = "test/model",
+                displayName = "Test Model",
+                sha256 = "abc123",
+                sizeInBytes = 1000000L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                temperature = 0.8,
+                topK = 50,
+                topP = 0.9,
+                repetitionPenalty = 1.2,
+                maxTokens = 4096,
+                contextWindow = 8192,
+                systemPrompt = "You are helpful."
+            )
+        )
+
+        // When
+        val modelAssets = fetcher.toLocalModelAssets(remoteConfigs)
+
+        // Then
+        val asset = modelAssets[ModelType.MAIN]!!
+        val config = asset.configurations.first()
+        assertTrue(config.isSystemPreset)
+    }
+
+    @Test
+    fun fetchRemoteConfig_failsIfVisionSlotModelNotVisionCapable() = runTest {
+        // Given
+        val json = """
+            {
+                "vision": {
+                    "fileName": "not_vision.gguf",
+                    "displayName": "Not Vision Model",
+                    "sha256": "abc123",
+                    "sizeInBytes": 1000000,
+                    "temperature": 0.7,
+                    "topK": 40,
+                    "topP": 0.95,
+                    "minP": 0.05,
+                    "repetitionPenalty": 1.1,
+                    "maxTokens": 2048,
+                    "contextWindow": 4096,
+                    "systemPrompt": "Hi",
+                    "visionCapable": false
+                }
+            }
+        """.trimIndent()
+
+        val mockCall = mockk<okhttp3.Call>()
+        val response = Response.Builder()
+            .request(mockk())
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body(json.toResponseBody())
+            .build()
+
+        every { mockOkHttpClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns response
+
+        // When
+        val result = fetcher.fetchRemoteConfig()
+
+        // Then
+        assertTrue(result.isFailure)
+        assertEquals("Model configured for 'vision' slot must have 'visionCapable' set to true", result.exceptionOrNull()?.message)
     }
 
     @Test

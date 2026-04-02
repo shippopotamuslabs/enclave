@@ -98,7 +98,7 @@ class InferenceFlowIntegrationTest {
     fun `end-to-end flow from InferenceEvent to AccumulatedMessages`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Thinking("Thinking step 1...", ModelType.FAST),
@@ -141,7 +141,7 @@ class InferenceFlowIntegrationTest {
     fun `flow completes and persists all messages`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
@@ -183,7 +183,7 @@ class InferenceFlowIntegrationTest {
     fun `lock acquired on start and released on completion`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Finished(ModelType.FAST)
@@ -244,7 +244,7 @@ class InferenceFlowIntegrationTest {
     fun `error state is accumulated and persisted`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Error(RuntimeException("Model crashed"), ModelType.FAST)
@@ -279,7 +279,7 @@ class InferenceFlowIntegrationTest {
     fun `thinking state is accumulated correctly`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Thinking("Step 1...", ModelType.FAST),
@@ -317,7 +317,7 @@ class InferenceFlowIntegrationTest {
     fun `ThinkingLive event sets messageState to THINKING`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Thinking("Let me think...", ModelType.FAST)
@@ -352,7 +352,7 @@ class InferenceFlowIntegrationTest {
     fun `GeneratingText event sets messageState to GENERATING`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello world!", ModelType.FAST)
@@ -387,7 +387,7 @@ class InferenceFlowIntegrationTest {
     fun `Finished event sets messageState to COMPLETE`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Finished(ModelType.FAST)
@@ -422,7 +422,7 @@ class InferenceFlowIntegrationTest {
     fun `thinkingEndTime is set when GeneratingText first arrives after Thinking`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Thinking("Thinking...", ModelType.FAST),
@@ -462,7 +462,7 @@ class InferenceFlowIntegrationTest {
     fun `thinkingEndTime is not overwritten by subsequent GeneratingText`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Thinking("Thinking...", ModelType.FAST),
@@ -516,7 +516,7 @@ class InferenceFlowIntegrationTest {
     fun `messageState transitions correctly from THINKING to GENERATING to COMPLETE`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.Thinking("Thinking...", ModelType.FAST),
@@ -571,7 +571,7 @@ class InferenceFlowIntegrationTest {
     fun `GeneratingText with DRAFT_ONE model sets pipelineStep to DRAFT_ONE`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.DRAFT_ONE) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.DRAFT_ONE) } returns mockConfig
 
         every { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.PartialResponse("Draft content", ModelType.DRAFT_ONE),
@@ -611,7 +611,7 @@ class InferenceFlowIntegrationTest {
     fun `GeneratingText with DRAFT_TWO model sets pipelineStep to DRAFT_TWO`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.DRAFT_TWO) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.DRAFT_TWO) } returns mockConfig
 
         every { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.PartialResponse("Draft two content", ModelType.DRAFT_TWO),
@@ -651,7 +651,7 @@ class InferenceFlowIntegrationTest {
     fun `GeneratingText with MAIN model sets pipelineStep to SYNTHESIS`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.MAIN) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.MAIN) } returns mockConfig
 
         every { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.PartialResponse("Main synthesis content", ModelType.MAIN),
@@ -691,7 +691,7 @@ class InferenceFlowIntegrationTest {
     fun `GeneratingText with FINAL_SYNTHESIS model sets pipelineStep to FINAL`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FINAL_SYNTHESIS) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FINAL_SYNTHESIS) } returns mockConfig
 
         every { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
             InferenceEvent.PartialResponse("Final content", ModelType.FINAL_SYNTHESIS),
@@ -732,7 +732,7 @@ class InferenceFlowIntegrationTest {
     fun `model timeout correctly produces Error state with specific timeout exception`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         val exception = Exception("Timed out waiting for model")
 
@@ -772,7 +772,7 @@ class InferenceFlowIntegrationTest {
     fun `empty stream responses completes gracefully without crashing`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         // Flow completes immediately without emitting anything
         every { fastModelService.sendPrompt(any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
@@ -804,7 +804,7 @@ class InferenceFlowIntegrationTest {
     fun `concurrent agent failures process the last error successfully`() = runTest {
         // Given
         val mockConfig = mockk<LocalModelAsset>()
-        every { modelRegistry.getRegisteredAssetSync(ModelType.FAST) } returns mockConfig
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         val firstException = Exception("Agent 1 failed")
         val secondException = Exception("Agent 2 failed")

@@ -32,7 +32,6 @@ class CheckModelsUseCaseTest {
             huggingFaceModelName = "TheBloke/Mistral-7B-v0.1-GGUF",
             remoteFileName = "mistral-7b-v0.1.Q4_K_M.gguf",
             localFileName = "mistral-7b-v0.1.Q4_K_M.gguf",
-            displayName = "Test Model",
             sha256 = "abc123",
             sizeInBytes = 1024L,
             modelFileFormat = ModelFileFormat.GGUF
@@ -120,8 +119,8 @@ class CheckModelsUseCaseTest {
 
         // Then
         assertEquals(1, result.modelsToDownload.size)
-        assertEquals("Test Model", result.modelsToDownload.first().metadata.displayName)
-        verify { logger.info(any(), match { it.contains("1 assets need download: [Test Model]") }) }
+        assertEquals("TheBloke/Mistral-7B-v0.1-GGUF", result.modelsToDownload.first().metadata.huggingFaceModelName)
+        verify { logger.info(any(), match { it.contains("1 assets need download: [TheBloke/Mistral-7B-v0.1-GGUF]") }) }
     }
 
     @Test
@@ -172,7 +171,7 @@ class CheckModelsUseCaseTest {
         checkModelsUseCase(emptyMap(), mapOf(ModelType.FAST to testAsset))
 
         // Then
-        verify { logger.info(eq("CheckModelsUseCase"), match { it.contains("1 assets need download: [Test Model]") }) }
+        verify { logger.info(eq("CheckModelsUseCase"), match { it.contains("1 assets need download: [TheBloke/Mistral-7B-v0.1-GGUF]") }) }
     }
 
     @Test

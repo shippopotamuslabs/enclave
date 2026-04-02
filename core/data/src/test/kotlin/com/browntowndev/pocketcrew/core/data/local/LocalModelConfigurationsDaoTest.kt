@@ -43,7 +43,6 @@ class LocalModelConfigurationsDaoTest {
             localFilename = "qwen.gguf",
             sha256 = "abc",
             sizeInBytes = 100,
-            displayName = "Qwen",
             modelStatus = ModelStatus.CURRENT
         ))
         
@@ -74,7 +73,6 @@ class LocalModelConfigurationsDaoTest {
             localFilename = "qwen.gguf",
             sha256 = "abc",
             sizeInBytes = 100,
-            displayName = "Qwen",
             modelStatus = ModelStatus.CURRENT
         ))
         
@@ -94,7 +92,6 @@ class LocalModelConfigurationsDaoTest {
             localFilename = "qwen.gguf",
             sha256 = "abc",
             sizeInBytes = 100,
-            displayName = "Qwen",
             modelStatus = ModelStatus.CURRENT
         ))
         
@@ -108,10 +105,10 @@ class LocalModelConfigurationsDaoTest {
     @Test
     fun `same display name on different assets is allowed`() = runTest {
         val model1Id = modelsDao.upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "qwen1", remoteFilename = "qwen1.gguf", localFilename = "qwen1.gguf", sha256 = "abc1", sizeInBytes = 100, displayName = "Qwen1", modelStatus = ModelStatus.CURRENT
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "qwen1", remoteFilename = "qwen1.gguf", localFilename = "qwen1.gguf", sha256 = "abc1", sizeInBytes = 100, modelStatus = ModelStatus.CURRENT
         ))
         val model2Id = modelsDao.upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "qwen2", remoteFilename = "qwen2.gguf", localFilename = "qwen2.gguf", sha256 = "abc2", sizeInBytes = 100, displayName = "Qwen2", modelStatus = ModelStatus.CURRENT
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "qwen2", remoteFilename = "qwen2.gguf", localFilename = "qwen2.gguf", sha256 = "abc2", sizeInBytes = 100, modelStatus = ModelStatus.CURRENT
         ))
         
         configDao.upsert(LocalModelConfigurationEntity(localModelId = model1Id, displayName = "Creative"))

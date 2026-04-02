@@ -13,6 +13,7 @@ import androidx.compose.runtime.remember
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.feature.settings.ByokConfigureRoute
+import com.browntowndev.pocketcrew.feature.settings.ByokCustomHeadersRoute
 import com.browntowndev.pocketcrew.feature.settings.LocalModelConfigureRoute
 import com.browntowndev.pocketcrew.feature.settings.ModelConfigurationRoute
 import com.browntowndev.pocketcrew.feature.settings.SettingsRoute
@@ -22,6 +23,7 @@ object SettingsDestination {
     const val MAIN = "settings_main"
     const val BYOK_CONFIGURE = "byok_configure"
     const val LOCAL_MODEL_CONFIGURE = "local_model_configure"
+    const val BYOK_CUSTOM_HEADERS = "byok_custom_headers"
     const val MODEL_CONFIGURE = "model_configure/{modelType}"
     const val MODEL_DOWNLOAD = "model_download"
 }
@@ -113,13 +115,83 @@ fun NavGraphBuilder.settingsGraph(
                 navController.getBackStackEntry(SettingsDestination.GRAPH)
             }
             ByokConfigureRoute(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToCustomHeaders = {
+                    navController.navigate(SettingsDestination.BYOK_CUSTOM_HEADERS)
+                },
+                viewModel = hiltViewModel(parentEntry)
             )
         }
 
-        composable(route = SettingsDestination.LOCAL_MODEL_CONFIGURE) {
+        composable(
+            route = SettingsDestination.BYOK_CUSTOM_HEADERS,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(300),
+                )
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(300),
+                )
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(300),
+                )
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(300),
+                )
+            },
+        ) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(SettingsDestination.GRAPH)
+            }
+            ByokCustomHeadersRoute(
+                onNavigateBack = { navController.popBackStack() },
+                viewModel = hiltViewModel(parentEntry)
+            )
+        }
+
+        composable(
+            route = SettingsDestination.LOCAL_MODEL_CONFIGURE,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(300),
+                )
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(300),
+                )
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(300),
+                )
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(300),
+                )
+            },
+        ) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(SettingsDestination.GRAPH)
+            }
             LocalModelConfigureRoute(
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                viewModel = hiltViewModel(parentEntry)
             )
         }
 

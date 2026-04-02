@@ -52,7 +52,13 @@ class ModelConfigFetcherImpl @Inject constructor(
 
                 // Parse vision model
                 json.optJSONObject("vision")?.let { vision ->
-                    configs.add(parseModelConfig(vision, ModelType.VISION))
+                    val config = parseModelConfig(vision, ModelType.VISION)
+                    if (!config.visionCapable) {
+                        return@withContext Result.failure(
+                            Exception("Model configured for 'vision' slot must have 'visionCapable' set to true")
+                        )
+                    }
+                    configs.add(config)
                 }
 
                 // Parse draft_one model
@@ -125,7 +131,8 @@ class ModelConfigFetcherImpl @Inject constructor(
             maxTokens = json.getInt("maxTokens"),
             contextWindow = json.getInt("contextWindow"),
             systemPrompt = json.getString("systemPrompt"),
-            thinkingEnabled = json.optBoolean("thinkingEnabled", false)
+            thinkingEnabled = json.optBoolean("thinkingEnabled", false),
+            visionCapable = json.optBoolean("visionCapable", false)
         )
     }
 
@@ -163,10 +170,10 @@ class ModelConfigFetcherImpl @Inject constructor(
                 huggingFaceModelName = config.huggingFaceModelName,
                 remoteFileName = config.fileName,
                 localFileName = config.fileName,
-                displayName = config.displayName,
                 sha256 = config.sha256,
                 sizeInBytes = config.sizeInBytes,
-                modelFileFormat = config.modelFileFormat
+                modelFileFormat = config.modelFileFormat,
+                visionCapable = config.visionCapable
             )
 
             val configuration = LocalModelConfiguration(
@@ -180,7 +187,8 @@ class ModelConfigFetcherImpl @Inject constructor(
                 minP = config.minP,
                 repetitionPenalty = config.repetitionPenalty,
                 thinkingEnabled = config.thinkingEnabled,
-                systemPrompt = config.systemPrompt
+                systemPrompt = config.systemPrompt,
+                isSystemPreset = true
             )
 
             config.modelType to LocalModelAsset(

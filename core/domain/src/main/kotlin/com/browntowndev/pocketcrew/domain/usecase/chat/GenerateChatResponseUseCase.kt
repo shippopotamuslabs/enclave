@@ -59,11 +59,11 @@ class GenerateChatResponseUseCase @Inject constructor(
         chatId: Long,
         mode: Mode
     ): Flow<AccumulatedMessages> {
-        val inferenceType = determineInferenceType(mode)
+        return flow {
+            val inferenceType = determineInferenceType(mode)
 
-        // Try to acquire the global inference lock
-        if (!inferenceLockManager.acquireLock(inferenceType)) {
-            return flow {
+            // Try to acquire the global inference lock
+            if (!inferenceLockManager.acquireLock(inferenceType)) {
                 emit(
                     AccumulatedMessages(
                         mapOf(
@@ -77,68 +77,91 @@ class GenerateChatResponseUseCase @Inject constructor(
                         )
                     )
                 )
+                return@flow
             }
-        }
 
-        val baseFlow: Flow<MessageGenerationState> = when (mode) {
-            Mode.FAST -> flow {
-                try {
-                    val service = inferenceFactory.getInferenceService(ModelType.FAST)
-                    emitAll(generateWithService(
-                        prompt, userMessageId, assistantMessageId, chatId, service, ModelType.FAST
-                    ))
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    emit(
-                        MessageGenerationState.Failed(
-                            modelType = ModelType.FAST,
-                            error = e
+            val baseFlow: Flow<MessageGenerationState> = when (mode) {
+                Mode.FAST -> flow {
+                    try {
+                        val service = inferenceFactory.getInferenceService(ModelType.FAST)
+                        emitAll(
+                            generateWithService(
+                                prompt, userMessageId, assistantMessageId, chatId, service, ModelType.FAST
+                            )
                         )
-                    )
-                }
-            }
-
-            Mode.THINKING -> flow {
-                try {
-                    val service = inferenceFactory.getInferenceService(ModelType.THINKING)
-                    emitAll(generateWithService(
-                        prompt, userMessageId, assistantMessageId, chatId, service, ModelType.THINKING
-                    ))
-                } catch (e: Exception) {
-                    if (e is CancellationException) throw e
-                    emit(
-                        MessageGenerationState.Failed(
-                            modelType = ModelType.THINKING,
-                            error = e
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        emit(
+                            MessageGenerationState.Failed(
+                                modelType = ModelType.FAST,
+                                error = e
+                            )
                         )
-                    )
+                    }
                 }
+
+                Mode.THINKING -> flow {
+                    try {
+                        val service = inferenceFactory.getInferenceService(ModelType.THINKING)
+                        emitAll(
+                            generateWithService(
+                                prompt, userMessageId, assistantMessageId, chatId, service, ModelType.THINKING
+                            )
+                        )
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        emit(
+                            MessageGenerationState.Failed(
+                                modelType = ModelType.THINKING,
+                                error = e
+                            )
+                        )
+                    }
+                }
+
+                Mode.CREW -> pipelineExecutor.executePipeline(
+                    chatId = chatId.toString(),
+                    userMessage = prompt,
+                )
             }
 
-            Mode.CREW -> pipelineExecutor.executePipeline(
-                chatId = chatId.toString(),
-                userMessage = prompt,
+            val assistantMessageIds = mutableMapOf(ModelType.DRAFT_ONE to assistantMessageId)
+
+            // Create accumulator manager for this invocation
+            val accumulatorManager = MessageAccumulatorManager(
+                mode = mode,
+                chatId = chatId,
+                userMessageId = userMessageId,
+                defaultAssistantMessageId = assistantMessageId,
+                assistantMessageIds = assistantMessageIds
             )
-        }
+            val loggedThinkingFor = mutableMapOf(
+                ModelType.DRAFT_ONE to false,
+                ModelType.DRAFT_TWO to false,
+                ModelType.MAIN to false,
+                ModelType.FINAL_SYNTHESIS to false
+            )
+            val loggedProcessingFor = mutableMapOf(
+                ModelType.DRAFT_ONE to false,
+                ModelType.DRAFT_TWO to false,
+                ModelType.MAIN to false,
+                ModelType.FINAL_SYNTHESIS to false
+            )
+            val loggedGenerationFor = mutableMapOf(
+                ModelType.DRAFT_ONE to false,
+                ModelType.DRAFT_TWO to false,
+                ModelType.MAIN to false,
+                ModelType.FINAL_SYNTHESIS to false
+            )
+            val loggedStepCompletionFor = mutableMapOf(
+                ModelType.DRAFT_ONE to false,
+                ModelType.DRAFT_TWO to false,
+                ModelType.MAIN to false,
+                ModelType.FINAL_SYNTHESIS to false
+            )
 
-        val assistantMessageIds = mutableMapOf(ModelType.DRAFT_ONE to assistantMessageId)
-
-        // Create accumulator manager for this invocation
-        val accumulatorManager = MessageAccumulatorManager(
-            mode = mode,
-            chatId = chatId,
-            userMessageId = userMessageId,
-            defaultAssistantMessageId = assistantMessageId,
-            assistantMessageIds = assistantMessageIds
-        )
-        val loggedThinkingFor = mutableMapOf(ModelType.DRAFT_ONE to false, ModelType.DRAFT_TWO to false, ModelType.MAIN to false, ModelType.FINAL_SYNTHESIS to false)
-        val loggedProcessingFor = mutableMapOf(ModelType.DRAFT_ONE to false, ModelType.DRAFT_TWO to false, ModelType.MAIN to false, ModelType.FINAL_SYNTHESIS to false)
-        val loggedGenerationFor = mutableMapOf(ModelType.DRAFT_ONE to false, ModelType.DRAFT_TWO to false, ModelType.MAIN to false, ModelType.FINAL_SYNTHESIS to false)
-        val loggedStepCompletionFor = mutableMapOf(ModelType.DRAFT_ONE to false, ModelType.DRAFT_TWO to false, ModelType.MAIN to false, ModelType.FINAL_SYNTHESIS to false)
-
-        return flow {
-            baseFlow
-                .collect { state ->
+            try {
+                baseFlow.collect { state ->
                     when (state) {
                         is MessageGenerationState.Processing -> {
                             if (loggedProcessingFor[state.modelType] == false) {
@@ -148,7 +171,6 @@ class GenerateChatResponseUseCase @Inject constructor(
 
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
                             accumulator.currentState = MessageState.PROCESSING
-                            accumulator.pipelineStep = getPipelineStepForModelType(state.modelType)
                             emit(accumulatorManager.toMessagesState())
                         }
 
@@ -159,10 +181,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                             }
 
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
-                            accumulator.thinkingRaw.append(state.thinkingChunk)
-                            if (accumulator.thinkingStartTime == null) {
-                                accumulator.thinkingStartTime = System.currentTimeMillis()
-                            }
+                            accumulator.appendThinking(state.thinkingChunk)
                             accumulator.currentState = MessageState.THINKING
                             emit(accumulatorManager.toMessagesState())
                         }
@@ -174,11 +193,8 @@ class GenerateChatResponseUseCase @Inject constructor(
                             }
 
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
-                            accumulator.content.append(state.textDelta)
+                            accumulator.appendContent(state.textDelta)
                             accumulator.currentState = MessageState.GENERATING
-                            if (accumulator.thinkingStartTime != null && accumulator.thinkingEndTime == null) {
-                                accumulator.thinkingEndTime = System.currentTimeMillis()
-                            }
                             emit(accumulatorManager.toMessagesState())
                         }
 
@@ -220,19 +236,15 @@ class GenerateChatResponseUseCase @Inject constructor(
                         }
                     }
                 }
-        }.buffer(FLOW_BUFFER_SIZE).onCompletion { cause ->
-            if (cause != null) {
-                loggingPort.error(TAG, "Flow failed", cause)
+            } finally {
+                try {
+                    persistAccumulatedMessages(accumulatorManager)
+                } catch (e: Exception) {
+                    loggingPort.error(TAG, "Failed to persist messages", e)
+                }
+                inferenceLockManager.releaseLock()
             }
-
-            try {
-                persistAccumulatedMessages(accumulatorManager)
-            } catch (e: Exception) {
-                loggingPort.error(TAG, "Failed to persist messages", e)
-            }
-
-            inferenceLockManager.releaseLock()
-        }
+        }.buffer(FLOW_BUFFER_SIZE)
     }
 
     /**
@@ -341,6 +353,20 @@ class GenerateChatResponseUseCase @Inject constructor(
                 (thinkingEndTime!! - thinkingStartTime!!) / 1000
             } else 0
 
+        fun appendThinking(chunk: String) {
+            thinkingRaw.append(chunk)
+            if (thinkingStartTime == null) {
+                thinkingStartTime = System.currentTimeMillis()
+            }
+        }
+
+        fun appendContent(chunk: String) {
+            content.append(chunk)
+            if (thinkingStartTime != null && thinkingEndTime == null) {
+                thinkingEndTime = System.currentTimeMillis()
+            }
+        }
+
         fun toSnapshot(): MessageSnapshot = MessageSnapshot(
             messageId = messageId,
             modelType = modelType,
@@ -365,26 +391,26 @@ class GenerateChatResponseUseCase @Inject constructor(
         }
     }
 
-    private fun determineInferenceType(mode: Mode): InferenceType {
+    private suspend fun determineInferenceType(mode: Mode): InferenceType {
         return when (mode) {
             Mode.FAST -> {
-                if (modelRegistry.getRegisteredAssetSync(ModelType.FAST) != null) {
+                if (modelRegistry.getRegisteredAsset(ModelType.FAST) != null) {
                     InferenceType.ON_DEVICE
                 } else {
                     InferenceType.BYOK
                 }
             }
             Mode.THINKING -> {
-                if (modelRegistry.getRegisteredAssetSync(ModelType.THINKING) != null) {
+                if (modelRegistry.getRegisteredAsset(ModelType.THINKING) != null) {
                     InferenceType.ON_DEVICE
                 } else {
                     InferenceType.BYOK
                 }
             }
             Mode.CREW -> {
-                val draftOneOnDevice = modelRegistry.getRegisteredAssetSync(ModelType.DRAFT_ONE) != null
-                val draftTwoOnDevice = modelRegistry.getRegisteredAssetSync(ModelType.DRAFT_TWO) != null
-                val mainOnDevice = modelRegistry.getRegisteredAssetSync(ModelType.MAIN) != null
+                val draftOneOnDevice = modelRegistry.getRegisteredAsset(ModelType.DRAFT_ONE) != null
+                val draftTwoOnDevice = modelRegistry.getRegisteredAsset(ModelType.DRAFT_TWO) != null
+                val mainOnDevice = modelRegistry.getRegisteredAsset(ModelType.MAIN) != null
 
                 if (draftOneOnDevice || draftTwoOnDevice || mainOnDevice) {
                     InferenceType.ON_DEVICE

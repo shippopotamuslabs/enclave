@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
+import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
@@ -218,7 +219,6 @@ class InitializeFileProgressUseCaseTest {
                 huggingFaceModelName = "test/model",
                 remoteFileName = localFileName,
                 localFileName = localFileName,
-                displayName = "${modelType.name} Model",
                 sha256 = sha256,
                 sizeInBytes = sizeInBytes,
                 modelFileFormat = ModelFileFormat.LITERTLM

@@ -8,9 +8,10 @@ data class ApiModelConfiguration(
     override val contextWindow: Int = 4096,
     override val temperature: Double = 0.7,
     override val topP: Double = 0.95,
-    override val topK: Int? = null,
+    override val topK: Int? = 40,
+    val minP: Double = 0.05,
     val frequencyPenalty: Double = 0.0,
     val presencePenalty: Double = 0.0,
-    val stopSequences: List<String> = emptyList(),
-    val customHeadersAndParams: Map<String, String> = emptyMap(),
+    val systemPrompt: String = "",
+    val customHeaders: Map<String, String> = emptyMap(),
 ) : ModelTuningConfiguration

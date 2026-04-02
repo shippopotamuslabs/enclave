@@ -291,7 +291,7 @@ class ModelDownloadWorker @AssistedInject constructor(
 
     private fun parseModelData(data: String): Pair<ModelType, LocalModelAsset>? {
         // Expected format:
-        // modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt
+        // modelType|remoteFileName|localFileName|presetName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt|isSystemPreset
         val parts = data.split("|")
         if (parts.size < 14) {
             logger.warning(TAG, "Invalid model data format: expected at least 14 parts, got ${parts.size}")
@@ -310,7 +310,6 @@ class ModelDownloadWorker @AssistedInject constructor(
                 huggingFaceModelName = parts[4],
                 remoteFileName = parts[1],
                 localFileName = parts[2],
-                displayName = parts[3],
                 sha256 = parts[6],
                 sizeInBytes = parts[5].toLongOrNull() ?: 0L,
                 modelFileFormat = try {
@@ -330,7 +329,8 @@ class ModelDownloadWorker @AssistedInject constructor(
                 repetitionPenalty = parts[12].toDoubleOrNull() ?: 1.1,
                 maxTokens = parts[13].toIntOrNull() ?: 4096,
                 contextWindow = parts[14].toIntOrNull() ?: 4096,
-                systemPrompt = parts.getOrNull(15) ?: ""
+                systemPrompt = parts.getOrNull(15) ?: "",
+                isSystemPreset = parts.getOrNull(16)?.toBoolean() ?: true
             )
 
             // DIAGNOSTIC: Log parsed data

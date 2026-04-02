@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 3,
-    "identityHash": "fe990aae95260bb1626fe51bcdd93031",
+    "identityHash": "a3b33f4d5a84b2c4599e07b13d546b1d",
     "entities": [
       {
         "tableName": "chat",
@@ -214,7 +214,7 @@
       },
       {
         "tableName": "local_models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `model_file_format` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `model_status` TEXT NOT NULL, `thinking_enabled` INTEGER NOT NULL, `is_vision` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `model_file_format` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `vision_capable` INTEGER NOT NULL, `model_status` TEXT NOT NULL, `thinking_enabled` INTEGER NOT NULL, `is_vision` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -259,9 +259,9 @@
             "notNull": true
           },
           {
-            "fieldPath": "displayName",
-            "columnName": "display_name",
-            "affinity": "TEXT",
+            "fieldPath": "visionCapable",
+            "columnName": "vision_capable",
+            "affinity": "INTEGER",
             "notNull": true
           },
           {
@@ -309,7 +309,7 @@
       },
       {
         "tableName": "local_model_configurations",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `local_model_id` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `temperature` REAL NOT NULL, `top_k` INTEGER NOT NULL, `top_p` REAL NOT NULL, `min_p` REAL NOT NULL, `repetition_penalty` REAL NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `system_prompt` TEXT, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`local_model_id`) REFERENCES `local_models`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `local_model_id` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `temperature` REAL NOT NULL, `top_k` INTEGER NOT NULL, `top_p` REAL NOT NULL, `min_p` REAL NOT NULL, `repetition_penalty` REAL NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `system_prompt` TEXT, `is_system_preset` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`local_model_id`) REFERENCES `local_models`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -381,6 +381,12 @@
             "fieldPath": "systemPrompt",
             "columnName": "system_prompt",
             "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "isSystemPreset",
+            "columnName": "is_system_preset",
+            "affinity": "INTEGER",
+            "notNull": true
           },
           {
             "fieldPath": "updatedAt",
@@ -501,7 +507,7 @@
       },
       {
         "tableName": "api_model_configurations",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `api_credentials_id` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `custom_headers_and_params` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `stop_sequences` TEXT NOT NULL, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `api_credentials_id` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `min_p` REAL NOT NULL, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `system_prompt` TEXT NOT NULL, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -522,8 +528,8 @@
             "notNull": true
           },
           {
-            "fieldPath": "customHeadersAndParams",
-            "columnName": "custom_headers_and_params",
+            "fieldPath": "customHeaders",
+            "columnName": "custom_headers",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -557,6 +563,12 @@
             "affinity": "INTEGER"
           },
           {
+            "fieldPath": "minP",
+            "columnName": "min_p",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
             "fieldPath": "frequencyPenalty",
             "columnName": "frequency_penalty",
             "affinity": "REAL",
@@ -569,8 +581,8 @@
             "notNull": true
           },
           {
-            "fieldPath": "stopSequences",
-            "columnName": "stop_sequences",
+            "fieldPath": "systemPrompt",
+            "columnName": "system_prompt",
             "affinity": "TEXT",
             "notNull": true
           },
@@ -694,7 +706,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'fe990aae95260bb1626fe51bcdd93031')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a3b33f4d5a84b2c4599e07b13d546b1d')"
     ]
   }
 }

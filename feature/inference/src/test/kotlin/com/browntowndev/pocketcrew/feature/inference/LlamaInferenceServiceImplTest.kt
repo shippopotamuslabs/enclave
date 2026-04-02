@@ -1,15 +1,22 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import android.content.Context
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlamaEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.feature.inference.LlamaInferenceServiceImpl
 import io.mockk.MockKAnnotations
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
@@ -27,18 +34,59 @@ import org.junit.jupiter.api.Test
  */
 class LlamaInferenceServiceImplTest {
 
+    private lateinit var mockContext: Context
+    private lateinit var mockModelRegistry: ModelRegistryPort
     private lateinit var mockEngine: LlamaEnginePort
     private lateinit var mockLoggingPort: LoggingPort
     private lateinit var processThinkingTokens: ProcessThinkingTokensUseCase
     private lateinit var sessionManager: LlamaChatSessionManager
     private lateinit var service: LlamaInferenceServiceImpl
 
+    private val fakeAsset = LocalModelAsset(
+        metadata = LocalModelMetadata(
+            id = 1L,
+            huggingFaceModelName = "test/model",
+            remoteFileName = "model.gguf",
+            localFileName = "model.gguf",
+            sha256 = "dummy-hash",
+            sizeInBytes = 1000L,
+            modelFileFormat = ModelFileFormat.GGUF
+        ),
+        configurations = emptyList()
+    )
+
+    private val fakeConfig = LocalModelConfiguration(
+        id = 1L,
+        localModelId = 1L,
+        displayName = "Test Config",
+        temperature = 0.7,
+        topK = 40,
+        topP = 0.9,
+        minP = 0.1,
+        repetitionPenalty = 1.1,
+        maxTokens = 4096,
+        contextWindow = 4096,
+        thinkingEnabled = false,
+        systemPrompt = "You are a helpful assistant.",
+        isSystemPreset = true
+    )
+
     @BeforeEach
     fun setup() {
         MockKAnnotations.init(this)
 
+        mockContext = mockk(relaxed = true)
+        mockModelRegistry = mockk(relaxed = true)
         mockEngine = mockk(relaxed = true)
         mockLoggingPort = mockk(relaxed = true)
+
+        val mockFilesDir = java.io.File("/fake/files/dir")
+        every { mockContext.getExternalFilesDir(null) } returns mockFilesDir
+
+        // Mock model registry to return valid asset and config
+        // Note: mockModelRegistry is relaxed=true, so suspend functions return null by default
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.MAIN) } returns fakeAsset
+        coEvery { mockModelRegistry.getRegisteredConfiguration(ModelType.MAIN) } returns fakeConfig
 
         // Create real ProcessThinkingTokensUseCase
         processThinkingTokens = ProcessThinkingTokensUseCase()
@@ -51,7 +99,9 @@ class LlamaInferenceServiceImplTest {
             sessionManager = sessionManager,
             processThinkingTokens = processThinkingTokens,
             modelType = ModelType.MAIN,
-            loggingPort = mockLoggingPort
+            loggingPort = mockLoggingPort,
+            modelRegistry = mockModelRegistry,
+            context = mockContext
         )
     }
 
@@ -68,13 +118,6 @@ class LlamaInferenceServiceImplTest {
         val token4 = GenerationEvent.Completed("")
 
         every { mockEngine.generate() } returns flowOf(token1, token2, token3, token4)
-
-        // Configure the service
-        service.configure(
-            modelPath = "/fake/model.gguf",
-            systemPrompt = "You are helpful",
-            samplingConfig = LlamaSamplingConfig(minP = 0.0f)
-        )
 
         // When
         val events = mutableListOf<InferenceEvent>()
@@ -118,11 +161,6 @@ class LlamaInferenceServiceImplTest {
 
         every { mockEngine.generate() } returns flowOf(token1, token2, token3, token4, token5, token6, token7)
 
-        service.configure(
-            modelPath = "/fake/model.gguf",
-            samplingConfig = LlamaSamplingConfig(minP = 0.0f)
-        )
-
         // When
         val events = mutableListOf<InferenceEvent>()
         service.sendPrompt("Hello", closeConversation = false).collect { event ->
@@ -147,11 +185,6 @@ class LlamaInferenceServiceImplTest {
         val token3 = GenerationEvent.Completed("")
 
         every { mockEngine.generate() } returns flowOf(token1, token2, token3)
-
-        service.configure(
-            modelPath = "/fake/model.gguf",
-            samplingConfig = LlamaSamplingConfig(minP = 0.0f)
-        )
 
         // When
         val events = mutableListOf<InferenceEvent>()
@@ -186,11 +219,6 @@ class LlamaInferenceServiceImplTest {
 
         every { mockEngine.generate() } returns flowOf(token1, token2)
 
-        service.configure(
-            modelPath = "/fake/model.gguf",
-            samplingConfig = LlamaSamplingConfig(minP = 0.0f)
-        )
-
         // When
         val events = mutableListOf<InferenceEvent>()
         service.sendPrompt("Hello", closeConversation = false).collect { event ->
@@ -212,11 +240,6 @@ class LlamaInferenceServiceImplTest {
         val token4 = GenerationEvent.Completed("")
 
         every { mockEngine.generate() } returns flowOf(token1, token2, token3, token4)
-
-        service.configure(
-            modelPath = "/fake/model.gguf",
-            samplingConfig = LlamaSamplingConfig(minP = 0.0f)
-        )
 
         // When
         val events = mutableListOf<InferenceEvent>()

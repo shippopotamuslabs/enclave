@@ -15,6 +15,7 @@ package com.browntowndev.pocketcrew.domain.model.inference
  * @property topP Top-p (nucleus) sampling parameter
  * @property maxTokens Maximum tokens to generate
  * @property systemPrompt Optional system prompt to prepend to conversations
+ * @property visionCapable Whether this model is capable of image understanding (multimodal)
  */
 data class ModelFile(
     val sizeBytes: Long,
@@ -29,4 +30,5 @@ data class ModelFile(
     val topP: Double = 0.95,
     val maxTokens: Int,
     val systemPrompt: String,
+    val visionCapable: Boolean = false
 )

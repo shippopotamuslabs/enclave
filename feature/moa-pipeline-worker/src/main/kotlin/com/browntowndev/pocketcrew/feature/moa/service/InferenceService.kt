@@ -440,7 +440,7 @@ class InferenceService : Service() {
     /**
      * Builds the prompt for the given step, incorporating previous outputs.
      */
-    private fun buildPromptForStep(state: PipelineState): String {
+    private suspend fun buildPromptForStep(state: PipelineState): String {
         val userPrompt = state.userMessage
 
         return when (state.currentStep) {
@@ -452,7 +452,7 @@ class InferenceService : Service() {
                 state.stepOutputs[PipelineStep.DRAFT_TWO] ?: ""
             )
             PipelineStep.FINAL -> {
-                val userSystemPrompt = modelRegistry.getRegisteredConfigurationSync(ModelType.FAST)?.systemPrompt ?: ""
+                val userSystemPrompt = modelRegistry.getRegisteredConfiguration(ModelType.FAST)?.systemPrompt ?: ""
                 buildFinalReviewPrompt(
                     userPrompt,
                     state.stepOutputs[PipelineStep.SYNTHESIS] ?: "",
@@ -520,9 +520,9 @@ Produce the final polished response for the user. Output ONLY the essay itself â
     /**
      * Gets the display name for a PipelineStep from the ModelRegistry.
      */
-    private fun getModelDisplayNameForStep(step: PipelineStep): String {
+    private suspend fun getModelDisplayNameForStep(step: PipelineStep): String {
         val modelType = getModelTypeForStep(step)
-        return modelRegistry.getRegisteredAssetSync(modelType)?.metadata?.displayName ?: modelType.name
+        return modelRegistry.getRegisteredAsset(modelType)?.metadata?.huggingFaceModelName ?: modelType.name
     }
 
     private fun createNotificationChannel() {

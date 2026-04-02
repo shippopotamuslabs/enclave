@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
+import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
@@ -66,7 +67,6 @@ class ValidateDownloadConditionsUseCaseTest {
                 huggingFaceModelName = "test/model",
                 remoteFileName = "${modelType.name.lowercase()}.litertlm",
                 localFileName = "${modelType.name.lowercase()}.litertlm",
-                displayName = "Test Model",
                 sha256 = sha256,
                 sizeInBytes = 1000000L,
                 modelFileFormat = ModelFileFormat.LITERTLM

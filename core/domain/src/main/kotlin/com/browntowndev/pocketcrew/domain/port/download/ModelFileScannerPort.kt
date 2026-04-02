@@ -20,4 +20,10 @@ interface ModelFileScannerPort {
         downloadedModels: Map<ModelType, LocalModelAsset> = emptyMap(),
         expectedModels: Map<ModelType, LocalModelAsset> = emptyMap()
     ): ModelScanResult
+
+    /**
+     * Deletes the physical model file from disk for the given local model ID.
+     * Called during soft-delete of a local model.
+     */
+    suspend fun deleteModelFile(localModelId: Long)
 }

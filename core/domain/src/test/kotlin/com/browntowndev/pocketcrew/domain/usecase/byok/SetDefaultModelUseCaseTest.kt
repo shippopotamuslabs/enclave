@@ -47,6 +47,5 @@ class SetDefaultModelUseCaseTest {
             useCase(modelType, localConfigId = 1L, apiConfigId = null)
             assertEquals(modelType, repository.lastSetCall?.first)
         }
-        assertEquals(ModelType.entries.size, ModelType.entries.size)
     }
 }

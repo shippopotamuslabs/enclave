@@ -26,6 +26,11 @@ class ApiModelRepositoryImpl @Inject constructor(
             entities.map { it.toDomain() }
         }
 
+    override fun observeAllConfigurations(): Flow<List<ApiModelConfiguration>> =
+        apiModelConfigurationsDao.observeAll().map { entities ->
+            entities.map { it.toDomain() }
+        }
+
     override suspend fun getAllCredentials(): List<ApiCredentials> =
         apiCredentialsDao.getAll().map { it.toDomain() }
 
@@ -76,10 +81,11 @@ class ApiModelRepositoryImpl @Inject constructor(
             temperature = config.temperature,
             topP = config.topP,
             topK = config.topK,
+            minP = config.minP,
             frequencyPenalty = config.frequencyPenalty,
             presencePenalty = config.presencePenalty,
-            stopSequences = config.stopSequences.joinToString(","),
-            customHeadersAndParams = ApiModelMapper.serializeCustomHeadersAndParams(config.customHeadersAndParams)
+            systemPrompt = config.systemPrompt,
+            customHeaders = ApiModelMapper.serializeCustomHeaders(config.customHeaders)
         )
         return apiModelConfigurationsDao.upsert(entity)
     }
@@ -111,9 +117,10 @@ class ApiModelRepositoryImpl @Inject constructor(
         temperature = temperature,
         topP = topP,
         topK = topK,
+        minP = minP,
         frequencyPenalty = frequencyPenalty,
         presencePenalty = presencePenalty,
-        stopSequences = if (stopSequences.isBlank()) emptyList() else stopSequences.split(","),
-        customHeadersAndParams = ApiModelMapper.deserializeCustomHeadersAndParams(customHeadersAndParams)
+        systemPrompt = systemPrompt,
+        customHeaders = ApiModelMapper.deserializeCustomHeaders(customHeaders)
     )
 }

@@ -40,6 +40,7 @@ data class SettingsUiState(
     // Model Configuration Bottom Sheet
     val showModelConfigSheet: Boolean = false,
     val localModels: List<LocalModelAssetUi> = emptyList(),
+    val availableToDownloadModels: List<LocalModelAssetUi> = emptyList(),
     val selectedLocalModelAsset: LocalModelAssetUi? = null,
     val selectedLocalModelConfig: LocalModelConfigUi? = null,
     val availableHuggingFaceModels: List<LocalModelMetadataUi> = emptyList(),
@@ -51,9 +52,26 @@ data class SettingsUiState(
 
     val defaultAssignments: List<DefaultModelAssignmentUi> = emptyList(),
 
+    // Deletion Flow
+    val showCannotDeleteLastModelAlert: Boolean = false,
+    val pendingDeletionModelId: Long? = null,
+    val pendingDeletionConfigId: Long? = null,
+    val modelTypesNeedingReassignment: List<ModelType> = emptyList(),
+    val reassignmentOptions: List<ReassignmentOptionUi> = emptyList(),
+
     // Assignment Selection Dialog
     val showAssignmentDialog: Boolean = false,
     val editingAssignmentSlot: ModelType? = null
+)
+
+@Immutable
+data class ReassignmentOptionUi(
+    val configId: Long,
+    val displayName: String,
+    val source: ModelSource,
+    val providerName: String? = null,
+    val apiCredentialsId: Long? = null,
+    val localModelId: Long? = null
 )
 
 @Immutable
@@ -69,6 +87,12 @@ data class ApiModelAssetUi(
 )
 
 @Immutable
+data class CustomHeaderUi(
+    val key: String = "",
+    val value: String = ""
+)
+
+@Immutable
 data class ApiModelConfigUi(
     val id: Long = 0,
     val credentialsId: Long = 0,
@@ -78,22 +102,23 @@ data class ApiModelConfigUi(
     val temperature: Double = 0.7,
     val topP: Double = 0.95,
     val topK: String = "40",
+    val minP: Double = 0.05,
     val frequencyPenalty: Double = 0.0,
     val presencePenalty: Double = 0.0,
-    val stopSequences: String = "",
-    val customHeadersAndParams: String = "",
-    val thinkingEnabled: Boolean = false
+    val customHeaders: List<CustomHeaderUi> = emptyList(),
+    val thinkingEnabled: Boolean = false,
+    val systemPrompt: String = ""
 )
 
 @Immutable
 data class LocalModelAssetUi(
     val metadataId: Long,
-    val displayName: String,
     val huggingFaceModelName: String,
     val remoteFileName: String,
     val sizeInBytes: Long,
     val configurations: List<LocalModelConfigUi>,
-    val isExpanded: Boolean = false
+    val isExpanded: Boolean = false,
+    val visionCapable: Boolean = false
 )
 
 @Immutable
@@ -108,14 +133,14 @@ data class LocalModelConfigUi(
     val topK: String = "40",
     val minP: Double = 0.0,
     val repetitionPenalty: Double = 1.1,
-    val systemPrompt: String = ""
+    val systemPrompt: String = "",
+    val isSystemPreset: Boolean = false
 )
 
 @Immutable
 data class LocalModelMetadataUi(
     val id: Long = 0,
-    val huggingFaceModelName: String,
-    val displayName: String
+    val huggingFaceModelName: String
 )
 
 @Immutable
@@ -123,8 +148,31 @@ data class DefaultModelAssignmentUi(
     val modelType: ModelType,
     val source: ModelSource,
     val currentModelName: String,
+    val displayLabel: String,
     val providerName: String? = null,
 )
+
+internal val ModelType.displayLabel: String
+    get() = when (this) {
+        ModelType.MAIN -> "Synthesis"
+        ModelType.FAST -> "Fast"
+        ModelType.THINKING -> "Thinking"
+        ModelType.VISION -> "Vision"
+        ModelType.DRAFT_ONE -> "Draft 1"
+        ModelType.DRAFT_TWO -> "Draft 2"
+        ModelType.FINAL_SYNTHESIS -> "Final Refinement"
+    }
+
+internal val ModelType.description: String
+    get() = when (this) {
+        ModelType.MAIN -> "The primary model responsible for synthesizing the draft content into a cohesive response."
+        ModelType.FAST -> "A lightweight, efficient model for quick, non-reasoning responses."
+        ModelType.THINKING -> "A reasoning model with extended context for complex tasks."
+        ModelType.VISION -> "A specialized model for image understanding and visual analysis."
+        ModelType.DRAFT_ONE -> "Generates the initial analytical draft for the Crew pipeline."
+        ModelType.DRAFT_TWO -> "Produces a secondary creative draft for the Crew pipeline."
+        ModelType.FINAL_SYNTHESIS -> "Polishes and refines the synthesized content for a professional final output."
+    }
 
 /**
  * Robust mock data provider for Settings UI Previews.
@@ -133,7 +181,6 @@ object MockSettingsData {
     val localModels = listOf(
         LocalModelAssetUi(
             metadataId = 1,
-            displayName = "Llama 3 8B",
             huggingFaceModelName = "meta-llama/Meta-Llama-3-8B-Instruct",
             remoteFileName = "Meta-Llama-3-8B-Instruct-Q4_K_M.gguf",
             sizeInBytes = 4_920_000_000L,
@@ -145,7 +192,6 @@ object MockSettingsData {
         ),
         LocalModelAssetUi(
             metadataId = 2,
-            displayName = "Gemma 2 9B",
             huggingFaceModelName = "google/gemma-2-9b-it",
             remoteFileName = "gemma-2-9b-it-Q4_K_M.gguf",
             sizeInBytes = 5_400_000_000L,
@@ -184,10 +230,10 @@ object MockSettingsData {
     )
 
     val defaultAssignments = listOf(
-        DefaultModelAssignmentUi(ModelType.MAIN, ModelSource.API, "GPT-4o (Balanced)", "OpenAI"),
-        DefaultModelAssignmentUi(ModelType.FAST, ModelSource.ON_DEVICE, "Llama 3 8B (Default)"),
-        DefaultModelAssignmentUi(ModelType.VISION, ModelSource.API, "Claude 3.5 Sonnet (Standard)", "Anthropic"),
-        DefaultModelAssignmentUi(ModelType.THINKING, ModelSource.ON_DEVICE, "Llama 3 8B (Precise)")
+        DefaultModelAssignmentUi(ModelType.MAIN, ModelSource.API, "GPT-4o (Balanced)", "Main", "OpenAI"),
+        DefaultModelAssignmentUi(ModelType.FAST, ModelSource.ON_DEVICE, "Llama 3 8B (Default)", "Fast"),
+        DefaultModelAssignmentUi(ModelType.VISION, ModelSource.API, "Claude 3.5 Sonnet (Standard)", "Vision", "Anthropic"),
+        DefaultModelAssignmentUi(ModelType.THINKING, ModelSource.ON_DEVICE, "Llama 3 8B (Precise)", "Thinking")
     )
 
     val baseUiState = SettingsUiState(

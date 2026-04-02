@@ -33,8 +33,8 @@ data class LocalModelEntity(
     @ColumnInfo(name = "size_in_bytes")
     val sizeInBytes: Long,
 
-    @ColumnInfo(name = "display_name")
-    val displayName: String,
+    @ColumnInfo(name = "vision_capable")
+    val visionCapable: Boolean = false,
 
     @ColumnInfo(name = "model_status")
     val modelStatus: ModelStatus,

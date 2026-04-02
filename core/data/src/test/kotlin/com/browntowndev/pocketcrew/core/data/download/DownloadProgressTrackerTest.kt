@@ -237,7 +237,6 @@ class DownloadProgressTrackerTest {
                 huggingFaceModelName = "model/name",
                 remoteFileName = filename,
                 localFileName = filename,
-                displayName = "Test Model",
                 sha256 = sha256,
                 sizeInBytes = sizeBytes,
                 modelFileFormat = ModelFileFormat.LITERTLM

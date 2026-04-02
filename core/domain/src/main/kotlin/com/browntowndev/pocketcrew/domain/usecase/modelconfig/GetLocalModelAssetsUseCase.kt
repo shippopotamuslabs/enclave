@@ -7,6 +7,7 @@ import javax.inject.Inject
 
 interface GetLocalModelAssetsUseCase {
     operator fun invoke(): Flow<List<LocalModelAsset>>
+    suspend fun getSoftDeletedModels(): List<LocalModelAsset>
 }
 
 class GetLocalModelAssetsUseCaseImpl @Inject constructor(
@@ -14,5 +15,9 @@ class GetLocalModelAssetsUseCaseImpl @Inject constructor(
 ) : GetLocalModelAssetsUseCase {
     override fun invoke(): Flow<List<LocalModelAsset>> {
         return modelRegistry.observeAssets()
+    }
+
+    override suspend fun getSoftDeletedModels(): List<LocalModelAsset> {
+        return modelRegistry.getSoftDeletedModels()
     }
 }

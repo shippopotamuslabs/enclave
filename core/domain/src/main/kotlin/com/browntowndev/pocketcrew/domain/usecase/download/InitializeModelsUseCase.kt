@@ -42,7 +42,7 @@ class InitializeModelsUseCase @Inject constructor(
         val currentModels = modelRegistry.getAssetsPreferringOld()
         logPort.debug(TAG, "Current downloaded/fallback models: ${
             currentModels.map { (type, asset) -> 
-                "$type: ${asset.metadata.displayName}"
+                "$type: ${asset.metadata.huggingFaceModelName}"
             }
         }")
 
@@ -60,12 +60,40 @@ class InitializeModelsUseCase @Inject constructor(
 
         logPort.debug(TAG, "Fetched ${remoteConfigs.size} remote configs")
 
+        // Filter out soft-deleted models (those with 0 configs) before scanning.
+        // Soft-deleted models have their entity preserved but no configs.
+        // They should NOT be passed to CheckModelsUseCase because the missing file
+        // would trigger an unwanted re-download. Instead, they go to availableToRedownload.
+        val (activeModels, softDeletedModels) = currentModels
+            .filter { (_, asset) -> asset.configurations.isNotEmpty() }
+            .let { active -> 
+                val softDeleted = currentModels.filter { (type, asset) -> 
+                    asset.configurations.isEmpty() && !active.containsKey(type) 
+                }
+                active to softDeleted
+            }
+        
+        if (softDeletedModels.isNotEmpty()) {
+            logPort.debug(TAG, "Found ${softDeletedModels.size} soft-deleted models available for re-download: ${
+                softDeletedModels.map { (type, asset) -> "$type: ${asset.metadata.huggingFaceModelName}" }
+            }")
+        }
+
+        // Exclude soft-deleted model types from remote configs so CheckModelsUseCase
+        // doesn't queue them for download. This fixes the pristine install bug (since 
+        // softDeletedModels will be empty in that case) while respecting user's explicit deletion.
+        val filteredRemoteConfigs = remoteConfigs.filterKeys { it !in softDeletedModels.keys }
+
         // Check if models are ready using CheckModelsUseCase
-        // Pass remoteConfigs instead of registeredModels
         val modelsResult = checkModelsUseCase(
-            downloadedModels = currentModels,
-            expectedModels = remoteConfigs
+            downloadedModels = activeModels,
+            expectedModels = filteredRemoteConfigs
         )
+
+        // Include soft-deleted models in availableToRedownload ONLY if they are still on remote.
+        val availableSoftDeleted = softDeletedModels.filterKeys { it in remoteConfigs.keys }
+        val availableToRedownload = (modelsResult.availableToRedownload + availableSoftDeleted.values.toList())
+            .distinctBy { it.metadata.sha256 }
 
         // Now register each remote config in the registry with CURRENT status.
         //
@@ -106,6 +134,7 @@ class InitializeModelsUseCase @Inject constructor(
         // Initialize the orchestrator with the startup result
         modelDownloadOrchestrator.initializeWithStartupResult(modelsResult)
 
-        return modelsResult
+        // Return result with soft-deleted models included in availableToRedownload
+        return modelsResult.copy(availableToRedownload = availableToRedownload)
     }
 }
