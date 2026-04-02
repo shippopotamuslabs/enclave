@@ -179,6 +179,8 @@ class ModelRegistryImpl @Inject constructor(
                 }
             }
         }
+
+        return result
     }
 
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long {

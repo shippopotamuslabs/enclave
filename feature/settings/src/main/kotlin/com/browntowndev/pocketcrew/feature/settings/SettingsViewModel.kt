@@ -862,14 +862,11 @@ class SettingsViewModel @Inject constructor(
                 val deletedAsset = apiAssets.find { asset ->
                     asset.configurations.any { config -> config.id == id }
                 }
-                val requiresVisionCompatibility =
-                    ModelType.VISION in needingReassignment ||
-                        deletedAsset?.isVision == true
                 val options = buildReassignmentOptions(
                     localAssets = localAssets,
                     apiAssets = apiAssets,
                     excludeApiConfigId = id,
-                    requireVisionCompatibility = requiresVisionCompatibility
+                    requireVisionCompatibility = false
                 )
 
                 _transientState.update { it.copy(
@@ -897,15 +894,12 @@ class SettingsViewModel @Inject constructor(
             if (needingReassignment.isNotEmpty()) {
                 val localAssets = localModelAssetsFlow.first()
                 val apiAssets = apiModelAssetsFlow.first()
-                val deletedAsset = apiAssets.find { it.credentialsId == id }
-                val requiresVisionCompatibility =
-                    ModelType.VISION in needingReassignment ||
-                        deletedAsset?.isVision == true
+                
                 val options = buildReassignmentOptions(
                     localAssets = localAssets,
                     apiAssets = apiAssets,
                     excludeApiCredentialsId = id,
-                    requireVisionCompatibility = requiresVisionCompatibility
+                    requireVisionCompatibility = false
                 )
 
                 _transientState.update { it.copy(
