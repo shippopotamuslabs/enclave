@@ -181,7 +181,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         if (!modelsDir.exists()) return
 
         // Get filenames of current assets
-        val currentFilenames = currentAssets.map { it.metadata.localFileName }.toSet()
+        val currentFilenamesSet = currentAssets.mapTo(mutableSetOf()) { it.metadata.localFileName }
 
         // Get all model files in the directory (excluding temp files)
         val existingFiles = modelsDir.listFiles { file ->
