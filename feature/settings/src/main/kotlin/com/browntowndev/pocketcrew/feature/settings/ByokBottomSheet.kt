@@ -48,7 +48,17 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.launch
+
+private sealed interface ByokSheetView {
+    data object AssetList : ByokSheetView
+    data class ConfigList(val asset: ApiModelAssetUi) : ByokSheetView
+    data class Reassignment(
+        val modelTypes: List<ModelType>,
+        val options: List<ReassignmentOptionUi>
+    ) : ByokSheetView
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +70,8 @@ fun ByokBottomSheet(
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
     onDeleteApiModelAsset: (Long) -> Unit,
     onDeleteApiModelConfig: (Long) -> Unit,
+    onConfirmDeletionWithReassignment: (Long?, Long?) -> Unit,
+    onDismissDeletionSafety: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var pendingDeleteTarget by remember { mutableStateOf<ByokDeleteTarget?>(null) }
@@ -84,39 +96,75 @@ fun ByokBottomSheet(
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 32.dp)
         ) {
-            val selectedAsset = uiState.selectedApiModelAsset
-
-            AnimatedContent(targetState = selectedAsset != null, label = "ByokSheetTransition") { isConfigView ->
-                if (isConfigView && selectedAsset != null) {
-                    ByokConfigListView(
-                        asset = selectedAsset,
-                        onBack = { onSelectApiModelAsset(null) },
-                        onEditConfig = { config ->
-                            onSelectApiModelConfig(config)
-                            hideAndNavigate(onNavigateToByokConfigure)
-                        },
-                        onRequestDeleteConfig = { config ->
-                            pendingDeleteTarget = ByokDeleteTarget.Config(config.id, config.displayName)
-                        },
-                        onAddConfig = {
-                            onSelectApiModelConfig(ApiModelConfigUi())
-                            hideAndNavigate(onNavigateToByokConfigure)
-                        }
-                    )
-                } else {
-                    ByokAssetListView(
-                        apiModels = uiState.apiModels,
-                        onSelectAsset = { asset -> onSelectApiModelAsset(asset) },
-                        onRequestDeleteAsset = { asset ->
-                            pendingDeleteTarget = ByokDeleteTarget.Asset(asset.credentialsId, asset.displayName)
-                        },
-                        onAddAsset = {
-                            onSelectApiModelAsset(null)
-                            hideAndNavigate(onNavigateToByokConfigure)
-                        }
-                    )
+            val viewState = remember(uiState) {
+                when {
+                    uiState.modelTypesNeedingReassignment.isNotEmpty() ->
+                        ByokSheetView.Reassignment(
+                            modelTypes = uiState.modelTypesNeedingReassignment,
+                            options = uiState.reassignmentOptions
+                        )
+                    uiState.selectedApiModelAsset != null ->
+                        ByokSheetView.ConfigList(uiState.selectedApiModelAsset)
+                    else ->
+                        ByokSheetView.AssetList
                 }
             }
+
+            AnimatedContent(targetState = viewState, label = "ByokSheetTransition") { state ->
+                when (state) {
+                    is ByokSheetView.ConfigList -> {
+                        ByokConfigListView(
+                            asset = state.asset,
+                            onBack = { onSelectApiModelAsset(null) },
+                            onEditConfig = { config ->
+                                onSelectApiModelConfig(config)
+                                hideAndNavigate(onNavigateToByokConfigure)
+                            },
+                            onRequestDeleteConfig = { config ->
+                                pendingDeleteTarget = ByokDeleteTarget.Config(config.id, config.displayName)
+                            },
+                            onAddConfig = {
+                                onSelectApiModelConfig(ApiModelConfigUi())
+                                hideAndNavigate(onNavigateToByokConfigure)
+                            }
+                        )
+                    }
+                    is ByokSheetView.AssetList -> {
+                        ByokAssetListView(
+                            apiModels = uiState.apiModels,
+                            onSelectAsset = { asset -> onSelectApiModelAsset(asset) },
+                            onRequestDeleteAsset = { asset ->
+                                pendingDeleteTarget = ByokDeleteTarget.Asset(asset.credentialsId, asset.displayName)
+                            },
+                            onAddAsset = {
+                                onSelectApiModelAsset(null)
+                                hideAndNavigate(onNavigateToByokConfigure)
+                            }
+                        )
+                    }
+                    is ByokSheetView.Reassignment -> {
+                        ReassignmentView(
+                            modelTypes = state.modelTypes,
+                            reassignmentOptions = state.options,
+                            onConfirm = onConfirmDeletionWithReassignment,
+                            onDismiss = onDismissDeletionSafety
+                        )
+                    }
+                }
+            }
+        }
+
+        if (uiState.showCannotDeleteLastModelAlert) {
+            AlertDialog(
+                onDismissRequest = onDismissDeletionSafety,
+                title = { Text("Cannot Delete Provider") },
+                text = { Text("At least one local or API model must remain. You cannot delete the last available provider.") },
+                confirmButton = {
+                    TextButton(onClick = onDismissDeletionSafety) {
+                        Text("OK")
+                    }
+                }
+            )
         }
 
         pendingDeleteTarget?.let { deleteTarget ->
