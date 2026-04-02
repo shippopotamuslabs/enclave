@@ -25,9 +25,10 @@ If NO → proceed directly to soft-delete
 
 **Step 2: Reassignment (if needed)**
 ```
-User picks replacementConfigId from a DIFFERENT model
+User picks replacementConfigId from a DIFFERENT model OR an API model
 UPDATE DefaultModelEntity(ModelType.X, newConfigId) — NOT delete, UPDATE
 ```
+**Note**: Reassignment options include BOTH local configs from other models AND API model configurations. If the only alternative is an API model, the user may reassign a local model slot to an API config. `DeleteLocalModelUseCase` accepts both `replacementLocalConfigId` and `replacementApiConfigId`.
 
 **Step 3: Soft-delete model 42**
 ```
@@ -55,18 +56,19 @@ For each remote config:
 - Soft-deleted models are perfectly identified by having 0 configs.
 - If a model is active (has configs) but its file is missing, it is queued for re-download.
 
-## 5. isDefault Semantics
+## 5. isSystemPreset Semantics
 
-- `isDefault = true` → config came from R2 download (read-only in UI)
-- User can NEVER change `isDefault`
+- `isSystemPreset = true` → config came from R2 download (read-only in UI)
+- User can NEVER change `isSystemPreset`
 - Used by UI to determine if LocalModelConfigurationScreen should be read-only
+- **NOTE**: Renamed from `isDefault` to avoid confusion with `DefaultModelEntity`. `isSystemPreset` means "is a factory-provided preset", NOT "is the currently active default".
 
 ## 6. Re-download Flow
 
 ```
 User clicks Download on soft-deleted model
 Reuse existing LocalModelEntity row (same id)
-Create new LocalModelConfigurationEntity with isDefault=true
+Create new LocalModelConfigurationEntity with isSystemPreset=true
 Create DefaultModelEntity pointing to new config
 Download file
 ```
@@ -74,8 +76,8 @@ Download file
 ## 7. Target Files to Modify
 
 ### Data Layer
-- `LocalModelConfigurationEntity` — ADD `isDefault: Boolean = false` column
-- `LocalModelsDao` — ADD `getSoftDeletedModels()` query
+- `LocalModelConfigurationEntity` — ADD `isSystemPreset: Boolean = false` column
+- `LocalModelsDao` — ADD `getSoftDeletedModels()`, FIX `observeAllCurrent()` and `getAllCurrent()` to exclude soft-deleted models (models with 0 configs)
 - `LocalModelConfigurationsDao` — already has `deleteAllForAsset()`
 - `DefaultModelsDao` — ADD `getModelIdsWithDefaults()` query
 - `ModelRegistryImpl` — ADD `getSoftDeletedModels()`, MODIFY delete logic
@@ -93,7 +95,7 @@ Download file
 
 | State | LocalModelEntity | Configs | DefaultModelEntity |
 |-------|-----------------|---------|-------------------|
-| Active | EXISTS | EXISTS (may have isDefault=true) | Points to one of the configs |
+| Active | EXISTS | EXISTS (may have isSystemPreset=true) | Points to one of the configs |
 | Soft-deleted | EXISTS (preserved) | DELETED (all hard-deleted) | NOT point to this model |
 | Never downloaded | DOES NOT EXIST | DOES NOT EXIST | DOES NOT EXIST |
 
@@ -112,4 +114,17 @@ AND m.model_status = 'CURRENT'
 ```sql
 SELECT local_model_id FROM local_model_configurations
 WHERE id IN (SELECT local_config_id FROM default_models WHERE local_config_id IS NOT NULL)
+```
+
+### CRITICAL: LocalModelsDao observeAllCurrent / getAllCurrent
+These queries must exclude soft-deleted models (models with 0 configs). Soft-deleted models retain `model_status = 'CURRENT'`, so a naive filter by status alone would include them.
+
+```sql
+-- BROKEN (includes soft-deleted):
+SELECT * FROM local_models WHERE model_status = 'CURRENT'
+
+-- FIXED (excludes soft-deleted):
+SELECT m.* FROM local_models m
+WHERE m.model_status = 'CURRENT'
+AND EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id)
 ```
