@@ -53,6 +53,7 @@ fun ChatScreen(
                 MessageList(
                     modifier = Modifier.fillMaxSize(),
                     messages = uiState.messages,
+                    hasActiveIndicator = uiState.hasActiveIndicator,
                     onEditMessage = onEditMessage,
                 )
 
