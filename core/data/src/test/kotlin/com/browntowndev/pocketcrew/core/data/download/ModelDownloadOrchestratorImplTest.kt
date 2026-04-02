@@ -2,10 +2,10 @@ package com.browntowndev.pocketcrew.core.data.download
 import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
-import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -17,7 +17,6 @@ import com.browntowndev.pocketcrew.domain.usecase.download.InitializeFileProgres
 import com.browntowndev.pocketcrew.domain.usecase.download.ValidateDownloadConditionsUseCase
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
-import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
@@ -100,14 +99,12 @@ class ModelDownloadOrchestratorImplTest {
         unmockkStatic(Log::class)
     }
 
-    private fun createModelConfig(
-        modelType: ModelType = ModelType.MAIN,
+    private fun createModelAsset(
         sha256: String = "testSha256",
         localFileName: String = "test.bin"
-    ): ModelConfiguration {
-        return ModelConfiguration(
-            modelType = modelType,
-            metadata = ModelConfiguration.Metadata(
+    ): LocalModelAsset {
+        return LocalModelAsset(
+            metadata = LocalModelMetadata(
                 huggingFaceModelName = "test/model",
                 remoteFileName = localFileName,
                 localFileName = localFileName,
@@ -116,22 +113,28 @@ class ModelDownloadOrchestratorImplTest {
                 sizeInBytes = 1024,
                 modelFileFormat = ModelFileFormat.LITERTLM
             ),
-            tunings = ModelConfiguration.Tunings(
-                temperature = 0.0,
-                topK = 40,
-                topP = 0.95,
-                repetitionPenalty = 1.0,
-                maxTokens = 2048,
-                contextWindow = 2048
-            ),
-            persona = ModelConfiguration.Persona(
-                systemPrompt = "You are a helpful assistant."
+            configurations = listOf(
+                LocalModelConfiguration(
+                    localModelId = 0,
+                    displayName = "Test Model",
+                    maxTokens = 2048,
+                    contextWindow = 2048,
+                    temperature = 0.0,
+                    topP = 0.95,
+                    topK = 40,
+                    repetitionPenalty = 1.0,
+                    systemPrompt = "You are a helpful assistant."
+                )
             )
         )
     }
 
-    private fun createDownloadModelsResult(modelsToDownload: List<ModelConfiguration> = emptyList()): DownloadModelsResult {
+    private fun createDownloadModelsResult(
+        modelsToDownload: List<LocalModelAsset> = emptyList(),
+        allModels: Map<ModelType, LocalModelAsset> = emptyMap()
+    ): DownloadModelsResult {
         return DownloadModelsResult(
+            allModels = allModels,
             modelsToDownload = modelsToDownload,
             scanResult = ModelScanResult(
                 missingModels = modelsToDownload,
@@ -169,8 +172,11 @@ class ModelDownloadOrchestratorImplTest {
     @Test
     fun `initializeWithStartupResult sets startupModelsResult`() = runTest {
         // Given
-        val modelConfig = createModelConfig()
-        val downloadResult = createDownloadModelsResult(listOf(modelConfig))
+        val modelAsset = createModelAsset()
+        val downloadResult = createDownloadModelsResult(
+            modelsToDownload = listOf(modelAsset),
+            allModels = mapOf(ModelType.MAIN to modelAsset)
+        )
 
         // When
         orchestrator.initializeWithStartupResult(downloadResult)

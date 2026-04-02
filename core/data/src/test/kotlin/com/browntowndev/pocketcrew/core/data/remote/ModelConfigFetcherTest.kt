@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.core.data.remote
 
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.config.RemoteModelConfig
@@ -25,10 +27,9 @@ class ModelConfigFetcherTest {
     @Test
     fun fetchRemoteConfig_returnsSuccess_withValidConfigs() = runTest {
         // Given
-        val mockConfigs = listOf(
-            ModelConfiguration(
-                modelType = ModelType.MAIN,
-                metadata = ModelConfiguration.Metadata(
+        val mockAssets = mapOf(
+            ModelType.MAIN to LocalModelAsset(
+                metadata = LocalModelMetadata(
                     huggingFaceModelName = "model/main",
                     remoteFileName = "main.bin",
                     localFileName = "main.bin",
@@ -37,19 +38,23 @@ class ModelConfigFetcherTest {
                     sizeInBytes = 1000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
                 ),
-                tunings = ModelConfiguration.Tunings(
-                    temperature = 0.0,
-                    topK = 40,
-                    topP = 0.95,
-                    maxTokens = 2048,
-                    contextWindow = 2048,
-                    repetitionPenalty = 1.1
-                ),
-                persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
+                configurations = listOf(
+                    LocalModelConfiguration(
+                        localModelId = 0,
+                        displayName = "Main Model",
+                        maxTokens = 2048,
+                        contextWindow = 2048,
+                        temperature = 0.0,
+                        topP = 0.95,
+                        topK = 40,
+                        repetitionPenalty = 1.1,
+                        systemPrompt = "You are a helpful assistant."
+                    )
+                )
             )
         )
 
-        coEvery { mockFetcher.fetchRemoteConfig() } returns Result.success(mockConfigs)
+        coEvery { mockFetcher.fetchRemoteConfig() } returns Result.success(mockAssets)
 
         // When
         val result = mockFetcher.fetchRemoteConfig()
@@ -57,7 +62,7 @@ class ModelConfigFetcherTest {
         // Then
         assertTrue(result.isSuccess)
         assertEquals(1, result.getOrNull()?.size)
-        assertEquals(ModelType.MAIN, result.getOrNull()?.first()?.modelType)
+        assertTrue(result.getOrNull()?.containsKey(ModelType.MAIN) == true)
     }
 
     @Test
@@ -74,7 +79,7 @@ class ModelConfigFetcherTest {
     }
 
     @Test
-    fun toModelConfigurations_convertsRemoteConfigToModelConfigurations() = runTest {
+    fun toLocalModelAssets_convertsRemoteConfigToLocalModelAssets() = runTest {
         // Given - RemoteModelConfig is the raw type from JSON parsing
         val remoteConfigs = listOf(
             RemoteModelConfig(
@@ -111,10 +116,9 @@ class ModelConfigFetcherTest {
             )
         )
 
-        val expectedModelConfigurations = listOf(
-            ModelConfiguration(
-                modelType = ModelType.MAIN,
-                metadata = ModelConfiguration.Metadata(
+        val expectedModelAssets = mapOf(
+            ModelType.MAIN to LocalModelAsset(
+                metadata = LocalModelMetadata(
                     huggingFaceModelName = "model/main",
                     remoteFileName = "main.bin",
                     localFileName = "main.bin",
@@ -123,19 +127,22 @@ class ModelConfigFetcherTest {
                     sizeInBytes = 1000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
                 ),
-                tunings = ModelConfiguration.Tunings(
-                    temperature = 0.0,
-                    topK = 40,
-                    topP = 0.95,
-                    maxTokens = 2048,
-                    contextWindow = 2048,
-                    repetitionPenalty = 1.1,
-                ),
-                persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
+                configurations = listOf(
+                    LocalModelConfiguration(
+                        localModelId = 0,
+                        displayName = "Main Model",
+                        maxTokens = 2048,
+                        contextWindow = 2048,
+                        temperature = 0.0,
+                        topP = 0.95,
+                        topK = 40,
+                        repetitionPenalty = 1.1,
+                        systemPrompt = "You are a helpful assistant."
+                    )
+                )
             ),
-            ModelConfiguration(
-                modelType = ModelType.VISION,
-                metadata = ModelConfiguration.Metadata(
+            ModelType.VISION to LocalModelAsset(
+                metadata = LocalModelMetadata(
                     huggingFaceModelName = "model/vision",
                     remoteFileName = "vision.bin",
                     localFileName = "vision.bin",
@@ -144,36 +151,39 @@ class ModelConfigFetcherTest {
                     sizeInBytes = 2000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
                 ),
-                tunings = ModelConfiguration.Tunings(
-                    temperature = 0.0,
-                    topK = 40,
-                    topP = 0.95,
-                    maxTokens = 2048,
-                    contextWindow = 2048,
-                    repetitionPenalty = 1.1,
-                ),
-                persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
+                configurations = listOf(
+                    LocalModelConfiguration(
+                        localModelId = 0,
+                        displayName = "Vision Model",
+                        maxTokens = 2048,
+                        contextWindow = 2048,
+                        temperature = 0.0,
+                        topP = 0.95,
+                        topK = 40,
+                        repetitionPenalty = 1.1,
+                        systemPrompt = "You are a vision assistant."
+                    )
+                )
             )
         )
 
-        coEvery { mockFetcher.toModelConfigurations(remoteConfigs) } returns expectedModelConfigurations
+        coEvery { mockFetcher.toLocalModelAssets(remoteConfigs) } returns expectedModelAssets
 
         // When
-        val modelConfigurations = mockFetcher.toModelConfigurations(remoteConfigs)
+        val modelAssets = mockFetcher.toLocalModelAssets(remoteConfigs)
 
         // Then
-        assertEquals(2, modelConfigurations.size)
-        assertTrue(modelConfigurations.any { it.modelType == ModelType.MAIN })
-        assertTrue(modelConfigurations.any { it.modelType == ModelType.VISION })
+        assertEquals(2, modelAssets.size)
+        assertTrue(modelAssets.containsKey(ModelType.MAIN))
+        assertTrue(modelAssets.containsKey(ModelType.VISION))
     }
 
     @Test
     fun fetchRemoteConfig_parsesMultipleModelTypes() = runTest {
         // Given
-        val mockConfigs = listOf(
-            ModelConfiguration(
-                modelType = ModelType.MAIN,
-                metadata = ModelConfiguration.Metadata(
+        val mockAssets = mapOf(
+            ModelType.MAIN to LocalModelAsset(
+                metadata = LocalModelMetadata(
                     huggingFaceModelName = "model/main",
                     remoteFileName = "main.bin",
                     localFileName = "main.bin",
@@ -182,19 +192,22 @@ class ModelConfigFetcherTest {
                     sizeInBytes = 1000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
                 ),
-                tunings = ModelConfiguration.Tunings(
-                    temperature = 0.0,
-                    topK = 40,
-                    topP = 0.95,
-                    maxTokens = 2048,
-                    repetitionPenalty = 1.1,
-                    contextWindow = 2048
-                ),
-                persona = ModelConfiguration.Persona(systemPrompt = "You are a helpful assistant.")
+                configurations = listOf(
+                    LocalModelConfiguration(
+                        localModelId = 0,
+                        displayName = "Main Model",
+                        maxTokens = 2048,
+                        contextWindow = 2048,
+                        temperature = 0.0,
+                        topP = 0.95,
+                        topK = 40,
+                        repetitionPenalty = 1.1,
+                        systemPrompt = "You are a helpful assistant."
+                    )
+                )
             ),
-            ModelConfiguration(
-                modelType = ModelType.VISION,
-                metadata = ModelConfiguration.Metadata(
+            ModelType.VISION to LocalModelAsset(
+                metadata = LocalModelMetadata(
                     huggingFaceModelName = "model/vision",
                     remoteFileName = "vision.bin",
                     localFileName = "vision.bin",
@@ -203,19 +216,22 @@ class ModelConfigFetcherTest {
                     sizeInBytes = 2000000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
                 ),
-                tunings = ModelConfiguration.Tunings(
-                    temperature = 0.0,
-                    topK = 40,
-                    topP = 0.95,
-                    maxTokens = 2048,
-                    repetitionPenalty = 1.1,
-                    contextWindow = 2048
-                ),
-                persona = ModelConfiguration.Persona(systemPrompt = "You are a vision assistant.")
+                configurations = listOf(
+                    LocalModelConfiguration(
+                        localModelId = 0,
+                        displayName = "Vision Model",
+                        maxTokens = 2048,
+                        contextWindow = 2048,
+                        temperature = 0.0,
+                        topP = 0.95,
+                        topK = 40,
+                        repetitionPenalty = 1.1,
+                        systemPrompt = "You are a vision assistant."
+                    )
+                )
             ),
-            ModelConfiguration(
-                modelType = ModelType.FAST,
-                metadata = ModelConfiguration.Metadata(
+            ModelType.FAST to LocalModelAsset(
+                metadata = LocalModelMetadata(
                     huggingFaceModelName = "model/fast",
                     remoteFileName = "fast.bin",
                     localFileName = "fast.bin",
@@ -224,19 +240,22 @@ class ModelConfigFetcherTest {
                     sizeInBytes = 500000L,
                     modelFileFormat = ModelFileFormat.LITERTLM
                 ),
-                tunings = ModelConfiguration.Tunings(
-                    temperature = 0.0,
-                    topK = 40,
-                    topP = 0.95,
-                    maxTokens = 1024,
-                    repetitionPenalty = 1.1,
-                    contextWindow = 2048
-                ),
-                persona = ModelConfiguration.Persona(systemPrompt = "You are a fast assistant.")
+                configurations = listOf(
+                    LocalModelConfiguration(
+                        localModelId = 0,
+                        displayName = "Fast Model",
+                        maxTokens = 1024,
+                        contextWindow = 2048,
+                        temperature = 0.0,
+                        topP = 0.95,
+                        topK = 40,
+                        repetitionPenalty = 1.1,
+                        systemPrompt = "You are a fast assistant."
+                    )
+                )
             ),
-            ModelConfiguration(
-                modelType = ModelType.DRAFT_ONE,
-                metadata = ModelConfiguration.Metadata(
+            ModelType.DRAFT_ONE to LocalModelAsset(
+                metadata = LocalModelMetadata(
                     huggingFaceModelName = "model/draft",
                     remoteFileName = "draft.bin",
                     localFileName = "draft.bin",
@@ -245,30 +264,34 @@ class ModelConfigFetcherTest {
                     sizeInBytes = 300000L,
                     modelFileFormat = ModelFileFormat.TASK
                 ),
-                tunings = ModelConfiguration.Tunings(
-                    temperature = 0.0,
-                    topK = 40,
-                    topP = 0.95,
-                    maxTokens = 512,
-                    repetitionPenalty = 1.1,
-                    contextWindow = 2048
-                ),
-                persona = ModelConfiguration.Persona(systemPrompt = "You are a draft assistant.")
+                configurations = listOf(
+                    LocalModelConfiguration(
+                        localModelId = 0,
+                        displayName = "Draft Model",
+                        maxTokens = 512,
+                        contextWindow = 2048,
+                        temperature = 0.0,
+                        topP = 0.95,
+                        topK = 40,
+                        repetitionPenalty = 1.1,
+                        systemPrompt = "You are a draft assistant."
+                    )
+                )
             )
         )
 
-        coEvery { mockFetcher.fetchRemoteConfig() } returns Result.success(mockConfigs)
+        coEvery { mockFetcher.fetchRemoteConfig() } returns Result.success(mockAssets)
 
         // When
         val result = mockFetcher.fetchRemoteConfig()
 
         // Then
         assertTrue(result.isSuccess)
-        val configs = requireNotNull(result.getOrNull())
-        assertEquals(4, configs.size)
-        assertTrue(configs.any { it.modelType == ModelType.MAIN })
-        assertTrue(configs.any { it.modelType == ModelType.VISION })
-        assertTrue(configs.any { it.modelType == ModelType.FAST })
-        assertTrue(configs.any { it.modelType == ModelType.DRAFT_ONE })
+        val assets = requireNotNull(result.getOrNull())
+        assertEquals(4, assets.size)
+        assertTrue(assets.containsKey(ModelType.MAIN))
+        assertTrue(assets.containsKey(ModelType.VISION))
+        assertTrue(assets.containsKey(ModelType.FAST))
+        assertTrue(assets.containsKey(ModelType.DRAFT_ONE))
     }
 }

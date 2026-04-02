@@ -10,7 +10,8 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.config.ModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,7 +30,7 @@ class DownloadWorkScheduler @Inject constructor(
         private const val TAG = "DownloadWorkScheduler"
     }
 
-    fun enqueue(models: List<ModelConfiguration>, sessionId: String?, wifiOnly: Boolean = true) {
+    fun enqueue(models: Map<ModelType, LocalModelAsset>, sessionId: String?, wifiOnly: Boolean = true) {
         // Use UNMETERED when wifiOnly is enabled (requires WiFi)
         // Use CONNECTED when wifiOnly is disabled (allows mobile data)
         val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
@@ -39,27 +40,28 @@ class DownloadWorkScheduler @Inject constructor(
             .setRequiresStorageNotLow(true)
             .build()
 
-        // Serialize ModelConfiguration to pipe-delimited string:
+        // Serialize LocalModelAsset to pipe-delimited string:
         // modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt
-        val inputData = models
-            .map { config ->
+        val inputData = models.entries
+            .map { (modelType, asset) ->
+                val config = asset.configurations.firstOrNull()
                 listOf(
-                    config.modelType.name,
-                    config.metadata.remoteFileName,
-                    config.metadata.localFileName,
-                    config.metadata.displayName,
-                    config.metadata.huggingFaceModelName,
-                    config.metadata.sizeInBytes.toString(),
-                    config.metadata.sha256,
-                    config.metadata.modelFileFormat.name,
-                    config.tunings.temperature.toString(),
-                    config.tunings.topK.toString(),
-                    config.tunings.topP.toString(),
-                    config.tunings.minP.toString(),
-                    config.tunings.repetitionPenalty.toString(),
-                    config.tunings.maxTokens.toString(),
-                    config.tunings.contextWindow.toString(),
-                    config.persona.systemPrompt
+                    modelType.name,
+                    asset.metadata.remoteFileName,
+                    asset.metadata.localFileName,
+                    asset.metadata.displayName,
+                    asset.metadata.huggingFaceModelName,
+                    asset.metadata.sizeInBytes.toString(),
+                    asset.metadata.sha256,
+                    asset.metadata.modelFileFormat.name,
+                    config?.temperature?.toString() ?: "0.7",
+                    config?.topK?.toString() ?: "40",
+                    config?.topP?.toString() ?: "0.95",
+                    config?.minP?.toString() ?: "0.0",
+                    config?.repetitionPenalty?.toString() ?: "1.1",
+                    config?.maxTokens?.toString() ?: "4096",
+                    config?.contextWindow?.toString() ?: "4096",
+                    config?.systemPrompt ?: ""
                 ).joinToString("|")
             }
             .toTypedArray()
