@@ -148,11 +148,12 @@ class ChatViewModel @Inject constructor(
         var hasActiveIndicator = false
         val chatMessages: List<ChatMessage> = allMergedMessages.values.map { message: Message ->
             val chatMessage = mapToChatMessage(message)
-            if (chatMessage.indicatorState != null && chatMessage.indicatorState !is IndicatorState.None) {
+            val state = chatMessage.indicatorState
+            if (state != null && state !is IndicatorState.None) {
                 hasActiveIndicator = true
-                if (chatMessage.indicatorState is IndicatorState.Generating ||
-                    chatMessage.indicatorState is IndicatorState.Thinking ||
-                    chatMessage.indicatorState is IndicatorState.Processing
+                if (!isGenerating && (state is IndicatorState.Generating ||
+                    state is IndicatorState.Thinking ||
+                    state is IndicatorState.Processing)
                 ) {
                     isGenerating = true
                 }
