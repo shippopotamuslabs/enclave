@@ -36,8 +36,8 @@ def post_github_comment(comment):
 
 def main():
     if not VERTEX_API_KEY:
-        print("Error: VERTEX_API_KEY is not set.")
-        sys.exit(1)
+        print("Error: VERTEX_API_KEY is not set. Exiting gracefully.")
+        sys.exit(0)
 
     diff = get_pr_diff()
     
@@ -91,7 +91,7 @@ Your objective is to identify general bugs, architectural flaws, performance bot
     }
 
     try:
-        response = requests.post(endpoint, json=payload, stream=True)
+        response = requests.post(endpoint, json=payload, stream=True, timeout=120)
         if response.status_code != 200:
             error_msg = response.reason
             try:
@@ -99,7 +99,7 @@ Your objective is to identify general bugs, architectural flaws, performance bot
             except:
                 pass
             print(f"Error calling Vertex AI: {response.status_code} - {error_msg}")
-            sys.exit(1)
+            sys.exit(0)
 
         full_text = ""
         
@@ -143,8 +143,8 @@ Your objective is to identify general bugs, architectural flaws, performance bot
         post_github_comment(final_output)
         
     except Exception as e:
-        print(f"Error calling Gemini/Vertex API: {e}")
-        sys.exit(1)
+        print(f"Error calling Gemini/Vertex API: {e}. Exiting gracefully without failing the build.")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()
