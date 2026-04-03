@@ -157,7 +157,8 @@ fun HeaderRow(
             label = { Text("Name") },
             modifier = Modifier.weight(1f),
             shape = RoundedCornerShape(8.dp),
-            singleLine = true
+            singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Next)
         )
         OutlinedTextField(
             value = header.value,
@@ -165,7 +166,8 @@ fun HeaderRow(
             label = { Text("Value") },
             modifier = Modifier.weight(1.5f),
             shape = RoundedCornerShape(8.dp),
-            singleLine = true
+            singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done)
         )
         IconButton(onClick = onDelete) {
             Icon(
