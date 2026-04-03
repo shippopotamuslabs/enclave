@@ -98,6 +98,7 @@ fun LocalModelConfigureScreen(
                 label = { Text("Preset Name (e.g. Creative)") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
+                keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Next),
                 readOnly = config.isSystemPreset,
                 enabled = !config.isSystemPreset
             )
@@ -128,7 +129,7 @@ fun LocalModelConfigureScreen(
                     },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next),
                     readOnly = config.isSystemPreset,
                     enabled = !config.isSystemPreset
                 )
@@ -145,7 +146,7 @@ fun LocalModelConfigureScreen(
                     },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next),
                     readOnly = config.isSystemPreset,
                     enabled = !config.isSystemPreset
                 )
@@ -165,7 +166,7 @@ fun LocalModelConfigureScreen(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done),
                 readOnly = config.isSystemPreset,
                 enabled = !config.isSystemPreset
             )
