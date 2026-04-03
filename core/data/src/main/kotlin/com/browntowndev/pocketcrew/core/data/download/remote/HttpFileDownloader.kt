@@ -11,6 +11,7 @@ import okhttp3.Request
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.net.URL
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
 import java.security.DigestInputStream
@@ -49,7 +50,7 @@ class HttpFileDownloader @Inject constructor(
                     addHeader("Range", "bytes=$existingBytes-")
                 }
                 // Add HF Auth token if it's a HF URL
-                if (downloadUrl.startsWith("https://huggingface.co") && hfApiKey.isNotEmpty()) {
+                if (isHuggingFaceUrl(downloadUrl) && hfApiKey.isNotEmpty()) {
                     addHeader("Authorization", "Bearer $hfApiKey")
                 }
             }
@@ -66,7 +67,7 @@ class HttpFileDownloader @Inject constructor(
                     .url(downloadUrl)
                     .apply {
                         // Add HF Auth token if it's a HF URL
-                        if (downloadUrl.startsWith("https://huggingface.co") && hfApiKey.isNotEmpty()) {
+                        if (isHuggingFaceUrl(downloadUrl) && hfApiKey.isNotEmpty()) {
                             addHeader("Authorization", "Bearer $hfApiKey")
                         }
                     }
@@ -284,7 +285,7 @@ class HttpFileDownloader @Inject constructor(
                 .head()
                 .apply {
                     // Add HF Auth token if it's a HF URL
-                    if (url.startsWith("https://huggingface.co") && hfApiKey.isNotEmpty()) {
+                    if (isHuggingFaceUrl(url) && hfApiKey.isNotEmpty()) {
                         addHeader("Authorization", "Bearer $hfApiKey")
                     }
                 }
@@ -299,6 +300,15 @@ class HttpFileDownloader @Inject constructor(
             }
         } catch (e: Exception) {
             null
+        }
+    }
+
+    private fun isHuggingFaceUrl(urlString: String): Boolean {
+        return try {
+            val host = URL(urlString).host
+            host == "huggingface.co" || host.endsWith(".huggingface.co")
+        } catch (e: Exception) {
+            false
         }
     }
 }
