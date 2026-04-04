@@ -25,7 +25,7 @@ interface ConversationManagerPort {
      * Closes the current conversation and releases resources.
      * After calling this, a new conversation will be created on next getConversation call.
      */
-    fun closeConversation()
+    suspend fun closeConversation()
 
     /**
      * Sets the historical messages for the conversation.
@@ -33,11 +33,11 @@ interface ConversationManagerPort {
      *
      * @param messages The list of historical messages.
      */
-    fun setHistory(messages: List<ChatMessage>)
+    suspend fun setHistory(messages: List<ChatMessage>)
 
     /**
      * Closes the underlying engine and releases all resources.
      * After calling this, the ConversationManager should not be used.
      */
-    fun closeEngine()
+    suspend fun closeEngine()
 }

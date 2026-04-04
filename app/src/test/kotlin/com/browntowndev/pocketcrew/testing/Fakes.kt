@@ -167,13 +167,29 @@ class FakeModelRegistry : ModelRegistryPort {
         return SlotResolvedLocalModel(modelType, asset, config)
     }
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long = 0L
-    override suspend fun deleteModel(modelId: Long, replacementLocalConfigId: Long?, replacementApiConfigId: Long?): Result<Unit> = Result.success(Unit)
     override suspend fun deleteLocalModelMetadata(id: Long) {}
     override suspend fun saveConfiguration(config: LocalModelConfiguration): Long = config.id
     override suspend fun deleteConfiguration(id: Long) {}
 
+    /**
+     * Deletes a model: hard-deletes configs, preserves LocalModelEntity for re-download.
+     */
+    override suspend fun deleteModel(modelId: Long, replacementLocalConfigId: Long?, replacementApiConfigId: Long?): Result<Unit> = Result.success(Unit)
+
+    /**
+     * Returns models that were previously downloaded but have been soft-deleted.
+     * A soft-deleted model has a LocalModelEntity row but has zero configurations.
+     * These models are available for re-download.
+     */
     override suspend fun getSoftDeletedModels(): List<LocalModelAsset> = emptyList()
 
+    /**
+     * Gets a LocalModelAsset by its database ID.
+     * Used by ModelFileScanner to locate the file to delete during soft-delete.
+     *
+     * @param id The LocalModelEntity database ID
+     * @return The LocalModelAsset if found, null otherwise
+     */
     override suspend fun getAssetById(id: Long): LocalModelAsset? {
         return _assets.value.values.find { it.metadata.id == id }
     }
