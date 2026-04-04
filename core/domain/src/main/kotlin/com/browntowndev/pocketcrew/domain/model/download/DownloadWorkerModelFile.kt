@@ -11,6 +11,6 @@ data class DownloadWorkerModelFile(
     val originalFileName: String,
     val modelFileFormat: ModelFileFormat,
 ) {
-    val filenames: List<String>
-        get() = modelTypes.map { "${it.name.lowercase()}.${modelFileFormat.extension.removePrefix(".")}" }
+    val filenames: List<String> =
+        modelTypes.map { "${it.name.lowercase()}.${modelFileFormat.extension.removePrefix(".")}" }
 }
