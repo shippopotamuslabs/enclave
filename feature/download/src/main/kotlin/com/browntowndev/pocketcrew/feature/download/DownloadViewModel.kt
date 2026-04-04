@@ -53,18 +53,6 @@ class DownloadViewModel @AssistedInject constructor(
         private const val THROTTLE_MS = 5000L
     }
 
-    // Cache of display names loaded at init time
-    private var displayNameCache: Map<ModelType, String> = emptyMap()
-
-    init {
-        viewModelScope.launch {
-            displayNameCache = ModelType.entries.associateWith { modelType ->
-                modelRegistry.getRegisteredAsset(modelType)?.metadata?.huggingFaceModelName
-                    ?: modelType.name.lowercase().replaceFirstChar { it.uppercase() }
-            }
-        }
-    }
-
     @AssistedFactory
     interface Factory {
         fun create(
@@ -87,15 +75,10 @@ class DownloadViewModel @AssistedInject constructor(
             get() = if (totalBytes > 0) bytesDownloaded.toFloat() / totalBytes else 0f
     }
 
-    // Get display name from cached registry values
-    private fun ModelType.toDisplayName(): String {
-        return displayNameCache[this] ?: this.name.lowercase().replaceFirstChar { it.uppercase() }
-    }
-
     // Convert FileProgress to UI model with display names from ModelRegistry
     internal fun FileProgress.toUiModel(): FileProgressUiModel {
         val displayName = if (modelTypes.isNotEmpty()) {
-            val names = modelTypes.map { it.toDisplayName() }.distinct()
+            val names = modelTypes.map { it.displayName() }.distinct()
             if (names.size == 1) {
                 names.first()
             } else {

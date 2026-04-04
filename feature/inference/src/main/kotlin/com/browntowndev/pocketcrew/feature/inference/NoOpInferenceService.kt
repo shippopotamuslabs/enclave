@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
@@ -18,18 +19,22 @@ class NoOpInferenceService @Inject constructor(
     private val modelType: ModelType
 ) : LlmInferencePort {
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = flow {
-        emit(InferenceEvent.Error(
-            cause = IllegalStateException("Model for $modelType is not available. Please download it first."),
-            modelType = modelType
-        ))
+    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
+        return sendPrompt(prompt, GenerationOptions(reasoningBudget = 0, modelType = modelType), closeConversation)
     }
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
         // No-op
     }
 
-    override fun closeSession() {
+    override suspend fun closeSession() {
         // No-op
+    }
+
+    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = flow {
+        emit(InferenceEvent.Error(
+            cause = IllegalStateException("Model for $modelType is not available. Please download it first."),
+            modelType = modelType
+        ))
     }
 }

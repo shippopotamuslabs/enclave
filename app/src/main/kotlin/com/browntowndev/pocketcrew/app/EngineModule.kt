@@ -93,77 +93,12 @@ abstract class EngineModule {
             return LlmInference.createFromOptions(context, options)
         }
 
-        // ConversationManager providers - resolve models lazily via ModelRegistry
-        // Pass applicationScope to enable async Flow observation without runBlocking
-        @Provides @Singleton @MainModelEngine
-        fun provideMainConversationManager(
-            @ApplicationContext context: Context,
-            modelRegistry: ModelRegistryPort,
-            @ApplicationScope applicationScope: CoroutineScope
-        ): ConversationManagerPort = ConversationManagerImpl(context, ModelType.MAIN, modelRegistry, applicationScope)
-
-        @Provides @Singleton @VisionModelEngine
-        fun provideVisionConversationManager(
-            @ApplicationContext context: Context,
-            modelRegistry: ModelRegistryPort,
-            @ApplicationScope applicationScope: CoroutineScope
-        ): ConversationManagerPort = ConversationManagerImpl(context, ModelType.VISION, modelRegistry, applicationScope)
-
-        @Provides @Singleton @DraftOneModelEngine
-        fun provideDraftOneConversationManager(
-            @ApplicationContext context: Context,
-            modelRegistry: ModelRegistryPort,
-            @ApplicationScope applicationScope: CoroutineScope
-        ): ConversationManagerPort = ConversationManagerImpl(context, ModelType.DRAFT_ONE, modelRegistry, applicationScope)
-
-        @Provides @Singleton @DraftTwoModelEngine
-        fun provideDraftTwoConversationManager(
-            @ApplicationContext context: Context,
-            modelRegistry: ModelRegistryPort,
-            @ApplicationScope applicationScope: CoroutineScope
-        ): ConversationManagerPort = ConversationManagerImpl(context, ModelType.DRAFT_TWO, modelRegistry, applicationScope)
-
-        @Provides @Singleton @FastModelEngine
-        fun provideFastConversationManager(
-            @ApplicationContext context: Context,
-            modelRegistry: ModelRegistryPort,
-            @ApplicationScope applicationScope: CoroutineScope
-        ): ConversationManagerPort = ConversationManagerImpl(context, ModelType.FAST, modelRegistry, applicationScope)
-
-        @Provides @Singleton @ThinkingModelEngine
-        fun provideThinkingConversationManager(
-            @ApplicationContext context: Context,
-            modelRegistry: ModelRegistryPort,
-            @ApplicationScope applicationScope: CoroutineScope
-        ): ConversationManagerPort = ConversationManagerImpl(context, ModelType.THINKING, modelRegistry, applicationScope)
-
-        @Provides @Singleton @FinalSynthesizerModelEngine
-        fun provideFinalSynthesizerConversationManager(
-            @ApplicationContext context: Context,
-            modelRegistry: ModelRegistryPort,
-            @ApplicationScope applicationScope: CoroutineScope
-        ): ConversationManagerPort = ConversationManagerImpl(context, ModelType.FINAL_SYNTHESIS, modelRegistry, applicationScope)
-
+        // Consolidated ConversationManager provider - resolve models lazily via ModelRegistry
+        // Each InferenceService gets its own manager instance to isolate Engine lifecycle per model file
         @Provides
-        @JvmSuppressWildcards
-        fun provideConversationManagerByType(
-            @MainModelEngine main: ConversationManagerPort,
-            @VisionModelEngine vision: ConversationManagerPort,
-            @DraftOneModelEngine draftOne: ConversationManagerPort,
-            @DraftTwoModelEngine draftTwo: ConversationManagerPort,
-            @FastModelEngine fast: ConversationManagerPort,
-            @ThinkingModelEngine thinking: ConversationManagerPort,
-            @FinalSynthesizerModelEngine synthesis: ConversationManagerPort
-        ): (ModelType) -> ConversationManagerPort = { type ->
-            when (type) {
-                ModelType.MAIN -> main
-                ModelType.VISION -> vision
-                ModelType.DRAFT_ONE -> draftOne
-                ModelType.DRAFT_TWO -> draftTwo
-                ModelType.FAST -> fast
-                ModelType.THINKING -> thinking
-                ModelType.FINAL_SYNTHESIS -> synthesis
-            }
-        }
+        fun provideConversationManager(
+            @ApplicationContext context: Context,
+            modelRegistry: ModelRegistryPort
+        ): ConversationManagerPort = ConversationManagerImpl(context, modelRegistry)
     }
 }

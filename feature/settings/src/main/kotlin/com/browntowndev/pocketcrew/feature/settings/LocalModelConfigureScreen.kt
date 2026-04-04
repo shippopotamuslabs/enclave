@@ -22,6 +22,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -205,6 +206,32 @@ fun LocalModelConfigureScreen(
                 onValueChange = { onConfigChange(config.copy(repetitionPenalty = it.toDouble())) },
                 enabled = !config.isSystemPreset
             )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Thinking",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Enable extended reasoning with higher token budget.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = config.thinkingEnabled,
+                    onCheckedChange = { onConfigChange(config.copy(thinkingEnabled = it)) },
+                    enabled = !config.isSystemPreset
+                )
+            }
 
             if (!config.isSystemPreset) {
                 Button(

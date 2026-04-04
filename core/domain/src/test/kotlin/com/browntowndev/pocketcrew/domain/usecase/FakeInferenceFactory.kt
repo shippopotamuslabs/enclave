@@ -6,13 +6,20 @@ import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 
 class FakeInferenceFactory : InferenceFactoryPort {
     val resolvedTypes = mutableListOf<ModelType>()
+    val executedTypes = mutableListOf<ModelType>()
     var serviceToReturn: LlmInferencePort? = null
     val serviceMap = mutableMapOf<ModelType, LlmInferencePort>()
     var exceptionToThrow: Throwable? = null
 
-    override suspend fun getInferenceService(modelType: ModelType): LlmInferencePort {
+    override suspend fun <T> withInferenceService(
+        modelType: ModelType,
+        block: suspend (LlmInferencePort) -> T
+    ): T {
         exceptionToThrow?.let { throw it }
         resolvedTypes.add(modelType)
-        return serviceMap[modelType] ?: serviceToReturn ?: throw IllegalStateException("Service for $modelType not configured")
+        executedTypes.add(modelType)
+        val service = serviceMap[modelType] ?: serviceToReturn
+            ?: throw IllegalStateException("Service for $modelType not configured")
+        return block(service)
     }
 }

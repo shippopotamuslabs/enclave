@@ -47,7 +47,9 @@ class CheckModelEligibilityUseCaseTest {
         sha256: String,
         sizeInBytes: Long = 1000000L,
         modelFileFormat: ModelFileFormat = ModelFileFormat.LITERTLM,
-        localFileName: String = "model.litertlm"
+        localFileName: String = "model.litertlm",
+        displayName: String = "Test Config",
+        thinkingEnabled: Boolean = false
     ): LocalModelAsset {
         return LocalModelAsset(
             metadata = LocalModelMetadata(
@@ -61,13 +63,14 @@ class CheckModelEligibilityUseCaseTest {
             configurations = listOf(
                 LocalModelConfiguration(
                     localModelId = 1L,
-                    displayName = "Test Config",
+                    displayName = displayName,
                     maxTokens = 2048,
                     contextWindow = 2048,
                     temperature = 0.7,
                     topP = 0.95,
                     topK = 40,
                     repetitionPenalty = 1.0,
+                    thinkingEnabled = thinkingEnabled,
                     systemPrompt = "You are helpful."
                 )
             )
@@ -223,17 +226,25 @@ class CheckModelEligibilityUseCaseTest {
     }
 
     @Test
-    fun `check groups models with same SHA256`() {
+    fun `check preserves slot specific assets with same SHA256`() {
         val asset1 = createModelAsset(
             sha256 = "shared-sha256",
-            localFileName = "shared.litertlm"
+            localFileName = "shared.litertlm",
+            displayName = "Gemma 4 E4B (Vision)"
         )
         val asset2 = createModelAsset(
             sha256 = "shared-sha256",
-            localFileName = "shared.litertlm"
+            localFileName = "shared.litertlm",
+            displayName = "Gemma 4 E4B (Fast)"
+        )
+        val asset3 = createModelAsset(
+            sha256 = "shared-sha256",
+            localFileName = "shared.litertlm",
+            displayName = "Gemma 4 E4B (Thinking)",
+            thinkingEnabled = true
         )
         val scanResult = ModelScanResult(
-            missingModels = listOf(asset1, asset2),
+            missingModels = listOf(asset1, asset2, asset3),
             partialDownloads = emptyMap(),
             invalidModels = emptyList(),
             allValid = false,
@@ -241,11 +252,23 @@ class CheckModelEligibilityUseCaseTest {
         )
 
         val result = useCase.check(
-            mapOf(ModelType.DRAFT_ONE to asset1, ModelType.FAST to asset2),
-            mapOf(ModelType.DRAFT_ONE to asset1, ModelType.FAST to asset2),
+            mapOf(
+                ModelType.VISION to asset1,
+                ModelType.FAST to asset2,
+                ModelType.THINKING to asset3
+            ),
+            mapOf(
+                ModelType.VISION to asset1,
+                ModelType.FAST to asset2,
+                ModelType.THINKING to asset3
+            ),
             scanResult
         )
 
-        assertEquals(1, result.size)
+        assertEquals(3, result.size)
+        assertEquals(
+            setOf("Gemma 4 E4B (Vision)", "Gemma 4 E4B (Fast)", "Gemma 4 E4B (Thinking)"),
+            result.map { it.configurations.first().displayName }.toSet()
+        )
     }
 }

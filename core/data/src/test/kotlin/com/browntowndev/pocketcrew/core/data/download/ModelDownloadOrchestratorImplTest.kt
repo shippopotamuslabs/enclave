@@ -6,7 +6,10 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
+import com.browntowndev.pocketcrew.domain.model.download.DownloadCheckResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
+import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
@@ -15,7 +18,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.usecase.download.FileProgressInitResult
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeFileProgressUseCase
 import com.browntowndev.pocketcrew.domain.usecase.download.ValidateDownloadConditionsUseCase
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.domain.usecase.download.CheckModelEligibilityUseCase
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -191,14 +194,9 @@ class ModelDownloadOrchestratorImplTest {
         )
         orchestrator.updateFromProgressUpdate(update)
 
-        // Then - registry should be updated with the NEW asset (this replaces current logic)
+        // Then - registry should activate the new asset atomically
         coVerify {
-            mockModelRegistry.setRegisteredModel(
-                modelType = ModelType.FAST,
-                asset = remoteAsset,
-                status = ModelStatus.CURRENT,
-                markExistingAsOld = true
-            )
+            mockModelRegistry.activateLocalModel(ModelType.FAST, remoteAsset)
         }
     }
 
@@ -239,5 +237,65 @@ class ModelDownloadOrchestratorImplTest {
 
         // Then - should emit a fallback snackbar
         assertTrue(messages.any { it.contains("Using existing model") })
+    }
+
+    @Test
+    fun `startDownloads enqueues every shared slot for a single physical asset`() = runTest {
+        val sharedSha = "shared-sha"
+        val sharedFileName = "gemma-4-E4B-it.litertlm"
+        val visionAsset = createModelAsset(sha256 = sharedSha, localFileName = sharedFileName).copy(
+            configurations = listOf(
+                createModelAsset(sha256 = sharedSha, localFileName = sharedFileName)
+                    .configurations.first()
+                    .copy(displayName = "Gemma 4 E4B (Vision)")
+            )
+        )
+        val fastAsset = createModelAsset(sha256 = sharedSha, localFileName = sharedFileName).copy(
+            configurations = listOf(
+                createModelAsset(sha256 = sharedSha, localFileName = sharedFileName)
+                    .configurations.first()
+                    .copy(displayName = "Gemma 4 E4B (Fast)")
+            )
+        )
+        val thinkingAsset = createModelAsset(sha256 = sharedSha, localFileName = sharedFileName).copy(
+            configurations = listOf(
+                createModelAsset(sha256 = sharedSha, localFileName = sharedFileName)
+                    .configurations.first()
+                    .copy(displayName = "Gemma 4 E4B (Thinking)", thinkingEnabled = true)
+            )
+        )
+
+        val downloadResult = createDownloadModelsResult(
+            modelsToDownload = listOf(visionAsset),
+            allModels = mapOf(
+                ModelType.VISION to visionAsset,
+                ModelType.FAST to fastAsset,
+                ModelType.THINKING to thinkingAsset
+            )
+        )
+        every { mockSessionManager.createNewSession() } returns "session-1"
+        coEvery { mockValidateConditions.invoke(any(), any()) } returns DownloadCheckResult(
+            canStart = true,
+            errorMessage = null,
+            missingModels = listOf(visionAsset)
+        )
+        every { mockInitializeFileProgress.invoke(any(), any(), any()) } returns FileProgressInitResult(
+            fileProgressList = emptyList(),
+            modelsTotal = 3,
+            modelsComplete = 0,
+            overallProgress = 0f
+        )
+
+        orchestrator.startDownloads(downloadResult, wifiOnly = true)
+
+        verify {
+            mockWorkScheduler.enqueue(
+                match { models ->
+                    models.keys == setOf(ModelType.VISION, ModelType.FAST, ModelType.THINKING)
+                },
+                "session-1",
+                true
+            )
+        }
     }
 }

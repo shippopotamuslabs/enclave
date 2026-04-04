@@ -3,16 +3,19 @@ package com.browntowndev.pocketcrew.testing
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOf
 
 class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
     private val _downloadState = MutableStateFlow(DownloadState(status = DownloadStatus.CHECKING))
@@ -142,31 +146,61 @@ class FakeModelRegistry : ModelRegistryPort {
     override suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration> = _configs.value.values.toList()
 
     override fun observeAsset(modelType: ModelType): Flow<LocalModelAsset?> = _assets.map { it[modelType] }
-    override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> = _configs.map { it[modelType] }
-    override fun observeAssets(): Flow<List<LocalModelAsset>> = _assets.map { it.values.toList() }
+    override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> = flowOf(null)
+    override fun observeAssets(): Flow<List<LocalModelAsset>> = flowOf(emptyList())
 
-    override suspend fun setRegisteredModel(modelType: ModelType, asset: LocalModelAsset, status: ModelStatus, markExistingAsOld: Boolean) {
+    override suspend fun clearAll() {}
+
+    override suspend fun upsertLocalAsset(asset: LocalModelAsset): Long = asset.metadata.id
+    override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): Long = config.id
+    override suspend fun setDefaultLocalConfig(modelType: ModelType, configId: Long) {}
+    override suspend fun activateLocalModel(modelType: ModelType, asset: LocalModelAsset): SlotResolvedLocalModel {
+        val selectedConfig = asset.configurations.firstOrNull()
+            ?: throw IllegalArgumentException("Asset must contain at least one configuration")
         _assets.value = _assets.value + (modelType to asset)
-        val config = asset.configurations.firstOrNull() ?: throw IllegalStateException("No configs")
-        _configs.value = _configs.value + (modelType to config)
+        _configs.value = _configs.value + (modelType to selectedConfig)
+        return SlotResolvedLocalModel(modelType, asset, selectedConfig)
     }
-
-    override suspend fun clearAll() {
-        _assets.value = emptyMap()
-        _configs.value = emptyMap()
+    override suspend fun getRegisteredSelection(modelType: ModelType): SlotResolvedLocalModel? {
+        val asset = _assets.value[modelType] ?: return null
+        val config = _configs.value[modelType] ?: return null
+        return SlotResolvedLocalModel(modelType, asset, config)
     }
-
-    override suspend fun clearOld() {}
-
-
-    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long = metadata.id
+    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long = 0L
     override suspend fun deleteLocalModelMetadata(id: Long) {}
     override suspend fun saveConfiguration(config: LocalModelConfiguration): Long = config.id
     override suspend fun deleteConfiguration(id: Long) {}
 
+    /**
+     * Deletes a model: hard-deletes configs, preserves LocalModelEntity for re-download.
+     */
+    override suspend fun deleteModel(modelId: Long, replacementLocalConfigId: Long?, replacementApiConfigId: Long?): Result<Unit> = Result.success(Unit)
+
+    /**
+     * Returns models that were previously downloaded but have been soft-deleted.
+     * A soft-deleted model has a LocalModelEntity row but has zero configurations.
+     * These models are available for re-download.
+     */
     override suspend fun getSoftDeletedModels(): List<LocalModelAsset> = emptyList()
-    override suspend fun reuseModelForRedownload(modelId: Long, newAsset: LocalModelAsset): Long = modelId
-    override suspend fun getAssetById(id: Long): LocalModelAsset? = _assets.value.values.find { it.metadata.id == id }
+
+    /**
+     * Gets a LocalModelAsset by its database ID.
+     * Used by ModelFileScanner to locate the file to delete during soft-delete.
+     *
+     * @param id The LocalModelEntity database ID
+     * @return The LocalModelAsset if found, null otherwise
+     */
+    override suspend fun getAssetById(id: Long): LocalModelAsset? {
+        return _assets.value.values.find { it.metadata.id == id }
+    }
+}
+
+class FakeLoggingPort : LoggingPort {
+    override fun debug(tag: String, message: String) {}
+    override fun info(tag: String, message: String) {}
+    override fun warning(tag: String, message: String) {}
+    override fun error(tag: String, message: String, throwable: Throwable?) {}
+    override fun recordException(tag: String, message: String, throwable: Throwable) {}
 }
 
 class FakeSpeedTracker : DownloadSpeedTrackerPort {

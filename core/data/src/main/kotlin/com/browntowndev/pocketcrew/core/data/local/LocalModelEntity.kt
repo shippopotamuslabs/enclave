@@ -5,7 +5,6 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 
 @Entity(
     tableName = "local_models",
@@ -35,9 +34,6 @@ data class LocalModelEntity(
 
     @ColumnInfo(name = "vision_capable")
     val visionCapable: Boolean = false,
-
-    @ColumnInfo(name = "model_status")
-    val modelStatus: ModelStatus,
 
     @ColumnInfo(name = "thinking_enabled")
     val thinkingEnabled: Boolean = false,

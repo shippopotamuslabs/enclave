@@ -75,7 +75,7 @@ class GenerateChatResponseUseCaseRefactorTest {
 
     @Test
     fun `FAST mode routes through InferenceFactoryPort`() = runTest {
-        every { mockInferenceService.sendPrompt(any(), any()) } returns flowOf(
+        every { mockInferenceService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
             InferenceEvent.Finished(ModelType.FAST),
         )
@@ -94,7 +94,7 @@ class GenerateChatResponseUseCaseRefactorTest {
 
     @Test
     fun `THINKING mode routes through InferenceFactoryPort`() = runTest {
-        every { mockInferenceService.sendPrompt(any(), any()) } returns flowOf(
+        every { mockInferenceService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Deep thought", ModelType.THINKING),
             InferenceEvent.Finished(ModelType.THINKING),
         )
@@ -161,7 +161,7 @@ class GenerateChatResponseUseCaseRefactorTest {
         // This test proves the use case no longer needs fastModelService/thinkingModelService
         // fields — it only needs InferenceFactoryPort. If this test compiles and we reach
         // this point, the refactored constructor is structurally correct.
-        every { mockInferenceService.sendPrompt(any(), any()) } returns flowOf(
+        every { mockInferenceService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("fast", ModelType.FAST),
             InferenceEvent.Finished(ModelType.FAST),
         )
@@ -174,7 +174,7 @@ class GenerateChatResponseUseCaseRefactorTest {
             mode = Mode.FAST,
         ).toList()
 
-        every { mockInferenceService.sendPrompt(any(), any()) } returns flowOf(
+        every { mockInferenceService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("think", ModelType.THINKING),
             InferenceEvent.Finished(ModelType.THINKING),
         )

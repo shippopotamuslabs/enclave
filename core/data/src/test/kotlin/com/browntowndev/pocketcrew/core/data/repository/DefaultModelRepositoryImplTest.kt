@@ -10,12 +10,12 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelEntity
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import io.mockk.coEvery
 import io.mockk.mockk
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -61,8 +61,7 @@ class DefaultModelRepositoryImplTest {
             remoteFilename = "qwen.gguf",
             localFilename = "qwen.gguf",
             sha256 = "abc",
-            sizeInBytes = 100,
-            modelStatus = ModelStatus.CURRENT
+            sizeInBytes = 100
         )
 
         val result = repo.getDefault(ModelType.MAIN)

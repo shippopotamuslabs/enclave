@@ -4,11 +4,10 @@ import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
-import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
@@ -182,7 +181,7 @@ class InitializeModelsUseCaseTest {
     }
 
     @Test
-    fun `invoke does NOT mark existing config as OLD when SHA256 is unchanged but tunings changed`() = runTest {
+    fun `invoke activates existing config in place when SHA256 is unchanged but tunings changed`() = runTest {
         // Given - remote config has same SHA256 but different temperature (tuning change only)
         val existingConfig = createFakeLocalModelAsset(
             sha256 = "sameSha256",
@@ -203,7 +202,7 @@ class InitializeModelsUseCaseTest {
             )
         )
 
-        // Registry has existing CURRENT config
+        // Registry has an existing active config
         coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
         coEvery { mockModelRegistry.getRegisteredAsset(ModelType.MAIN) } returns existingConfig
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(mapOf(ModelType.MAIN to remoteConfig))
@@ -212,15 +211,107 @@ class InitializeModelsUseCaseTest {
         // When
         useCase.invoke()
 
-        // Then - setRegisteredModel is called with markExistingAsOld=false
-        // because SHA256 is unchanged - the file is still valid
+        // Then - activation is applied atomically because SHA256 is unchanged
         coVerify(exactly = 1) {
-            mockModelRegistry.setRegisteredModel(ModelType.MAIN, remoteConfig, ModelStatus.CURRENT, markExistingAsOld = false)
+            mockModelRegistry.activateLocalModel(ModelType.MAIN, remoteConfig)
         }
     }
 
     @Test
-    fun `invoke does NOT call setRegisteredModel for changed-SHA assets immediately`() = runTest {
+    fun `invoke defers activation when filename changes even if SHA256 is unchanged`() = runTest {
+        val existingConfig = createFakeLocalModelAsset(
+            sha256 = "sameSha256",
+            localFileName = "old-model.bin",
+            remoteFileName = "old-model.bin",
+            configurations = listOf(createFakeLocalModelConfiguration(temperature = 0.0))
+        )
+
+        val remoteConfig = existingConfig.copy(
+            metadata = existingConfig.metadata.copy(
+                localFileName = "new-model.bin",
+                remoteFileName = "new-model.bin"
+            )
+        )
+
+        val emptyResult = DownloadModelsResult(
+            allModels = mapOf(ModelType.MAIN to remoteConfig),
+            modelsToDownload = listOf(remoteConfig),
+            scanResult = ModelScanResult(
+                missingModels = listOf(remoteConfig),
+                partialDownloads = emptyMap(),
+                allValid = false
+            )
+        )
+
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.MAIN) } returns existingConfig
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(mapOf(ModelType.MAIN to remoteConfig))
+        coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
+
+        useCase.invoke()
+
+        coVerify(exactly = 0) {
+            mockModelRegistry.activateLocalModel(ModelType.MAIN, remoteConfig)
+        }
+    }
+
+    @Test
+    fun `invoke activates THINKING immediately when shared asset already exists under FAST`() = runTest {
+        val sharedFast = createFakeLocalModelAsset(
+            sha256 = "sharedSha256",
+            localFileName = "gemma-4-E4B-it.litertlm",
+            remoteFileName = "gemma-4-E4B-it.litertlm",
+            configurations = listOf(
+                createFakeLocalModelConfiguration(
+                    displayName = "Gemma 3 2B (Fast)",
+                    systemPrompt = "fast"
+                )
+            )
+        )
+        val sharedThinking = sharedFast.copy(
+            configurations = listOf(
+                sharedFast.configurations.first().copy(
+                    displayName = "Gemma 3 2B (Thinking)",
+                    temperature = 0.05,
+                    maxTokens = 6144,
+                    thinkingEnabled = true,
+                    systemPrompt = "thinking"
+                )
+            )
+        )
+
+        val emptyResult = DownloadModelsResult(
+            allModels = mapOf(
+                ModelType.FAST to sharedFast,
+                ModelType.THINKING to sharedThinking
+            ),
+            modelsToDownload = emptyList(),
+            scanResult = ModelScanResult(
+                missingModels = emptyList(),
+                partialDownloads = emptyMap(),
+                allValid = true
+            )
+        )
+
+        coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns sharedFast
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
+            mapOf(
+                ModelType.FAST to sharedFast,
+                ModelType.THINKING to sharedThinking
+            )
+        )
+        coEvery { mockCheckModelsUseCase.invoke(any(), any()) } returns emptyResult
+
+        useCase.invoke()
+
+        coVerify(exactly = 1) {
+            mockModelRegistry.activateLocalModel(ModelType.THINKING, sharedThinking)
+        }
+    }
+
+    @Test
+    fun `invoke does NOT activate changed-SHA assets immediately`() = runTest {
         // Given - remote config has different SHA256 (new model file)
         val existingConfig = createFakeLocalModelAsset(
             sha256 = "oldSha256",
@@ -251,14 +342,14 @@ class InitializeModelsUseCaseTest {
         // When
         useCase.invoke()
 
-        // Then - setRegisteredModel should NOT be called because SHA changed
+        // Then - NO updates are called yet (deferred activation)
         coVerify(exactly = 0) {
-            mockModelRegistry.setRegisteredModel(any(), any(), any(), any())
+            mockModelRegistry.upsertLocalAsset(any())
         }
     }
 
     @Test
-    fun `invoke calls setRegisteredModel only for unchanged-SHA config-only updates`() = runTest {
+    fun `invoke calls activateLocalModel only for unchanged-SHA config-only updates`() = runTest {
         // Given - SHA same, but tuning changed
         val existingConfig = createFakeLocalModelAsset(
             sha256 = "sameSha256",
@@ -286,20 +377,19 @@ class InitializeModelsUseCaseTest {
         // When
         useCase.invoke()
 
-        // Then - setRegisteredModel should be called for config-only update
+        // Then - the slot activation is applied immediately for tuning-only updates
         coVerify(exactly = 1) {
-            mockModelRegistry.setRegisteredModel(ModelType.MAIN, remoteConfig, ModelStatus.CURRENT, markExistingAsOld = false)
+            mockModelRegistry.activateLocalModel(ModelType.MAIN, remoteConfig)
         }
     }
 
     /**
      * VERIFIED FIX:
-     * When SHA256 is unchanged but tunings change, the use case now correctly
-     * passes markExistingAsOld=false to prevent creating an OLD entry.
-     * This prevents the file cleanup logic from deleting valid model files.
+     * When SHA256 is unchanged but tunings change, the use case now applies the
+     * activation in place instead of staging a replacement row.
      */
     @Test
-    fun `FIXED - when SHA256 unchanged, markExistingAsOld is false to prevent file deletion`() = runTest {
+    fun `FIXED - when SHA256 unchanged, activateLocalModel updates in place`() = runTest {
         // Given - same SHA256 but different temperature
         val existingConfig = createFakeLocalModelAsset(
             sha256 = "sameSha256",
@@ -320,7 +410,7 @@ class InitializeModelsUseCaseTest {
             )
         )
 
-        // Registry has existing CURRENT config
+        // Registry has an existing active config
         coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns null
         coEvery { mockModelRegistry.getRegisteredAsset(ModelType.MAIN) } returns existingConfig
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(mapOf(ModelType.MAIN to remoteConfig))
@@ -329,17 +419,16 @@ class InitializeModelsUseCaseTest {
         // When - invoke the use case
         useCase.invoke()
 
-        // Verify: markExistingAsOld should be false because SHA256 is unchanged
+        // Verify: unchanged SHA uses the immediate in-place activation path
         coVerify(exactly = 1) {
-            mockModelRegistry.setRegisteredModel(ModelType.MAIN, remoteConfig, ModelStatus.CURRENT, markExistingAsOld = false)
+            mockModelRegistry.activateLocalModel(ModelType.MAIN, remoteConfig)
         }
     }
 
     /**
      * BUG FIX TEST:
      * When DRAFT_ONE's SHA256 changes from "abc" to "xyz", but FAST still uses SHA256 "abc",
-     * the old DRAFT_ONE config should NOT be marked as OLD because the file is still in use by FAST.
-     * Only mark as OLD if the SHA256 changed AND no other model type uses that SHA256.
+     * the existing DRAFT_ONE slot should not be disrupted because the file is still in use by FAST.
      */
     @Test
     fun `invoke does NOT mark existing config as OLD when SHA256 changed but other model still uses that SHA256`() = runTest {
@@ -388,20 +477,15 @@ class InitializeModelsUseCaseTest {
         // When
         useCase.invoke()
 
-        // Then - DRAFT_ONE's old config should NOT be marked as OLD because FAST still uses that SHA256
-        // The fix: markExistingAsOld should be FALSE for DRAFT_ONE since FAST still references "sharedSha256"
+        // Then - DRAFT_ONE should remain untouched because FAST still uses the shared SHA256
+        // The unchanged FAST asset should be refreshed atomically without affecting DRAFT_ONE.
         coVerify(exactly = 1) {
-            mockModelRegistry.setRegisteredModel(
-                ModelType.FAST,
-                remoteFast,
-                ModelStatus.CURRENT,
-                markExistingAsOld = false  // SHA256 unchanged
-            )
+            mockModelRegistry.activateLocalModel(ModelType.FAST, remoteFast)
         }
     }
 
     /**
-     * TEST: When SHA256 changes AND no other model uses that SHA256, mark as OLD (current behavior for single models)
+     * TEST: When SHA256 changes AND no other model uses that SHA256, defer activation until download succeeds.
      */
     @Test
     fun `invoke marks existing config as OLD when SHA256 changed and no other model uses that SHA256`() = runTest {
@@ -438,9 +522,9 @@ class InitializeModelsUseCaseTest {
         // When
         useCase.invoke()
 
-        // Then - registerModel should NOT be called for changed-SHA immediately
+        // Then - activateLocalModel should NOT be called for changed-SHA immediately
         coVerify(exactly = 0) {
-            mockModelRegistry.setRegisteredModel(any(), any(), any(), any())
+            mockModelRegistry.activateLocalModel(any(), any())
         }
     }
 
