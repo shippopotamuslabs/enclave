@@ -2,7 +2,7 @@ package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -36,9 +36,12 @@ class CascadeBehaviorTest {
 
     @Test
     fun `deleting a local model cascades to its configurations`() = runTest {
-        val modelId = database.localModelsDao().upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, modelStatus = ModelStatus.CURRENT
-        ))
+        val model = LocalModelEntity(
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q",
+            localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false,
+            thinkingEnabled = false, isVision = false
+        )
+        val modelId = database.localModelsDao().upsert(model)
         database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(localModelId = modelId, displayName = "c1"))
         database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(localModelId = modelId, displayName = "c2"))
         
@@ -64,9 +67,12 @@ class CascadeBehaviorTest {
 
     @Test(expected = SQLiteConstraintException::class)
     fun `deleting a local config that is currently a default is blocked`() = runTest {
-        val modelId = database.localModelsDao().upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, modelStatus = ModelStatus.CURRENT
-        ))
+        val model = LocalModelEntity(
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q",
+            localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false,
+            thinkingEnabled = false, isVision = false
+        )
+        val modelId = database.localModelsDao().upsert(model)
         val configId = database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(localModelId = modelId, displayName = "c1"))
         database.defaultModelsDao().upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = configId, apiConfigId = null))
         

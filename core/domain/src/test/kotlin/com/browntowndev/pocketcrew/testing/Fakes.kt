@@ -21,7 +21,7 @@ import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
@@ -32,6 +32,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
@@ -41,6 +42,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOf
 
 
 fun createFakeLocalModelAsset(
@@ -226,33 +228,28 @@ class FakeModelRegistry : ModelRegistryPort {
     override suspend fun getRegisteredAssets(): List<LocalModelAsset> = _assets.value.values.toList()
     override suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration> = _configs.value.values.toList()
     override fun observeAsset(modelType: ModelType): Flow<LocalModelAsset?> = _assets.map { it[modelType] }
-    override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> = _configs.map { it[modelType] }
-    override fun observeAssets(): Flow<List<LocalModelAsset>> = _assets.map { it.values.toList() }
-
-    override suspend fun setRegisteredModel(
-        modelType: ModelType,
-        asset: LocalModelAsset,
-        status: ModelStatus,
-        markExistingAsOld: Boolean
-    ) {
-        registerAsset(modelType, asset)
-    }
+    override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> = flowOf(null)
+    override fun observeAssets(): Flow<List<LocalModelAsset>> = flowOf(emptyList())
 
     override suspend fun clearAll() { clearModels() }
-    override suspend fun clearOld() {}
 
-    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long {
-        // Find existing asset or create new one
-        val existingEntry = _assets.value.entries.find { it.value.metadata.sha256 == metadata.sha256 }
-        if (existingEntry != null) {
-            val updatedAsset = existingEntry.value.copy(metadata = metadata)
-            _assets.value = _assets.value + (existingEntry.key to updatedAsset)
-            return metadata.id
-        }
-        // Simplified for fake: just return ID
-        return metadata.id
+    override suspend fun upsertLocalAsset(asset: LocalModelAsset): Long = asset.metadata.id
+    override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): Long = config.id
+    override suspend fun setDefaultLocalConfig(modelType: ModelType, configId: Long) {}
+    override suspend fun activateLocalModel(modelType: ModelType, asset: LocalModelAsset): SlotResolvedLocalModel {
+        val selectedConfig = asset.configurations.firstOrNull()
+            ?: throw IllegalArgumentException("Asset must contain at least one configuration")
+        _assets.value = _assets.value + (modelType to asset)
+        _configs.value = _configs.value + (modelType to selectedConfig)
+        return SlotResolvedLocalModel(modelType, asset, selectedConfig)
     }
-
+    override suspend fun getRegisteredSelection(modelType: ModelType): SlotResolvedLocalModel? {
+        val asset = _assets.value[modelType] ?: return null
+        val config = _configs.value[modelType] ?: return null
+        return SlotResolvedLocalModel(modelType, asset, config)
+    }
+    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long = 0L
+    override suspend fun deleteModel(modelId: Long, replacementLocalConfigId: Long?, replacementApiConfigId: Long?): Result<Unit> = Result.success(Unit)
     override suspend fun deleteLocalModelMetadata(id: Long) {
         val entryToDelete = _assets.value.entries.find { it.value.metadata.id == id }
         if (entryToDelete != null) {
@@ -275,13 +272,7 @@ class FakeModelRegistry : ModelRegistryPort {
         }
     }
 
-    override suspend fun getSoftDeletedModels(): List<LocalModelAsset> {
-        throw NotImplementedError("TDD Red - getSoftDeletedModels not yet implemented")
-    }
-
-    override suspend fun reuseModelForRedownload(modelId: Long, newAsset: LocalModelAsset): Long {
-        throw NotImplementedError("TDD Red - reuseModelForRedownload not yet implemented")
-    }
+    override suspend fun getSoftDeletedModels(): List<LocalModelAsset> = emptyList()
 
     override suspend fun getAssetById(id: Long): LocalModelAsset? {
         return _assets.value.values.find { it.metadata.id == id }
@@ -356,6 +347,14 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
     fun seed(assignments: List<DefaultModelAssignment>) {
         _defaults.value = assignments
     }
+}
+
+class FakeLoggingPort : LoggingPort {
+    override fun debug(tag: String, message: String) {}
+    override fun info(tag: String, message: String) {}
+    override fun warning(tag: String, message: String) {}
+    override fun error(tag: String, message: String, throwable: Throwable?) {}
+    override fun recordException(tag: String, message: String, throwable: Throwable) {}
 }
 
 class FakeSpeedTracker : DownloadSpeedTrackerPort {

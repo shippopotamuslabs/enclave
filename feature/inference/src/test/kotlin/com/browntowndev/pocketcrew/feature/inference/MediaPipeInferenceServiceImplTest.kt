@@ -61,7 +61,7 @@ class MediaPipeInferenceServiceImplTest {
     @Test
     fun `sendPrompt seeds history via sequential addQueryChunk calls before first prompt`() = runTest {
         // Given
-        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper, ModelType.MAIN)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper)
         val history = listOf(
             ChatMessage(Role.USER, "What is AI?"),
             ChatMessage(Role.ASSISTANT, "AI is...")
@@ -91,7 +91,7 @@ class MediaPipeInferenceServiceImplTest {
     @Test
     fun `sendPrompt does not re-seed history if session persists`() = runTest {
         // Given
-        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper, ModelType.MAIN)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper)
         val history = listOf(ChatMessage(Role.USER, "What is AI?"))
         
         val mockFuture = mockk<ListenableFuture<String>>(relaxed = true)
@@ -115,7 +115,7 @@ class MediaPipeInferenceServiceImplTest {
     @Test
     fun `sendPrompt re-seeds history if conversation was closed`() = runTest {
         // Given
-        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper, ModelType.MAIN)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper)
         val history = listOf(ChatMessage(Role.USER, "What is AI?"))
         
         val mockFuture = mockk<ListenableFuture<String>>(relaxed = true)
@@ -137,7 +137,7 @@ class MediaPipeInferenceServiceImplTest {
     @Test
     fun `sendPrompt with empty history does not call addQueryChunk for history`() = runTest {
         // Given
-        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper, ModelType.MAIN)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper)
         val history = emptyList<ChatMessage>()
         
         val mockFuture = mockk<ListenableFuture<String>>(relaxed = true)
@@ -159,7 +159,7 @@ class MediaPipeInferenceServiceImplTest {
     @Test
     fun `error during session creation emits Error event`() = runTest {
         // Given
-        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper, ModelType.MAIN)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper)
         every { mockLlmInferenceWrapper.createSession(any()) } throws RuntimeException("Session creation failed")
 
         // When
@@ -167,5 +167,29 @@ class MediaPipeInferenceServiceImplTest {
 
         // Then
         assertTrue(events.any { it is InferenceEvent.Error })
+    }
+
+    @Test
+    fun `sendPrompt correctly identifies and emits thinking events from tags`() = runTest {
+        // Given
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper)
+        val mockFuture = mockk<ListenableFuture<String>>(relaxed = true)
+        
+        every { mockSession.generateResponseAsync(any()) } answers {
+            val callback = it.invocation.args[0] as ProgressListener<String>
+            callback.run("<think>", false)
+            callback.run("reasoning", false)
+            callback.run("</think>", false)
+            callback.run("final answer", true)
+            mockFuture
+        }
+
+        // When
+        val events = service.sendPrompt("Hello", closeConversation = false).toList()
+
+        // Then
+        assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "reasoning" })
+        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "final answer" })
+        assertTrue(events.any { it is InferenceEvent.Finished })
     }
 }

@@ -108,7 +108,7 @@ class GenerateChatResponseUseCaseTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Thinking("Thinking...", ModelType.FAST),
             InferenceEvent.PartialResponse("Hello ", ModelType.FAST),
             InferenceEvent.PartialResponse("world!", ModelType.FAST),
@@ -150,7 +150,7 @@ class GenerateChatResponseUseCaseTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
             InferenceEvent.PartialResponse(" world", ModelType.FAST),
             InferenceEvent.PartialResponse("!", ModelType.FAST)
@@ -190,7 +190,7 @@ class GenerateChatResponseUseCaseTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Thinking("Step 1...", ModelType.FAST),
             InferenceEvent.Thinking("Step 2...", ModelType.FAST)
         )
@@ -227,7 +227,7 @@ class GenerateChatResponseUseCaseTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
             InferenceEvent.Finished(ModelType.FAST)
         )
@@ -262,7 +262,7 @@ class GenerateChatResponseUseCaseTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
             InferenceEvent.Finished(ModelType.FAST)
         )
@@ -292,7 +292,7 @@ class GenerateChatResponseUseCaseTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Error(RuntimeException("Test error"), ModelType.FAST)
         )
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
@@ -667,7 +667,7 @@ class GenerateChatResponseUseCaseTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
             InferenceEvent.Finished(ModelType.FAST)
         )
@@ -777,7 +777,7 @@ class GenerateChatResponseUseCaseTest {
         // Instead of mockkStatic, let's just use the real time and verify duration is correctly calculated
         // based on thinkingStartTime and thinkingEndTime within the AccumulatedMessages response.
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Thinking("Think 1 ", ModelType.FAST),
             InferenceEvent.PartialResponse("Response 1 ", ModelType.FAST),
             InferenceEvent.Finished(ModelType.FAST)
@@ -826,7 +826,7 @@ class GenerateChatResponseUseCaseTest {
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockk<LocalModelAsset>()
 
         // Emitting ONLY Thinking events means thinkingEndTime remains null
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Thinking("Quick think", ModelType.FAST)
         )
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()

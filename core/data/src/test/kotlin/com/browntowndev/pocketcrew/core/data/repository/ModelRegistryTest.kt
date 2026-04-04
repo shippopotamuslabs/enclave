@@ -4,7 +4,6 @@ import com.browntowndev.pocketcrew.core.testing.FakeModelRegistry
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.first
@@ -79,7 +78,9 @@ class ModelRegistryTest {
     fun getRegisteredAsset_returnsCorrectAsset_whenRegistered() = runTest {
         // Given
         val asset = createMainModelAsset()
-        fakeRegistry.setRegisteredModel(ModelType.MAIN, asset)
+        val assetId = fakeRegistry.upsertLocalAsset(asset)
+        val configId = fakeRegistry.upsertLocalConfiguration(asset.configurations.first().copy(localModelId = assetId))
+        fakeRegistry.setDefaultLocalConfig(ModelType.MAIN, configId)
 
         // When
         val retrieved = fakeRegistry.getRegisteredAsset(ModelType.MAIN)
@@ -98,32 +99,17 @@ class ModelRegistryTest {
     }
 
     @Test
-    fun setRegisteredModel_marksExistingAsOld_whenRequested() = runTest {
-        // Given
-        val oldAsset = createMainModelAsset()
-        fakeRegistry.setRegisteredModel(ModelType.MAIN, oldAsset)
-
-        // When
-        val newAsset = createMainModelAsset().copy(
-            metadata = oldAsset.metadata.copy(sha256 = "new_sha")
-        )
-        fakeRegistry.setRegisteredModel(
-            modelType = ModelType.MAIN,
-            asset = newAsset,
-            status = ModelStatus.CURRENT,
-            markExistingAsOld = true
-        )
-
-        // Then
-        assertEquals(ModelStatus.OLD, fakeRegistry.getStatusBySha256(oldAsset.metadata.sha256))
-        assertEquals(ModelStatus.CURRENT, fakeRegistry.getStatusBySha256(newAsset.metadata.sha256))
-    }
-
-    @Test
     fun clearAll_removesAllRegisteredModels() = runTest {
         // Given
-        fakeRegistry.setRegisteredModel(ModelType.MAIN, createMainModelAsset())
-        fakeRegistry.setRegisteredModel(ModelType.VISION, createVisionModelAsset())
+        val asset1 = createMainModelAsset()
+        val id1 = fakeRegistry.upsertLocalAsset(asset1)
+        val conf1 = fakeRegistry.upsertLocalConfiguration(asset1.configurations.first().copy(localModelId = id1))
+        fakeRegistry.setDefaultLocalConfig(ModelType.MAIN, conf1)
+
+        val asset2 = createVisionModelAsset()
+        val id2 = fakeRegistry.upsertLocalAsset(asset2)
+        val conf2 = fakeRegistry.upsertLocalConfiguration(asset2.configurations.first().copy(localModelId = id2))
+        fakeRegistry.setDefaultLocalConfig(ModelType.VISION, conf2)
 
         // When
         fakeRegistry.clearAll()
@@ -137,8 +123,15 @@ class ModelRegistryTest {
     @Test
     fun getRegisteredAssets_returnsAllRegisteredAssets() = runTest {
         // Given
-        fakeRegistry.setRegisteredModel(ModelType.MAIN, createMainModelAsset())
-        fakeRegistry.setRegisteredModel(ModelType.VISION, createVisionModelAsset())
+        val asset1 = createMainModelAsset()
+        val id1 = fakeRegistry.upsertLocalAsset(asset1)
+        val conf1 = fakeRegistry.upsertLocalConfiguration(asset1.configurations.first().copy(localModelId = id1))
+        fakeRegistry.setDefaultLocalConfig(ModelType.MAIN, conf1)
+
+        val asset2 = createVisionModelAsset()
+        val id2 = fakeRegistry.upsertLocalAsset(asset2)
+        val conf2 = fakeRegistry.upsertLocalConfiguration(asset2.configurations.first().copy(localModelId = id2))
+        fakeRegistry.setDefaultLocalConfig(ModelType.VISION, conf2)
 
         // When
         val allAssets = fakeRegistry.getRegisteredAssets()
@@ -152,54 +145,16 @@ class ModelRegistryTest {
     // ============================================================
 
     /**
-     * Risk #3: Creating new LocalModelEntity on re-download instead of reusing
-     * Defense: reuseModelForRedownload() reuses the same LocalModelEntity ID
-     *
-     * TDD Red: This test FAILS against current implementation because
-     * reuseModelForRedownload is NotImplementedError in FakeModelRegistry
-     * until the feature is implemented.
-     */
-    @Test
-    fun `reuseModelForRedownload reuses same LocalModelEntity ID`() = runTest {
-        // Given: a soft-deleted model exists (model with no configs, stored in softDeletedModels)
-        val modelId = 42L
-        val softDeletedAsset = createMainModelAsset().copy(configurations = emptyList())
-        // Manually add to soft-deleted (simulates soft-delete state)
-        fakeRegistry.registerSoftDeletedModel(modelId, softDeletedAsset)
-
-        // Given: new remote asset with matching sha256
-        val newAsset = createMainModelAsset().copy(
-            configurations = listOf(
-                LocalModelConfiguration(
-                    localModelId = modelId,
-                    displayName = "Main Model",
-                    maxTokens = 2048,
-                    contextWindow = 2048,
-                    temperature = 0.0,
-                    topP = 0.95,
-                    topK = 40,
-                    repetitionPenalty = 1.1,
-                    systemPrompt = "",
-                    isSystemPreset = true
-                )
-            )
-        )
-
-        // When
-        val reusedId = fakeRegistry.reuseModelForRedownload(modelId, newAsset)
-
-        // Then: same model ID is returned
-        assertEquals(modelId, reusedId)
-    }
-
-    /**
      * Risk #4: InitializeModelsUseCase re-downloads soft-deleted models
      * Defense: getSoftDeletedModels() returns only models with no configs
      */
     @Test
     fun `getSoftDeletedModels returns only soft-deleted models with zero configs`() = runTest {
         // Given: an active model with configs
-        fakeRegistry.setRegisteredModel(ModelType.FAST, createMainModelAsset())
+        val asset = createMainModelAsset()
+        val id = fakeRegistry.upsertLocalAsset(asset)
+        val confId = fakeRegistry.upsertLocalConfiguration(asset.configurations.first().copy(localModelId = id))
+        fakeRegistry.setDefaultLocalConfig(ModelType.FAST, confId)
 
         // Given: a soft-deleted model (no configs)
         val softDeletedId = 99L
@@ -219,8 +174,15 @@ class ModelRegistryTest {
     @Test
     fun `getSoftDeletedModels returns empty when no soft-deleted models exist`() = runTest {
         // Given: only active models
-        fakeRegistry.setRegisteredModel(ModelType.FAST, createMainModelAsset())
-        fakeRegistry.setRegisteredModel(ModelType.VISION, createVisionModelAsset())
+        val asset1 = createMainModelAsset()
+        val id1 = fakeRegistry.upsertLocalAsset(asset1)
+        val conf1 = fakeRegistry.upsertLocalConfiguration(asset1.configurations.first().copy(localModelId = id1))
+        fakeRegistry.setDefaultLocalConfig(ModelType.FAST, conf1)
+
+        val asset2 = createVisionModelAsset()
+        val id2 = fakeRegistry.upsertLocalAsset(asset2)
+        val conf2 = fakeRegistry.upsertLocalConfiguration(asset2.configurations.first().copy(localModelId = id2))
+        fakeRegistry.setDefaultLocalConfig(ModelType.VISION, conf2)
 
         // When
         val softDeleted = fakeRegistry.getSoftDeletedModels()

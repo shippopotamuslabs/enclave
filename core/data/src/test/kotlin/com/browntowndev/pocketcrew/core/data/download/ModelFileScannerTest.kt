@@ -21,6 +21,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -261,5 +262,46 @@ class ModelFileScannerTest {
 
         // When/Then: should not throw
         scanner.deleteModelFile(modelId)
+    }
+
+    @Test
+    fun `scanAndCreateDirIfNotExist preserves all shared file slots in missing models`() = runTest {
+        val sharedFilename = "gemma-4-E4B-it.litertlm"
+        val visionAsset = createModelAsset(modelId = 1L, sha256 = "shared-sha", localFileName = sharedFilename).copy(
+            configurations = listOf(
+                createModelAsset(modelId = 1L, sha256 = "shared-sha", localFileName = sharedFilename)
+                    .configurations.first()
+                    .copy(displayName = "Gemma 4 E4B (Vision)")
+            )
+        )
+        val fastAsset = createModelAsset(modelId = 2L, sha256 = "shared-sha", localFileName = sharedFilename).copy(
+            configurations = listOf(
+                createModelAsset(modelId = 2L, sha256 = "shared-sha", localFileName = sharedFilename)
+                    .configurations.first()
+                    .copy(displayName = "Gemma 4 E4B (Fast)")
+            )
+        )
+        val thinkingAsset = createModelAsset(modelId = 3L, sha256 = "shared-sha", localFileName = sharedFilename).copy(
+            configurations = listOf(
+                createModelAsset(modelId = 3L, sha256 = "shared-sha", localFileName = sharedFilename)
+                    .configurations.first()
+                    .copy(displayName = "Gemma 4 E4B (Thinking)", thinkingEnabled = true)
+            )
+        )
+
+        val result = scanner.scanAndCreateDirIfNotExist(
+            downloadedModels = emptyMap(),
+            expectedModels = mapOf(
+                ModelType.VISION to visionAsset,
+                ModelType.FAST to fastAsset,
+                ModelType.THINKING to thinkingAsset
+            )
+        )
+
+        assertEquals(3, result.missingModels.size)
+        assertEquals(
+            setOf("Gemma 4 E4B (Vision)", "Gemma 4 E4B (Fast)", "Gemma 4 E4B (Thinking)"),
+            result.missingModels.map { it.configurations.first().displayName }.toSet()
+        )
     }
 }
