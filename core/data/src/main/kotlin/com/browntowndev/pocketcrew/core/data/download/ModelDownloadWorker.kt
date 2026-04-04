@@ -30,6 +30,7 @@ import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
+import org.json.JSONObject
 
 /**
  * WorkManager worker for downloading model files.
@@ -290,30 +291,23 @@ class ModelDownloadWorker @AssistedInject constructor(
     }
 
     private fun parseModelData(data: String): Pair<ModelType, LocalModelAsset>? {
-        // Expected format:
-        // modelType|remoteFileName|localFileName|presetName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt|isSystemPreset
-        val parts = data.split("|")
-        if (parts.size < 14) {
-            logger.warning(TAG, "Invalid model data format: expected at least 14 parts, got ${parts.size}")
-            return null
-        }
-
         return try {
+            val json = JSONObject(data)
             val modelType = try {
-                ModelType.valueOf(parts[0])
+                ModelType.valueOf(json.getString("modelType"))
             } catch (e: Exception) {
-                logger.error(TAG, "Invalid model type: ${parts[0]}")
+                logger.error(TAG, "Invalid model type: ${json.optString("modelType")}")
                 return null
             }
 
             val metadata = LocalModelMetadata(
-                huggingFaceModelName = parts[4],
-                remoteFileName = parts[1],
-                localFileName = parts[2],
-                sha256 = parts[6],
-                sizeInBytes = parts[5].toLongOrNull() ?: 0L,
+                huggingFaceModelName = json.optString("huggingFaceModelName", ""),
+                remoteFileName = json.getString("remoteFileName"),
+                localFileName = json.getString("localFileName"),
+                sha256 = json.getString("sha256"),
+                sizeInBytes = json.optLong("sizeInBytes", 0L),
                 modelFileFormat = try {
-                    ModelFileFormat.valueOf(parts[7])
+                    ModelFileFormat.valueOf(json.getString("modelFileFormat"))
                 } catch (e: Exception) {
                     ModelFileFormat.LITERTLM
                 }
@@ -321,16 +315,17 @@ class ModelDownloadWorker @AssistedInject constructor(
 
             val configuration = LocalModelConfiguration(
                 localModelId = 0, // Assigned later by repository
-                displayName = parts[3],
-                temperature = parts[8].toDoubleOrNull() ?: 0.7,
-                topK = parts[9].toIntOrNull() ?: 40,
-                topP = parts[10].toDoubleOrNull() ?: 0.95,
-                minP = parts[11].toDoubleOrNull() ?: 0.0,
-                repetitionPenalty = parts[12].toDoubleOrNull() ?: 1.1,
-                maxTokens = parts[13].toIntOrNull() ?: 4096,
-                contextWindow = parts[14].toIntOrNull() ?: 4096,
-                systemPrompt = parts.getOrNull(15) ?: "",
-                isSystemPreset = parts.getOrNull(16)?.toBoolean() ?: true
+                displayName = json.getString("presetName"),
+                temperature = json.optDouble("temperature", 0.7),
+                topK = json.optInt("topK", 40),
+                topP = json.optDouble("topP", 0.95),
+                minP = json.optDouble("minP", 0.0),
+                repetitionPenalty = json.optDouble("repetitionPenalty", 1.1),
+                maxTokens = json.optInt("maxTokens", 4096),
+                contextWindow = json.optInt("contextWindow", 4096),
+                systemPrompt = json.optString("systemPrompt", ""),
+                isSystemPreset = json.optBoolean("isSystemPreset", true),
+                thinkingEnabled = json.optBoolean("thinkingEnabled", false)
             )
 
             // DIAGNOSTIC: Log parsed data

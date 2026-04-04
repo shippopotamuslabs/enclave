@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ApiModelConfigurationEntity::class,
         DefaultModelEntity::class
     ],
-    version = 3,
+    version = 1,
     exportSchema = true
 )
 @TypeConverters(DateConverters::class, RoleConverters::class, ModelTypeConverters::class, MessageStateConverters::class, PipelineStepConverters::class, ApiProviderConverters::class)

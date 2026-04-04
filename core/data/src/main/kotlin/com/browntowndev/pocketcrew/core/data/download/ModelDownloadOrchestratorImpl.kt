@@ -1,7 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.download
 import android.content.Context
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
@@ -129,7 +128,17 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         val initResult = initializeFileProgress(scan, modelsResult.allModels, _downloadState.value.currentDownloads)
         stateManager.applyProgressInit(initResult)
 
-        val modelsToEnqueue = modelsResult.allModels.filter { it.value in modelsToDownload }
+        val modelsToEnqueue = modelsResult.allModels.filter { (_, asset) ->
+            modelsToDownload.any { candidate -> candidate.matchesPhysicalAsset(asset) }
+        }
+        logger.info(
+            TAG,
+            "Enqueuing ${modelsToEnqueue.size} model slots for ${modelsToDownload.map { it.metadata.sha256 }.distinct().size} physical downloads: ${
+                modelsToEnqueue.entries.joinToString { (modelType, asset) ->
+                    "$modelType -> ${asset.configurations.firstOrNull()?.displayName ?: asset.metadata.localFileName}"
+                }
+            }"
+        )
         workScheduler.enqueue(modelsToEnqueue, sessionId, wifiOnly)
         stateManager.updateStatus(DownloadStatus.DOWNLOADING)
         return true
@@ -162,33 +171,32 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
     private suspend fun updateModelRegistry() {
         // Deferred Activation: Commit the models that were just downloaded
         // (and any other remote configs that were deferred).
-        startupModelsResult?.modelsToDownload?.forEach { asset ->
-            val modelType = startupModelsResult?.allModels?.entries
-                ?.find { it.value.metadata.sha256 == asset.metadata.sha256 }?.key ?: return@forEach
+        val downloadedShas = startupModelsResult?.modelsToDownload?.map { it.metadata.sha256 }?.toSet() ?: emptySet()
+        logger.info(TAG, "Finalizing registry for downloaded SHAs: $downloadedShas")
 
-            try {
-                modelRegistry.setRegisteredModel(
-                    modelType = modelType,
-                    asset = asset,
-                    status = ModelStatus.CURRENT,
-                    markExistingAsOld = true
-                )
-                logger.debug(TAG, "Successfully activated model $modelType post-download")
-            } catch (e: Exception) {
-                logger.error(TAG, "Failed to activate model $modelType: ${e.message}")
+        startupModelsResult?.allModels?.entries?.forEach { (modelType, asset) ->
+            if (downloadedShas.contains(asset.metadata.sha256)) {
+                try {
+                    val primaryConfig = asset.configurations.firstOrNull()
+                    logger.info(
+                        TAG,
+                        "Activating $modelType for shared asset ${asset.metadata.localFileName} " +
+                            "(sha=${asset.metadata.sha256}, preset=${primaryConfig?.displayName}, " +
+                            "thinking=${primaryConfig?.thinkingEnabled}, vision=${asset.metadata.visionCapable})"
+                    )
+                    modelRegistry.activateLocalModel(modelType, asset)
+                    logger.debug(TAG, "Successfully activated model $modelType post-download")
+                } catch (e: Exception) {
+                    logger.error(
+                        TAG,
+                        "Failed to activate model $modelType for ${asset.metadata.localFileName} " +
+                            "(sha=${asset.metadata.sha256}, preset=${asset.configurations.firstOrNull()?.displayName}): ${e.message}"
+                    )
+                }
             }
         }
 
-        // Clear old entries after successful download. This removes fallback versions
-        // that were kept during the download process.
-        try {
-            modelRegistry.clearOld()
-            logger.debug(TAG, "Cleared OLD registry entries after successful download")
-        } catch (e: Exception) {
-            logger.error(TAG, "Failed to clear OLD registry entries: ${e.message}")
-        }
-
-        // Clean up old files on filesystem - use ALL registered models, not just downloaded ones
+        // Clean up old files on filesystem - use ALL registered assets, not just downloaded ones
         // This is critical: if we only pass modelsToDownload, valid files will be incorrectly deleted
         try {
             val allRegisteredAssets = modelRegistry.getRegisteredAssets()
@@ -308,5 +316,11 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
 
     override fun setError(message: String) {
         stateManager.updateState { copy(status = DownloadStatus.ERROR, errorMessage = message) }
+    }
+
+    private fun LocalModelAsset.matchesPhysicalAsset(other: LocalModelAsset): Boolean {
+        return metadata.sha256 == other.metadata.sha256 &&
+            metadata.localFileName == other.metadata.localFileName &&
+            metadata.modelFileFormat == other.metadata.modelFileFormat
     }
 }

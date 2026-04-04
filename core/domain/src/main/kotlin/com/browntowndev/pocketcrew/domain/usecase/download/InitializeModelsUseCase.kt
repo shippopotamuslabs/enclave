@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -99,18 +98,18 @@ class InitializeModelsUseCase @Inject constructor(
         
         remoteConfigs.forEach { (modelType, remoteAsset) ->
             val existingAsset = currentModels[modelType]
-            val shaUnchanged = existingAsset != null &&
-                existingAsset.metadata.sha256 == remoteAsset.metadata.sha256
+            val sharedExistingAsset = currentModels.values.firstOrNull { asset ->
+                asset.metadata.sha256 == remoteAsset.metadata.sha256 &&
+                    asset.metadata.localFileName == remoteAsset.metadata.localFileName &&
+                    asset.metadata.modelFileFormat == remoteAsset.metadata.modelFileFormat
+            }
 
-            if (shaUnchanged) {
-                // SHA is same, tuning might have changed. Safe to update immediately.
-                modelRegistry.setRegisteredModel(
-                    modelType = modelType,
-                    asset = remoteAsset,
-                    status = ModelStatus.CURRENT,
-                    markExistingAsOld = false // SHA same, file still in use
-                )
-                logPort.debug(TAG, "Applied tuning-only update for $modelType immediately")
+            if (sharedExistingAsset != null) {
+                // The physical asset is already present locally, either for this slot or another slot
+                // sharing the same file. Apply the slot config immediately instead of waiting for
+                // a download that will never be scheduled.
+                modelRegistry.activateLocalModel(modelType, remoteAsset)
+                logPort.debug(TAG, "Applied slot activation for $modelType immediately")
             } else {
                 logPort.debug(TAG, "Deferring registration for $modelType until download success")
             }
