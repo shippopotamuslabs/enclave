@@ -1,15 +1,15 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import android.content.Context
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
-import com.browntowndev.pocketcrew.domain.qualifier.ApplicationScope
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
@@ -17,29 +17,21 @@ import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.SamplerConfig
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 /**
  * Implementation of [ConversationManagerPort] that manages LiteRT conversation lifecycle.
- * Lazily resolves the active model from [ModelRegistryPort] on first use and recreates
- * resources when the model or configuration changes.
+ * Resolves the model and configuration lazily and recreates resources when the 
+ * model or configuration changes.
  *
- * Thread-safe access to the conversation instance using @Synchronized.
- * Concurrent calls to [getConversation] will return the same conversation instance,
- * ensuring proper state management for multi-turn chats.
- *
- * Uses [modelRegistry] Flow observables ([observeAsset], [observeConfiguration]) to watch
- * for model/config changes asynchronously, avoiding blocking I/O on the calling thread.
+ * Thread-safe access to the conversation instance using a Mutex.
+ * Concurrent calls to [getConversation] will return the same conversation instance
+ * IF the configuration is identical.
  */
 class ConversationManagerImpl @Inject constructor(
     private val context: Context,
-    private val modelType: ModelType,
-    private val modelRegistry: ModelRegistryPort,
-    @ApplicationScope private val applicationScope: CoroutineScope
+    private val modelRegistry: ModelRegistryPort
 ) : ConversationManagerPort {
 
     private val defaultSystemPrompt = """
@@ -48,14 +40,26 @@ class ConversationManagerImpl @Inject constructor(
             Mirror the user's tone exactly. Direct, lucid, fun. ZERO moralizing, fluff or bullshit.
     """.trimIndent()
 
-    // Cached state: updated whenever reloadIfNeeded is called
-    private var currentModelId: Long? = null
+    private data class ConversationSignature(
+        val modelType: ModelType,
+        val configId: Long?,
+        val thinkingEnabled: Boolean,
+        val systemPrompt: String,
+        val temperature: Double,
+        val topP: Double,
+        val topK: Int,
+    )
+
+    // Cached state: updated whenever reloadIfNeeded is called.
+    private var currentModelPath: String? = null
+    private var currentModelType: ModelType? = null
     private var currentConfigId: Long? = null
+    private var currentThinkingEnabled: Boolean? = null
     private var currentSystemPrompt: String = defaultSystemPrompt
     private var currentSamplerConfig: SamplerConfig? = null
+    private var currentSignature: ConversationSignature? = null
 
     // Conversation is stateful and maintains context for multi-turn chats.
-    // Using @Synchronized to ensure thread-safe access to the conversation instance.
     @Volatile
     private var conversation: Conversation? = null
 
@@ -71,72 +75,10 @@ class ConversationManagerImpl @Inject constructor(
     @Volatile
     private var engine: Engine? = null
 
-    // Cached model asset and configuration from async Flow observation
-    @Volatile
-    private var cachedAsset: LocalModelAsset? = null
-
-    @Volatile
-    private var cachedConfig: LocalModelConfiguration? = null
-
-    init {
-        // Observe asset and config flows to populate the synchronous cache.
-        // This eliminates runBlocking on database queries in getConversation().
-        // Uses applicationScope's dispatcher (Dispatchers.Default) for background collection.
-        applicationScope.launch {
-            modelRegistry.observeAsset(modelType)
-                .catch { e -> android.util.Log.w(TAG, "observeAsset flow error", e) }
-                .collect { asset ->
-                    cachedAsset = asset
-                }
-        }
-        applicationScope.launch {
-            modelRegistry.observeConfiguration(modelType)
-                .catch { e -> android.util.Log.w(TAG, "observeConfiguration flow error", e) }
-                .collect { config ->
-                    cachedConfig = config
-                }
-        }
-    }
-
     private fun getModelPath(filename: String): String {
         // Use getExternalFilesDir to match ModelFileScanner's directory choice
         val modelsDir = java.io.File(context.getExternalFilesDir(null), "models")
         return java.io.File(modelsDir, filename).absolutePath
-    }
-
-    @Synchronized
-    private fun reloadIfNeeded(config: LocalModelConfiguration?, modelId: Long) {
-        val configId = config?.id
-        val modelChanged = currentModelId != modelId
-        val configChanged = currentConfigId != configId
-
-        if (!modelChanged && !configChanged) return
-
-        // Close existing conversation (engine can be reused if model file is same)
-        conversation?.close()
-        conversation = null
-        conversationPort = null
-
-        if (modelChanged) {
-            // Model file changed - need to recreate engine
-            engine?.close()
-            engine = null
-            currentModelId = modelId
-        }
-
-        // Update cached config
-        currentConfigId = configId
-        if (config != null) {
-            currentSystemPrompt = config.systemPrompt ?: defaultSystemPrompt
-            currentSamplerConfig = SamplerConfig(
-                temperature = config.temperature,
-                topP = config.topP,
-                topK = config.topK ?: 40
-            )
-        } else {
-            currentSystemPrompt = defaultSystemPrompt
-            currentSamplerConfig = null
-        }
     }
 
     private val mutex = kotlinx.coroutines.sync.Mutex()
@@ -145,92 +87,119 @@ class ConversationManagerImpl @Inject constructor(
      * Returns the active conversation, initializing it if needed.
      * Thread-safe: concurrent calls will return the same conversation instance.
      *
+     * @param modelType The type of model to get the configuration for.
+     * @param options Per-request generation options (e.g., sampler overrides).
      * @return The active ConversationPort instance wrapping the LiteRT Conversation
      * @throws IllegalStateException if no model is registered for this model type
      */
-    override suspend fun getConversation(): ConversationPort {
-        // Fast path
-        synchronized(this) {
-            conversationPort?.let { cachedWrapper ->
-                if (conversation?.isAlive == true) {
-                    return cachedWrapper
-                }
-                conversationPort = null
-            }
-        }
-
-        // Read from async cache (populated by Flow observation in init)
-        var asset = cachedAsset
-        var config = cachedConfig
-
-        if (asset == null) {
-            // Cold start fallback: Perform suspend read from registry if async flow hasn't emitted yet.
-            asset = modelRegistry.getRegisteredAsset(modelType)
-            config = modelRegistry.getRegisteredConfiguration(modelType)
-            cachedAsset = asset
-            cachedConfig = config
-        }
-
-        if (asset == null) {
-            throw IllegalStateException(
-                "No registered asset for $modelType. Download a model first."
-            )
-        }
-
-        val modelId = asset.metadata.id
-
-        // Lock to avoid concurrent initializations
+    override suspend fun getConversation(modelType: ModelType, options: GenerationOptions?): ConversationPort {
+        // Lock to avoid concurrent initializations and ensure consistent state
         return mutex.withLock {
-            // Double-check
-            synchronized(this) {
-                conversationPort?.let { cachedWrapper ->
-                    if (conversation?.isAlive == true) {
-                        return@withLock cachedWrapper
-                    }
-                    conversationPort = null
-                }
+            val asset = modelRegistry.getRegisteredAsset(modelType)
+            val config = modelRegistry.getRegisteredConfiguration(modelType)
+
+            if (asset == null) {
+                throw IllegalStateException(
+                    "No registered asset for $modelType. Download a model first."
+                )
             }
 
-            reloadIfNeeded(config, modelId)
-            ensureEngineInitialized(asset!!)
+            val modelPath = getModelPath(asset.metadata.localFileName)
+            val configId = config?.id
+            val resolvedThinkingEnabled = config?.thinkingEnabled ?: false
+            val resolvedSystemPrompt = config?.systemPrompt ?: defaultSystemPrompt
+            val targetSamplerConfig = SamplerConfig(
+                temperature = options?.temperature?.toDouble() ?: config?.temperature ?: 0.7,
+                topP = options?.topP?.toDouble() ?: config?.topP ?: 0.95,
+                topK = options?.topK ?: config?.topK ?: 40
+            )
+
+            val desiredSignature = ConversationSignature(
+                modelType = modelType,
+                configId = configId,
+                thinkingEnabled = resolvedThinkingEnabled,
+                systemPrompt = resolvedSystemPrompt,
+                temperature = targetSamplerConfig.temperature,
+                topP = targetSamplerConfig.topP,
+                topK = targetSamplerConfig.topK,
+            )
+
+            val engineChanged = currentModelPath != modelPath || engine == null
+            val conversationChanged =
+                currentSignature != desiredSignature || conversation == null || conversation?.isAlive != true
+            val conversationRecreated = engineChanged || conversationChanged
+
+            if (engineChanged) {
+                Log.d(
+                    TAG,
+                    "Recreating LiteRT engine for modelType=$modelType, modelPath=$modelPath"
+                )
+                closeEngineLocked()
+                currentModelPath = modelPath
+            } else if (conversationChanged) {
+                Log.d(
+                    TAG,
+                    "Recreating LiteRT conversation for modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled"
+                )
+                closeConversationLocked()
+            } else {
+                Log.d(
+                    TAG,
+                    "Reusing LiteRT conversation for modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled"
+                )
+            }
+
+            ensureEngineInitializedLocked(modelPath)
             val eng = engine ?: throw IllegalStateException("Engine not initialized")
 
-            synchronized(this) {
-                if (conversation == null || conversation?.isAlive != true) {
-                    conversation?.close()
+            if (conversation == null || conversation?.isAlive != true) {
+                conversation?.close()
 
-                    if (!eng.isInitialized()) {
-                        eng.initialize()
-                    }
-
-                    val conversationConfig = ConversationConfig(
-                        systemInstruction = Contents.of(currentSystemPrompt),
-                        initialMessages = history.map { domainMsg ->
-                            when (domainMsg.role) {
-                                Role.USER -> Message.user(domainMsg.content)
-                                Role.ASSISTANT -> Message.model(domainMsg.content)
-                                Role.SYSTEM -> Message.system(domainMsg.content)
-                            }
-                        },
-                        samplerConfig = currentSamplerConfig ?: SamplerConfig(temperature = 0.7, topP = 0.95, topK = 40),
-                        automaticToolCalling = false,
-                    )
-
-                    conversation = eng.createConversation(conversationConfig)
+                if (!eng.isInitialized()) {
+                    eng.initialize()
                 }
 
-                val liteRtConversation = conversation ?: throw IllegalStateException("Conversation not initialized")
-                val wrapper = ConversationImpl(liteRtConversation)
-                conversationPort = wrapper
-                return@withLock wrapper
+                val conversationConfig = ConversationConfig(
+                    systemInstruction = Contents.of(resolvedSystemPrompt),
+                    initialMessages = history.map { domainMsg ->
+                        when (domainMsg.role) {
+                            Role.USER -> Message.user(domainMsg.content)
+                            Role.ASSISTANT -> Message.model(domainMsg.content)
+                            Role.SYSTEM -> Message.system(domainMsg.content)
+                        }
+                    },
+                    samplerConfig = targetSamplerConfig,
+                    automaticToolCalling = false,
+                )
+
+                conversation = eng.createConversation(conversationConfig)
             }
+
+            val liteRtConversation = conversation ?: throw IllegalStateException("Conversation not initialized")
+            
+            // Re-wrap if conversation was recreated
+            if (conversationPort == null) {
+                conversationPort = ConversationImpl(liteRtConversation)
+            }
+
+            currentSignature = desiredSignature
+            currentModelType = modelType
+            currentConfigId = configId
+            currentThinkingEnabled = resolvedThinkingEnabled
+            currentSystemPrompt = resolvedSystemPrompt
+            currentSamplerConfig = targetSamplerConfig
+
+            Log.d(
+                TAG,
+                "getConversation decision: modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled, systemPrompt=${resolvedSystemPrompt.take(120)}, samplerConfig=$targetSamplerConfig, engineRecreated=$engineChanged, conversationRecreated=$conversationRecreated"
+            )
+            
+            return@withLock conversationPort!!
         }
     }
 
-    @Synchronized
-    private fun ensureEngineInitialized(asset: LocalModelAsset) {
+    private fun ensureEngineInitializedLocked(modelPath: String) {
         if (engine == null) {
-            val modelPath = getModelPath(asset.metadata.localFileName)
             engine = Engine(EngineConfig(modelPath))
         }
     }
@@ -239,18 +208,39 @@ class ConversationManagerImpl @Inject constructor(
      * Closes the current conversation and releases resources.
      * After calling this, a new conversation will be created on next getConversation call.
      */
-    @Synchronized
-    override fun closeConversation() {
+    override suspend fun closeConversation() {
+        mutex.withLock {
+            closeConversationLocked()
+        }
+    }
+
+    private fun closeConversationLocked() {
         conversation?.close()
         conversation = null
         conversationPort = null
     }
 
-    @Synchronized
-    override fun setHistory(messages: List<DomainChatMessage>) {
-        if (this.history != messages) {
+    override suspend fun setHistory(messages: List<DomainChatMessage>) {
+        mutex.withLock {
+            // A history is a continuation if the new list starts with the exact same messages
+            // as the current list. If it doesn't (e.g. chat switch or message deletion),
+            // we must recreate the conversation to ensure context integrity.
+            // We only need to close if a conversation is already active; otherwise,
+            // getConversation will naturally create it with the correct history.
+            val isContinuation = this.history == messages || (
+                this.history.isNotEmpty() &&
+                messages.size >= this.history.size &&
+                messages.take(this.history.size) == this.history
+            )
+
+            if (!isContinuation && conversation != null) {
+                Log.d(TAG, "History discontinuity detected. Recreating conversation. (oldSize=${this.history.size}, newSize=${messages.size})")
+                closeConversationLocked()
+            } else if (isContinuation) {
+                Log.d(TAG, "History is a continuation. Reusing conversation. (oldSize=${this.history.size}, newSize=${messages.size})")
+            }
+
             this.history = messages.toList()
-            closeConversation()
         }
     }
 
@@ -258,15 +248,23 @@ class ConversationManagerImpl @Inject constructor(
      * Closes the underlying engine and releases all resources.
      * After calling this, the ConversationManager should not be used.
      */
-    @Synchronized
-    override fun closeEngine() {
-        conversation?.close()
-        conversation = null
-        conversationPort = null
+    override suspend fun closeEngine() {
+        mutex.withLock {
+            closeEngineLocked()
+        }
+    }
+
+    private fun closeEngineLocked() {
+        closeConversationLocked()
         engine?.close()
         engine = null
-        currentModelId = null
+        currentModelPath = null
+        currentModelType = null
         currentConfigId = null
+        currentThinkingEnabled = null
+        currentSystemPrompt = defaultSystemPrompt
+        currentSamplerConfig = null
+        currentSignature = null
     }
 
     companion object {

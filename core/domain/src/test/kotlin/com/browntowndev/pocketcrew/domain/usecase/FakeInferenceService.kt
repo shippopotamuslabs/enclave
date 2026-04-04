@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
@@ -11,23 +12,24 @@ import kotlinx.coroutines.flow.flow
  * Fake implementation of LlmInferencePort for testing.
  * Allows controlling inference events and verifying interactions.
  */
-class FakeInferenceService : LlmInferencePort {
+class FakeInferenceService(private val modelType: ModelType = ModelType.FAST) : LlmInferencePort {
 
     private var shouldThrowOnSendPrompt = false
     private var shouldThrowOnSetHistory = false
     private val sentPrompts = mutableListOf<String>()
     private var historyMessages: List<ChatMessage> = emptyList()
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = flow {
+    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
+        return sendPrompt(prompt, GenerationOptions(reasoningBudget = 0, modelType = modelType), closeConversation)
+    }
+
+    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = flow {
         sentPrompts.add(prompt)
-        
+
         if (shouldThrowOnSendPrompt) {
             shouldThrowOnSendPrompt = false
-            throw RuntimeException("Simulated sendPrompt error")
+            throw RuntimeException("Simulated sendPrompt with options error")
         }
-        
-        // Default behavior - emit nothing unless configured
-        // Subclasses or tests should override this behavior
     }
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
@@ -39,8 +41,8 @@ class FakeInferenceService : LlmInferencePort {
         }
     }
 
-    override fun closeSession() {
-        // No-op for testing
+    override suspend fun closeSession() {
+        // No-op for fake
     }
 
     fun getSentPrompts(): List<String> = sentPrompts.toList()

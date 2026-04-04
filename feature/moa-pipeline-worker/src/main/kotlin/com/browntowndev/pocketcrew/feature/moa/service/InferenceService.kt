@@ -16,6 +16,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.DraftOneModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.DraftTwoModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.FinalSynthesizerModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.MainModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
@@ -85,12 +86,6 @@ class InferenceService : Service() {
     @Inject
     lateinit var inferenceFactoryProvider: dagger.Lazy<InferenceFactoryPort>
 
-    // Lambdas for service access (matching worker pattern)
-    private lateinit var draftOneService: suspend () -> LlmInferencePort
-    private lateinit var draftTwoService: suspend () -> LlmInferencePort
-    private lateinit var synthesisService: suspend () -> LlmInferencePort
-    private lateinit var finalService: suspend () -> LlmInferencePort
-
     @Inject
     lateinit var modelRegistry: ModelRegistryPort
 
@@ -106,12 +101,6 @@ class InferenceService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-
-        // Initialize service lambdas (matching worker pattern)
-        draftOneService = { inferenceFactoryProvider.get().getInferenceService(ModelType.DRAFT_ONE) }
-        draftTwoService = { inferenceFactoryProvider.get().getInferenceService(ModelType.DRAFT_TWO) }
-        synthesisService = { inferenceFactoryProvider.get().getInferenceService(ModelType.MAIN) }
-        finalService = { inferenceFactoryProvider.get().getInferenceService(ModelType.FINAL_SYNTHESIS) }
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -271,14 +260,6 @@ class InferenceService : Service() {
         userMessage: String,
         initialState: PipelineState
     ) {
-        // Map steps to services using class-level lambdas
-        val stepServices = mapOf(
-            PipelineStep.DRAFT_ONE to draftOneService,
-            PipelineStep.DRAFT_TWO to draftTwoService,
-            PipelineStep.SYNTHESIS to synthesisService,
-            PipelineStep.FINAL to finalService
-        )
-
         // Make state mutable so we can update it as we progress through steps
         var currentState = initialState
         var currentStep = currentState.currentStep
@@ -286,21 +267,14 @@ class InferenceService : Service() {
 
         while (true) {
             logger.info(TAG, "Executing step: ${currentStep.name}")
-
-            val serviceGetter = stepServices[currentStep]
-                ?: throw IllegalStateException("No service for step: $currentStep")
-
-            val service = serviceGetter()
-                ?: throw IllegalStateException("Service not available for step: $currentStep")
-
             val prompt = buildPromptForStep(currentState)
+            val modelType = getModelTypeForStep(currentStep)
 
             // Broadcast step started BEFORE model begins generation
             // This ensures ProcessingIndicator appears immediately in UI
-            val modelType = getModelTypeForStep(currentStep)
             broadcastStepStarted(modelType)
 
-            val result = executeStepForPipeline(service, prompt, currentStep)
+            val result = executeStepForPipeline(prompt, currentStep)
 
             logger.info(TAG, "${currentStep.name} Response: ${result.output}")
 
@@ -341,14 +315,21 @@ class InferenceService : Service() {
      * Executes a single step for the pipeline (closes session after each step to free memory).
      */
     private suspend fun executeStepForPipeline(
-        service: LlmInferencePort,
         prompt: String,
         step: PipelineStep,
     ): StepResult {
         var output = ""
+        val modelType = getModelTypeForStep(step)
 
-        try {
-            service.sendPrompt(prompt, closeConversation = false).collect { event ->
+        inferenceFactoryProvider.get().withInferenceService(modelType) { service ->
+            // Fetch configuration to determine thinking/reasoning budget for this specific step
+            val config = modelRegistry.getRegisteredConfiguration(modelType)
+            val options = GenerationOptions(
+                reasoningBudget = if (config?.thinkingEnabled == true) 1024 else 0,
+                modelType = modelType
+            )
+
+            service.sendPrompt(prompt, options = options, closeConversation = false).collect { event ->
                 when (event) {
                     is InferenceEvent.Thinking -> {
                         broadcastProgress(EXTRA_THINKING_CHUNK, event.chunk, getModelTypeForStep(step).name)
@@ -367,12 +348,6 @@ class InferenceService : Service() {
                         throw event.cause
                     }
                 }
-            }
-        } finally {
-            try {
-                service.closeSession()
-            } catch (e: Exception) {
-                logger.warning(TAG, "Error closing service: ${e.message}")
             }
         }
 

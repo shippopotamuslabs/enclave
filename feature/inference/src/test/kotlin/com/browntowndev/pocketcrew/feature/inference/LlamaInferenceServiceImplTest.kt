@@ -98,12 +98,21 @@ class LlamaInferenceServiceImplTest {
         service = LlamaInferenceServiceImpl(
             sessionManager = sessionManager,
             processThinkingTokens = processThinkingTokens,
-            modelType = ModelType.MAIN,
             loggingPort = mockLoggingPort,
             modelRegistry = mockModelRegistry,
-            context = mockContext
+            context = mockContext,
+            modelType = ModelType.FAST
         )
     }
+
+    private fun createService() = LlamaInferenceServiceImpl(
+        sessionManager = sessionManager,
+        processThinkingTokens = processThinkingTokens,
+        loggingPort = mockLoggingPort,
+        modelRegistry = mockModelRegistry,
+        context = mockContext,
+        modelType = ModelType.FAST
+    )
 
     // =========================================================================
     // [THINK] Tag Tests (Streaming & Partial Token Handling)
@@ -117,7 +126,7 @@ class LlamaInferenceServiceImplTest {
         val token3 = GenerationEvent.Token("[/THINK]answer")
         val token4 = GenerationEvent.Completed("")
 
-        every { mockEngine.generate() } returns flowOf(token1, token2, token3, token4)
+        every { mockEngine.generateWithOptions(any()) } returns flowOf(token1, token2, token3, token4)
 
         // When
         val events = mutableListOf<InferenceEvent>()
@@ -159,7 +168,7 @@ class LlamaInferenceServiceImplTest {
         val token6 = GenerationEvent.Token("answer")
         val token7 = GenerationEvent.Completed("")
 
-        every { mockEngine.generate() } returns flowOf(token1, token2, token3, token4, token5, token6, token7)
+        every { mockEngine.generateWithOptions(any()) } returns flowOf(token1, token2, token3, token4, token5, token6, token7)
 
         // When
         val events = mutableListOf<InferenceEvent>()
@@ -179,12 +188,11 @@ class LlamaInferenceServiceImplTest {
 
     @Test
     fun `multiple THINK_bracket blocks are all classified as thinking`() = runTest {
-        // Given - multiple [THINK] blocks
-        val token1 = GenerationEvent.Token("[THINK]first[/THINK]")
-        val token2 = GenerationEvent.Token("[THINK]second[/THINK]")
-        val token3 = GenerationEvent.Completed("")
+        // Given - multiple thinking blocks
+        val token1 = GenerationEvent.Token("[THINK]part1[/THINK]intermediate[THINK]part2[/THINK]final")
+        val token2 = GenerationEvent.Completed("")
 
-        every { mockEngine.generate() } returns flowOf(token1, token2, token3)
+        every { mockEngine.generateWithOptions(any()) } returns flowOf(token1, token2)
 
         // When
         val events = mutableListOf<InferenceEvent>()
@@ -194,30 +202,31 @@ class LlamaInferenceServiceImplTest {
 
         // Then - both thinking blocks should be classified as thinking
         val thinkingEvents = events.filterIsInstance<InferenceEvent.Thinking>()
-        val allThinkingText = thinkingEvents.joinToString("") { it.chunk }
-
-        assert(allThinkingText.contains("first")) {
-            "Expected 'first' to be in thinking text"
-        }
-        assert(allThinkingText.contains("second")) {
-            "Expected 'second' to be in thinking text"
-        }
-
-        // No visible text should be emitted (empty response)
         val partialResponseEvents = events.filterIsInstance<InferenceEvent.PartialResponse>()
+        val allThinkingText = thinkingEvents.joinToString("") { it.chunk }
         val allVisibleText = partialResponseEvents.joinToString("") { it.chunk }
-        assert(allVisibleText.isEmpty()) {
-            "Expected no visible text for thinking-only response, got: $allVisibleText"
+
+        assert(allThinkingText.contains("part1")) {
+            "Expected 'part1' to be in thinking text, got: $allThinkingText"
+        }
+        assert(allThinkingText.contains("part2")) {
+            "Expected 'part2' to be in thinking text, got: $allThinkingText"
+        }
+        assert(allVisibleText.contains("intermediate")) {
+            "Expected 'intermediate' to be in visible text, got: $allVisibleText"
+        }
+        assert(allVisibleText.contains("final")) {
+            "Expected 'final' to be in visible text, got: $allVisibleText"
         }
     }
 
     @Test
     fun `service emits InferenceEvent_Finished after all tokens`() = runTest {
         // Given
-        val token1 = GenerationEvent.Token("[THINK]think[/THINK]answer")
+        val token1 = GenerationEvent.Token("hello")
         val token2 = GenerationEvent.Completed("")
 
-        every { mockEngine.generate() } returns flowOf(token1, token2)
+        every { mockEngine.generateWithOptions(any()) } returns flowOf(token1, token2)
 
         // When
         val events = mutableListOf<InferenceEvent>()
@@ -233,13 +242,13 @@ class LlamaInferenceServiceImplTest {
 
     @Test
     fun `angle bracket format still works correctly`() = runTest {
-        // Given - use <think> format
+        // Given - tokens arrive separately (streaming)
         val token1 = GenerationEvent.Token("<think>")
-        val token2 = GenerationEvent.Token("thought content")
+        val token2 = GenerationEvent.Token("thinking...")
         val token3 = GenerationEvent.Token("</think>answer")
         val token4 = GenerationEvent.Completed("")
 
-        every { mockEngine.generate() } returns flowOf(token1, token2, token3, token4)
+        every { mockEngine.generateWithOptions(any()) } returns flowOf(token1, token2, token3, token4)
 
         // When
         val events = mutableListOf<InferenceEvent>()
@@ -251,8 +260,8 @@ class LlamaInferenceServiceImplTest {
         val thinkingEvents = events.filterIsInstance<InferenceEvent.Thinking>()
         val partialResponseEvents = events.filterIsInstance<InferenceEvent.PartialResponse>()
 
-        assert(thinkingEvents.any { it.chunk == "thought content" }) {
-            "Expected 'thought content' to be Thinking"
+        assert(thinkingEvents.any { it.chunk == "thinking..." }) {
+            "Expected 'thinking...' to be Thinking"
         }
         assert(partialResponseEvents.any { it.chunk == "answer" }) {
             "Expected 'answer' to be PartialResponse"

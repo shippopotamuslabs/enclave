@@ -134,6 +134,7 @@ data class LocalModelConfigUi(
     val minP: Double = 0.0,
     val repetitionPenalty: Double = 1.1,
     val systemPrompt: String = "",
+    val thinkingEnabled: Boolean = false,
     val isSystemPreset: Boolean = false
 )
 

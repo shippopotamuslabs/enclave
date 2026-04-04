@@ -20,6 +20,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
+import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
@@ -106,7 +107,7 @@ class EdgeCaseTests {
         val mockAsset = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockAsset
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
             InferenceEvent.Finished(ModelType.FAST)
         )
@@ -147,7 +148,7 @@ class EdgeCaseTests {
             InferenceEvent.PartialResponse("chunk$i ", ModelType.FAST)
         } + InferenceEvent.Finished(ModelType.FAST)
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flow { partialResponses.forEach { emit(it) } }
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flow { partialResponses.forEach { emit(it) } }
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
 
         // When
@@ -180,7 +181,7 @@ class EdgeCaseTests {
         val mockAsset = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockAsset
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Finished(ModelType.FAST)
         )
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
@@ -205,8 +206,8 @@ class EdgeCaseTests {
 
     @Test
     fun `blocked inference returns blocked content`() = runTest {
-        // Given - lock already held
-        inferenceLockManager.acquireLock(InferenceType.ON_DEVICE)
+        // Given - factory reports local inference is already busy
+        inferenceFactory.exceptionToThrow = InferenceBusyException()
 
         // When
         val accumulatedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()
@@ -237,7 +238,7 @@ class EdgeCaseTests {
         val mockAsset = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockAsset
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.SafetyBlocked("Content policy violation", ModelType.FAST)
         )
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()

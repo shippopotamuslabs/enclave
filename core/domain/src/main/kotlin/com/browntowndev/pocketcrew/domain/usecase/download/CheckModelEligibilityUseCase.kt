@@ -61,16 +61,9 @@ class CheckModelEligibilityUseCase @Inject constructor(
         // Combine missing, partial, and invalid models
         val allMissingAssets = scanResult.missingModels + partialDownloadAssets + invalidAssets + configChangedAssets
 
-        // Combine models with the same SHA256 (multi-type models like DRAFT_ONE + FAST share the same file)
-        // by merging their modelTypes into a single entry
-        val combinedMissingAssets = allMissingAssets
-            .groupBy { it.metadata.sha256 }
-            .map { (_, assets) ->
-                val firstAsset = assets.first()
-                firstAsset
-            }
-
-        return combinedMissingAssets
+        // Preserve slot-specific assets even when they share the same file. The worker will
+        // deduplicate the physical download by SHA256, but activation must keep every role.
+        return allMissingAssets.distinct()
     }
 
     /**
@@ -81,7 +74,7 @@ class CheckModelEligibilityUseCase @Inject constructor(
         originalModels: Map<ModelType, LocalModelAsset>,
         newModels: Map<ModelType, LocalModelAsset>,
     ): List<LocalModelAsset> {
-        if (originalModels.isEmpty()) return newModels.values.toList()
+        if (originalModels.isEmpty()) return newModels.values.distinct()
 
         val assetsToDownload = mutableListOf<LocalModelAsset>()
         val originalAssetsBySha256 = originalModels.values.associateBy { it.metadata.sha256 }
@@ -90,7 +83,8 @@ class CheckModelEligibilityUseCase @Inject constructor(
         for (asset in newModels.values) {
             val registeredAsset = originalAssetsBySha256[asset.metadata.sha256]
             val assetFileUpdated = registeredAsset == null ||
-                registeredAsset.metadata.modelFileFormat != asset.metadata.modelFileFormat
+                registeredAsset.metadata.modelFileFormat != asset.metadata.modelFileFormat ||
+                registeredAsset.metadata.localFileName != asset.metadata.localFileName
 
             if (assetFileUpdated) {
                 logger.debug(TAG, "[ASSET UPDATED] Asset updated: ${asset.metadata.huggingFaceModelName}. Registered: $registeredAsset")

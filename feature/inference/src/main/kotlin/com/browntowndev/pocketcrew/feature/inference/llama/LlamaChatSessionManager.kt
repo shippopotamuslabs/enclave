@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.feature.inference.llama
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LlamaEnginePort
 import kotlinx.coroutines.flow.Flow
@@ -52,6 +53,13 @@ class LlamaChatSessionManager @Inject constructor(
      */
     fun streamAssistantResponse(): Flow<GenerationEvent> {
         return engine.generate()
+    }
+
+    /**
+     * Stream the assistant's response with per-request GenerationOptions.
+     */
+    fun streamAssistantResponseWithOptions(options: GenerationOptions): Flow<GenerationEvent> {
+        return engine.generateWithOptions(options)
     }
 
     /**

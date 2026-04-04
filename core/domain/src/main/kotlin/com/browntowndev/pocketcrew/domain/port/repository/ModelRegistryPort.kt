@@ -3,7 +3,7 @@ package com.browntowndev.pocketcrew.domain.port.repository
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.Flow
 
@@ -15,9 +15,17 @@ interface ModelRegistryPort {
     fun observeAsset(modelType: ModelType): Flow<LocalModelAsset?>
     fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?>
     fun observeAssets(): Flow<List<LocalModelAsset>>
-    suspend fun setRegisteredModel(modelType: ModelType, asset: LocalModelAsset, status: ModelStatus = ModelStatus.CURRENT, markExistingAsOld: Boolean = true)
     suspend fun clearAll()
-    suspend fun clearOld()
+
+    suspend fun upsertLocalAsset(asset: LocalModelAsset): Long
+
+    suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): Long
+
+    suspend fun setDefaultLocalConfig(modelType: ModelType, configId: Long)
+
+    suspend fun activateLocalModel(modelType: ModelType, asset: LocalModelAsset): SlotResolvedLocalModel
+
+    suspend fun getRegisteredSelection(modelType: ModelType): SlotResolvedLocalModel?
 
     suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long
     suspend fun deleteLocalModelMetadata(id: Long)
@@ -25,22 +33,16 @@ interface ModelRegistryPort {
     suspend fun deleteConfiguration(id: Long)
 
     /**
+     * Deletes a model: hard-deletes configs, preserves LocalModelEntity for re-download.
+     */
+    suspend fun deleteModel(modelId: Long, replacementLocalConfigId: Long?, replacementApiConfigId: Long?): Result<Unit>
+
+    /**
      * Returns models that were previously downloaded but have been soft-deleted.
      * A soft-deleted model has a LocalModelEntity row but has zero configurations.
      * These models are available for re-download.
      */
     suspend fun getSoftDeletedModels(): List<LocalModelAsset>
-
-    /**
-     * Reuses an existing soft-deleted LocalModelEntity row for re-download.
-     * Updates the metadata with the new asset information and creates a new
-     * configuration with isSystemPreset=true.
-     *
-     * @param modelId The existing LocalModelEntity ID to reuse
-     * @param newAsset The new asset data from the remote config
-     * @return The LocalModelEntity ID (same as input modelId)
-     */
-    suspend fun reuseModelForRedownload(modelId: Long, newAsset: LocalModelAsset): Long
 
     /**
      * Gets a LocalModelAsset by its database ID.

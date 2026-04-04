@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "85b1e7c0acd639ed1634ee4dcaa8a50f",
+    "identityHash": "3a4389f1fc9b7ecb2f231861cc2c2272",
     "entities": [
       {
         "tableName": "chat",
@@ -214,18 +214,12 @@
       },
       {
         "tableName": "local_models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `display_name` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `vision_capable` INTEGER NOT NULL, `model_status` TEXT NOT NULL, `thinking_enabled` INTEGER NOT NULL, `is_vision` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `model_file_format` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `vision_capable` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `is_vision` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
             "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "displayName",
-            "columnName": "display_name",
-            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -268,12 +262,6 @@
             "fieldPath": "visionCapable",
             "columnName": "vision_capable",
             "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "modelStatus",
-            "columnName": "model_status",
-            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -508,12 +496,21 @@
             ],
             "orders": [],
             "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_api_credentials_provider_model_id_base_url` ON `${TABLE_NAME}` (`provider`, `model_id`, `base_url`)"
+          },
+          {
+            "name": "index_api_credentials_credential_alias",
+            "unique": true,
+            "columnNames": [
+              "credential_alias"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_api_credentials_credential_alias` ON `${TABLE_NAME}` (`credential_alias`)"
           }
         ]
       },
       {
         "tableName": "api_model_configurations",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `api_credentials_id` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `api_credentials_id` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `min_p` REAL NOT NULL, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `system_prompt` TEXT NOT NULL, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -569,6 +566,12 @@
             "affinity": "INTEGER"
           },
           {
+            "fieldPath": "minP",
+            "columnName": "min_p",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
             "fieldPath": "frequencyPenalty",
             "columnName": "frequency_penalty",
             "affinity": "REAL",
@@ -578,6 +581,12 @@
             "fieldPath": "presencePenalty",
             "columnName": "presence_penalty",
             "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "systemPrompt",
+            "columnName": "system_prompt",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -700,7 +709,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '85b1e7c0acd639ed1634ee4dcaa8a50f')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3a4389f1fc9b7ecb2f231861cc2c2272')"
     ]
   }
 }

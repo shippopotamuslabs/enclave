@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.port.inference
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.Flow
 
@@ -17,6 +18,14 @@ interface LlmInferencePort {
     fun sendPrompt(prompt: String, closeConversation: Boolean = false): Flow<InferenceEvent>
 
     /**
+     * Sends a prompt with per-response generation options.
+     * @param prompt The prompt to send to the LLM.
+     * @param options Generation options for this specific request.
+     * @param closeConversation Whether to close the conversation after sending the prompt.
+     */
+    fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean = false): Flow<InferenceEvent>
+
+    /**
      * Replaces the entire conversation history with the given messages.
      * Used for rehydrating context from database on new session.
      *
@@ -28,7 +37,7 @@ interface LlmInferencePort {
      * Closes the underlying session and releases resources. Both the engine
      * and conversation are closed.
      */
-    fun closeSession()
+    suspend fun closeSession()
 }
 
 /**

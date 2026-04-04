@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.port.inference
 
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -10,9 +11,19 @@ import kotlinx.coroutines.flow.Flow
  */
 interface ConversationPort {
     /**
-     * Sends a message to the LLM and returns a flow of text chunks.
+     * Sends a message to the LLM and returns a flow of response segments.
      * @param message The message to send to the LLM.
-     * @return A flow emitting text chunks from the streaming response.
+     * @param options Per-request generation options (e.g., reasoning budget).
+     * @return A flow emitting response segments from the streaming response.
      */
-    fun sendMessageAsync(message: String): Flow<String>
+    fun sendMessageAsync(message: String, options: GenerationOptions? = null): Flow<ConversationResponse>
 }
+
+/**
+ * Represents a streaming response segment, which can contain user-facing text,
+ * hidden reasoning (thought), or both.
+ */
+data class ConversationResponse(
+    val text: String = "",
+    val thought: String = ""
+)

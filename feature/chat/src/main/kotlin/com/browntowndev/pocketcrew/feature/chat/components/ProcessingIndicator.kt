@@ -26,7 +26,7 @@ fun ProcessingIndicator(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp),
+            .padding(top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Dynamic orb animation (same as ThinkingIndicator)
@@ -35,6 +35,7 @@ fun ProcessingIndicator(
         )
 
         Spacer(modifier = Modifier.width(5.dp))
+// ... existing code ...
 
         // Gray shimmer "Processing..." text
         val grayColor = MaterialTheme.colorScheme.onSurfaceVariant
