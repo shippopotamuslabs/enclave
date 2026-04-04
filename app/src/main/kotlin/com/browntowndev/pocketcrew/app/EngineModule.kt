@@ -100,11 +100,5 @@ abstract class EngineModule {
             @ApplicationContext context: Context,
             modelRegistry: ModelRegistryPort
         ): ConversationManagerPort = ConversationManagerImpl(context, modelRegistry)
-
-        @Provides
-        @JvmSuppressWildcards
-        fun provideConversationManagerFactory(
-            manager: ConversationManagerPort
-        ): (ModelType) -> ConversationManagerPort = { _ -> manager }
     }
 }

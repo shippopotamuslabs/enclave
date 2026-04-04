@@ -45,8 +45,9 @@ class ConversationManagerImpl @Inject constructor(
         val configId: Long?,
         val thinkingEnabled: Boolean,
         val systemPrompt: String,
-        val samplerConfig: SamplerConfig,
-        val historyFingerprint: Int,
+        val temperature: Double,
+        val topP: Double,
+        val topK: Int,
     )
 
     // Cached state: updated whenever reloadIfNeeded is called.
@@ -118,8 +119,9 @@ class ConversationManagerImpl @Inject constructor(
                 configId = configId,
                 thinkingEnabled = resolvedThinkingEnabled,
                 systemPrompt = resolvedSystemPrompt,
-                samplerConfig = targetSamplerConfig,
-                historyFingerprint = history.hashCode(),
+                temperature = targetSamplerConfig.temperature,
+                topP = targetSamplerConfig.topP,
+                topK = targetSamplerConfig.topK,
             )
 
             val engineChanged = currentModelPath != modelPath || engine == null
@@ -132,20 +134,14 @@ class ConversationManagerImpl @Inject constructor(
                     TAG,
                     "Recreating LiteRT engine for modelType=$modelType, modelPath=$modelPath"
                 )
-                conversation?.close()
-                conversation = null
-                conversationPort = null
-                engine?.close()
-                engine = null
+                closeEngineLocked()
                 currentModelPath = modelPath
             } else if (conversationChanged) {
                 Log.d(
                     TAG,
                     "Recreating LiteRT conversation for modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled"
                 )
-                conversation?.close()
-                conversation = null
-                conversationPort = null
+                closeConversationLocked()
             } else {
                 Log.d(
                     TAG,
@@ -153,7 +149,7 @@ class ConversationManagerImpl @Inject constructor(
                 )
             }
 
-            ensureEngineInitialized(modelPath)
+            ensureEngineInitializedLocked(modelPath)
             val eng = engine ?: throw IllegalStateException("Engine not initialized")
 
             if (conversation == null || conversation?.isAlive != true) {
@@ -202,8 +198,7 @@ class ConversationManagerImpl @Inject constructor(
         }
     }
 
-    @Synchronized
-    private fun ensureEngineInitialized(modelPath: String) {
+    private fun ensureEngineInitializedLocked(modelPath: String) {
         if (engine == null) {
             engine = Engine(EngineConfig(modelPath))
         }
@@ -213,18 +208,39 @@ class ConversationManagerImpl @Inject constructor(
      * Closes the current conversation and releases resources.
      * After calling this, a new conversation will be created on next getConversation call.
      */
-    @Synchronized
-    override fun closeConversation() {
+    override suspend fun closeConversation() {
+        mutex.withLock {
+            closeConversationLocked()
+        }
+    }
+
+    private fun closeConversationLocked() {
         conversation?.close()
         conversation = null
         conversationPort = null
     }
 
-    @Synchronized
-    override fun setHistory(messages: List<DomainChatMessage>) {
-        if (this.history != messages) {
+    override suspend fun setHistory(messages: List<DomainChatMessage>) {
+        mutex.withLock {
+            // A history is a continuation if the new list starts with the exact same messages
+            // as the current list. If it doesn't (e.g. chat switch or message deletion),
+            // we must recreate the conversation to ensure context integrity.
+            // We only need to close if a conversation is already active; otherwise,
+            // getConversation will naturally create it with the correct history.
+            val isContinuation = this.history == messages || (
+                this.history.isNotEmpty() &&
+                messages.size >= this.history.size &&
+                messages.take(this.history.size) == this.history
+            )
+
+            if (!isContinuation && conversation != null) {
+                Log.d(TAG, "History discontinuity detected. Recreating conversation. (oldSize=${this.history.size}, newSize=${messages.size})")
+                closeConversationLocked()
+            } else if (isContinuation) {
+                Log.d(TAG, "History is a continuation. Reusing conversation. (oldSize=${this.history.size}, newSize=${messages.size})")
+            }
+
             this.history = messages.toList()
-            closeConversation()
         }
     }
 
@@ -232,11 +248,14 @@ class ConversationManagerImpl @Inject constructor(
      * Closes the underlying engine and releases all resources.
      * After calling this, the ConversationManager should not be used.
      */
-    @Synchronized
-    override fun closeEngine() {
-        conversation?.close()
-        conversation = null
-        conversationPort = null
+    override suspend fun closeEngine() {
+        mutex.withLock {
+            closeEngineLocked()
+        }
+    }
+
+    private fun closeEngineLocked() {
+        closeConversationLocked()
         engine?.close()
         engine = null
         currentModelPath = null

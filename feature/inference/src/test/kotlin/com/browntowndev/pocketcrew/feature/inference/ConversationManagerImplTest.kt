@@ -233,6 +233,25 @@ class ConversationManagerImplTest {
     }
 
     @Test
+    fun `setting continuation history preserves conversation`() = runTest {
+        // Given
+        val manager = ConversationManagerImpl(mockContext, mockModelRegistry)
+        val history1 = listOf(ChatMessage(Role.USER, "Part 1"))
+        manager.setHistory(history1)
+        val conv1 = manager.getConversation(ModelType.MAIN)
+
+        val history2 = listOf(ChatMessage(Role.USER, "Part 1"), ChatMessage(Role.ASSISTANT, "Response 1"))
+
+        // When
+        manager.setHistory(history2)
+        val conv2 = manager.getConversation(ModelType.MAIN)
+
+        // Then
+        assertTrue(conv1 === conv2, "Should reuse conversation instance when history is a continuation")
+        verify(exactly = 0) { mockConversation.close() }
+    }
+
+    @Test
     fun `setting different history invalidates current conversation`() = runTest {
         // Given
         val manager = ConversationManagerImpl(mockContext, mockModelRegistry)
