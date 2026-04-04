@@ -16,6 +16,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import kotlinx.coroutines.Dispatchers
@@ -89,12 +90,17 @@ class GenerateChatResponseUseCase @Inject constructor(
                                 prompt, userMessageId, assistantMessageId, chatId, service, ModelType.FAST
                             )
                         )
+                    } catch (e: IllegalStateException) {
+                        emit(MessageGenerationState.Failed(e, ModelType.FAST))
+                    } catch (e: java.io.IOException) {
+                        emit(MessageGenerationState.Failed(e, ModelType.FAST))
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
+                        loggingPort.error(TAG, "Unexpected error in FAST mode", e)
                         emit(
                             MessageGenerationState.Failed(
-                                modelType = ModelType.FAST,
-                                error = e
+                                error = e,
+                                modelType = ModelType.FAST
                             )
                         )
                     }
@@ -108,12 +114,17 @@ class GenerateChatResponseUseCase @Inject constructor(
                                 prompt, userMessageId, assistantMessageId, chatId, service, ModelType.THINKING
                             )
                         )
+                    } catch (e: IllegalStateException) {
+                        emit(MessageGenerationState.Failed(e, ModelType.THINKING))
+                    } catch (e: java.io.IOException) {
+                        emit(MessageGenerationState.Failed(e, ModelType.THINKING))
                     } catch (e: Exception) {
                         if (e is CancellationException) throw e
+                        loggingPort.error(TAG, "Unexpected error in THINKING mode", e)
                         emit(
                             MessageGenerationState.Failed(
-                                modelType = ModelType.THINKING,
-                                error = e
+                                error = e,
+                                modelType = ModelType.THINKING
                             )
                         )
                     }
@@ -448,30 +459,52 @@ class GenerateChatResponseUseCase @Inject constructor(
         service: LlmInferencePort,
         modelType: ModelType,
     ): Flow<MessageGenerationState> = flow {
-        try {
-            rehydrateHistory(chatId, userMessageId, assistantMessageId, service)
-        } catch (e: Exception) {
-            loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
-        }
+        // Register usage before generation
+        inferenceFactory.registerUsage(service)
 
-        service.sendPrompt(prompt, closeConversation = false).collect { event ->
-            when (event) {
-                is InferenceEvent.Thinking -> {
-                    emit(MessageGenerationState.ThinkingLive(event.chunk, modelType))
-                }
-                is InferenceEvent.PartialResponse -> {
-                    emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
-                }
-                is InferenceEvent.Finished -> {
-                    emit(MessageGenerationState.Finished(event.modelType))
-                }
-                is InferenceEvent.SafetyBlocked -> {
-                    emit(MessageGenerationState.Blocked(event.reason, event.modelType))
-                }
-                is InferenceEvent.Error -> {
-                    emit(MessageGenerationState.Failed(event.cause, event.modelType))
+        try {
+            try {
+                rehydrateHistory(chatId, userMessageId, assistantMessageId, service)
+            } catch (e: Exception) {
+                // Rehydration failures are not fatal to generation
+                loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
+            }
+
+            val config = modelRegistry.getRegisteredConfiguration(modelType)
+            val reasoningBudget = when (modelType) {
+                ModelType.FAST -> 0
+                ModelType.THINKING -> 2048
+                else -> if (config?.thinkingEnabled == true) 2048 else 0
+            }
+            
+            // ARCHITECTURE: Explicitly provide modelType to options for event tagging
+            val options = GenerationOptions(
+                reasoningBudget = reasoningBudget,
+                modelType = modelType
+            )
+
+            service.sendPrompt(prompt, options, closeConversation = false).collect { event ->
+                when (event) {
+                    is InferenceEvent.Thinking -> {
+                        emit(MessageGenerationState.ThinkingLive(event.chunk, modelType))
+                    }
+                    is InferenceEvent.PartialResponse -> {
+                        emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
+                    }
+                    is InferenceEvent.Finished -> {
+                        emit(MessageGenerationState.Finished(event.modelType))
+                    }
+                    is InferenceEvent.SafetyBlocked -> {
+                        emit(MessageGenerationState.Blocked(event.reason, event.modelType))
+                    }
+                    is InferenceEvent.Error -> {
+                        emit(MessageGenerationState.Failed(event.cause, event.modelType))
+                    }
                 }
             }
+        } finally {
+            // Release usage after generation (in finally to ensure cleanup on errors too)
+            inferenceFactory.releaseUsage(service)
         }
     }.flowOn(Dispatchers.Default)
 }
