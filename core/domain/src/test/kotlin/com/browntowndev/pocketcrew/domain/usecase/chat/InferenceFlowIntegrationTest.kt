@@ -23,6 +23,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
+import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
@@ -210,8 +211,8 @@ class InferenceFlowIntegrationTest {
 
     @Test
     fun `blocked inference returns AccumulatedMessages immediately`() = runTest {
-        // Given - lock already held
-        inferenceLockManager.acquireLock(InferenceType.ON_DEVICE)
+        // Given - factory reports local inference is already busy
+        inferenceFactory.exceptionToThrow = InferenceBusyException()
 
         // When
         val blockedMessages = mutableListOf<GenerateChatResponseUseCase.AccumulatedMessages>()

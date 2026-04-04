@@ -6,196 +6,116 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
+import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManagerImpl
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Assertions.assertInstanceOf
+import org.junit.jupiter.api.Assertions.assertNotSame
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Test
-import javax.inject.Provider
 import java.io.File
 
-/**
- * Tests that InferenceFactoryImpl correctly resolves services dynamically based on file extensions.
- */
 class InferenceFactoryImplTest {
 
-    private lateinit var mockContext: Context
-    private lateinit var mockModelRegistry: ModelRegistryPort
-    private lateinit var mockProcessThinkingTokens: ProcessThinkingTokensUseCase
-    private lateinit var mockLlamaChatSessionManager: LlamaChatSessionManager
-    private lateinit var mockLoggingPort: LoggingPort
-    private lateinit var mockConversationManagerProvider: Provider<ConversationManagerPort>
-    private lateinit var mockMediaPipeFactory: MediaPipeInferenceServiceFactory
-
-    private lateinit var factory: InferenceFactoryImpl
-
-    @BeforeEach
-    fun setUp() {
-        mockContext = mockk(relaxed = true)
-        mockModelRegistry = mockk(relaxed = true)
-        mockProcessThinkingTokens = mockk(relaxed = true)
-        mockLlamaChatSessionManager = mockk(relaxed = true)
-        mockLoggingPort = mockk(relaxed = true)
-        val mockConversationManager = mockk<ConversationManagerPort>(relaxed = true)
-        mockConversationManagerProvider = Provider { mockConversationManager }
-        mockMediaPipeFactory = mockk(relaxed = true)
-
-        // Mock java.io.File to avoid filesystem access errors
-        every { mockContext.getExternalFilesDir(null) } returns File("/mock")
-
-        // Mock the MediaPipe factory so we don't hit UnsatisfiedLinkError
-        val mockMediaPipeService = mockk<MediaPipeInferenceServiceImpl>(relaxed = true)
-        every { mockMediaPipeFactory.create(any()) } returns mockMediaPipeService
-
-        factory = InferenceFactoryImpl(
-            context = mockContext,
-            conversationManagerProvider = mockConversationManagerProvider,
-            modelRegistry = mockModelRegistry,
-            processThinkingTokens = mockProcessThinkingTokens,
-            llamaChatSessionManagerProvider = { mockLlamaChatSessionManager },
-            loggingPort = mockLoggingPort,
-            mediaPipeFactory = mockMediaPipeFactory
-        )
+    private val mockContext = mockk<Context>(relaxed = true).also {
+        every { it.getExternalFilesDir(null) } returns File("/mock")
     }
+    private val mockModelRegistry = mockk<ModelRegistryPort>(relaxed = true)
+    private val mockProcessThinkingTokens = mockk<ProcessThinkingTokensUseCase>(relaxed = true)
+    private val mockLlamaChatSessionManager = mockk<LlamaChatSessionManager>(relaxed = true)
+    private val mockLoggingPort = mockk<LoggingPort>(relaxed = true)
+    private val mockConversationManager = mockk<ConversationManagerPort>(relaxed = true)
+    private val mockMediaPipeFactory = mockk<MediaPipeInferenceServiceFactory>(relaxed = true)
 
     private fun createFactory(): InferenceFactoryImpl {
-        every { mockContext.getExternalFilesDir(null) } returns java.io.File("/mock")
-        val mockMediaPipeService = mockk<MediaPipeInferenceServiceImpl>(relaxed = true)
-        every { mockMediaPipeFactory.create(any()) } returns mockMediaPipeService
-
         return InferenceFactoryImpl(
             context = mockContext,
-            conversationManagerProvider = mockConversationManagerProvider,
+            conversationManagerProvider = { mockConversationManager },
             modelRegistry = mockModelRegistry,
             processThinkingTokens = mockProcessThinkingTokens,
             llamaChatSessionManagerProvider = { mockLlamaChatSessionManager },
             loggingPort = mockLoggingPort,
-            mediaPipeFactory = mockMediaPipeFactory
+            mediaPipeFactory = mockMediaPipeFactory,
+            inferenceLockManager = InferenceLockManagerImpl()
         )
     }
 
-    @Test
-    fun `resolves LlamaInferenceServiceImpl for gguf files`() = runTest {
-        val ggufAsset = LocalModelAsset(
-            metadata = LocalModelMetadata(
-                id = 1L,
-                huggingFaceModelName = "test/llama",
-                remoteFileName = "model.gguf",
-                localFileName = "model.gguf",
-                sha256 = "hash",
-                sizeInBytes = 1000L,
-                modelFileFormat = ModelFileFormat.GGUF
-            ),
-            configurations = emptyList()
-        )
-        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns ggufAsset
+    private fun asset(
+        sha: String,
+        localFileName: String,
+        format: ModelFileFormat,
+        id: Long = 1L
+    ) = LocalModelAsset(
+        metadata = LocalModelMetadata(
+            id = id,
+            huggingFaceModelName = "test/model",
+            remoteFileName = localFileName,
+            localFileName = localFileName,
+            sha256 = sha,
+            sizeInBytes = 1000L,
+            modelFileFormat = format
+        ),
+        configurations = emptyList()
+    )
 
-        val service = factory.getInferenceService(ModelType.FAST)
-        assertTrue(service is LlamaInferenceServiceImpl)
+    @Test
+    fun `resolves llama service for gguf files`() = runTest {
+        val factory = createFactory()
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns asset("sha-1", "model.gguf", ModelFileFormat.GGUF)
+
+        val service = factory.withInferenceService(ModelType.FAST) { it }
+
+        assertInstanceOf(LlamaInferenceServiceImpl::class.java, service)
     }
 
     @Test
-    fun `resolves MediaPipeInferenceServiceImpl for task files`() = runTest {
-        val taskAsset = LocalModelAsset(
-            metadata = LocalModelMetadata(
-                id = 2L,
-                huggingFaceModelName = "test/litert",
-                remoteFileName = "model.task",
-                localFileName = "model.task",
-                sha256 = "hash2",
-                sizeInBytes = 2000L,
-                modelFileFormat = ModelFileFormat.TASK
-            ),
-            configurations = emptyList()
-        )
-        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns taskAsset
+    fun `resolves mediapipe service for task files`() = runTest {
+        val factory = createFactory()
+        val mediaPipeService = mockk<LlmInferencePort>(relaxed = true)
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns asset("sha-1", "model.task", ModelFileFormat.TASK)
+        every { mockMediaPipeFactory.create(any()) } returns mediaPipeService
 
-        val service = factory.getInferenceService(ModelType.FAST)
-        assertTrue(service is MediaPipeInferenceServiceImpl || service.javaClass.simpleName.contains("Subclass")) // MockK proxies
+        val service = factory.withInferenceService(ModelType.FAST) { it }
+
+        assertSame(mediaPipeService, service)
     }
 
     @Test
-    fun `dynamically switches service implementation when model assignment changes`() = runTest {
-        val ggufAsset = LocalModelAsset(
-            metadata = LocalModelMetadata(
-                id = 1L,
-                huggingFaceModelName = "test/llama",
-                remoteFileName = "model.gguf",
-                localFileName = "model.gguf",
-                sha256 = "hash",
-                sizeInBytes = 1000L,
-                modelFileFormat = ModelFileFormat.GGUF
-            ),
-            configurations = emptyList()
-        )
-        val taskAsset = LocalModelAsset(
-            metadata = LocalModelMetadata(
-                id = 2L,
-                huggingFaceModelName = "test/litert",
-                remoteFileName = "model.task",
-                localFileName = "model.task",
-                sha256 = "hash2",
-                sizeInBytes = 2000L,
-                modelFileFormat = ModelFileFormat.TASK
-            ),
-            configurations = emptyList()
-        )
+    fun `same model identity reuses loaded engine`() = runTest {
+        val factory = createFactory()
+        val mediaPipeService = mockk<LlmInferencePort>(relaxed = true)
+        val sharedAsset = asset("sha-1", "model.task", ModelFileFormat.TASK)
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns sharedAsset
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.THINKING) } returns sharedAsset
+        every { mockMediaPipeFactory.create(any()) } returns mediaPipeService
 
-        // Initial assignment is GGUF
-        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns ggufAsset
-        val firstService = factory.getInferenceService(ModelType.FAST)
-        assertTrue(firstService is LlamaInferenceServiceImpl)
+        val first = factory.withInferenceService(ModelType.FAST) { it }
+        val second = factory.withInferenceService(ModelType.THINKING) { it }
 
-        // User changes assignment to .task at runtime
-        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns taskAsset
-        val secondService = factory.getInferenceService(ModelType.FAST)
-        assertTrue(secondService is MediaPipeInferenceServiceImpl || secondService.javaClass.simpleName.contains("Subclass"))
+        assertSame(first, second)
     }
 
     @Test
-    fun `forces service recreation when same-extension model changes SHA`() = runTest {
-        val oldAsset = LocalModelAsset(
-            metadata = LocalModelMetadata(
-                id = 1L,
-                huggingFaceModelName = "test/llama-old",
-                remoteFileName = "model.gguf",
-                localFileName = "model.gguf",
-                sha256 = "old-sha",
-                sizeInBytes = 1000L,
-                modelFileFormat = ModelFileFormat.GGUF
-            ),
-            configurations = emptyList()
-        )
-        val newAsset = LocalModelAsset(
-            metadata = LocalModelMetadata(
-                id = 2L,
-                huggingFaceModelName = "test/llama-new",
-                remoteFileName = "model.gguf",
-                localFileName = "model.gguf",
-                sha256 = "new-sha",
-                sizeInBytes = 1000L,
-                modelFileFormat = ModelFileFormat.GGUF
-            ),
-            configurations = emptyList()
-        )
+    fun `different model identity closes old engine and loads replacement`() = runTest {
+        val factory = createFactory()
+        val firstService = mockk<LlmInferencePort>(relaxed = true)
+        val secondService = mockk<LlmInferencePort>(relaxed = true)
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns asset("sha-1", "model.task", ModelFileFormat.TASK)
+        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.THINKING) } returns asset("sha-2", "model.task", ModelFileFormat.TASK, id = 2L)
+        every { mockMediaPipeFactory.create(any()) } returnsMany listOf(firstService, secondService)
 
-        // Initial assignment is old SHA
-        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns oldAsset
-        val firstService = factory.getInferenceService(ModelType.FAST)
-        assertTrue(firstService is LlamaInferenceServiceImpl)
+        val first = factory.withInferenceService(ModelType.FAST) { it }
+        val second = factory.withInferenceService(ModelType.THINKING) { it }
 
-        // Model file changes to new SHA (but same extension .gguf)
-        coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns newAsset
-        val secondService = factory.getInferenceService(ModelType.FAST)
-        
-        // They should be DIFFERENT instances because SHA changed
-        assertTrue(firstService !== secondService)
+        assertNotSame(first, second)
+        coVerify(exactly = 1) { firstService.closeSession() }
     }
 }

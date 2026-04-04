@@ -129,7 +129,7 @@ class GenerateChatResponseUseCaseGenerationOptionsTest {
         }
 
     @Test
-    fun `FAST mode calls registerUsage and releaseUsage lifecycle`() = runTest {
+    fun `FAST mode executes through inference factory wrapper`() = runTest {
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns asset()
         coEvery { modelRegistry.getRegisteredConfiguration(ModelType.FAST) } returns config(thinkingEnabled = false)
 
@@ -140,10 +140,8 @@ class GenerateChatResponseUseCaseGenerationOptionsTest {
             chatId = 1L, mode = Mode.FAST
         ).collect { }
 
-        assertTrue(fastService in inferenceFactory.registeredServices,
-            "registerUsage(fastService) must be called")
-        assertTrue(fastService in inferenceFactory.releasedServices,
-            "releaseUsage(fastService) must be called")
+        assertTrue(ModelType.FAST in inferenceFactory.executedTypes,
+            "withInferenceService(ModelType.FAST) must be called")
     }
 
     // ===== Defense Scenario 4: THINKING =====
@@ -169,7 +167,7 @@ class GenerateChatResponseUseCaseGenerationOptionsTest {
         }
 
     @Test
-    fun `THINKING mode calls registerUsage and releaseUsage lifecycle`() = runTest {
+    fun `THINKING mode executes through inference factory wrapper`() = runTest {
         coEvery { modelRegistry.getRegisteredAsset(ModelType.THINKING) } returns asset()
         coEvery { modelRegistry.getRegisteredConfiguration(ModelType.THINKING) } returns config(thinkingEnabled = true)
 
@@ -180,10 +178,8 @@ class GenerateChatResponseUseCaseGenerationOptionsTest {
             chatId = 1L, mode = Mode.THINKING
         ).collect { }
 
-        assertTrue(thinkingService in inferenceFactory.registeredServices,
-            "registerUsage(thinkingService) must be called")
-        assertTrue(thinkingService in inferenceFactory.releasedServices,
-            "releaseUsage(thinkingService) must be called")
+        assertTrue(ModelType.THINKING in inferenceFactory.executedTypes,
+            "withInferenceService(ModelType.THINKING) must be called")
     }
 
     // ===== Defense Scenario 8: Per-role thinking resolution =====
