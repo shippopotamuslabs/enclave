@@ -63,7 +63,7 @@ fun ThinkingIndicator(
 
     Column(
         modifier = modifier
-            .padding(vertical = 10.dp)
+            .padding(top = 8.dp, bottom = 8.dp)
             .fillMaxWidth()
     ) {
         // Header Row: Orb + "Thinking" text + elapsed time + chevron
@@ -72,7 +72,6 @@ fun ThinkingIndicator(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { onToggleDetails() }
-                .padding(vertical = 8.dp)
         ) {
             // Dynamic molten-lava orb
             DynamicThinkingAnimation(
