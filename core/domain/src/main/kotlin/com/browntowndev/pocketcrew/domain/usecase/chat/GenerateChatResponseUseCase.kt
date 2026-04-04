@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
+import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -15,7 +16,6 @@ import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
@@ -61,35 +61,18 @@ class GenerateChatResponseUseCase @Inject constructor(
         mode: Mode
     ): Flow<AccumulatedMessages> {
         return flow {
-            val inferenceType = determineInferenceType(mode)
-
-            // Try to acquire the global inference lock
-            if (!inferenceLockManager.acquireLock(inferenceType)) {
-                emit(
-                    AccumulatedMessages(
-                        mapOf(
-                            assistantMessageId to MessageSnapshot(
-                                messageId = assistantMessageId,
-                                modelType = ModelType.FAST,
-                                content = "Another message is in progress. Please wait until it completes.",
-                                thinkingRaw = "",
-                                isComplete = true
-                            )
-                        )
-                    )
-                )
-                return@flow
-            }
-
             val baseFlow: Flow<MessageGenerationState> = when (mode) {
                 Mode.FAST -> flow {
                     try {
-                        val service = inferenceFactory.getInferenceService(ModelType.FAST)
-                        emitAll(
-                            generateWithService(
-                                prompt, userMessageId, assistantMessageId, chatId, service, ModelType.FAST
+                        inferenceFactory.withInferenceService(ModelType.FAST) { service ->
+                            emitAll(
+                                generateWithService(
+                                    prompt, userMessageId, assistantMessageId, chatId, service, ModelType.FAST
+                                )
                             )
-                        )
+                        }
+                    } catch (e: InferenceBusyException) {
+                        emitBusyState(ModelType.FAST)
                     } catch (e: IllegalStateException) {
                         emit(MessageGenerationState.Failed(e, ModelType.FAST))
                     } catch (e: java.io.IOException) {
@@ -108,12 +91,15 @@ class GenerateChatResponseUseCase @Inject constructor(
 
                 Mode.THINKING -> flow {
                     try {
-                        val service = inferenceFactory.getInferenceService(ModelType.THINKING)
-                        emitAll(
-                            generateWithService(
-                                prompt, userMessageId, assistantMessageId, chatId, service, ModelType.THINKING
+                        inferenceFactory.withInferenceService(ModelType.THINKING) { service ->
+                            emitAll(
+                                generateWithService(
+                                    prompt, userMessageId, assistantMessageId, chatId, service, ModelType.THINKING
+                                )
                             )
-                        )
+                        }
+                    } catch (e: InferenceBusyException) {
+                        emitBusyState(ModelType.THINKING)
                     } catch (e: IllegalStateException) {
                         emit(MessageGenerationState.Failed(e, ModelType.THINKING))
                     } catch (e: java.io.IOException) {
@@ -240,7 +226,11 @@ class GenerateChatResponseUseCase @Inject constructor(
                         is MessageGenerationState.Failed -> {
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
                             accumulator.content.clear()
-                            accumulator.content.append("Error: ${state.error.message ?: "Unknown error"}")
+                            if (state.error is InferenceBusyException) {
+                                accumulator.content.append(state.error.message ?: "Another message is in progress. Please wait until it completes.")
+                            } else {
+                                accumulator.content.append("Error: ${state.error.message ?: "Unknown error"}")
+                            }
                             accumulator.isComplete = true
                             accumulator.currentState = MessageState.COMPLETE
                             emit(accumulatorManager.toMessagesState())
@@ -253,9 +243,19 @@ class GenerateChatResponseUseCase @Inject constructor(
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to persist messages", e)
                 }
-                inferenceLockManager.releaseLock()
             }
         }.buffer(FLOW_BUFFER_SIZE)
+    }
+
+    private suspend fun kotlinx.coroutines.flow.FlowCollector<MessageGenerationState>.emitBusyState(
+        modelType: ModelType
+    ) {
+        emit(
+            MessageGenerationState.Failed(
+                error = InferenceBusyException(),
+                modelType = modelType
+            )
+        )
     }
 
     /**
@@ -402,36 +402,6 @@ class GenerateChatResponseUseCase @Inject constructor(
         }
     }
 
-    private suspend fun determineInferenceType(mode: Mode): InferenceType {
-        return when (mode) {
-            Mode.FAST -> {
-                if (modelRegistry.getRegisteredAsset(ModelType.FAST) != null) {
-                    InferenceType.ON_DEVICE
-                } else {
-                    InferenceType.BYOK
-                }
-            }
-            Mode.THINKING -> {
-                if (modelRegistry.getRegisteredAsset(ModelType.THINKING) != null) {
-                    InferenceType.ON_DEVICE
-                } else {
-                    InferenceType.BYOK
-                }
-            }
-            Mode.CREW -> {
-                val draftOneOnDevice = modelRegistry.getRegisteredAsset(ModelType.DRAFT_ONE) != null
-                val draftTwoOnDevice = modelRegistry.getRegisteredAsset(ModelType.DRAFT_TWO) != null
-                val mainOnDevice = modelRegistry.getRegisteredAsset(ModelType.MAIN) != null
-
-                if (draftOneOnDevice || draftTwoOnDevice || mainOnDevice) {
-                    InferenceType.ON_DEVICE
-                } else {
-                    InferenceType.BYOK
-                }
-            }
-        }
-    }
-
     private suspend fun rehydrateHistory(
         chatId: Long,
         userMessageId: Long,
@@ -459,52 +429,44 @@ class GenerateChatResponseUseCase @Inject constructor(
         service: LlmInferencePort,
         modelType: ModelType,
     ): Flow<MessageGenerationState> = flow {
-        // Register usage before generation
-        inferenceFactory.registerUsage(service)
-
         try {
-            try {
-                rehydrateHistory(chatId, userMessageId, assistantMessageId, service)
-            } catch (e: Exception) {
-                // Rehydration failures are not fatal to generation
-                loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
-            }
+            rehydrateHistory(chatId, userMessageId, assistantMessageId, service)
+        } catch (e: Exception) {
+            // Rehydration failures are not fatal to generation
+            loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
+        }
 
-            val config = modelRegistry.getRegisteredConfiguration(modelType)
-            val reasoningBudget = when (modelType) {
-                ModelType.FAST -> 0
-                ModelType.THINKING -> 2048
-                else -> if (config?.thinkingEnabled == true) 2048 else 0
-            }
-            
-            // ARCHITECTURE: Explicitly provide modelType to options for event tagging
-            val options = GenerationOptions(
-                reasoningBudget = reasoningBudget,
-                modelType = modelType
-            )
+        val config = modelRegistry.getRegisteredConfiguration(modelType)
+        val reasoningBudget = when (modelType) {
+            ModelType.FAST -> 0
+            ModelType.THINKING -> 2048
+            else -> if (config?.thinkingEnabled == true) 2048 else 0
+        }
+        
+        // ARCHITECTURE: Explicitly provide modelType to options for event tagging
+        val options = GenerationOptions(
+            reasoningBudget = reasoningBudget,
+            modelType = modelType
+        )
 
-            service.sendPrompt(prompt, options, closeConversation = false).collect { event ->
-                when (event) {
-                    is InferenceEvent.Thinking -> {
-                        emit(MessageGenerationState.ThinkingLive(event.chunk, modelType))
-                    }
-                    is InferenceEvent.PartialResponse -> {
-                        emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
-                    }
-                    is InferenceEvent.Finished -> {
-                        emit(MessageGenerationState.Finished(event.modelType))
-                    }
-                    is InferenceEvent.SafetyBlocked -> {
-                        emit(MessageGenerationState.Blocked(event.reason, event.modelType))
-                    }
-                    is InferenceEvent.Error -> {
-                        emit(MessageGenerationState.Failed(event.cause, event.modelType))
-                    }
+        service.sendPrompt(prompt, options, closeConversation = false).collect { event ->
+            when (event) {
+                is InferenceEvent.Thinking -> {
+                    emit(MessageGenerationState.ThinkingLive(event.chunk, modelType))
+                }
+                is InferenceEvent.PartialResponse -> {
+                    emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
+                }
+                is InferenceEvent.Finished -> {
+                    emit(MessageGenerationState.Finished(event.modelType))
+                }
+                is InferenceEvent.SafetyBlocked -> {
+                    emit(MessageGenerationState.Blocked(event.reason, event.modelType))
+                }
+                is InferenceEvent.Error -> {
+                    emit(MessageGenerationState.Failed(event.cause, event.modelType))
                 }
             }
-        } finally {
-            // Release usage after generation (in finally to ensure cleanup on errors too)
-            inferenceFactory.releaseUsage(service)
         }
     }.flowOn(Dispatchers.Default)
 }
