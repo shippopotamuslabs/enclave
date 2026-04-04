@@ -9,15 +9,11 @@ import androidx.room.Room
 import androidx.work.WorkManager
 import com.browntowndev.pocketcrew.core.data.download.DownloadNotificationManager
 import com.browntowndev.pocketcrew.core.data.download.DownloadProgressTracker
-import com.browntowndev.pocketcrew.core.data.download.DownloadSessionManager
 import com.browntowndev.pocketcrew.core.data.download.DownloadSpeedTracker
-import com.browntowndev.pocketcrew.core.data.download.DownloadStateManager
-import com.browntowndev.pocketcrew.core.data.download.DownloadWorkScheduler
 import com.browntowndev.pocketcrew.core.data.download.HashingService
 import com.browntowndev.pocketcrew.core.data.download.ModelConfigFetcherImpl
 import com.browntowndev.pocketcrew.core.data.download.ModelDownloadOrchestratorImpl
 import com.browntowndev.pocketcrew.core.data.download.ModelFileScanner
-import com.browntowndev.pocketcrew.core.data.download.WorkProgressParser
 import com.browntowndev.pocketcrew.core.data.download.remote.HttpFileDownloader
 import com.browntowndev.pocketcrew.core.data.download.remote.HuggingFaceModelUrlProvider
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao

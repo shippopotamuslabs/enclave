@@ -83,7 +83,8 @@ class ModelFileScanner @Inject constructor(
             // Detect if config changed by comparing expected (remote) vs downloaded (registry)
             val configChanged = downloadedAsset != null && (
                 downloadedAsset.metadata.sha256 != expectedAsset.metadata.sha256 ||
-                downloadedAsset.metadata.modelFileFormat != expectedAsset.metadata.modelFileFormat
+                downloadedAsset.metadata.modelFileFormat != expectedAsset.metadata.modelFileFormat ||
+                downloadedAsset.metadata.localFileName != expectedAsset.metadata.localFileName
             )
 
             when {
@@ -151,10 +152,12 @@ class ModelFileScanner @Inject constructor(
         }
 
         ModelScanResult(
-            missingModels = missingModels.distinctBy { it.metadata.sha256 },
+            // Preserve per-slot assets for shared files so downstream activation can
+            // apply every configuration (VISION / FAST / THINKING, etc.) after one download.
+            missingModels = missingModels.distinct(),
             partialDownloads = partialDownloads,
             allValid = missingModels.isEmpty() && invalidModels.isEmpty() && partialDownloads.isEmpty(),
-            invalidModels = invalidModels.distinctBy { it.metadata.sha256 }
+            invalidModels = invalidModels.distinct()
         )
     }
 

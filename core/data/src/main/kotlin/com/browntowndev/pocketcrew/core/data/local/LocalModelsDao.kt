@@ -17,29 +17,24 @@ interface LocalModelsDao {
     suspend fun getAll(): List<LocalModelEntity>
 
     /**
-     * Returns all active local models (CURRENT status) that have at least one configuration.
-     * Excludes soft-deleted models (models with 0 configs).
-     *
-     * Soft-deleted models retain model_status='CURRENT' but have no configurations,
-     * so this query uses EXISTS to filter them out.
+     * Returns all active local models that have at least one configuration.
+     * Excludes soft-deleted models, which have no configurations.
      */
     @Query("""
         SELECT m.* FROM local_models m
-        WHERE m.model_status = 'CURRENT'
-        AND EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id)
+        WHERE EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id)
     """)
-    suspend fun getAllCurrent(): List<LocalModelEntity>
+    suspend fun getAllActive(): List<LocalModelEntity>
 
     /**
-     * Flow version of getAllCurrent(). Returns active models with configs.
+     * Flow version of getAllActive(). Returns active models with configs.
      * Excludes soft-deleted models via EXISTS subquery.
      */
     @Query("""
         SELECT m.* FROM local_models m
-        WHERE m.model_status = 'CURRENT'
-        AND EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id)
+        WHERE EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id)
     """)
-    fun observeAllCurrent(): Flow<List<LocalModelEntity>>
+    fun observeAllActive(): Flow<List<LocalModelEntity>>
 
     /**
      * Returns soft-deleted models: LocalModelEntity rows that have ZERO configurations.
@@ -47,8 +42,7 @@ interface LocalModelsDao {
      */
     @Query("""
         SELECT m.* FROM local_models m
-        WHERE m.model_status = 'CURRENT'
-        AND NOT EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id)
+        WHERE NOT EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id)
     """)
     suspend fun getSoftDeletedModels(): List<LocalModelEntity>
 
@@ -57,7 +51,4 @@ interface LocalModelsDao {
 
     @Query("DELETE FROM local_models WHERE id = :id")
     suspend fun deleteById(id: Long)
-
-    @Query("DELETE FROM local_models WHERE model_status = 'OLD'")
-    suspend fun deleteOld()
 }
