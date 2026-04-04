@@ -66,7 +66,7 @@ class InferenceFactoryAirtightTest {
         val factory = createFactory()
         val service = mockk<LlmInferencePort>(relaxed = true)
         coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns taskAsset("shared-sha")
-        every { mockMediaPipeFactory.create(any()) } returns service
+        every { mockMediaPipeFactory.create(any<String>(), any<ModelType>()) } returns service
 
         val first = factory.withInferenceService(ModelType.FAST) { it }
         val second = factory.withInferenceService(ModelType.FAST) { it }
@@ -75,7 +75,7 @@ class InferenceFactoryAirtightTest {
         assertSame(service, first)
         assertSame(first, second)
         assertSame(second, third)
-        verify(exactly = 1) { mockMediaPipeFactory.create(any()) }
+        verify(exactly = 1) { mockMediaPipeFactory.create(any<String>(), any<ModelType>()) }
         coVerify(exactly = 0) { service.closeSession() }
     }
 
@@ -86,7 +86,7 @@ class InferenceFactoryAirtightTest {
         val secondService = mockk<LlmInferencePort>(relaxed = true)
         coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns taskAsset("sha-one")
         coEvery { mockModelRegistry.getRegisteredAsset(ModelType.THINKING) } returns taskAsset("sha-two")
-        every { mockMediaPipeFactory.create(any()) } returnsMany listOf(firstService, secondService)
+        every { mockMediaPipeFactory.create(any<String>(), any<ModelType>()) } returnsMany listOf(firstService, secondService)
 
         val first = factory.withInferenceService(ModelType.FAST) { it }
         val reused = factory.withInferenceService(ModelType.FAST) { it }

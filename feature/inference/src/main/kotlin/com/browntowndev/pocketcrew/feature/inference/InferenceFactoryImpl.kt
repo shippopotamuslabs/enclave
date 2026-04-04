@@ -22,16 +22,21 @@ import javax.inject.Singleton
 
 @Singleton
 class MediaPipeInferenceServiceFactory @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    private val modelRegistry: ModelRegistryPort,
+    private val processThinkingTokens: ProcessThinkingTokensUseCase,
 ) {
-    fun create(modelPath: String): LlmInferencePort {
+    fun create(modelPath: String, modelType: ModelType): LlmInferencePort {
         val options = com.google.mediapipe.tasks.genai.llminference.LlmInference.LlmInferenceOptions.builder()
             .setModelPath(modelPath)
             .setMaxTokens(16384)
             .setPreferredBackend(com.google.mediapipe.tasks.genai.llminference.LlmInference.Backend.GPU)
             .build()
         return MediaPipeInferenceServiceImpl(
-            LlmInferenceWrapper(com.google.mediapipe.tasks.genai.llminference.LlmInference.createFromOptions(context, options))
+            LlmInferenceWrapper(com.google.mediapipe.tasks.genai.llminference.LlmInference.createFromOptions(context, options)),
+            modelType,
+            modelRegistry,
+            processThinkingTokens,
         )
     }
 }
@@ -111,17 +116,19 @@ class InferenceFactoryImpl @Inject constructor(
                         processThinkingTokens = processThinkingTokens,
                         loggingPort = loggingPort,
                         modelRegistry = modelRegistry,
-                        context = context
+                        context = context,
+                        modelType = modelType
                     )
                 }
                 "task" -> {
                     val modelPath = getModelPath(filename)
-                    mediaPipeFactory.create(modelPath)
+                    mediaPipeFactory.create(modelPath, modelType)
                 }
                 else -> {
                     LiteRtInferenceServiceImpl(
                         conversationManager = conversationManagerProvider.get(),
-                        processThinkingTokens = processThinkingTokens
+                        processThinkingTokens = processThinkingTokens,
+                        modelType = modelType
                     )
                 }
             }

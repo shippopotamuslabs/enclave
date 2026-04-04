@@ -16,66 +16,14 @@ import javax.inject.Inject
 class LiteRtInferenceServiceImpl @Inject constructor(
     private val conversationManager: ConversationManagerPort,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
+    private val modelType: ModelType,
 ) : LlmInferencePort {
     companion object {
         private const val TAG = "LiteRtInferenceService"
     }
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = flow {
-        val modelType = ModelType.FAST 
-        var isThinking = false
-        val accumulatedThought = StringBuilder()
-        val accumulatedText = StringBuilder()
-        var buffer = ""
-
-        try {
-            val conversation = conversationManager.getConversation(modelType)
-            Log.d(TAG, "Sending prompt: $prompt")
-
-            conversation.sendMessageAsync(prompt).collect { response ->
-                if (response.thought.isNotEmpty()) {
-                    emit(InferenceEvent.Thinking(response.thought, modelType))
-                }
-                
-                if (response.text.isNotEmpty()) {
-                    val state = processThinkingTokens(buffer, response.text, isThinking)
-                    buffer = state.buffer
-                    isThinking = state.isThinking
-
-                    state.emittedSegments.forEach { segment ->
-                        when (segment.kind) {
-                            SegmentKind.THINKING -> {
-                                accumulatedThought.append(segment.text)
-                                emit(InferenceEvent.Thinking(segment.text, modelType))
-                            }
-                            SegmentKind.VISIBLE -> {
-                                accumulatedText.append(segment.text)
-                                emit(InferenceEvent.PartialResponse(segment.text, modelType))
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (buffer.isNotEmpty()) {
-                if (isThinking) {
-                    accumulatedThought.append(buffer)
-                    emit(InferenceEvent.Thinking(buffer, modelType))
-                } else {
-                    accumulatedText.append(buffer)
-                    emit(InferenceEvent.PartialResponse(buffer, modelType))
-                }
-            }
-
-            emit(InferenceEvent.Finished(modelType))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending prompt", e)
-            emit(InferenceEvent.Error(e, modelType))
-        } finally {
-            if (closeConversation) {
-                conversationManager.closeConversation()
-            }
-        }
+    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
+        return sendPrompt(prompt, GenerationOptions(reasoningBudget = 0, modelType = modelType), closeConversation)
     }
 
     override suspend fun closeSession() {

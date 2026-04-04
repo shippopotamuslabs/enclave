@@ -220,9 +220,27 @@ class GenerateChatResponseUseCaseGenerationOptionsTest {
     }
 
     @Test
-    fun `FAST mode ignores misbound thinkingEnabled config and still uses reasoningBudget 0`() = runTest {
+    fun `FAST mode respects thinkingEnabled config and uses reasoningBudget 2048`() = runTest {
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns asset()
         coEvery { modelRegistry.getRegisteredConfiguration(ModelType.FAST) } returns config(thinkingEnabled = true)
+
+        val optionsSlot = CapturingSlot<GenerationOptions>()
+        every { fastService.sendPrompt(any<String>(), capture(optionsSlot), any<Boolean>()) } returns fastSuccessFlow()
+
+        useCase(
+            prompt = "Quick thinking", userMessageId = 1L, assistantMessageId = 2L,
+            chatId = 1L, mode = Mode.FAST
+        ).collect { }
+
+        assertTrue(optionsSlot.isCaptured)
+        assertTrue(optionsSlot.captured.reasoningBudget == 2048)
+    }
+
+    @Test
+    fun `GenerationOptions correctly populates all sampler fields from config`() = runTest {
+        val testConfig = config(thinkingEnabled = false)
+        coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns asset()
+        coEvery { modelRegistry.getRegisteredConfiguration(ModelType.FAST) } returns testConfig
 
         val optionsSlot = CapturingSlot<GenerationOptions>()
         every { fastService.sendPrompt(any<String>(), capture(optionsSlot), any<Boolean>()) } returns fastSuccessFlow()
@@ -233,6 +251,10 @@ class GenerateChatResponseUseCaseGenerationOptionsTest {
         ).collect { }
 
         assertTrue(optionsSlot.isCaptured)
-        assertTrue(optionsSlot.captured.reasoningBudget == 0)
+        val captured = optionsSlot.captured
+        assertTrue(captured.temperature == testConfig.temperature.toFloat())
+        assertTrue(captured.topK == testConfig.topK)
+        assertTrue(captured.topP == testConfig.topP.toFloat())
+        assertTrue(captured.maxTokens == testConfig.maxTokens)
     }
 }

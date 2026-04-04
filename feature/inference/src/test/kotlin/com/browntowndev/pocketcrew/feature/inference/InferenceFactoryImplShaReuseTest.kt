@@ -102,7 +102,7 @@ class InferenceFactoryImplShaReuseTest {
             configurations = emptyList()
         )
         coEvery { mockModelRegistry.getRegisteredAsset(any()) } returns taskAsset
-        every { mockMediaPipeFactory.create(any()) } returns mediaPipeService
+        every { mockMediaPipeFactory.create(any<String>(), any<ModelType>()) } returns mediaPipeService
 
         factory.withInferenceService(ModelType.FAST) {
             assertFailsWith<InferenceBusyException> {

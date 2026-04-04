@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationResponse
@@ -52,7 +53,7 @@ class LiteRtInferenceServiceImplGenerationOptionsTest {
         val responses = flowOf(ConversationResponse(text = "response"))
         every { mockConversation.sendMessageAsync(any(), any()) } returns responses
 
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens)
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.FAST)
         val options = GenerationOptions(reasoningBudget = 2048)
         // Actually collect the flow to exercise the implementation
         val events = service.sendPrompt("hello", options, closeConversation = false).toList()

@@ -41,7 +41,8 @@ class LlamaInferenceServiceImplSendPromptOptionsErrorTest {
         processThinkingTokens = processThinkingTokens,
         loggingPort = mockLoggingPort,
         modelRegistry = mockModelRegistry,
-        context = mockContext
+        context = mockContext,
+        modelType = ModelType.FAST
     )
 
     @BeforeEach
@@ -64,7 +65,8 @@ class LlamaInferenceServiceImplSendPromptOptionsErrorTest {
             processThinkingTokens = processThinkingTokens,
             loggingPort = mockLoggingPort,
             modelRegistry = mockModelRegistry,
-            context = mockContext
+            context = mockContext,
+            modelType = ModelType.FAST
         )
     }
 

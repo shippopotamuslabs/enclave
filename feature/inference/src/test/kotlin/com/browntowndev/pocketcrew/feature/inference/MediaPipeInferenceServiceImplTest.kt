@@ -3,8 +3,11 @@ package com.browntowndev.pocketcrew.feature.inference
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession
 import com.google.mediapipe.tasks.genai.llminference.ProgressListener
@@ -26,6 +29,8 @@ class MediaPipeInferenceServiceImplTest {
 
     private lateinit var mockLlmInferenceWrapper: LlmInferenceWrapper
     private lateinit var mockSession: LlmSessionPort
+    private lateinit var mockModelRegistry: ModelRegistryPort
+    private lateinit var processThinkingTokens: ProcessThinkingTokensUseCase
 
     @BeforeEach
     fun setup() {
@@ -39,6 +44,8 @@ class MediaPipeInferenceServiceImplTest {
 
         mockLlmInferenceWrapper = mockk(relaxed = true)
         mockSession = mockk(relaxed = true)
+        mockModelRegistry = mockk(relaxed = true)
+        processThinkingTokens = ProcessThinkingTokensUseCase()
 
         // Mock session creation via wrapper
         val mockBuilder = mockk<LlmInferenceSession.LlmInferenceSessionOptions.Builder>(relaxed = true)
@@ -61,7 +68,7 @@ class MediaPipeInferenceServiceImplTest {
     @Test
     fun `sendPrompt seeds history via sequential addQueryChunk calls before first prompt`() = runTest {
         // Given
-        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper, ModelType.FAST, mockModelRegistry, processThinkingTokens)
         val history = listOf(
             ChatMessage(Role.USER, "What is AI?"),
             ChatMessage(Role.ASSISTANT, "AI is...")
@@ -91,7 +98,7 @@ class MediaPipeInferenceServiceImplTest {
     @Test
     fun `sendPrompt does not re-seed history if session persists`() = runTest {
         // Given
-        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper, ModelType.FAST, mockModelRegistry, processThinkingTokens)
         val history = listOf(ChatMessage(Role.USER, "What is AI?"))
         
         val mockFuture = mockk<ListenableFuture<String>>(relaxed = true)
@@ -115,7 +122,7 @@ class MediaPipeInferenceServiceImplTest {
     @Test
     fun `sendPrompt re-seeds history if conversation was closed`() = runTest {
         // Given
-        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper, ModelType.FAST, mockModelRegistry, processThinkingTokens)
         val history = listOf(ChatMessage(Role.USER, "What is AI?"))
         
         val mockFuture = mockk<ListenableFuture<String>>(relaxed = true)
@@ -137,7 +144,7 @@ class MediaPipeInferenceServiceImplTest {
     @Test
     fun `sendPrompt with empty history does not call addQueryChunk for history`() = runTest {
         // Given
-        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper, ModelType.FAST, mockModelRegistry, processThinkingTokens)
         val history = emptyList<ChatMessage>()
         
         val mockFuture = mockk<ListenableFuture<String>>(relaxed = true)
@@ -159,7 +166,7 @@ class MediaPipeInferenceServiceImplTest {
     @Test
     fun `error during session creation emits Error event`() = runTest {
         // Given
-        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper, ModelType.FAST, mockModelRegistry, processThinkingTokens)
         every { mockLlmInferenceWrapper.createSession(any()) } throws RuntimeException("Session creation failed")
 
         // When
@@ -172,7 +179,7 @@ class MediaPipeInferenceServiceImplTest {
     @Test
     fun `sendPrompt correctly identifies and emits thinking events from tags`() = runTest {
         // Given
-        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper, ModelType.FAST, mockModelRegistry, processThinkingTokens)
         val mockFuture = mockk<ListenableFuture<String>>(relaxed = true)
         
         every { mockSession.generateResponseAsync(any()) } answers {
@@ -191,5 +198,27 @@ class MediaPipeInferenceServiceImplTest {
         assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "reasoning" })
         assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "final answer" })
         assertTrue(events.any { it is InferenceEvent.Finished })
+    }
+
+    @Test
+    fun `sendPrompt recreates session when options change`() = runTest {
+        // Given
+        val service = MediaPipeInferenceServiceImpl(mockLlmInferenceWrapper, ModelType.FAST, mockModelRegistry, processThinkingTokens)
+        val mockFuture = mockk<ListenableFuture<String>>(relaxed = true)
+        every { mockSession.generateResponseAsync(any()) } answers {
+            val callback = it.invocation.args[0] as ProgressListener<String>
+            callback.run("Response", true)
+            mockFuture
+        }
+
+        val options1 = GenerationOptions(reasoningBudget = 0, temperature = 0.7f)
+        val options2 = GenerationOptions(reasoningBudget = 2048, temperature = 0.7f)
+
+        // When
+        service.sendPrompt("Prompt 1", options1, closeConversation = false).toList()
+        service.sendPrompt("Prompt 2", options2, closeConversation = false).toList()
+
+        // Then
+        verify(exactly = 2) { mockLlmInferenceWrapper.createSession(any()) }
     }
 }

@@ -12,23 +12,15 @@ import kotlinx.coroutines.flow.flow
  * Fake implementation of LlmInferencePort for testing.
  * Allows controlling inference events and verifying interactions.
  */
-class FakeInferenceService : LlmInferencePort {
+class FakeInferenceService(private val modelType: ModelType = ModelType.FAST) : LlmInferencePort {
 
     private var shouldThrowOnSendPrompt = false
     private var shouldThrowOnSetHistory = false
     private val sentPrompts = mutableListOf<String>()
     private var historyMessages: List<ChatMessage> = emptyList()
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = flow {
-        sentPrompts.add(prompt)
-        
-        if (shouldThrowOnSendPrompt) {
-            shouldThrowOnSendPrompt = false
-            throw RuntimeException("Simulated sendPrompt error")
-        }
-        
-        // Default behavior - emit nothing unless configured
-        // Subclasses or tests should override this behavior
+    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
+        return sendPrompt(prompt, GenerationOptions(reasoningBudget = 0, modelType = modelType), closeConversation)
     }
 
     override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = flow {

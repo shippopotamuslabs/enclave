@@ -19,11 +19,8 @@ class NoOpInferenceService @Inject constructor(
     private val modelType: ModelType
 ) : LlmInferencePort {
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = flow {
-        emit(InferenceEvent.Error(
-            cause = IllegalStateException("Model for $modelType is not available. Please download it first."),
-            modelType = modelType
-        ))
+    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
+        return sendPrompt(prompt, GenerationOptions(reasoningBudget = 0, modelType = modelType), closeConversation)
     }
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
