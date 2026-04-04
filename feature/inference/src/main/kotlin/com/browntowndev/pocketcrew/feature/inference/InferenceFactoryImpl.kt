@@ -14,21 +14,21 @@ import kotlin.jvm.JvmSuppressWildcards
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
 @Singleton
 class MediaPipeInferenceServiceFactory @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) {
-    fun create(modelPath: String, modelType: ModelType): LlmInferencePort {
+    fun create(modelPath: String): LlmInferencePort {
         val options = com.google.mediapipe.tasks.genai.llminference.LlmInference.LlmInferenceOptions.builder()
             .setModelPath(modelPath)
             .setMaxTokens(16384)
             .setPreferredBackend(com.google.mediapipe.tasks.genai.llminference.LlmInference.Backend.GPU)
             .build()
         return MediaPipeInferenceServiceImpl(
-            LlmInferenceWrapper(com.google.mediapipe.tasks.genai.llminference.LlmInference.createFromOptions(context, options)),
-            modelType
+            LlmInferenceWrapper(com.google.mediapipe.tasks.genai.llminference.LlmInference.createFromOptions(context, options))
         )
     }
 }
@@ -40,10 +40,10 @@ class MediaPipeInferenceServiceFactory @Inject constructor(
  */
 class InferenceFactoryImpl @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val conversationManagerProvider: @JvmSuppressWildcards (ModelType) -> ConversationManagerPort,
     private val modelRegistry: ModelRegistryPort,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
-    private val llamaChatSessionManager: LlamaChatSessionManager,
+    private val llamaChatSessionManagerProvider: Provider<LlamaChatSessionManager>,
+    private val conversationManagerProvider: Provider<ConversationManagerPort>,
     private val mediaPipeFactory: MediaPipeInferenceServiceFactory,
     private val loggingPort: LoggingPort,
 ) : InferenceFactoryPort {
@@ -52,9 +52,40 @@ class InferenceFactoryImpl @Inject constructor(
         private const val TAG = "InferenceFactory"
     }
 
-    private val cachedServices = mutableMapOf<ModelType, LlmInferencePort>()
-    private val cachedAssetIdentities = mutableMapOf<ModelType, String?>()
+    /** Cache keyed by SHA-identity (sha256-extension). Services are shared across ModelTypes with same identity. */
+    private val serviceCache = mutableMapOf<String, LlmInferencePort>()
+    /** Reference count per SHA-identity. Ensures engine stays alive while any ModelType still uses it. */
+    private val refCounts = mutableMapOf<String, Int>()
+    
+    // Maps a service instance to its SHA-identity key for robust refcounting
+    private val serviceToIdentity = mutableMapOf<LlmInferencePort, String>()
+
     private val mutex = Mutex()
+
+    override suspend fun registerUsage(service: LlmInferencePort) {
+        mutex.withLock {
+            val identity = serviceToIdentity[service] ?: return@withLock
+            val current = refCounts[identity] ?: 0
+            refCounts[identity] = current + 1
+        }
+    }
+
+    override suspend fun releaseUsage(service: LlmInferencePort) {
+        mutex.withLock {
+            val identity = serviceToIdentity[service] ?: return@withLock
+            
+            val current = refCounts[identity] ?: 0
+            val newCount = (current - 1).coerceAtLeast(0)
+
+            if (newCount == 0) {
+                // Keep the service cached while idle so subsequent requests can reuse the
+                // underlying engine instead of recreating it on every mode switch.
+                refCounts.remove(identity)
+            } else {
+                refCounts[identity] = newCount
+            }
+        }
+    }
 
     override suspend fun getInferenceService(modelType: ModelType): LlmInferencePort {
         return mutex.withLock {
@@ -67,59 +98,45 @@ class InferenceFactoryImpl @Inject constructor(
 
             if (asset == null) {
                 loggingPort.warning(TAG, "No asset for $modelType, using NoOpInferenceService")
-                val oldService = cachedServices[modelType]
-                if (oldService !is NoOpInferenceService) {
-                    oldService?.closeSession()
-                    val newService = NoOpInferenceService(modelType)
-                    cachedServices[modelType] = newService
-                    cachedAssetIdentities[modelType] = null
-                    return@withLock newService
-                }
-                return@withLock oldService
+                return@withLock NoOpInferenceService(modelType)
             }
 
             val filename = asset.metadata.localFileName
             val extension = filename.substringAfterLast('.', "")
             val assetIdentity = "${asset.metadata.sha256}-$extension"
 
-            val currentService = cachedServices[modelType]
-            val currentIdentity = cachedAssetIdentities[modelType]
-
-            // If we already have a service and the identity (SHA + extension) hasn't changed, return it
-            if (currentService != null && currentIdentity == assetIdentity && currentService !is NoOpInferenceService) {
-                return@withLock currentService
+            // Return cached service if it exists. 
+            serviceCache[assetIdentity]?.let { cached ->
+                return@withLock cached
             }
 
-            // Implementation type or model file changed (or it's the first time)
-            currentService?.closeSession()
-
+            // Create new service and cache it by SHA-identity
             val newService = when (extension) {
                 "gguf" -> {
                     LlamaInferenceServiceImpl(
-                        llamaChatSessionManager,
-                        processThinkingTokens,
-                        modelType,
-                        loggingPort,
-                        modelRegistry,
-                        context
+                        sessionManager = llamaChatSessionManagerProvider.get(),
+                        processThinkingTokens = processThinkingTokens,
+                        loggingPort = loggingPort,
+                        modelRegistry = modelRegistry,
+                        context = context
                     )
                 }
                 "task" -> {
                     val modelPath = getModelPath(filename)
-                    mediaPipeFactory.create(modelPath, modelType)
+                    mediaPipeFactory.create(modelPath)
                 }
                 else -> {
                     LiteRtInferenceServiceImpl(
-                        conversationManagerProvider(modelType),
-                        processThinkingTokens,
-                        modelType
+                        conversationManager = conversationManagerProvider.get(),
+                        processThinkingTokens = processThinkingTokens
                     )
                 }
             }
 
-            cachedServices[modelType] = newService
-            cachedAssetIdentities[modelType] = assetIdentity
-            newService
+            // Associate this instance with its identity for refcounting
+            serviceToIdentity[newService] = assetIdentity
+            serviceCache[assetIdentity] = newService
+            return@withLock newService
         }
     }
 

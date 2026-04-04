@@ -3,12 +3,14 @@ package com.browntowndev.pocketcrew.feature.inference
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -22,7 +24,6 @@ import javax.inject.Inject
  */
 class MediaPipeInferenceServiceImpl @Inject constructor(
     private val llmInference: LlmInferenceWrapper,
-    private val modelType: ModelType,
 ) : LlmInferencePort {
 
     companion object {
@@ -69,6 +70,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
     }
 
     override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = callbackFlow {
+        val modelType = ModelType.FAST
         var isThinkingPhase = false
         val accumulatedThought = StringBuilder()
         val accumulatedText = StringBuilder()
@@ -141,21 +143,77 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         }
     }
 
-    override fun closeSession() {
-        // Defensive closure: only close if we can acquire the lock or if it's terminal cleanup.
-        // If the lock is held, something is either seeding or closing.
-        if (mutex.tryLock()) {
+    override suspend fun closeSession() {
+        // Constitutional Fix: use mutex.withLock in suspend function.
+        mutex.withLock {
             try {
                 session?.close()
                 session = null
                 llmInference.close()
             } catch (e: Exception) {
                 Log.w(TAG, "Error closing session", e)
-            } finally {
-                mutex.unlock()
             }
-        } else {
-            Log.w(TAG, "Could not acquire lock for closeSession - logic may be busy. Native resources will be freed by DI cleanup.")
+        }
+    }
+
+    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = callbackFlow {
+        val targetModelType = options.modelType ?: ModelType.FAST
+        var isThinkingPhase = false
+        val accumulatedThought = StringBuilder()
+        val accumulatedText = StringBuilder()
+
+        try {
+            val currentSession = mutex.withLock {
+                getOrCreateAndSeedSessionLocked()
+            }
+            
+            currentSession.addQueryChunk(prompt)
+
+            currentSession.generateResponseAsync { partialResult, done ->
+                val chunkText = partialResult ?: ""
+
+                if (chunkText.isNotEmpty()) {
+                    if (chunkText.contains("<think>")) {
+                        isThinkingPhase = true
+                        val cleanText = chunkText.replace("<think>", "")
+                        if (cleanText.isNotEmpty()) {
+                            accumulatedThought.append(cleanText)
+                            trySend(InferenceEvent.Thinking(cleanText, targetModelType))
+                        }
+                    } else if (chunkText.contains("</think>")) {
+                        isThinkingPhase = false
+                        val cleanText = chunkText.replace("</think>", "")
+                        if (cleanText.isNotEmpty()) {
+                            accumulatedText.append(cleanText)
+                            trySend(InferenceEvent.PartialResponse(cleanText, targetModelType))
+                        }
+                    } else if (isThinkingPhase) {
+                        accumulatedThought.append(chunkText)
+                        trySend(InferenceEvent.Thinking(chunkText, targetModelType))
+                    } else {
+                        accumulatedText.append(chunkText)
+                        trySend(InferenceEvent.PartialResponse(chunkText, targetModelType))
+                    }
+                }
+
+                if (done) {
+                    trySend(InferenceEvent.Finished(targetModelType))
+                    close()
+                }
+            }
+
+            awaitClose { }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during inference", e)
+            trySend(InferenceEvent.Error(e, targetModelType))
+            close()
+        } finally {
+            if (closeConversation) {
+                mutex.withLock {
+                    session?.close()
+                    session = null
+                }
+            }
         }
     }
 }

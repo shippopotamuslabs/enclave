@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.feature.inference.llama
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LlamaEnginePort
 import kotlinx.coroutines.CoroutineDispatcher
@@ -344,6 +345,95 @@ class JniLlamaEngine @Inject constructor(
         awaitClose {
             // Always try to stop - it's safe to call even if generation already completed
             // This ensures we don't have a race between completion and cleanup
+            llamaExecutor.submit {
+                nativeStopCompletion()
+            }
+            generating.set(false)
+        }
+    }.flowOn(Dispatchers.IO)
+
+    override fun generateWithOptions(options: GenerationOptions): Flow<GenerationEvent> = callbackFlow {
+        Log.i(TAG, "Starting generation with options: reasoningBudget=${options.reasoningBudget}")
+        check(loaded.get()) { "Engine not initialized" }
+        check(generating.compareAndSet(false, true)) { "Generation already in progress" }
+
+        val cfg = requireNotNull(currentConfig) { "Missing config" }
+        val roles = history.map { it.toNativeMessage().first }.toTypedArray()
+        val contents = history.map { it.toNativeMessage().second }.toTypedArray()
+
+        // Derive parameters from options instead of config defaults
+        val reasoningBudget = options.reasoningBudget
+        val penaltyFreq = if (reasoningBudget > 0) 0.0f else 0.05f
+        val penaltyPresent = if (reasoningBudget > 0) 0.0f else 0.05f
+        val timeoutSeconds = if (reasoningBudget > 0) GENERATION_TIMEOUT_SECONDS_THINKING else GENERATION_TIMEOUT_SECONDS_REGULAR
+        val temperature = options.temperature ?: cfg.sampling.temperature
+
+        Log.i(TAG, "Generation with options: reasoningBudget=$reasoningBudget, penaltyFreq=$penaltyFreq, penaltyPresent=$penaltyPresent, timeout=$timeoutSeconds, temp=$temperature")
+
+        val callback = object : NativeTokenCallback {
+            private val sb = StringBuilder()
+            private var isClosed = false
+
+            override fun onToken(token: String) {
+                if (isClosed) return
+                sb.append(token)
+                trySend(GenerationEvent.Token(token))
+            }
+
+            override fun onComplete(promptTokens: Int, generatedTokens: Int) {
+                if (isClosed) return
+                isClosed = true
+                Log.i(TAG, "Generation complete: $generatedTokens tokens generated")
+                trySend(
+                    GenerationEvent.Completed(
+                        fullText = sb.toString(),
+                        promptTokens = promptTokens,
+                        generatedTokens = generatedTokens
+                    )
+                )
+                lastPromptTokens = promptTokens
+                lastGeneratedTokens = generatedTokens
+                checkAndCompressContext()
+                history += ChatMessage(ChatRole.ASSISTANT, sb.toString())
+                generating.set(false)
+                close()
+            }
+
+            override fun onError(message: String) {
+                if (isClosed) return
+                isClosed = true
+                trySend(GenerationEvent.Error(IllegalStateException(message)))
+                generating.set(false)
+                close()
+            }
+        }
+
+        try {
+            val future = llamaExecutor.submit<Unit> {
+                nativeStartCompletion(
+                    roles = roles,
+                    contents = contents,
+                    temperature = temperature,
+                    topK = options.topK ?: cfg.sampling.topK,
+                    topP = options.topP ?: cfg.sampling.topP,
+                    minP = options.minP ?: cfg.sampling.minP,
+                    maxTokens = options.maxTokens ?: cfg.sampling.maxTokens,
+                    repeatPenalty = cfg.sampling.repeatPenalty,
+                    penaltyFreq = penaltyFreq,
+                    penaltyPresent = penaltyPresent,
+                    reasoningBudget = reasoningBudget,
+                    callback = callback
+                )
+            }
+            future.get(timeoutSeconds, TimeUnit.SECONDS)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during generation", e)
+            trySend(GenerationEvent.Error(e))
+            generating.set(false)
+            close(e)
+        }
+
+        awaitClose {
             llamaExecutor.submit {
                 nativeStopCompletion()
             }

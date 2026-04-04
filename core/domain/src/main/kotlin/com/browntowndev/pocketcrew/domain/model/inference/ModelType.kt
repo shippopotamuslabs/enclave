@@ -39,6 +39,19 @@ enum class ModelType(val apiValue: String) {
      */
     FINAL_SYNTHESIS("final_synthesis");
 
+    /**
+     * Returns the human-readable display name for this model role.
+     */
+    fun displayName(): String = when (this) {
+        VISION -> "Vision"
+        DRAFT_ONE -> "Draft One"
+        DRAFT_TWO -> "Draft Two"
+        MAIN -> "Synthesis"
+        FAST -> "Fast"
+        THINKING -> "Thinking"
+        FINAL_SYNTHESIS -> "Final Review"
+    }
+
     companion object {
         /**
          * Converts a string value to a ModelType enum.

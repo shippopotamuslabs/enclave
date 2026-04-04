@@ -12,6 +12,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseC
 import com.browntowndev.pocketcrew.feature.inference.llama.ChatMessage
 import com.browntowndev.pocketcrew.feature.inference.llama.ChatRole
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
@@ -32,7 +33,6 @@ import javax.inject.Inject
 class LlamaInferenceServiceImpl @Inject constructor(
     private val sessionManager: LlamaChatSessionManager,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
-    private val modelType: ModelType,
     private val loggingPort: LoggingPort,
     private val modelRegistry: ModelRegistryPort,
     @ApplicationContext private val context: Context
@@ -59,7 +59,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
      * Ensures the engine is loaded with the current model from registry.
      * If the model or config has changed since last load, tears down and reloads.
      */
-    private suspend fun ensureModelLoaded() {
+    private suspend fun ensureModelLoaded(modelType: ModelType) {
         val asset = modelRegistry.getRegisteredAsset(modelType)
         val config = modelRegistry.getRegisteredConfiguration(modelType)
 
@@ -134,9 +134,11 @@ class LlamaInferenceServiceImpl @Inject constructor(
     }
 
     override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = flow {
-        // Ensure the engine is loaded with the current model from registry
+        // Fallback for cases where targetModelType is not provided
+        val modelType = ModelType.FAST 
+        
         try {
-            ensureModelLoaded()
+            ensureModelLoaded(modelType)
         } catch (e: Exception) {
             emit(InferenceEvent.Error(e, modelType))
             return@flow
@@ -213,11 +215,10 @@ class LlamaInferenceServiceImpl @Inject constructor(
         }
     }
 
-    override fun closeSession() {
+    override suspend fun closeSession() {
+        // Constitutional Fix: remove runBlocking.
         try {
-            kotlinx.coroutines.runBlocking {
-                sessionManager.shutdown()
-            }
+            sessionManager.shutdown()
             isInitialized = false
             currentModelId = null
             currentConfigId = null
@@ -230,19 +231,83 @@ class LlamaInferenceServiceImpl @Inject constructor(
      * Clear the conversation but keep the model loaded.
      * Used between pipeline steps to avoid reloading the model.
      */
-    fun clearConversation() {
+    suspend fun clearConversation() {
+        // Constitutional Fix: remove runBlocking.
         try {
-            kotlinx.coroutines.runBlocking {
-                sessionManager.clearConversation()
-            }
+            sessionManager.clearConversation()
         } catch (e: Exception) {
             Log.w(TAG, "Error clearing conversation", e)
         }
     }
 
     override suspend fun setHistory(messages: List<DomainChatMessage>) {
-        // Ensure model is loaded before setting history
-        ensureModelLoaded()
         sessionManager.setHistory(messages)
+    }
+
+    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = flow {
+        // Get model type from options (we'll need to add it to GenerationOptions)
+        val targetModelType = options.modelType ?: ModelType.FAST
+
+        try {
+            ensureModelLoaded(targetModelType)
+        } catch (e: Exception) {
+            emit(InferenceEvent.Error(e, targetModelType))
+            return@flow
+        }
+
+        var isThinking = false
+        val accumulatedThought = StringBuilder()
+        val accumulatedText = StringBuilder()
+        var buffer = ""
+
+        try {
+            sessionManager.sendUserMessage(prompt)
+
+            // Use options-aware streaming instead of mutating samplingConfig
+            sessionManager.streamAssistantResponseWithOptions(options).collect { event ->
+                when (event) {
+                    is GenerationEvent.Token -> {
+                        val state = processThinkingTokens(buffer, event.text, isThinking)
+                        buffer = state.buffer
+                        isThinking = state.isThinking
+
+                        state.emittedSegments.forEach { segment ->
+                            when (segment.kind) {
+                                SegmentKind.THINKING -> {
+                                    accumulatedThought.append(segment.text)
+                                    emit(InferenceEvent.Thinking(segment.text, targetModelType))
+                                }
+                                SegmentKind.VISIBLE -> {
+                                    accumulatedText.append(segment.text)
+                                    emit(InferenceEvent.PartialResponse(segment.text, targetModelType))
+                                }
+                            }
+                        }
+                    }
+                    is GenerationEvent.Completed -> {
+                        if (buffer.isNotEmpty()) {
+                            if (isThinking) {
+                                accumulatedThought.append(buffer)
+                                emit(InferenceEvent.Thinking(buffer, targetModelType))
+                            } else {
+                                accumulatedText.append(buffer)
+                                emit(InferenceEvent.PartialResponse(buffer, targetModelType))
+                            }
+                        }
+                        emit(InferenceEvent.Finished(targetModelType))
+                    }
+                    is GenerationEvent.Error -> {
+                        emit(InferenceEvent.Error(event.throwable, targetModelType))
+                    }
+                }
+            }
+
+            if (closeConversation) {
+                sessionManager.clearConversation()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during inference", e)
+            emit(InferenceEvent.Error(e, targetModelType))
+        }
     }
 }

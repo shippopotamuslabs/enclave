@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.domain.port.inference
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import kotlinx.coroutines.flow.Flow
 
@@ -40,6 +41,14 @@ interface LlamaEnginePort {
      * Returns a flow of GenerationEvent for streaming tokens.
      */
     fun generate(): Flow<GenerationEvent>
+
+    /**
+     * Start text generation with per-request GenerationOptions.
+     * Derives reasoning budget, penalties, and timeout from options rather than config defaults.
+     *
+     * @param options Per-request generation options
+     */
+    fun generateWithOptions(options: GenerationOptions): Flow<GenerationEvent>
 
     /**
      * Stop the current generation if in progress.

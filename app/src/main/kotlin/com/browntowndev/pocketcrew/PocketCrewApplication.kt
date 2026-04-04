@@ -3,7 +3,6 @@ import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.google.ai.edge.litertlm.ExperimentalApi
-import com.google.ai.edge.litertlm.ExperimentalFlags
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -20,7 +19,7 @@ class PocketCrewApplication : Application(), Configuration.Provider {
         
         // Required for LiteRT NPU support if available on the device
         // This is a static initialization that only needs to happen once.
-        ExperimentalFlags.npuLibrariesDir = applicationInfo.nativeLibraryDir
+        // Removed as of litertlm 0.10.0, NPU path handling has changed internally
     }
 
     override val workManagerConfiguration: Configuration
