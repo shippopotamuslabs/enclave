@@ -4,6 +4,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -83,31 +84,35 @@ fun MessageList(
                 val messageIndex = messages.size - 1 - index
                 val message = messages[messageIndex]
 
-                // ============================================================
-                // Content rendering based on message role
-                // ============================================================
-                if (message.role == MessageRole.User) {
-                    MessageBubble(
-                        modifier = Modifier.padding(horizontal = 10.dp),
-                        message = message,
-                        onEditClick = onEditMessage,
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp)
+                ) {
+                    // ============================================================
+                    // Indicator rendering - shows at TOP for Assistant messages
+                    // (below content for User messages since they have no indicators)
+                    // ============================================================
+                    Indicators(
+                        modelDisplayName = message.modelDisplayName,
+                        indicatorState = message.indicatorState
                     )
-                } else {
-                    AssistantResponse(
-                        modifier = Modifier.padding(horizontal = 10.dp),
-                        message = message,
-                        isPreview = isPreview,
-                    )
-                }
 
-                // ============================================================
-                // Indicator rendering - shows at TOP for Assistant messages
-                // (below content for User messages since they have no indicators)
-                // ============================================================
-                Indicators(
-                    modelDisplayName = message.modelDisplayName,
-                    indicatorState = message.indicatorState
-                )
+                    // ============================================================
+                    // Content rendering based on message role
+                    // ============================================================
+                    if (message.role == MessageRole.User) {
+                        MessageBubble(
+                            message = message,
+                            onEditClick = onEditMessage,
+                        )
+                    } else {
+                        AssistantResponse(
+                            message = message,
+                            isPreview = isPreview,
+                        )
+                    }
+                }
             }
         }
     }
@@ -175,7 +180,6 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
         when (indicatorState) {
             is IndicatorState.Thinking -> {
                 ThinkingIndicator(
-                    modifier = Modifier.padding(horizontal = 5.dp),
                     thinkingRaw = indicatorState.thinkingRaw,
                     elapsedSeconds = elapsedSeconds,
                     modelDisplayName = modelDisplayName,
@@ -189,25 +193,27 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                 ProcessingIndicator()
             }
             is IndicatorState.Generating -> {
-                GeneratingIndicator(modifier = Modifier.offset(x = (-2).dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    val thinkingData = indicatorState.thinkingData
+                    if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank()) {
+                        ThoughtForHeader(
+                            modifier = Modifier.padding(top = 8.dp),
+                            durationText = formatThinkingDuration(elapsedSeconds),
+                            isExpanded = isThinkingSheetVisible,
+                            onViewFullThinking = {
+                                isThinkingSheetVisible = !isThinkingSheetVisible
+                            }
+                        )
+                    }
 
-                val thinkingData = indicatorState.thinkingData
-                if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank()) {
-                    ThoughtForHeader(
-                        modifier = Modifier.padding(horizontal = 5.dp),
-                        durationText = formatThinkingDuration(elapsedSeconds),
-                        isExpanded = isThinkingSheetVisible,
-                        onViewFullThinking = {
-                            isThinkingSheetVisible = !isThinkingSheetVisible
-                        }
-                    )
+                    GeneratingIndicator()
                 }
             }
             is IndicatorState.Complete -> {
                 val thinkingData = indicatorState.thinkingData
                 if (thinkingData != null && thinkingData.thinkingRaw.isNotBlank()) {
                     ThoughtForHeader(
-                        modifier = Modifier.padding(horizontal = 5.dp),
+                        modifier = Modifier.padding(top = 8.dp),
                         durationText = formatThinkingDuration(elapsedSeconds),
                         isExpanded = isThinkingSheetVisible,
                         onViewFullThinking = {
@@ -264,17 +270,23 @@ private fun ThoughtForHeader(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
-            .padding(vertical = 10.dp)
+            .padding(bottom = 8.dp)
             .fillMaxWidth()
             .clickable { onViewFullThinking() }
     ) {
-        Icon(
-            painter = painterResource(R.drawable.lightbulb),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(24.dp),
-        )
-        Spacer(Modifier.width(6.dp))
+        Box(
+            modifier = Modifier.size(46.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.lightbulb),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp),
+            )
+        }
+        Spacer(Modifier.width(5.dp))
+
         Text(
             text = "Thought for $durationText",
             style = MaterialTheme.typography.titleMedium.copy(
@@ -283,13 +295,14 @@ private fun ThoughtForHeader(
             ),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
         Spacer(Modifier.width(6.dp))
         Icon(
             imageVector = Icons.Default.ChevronRight,
             contentDescription = if (isExpanded) "Collapse details" else "Expand details",
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
-                .size(18.dp)
+                .size(24.dp)
                 .rotate(rotation),
         )
     }
