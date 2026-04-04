@@ -305,7 +305,11 @@ class HttpFileDownloader @Inject constructor(
 
     private fun isHuggingFaceUrl(urlString: String): Boolean {
         return try {
-            val host = URL(urlString).host
+            val url = URL(urlString)
+            if (!url.protocol.equals("https", ignoreCase = true)) {
+                return false
+            }
+            val host = url.host.lowercase()
             host == "huggingface.co" || host.endsWith(".huggingface.co")
         } catch (e: Exception) {
             false
