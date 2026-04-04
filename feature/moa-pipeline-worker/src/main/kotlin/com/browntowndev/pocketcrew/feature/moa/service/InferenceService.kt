@@ -16,6 +16,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.DraftOneModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.DraftTwoModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.FinalSynthesizerModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.MainModelEngine
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
@@ -346,9 +347,20 @@ class InferenceService : Service() {
         step: PipelineStep,
     ): StepResult {
         var output = ""
+        val modelType = getModelTypeForStep(step)
+
+        // Register usage to participate in refcounted lifecycle
+        inferenceFactoryProvider.get().registerUsage(service)
 
         try {
-            service.sendPrompt(prompt, closeConversation = false).collect { event ->
+            // Fetch configuration to determine thinking/reasoning budget for this specific step
+            val config = modelRegistry.getRegisteredConfiguration(modelType)
+            val options = GenerationOptions(
+                reasoningBudget = if (config?.thinkingEnabled == true) 1024 else 0,
+                modelType = modelType
+            )
+
+            service.sendPrompt(prompt, options = options, closeConversation = false).collect { event ->
                 when (event) {
                     is InferenceEvent.Thinking -> {
                         broadcastProgress(EXTRA_THINKING_CHUNK, event.chunk, getModelTypeForStep(step).name)
@@ -370,9 +382,10 @@ class InferenceService : Service() {
             }
         } finally {
             try {
-                service.closeSession()
+                // Use factory releaseUsage instead of direct closeSession to ensure refcount integrity
+                inferenceFactoryProvider.get().releaseUsage(service)
             } catch (e: Exception) {
-                logger.warning(TAG, "Error closing service: ${e.message}")
+                logger.warning(TAG, "Error releasing service: ${e.message}")
             }
         }
 
