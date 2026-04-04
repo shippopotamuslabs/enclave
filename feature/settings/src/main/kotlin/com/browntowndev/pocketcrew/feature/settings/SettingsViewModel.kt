@@ -261,6 +261,7 @@ class SettingsViewModel @Inject constructor(
         minP = minP,
         repetitionPenalty = repetitionPenalty,
         systemPrompt = systemPrompt,
+        thinkingEnabled = thinkingEnabled,
         isSystemPreset = isSystemPreset
     )
 
@@ -518,6 +519,7 @@ class SettingsViewModel @Inject constructor(
             topK = configUi.topK.toIntOrNull(),
             minP = configUi.minP,
             repetitionPenalty = configUi.repetitionPenalty,
+            thinkingEnabled = configUi.thinkingEnabled,
             systemPrompt = configUi.systemPrompt
         )
 

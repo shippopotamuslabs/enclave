@@ -41,8 +41,8 @@ import kotlinx.coroutines.delay
  * - Chevron that rotates 90° when tapped to reveal details in bottom sheet
  *
  * @param thinkingRaw Raw thinking text as markdown
- * @param thinkingStartTime Timestamp (System.currentTimeMillis()) when thinking started. If not provided or 0, elapsed time won't be shown.
  * @param modifier Modifier for the composable
+ * @param modelDisplayName Display name of the model
  * @param isExpanded Whether the details are expanded (chevron rotation)
  * @param onToggleDetails Callback when the indicator is tapped to toggle details bottom sheet
  */
@@ -50,8 +50,8 @@ import kotlinx.coroutines.delay
 fun ThinkingIndicator(
     thinkingRaw: String,
     modifier: Modifier = Modifier,
-    elapsedSeconds: Int = 0,
     modelDisplayName: String = "",
+    elapsedSeconds: Int = 0,
     isExpanded: Boolean = false,
     onToggleDetails: () -> Unit = {},
 ) {
