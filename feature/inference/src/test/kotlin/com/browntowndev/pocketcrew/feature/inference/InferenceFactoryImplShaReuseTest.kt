@@ -16,13 +16,12 @@ import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManag
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertSame
-import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import java.io.File
+import kotlin.test.assertFailsWith
 
 class InferenceFactoryImplShaReuseTest {
 
@@ -106,12 +105,8 @@ class InferenceFactoryImplShaReuseTest {
         every { mockMediaPipeFactory.create(any()) } returns mediaPipeService
 
         factory.withInferenceService(ModelType.FAST) {
-            val secondCall = async {
+            assertFailsWith<InferenceBusyException> {
                 factory.withInferenceService(ModelType.THINKING) { inner -> inner }
-            }
-
-            assertThrows(InferenceBusyException::class.java) {
-                kotlinx.coroutines.runBlocking { secondCall.await() }
             }
         }
     }
