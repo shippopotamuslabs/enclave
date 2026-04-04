@@ -98,12 +98,19 @@ class LlamaInferenceServiceImplTest {
         service = LlamaInferenceServiceImpl(
             sessionManager = sessionManager,
             processThinkingTokens = processThinkingTokens,
-            modelType = ModelType.MAIN,
             loggingPort = mockLoggingPort,
             modelRegistry = mockModelRegistry,
             context = mockContext
         )
     }
+
+    private fun createService() = LlamaInferenceServiceImpl(
+        sessionManager = sessionManager,
+        processThinkingTokens = processThinkingTokens,
+        loggingPort = mockLoggingPort,
+        modelRegistry = mockModelRegistry,
+        context = mockContext
+    )
 
     // =========================================================================
     // [THINK] Tag Tests (Streaming & Partial Token Handling)

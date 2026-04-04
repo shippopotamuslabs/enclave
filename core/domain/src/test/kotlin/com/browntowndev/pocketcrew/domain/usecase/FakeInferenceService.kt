@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
@@ -30,6 +31,15 @@ class FakeInferenceService : LlmInferencePort {
         // Subclasses or tests should override this behavior
     }
 
+    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = flow {
+        sentPrompts.add(prompt)
+
+        if (shouldThrowOnSendPrompt) {
+            shouldThrowOnSendPrompt = false
+            throw RuntimeException("Simulated sendPrompt with options error")
+        }
+    }
+
     override suspend fun setHistory(messages: List<ChatMessage>) {
         historyMessages = messages
         
@@ -39,8 +49,8 @@ class FakeInferenceService : LlmInferencePort {
         }
     }
 
-    override fun closeSession() {
-        // No-op for testing
+    override suspend fun closeSession() {
+        // No-op for fake
     }
 
     fun getSentPrompts(): List<String> = sentPrompts.toList()

@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.json.JSONObject
 
 /**
  * Unit tests for ModelDownloadWorker parseModelData function.
@@ -29,25 +30,26 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseModelData correctly parses complete serialized string`() {
-        // Format: modelType|remoteFileName|localFileName|displayName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt
-        val serialized = listOf(
-            "MAIN",
-            "Llama-3-8B-Instruct-Q4_K_M.gguf",
-            "Llama-3-8B-Instruct-Q4_K_M.gguf",
-            "Llama 3 8B",
-            "meta-llama/Llama-3-8B-Instruct",
-            "5200000000",
-            "abc123def456",
-            "GGUF",
-            "0.7",
-            "40",
-            "0.95",
-            "0.0",
-            "1.1",
-            "4096",
-            "4096",
-            "You are a helpful assistant."
-        ).joinToString("|")
+        val serialized = JSONObject().apply {
+            put("modelType", "MAIN")
+            put("remoteFileName", "Llama-3-8B-Instruct-Q4_K_M.gguf")
+            put("localFileName", "Llama-3-8B-Instruct-Q4_K_M.gguf")
+            put("presetName", "Llama 3 8B")
+            put("huggingFaceModelName", "meta-llama/Llama-3-8B-Instruct")
+            put("sizeInBytes", 5_200_000_000L)
+            put("sha256", "abc123def456")
+            put("modelFileFormat", "GGUF")
+            put("temperature", 0.7)
+            put("topK", 40)
+            put("topP", 0.95)
+            put("minP", 0.0)
+            put("repetitionPenalty", 1.1)
+            put("maxTokens", 4096)
+            put("contextWindow", 4096)
+            put("systemPrompt", "You are a helpful assistant.")
+            put("isSystemPreset", true)
+            put("thinkingEnabled", false)
+        }.toString()
 
         val result = parseModelData(serialized)
 
@@ -72,24 +74,26 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseModelData handles litertlm format`() {
-        val serialized = listOf(
-            "VISION",
-            "gemma-3n-E2B-it-int4.litertlm",
-            "gemma-3n-E2B-it-int4.litertlm",
-            "Gemma 3N E2B",
-            "google/gemma-3n-E2B",
-            "2800000000",
-            "def789ghi012",
-            "LITERTLM",
-            "0.5",
-            "40",
-            "0.9",
-            "0.0",
-            "1.05",
-            "2048",
-            "2048",
-            "You are a vision assistant."
-        ).joinToString("|")
+        val serialized = JSONObject().apply {
+            put("modelType", "VISION")
+            put("remoteFileName", "gemma-3n-E2B-it-int4.litertlm")
+            put("localFileName", "gemma-3n-E2B-it-int4.litertlm")
+            put("presetName", "Gemma 3N E2B")
+            put("huggingFaceModelName", "google/gemma-3n-E2B")
+            put("sizeInBytes", 2_800_000_000L)
+            put("sha256", "def789ghi012")
+            put("modelFileFormat", "LITERTLM")
+            put("temperature", 0.5)
+            put("topK", 40)
+            put("topP", 0.9)
+            put("minP", 0.0)
+            put("repetitionPenalty", 1.05)
+            put("maxTokens", 2048)
+            put("contextWindow", 2048)
+            put("systemPrompt", "You are a vision assistant.")
+            put("isSystemPreset", true)
+            put("thinkingEnabled", false)
+        }.toString()
 
         val result = parseModelData(serialized)
 
@@ -108,24 +112,26 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseModelData handles task format`() {
-        val serialized = listOf(
-            "FAST",
-            "LFM2.5-1.2B-Thinking-Q8_0.gguf",
-            "LFM2.5-1.2B-Thinking-Q8_0.gguf",
-            "LFM 2.5 1.2B Thinking",
-            "Liquid/LFM-2.5-1.2B-Thinking",
-            "1800000000",
-            "jkl012mno345",
-            "GGUF",
-            "0.3",
-            "40",
-            "0.95",
-            "0.0",
-            "1.2",
-            "4096",
-            "8192",
-            "You are a fast thinking assistant."
-        ).joinToString("|")
+        val serialized = JSONObject().apply {
+            put("modelType", "FAST")
+            put("remoteFileName", "LFM2.5-1.2B-Thinking-Q8_0.gguf")
+            put("localFileName", "LFM2.5-1.2B-Thinking-Q8_0.gguf")
+            put("presetName", "LFM 2.5 1.2B Thinking")
+            put("huggingFaceModelName", "Liquid/LFM-2.5-1.2B-Thinking")
+            put("sizeInBytes", 1_800_000_000L)
+            put("sha256", "jkl012mno345")
+            put("modelFileFormat", "GGUF")
+            put("temperature", 0.3)
+            put("topK", 40)
+            put("topP", 0.95)
+            put("minP", 0.0)
+            put("repetitionPenalty", 1.2)
+            put("maxTokens", 4096)
+            put("contextWindow", 8192)
+            put("systemPrompt", "You are a fast thinking assistant.")
+            put("isSystemPreset", true)
+            put("thinkingEnabled", false)
+        }.toString()
 
         val result = parseModelData(serialized)
 
@@ -143,24 +149,26 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseModelData returns null for invalid model type`() {
-        val serialized = listOf(
-            "INVALID_TYPE",
-            "model.gguf",
-            "model.gguf",
-            "Test Model",
-            "test/model",
-            "1000",
-            "abc123",
-            "GGUF",
-            "0.7",
-            "40",
-            "0.95",
-            "0.0",
-            "1.1",
-            "4096",
-            "4096",
-            ""
-        ).joinToString("|")
+        val serialized = JSONObject().apply {
+            put("modelType", "INVALID_TYPE")
+            put("remoteFileName", "model.gguf")
+            put("localFileName", "model.gguf")
+            put("presetName", "Test Model")
+            put("huggingFaceModelName", "test/model")
+            put("sizeInBytes", 1000L)
+            put("sha256", "abc123")
+            put("modelFileFormat", "GGUF")
+            put("temperature", 0.7)
+            put("topK", 40)
+            put("topP", 0.95)
+            put("minP", 0.0)
+            put("repetitionPenalty", 1.1)
+            put("maxTokens", 4096)
+            put("contextWindow", 4096)
+            put("systemPrompt", "")
+            put("isSystemPreset", true)
+            put("thinkingEnabled", false)
+        }.toString()
 
         val result = parseModelData(serialized)
 
@@ -169,22 +177,7 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseModelData returns null for insufficient parts`() {
-        // Only 13 parts (needs at least 14)
-        val serialized = listOf(
-            "MAIN",
-            "model.gguf",
-            "model.gguf",
-            "Test",
-            "test/model",
-            "1000",
-            "abc123",
-            "GGUF",
-            "0.7",
-            "40",
-            "0.95",
-            "0.0",
-            "1.1"
-        ).joinToString("|")
+        val serialized = """{"modelType":"MAIN"}"""
 
         val result = parseModelData(serialized)
 
@@ -193,24 +186,26 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseModelData defaults modelFileFormat on invalid format string`() {
-        val serialized = listOf(
-            "MAIN",
-            "model.unknown",
-            "model.unknown",
-            "Test Model",
-            "test/model",
-            "1000",
-            "abc123",
-            "UNKNOWN_FORMAT",
-            "0.7",
-            "40",
-            "0.95",
-            "0.0",
-            "1.1",
-            "4096",
-            "4096",
-            ""
-        ).joinToString("|")
+        val serialized = JSONObject().apply {
+            put("modelType", "MAIN")
+            put("remoteFileName", "model.unknown")
+            put("localFileName", "model.unknown")
+            put("presetName", "Test Model")
+            put("huggingFaceModelName", "test/model")
+            put("sizeInBytes", 1000L)
+            put("sha256", "abc123")
+            put("modelFileFormat", "UNKNOWN_FORMAT")
+            put("temperature", 0.7)
+            put("topK", 40)
+            put("topP", 0.95)
+            put("minP", 0.0)
+            put("repetitionPenalty", 1.1)
+            put("maxTokens", 4096)
+            put("contextWindow", 4096)
+            put("systemPrompt", "")
+            put("isSystemPreset", true)
+            put("thinkingEnabled", false)
+        }.toString()
 
         val result = parseModelData(serialized)
 
@@ -221,24 +216,26 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseModelData handles empty system prompt`() {
-        val serialized = listOf(
-            "THINKING",
-            "model.gguf",
-            "model.gguf",
-            "Test",
-            "test/model",
-            "1000",
-            "abc123",
-            "GGUF",
-            "0.7",
-            "40",
-            "0.95",
-            "0.0",
-            "1.1",
-            "4096",
-            "4096",
-            ""
-        ).joinToString("|")
+        val serialized = JSONObject().apply {
+            put("modelType", "THINKING")
+            put("remoteFileName", "model.gguf")
+            put("localFileName", "model.gguf")
+            put("presetName", "Test")
+            put("huggingFaceModelName", "test/model")
+            put("sizeInBytes", 1000L)
+            put("sha256", "abc123")
+            put("modelFileFormat", "GGUF")
+            put("temperature", 0.7)
+            put("topK", 40)
+            put("topP", 0.95)
+            put("minP", 0.0)
+            put("repetitionPenalty", 1.1)
+            put("maxTokens", 4096)
+            put("contextWindow", 4096)
+            put("systemPrompt", "")
+            put("isSystemPreset", true)
+            put("thinkingEnabled", false)
+        }.toString()
 
         val result = parseModelData(serialized)
 
@@ -249,24 +246,26 @@ class ModelDownloadWorkerTest {
     @Test
     fun `parseModelData correctly extracts huggingFaceModelName for URL construction`() {
         // This test specifically verifies the field ordering issue that caused 404 errors
-        val serialized = listOf(
-            "MAIN",
-            "actual-filename.gguf",
-            "actual-filename.gguf",
-            "Display Name",
-            "correct/huggingface-model-name",  // This should be used for URL
-            "5000000000",
-            "sha256hash",
-            "GGUF",
-            "0.7",
-            "40",
-            "0.95",
-            "0.0",
-            "1.1",
-            "4096",
-            "4096",
-            ""
-        ).joinToString("|")
+        val serialized = JSONObject().apply {
+            put("modelType", "MAIN")
+            put("remoteFileName", "actual-filename.gguf")
+            put("localFileName", "actual-filename.gguf")
+            put("presetName", "Display Name")
+            put("huggingFaceModelName", "correct/huggingface-model-name")
+            put("sizeInBytes", 5_000_000_000L)
+            put("sha256", "sha256hash")
+            put("modelFileFormat", "GGUF")
+            put("temperature", 0.7)
+            put("topK", 40)
+            put("topP", 0.95)
+            put("minP", 0.0)
+            put("repetitionPenalty", 1.1)
+            put("maxTokens", 4096)
+            put("contextWindow", 4096)
+            put("systemPrompt", "")
+            put("isSystemPreset", true)
+            put("thinkingEnabled", false)
+        }.toString()
 
         val result = parseModelData(serialized)
 
@@ -294,24 +293,26 @@ class ModelDownloadWorkerTest {
             ModelType.DRAFT_TWO,
             ModelType.THINKING
         ).forEach { expectedType ->
-            val serialized = listOf(
-                expectedType.name,
-                "model.gguf",
-                "model.gguf",
-                "Test Model",
-                "test/model",
-                "1000",
-                "abc123",
-                "GGUF",
-                "0.7",
-                "40",
-                "0.95",
-                "0.0",
-                "1.1",
-                "4096",
-                "4096",
-                ""
-            ).joinToString("|")
+            val serialized = JSONObject().apply {
+                put("modelType", expectedType.name)
+                put("remoteFileName", "model.gguf")
+                put("localFileName", "model.gguf")
+                put("presetName", "Test Model")
+                put("huggingFaceModelName", "test/model")
+                put("sizeInBytes", 1000L)
+                put("sha256", "abc123")
+                put("modelFileFormat", "GGUF")
+                put("temperature", 0.7)
+                put("topK", 40)
+                put("topP", 0.95)
+                put("minP", 0.0)
+                put("repetitionPenalty", 1.1)
+                put("maxTokens", 4096)
+                put("contextWindow", 4096)
+                put("systemPrompt", "")
+                put("isSystemPreset", true)
+                put("thinkingEnabled", false)
+            }.toString()
 
             val result = parseModelData(serialized)
 
@@ -325,26 +326,22 @@ class ModelDownloadWorkerTest {
      * This is a copy for testing purposes - in the actual worker it would be private.
      */
     private fun parseModelData(data: String): Pair<ModelType, LocalModelAsset>? {
-        val parts = data.split("|")
-        if (parts.size < 14) {
-            return null
-        }
-
         return try {
+            val json = JSONObject(data)
             val modelType = try {
-                ModelType.valueOf(parts[0])
+                ModelType.valueOf(json.getString("modelType"))
             } catch (e: Exception) {
                 return null
             }
 
             val metadata = com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata(
-                huggingFaceModelName = parts[4],
-                remoteFileName = parts[1],
-                localFileName = parts[2],
-                sha256 = parts[6],
-                sizeInBytes = parts[5].toLongOrNull() ?: 0L,
+                huggingFaceModelName = json.optString("huggingFaceModelName", ""),
+                remoteFileName = json.getString("remoteFileName"),
+                localFileName = json.getString("localFileName"),
+                sha256 = json.getString("sha256"),
+                sizeInBytes = json.optLong("sizeInBytes", 0L),
                 modelFileFormat = try {
-                    ModelFileFormat.valueOf(parts[7])
+                    ModelFileFormat.valueOf(json.getString("modelFileFormat"))
                 } catch (e: Exception) {
                     ModelFileFormat.LITERTLM
                 }
@@ -352,15 +349,17 @@ class ModelDownloadWorkerTest {
 
             val configuration = LocalModelConfiguration(
                 localModelId = 0,
-                displayName = parts[3],
-                temperature = parts[8].toDoubleOrNull() ?: 0.7,
-                topK = parts[9].toIntOrNull() ?: 40,
-                topP = parts[10].toDoubleOrNull() ?: 0.95,
-                minP = parts[11].toDoubleOrNull() ?: 0.0,
-                repetitionPenalty = parts[12].toDoubleOrNull() ?: 1.1,
-                maxTokens = parts[13].toIntOrNull() ?: 4096,
-                contextWindow = parts.getOrNull(14)?.toIntOrNull() ?: 4096,
-                systemPrompt = parts.getOrNull(15) ?: ""
+                displayName = json.getString("presetName"),
+                temperature = json.optDouble("temperature", 0.7),
+                topK = json.optInt("topK", 40),
+                topP = json.optDouble("topP", 0.95),
+                minP = json.optDouble("minP", 0.0),
+                repetitionPenalty = json.optDouble("repetitionPenalty", 1.1),
+                maxTokens = json.optInt("maxTokens", 4096),
+                contextWindow = json.optInt("contextWindow", 4096),
+                systemPrompt = json.optString("systemPrompt", ""),
+                isSystemPreset = json.optBoolean("isSystemPreset", true),
+                thinkingEnabled = json.optBoolean("thinkingEnabled", false)
             )
 
             modelType to LocalModelAsset(

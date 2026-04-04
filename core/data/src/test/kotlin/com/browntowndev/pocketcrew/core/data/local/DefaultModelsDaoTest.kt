@@ -2,7 +2,6 @@ package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -41,7 +40,7 @@ class DefaultModelsDaoTest {
     @Test
     fun `assign a local config as default for a ModelType`() = runTest {
         val modelId = database.localModelsDao().upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, modelStatus = ModelStatus.CURRENT
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false, thinkingEnabled = false, isVision = false
         ))
         val configId = database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
             localModelId = modelId, displayName = "c"
@@ -71,7 +70,7 @@ class DefaultModelsDaoTest {
     @Test
     fun `switch default from local to API`() = runTest {
         val modelId = database.localModelsDao().upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, modelStatus = ModelStatus.CURRENT
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false, thinkingEnabled = false, isVision = false
         ))
         val localConfigId = database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
             localModelId = modelId, displayName = "c"
@@ -94,7 +93,7 @@ class DefaultModelsDaoTest {
     @Test
     fun `observe all defaults`() = runTest {
         val modelId = database.localModelsDao().upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, modelStatus = ModelStatus.CURRENT
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false, thinkingEnabled = false, isVision = false
         ))
         val localConfigId = database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
             localModelId = modelId, displayName = "c"

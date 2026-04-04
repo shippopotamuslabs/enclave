@@ -2,7 +2,6 @@ package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -44,8 +43,7 @@ class LocalModelConfigurationsDaoTest {
             remoteFilename = "qwen.gguf",
             localFilename = "qwen.gguf",
             sha256 = "abc",
-            sizeInBytes = 100,
-            modelStatus = ModelStatus.CURRENT
+            sizeInBytes = 100
         ))
         
         val config = LocalModelConfigurationEntity(
@@ -74,8 +72,7 @@ class LocalModelConfigurationsDaoTest {
             remoteFilename = "qwen.gguf",
             localFilename = "qwen.gguf",
             sha256 = "abc",
-            sizeInBytes = 100,
-            modelStatus = ModelStatus.CURRENT
+            sizeInBytes = 100
         ))
         
         configDao.upsert(LocalModelConfigurationEntity(localModelId = modelId, displayName = "Precise"))
@@ -93,8 +90,7 @@ class LocalModelConfigurationsDaoTest {
             remoteFilename = "qwen.gguf",
             localFilename = "qwen.gguf",
             sha256 = "abc",
-            sizeInBytes = 100,
-            modelStatus = ModelStatus.CURRENT
+            sizeInBytes = 100
         ))
         
         configDao.upsert(LocalModelConfigurationEntity(localModelId = modelId, displayName = "Creative"))
@@ -107,10 +103,10 @@ class LocalModelConfigurationsDaoTest {
     @Test
     fun `same display name on different assets is allowed`() = runTest {
         val model1Id = modelsDao.upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "qwen1", remoteFilename = "qwen1.gguf", localFilename = "qwen1.gguf", sha256 = "abc1", sizeInBytes = 100, modelStatus = ModelStatus.CURRENT
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "qwen1", remoteFilename = "qwen1.gguf", localFilename = "qwen1.gguf", sha256 = "abc1", sizeInBytes = 100
         ))
         val model2Id = modelsDao.upsert(LocalModelEntity(
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "qwen2", remoteFilename = "qwen2.gguf", localFilename = "qwen2.gguf", sha256 = "abc2", sizeInBytes = 100, modelStatus = ModelStatus.CURRENT
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "qwen2", remoteFilename = "qwen2.gguf", localFilename = "qwen2.gguf", sha256 = "abc2", sizeInBytes = 100
         ))
         
         configDao.upsert(LocalModelConfigurationEntity(localModelId = model1Id, displayName = "Creative"))

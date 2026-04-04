@@ -100,7 +100,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Thinking("Thinking step 1...", ModelType.FAST),
             InferenceEvent.PartialResponse("Hello ", ModelType.FAST),
             InferenceEvent.PartialResponse("world!", ModelType.FAST),
@@ -143,7 +143,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello", ModelType.FAST),
             InferenceEvent.Finished(ModelType.FAST)
         )
@@ -185,7 +185,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Finished(ModelType.FAST)
         )
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
@@ -246,7 +246,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Error(RuntimeException("Model crashed"), ModelType.FAST)
         )
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
@@ -281,7 +281,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Thinking("Step 1...", ModelType.FAST),
             InferenceEvent.Thinking("Step 2...", ModelType.FAST),
             InferenceEvent.Finished(ModelType.FAST)
@@ -319,7 +319,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Thinking("Let me think...", ModelType.FAST)
         )
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
@@ -354,7 +354,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Hello world!", ModelType.FAST)
         )
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
@@ -389,7 +389,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Finished(ModelType.FAST)
         )
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
@@ -424,7 +424,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Thinking("Thinking...", ModelType.FAST),
             InferenceEvent.PartialResponse("First response", ModelType.FAST),
             InferenceEvent.PartialResponse(" continues", ModelType.FAST)
@@ -464,7 +464,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Thinking("Thinking...", ModelType.FAST),
             InferenceEvent.PartialResponse("First", ModelType.FAST),
             InferenceEvent.PartialResponse("Second", ModelType.FAST),
@@ -518,7 +518,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Thinking("Thinking...", ModelType.FAST),
             InferenceEvent.PartialResponse("Response", ModelType.FAST),
             InferenceEvent.Finished(ModelType.FAST)
@@ -573,7 +573,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.DRAFT_ONE) } returns mockConfig
 
-        every { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { thinkingModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Draft content", ModelType.DRAFT_ONE),
             InferenceEvent.Finished(ModelType.DRAFT_ONE)
         )
@@ -613,7 +613,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.DRAFT_TWO) } returns mockConfig
 
-        every { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { thinkingModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Draft two content", ModelType.DRAFT_TWO),
             InferenceEvent.Finished(ModelType.DRAFT_TWO)
         )
@@ -653,7 +653,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.MAIN) } returns mockConfig
 
-        every { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { thinkingModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Main synthesis content", ModelType.MAIN),
             InferenceEvent.Finished(ModelType.MAIN)
         )
@@ -693,7 +693,7 @@ class InferenceFlowIntegrationTest {
         val mockConfig = mockk<LocalModelAsset>()
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FINAL_SYNTHESIS) } returns mockConfig
 
-        every { thinkingModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { thinkingModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.PartialResponse("Final content", ModelType.FINAL_SYNTHESIS),
             InferenceEvent.Finished(ModelType.FINAL_SYNTHESIS)
         )
@@ -736,7 +736,7 @@ class InferenceFlowIntegrationTest {
 
         val exception = Exception("Timed out waiting for model")
 
-        every { fastModelService.sendPrompt(any(), any()) } returns flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns flowOf(
             InferenceEvent.Error(exception, ModelType.FAST)
         )
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
@@ -775,7 +775,7 @@ class InferenceFlowIntegrationTest {
         coEvery { modelRegistry.getRegisteredAsset(ModelType.FAST) } returns mockConfig
 
         // Flow completes immediately without emitting anything
-        every { fastModelService.sendPrompt(any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns kotlinx.coroutines.flow.emptyFlow()
         coEvery { messageRepository.getMessagesForChat(any()) } returns emptyList()
 
         // When
@@ -809,7 +809,7 @@ class InferenceFlowIntegrationTest {
         val firstException = Exception("Agent 1 failed")
         val secondException = Exception("Agent 2 failed")
 
-        every { fastModelService.sendPrompt(any(), any()) } returns kotlinx.coroutines.flow.flowOf(
+        every { fastModelService.sendPrompt(any<String>(), any<com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions>(), any<Boolean>()) } returns kotlinx.coroutines.flow.flowOf(
             InferenceEvent.Error(firstException, ModelType.FAST),
             InferenceEvent.Error(secondException, ModelType.FAST)
         )

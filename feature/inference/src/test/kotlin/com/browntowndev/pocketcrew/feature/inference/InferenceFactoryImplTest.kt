@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import javax.inject.Provider
 import java.io.File
 
 /**
@@ -30,7 +31,7 @@ class InferenceFactoryImplTest {
     private lateinit var mockProcessThinkingTokens: ProcessThinkingTokensUseCase
     private lateinit var mockLlamaChatSessionManager: LlamaChatSessionManager
     private lateinit var mockLoggingPort: LoggingPort
-    private lateinit var mockConversationManagerProvider: (ModelType) -> ConversationManagerPort
+    private lateinit var mockConversationManagerProvider: Provider<ConversationManagerPort>
     private lateinit var mockMediaPipeFactory: MediaPipeInferenceServiceFactory
 
     private lateinit var factory: InferenceFactoryImpl
@@ -43,7 +44,7 @@ class InferenceFactoryImplTest {
         mockLlamaChatSessionManager = mockk(relaxed = true)
         mockLoggingPort = mockk(relaxed = true)
         val mockConversationManager = mockk<ConversationManagerPort>(relaxed = true)
-        mockConversationManagerProvider = { mockConversationManager }
+        mockConversationManagerProvider = Provider { mockConversationManager }
         mockMediaPipeFactory = mockk(relaxed = true)
 
         // Mock java.io.File to avoid filesystem access errors
@@ -51,14 +52,30 @@ class InferenceFactoryImplTest {
 
         // Mock the MediaPipe factory so we don't hit UnsatisfiedLinkError
         val mockMediaPipeService = mockk<MediaPipeInferenceServiceImpl>(relaxed = true)
-        every { mockMediaPipeFactory.create(any(), any()) } returns mockMediaPipeService
+        every { mockMediaPipeFactory.create(any()) } returns mockMediaPipeService
 
         factory = InferenceFactoryImpl(
             context = mockContext,
             conversationManagerProvider = mockConversationManagerProvider,
             modelRegistry = mockModelRegistry,
             processThinkingTokens = mockProcessThinkingTokens,
-            llamaChatSessionManager = mockLlamaChatSessionManager,
+            llamaChatSessionManagerProvider = { mockLlamaChatSessionManager },
+            loggingPort = mockLoggingPort,
+            mediaPipeFactory = mockMediaPipeFactory
+        )
+    }
+
+    private fun createFactory(): InferenceFactoryImpl {
+        every { mockContext.getExternalFilesDir(null) } returns java.io.File("/mock")
+        val mockMediaPipeService = mockk<MediaPipeInferenceServiceImpl>(relaxed = true)
+        every { mockMediaPipeFactory.create(any()) } returns mockMediaPipeService
+
+        return InferenceFactoryImpl(
+            context = mockContext,
+            conversationManagerProvider = mockConversationManagerProvider,
+            modelRegistry = mockModelRegistry,
+            processThinkingTokens = mockProcessThinkingTokens,
+            llamaChatSessionManagerProvider = { mockLlamaChatSessionManager },
             loggingPort = mockLoggingPort,
             mediaPipeFactory = mockMediaPipeFactory
         )

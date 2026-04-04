@@ -3,12 +3,14 @@ package com.browntowndev.pocketcrew.core.testing
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
-import com.browntowndev.pocketcrew.domain.model.config.ModelStatus
+import com.browntowndev.pocketcrew.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 
 /**
  * Fake implementation of ModelRegistryPort for testing.
@@ -17,23 +19,29 @@ import kotlinx.coroutines.flow.map
 class FakeModelRegistry : ModelRegistryPort {
 
     private val modelsMap = mutableMapOf<ModelType, Pair<LocalModelAsset, LocalModelConfiguration>>()
-    private val modelStatuses = mutableMapOf<String, ModelStatus>() // SHA256 -> Status
     private val _registeredModelsFlow = MutableStateFlow<Map<ModelType, String>>(emptyMap())
 
     // Soft-deleted models: LocalModelEntity rows with no configs
     // Key = model ID, Value = LocalModelAsset (metadata only, no configs)
     private val softDeletedModels = mutableMapOf<Long, LocalModelAsset>()
 
+    private val assignments = mutableMapOf<ModelType, LocalModelAsset>()
+    private val assets = mutableListOf<LocalModelAsset>()
+    private val softDeleted = mutableListOf<LocalModelAsset>()
+    private val configsById = mutableMapOf<Long, Pair<LocalModelAsset, LocalModelConfiguration>>()
+    private var nextAssetId = 1L
+    private var nextConfigId = 1L
+
     override suspend fun getRegisteredAsset(modelType: ModelType): LocalModelAsset? {
-        return modelsMap[modelType]?.first
+        return assignments[modelType]
     }
 
     override suspend fun getRegisteredConfiguration(modelType: ModelType): LocalModelConfiguration? {
-        return modelsMap[modelType]?.second
+        return assignments[modelType]?.configurations?.firstOrNull()
     }
 
     override suspend fun getRegisteredAssets(): List<LocalModelAsset> {
-        return modelsMap.values.map { it.first }.distinctBy { it.metadata.sha256 }
+        return assignments.values.toList()
     }
 
     override suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration> {
@@ -44,43 +52,67 @@ class FakeModelRegistry : ModelRegistryPort {
         return _registeredModelsFlow.map { modelsMap[modelType]?.first }
     }
 
-    override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> {
-        return _registeredModelsFlow.map { modelsMap[modelType]?.second }
+    override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> = flow {
+        emit(getRegisteredConfiguration(modelType))
     }
 
     override fun observeAssets(): Flow<List<LocalModelAsset>> {
         return _registeredModelsFlow.map { modelsMap.values.map { it.first }.distinctBy { it.metadata.id } }
     }
 
-    override suspend fun setRegisteredModel(
-        modelType: ModelType,
-        asset: LocalModelAsset,
-        status: ModelStatus,
-        markExistingAsOld: Boolean
-    ) {
-        val currentEntry = modelsMap[modelType]
-        if (status == ModelStatus.CURRENT && markExistingAsOld && currentEntry != null) {
-            modelStatuses[currentEntry.first.metadata.sha256] = ModelStatus.OLD
+    override suspend fun upsertLocalAsset(asset: LocalModelAsset): Long {
+        val existingIndex = assets.indexOfFirst { it.metadata.id == asset.metadata.id || it.metadata.sha256 == asset.metadata.sha256 }
+        val assignedId = when {
+            asset.metadata.id > 0 -> asset.metadata.id
+            existingIndex >= 0 -> assets[existingIndex].metadata.id
+            else -> nextAssetId++
         }
+        val normalizedAsset = asset.copy(metadata = asset.metadata.copy(id = assignedId))
+        if (existingIndex >= 0) {
+            assets[existingIndex] = normalizedAsset
+        } else {
+            assets.add(normalizedAsset)
+        }
+        return assignedId
+    }
 
-        // Use the first configuration as the one being registered for the slot.
-        val config = asset.configurations.firstOrNull()
-            ?: throw IllegalStateException("Asset must have at least one configuration")
+    override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): Long {
+        val configId = if (config.id > 0) config.id else nextConfigId++
+        val asset = assets.find { it.metadata.id == config.localModelId }
+            ?: throw IllegalStateException("Asset ${config.localModelId} not found")
+        val normalizedConfig = config.copy(id = configId, localModelId = asset.metadata.id)
+        configsById[configId] = asset to normalizedConfig
+        return configId
+    }
 
-        modelsMap[modelType] = asset to config
-        modelStatuses[asset.metadata.sha256] = status
+    override suspend fun setDefaultLocalConfig(modelType: ModelType, configId: Long) {
+        val pair = configsById[configId] ?: return
+        val resolvedAsset = pair.first.copy(configurations = listOf(pair.second))
+        assignments[modelType] = resolvedAsset
+        modelsMap[modelType] = resolvedAsset to pair.second
         updateFlow()
+    }
+
+    override suspend fun activateLocalModel(modelType: ModelType, asset: LocalModelAsset): SlotResolvedLocalModel {
+        val assetId = upsertLocalAsset(asset)
+        val primaryConfig = asset.configurations.firstOrNull()
+            ?: throw IllegalArgumentException("Asset must contain at least one configuration")
+        val configId = upsertLocalConfiguration(primaryConfig.copy(localModelId = assetId))
+        setDefaultLocalConfig(modelType, configId)
+        return getRegisteredSelection(modelType)
+            ?: throw IllegalStateException("Failed to resolve activated fake model for $modelType")
+    }
+
+    override suspend fun getRegisteredSelection(modelType: ModelType): SlotResolvedLocalModel? {
+        val pair = modelsMap[modelType] ?: return null
+        return SlotResolvedLocalModel(modelType, pair.first, pair.second)
     }
 
     override suspend fun clearAll() {
-        modelsMap.clear()
-        modelStatuses.clear()
-        softDeletedModels.clear()
-        updateFlow()
-    }
-
-    override suspend fun clearOld() {
-        // Simple implementation for fakes
+        assignments.clear()
+        assets.clear()
+        softDeleted.clear()
+        configsById.clear()
     }
 
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long {
@@ -97,24 +129,25 @@ class FakeModelRegistry : ModelRegistryPort {
     override suspend fun deleteConfiguration(id: Long) {
     }
 
+    override suspend fun deleteModel(modelId: Long, replacementLocalConfigId: Long?, replacementApiConfigId: Long?): Result<Unit> {
+        return Result.success(Unit)
+    }
+
+    fun setAssets(newAssets: List<LocalModelAsset>) {
+        assets.clear()
+    }
+
     private fun updateFlow() {
         _registeredModelsFlow.value = modelsMap.mapValues { it.value.second.displayName }
     }
 
     fun reset() {
         modelsMap.clear()
-        modelStatuses.clear()
         softDeletedModels.clear()
+        assignments.clear()
+        assets.clear()
+        configsById.clear()
         _registeredModelsFlow.value = emptyMap()
-    }
-
-    fun getModelStatus(modelType: ModelType): ModelStatus? {
-        val asset = modelsMap[modelType]?.first ?: return null
-        return modelStatuses[asset.metadata.sha256]
-    }
-
-    fun getStatusBySha256(sha256: String): ModelStatus? {
-        return modelStatuses[sha256]
     }
 
     override suspend fun getSoftDeletedModels(): List<LocalModelAsset> {
@@ -126,30 +159,6 @@ class FakeModelRegistry : ModelRegistryPort {
         modelsMap.values.find { it.first.metadata.id == id }?.let { return it.first }
         // Then check soft-deleted models
         return softDeletedModels[id]
-    }
-
-    override suspend fun reuseModelForRedownload(modelId: Long, newAsset: LocalModelAsset): Long {
-        // Reuse the existing model row if it was soft-deleted
-        // The fake just returns the same ID
-        val existingModel = softDeletedModels[modelId]
-            ?: throw IllegalStateException("Model $modelId not found in soft-deleted models")
-
-        // Remove from soft-deleted and register as active
-        softDeletedModels.remove(modelId)
-
-        // Register with the new asset (which has configs with isSystemPreset=true)
-        val config = newAsset.configurations.firstOrNull()
-            ?: throw IllegalStateException("Asset must have at least one configuration")
-
-        // Find the modelType from the asset (using huggingFaceModelName)
-        val modelType = ModelType.entries.find { newAsset.metadata.huggingFaceModelName.contains(it.name, ignoreCase = true) }
-            ?: ModelType.FAST
-
-        modelsMap[modelType] = newAsset to config
-        modelStatuses[newAsset.metadata.sha256] = ModelStatus.CURRENT
-        updateFlow()
-
-        return modelId
     }
 
     /**

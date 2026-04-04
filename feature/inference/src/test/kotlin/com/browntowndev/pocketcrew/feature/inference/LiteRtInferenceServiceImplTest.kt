@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
+import com.browntowndev.pocketcrew.domain.port.inference.ConversationResponse
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
@@ -42,7 +43,7 @@ class LiteRtInferenceServiceImplTest {
         mockConversation = mockk(relaxed = true)
         processThinkingTokens = ProcessThinkingTokensUseCase()
 
-        coEvery { mockConversationManager.getConversation() } returns mockConversation
+        coEvery { mockConversationManager.getConversation(any(), any()) } returns mockConversation
     }
 
     @AfterEach
@@ -53,26 +54,32 @@ class LiteRtInferenceServiceImplTest {
     // ========== Integration Tests (using real use case) ==========
 
     @Test
-    fun `sendPrompt delegates to use case for thinking token processing`() = runTest {
-        // Given - simulate the conversation returning chunks with thinking tokens
-        val chunks = flowOf("<think>", "thinking", "</think>answer")
-        every { mockConversation.sendMessageAsync(any()) } returns chunks
+    fun `sendPrompt emits thinking and partial events from response`() = runTest {
+        // Given - simulate the conversation returning responses with thought and text
+        val responses = flowOf(
+            ConversationResponse(thought = "thinking"),
+            ConversationResponse(text = "answer"),
+            ConversationResponse(thought = "more thought", text = "more answer")
+        )
+        every { mockConversation.sendMessageAsync(any(), any()) } returns responses
 
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.MAIN)
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens)
         val events = service.sendPrompt("Hello", closeConversation = false).toList()
 
-        // Then - events should be processed by use case
-        assertTrue(events.any { it is InferenceEvent.Thinking })
-        assertTrue(events.any { it is InferenceEvent.PartialResponse })
+        // Then - events should be processed
+        assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "thinking" })
+        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "answer" })
+        assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "more thought" })
+        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "more answer" })
         assertTrue(events.any { it is InferenceEvent.Finished })
     }
 
     @Test
     fun `sendPrompt closes conversation when closeConversation is true`() = runTest {
-        val chunks = flowOf("<think>", "thought", "</think>answer")
-        every { mockConversation.sendMessageAsync(any()) } returns chunks
+        val responses = flowOf(ConversationResponse(text = "answer"))
+        every { mockConversation.sendMessageAsync(any(), any()) } returns responses
 
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.MAIN)
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens)
         service.sendPrompt("Hello", closeConversation = true).toList()
 
         verify { mockConversationManager.closeConversation() }
@@ -80,18 +87,18 @@ class LiteRtInferenceServiceImplTest {
 
     @Test
     fun `sendPrompt does not close conversation when closeConversation is false`() = runTest {
-        val chunks = flowOf("<think>", "thought", "</think>answer")
-        every { mockConversation.sendMessageAsync(any()) } returns chunks
+        val responses = flowOf(ConversationResponse(text = "answer"))
+        every { mockConversation.sendMessageAsync(any(), any()) } returns responses
 
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.MAIN)
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens)
         service.sendPrompt("Hello", closeConversation = false).toList()
 
         verify(exactly = 0) { mockConversationManager.closeConversation() }
     }
 
     @Test
-    fun `closeSession closes conversation and engine`() {
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.MAIN)
+    fun `closeSession closes conversation and engine`() = runTest {
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens)
         service.closeSession()
 
         verify { mockConversationManager.closeConversation() }
@@ -100,7 +107,7 @@ class LiteRtInferenceServiceImplTest {
 
     @Test
     fun `setHistory delegates to conversation manager`() = runTest {
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.MAIN)
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens)
         val history = listOf(ChatMessage(Role.USER, "Hello"))
 
         service.setHistory(history)
