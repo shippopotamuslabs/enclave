@@ -98,6 +98,27 @@ class HttpFileDownloaderTest {
     }
 
     @Test
+    fun getServerFileSize_doesNotAddAuthHeader_whenUrlIsHttp() = kotlinx.coroutines.test.runTest {
+        // Given: A Hugging Face URL over plaintext HTTP
+        val hfUrl = "http://huggingface.co/google/gemma-2b-it/resolve/main/model.gguf"
+        val requestSlot = slot<Request>()
+        val mockCall = mockk<okhttp3.Call>(relaxed = true)
+        val mockResponse = mockk<Response>(relaxed = true)
+
+        every { mockClient.newCall(capture(requestSlot)) } returns mockCall
+        every { mockCall.execute() } returns mockResponse
+        every { mockResponse.isSuccessful } returns true
+        every { mockResponse.header("Content-Length") } returns "2048"
+
+        // When: Get server file size for HF URL
+        httpFileDownloader.getServerFileSize(hfUrl)
+
+        // Then: Request should not have Authorization header
+        val authHeader = requestSlot.captured.header("Authorization")
+        assertNull(authHeader)
+    }
+
+    @Test
     fun getServerFileSize_returnsNull_whenServerReturnsError() = kotlinx.coroutines.test.runTest {
         // Given: Mock HTTP client returns error response
         val mockCall = mockk<okhttp3.Call>(relaxed = true)
@@ -244,6 +265,41 @@ class HttpFileDownloaderTest {
         // Then: Request should have Authorization header
         val authHeader = requestSlot.captured.header("Authorization")
         assertEquals("Bearer $testHfApiKey", authHeader)
+    }
+
+    @Test
+    fun downloadFile_doesNotAddAuthHeader_whenUrlIsHttp() = kotlinx.coroutines.test.runTest {
+        // Given: A Hugging Face URL over plaintext HTTP
+        val hfUrl = "http://huggingface.co/google/gemma-2b-it/resolve/main/model.gguf"
+        val testContent = "test"
+        val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
+        val testConfig = createTestConfig(testContent)
+
+        val requestSlot = slot<Request>()
+        val mockCall = mockk<okhttp3.Call>(relaxed = true)
+        val mockResponse = mockk<Response>(relaxed = true)
+        val mockBody = mockk<ResponseBody>(relaxed = true)
+
+        every { mockClient.newCall(capture(requestSlot)) } returns mockCall
+        every { mockCall.execute() } returns mockResponse
+        every { mockResponse.isSuccessful } returns true
+        every { mockResponse.code } returns 200
+        every { mockResponse.body } returns mockBody
+        every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
+        every { mockBody.byteStream() } returns contentBytes.inputStream()
+
+        // When: Download from HF URL
+        httpFileDownloader.downloadFile(
+            config = testConfig,
+            downloadUrl = hfUrl,
+            targetDir = tempDir,
+            existingBytes = 0L,
+            progressCallback = null
+        )
+
+        // Then: Request should not have Authorization header
+        val authHeader = requestSlot.captured.header("Authorization")
+        assertNull(authHeader)
     }
 
     // ============ downloadFile Error Tests ============
