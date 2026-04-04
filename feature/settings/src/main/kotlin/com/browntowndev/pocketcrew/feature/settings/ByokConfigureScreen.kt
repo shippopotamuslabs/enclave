@@ -394,7 +394,8 @@ fun PresetConfigurationForm(
             onValueChange = { onConfigChange(config.copy(displayName = it)) },
             label = { Text("Preset Name (e.g. Creative)") },
             modifier = Modifier.padding(top = 16.dp).fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(12.dp),
+            keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Next)
         )
 
         OutlinedTextField(
@@ -421,7 +422,7 @@ fun PresetConfigurationForm(
                     }
                 },
                 shape = RoundedCornerShape(12.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next)
             )
 
             OutlinedTextField(
@@ -436,7 +437,7 @@ fun PresetConfigurationForm(
                     }
                 },
                 shape = RoundedCornerShape(12.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next)
             )
         }
 
@@ -454,7 +455,7 @@ fun PresetConfigurationForm(
             },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done)
         )
 
         TuningSlider(
