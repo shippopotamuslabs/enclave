@@ -26,7 +26,7 @@ fun GeneratingIndicator(
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.padding(vertical = 10.dp).fillMaxWidth()
+        modifier = modifier.padding(vertical = 12.dp).fillMaxWidth()
     ) {
         // Header Row: Orb + "Generating" text
         Row(
