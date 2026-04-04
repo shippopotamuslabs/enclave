@@ -437,16 +437,16 @@ class GenerateChatResponseUseCase @Inject constructor(
         }
 
         val config = modelRegistry.getRegisteredConfiguration(modelType)
-        val reasoningBudget = when (modelType) {
-            ModelType.FAST -> 0
-            ModelType.THINKING -> 2048
-            else -> if (config?.thinkingEnabled == true) 2048 else 0
-        }
+        val reasoningBudget = if (config?.thinkingEnabled == true) 2048 else 0
         
         // ARCHITECTURE: Explicitly provide modelType to options for event tagging
         val options = GenerationOptions(
             reasoningBudget = reasoningBudget,
-            modelType = modelType
+            modelType = modelType,
+            temperature = config?.temperature?.toFloat(),
+            topK = config?.topK,
+            topP = config?.topP?.toFloat(),
+            maxTokens = config?.maxTokens
         )
 
         service.sendPrompt(prompt, options, closeConversation = false).collect { event ->

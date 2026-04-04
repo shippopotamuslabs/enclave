@@ -87,7 +87,8 @@ class LlamaInferenceServiceImplGenerationOptionsTest {
             processThinkingTokens = processThinkingTokens,
             loggingPort = mockLoggingPort,
             modelRegistry = mockModelRegistry,
-            context = mockContext
+            context = mockContext,
+            modelType = ModelType.FAST
         )
     }
 
@@ -96,7 +97,8 @@ class LlamaInferenceServiceImplGenerationOptionsTest {
         processThinkingTokens = processThinkingTokens,
         loggingPort = mockLoggingPort,
         modelRegistry = mockModelRegistry,
-        context = mockContext
+        context = mockContext,
+        modelType = ModelType.FAST
     )
 
     // ===== Overload Acceptance Tests =====

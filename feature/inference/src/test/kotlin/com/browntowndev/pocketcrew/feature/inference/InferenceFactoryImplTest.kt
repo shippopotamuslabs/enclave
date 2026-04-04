@@ -81,7 +81,7 @@ class InferenceFactoryImplTest {
         val factory = createFactory()
         val mediaPipeService = mockk<LlmInferencePort>(relaxed = true)
         coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns asset("sha-1", "model.task", ModelFileFormat.TASK)
-        every { mockMediaPipeFactory.create(any()) } returns mediaPipeService
+        every { mockMediaPipeFactory.create(any(), any()) } returns mediaPipeService
 
         val service = factory.withInferenceService(ModelType.FAST) { it }
 
@@ -95,7 +95,7 @@ class InferenceFactoryImplTest {
         val sharedAsset = asset("sha-1", "model.task", ModelFileFormat.TASK)
         coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns sharedAsset
         coEvery { mockModelRegistry.getRegisteredAsset(ModelType.THINKING) } returns sharedAsset
-        every { mockMediaPipeFactory.create(any()) } returns mediaPipeService
+        every { mockMediaPipeFactory.create(any(), any()) } returns mediaPipeService
 
         val first = factory.withInferenceService(ModelType.FAST) { it }
         val second = factory.withInferenceService(ModelType.THINKING) { it }
@@ -110,7 +110,7 @@ class InferenceFactoryImplTest {
         val secondService = mockk<LlmInferencePort>(relaxed = true)
         coEvery { mockModelRegistry.getRegisteredAsset(ModelType.FAST) } returns asset("sha-1", "model.task", ModelFileFormat.TASK)
         coEvery { mockModelRegistry.getRegisteredAsset(ModelType.THINKING) } returns asset("sha-2", "model.task", ModelFileFormat.TASK, id = 2L)
-        every { mockMediaPipeFactory.create(any()) } returnsMany listOf(firstService, secondService)
+        every { mockMediaPipeFactory.create(any(), any()) } returnsMany listOf(firstService, secondService)
 
         val first = factory.withInferenceService(ModelType.FAST) { it }
         val second = factory.withInferenceService(ModelType.THINKING) { it }

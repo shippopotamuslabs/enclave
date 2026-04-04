@@ -7,6 +7,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -24,16 +26,30 @@ import javax.inject.Inject
  */
 class MediaPipeInferenceServiceImpl @Inject constructor(
     private val llmInference: LlmInferenceWrapper,
+    private val modelType: ModelType,
+    private val modelRegistry: ModelRegistryPort,
+    private val processThinkingTokens: ProcessThinkingTokensUseCase,
 ) : LlmInferencePort {
 
     companion object {
         private const val TAG = "MediaPipeInference"
     }
 
+    private data class SessionSignature(
+        val topK: Int,
+        val topP: Float,
+        val temperature: Float,
+        val reasoningBudget: Int,
+        val historyFingerprint: Int,
+    )
+
     private val mutex = Mutex()
 
     // Session is stateful — maintains multi-turn conversation context.
     private var session: LlmSessionPort? = null
+
+    // Cache the signature of the currently active session
+    private var currentSignature: SessionSignature? = null
 
     // Cached history to seed new sessions
     private var history: List<DomainChatMessage> = emptyList()
@@ -42,14 +58,37 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
      * Gets the current session or creates and seeds a new one.
      * This operation is atomic to ensure history context is correctly injected.
      */
-    private fun getOrCreateAndSeedSessionLocked(): LlmSessionPort {
+    private suspend fun getOrCreateAndSeedSessionLocked(options: GenerationOptions): LlmSessionPort {
+        val config = modelRegistry.getRegisteredConfiguration(modelType)
+
+        val targetTopK = options.topK ?: config?.topK ?: 40
+        val targetTopP = options.topP ?: config?.topP?.toFloat() ?: 0.95f
+        val targetTemperature = options.temperature ?: config?.temperature?.toFloat() ?: 0.7f
+        val targetReasoningBudget = options.reasoningBudget
+
+        val newSignature = SessionSignature(
+            topK = targetTopK,
+            topP = targetTopP,
+            temperature = targetTemperature,
+            reasoningBudget = targetReasoningBudget,
+            historyFingerprint = history.hashCode(),
+        )
+
+        if (session != null && currentSignature != newSignature) {
+            Log.d(TAG, "Options or history changed, recreating MediaPipe session")
+            session?.close()
+            session = null
+            currentSignature = null
+        }
+
         session?.let { return it }
         
+        Log.d(TAG, "Creating new MediaPipe session with options: $newSignature")
         val newSession = llmInference.createSession(
             com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.LlmInferenceSessionOptions.builder()
-                .setTopK(40)
-                .setTopP(0.95f)
-                .setTemperature(0.7f)
+                .setTopK(targetTopK)
+                .setTopP(targetTopP)
+                .setTemperature(targetTemperature)
                 .build()
         )
 
@@ -66,79 +105,18 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         }
 
         session = newSession
+        currentSignature = newSignature
         return newSession
     }
 
-    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> = callbackFlow {
-        val modelType = ModelType.FAST
-        var isThinkingPhase = false
-        val accumulatedThought = StringBuilder()
-        val accumulatedText = StringBuilder()
-
-        try {
-            val currentSession = mutex.withLock {
-                getOrCreateAndSeedSessionLocked()
-            }
-            
-            currentSession.addQueryChunk(prompt)
-
-            currentSession.generateResponseAsync { partialResult, done ->
-                val chunkText = partialResult ?: ""
-
-                if (chunkText.isNotEmpty()) {
-                    if (chunkText.contains("<think>")) {
-                        isThinkingPhase = true
-                        val cleanText = chunkText.replace("<think>", "")
-                        if (cleanText.isNotEmpty()) {
-                            accumulatedThought.append(cleanText)
-                            trySend(InferenceEvent.Thinking(cleanText, modelType))
-                        }
-                    } else if (chunkText.contains("</think>")) {
-                        isThinkingPhase = false
-                        val cleanText = chunkText.replace("</think>", "")
-                        if (cleanText.isNotEmpty()) {
-                            accumulatedText.append(cleanText)
-                            trySend(InferenceEvent.PartialResponse(cleanText, modelType))
-                        }
-                    } else if (isThinkingPhase) {
-                        accumulatedThought.append(chunkText)
-                        trySend(InferenceEvent.Thinking(chunkText, modelType))
-                    } else {
-                        accumulatedText.append(chunkText)
-                        trySend(InferenceEvent.PartialResponse(chunkText, modelType))
-                    }
-                }
-
-                if (done) {
-                    trySend(InferenceEvent.Finished(modelType))
-                    close()
-                }
-            }
-
-            awaitClose {
-                // No-op: session lifecycle managed by closeSession() or finally block
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error during inference", e)
-            trySend(InferenceEvent.Error(e, modelType))
-            close()
-        } finally {
-            if (closeConversation) {
-                mutex.withLock {
-                    session?.close()
-                    session = null
-                }
-            }
-        }
-    }
+    override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> =
+        sendPrompt(prompt, GenerationOptions(reasoningBudget = 0), closeConversation)
 
     override suspend fun setHistory(messages: List<DomainChatMessage>) {
         mutex.withLock {
             if (this.history != messages) {
                 this.history = messages.toList() // Defensive copy
-                // Invalidate session to force re-seeding on next prompt
-                session?.close()
-                session = null
+                // Session will be closed/recreated on next prompt if history fingerpint changes
             }
         }
     }
@@ -149,6 +127,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
             try {
                 session?.close()
                 session = null
+                currentSignature = null
                 llmInference.close()
             } catch (e: Exception) {
                 Log.w(TAG, "Error closing session", e)
@@ -161,10 +140,11 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         var isThinkingPhase = false
         val accumulatedThought = StringBuilder()
         val accumulatedText = StringBuilder()
+        var buffer = ""
 
         try {
             val currentSession = mutex.withLock {
-                getOrCreateAndSeedSessionLocked()
+                getOrCreateAndSeedSessionLocked(options)
             }
             
             currentSession.addQueryChunk(prompt)
@@ -173,30 +153,38 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                 val chunkText = partialResult ?: ""
 
                 if (chunkText.isNotEmpty()) {
-                    if (chunkText.contains("<think>")) {
-                        isThinkingPhase = true
-                        val cleanText = chunkText.replace("<think>", "")
-                        if (cleanText.isNotEmpty()) {
-                            accumulatedThought.append(cleanText)
-                            trySend(InferenceEvent.Thinking(cleanText, targetModelType))
+                    val state = processThinkingTokens(
+                        currentBuffer = buffer,
+                        newChunk = chunkText,
+                        isThinking = isThinkingPhase
+                    )
+                    buffer = state.buffer
+                    isThinkingPhase = state.isThinking
+
+                    state.emittedSegments.forEach { segment ->
+                        when (segment.kind) {
+                            ProcessThinkingTokensUseCase.SegmentKind.THINKING -> {
+                                accumulatedThought.append(segment.text)
+                                trySend(InferenceEvent.Thinking(segment.text, targetModelType))
+                            }
+                            ProcessThinkingTokensUseCase.SegmentKind.VISIBLE -> {
+                                accumulatedText.append(segment.text)
+                                trySend(InferenceEvent.PartialResponse(segment.text, targetModelType))
+                            }
                         }
-                    } else if (chunkText.contains("</think>")) {
-                        isThinkingPhase = false
-                        val cleanText = chunkText.replace("</think>", "")
-                        if (cleanText.isNotEmpty()) {
-                            accumulatedText.append(cleanText)
-                            trySend(InferenceEvent.PartialResponse(cleanText, targetModelType))
-                        }
-                    } else if (isThinkingPhase) {
-                        accumulatedThought.append(chunkText)
-                        trySend(InferenceEvent.Thinking(chunkText, targetModelType))
-                    } else {
-                        accumulatedText.append(chunkText)
-                        trySend(InferenceEvent.PartialResponse(chunkText, targetModelType))
                     }
                 }
 
                 if (done) {
+                    if (buffer.isNotEmpty()) {
+                        if (isThinkingPhase) {
+                            accumulatedThought.append(buffer)
+                            trySend(InferenceEvent.Thinking(buffer, targetModelType))
+                        } else {
+                            accumulatedText.append(buffer)
+                            trySend(InferenceEvent.PartialResponse(buffer, targetModelType))
+                        }
+                    }
                     trySend(InferenceEvent.Finished(targetModelType))
                     close()
                 }

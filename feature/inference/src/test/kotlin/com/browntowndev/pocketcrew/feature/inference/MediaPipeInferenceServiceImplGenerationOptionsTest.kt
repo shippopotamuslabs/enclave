@@ -2,6 +2,8 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.google.common.util.concurrent.SettableFuture
 import com.google.mediapipe.tasks.genai.llminference.ProgressListener
 import io.mockk.MockKAnnotations
@@ -19,6 +21,8 @@ class MediaPipeInferenceServiceImplGenerationOptionsTest {
 
     private lateinit var mockLlmInference: LlmInferenceWrapper
     private lateinit var mockSession: LlmSessionPort
+    private lateinit var mockModelRegistry: ModelRegistryPort
+    private lateinit var processThinkingTokens: ProcessThinkingTokensUseCase
 
     @BeforeEach
     fun setup() {
@@ -30,6 +34,8 @@ class MediaPipeInferenceServiceImplGenerationOptionsTest {
 
         mockLlmInference = mockk(relaxed = true)
         mockSession = mockk(relaxed = true)
+        mockModelRegistry = mockk(relaxed = true)
+        processThinkingTokens = ProcessThinkingTokensUseCase()
         val future = SettableFuture.create<String>()
         every { mockSession.generateResponseAsync(any<ProgressListener<String>>()) } returns future
         every { mockLlmInference.createSession(any()) } returns mockSession
@@ -44,7 +50,7 @@ class MediaPipeInferenceServiceImplGenerationOptionsTest {
     fun `sendPrompt with GenerationOptions accepts call without crashing`() = runTest {
         every { mockSession.addQueryChunk(any<String>()) } returns Unit
 
-        val service = MediaPipeInferenceServiceImpl(mockLlmInference)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInference, ModelType.FAST, mockModelRegistry, processThinkingTokens)
         val options = GenerationOptions(reasoningBudget = 2048, temperature = 0.9f)
         val result = service.sendPrompt("hello", options, closeConversation = false)
         assertNotNull(result)
@@ -54,7 +60,7 @@ class MediaPipeInferenceServiceImplGenerationOptionsTest {
     fun `sendPrompt without options uses default behavior`() = runTest {
         every { mockSession.addQueryChunk(any<String>()) } returns Unit
 
-        val service = MediaPipeInferenceServiceImpl(mockLlmInference)
+        val service = MediaPipeInferenceServiceImpl(mockLlmInference, ModelType.FAST, mockModelRegistry, processThinkingTokens)
         val result = service.sendPrompt("hello", closeConversation = false)
         assertNotNull(result)
     }
