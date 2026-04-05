@@ -24,14 +24,16 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
+import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.DefaultModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.DeviceEnvironmentRepository
-import com.browntowndev.pocketcrew.core.data.repository.LocalModelConfigurationsRepositoryImpl
+
 import com.browntowndev.pocketcrew.core.data.repository.MessageRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ModelConfigProviderImpl
-import com.browntowndev.pocketcrew.core.data.repository.ModelRegistryImpl
+import com.browntowndev.pocketcrew.core.data.repository.LocalModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.RoomTransactionProvider
 import com.browntowndev.pocketcrew.core.data.repository.SettingsRepositoryImpl
@@ -43,14 +45,15 @@ import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
+import com.browntowndev.pocketcrew.core.data.security.ApiKeyProviderImpl
+import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DeviceEnvironmentRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.LocalModelConfigurationsRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.PipelineStateRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
@@ -170,7 +173,7 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindModelRegistry(impl: ModelRegistryImpl): ModelRegistryPort
+    abstract fun bindModelRegistry(impl: LocalModelRepositoryImpl): LocalModelRepositoryPort
 
     @Binds
     @Singleton
@@ -210,5 +213,11 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindLocalModelConfigurationsRepository(impl: LocalModelConfigurationsRepositoryImpl): LocalModelConfigurationsRepositoryPort
+    abstract fun bindApiKeyProvider(impl: ApiKeyProviderImpl): ApiKeyProviderPort
+
+    @Binds
+    @Singleton
+    abstract fun bindActiveModelProvider(impl: ActiveModelProviderImpl): ActiveModelProviderPort
+
+
 }

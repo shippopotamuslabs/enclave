@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.modelconfig
 
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -10,7 +10,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class DeleteLocalModelConfigurationUseCaseTest {
-    private val repository = mockk<ModelRegistryPort>()
+    private val repository = mockk<LocalModelRepositoryPort>()
     private lateinit var useCase: DeleteLocalModelConfigurationUseCase
 
     @BeforeEach

@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.modelconfig
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import javax.inject.Inject
 
 interface SaveLocalModelConfigurationUseCase {
@@ -9,11 +9,11 @@ interface SaveLocalModelConfigurationUseCase {
 }
 
 class SaveLocalModelConfigurationUseCaseImpl @Inject constructor(
-    private val modelRegistry: ModelRegistryPort,
+    private val localModelRepository: LocalModelRepositoryPort,
 ) : SaveLocalModelConfigurationUseCase {
     override suspend fun invoke(configuration: LocalModelConfiguration): Result<Long> {
         return Result.runCatching {
-            modelRegistry.saveConfiguration(configuration)
+            localModelRepository.saveConfiguration(configuration)
         }
     }
 }

@@ -2,7 +2,7 @@ package com.browntowndev.pocketcrew.domain.usecase.byok
 
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.first
@@ -22,7 +22,7 @@ interface DeleteApiCredentialsUseCase {
 
 class DeleteApiCredentialsUseCaseImpl @Inject constructor(
     private val apiModelRepository: ApiModelRepositoryPort,
-    private val modelRegistry: ModelRegistryPort,
+    private val localModelRepository: LocalModelRepositoryPort,
     private val defaultModelRepository: DefaultModelRepositoryPort,
     private val transactionProvider: TransactionProvider,
 ) : DeleteApiCredentialsUseCase {
@@ -71,7 +71,7 @@ class DeleteApiCredentialsUseCaseImpl @Inject constructor(
     }
 
     override suspend fun isLastModel(id: Long): Boolean {
-        val registeredModels = modelRegistry.getRegisteredAssets()
+        val registeredModels = localModelRepository.getAllLocalAssets()
         val allApiCredentials = apiModelRepository.getAllCredentials()
         
         val hasLocalModels = registeredModels.isNotEmpty()

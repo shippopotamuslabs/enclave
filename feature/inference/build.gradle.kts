@@ -43,6 +43,9 @@ dependencies {
     implementation(libs.tasks.genai)
     implementation(libs.firebase.crashlytics)
 
+    // OpenAI
+    implementation(libs.openai.java)
+
     // Testing
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.kotlin.test.junit5)

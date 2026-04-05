@@ -6,7 +6,5 @@ package com.browntowndev.pocketcrew.domain.model.inference
 enum class ApiProvider(val displayName: String) {
     ANTHROPIC("Anthropic"),
     OPENAI("OpenAI"),
-    GOOGLE("Google"),
-    SELF_HOSTED("Self-Hosted"),
-    SUBSCRIPTION("Subscription")
+    GOOGLE("Google")
 }

@@ -9,7 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,7 +23,8 @@ import javax.inject.Singleton
 @Singleton
 class ModelFileScanner @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val modelRegistry: ModelRegistryPort,
+    private val localModelRepository: com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort,
+    private val activeModelProvider: ActiveModelProviderPort,
     private val hashingPort: HashingPort
 ) : ModelFileScannerPort {
     companion object {
@@ -220,7 +221,7 @@ class ModelFileScanner @Inject constructor(
             val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
 
             // Look up the model to get its filename
-            val asset = modelRegistry.getAssetById(localModelId)
+            val asset = localModelRepository.getAssetById(localModelId)
             val filename = asset?.metadata?.localFileName
 
             if (filename != null && filename.isNotBlank()) {
@@ -254,7 +255,12 @@ class ModelFileScanner @Inject constructor(
         val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
 
         // Get dynamic filenames from registry
-        val assetsByType = ModelType.entries.associateWith { modelRegistry.getRegisteredAsset(it) }
+        val assetsByType = ModelType.entries.associateWith { modelType -> 
+            val config = activeModelProvider.getActiveConfiguration(modelType)
+            if (config != null && config.isLocal) {
+                localModelRepository.getAssetByConfigId(config.id)
+            } else null
+        }
 
         // Check for model files - use localFileName from config
         val requiredFiles = listOfNotNull(

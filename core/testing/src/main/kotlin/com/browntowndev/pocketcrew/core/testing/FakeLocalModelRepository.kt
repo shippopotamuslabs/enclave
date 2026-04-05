@@ -5,7 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -13,10 +13,10 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 
 /**
- * Fake implementation of ModelRegistryPort for testing.
+ * Fake implementation of LocalModelRepositoryPort for testing.
  * Provides in-memory storage to test real behavioral scenarios.
  */
-class FakeModelRegistry : ModelRegistryPort {
+class FakeLocalModelRepository : LocalModelRepositoryPort {
 
     private val modelsMap = mutableMapOf<ModelType, Pair<LocalModelAsset, LocalModelConfiguration>>()
     private val _registeredModelsFlow = MutableStateFlow<Map<ModelType, String>>(emptyMap())
@@ -32,32 +32,16 @@ class FakeModelRegistry : ModelRegistryPort {
     private var nextAssetId = 1L
     private var nextConfigId = 1L
 
-    override suspend fun getRegisteredAsset(modelType: ModelType): LocalModelAsset? {
-        return assignments[modelType]
+    override suspend fun getAllLocalAssets(): List<LocalModelAsset> {
+        return assets
     }
 
-    override suspend fun getRegisteredConfiguration(modelType: ModelType): LocalModelConfiguration? {
-        return assignments[modelType]?.configurations?.firstOrNull()
+    override fun observeAllLocalAssets(): Flow<List<LocalModelAsset>> {
+        return _registeredModelsFlow.map { assets }
     }
 
-    override suspend fun getRegisteredAssets(): List<LocalModelAsset> {
-        return assignments.values.toList()
-    }
-
-    override suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration> {
-        return modelsMap.values.map { it.second }
-    }
-
-    override fun observeAsset(modelType: ModelType): Flow<LocalModelAsset?> {
-        return _registeredModelsFlow.map { modelsMap[modelType]?.first }
-    }
-
-    override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> = flow {
-        emit(getRegisteredConfiguration(modelType))
-    }
-
-    override fun observeAssets(): Flow<List<LocalModelAsset>> {
-        return _registeredModelsFlow.map { modelsMap.values.map { it.first }.distinctBy { it.metadata.id } }
+    override suspend fun getAssetByConfigId(configId: Long): LocalModelAsset? {
+        return configsById[configId]?.first
     }
 
     override suspend fun upsertLocalAsset(asset: LocalModelAsset): Long {
@@ -85,28 +69,7 @@ class FakeModelRegistry : ModelRegistryPort {
         return configId
     }
 
-    override suspend fun setDefaultLocalConfig(modelType: ModelType, configId: Long) {
-        val pair = configsById[configId] ?: return
-        val resolvedAsset = pair.first.copy(configurations = listOf(pair.second))
-        assignments[modelType] = resolvedAsset
-        modelsMap[modelType] = resolvedAsset to pair.second
-        updateFlow()
-    }
 
-    override suspend fun activateLocalModel(modelType: ModelType, asset: LocalModelAsset): SlotResolvedLocalModel {
-        val assetId = upsertLocalAsset(asset)
-        val primaryConfig = asset.configurations.firstOrNull()
-            ?: throw IllegalArgumentException("Asset must contain at least one configuration")
-        val configId = upsertLocalConfiguration(primaryConfig.copy(localModelId = assetId))
-        setDefaultLocalConfig(modelType, configId)
-        return getRegisteredSelection(modelType)
-            ?: throw IllegalStateException("Failed to resolve activated fake model for $modelType")
-    }
-
-    override suspend fun getRegisteredSelection(modelType: ModelType): SlotResolvedLocalModel? {
-        val pair = modelsMap[modelType] ?: return null
-        return SlotResolvedLocalModel(modelType, pair.first, pair.second)
-    }
 
     override suspend fun clearAll() {
         assignments.clear()
@@ -129,8 +92,16 @@ class FakeModelRegistry : ModelRegistryPort {
     override suspend fun deleteConfiguration(id: Long) {
     }
 
-    override suspend fun deleteModel(modelId: Long, replacementLocalConfigId: Long?, replacementApiConfigId: Long?): Result<Unit> {
-        return Result.success(Unit)
+    override suspend fun getConfigurationById(id: Long): LocalModelConfiguration? {
+        return configsById[id]?.second
+    }
+
+    override suspend fun getAllConfigurationsForAsset(localModelId: Long): List<LocalModelConfiguration> {
+        return configsById.values.filter { it.first.metadata.id == localModelId }.map { it.second }
+    }
+
+    override suspend fun deleteAllConfigurationsForAsset(localModelId: Long) {
+        configsById.entries.removeIf { it.value.first.metadata.id == localModelId }
     }
 
     fun setAssets(newAssets: List<LocalModelAsset>) {
