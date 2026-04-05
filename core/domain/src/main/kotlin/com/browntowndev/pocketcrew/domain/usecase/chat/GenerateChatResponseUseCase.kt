@@ -179,6 +179,10 @@ class GenerateChatResponseUseCase @Inject constructor(
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
                             accumulator.appendThinking(state.thinkingChunk)
                             accumulator.currentState = MessageState.THINKING
+                            loggingPort.debug(
+                                TAG,
+                                "Accumulator THINKING messageId=${accumulator.messageId} modelType=${state.modelType} thinkingChars=${accumulator.thinkingRaw.length} contentChars=${accumulator.content.length}"
+                            )
                             emit(accumulatorManager.toMessagesState())
                         }
 
@@ -191,6 +195,10 @@ class GenerateChatResponseUseCase @Inject constructor(
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
                             accumulator.appendContent(state.textDelta)
                             accumulator.currentState = MessageState.GENERATING
+                            loggingPort.debug(
+                                TAG,
+                                "Accumulator GENERATING messageId=${accumulator.messageId} modelType=${state.modelType} thinkingChars=${accumulator.thinkingRaw.length} contentChars=${accumulator.content.length} thinkingEnded=${accumulator.thinkingEndTime != null}"
+                            )
                             emit(accumulatorManager.toMessagesState())
                         }
 
@@ -210,6 +218,10 @@ class GenerateChatResponseUseCase @Inject constructor(
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
                             accumulator.isComplete = true
                             accumulator.currentState = MessageState.COMPLETE
+                            loggingPort.debug(
+                                TAG,
+                                "Accumulator FINISHED messageId=${accumulator.messageId} modelType=${state.modelType} thinkingChars=${accumulator.thinkingRaw.length} contentChars=${accumulator.content.length} thinkingDurationSeconds=${accumulator.thinkingDurationSeconds}"
+                            )
                             emit(accumulatorManager.toMessagesState())
                         }
 
@@ -436,13 +448,18 @@ class GenerateChatResponseUseCase @Inject constructor(
         }
 
         val config = activeModelProvider.getActiveConfiguration(modelType)
-        val reasoningBudget = if (config?.thinkingEnabled == true) 2048 else 0
+        val reasoningBudget = if (config?.isLocal == true && config.thinkingEnabled) 2048 else 0
+        loggingPort.debug(
+            TAG,
+            "generateWithService config modelType=$modelType configName=${config?.name} isLocal=${config?.isLocal} thinkingEnabled=${config?.thinkingEnabled} reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget"
+        )
         
         // ARCHITECTURE: Explicitly provide modelType to options for event tagging
         val options = GenerationOptions(
             reasoningBudget = reasoningBudget,
             modelType = modelType,
             systemPrompt = config?.systemPrompt,
+            reasoningEffort = config?.reasoningEffort,
             temperature = config?.temperature?.toFloat(),
             topK = config?.topK,
             topP = config?.topP?.toFloat(),
@@ -452,23 +469,36 @@ class GenerateChatResponseUseCase @Inject constructor(
         service.sendPrompt(prompt, options, closeConversation = false).collect { event ->
             when (event) {
                 is InferenceEvent.Thinking -> {
+                    loggingPort.debug(
+                        TAG,
+                        "InferenceEvent.Thinking modelType=$modelType chunkLen=${event.chunk.length} preview=${previewChunk(event.chunk)}"
+                    )
                     emit(MessageGenerationState.ThinkingLive(event.chunk, modelType))
                 }
                 is InferenceEvent.PartialResponse -> {
+                    loggingPort.debug(
+                        TAG,
+                        "InferenceEvent.PartialResponse modelType=${event.modelType} chunkLen=${event.chunk.length} preview=${previewChunk(event.chunk)}"
+                    )
                     emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
                 }
                 is InferenceEvent.Finished -> {
+                    loggingPort.debug(TAG, "InferenceEvent.Finished modelType=${event.modelType}")
                     emit(MessageGenerationState.Finished(event.modelType))
                 }
                 is InferenceEvent.SafetyBlocked -> {
+                    loggingPort.warning(TAG, "InferenceEvent.SafetyBlocked modelType=${event.modelType} reason=${event.reason}")
                     emit(MessageGenerationState.Blocked(event.reason, event.modelType))
                 }
                 is InferenceEvent.Error -> {
+                    loggingPort.error(TAG, "InferenceEvent.Error modelType=${event.modelType} message=${event.cause.message}", event.cause)
                     emit(MessageGenerationState.Failed(event.cause, event.modelType))
                 }
             }
         }
     }.flowOn(Dispatchers.Default)
+
+    private fun previewChunk(text: String): String = text.replace("\n", "\\n").take(120)
 }
 
 /**
