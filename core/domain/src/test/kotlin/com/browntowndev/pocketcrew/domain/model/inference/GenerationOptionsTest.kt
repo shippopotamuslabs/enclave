@@ -15,6 +15,7 @@ class GenerationOptionsTest {
     fun `data class has correct properties`() {
         val options = GenerationOptions(
             reasoningBudget = 2048,
+            systemPrompt = "You are helpful.",
             temperature = 0.7f,
             topK = 40,
             topP = 0.9f,
@@ -22,6 +23,7 @@ class GenerationOptionsTest {
             maxTokens = 4096
         )
         assertEquals(2048, options.reasoningBudget)
+        assertEquals("You are helpful.", options.systemPrompt)
         assertEquals(0.7f, options.temperature)
         assertEquals(40, options.topK)
         assertEquals(0.9f, options.topP)

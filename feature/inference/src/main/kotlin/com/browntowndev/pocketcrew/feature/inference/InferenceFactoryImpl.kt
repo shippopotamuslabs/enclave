@@ -124,7 +124,9 @@ class InferenceFactoryImpl @Inject constructor(
                         ),
                         modelId = apiCreds.modelId,
                         provider = apiCreds.provider.name,
-                        modelType = modelType
+                        modelType = modelType,
+                        baseUrl = apiCreds.baseUrl,
+                        loggingPort = loggingPort
                     )
 
                     activeService = newService

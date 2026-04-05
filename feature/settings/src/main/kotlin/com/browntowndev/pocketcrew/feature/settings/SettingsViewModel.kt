@@ -148,19 +148,17 @@ class SettingsViewModel @Inject constructor(
             availableToDownloadModels = transientState.availableToDownloadModels.map { it.toUi() },
             selectedLocalModelAsset = transientState.selectedLocalModelAsset?.let { selected ->
                 if (selected.metadataId != 0L) {
-                    localAssets.find { it.metadata.id == selected.metadataId }?.toUi() ?: selected
+                    val dbAsset = localAssets.find { it.metadata.id == selected.metadataId }?.toUi()
+                    if (dbAsset != null) {
+                        selected.copy(configurations = dbAsset.configurations)
+                    } else {
+                        selected
+                    }
                 } else {
                     selected
                 }
             },
-            selectedLocalModelConfig = transientState.selectedLocalModelConfig?.let { selected ->
-                if (selected.id != 0L) {
-                    val asset = localAssets.find { it.metadata.id == selected.localModelId }
-                    asset?.configurations?.find { it.id == selected.id }?.toUi() ?: selected
-                } else {
-                    selected
-                }
-            },
+            selectedLocalModelConfig = transientState.selectedLocalModelConfig,
             // Available HuggingFace models for new configurations
             availableHuggingFaceModels = localAssets.map {
                 LocalModelMetadataUi(
@@ -173,19 +171,17 @@ class SettingsViewModel @Inject constructor(
             apiModels = apiAssets.map { it.toUi() },
             selectedApiModelAsset = transientState.selectedApiModelAsset?.let { selected ->
                 if (selected.credentialsId != 0L) {
-                    apiAssets.find { it.credentials.id == selected.credentialsId }?.toUi() ?: selected
+                    val dbAsset = apiAssets.find { it.credentials.id == selected.credentialsId }?.toUi()
+                    if (dbAsset != null) {
+                        selected.copy(configurations = dbAsset.configurations)
+                    } else {
+                        selected
+                    }
                 } else {
                     selected
                 }
             },
-            selectedApiModelConfig = transientState.selectedApiModelConfig?.let { selected ->
-                if (selected.id != 0L) {
-                    val asset = apiAssets.find { it.credentials.id == selected.credentialsId }
-                    asset?.configurations?.find { it.id == selected.id }?.toUi() ?: selected
-                } else {
-                    selected
-                }
-            },
+            selectedApiModelConfig = transientState.selectedApiModelConfig,
             // Default model assignments
             defaultAssignments = defaultModels.map { def ->
                 DefaultModelAssignmentUi(
