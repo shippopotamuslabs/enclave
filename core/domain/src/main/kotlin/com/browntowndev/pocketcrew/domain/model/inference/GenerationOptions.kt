@@ -9,6 +9,7 @@ package com.browntowndev.pocketcrew.domain.model.inference
 data class GenerationOptions(
     val reasoningBudget: Int,        // 0 = reasoning OFF, >0 = reasoning ON with budget
     val modelType: ModelType? = null, // The requesting role (FAST, THINKING, etc.)
+    val systemPrompt: String? = null,
     val temperature: Float? = null,
     val topK: Int? = null,
     val topP: Float? = null,

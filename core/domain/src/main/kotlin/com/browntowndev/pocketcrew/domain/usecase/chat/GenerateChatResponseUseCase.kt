@@ -442,6 +442,7 @@ class GenerateChatResponseUseCase @Inject constructor(
         val options = GenerationOptions(
             reasoningBudget = reasoningBudget,
             modelType = modelType,
+            systemPrompt = config?.systemPrompt,
             temperature = config?.temperature?.toFloat(),
             topK = config?.topK,
             topP = config?.topP?.toFloat(),

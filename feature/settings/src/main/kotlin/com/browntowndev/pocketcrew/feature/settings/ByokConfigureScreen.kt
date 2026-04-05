@@ -85,6 +85,8 @@ fun ByokConfigureRoute(
                 if (configUi != null) {
                     viewModel.onSelectApiModelConfig(configUi)
                 }
+                viewModel.onBackToByokList()
+                onNavigateBack()
             })
         },
         onSaveApiModelConfig = {
@@ -360,9 +362,14 @@ fun CredentialsConfigurationForm(
         }
         */
 
-        val isSaveEnabled = asset.displayName.isNotBlank() &&
-                asset.modelId.isNotBlank() &&
-                apiKey.isNotBlank()
+        val isSaveEnabled = if (asset.credentialsId == 0L) {
+            asset.displayName.isNotBlank() &&
+            asset.modelId.isNotBlank() &&
+            apiKey.isNotBlank()
+        } else {
+            asset.displayName.isNotBlank() &&
+            asset.modelId.isNotBlank()
+        }
 
         Button(
             onClick = onSave,
