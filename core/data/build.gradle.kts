@@ -73,6 +73,7 @@ dependencies {
     // OkHttp
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
+    implementation(libs.openai.java)
 
     // DataStore
     implementation(libs.androidx.datastore.preferences)

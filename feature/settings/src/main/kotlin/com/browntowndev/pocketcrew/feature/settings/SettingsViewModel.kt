@@ -7,12 +7,16 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiCredentialsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiModelConfigurationUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.FetchApiProviderModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SaveApiCredentialsUseCase
@@ -66,6 +70,8 @@ private data class TransientState(
     val showByokSheet: Boolean = false,
     val selectedApiModelAsset: ApiModelAssetUi? = null,
     val selectedApiModelConfig: ApiModelConfigUi? = null,
+    val discoveredApiModels: List<String> = emptyList(),
+    val isDiscoveringApiModels: Boolean = false,
     // Deletion Flow
     val showCannotDeleteLastModelAlert: Boolean = false,
     val pendingDeletionModelId: Long? = null,
@@ -96,6 +102,7 @@ class SettingsViewModel @Inject constructor(
     private val deleteLocalModelMetadataUseCase: DeleteLocalModelMetadataUseCase,
     private val deleteLocalModelUseCase: DeleteLocalModelUseCase,
     private val getApiModelAssetsUseCase: GetApiModelAssetsUseCase,
+    private val fetchApiProviderModelsUseCase: FetchApiProviderModelsUseCase,
     private val saveApiCredentialsUseCase: SaveApiCredentialsUseCase,
     private val deleteApiCredentialsUseCase: DeleteApiCredentialsUseCase,
     private val saveApiModelConfigurationUseCase: SaveApiModelConfigurationUseCase,
@@ -182,6 +189,8 @@ class SettingsViewModel @Inject constructor(
                 }
             },
             selectedApiModelConfig = transientState.selectedApiModelConfig,
+            discoveredApiModels = transientState.discoveredApiModels,
+            isDiscoveringApiModels = transientState.isDiscoveringApiModels,
             // Default model assignments
             defaultAssignments = defaultModels.map { def ->
                 DefaultModelAssignmentUi(
@@ -233,7 +242,8 @@ class SettingsViewModel @Inject constructor(
         presencePenalty = presencePenalty,
         customHeaders = customHeaders.map { CustomHeaderUi(it.key, it.value) },
         thinkingEnabled = false,
-        systemPrompt = systemPrompt
+        systemPrompt = systemPrompt,
+        reasoningEffort = reasoningEffort
     )
 
     private fun LocalModelAsset.toUi() = LocalModelAssetUi(
@@ -668,17 +678,45 @@ class SettingsViewModel @Inject constructor(
         _transientState.update { 
             it.copy(
                 selectedApiModelAsset = asset, 
-                selectedApiModelConfig = null 
+                selectedApiModelConfig = null,
+                discoveredApiModels = asset?.modelId?.takeIf(String::isNotBlank)?.let(::listOf) ?: emptyList(),
+                isDiscoveringApiModels = false
             ) 
         }
     }
 
     fun onSelectApiModelConfig(config: ApiModelConfigUi?) {
-        _transientState.update { it.copy(selectedApiModelConfig = config) }
+        _transientState.update { state ->
+            val normalizedConfig = config?.withProviderDefaults(state.selectedApiModelAsset)
+            state.copy(selectedApiModelConfig = normalizedConfig)
+        }
     }
 
     fun onApiModelAssetFieldChange(asset: ApiModelAssetUi) {
-        _transientState.update { it.copy(selectedApiModelAsset = asset) }
+        _transientState.update {
+            val selectedAsset = it.selectedApiModelAsset
+            val previousProvider = selectedAsset?.provider
+            val previousCredentialsId = selectedAsset?.credentialsId
+            val previousBaseUrl = selectedAsset?.baseUrl?.trim().orEmpty()
+            val discoveryScopeChanged =
+                previousProvider != asset.provider ||
+                    previousCredentialsId != asset.credentialsId ||
+                    previousBaseUrl != asset.baseUrl?.trim().orEmpty()
+            val existingModels = if (discoveryScopeChanged) {
+                emptyList()
+            } else {
+                it.discoveredApiModels
+            }
+            val updatedModels = when {
+                asset.modelId.isBlank() -> existingModels
+                asset.modelId in existingModels -> existingModels
+                else -> listOf(asset.modelId) + existingModels
+            }
+            it.copy(
+                selectedApiModelAsset = asset,
+                discoveredApiModels = updatedModels
+            )
+        }
     }
 
     fun onApiModelConfigFieldChange(config: ApiModelConfigUi) {
@@ -693,6 +731,7 @@ class SettingsViewModel @Inject constructor(
         val assetUi = _transientState.value.selectedApiModelAsset ?: return
         val apiKeyToSave = _currentApiKey.value
         val isNewAsset = assetUi.credentialsId == 0L
+        val defaultReasoningEffort = assetUi.defaultReasoningEffort()
         
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API credentials", "Failed to save credentials")) {
             val finalAlias = if (assetUi.credentialAlias.isBlank()) {
@@ -706,7 +745,7 @@ class SettingsViewModel @Inject constructor(
                 displayName = assetUi.displayName,
                 provider = assetUi.provider,
                 modelId = assetUi.modelId,
-                baseUrl = assetUi.baseUrl.takeIf { !it.isNullOrBlank() },
+                baseUrl = assetUi.baseUrl.takeIf { !it.isNullOrBlank() } ?: assetUi.provider.defaultBaseUrl(),
                 isVision = assetUi.isVision,
                 credentialAlias = finalAlias
             )
@@ -717,7 +756,8 @@ class SettingsViewModel @Inject constructor(
             if (isNewAsset) {
                 val defaultConfig = ApiModelConfiguration(
                     apiCredentialsId = id,
-                    displayName = "Default Preset"
+                    displayName = "Default Preset",
+                    reasoningEffort = defaultReasoningEffort,
                 )
                 saveApiModelConfigurationUseCase(defaultConfig).onSuccess { configId ->
                     configUi = defaultConfig.copy(id = configId).toUi()
@@ -755,6 +795,7 @@ class SettingsViewModel @Inject constructor(
     fun onSaveApiModelConfig(onSuccess: () -> Unit) {
         val configUi = _transientState.value.selectedApiModelConfig ?: return
         val assetUi = _transientState.value.selectedApiModelAsset ?: return
+        val defaultReasoningEffort = assetUi.defaultReasoningEffort()
 
         val config = ApiModelConfiguration(
             id = configUi.id,
@@ -769,6 +810,7 @@ class SettingsViewModel @Inject constructor(
             frequencyPenalty = configUi.frequencyPenalty,
             presencePenalty = configUi.presencePenalty,
             systemPrompt = configUi.systemPrompt,
+            reasoningEffort = configUi.reasoningEffort ?: defaultReasoningEffort,
             customHeaders = configUi.customHeaders
                 .filter { it.key.isNotBlank() && it.value.isNotBlank() }
                 .associate { it.key to it.value }
@@ -778,6 +820,57 @@ class SettingsViewModel @Inject constructor(
             saveApiModelConfigurationUseCase(config)
             onSuccess()
         }
+    }
+
+    fun onFetchApiModels() {
+        val assetUi = _transientState.value.selectedApiModelAsset ?: return
+        if (_currentApiKey.value.isBlank() && assetUi.credentialAlias.isBlank()) return
+
+        _transientState.update { it.copy(isDiscoveringApiModels = true) }
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch provider models", "Failed to fetch models")) {
+            try {
+                val models = fetchApiProviderModelsUseCase(
+                    provider = assetUi.provider,
+                    currentApiKey = _currentApiKey.value,
+                    credentialAlias = assetUi.credentialAlias,
+                    baseUrl = assetUi.baseUrl
+                )
+
+                _transientState.update { state ->
+                    val selectedAsset = state.selectedApiModelAsset
+                    val selectedModelId = selectedAsset?.modelId
+                    val mergedModels = buildList {
+                        if (!selectedModelId.isNullOrBlank() && selectedModelId !in models) {
+                            add(selectedModelId)
+                        }
+                        addAll(models)
+                    }
+                        .distinct()
+
+                    state.copy(
+                        discoveredApiModels = mergedModels
+                    )
+                }
+            } finally {
+                _transientState.update { it.copy(isDiscoveringApiModels = false) }
+            }
+        }
+    }
+
+    private fun ApiModelAssetUi.defaultReasoningEffort(): ApiReasoningEffort =
+        ApiProviderModelPolicy
+            .reasoningPolicy(provider = provider, modelId = modelId)
+            .defaultEffort
+
+    private fun ApiModelConfigUi.withProviderDefaults(asset: ApiModelAssetUi?): ApiModelConfigUi {
+        if (asset == null || reasoningEffort != null) {
+            return this
+        }
+        return copy(
+            reasoningEffort = ApiProviderModelPolicy
+                .reasoningPolicy(provider = asset.provider, modelId = asset.modelId)
+                .defaultEffort
+        )
     }
 
     fun onAddCustomHeader() {

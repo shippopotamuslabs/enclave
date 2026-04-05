@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 
 @Immutable
 data class StoredMemory(
@@ -49,6 +50,8 @@ data class SettingsUiState(
     val apiModels: List<ApiModelAssetUi> = emptyList(),
     val selectedApiModelAsset: ApiModelAssetUi? = null,
     val selectedApiModelConfig: ApiModelConfigUi? = null,
+    val discoveredApiModels: List<String> = emptyList(),
+    val isDiscoveringApiModels: Boolean = false,
 
     val defaultAssignments: List<DefaultModelAssignmentUi> = emptyList(),
 
@@ -107,7 +110,8 @@ data class ApiModelConfigUi(
     val presencePenalty: Double = 0.0,
     val customHeaders: List<CustomHeaderUi> = emptyList(),
     val thinkingEnabled: Boolean = false,
-    val systemPrompt: String = ""
+    val systemPrompt: String = "",
+    val reasoningEffort: ApiReasoningEffort? = null
 )
 
 @Immutable

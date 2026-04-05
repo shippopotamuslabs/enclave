@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "3a4389f1fc9b7ecb2f231861cc2c2272",
+    "identityHash": "c159972c7ede8c5f5a4e3741e4ef010b",
     "entities": [
       {
         "tableName": "chat",
@@ -510,7 +510,7 @@
       },
       {
         "tableName": "api_model_configurations",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `api_credentials_id` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `min_p` REAL NOT NULL, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `system_prompt` TEXT NOT NULL, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `api_credentials_id` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `min_p` REAL NOT NULL, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `system_prompt` TEXT NOT NULL, `reasoning_effort` TEXT, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -588,6 +588,11 @@
             "columnName": "system_prompt",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "reasoningEffort",
+            "columnName": "reasoning_effort",
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "updatedAt",
@@ -709,7 +714,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3a4389f1fc9b7ecb2f231861cc2c2272')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c159972c7ede8c5f5a4e3741e4ef010b')"
     ]
   }
 }

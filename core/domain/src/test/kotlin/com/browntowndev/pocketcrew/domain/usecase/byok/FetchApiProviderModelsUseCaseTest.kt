@@ -1,0 +1,76 @@
+package com.browntowndev.pocketcrew.domain.usecase.byok
+
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
+import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.mockk
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlinx.coroutines.test.runTest
+
+class FetchApiProviderModelsUseCaseTest {
+
+    private val apiModelCatalog = mockk<ApiModelCatalogPort>()
+    private val apiKeyProvider = mockk<ApiKeyProviderPort>()
+    private val useCase = FetchApiProviderModelsUseCaseImpl(
+        apiModelCatalog = apiModelCatalog,
+        apiKeyProvider = apiKeyProvider,
+    )
+
+    @Test
+    fun `uses in-memory api key when present`() = runTest {
+        coEvery {
+            apiModelCatalog.fetchModels(ApiProvider.OPENAI, "live-key", null)
+        } returns listOf("gpt-5")
+
+        val models = useCase(
+            provider = ApiProvider.OPENAI,
+            currentApiKey = "live-key",
+            credentialAlias = "saved-alias",
+            baseUrl = null,
+        )
+
+        assertEquals(listOf("gpt-5"), models)
+        coVerify(exactly = 1) {
+            apiModelCatalog.fetchModels(ApiProvider.OPENAI, "live-key", null)
+        }
+    }
+
+    @Test
+    fun `falls back to stored api key when current key is blank`() = runTest {
+        every { apiKeyProvider.getApiKey("saved-alias") } returns "stored-key"
+        coEvery {
+            apiModelCatalog.fetchModels(ApiProvider.XAI, "stored-key", "https://api.x.ai/v1")
+        } returns listOf("grok-4.20-multi-agent")
+
+        val models = useCase(
+            provider = ApiProvider.XAI,
+            currentApiKey = "",
+            credentialAlias = "saved-alias",
+            baseUrl = "https://api.x.ai/v1",
+        )
+
+        assertEquals(listOf("grok-4.20-multi-agent"), models)
+        coVerify(exactly = 1) {
+            apiModelCatalog.fetchModels(ApiProvider.XAI, "stored-key", "https://api.x.ai/v1")
+        }
+    }
+
+    @Test
+    fun `fails when no api key is available`() = runTest {
+        every { apiKeyProvider.getApiKey(any()) } returns null
+
+        assertFailsWith<IllegalArgumentException> {
+            useCase(
+                provider = ApiProvider.OPENAI,
+                currentApiKey = "",
+                credentialAlias = "saved-alias",
+                baseUrl = null,
+            )
+        }
+    }
+}
