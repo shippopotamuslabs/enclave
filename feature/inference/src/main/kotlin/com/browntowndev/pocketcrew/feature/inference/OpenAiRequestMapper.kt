@@ -12,7 +12,6 @@ import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
 
 object OpenAiRequestMapper {
-    private const val XAI_MULTI_AGENT_MODEL = "grok-4.20-multi-agent"
     private const val SYNTHETIC_API_ERROR_PREFIX = "Error: API Error"
 
     fun mapToChatCompletionParams(
@@ -45,6 +44,7 @@ object OpenAiRequestMapper {
 
         builder.messages(messages)
 
+        options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
         options.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
@@ -100,17 +100,13 @@ object OpenAiRequestMapper {
             .takeIf { it.isNotBlank() }
             ?.let { builder.instructions(it) }
 
+        options.reasoningEffort?.let { builder.reasoning(ReasoningMapper.toSdkReasoning(it)) }
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
-        if (!isXaiMultiAgentModel(modelId)) {
-            options.maxTokens?.let { builder.maxOutputTokens(it.toLong()) }
-        }
+        options.maxTokens?.let { builder.maxOutputTokens(it.toLong()) }
         
         return builder.build()
     }
-
-    fun isXaiMultiAgentModel(modelId: String): Boolean =
-        modelId == XAI_MULTI_AGENT_MODEL
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)

@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.core.data.openai.OpenAiClientProvider
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
@@ -69,8 +71,8 @@ class InferenceFactoryImpl @Inject constructor(
         private const val TAG = "InferenceFactory"
     }
 
-    private var activeIdentity: String? = null
-    private var activeService: LlmInferencePort? = null
+    private val activeIdentities = mutableMapOf<ModelType, String>()
+    private val activeServices = mutableMapOf<ModelType, LlmInferencePort>()
 
     private val mutex = Mutex()
 
@@ -107,30 +109,42 @@ class InferenceFactoryImpl @Inject constructor(
                 loggingPort.error(TAG, "Missing API configuration or credentials for $modelType. Config: ${apiConfig?.id}, Creds: ${apiCreds?.id}, Key present: ${apiKey != null}")
                 // Fallback to on-device logic below if we somehow have both set, though UI shouldn't allow this
             } else {
-                val requestedIdentity = "api-${apiConfig.id}"
+                val requestedIdentity = buildApiIdentity(modelType, apiConfig, apiCreds)
                 
                 return mutex.withLock {
-                    activeService?.let { currentService ->
-                        if (activeIdentity == requestedIdentity) {
+                    activeServices[modelType]?.let { currentService ->
+                        if (activeIdentities[modelType] == requestedIdentity) {
                             return currentService
                         }
                         currentService.closeSession()
+                        activeServices.remove(modelType)
+                        activeIdentities.remove(modelType)
                     }
-
-                    val newService = ApiInferenceServiceImpl(
-                        client = openAiClientProvider.getClient(
-                            apiKey = apiKey,
-                            baseUrl = apiCreds.baseUrl
-                        ),
-                        modelId = apiCreds.modelId,
-                        provider = apiCreds.provider.name,
-                        modelType = modelType,
-                        baseUrl = apiCreds.baseUrl,
-                        loggingPort = loggingPort
+ 
+                    val client = openAiClientProvider.getClient(
+                        apiKey = apiKey,
+                        baseUrl = apiCreds.baseUrl
                     )
-
-                    activeService = newService
-                    activeIdentity = requestedIdentity
+                    val newService = when (apiCreds.provider) {
+                        ApiProvider.XAI -> XaiInferenceServiceImpl(
+                            client = client,
+                            modelId = apiCreds.modelId,
+                            modelType = modelType,
+                            baseUrl = apiCreds.baseUrl,
+                            loggingPort = loggingPort
+                        )
+                        else -> ApiInferenceServiceImpl(
+                            client = client,
+                            modelId = apiCreds.modelId,
+                            provider = apiCreds.provider.name,
+                            modelType = modelType,
+                            baseUrl = apiCreds.baseUrl,
+                            loggingPort = loggingPort
+                        )
+                    }
+ 
+                    activeServices[modelType] = newService
+                    activeIdentities[modelType] = requestedIdentity
                     return newService
                 }
             }
@@ -156,18 +170,18 @@ class InferenceFactoryImpl @Inject constructor(
         
         val filename = asset.metadata.localFileName
         val extension = filename.substringAfterLast('.', "")
-        val requestedIdentity = "${asset.metadata.sha256}-$extension"
-
+        val requestedIdentity = "local-$modelType-${asset.metadata.sha256}-$extension-$localConfigId"
+ 
         return mutex.withLock {
-            activeService?.let { currentService ->
-                val currentIdentity = activeIdentity
+            activeServices[modelType]?.let { currentService ->
+                val currentIdentity = activeIdentities[modelType]
                 if (currentIdentity == requestedIdentity) {
                     return currentService
                 }
-
+ 
                 currentService.closeSession()
-                activeService = null
-                activeIdentity = null
+                activeServices.remove(modelType)
+                activeIdentities.remove(modelType)
             }
 
             val newService = when (extension) {
@@ -195,10 +209,31 @@ class InferenceFactoryImpl @Inject constructor(
                 }
             }
 
-            activeService = newService
-            activeIdentity = requestedIdentity
+            activeServices[modelType] = newService
+            activeIdentities[modelType] = requestedIdentity
             return newService
         }
+    }
+
+    private fun buildApiIdentity(
+        modelType: ModelType,
+        apiConfig: com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration,
+        apiCreds: com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
+    ): String = buildString {
+        append("api-")
+        append(modelType)
+        append("-cfg=")
+        append(apiConfig.id)
+        append("-creds=")
+        append(apiCreds.id)
+        append("-provider=")
+        append(apiCreds.provider)
+        append("-model=")
+        append(apiCreds.modelId)
+        append("-baseUrl=")
+        append(apiCreds.baseUrl ?: "")
+        append("-reasoning=")
+        append(apiConfig.reasoningEffort?.wireValue ?: "")
     }
 
     private fun getModelPath(filename: String): String {

@@ -60,6 +60,9 @@ data class ApiModelConfigurationEntity(
     @ColumnInfo(name = "system_prompt")
     val systemPrompt: String = "",
 
+    @ColumnInfo(name = "reasoning_effort")
+    val reasoningEffort: String? = null,
+
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis()
 )

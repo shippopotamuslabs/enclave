@@ -27,6 +27,7 @@ class ActiveModelProviderImpl @Inject constructor(
                 isLocal = true,
                 name = config.displayName,
                 systemPrompt = config.systemPrompt,
+                reasoningEffort = null,
                 temperature = config.temperature,
                 topK = config.topK,
                 topP = config.topP,
@@ -46,6 +47,9 @@ class ActiveModelProviderImpl @Inject constructor(
                 isLocal = false,
                 name = config.displayName,
                 systemPrompt = config.systemPrompt,
+                reasoningEffort = config.reasoningEffort?.let {
+                    com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort.fromWireValue(it)
+                },
                 temperature = config.temperature,
                 topK = config.topK,
                 topP = config.topP,
@@ -53,7 +57,7 @@ class ActiveModelProviderImpl @Inject constructor(
                 minP = null, // API models might not have minP
                 repetitionPenalty = null, // API models might not have repetitionPenalty
                 contextWindow = null, // API models might not have contextWindow
-                thinkingEnabled = false // Currently no reasoning support for APIs
+                thinkingEnabled = config.reasoningEffort != null
             )
         }
 

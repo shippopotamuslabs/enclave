@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.feature.inference
+package com.browntowndev.pocketcrew.core.data.openai
 
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
@@ -16,16 +16,21 @@ class OpenAiClientProvider @Inject constructor() {
         organizationId: String? = null,
         projectId: String? = null
     ): OpenAIClient {
-        // Create a stable cache key
         val key = "${apiKey.hashCode()}_${baseUrl}_${organizationId}_${projectId}"
-        
+
         return clientCache.getOrPut(key) {
             OpenAIOkHttpClient.builder()
                 .apiKey(apiKey)
                 .apply {
-                    if (!baseUrl.isNullOrBlank()) baseUrl(baseUrl)
-                    if (!organizationId.isNullOrBlank()) organization(organizationId)
-                    if (!projectId.isNullOrBlank()) project(projectId)
+                    if (!baseUrl.isNullOrBlank()) {
+                        baseUrl(baseUrl)
+                    }
+                    if (!organizationId.isNullOrBlank()) {
+                        organization(organizationId)
+                    }
+                    if (!projectId.isNullOrBlank()) {
+                        project(projectId)
+                    }
                 }
                 .build()
         }

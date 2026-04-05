@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -63,9 +64,26 @@ class OpenAiRequestMapperTest {
     }
 
     @Test
-    fun `mapToResponseParams omits max output tokens for xai multi agent model`() {
+    fun `mapToResponseParams includes reasoning effort when configured`() {
         val params = OpenAiRequestMapper.mapToResponseParams(
-            modelId = "grok-4.20-multi-agent",
+            modelId = "gpt-5",
+            prompt = "How are you?",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                reasoningEffort = ApiReasoningEffort.XHIGH
+            )
+        )
+
+        assertTrue(params.reasoning().isPresent)
+        assertTrue(params.reasoning().get().toString().contains("xhigh"))
+        assertTrue(params.reasoning().get().toString().contains("concise"))
+    }
+
+    @Test
+    fun `mapToResponseParams includes max output tokens for generic openai models`() {
+        val params = OpenAiRequestMapper.mapToResponseParams(
+            modelId = "gpt-4o",
             prompt = "How are you?",
             history = emptyList(),
             options = GenerationOptions(
@@ -74,7 +92,8 @@ class OpenAiRequestMapperTest {
             )
         )
 
-        assertFalse(params.maxOutputTokens().isPresent)
+        assertTrue(params.maxOutputTokens().isPresent)
+        assertEquals(100L, params.maxOutputTokens().get())
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.core.data.mapper.ApiModelMapper
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -85,6 +86,7 @@ class ApiModelRepositoryImpl @Inject constructor(
             frequencyPenalty = config.frequencyPenalty,
             presencePenalty = config.presencePenalty,
             systemPrompt = config.systemPrompt,
+            reasoningEffort = config.reasoningEffort?.wireValue,
             customHeaders = ApiModelMapper.serializeCustomHeaders(config.customHeaders)
         )
         return apiModelConfigurationsDao.upsert(entity)
@@ -121,6 +123,7 @@ class ApiModelRepositoryImpl @Inject constructor(
         frequencyPenalty = frequencyPenalty,
         presencePenalty = presencePenalty,
         systemPrompt = systemPrompt,
+        reasoningEffort = ApiReasoningEffort.fromWireValue(reasoningEffort),
         customHeaders = ApiModelMapper.deserializeCustomHeaders(customHeaders)
     )
 }

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -53,6 +54,9 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningControlStyle
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import androidx.compose.ui.tooling.preview.Preview
 import kotlin.math.roundToInt
@@ -79,6 +83,7 @@ fun ByokConfigureRoute(
         onApiModelAssetFieldChange = viewModel::onApiModelAssetFieldChange,
         onApiModelConfigFieldChange = viewModel::onApiModelConfigFieldChange,
         onApiKeyChange = viewModel::onApiKeyChange,
+        onFetchApiModels = viewModel::onFetchApiModels,
         onSaveApiCredentials = {
             viewModel.onSaveApiCredentials(onSuccess = { assetUi, configUi ->
                 viewModel.onSelectApiModelAsset(assetUi)
@@ -108,6 +113,7 @@ fun ByokConfigureScreen(
     onApiModelAssetFieldChange: (ApiModelAssetUi) -> Unit,
     onApiModelConfigFieldChange: (ApiModelConfigUi) -> Unit,
     onApiKeyChange: (String) -> Unit,
+    onFetchApiModels: () -> Unit,
     onSaveApiCredentials: () -> Unit,
     onSaveApiModelConfig: () -> Unit
 ) {
@@ -136,6 +142,7 @@ fun ByokConfigureScreen(
             val selectedConfig = uiState.selectedApiModelConfig
             if (selectedConfig != null) {
                 PresetConfigurationForm(
+                    asset = uiState.selectedApiModelAsset,
                     config = selectedConfig,
                     onConfigChange = onApiModelConfigFieldChange,
                     onNavigateToCustomHeaders = onNavigateToCustomHeaders,
@@ -149,8 +156,11 @@ fun ByokConfigureScreen(
                         configurations = emptyList()
                     ),
                     apiKey = apiKey,
+                    availableModels = uiState.discoveredApiModels,
+                    isFetchingModels = uiState.isDiscoveringApiModels,
                     onAssetChange = onApiModelAssetFieldChange,
                     onApiKeyChange = onApiKeyChange,
+                    onFetchModels = onFetchApiModels,
                     onSave = onSaveApiCredentials
                 )
             }
@@ -174,6 +184,7 @@ fun PreviewByokConfigureCredentials() {
             onApiModelAssetFieldChange = {},
             onApiModelConfigFieldChange = {},
             onApiKeyChange = {},
+            onFetchApiModels = {},
             onSaveApiCredentials = {},
             onSaveApiModelConfig = {},
             onNavigateToCustomHeaders = {}
@@ -195,6 +206,7 @@ fun PreviewByokConfigurePreset() {
             onApiModelAssetFieldChange = {},
             onApiModelConfigFieldChange = {},
             onApiKeyChange = {},
+            onFetchApiModels = {},
             onSaveApiCredentials = {},
             onSaveApiModelConfig = {},
             onNavigateToCustomHeaders = {}
@@ -227,6 +239,7 @@ fun PreviewByokConfigurePresetWithHeaders() {
             onApiModelAssetFieldChange = {},
             onApiModelConfigFieldChange = {},
             onApiKeyChange = {},
+            onFetchApiModels = {},
             onSaveApiCredentials = {},
             onSaveApiModelConfig = {}
         )
@@ -264,12 +277,17 @@ fun PreviewByokCustomHeadersList() {
 fun CredentialsConfigurationForm(
     asset: ApiModelAssetUi,
     apiKey: String,
+    availableModels: List<String>,
+    isFetchingModels: Boolean,
     onAssetChange: (ApiModelAssetUi) -> Unit,
     onApiKeyChange: (String) -> Unit,
+    onFetchModels: () -> Unit,
     onSave: () -> Unit
 ) {
     var providerDropdownExpanded by remember { mutableStateOf(false) }
+    var modelDropdownExpanded by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
+    val supportsModelDiscovery = ApiProviderModelPolicy.supportsModelDiscovery(asset.provider)
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Provider Selection
@@ -298,7 +316,18 @@ fun CredentialsConfigurationForm(
                     DropdownMenuItem(
                         text = { Text(provider.displayName) },
                         onClick = {
-                            onAssetChange(asset.copy(provider = provider))
+                            val nextBaseUrl = when {
+                                asset.baseUrl == asset.provider.defaultBaseUrl() -> provider.defaultBaseUrl()
+                                asset.baseUrl.isNullOrBlank() -> provider.defaultBaseUrl()
+                                else -> asset.baseUrl
+                            }
+                            onAssetChange(
+                                asset.copy(
+                                    provider = provider,
+                                    baseUrl = nextBaseUrl,
+                                    modelId = ""
+                                )
+                            )
                             providerDropdownExpanded = false
                         }
                     )
@@ -314,13 +343,82 @@ fun CredentialsConfigurationForm(
             shape = RoundedCornerShape(12.dp)
         )
 
-        OutlinedTextField(
-            value = asset.modelId,
-            onValueChange = { onAssetChange(asset.copy(modelId = it)) },
-            label = { Text("Model ID (e.g. gpt-4o)") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        )
+        if (supportsModelDiscovery) {
+            Button(
+                onClick = onFetchModels,
+                enabled = apiKey.isNotBlank() || asset.credentialsId != 0L,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                if (isFetchingModels) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+                Text(if (availableModels.isEmpty()) "Load Models" else "Refresh Models")
+            }
+
+            ExposedDropdownMenuBox(
+                expanded = modelDropdownExpanded,
+                onExpandedChange = { modelDropdownExpanded = it && availableModels.isNotEmpty() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = asset.modelId,
+                    onValueChange = { onAssetChange(asset.copy(modelId = it)) },
+                    readOnly = false,
+                    enabled = true,
+                    label = { Text("Model") },
+                    placeholder = {
+                        Text(
+                            if (availableModels.isEmpty()) {
+                                "Type a model ID or load models"
+                            } else {
+                                "Type a model ID or choose one below"
+                            }
+                        )
+                    },
+                    trailingIcon = {
+                        if (availableModels.isNotEmpty()) {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelDropdownExpanded)
+                        }
+                    },
+                    modifier = Modifier
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    supportingText = {
+                        if (availableModels.isEmpty()) {
+                            Text("Model discovery is optional. You can always enter a model ID manually.")
+                        }
+                    }
+                )
+                ExposedDropdownMenu(
+                    expanded = modelDropdownExpanded,
+                    onDismissRequest = { modelDropdownExpanded = false }
+                ) {
+                    availableModels.forEach { modelId ->
+                        DropdownMenuItem(
+                            text = { Text(modelId) },
+                            onClick = {
+                                onAssetChange(asset.copy(modelId = modelId))
+                                modelDropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+        } else {
+            OutlinedTextField(
+                value = asset.modelId,
+                onValueChange = { onAssetChange(asset.copy(modelId = it)) },
+                label = { Text("Model ID") },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+        }
 
         OutlinedTextField(
             value = apiKey,
@@ -385,13 +483,23 @@ fun CredentialsConfigurationForm(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PresetConfigurationForm(
+    asset: ApiModelAssetUi?,
     config: ApiModelConfigUi,
     onConfigChange: (ApiModelConfigUi) -> Unit,
     onNavigateToCustomHeaders: () -> Unit,
     onSave: () -> Unit
 ) {
+    val reasoningPolicy = remember(asset?.provider, asset?.modelId) {
+        ApiProviderModelPolicy.reasoningPolicy(
+            provider = asset?.provider ?: ApiProvider.ANTHROPIC,
+            modelId = asset?.modelId.orEmpty(),
+        )
+    }
+    var reasoningDropdownExpanded by remember(config.reasoningEffort, reasoningPolicy) { mutableStateOf(false) }
+
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         OutlinedTextField(
             value = config.displayName,
@@ -462,6 +570,59 @@ fun PresetConfigurationForm(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done)
         )
 
+        ExposedDropdownMenuBox(
+            expanded = reasoningDropdownExpanded,
+            onExpandedChange = { reasoningDropdownExpanded = it },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = reasoningSelectionLabel(config.reasoningEffort, reasoningPolicy),
+                onValueChange = {},
+                readOnly = true,
+                label = {
+                    Text(if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) "Agent Count" else "Reasoning")
+                },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = reasoningDropdownExpanded) },
+                modifier = Modifier
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                placeholder = {
+                    Text(
+                        if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
+                            "Select agent count"
+                        } else {
+                            "Select reasoning level"
+                        }
+                    )
+                }
+            )
+            ExposedDropdownMenu(
+                expanded = reasoningDropdownExpanded,
+                onDismissRequest = { reasoningDropdownExpanded = false }
+            ) {
+                reasoningOptions(reasoningPolicy).forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.label) },
+                        onClick = {
+                            onConfigChange(config.copy(reasoningEffort = option.effort))
+                            reasoningDropdownExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
+                "xAI multi-agent maps 4 agents to low reasoning and 16 agents to high reasoning."
+            } else {
+                "Reasoning support varies by provider and model. Unsupported values may be rejected by the provider."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
         TuningSlider(
             label = "Min P",
             description = "Limits the next token choice to tokens with probability at least P times the probability of the most likely token.",
@@ -525,6 +686,46 @@ fun PresetConfigurationForm(
         ) {
             Text("Save Preset", fontWeight = FontWeight.Bold)
         }
+    }
+}
+
+private data class ReasoningOptionUi(
+    val label: String,
+    val effort: ApiReasoningEffort
+)
+
+private fun reasoningOptions(policy: com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningPolicy): List<ReasoningOptionUi> =
+    policy.supportedEfforts.map { effort ->
+        ReasoningOptionUi(
+            label = if (policy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
+                if (effort == ApiReasoningEffort.HIGH || effort == ApiReasoningEffort.XHIGH) {
+                    "16 agents"
+                } else {
+                    "4 agents"
+                }
+            } else {
+                effort.displayName
+            },
+            effort = effort
+        )
+    }
+
+private fun reasoningSelectionLabel(
+    effort: ApiReasoningEffort?,
+    policy: com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningPolicy
+): String {
+    if (effort == null) {
+        return ""
+    }
+
+    return if (policy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
+        if (effort == ApiReasoningEffort.HIGH || effort == ApiReasoningEffort.XHIGH) {
+            "16 agents"
+        } else {
+            "4 agents"
+        }
+    } else {
+        effort.displayName
     }
 }
 

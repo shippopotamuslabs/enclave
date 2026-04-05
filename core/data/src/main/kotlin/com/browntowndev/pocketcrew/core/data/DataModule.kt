@@ -26,6 +26,7 @@ import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.core.data.repository.ApiModelCatalogRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.DefaultModelRepositoryImpl
@@ -45,6 +46,7 @@ import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyProviderImpl
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
@@ -83,7 +85,8 @@ object DataModule {
             context,
             PocketCrewDatabase::class.java,
             "pocket_crew_db"
-        ).fallbackToDestructiveMigration(false)
+        )
+        .fallbackToDestructiveMigration(false)
         .build()
     }
 
@@ -210,6 +213,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindApiModelRepository(impl: ApiModelRepositoryImpl): ApiModelRepositoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindApiModelCatalogRepository(impl: ApiModelCatalogRepositoryImpl): ApiModelCatalogPort
 
     @Binds
     @Singleton
