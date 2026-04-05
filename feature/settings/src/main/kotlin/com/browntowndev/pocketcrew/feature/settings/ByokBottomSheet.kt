@@ -116,6 +116,10 @@ fun ByokBottomSheet(
                         ByokConfigListView(
                             asset = state.asset,
                             onBack = { onSelectApiModelAsset(null) },
+                            onEditAsset = {
+                                onSelectApiModelConfig(null)
+                                hideAndNavigate(onNavigateToByokConfigure)
+                            },
                             onEditConfig = { config ->
                                 onSelectApiModelConfig(config)
                                 hideAndNavigate(onNavigateToByokConfigure)
@@ -133,6 +137,11 @@ fun ByokBottomSheet(
                         ByokAssetListView(
                             apiModels = uiState.apiModels,
                             onSelectAsset = { asset -> onSelectApiModelAsset(asset) },
+                            onEditAsset = { asset ->
+                                onSelectApiModelAsset(asset)
+                                onSelectApiModelConfig(null)
+                                hideAndNavigate(onNavigateToByokConfigure)
+                            },
                             onRequestDeleteAsset = { asset ->
                                 pendingDeleteTarget = ByokDeleteTarget.Asset(asset.credentialsId, asset.displayName)
                             },
@@ -197,6 +206,7 @@ fun ByokBottomSheet(
 private fun ByokAssetListView(
     apiModels: List<ApiModelAssetUi>,
     onSelectAsset: (ApiModelAssetUi) -> Unit,
+    onEditAsset: (ApiModelAssetUi) -> Unit,
     onRequestDeleteAsset: (ApiModelAssetUi) -> Unit,
     onAddAsset: () -> Unit
 ) {
@@ -212,6 +222,14 @@ private fun ByokAssetListView(
             text = "Manage your own API keys and model configurations.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        
+        Text(
+            text = "Hint: long press to edit/delete the provider.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
@@ -269,6 +287,13 @@ private fun ByokAssetListView(
                         onDismissRequest = { menuExpanded = false }
                     ) {
                         DropdownMenuItem(
+                            text = { Text("Edit") },
+                            onClick = {
+                                menuExpanded = false
+                                onEditAsset(asset)
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Delete") },
                             onClick = {
                                 menuExpanded = false
@@ -300,6 +325,7 @@ private fun ByokAssetListView(
 private fun ByokConfigListView(
     asset: ApiModelAssetUi,
     onBack: () -> Unit,
+    onEditAsset: () -> Unit,
     onEditConfig: (ApiModelConfigUi) -> Unit,
     onRequestDeleteConfig: (ApiModelConfigUi) -> Unit,
     onAddConfig: () -> Unit
@@ -312,7 +338,7 @@ private fun ByokConfigListView(
             IconButton(onClick = onBack, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to providers")
             }
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = asset.displayName,
                     style = MaterialTheme.typography.headlineSmall,
@@ -322,6 +348,13 @@ private fun ByokConfigListView(
                     text = "Presets",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onEditAsset, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = "Edit Provider Credentials",
+                    tint = MaterialTheme.colorScheme.primary
                 )
             }
         }

@@ -15,7 +15,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.ThinkingModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.VisionModelEngine
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.feature.inference.InferenceFactoryImpl
 import com.browntowndev.pocketcrew.feature.inference.LiteRtInferenceServiceImpl
 import com.browntowndev.pocketcrew.feature.inference.MediaPipeInferenceServiceImpl
@@ -46,7 +47,7 @@ import javax.inject.Singleton
 
 /**
  * Hilt module for LiteRT engine and inference pipeline components.
- * Inference services and ConversationManagers resolve models lazily from [ModelRegistryPort]
+ * Inference services and ConversationManagers resolve models lazily from [LocalModelRepositoryPort]
  * at runtime, eliminating the need for a startup cache.
  */
 @Module
@@ -98,7 +99,8 @@ abstract class EngineModule {
         @Provides
         fun provideConversationManager(
             @ApplicationContext context: Context,
-            modelRegistry: ModelRegistryPort
-        ): ConversationManagerPort = ConversationManagerImpl(context, modelRegistry)
+            localModelRepository: LocalModelRepositoryPort,
+            activeModelProvider: ActiveModelProviderPort
+        ): ConversationManagerPort = ConversationManagerImpl(context, localModelRepository, activeModelProvider)
     }
 }

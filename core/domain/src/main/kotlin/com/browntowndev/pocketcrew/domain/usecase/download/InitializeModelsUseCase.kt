@@ -4,7 +4,8 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ActivateLocalModelUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -15,7 +16,9 @@ import javax.inject.Inject
  */
 class InitializeModelsUseCase @Inject constructor(
     private val modelConfigFetcher: ModelConfigFetcherPort,
-    private val modelRegistry: ModelRegistryPort,
+    private val activeModelProvider: ActiveModelProviderPort,
+    private val activateLocalModelUseCase: ActivateLocalModelUseCase,
+    private val localModelRepository: com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort,
     private val modelDownloadOrchestrator: ModelDownloadOrchestratorPort,
     private val checkModelsUseCase: CheckModelsUseCase,
     private val logPort: LoggingPort
@@ -39,7 +42,12 @@ class InitializeModelsUseCase @Inject constructor(
     private suspend fun checkModelsResult(): DownloadModelsResult {
         // Get currently active models from registry
         val currentModels = com.browntowndev.pocketcrew.domain.model.inference.ModelType.entries
-            .associateWith { modelRegistry.getRegisteredAsset(it) }
+            .associateWith { modelType -> 
+                val config = activeModelProvider.getActiveConfiguration(modelType)
+                if (config != null && config.isLocal) {
+                    localModelRepository.getAssetByConfigId(config.id)
+                } else null
+            }
             .filterValues { it != null }
             .mapValues { it.value!! }
 
@@ -64,7 +72,7 @@ class InitializeModelsUseCase @Inject constructor(
         logPort.debug(TAG, "Fetched ${remoteConfigs.size} remote configs")
 
         // Source of truth for soft-deleted models is getSoftDeletedModels()
-        val softDeletedAssets = modelRegistry.getSoftDeletedModels()
+        val softDeletedAssets = localModelRepository.getSoftDeletedModels()
         
         if (softDeletedAssets.isNotEmpty()) {
             logPort.debug(TAG, "Found ${softDeletedAssets.size} soft-deleted models available for re-download: ${
@@ -108,7 +116,7 @@ class InitializeModelsUseCase @Inject constructor(
                 // The physical asset is already present locally, either for this slot or another slot
                 // sharing the same file. Apply the slot config immediately instead of waiting for
                 // a download that will never be scheduled.
-                modelRegistry.activateLocalModel(modelType, remoteAsset)
+                activateLocalModelUseCase(modelType, remoteAsset)
                 logPort.debug(TAG, "Applied slot activation for $modelType immediately")
             } else {
                 logPort.debug(TAG, "Deferring registration for $modelType until download success")

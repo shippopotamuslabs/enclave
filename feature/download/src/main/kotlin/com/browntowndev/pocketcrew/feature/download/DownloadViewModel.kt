@@ -15,7 +15,7 @@ import com.browntowndev.pocketcrew.core.data.repository.DownloadWorkRepository
 import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
@@ -40,7 +40,7 @@ import kotlinx.coroutines.launch
 class DownloadViewModel @AssistedInject constructor(
     private val modelDownloadOrchestrator: ModelDownloadOrchestratorPort,
     private val downloadWorkRepository: DownloadWorkRepository,
-    private val modelRegistry: ModelRegistryPort,
+    private val localModelRepository: LocalModelRepositoryPort,
     private val progressParser: WorkProgressParser,
     private val errorHandler: ViewModelErrorHandler,
     @Assisted private val modelsResult: DownloadModelsResult,

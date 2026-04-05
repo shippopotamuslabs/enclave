@@ -14,7 +14,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -45,8 +45,7 @@ class GenerateChatResponseUseCase @Inject constructor(
     private val chatRepository: ChatRepository,
     private val messageRepository: MessageRepository,
     private val loggingPort: LoggingPort,
-    private val inferenceLockManager: InferenceLockManager,
-    private val modelRegistry: ModelRegistryPort,
+    private val activeModelProvider: ActiveModelProviderPort,
 ) {
     companion object {
         private const val TAG = "GenerateChatResponse"
@@ -436,7 +435,7 @@ class GenerateChatResponseUseCase @Inject constructor(
             loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
         }
 
-        val config = modelRegistry.getRegisteredConfiguration(modelType)
+        val config = activeModelProvider.getActiveConfiguration(modelType)
         val reasoningBudget = if (config?.thinkingEnabled == true) 2048 else 0
         
         // ARCHITECTURE: Explicitly provide modelType to options for event tagging

@@ -17,7 +17,8 @@ import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManag
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -27,14 +28,15 @@ import javax.inject.Inject
 /**
  * Implementation of LlmInferencePort using llama.cpp via JNI.
  * Bridges the llama.cpp GenerationEvent to the domain's InferenceEvent.
- * Resolves the active model from [ModelRegistryPort] at runtime, eliminating
+ * Resolves the active model from [LocalModelRepositoryPort] at runtime, eliminating
  * the need for explicit configure() calls at provision time.
  */
 class LlamaInferenceServiceImpl @Inject constructor(
     private val sessionManager: LlamaChatSessionManager,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
     private val loggingPort: LoggingPort,
-    private val modelRegistry: ModelRegistryPort,
+    private val localModelRepository: LocalModelRepositoryPort,
+    private val activeModelProvider: ActiveModelProviderPort,
     @ApplicationContext private val context: Context,
     private val modelType: ModelType,
 ) : LlmInferencePort {
@@ -70,22 +72,25 @@ class LlamaInferenceServiceImpl @Inject constructor(
      * If the model or config has changed since last load, tears down and reloads.
      */
     private suspend fun ensureModelLoaded(modelType: ModelType, options: GenerationOptions) {
-        val asset = modelRegistry.getRegisteredAsset(modelType)
-        val config = modelRegistry.getRegisteredConfiguration(modelType)
+        val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
+            ?: throw IllegalStateException("No active configuration for $modelType")
 
-        if (asset == null) {
-            throw IllegalStateException("No registered asset for $modelType. Download a model first.")
+        if (!activeConfig.isLocal) {
+            throw IllegalStateException("LlamaInferenceService cannot run API models. ModelType $modelType is mapped to an API configuration.")
         }
 
+        val asset = localModelRepository.getAssetByConfigId(activeConfig.id)
+            ?: throw IllegalStateException("No registered asset for config ${activeConfig.id}. Download a model first.")
+
         val targetReasoningBudget = options.reasoningBudget
-        val targetTemperature = options.temperature ?: config?.temperature?.toFloat() ?: 0.7f
-        val targetTopK = options.topK ?: config?.topK ?: 40
-        val targetTopP = options.topP ?: config?.topP?.toFloat() ?: 0.9f
-        val targetMaxTokens = options.maxTokens ?: config?.maxTokens ?: 4096
+        val targetTemperature = options.temperature ?: activeConfig.temperature?.toFloat() ?: 0.7f
+        val targetTopK = options.topK ?: activeConfig.topK ?: 40
+        val targetTopP = options.topP ?: activeConfig.topP?.toFloat() ?: 0.9f
+        val targetMaxTokens = options.maxTokens ?: activeConfig.maxTokens ?: 4096
 
         val newSignature = SessionSignature(
             modelId = asset.metadata.id,
-            configId = config?.id,
+            configId = activeConfig.id,
             reasoningBudget = targetReasoningBudget,
             temperature = targetTemperature,
             topK = targetTopK,
@@ -104,18 +109,18 @@ class LlamaInferenceServiceImpl @Inject constructor(
         hasTriedCpuFallback = false
 
         val modelPath = getModelPath(asset.metadata.localFileName)
-        val systemPrompt = config?.systemPrompt ?: "You are a helpful assistant."
+        val systemPrompt = activeConfig.systemPrompt ?: "You are a helpful assistant."
         val samplingConfig = LlamaSamplingConfig(
             temperature = targetTemperature,
             topP = targetTopP,
             topK = targetTopK,
-            minP = config?.minP?.toFloat() ?: 0.0f,
+            minP = activeConfig.minP?.toFloat() ?: 0.0f,
             maxTokens = targetMaxTokens,
-            contextWindow = config?.contextWindow ?: 4096,
+            contextWindow = activeConfig.contextWindow ?: 4096,
             batchSize = 256,
             gpuLayers = 32, // Will be adjusted by GpuConfig.forDevice
             thinkingEnabled = targetReasoningBudget > 0,
-            repeatPenalty = config?.repetitionPenalty?.toFloat() ?: 1.1f
+            repeatPenalty = activeConfig.repetitionPenalty?.toFloat() ?: 1.1f
         )
 
         try {

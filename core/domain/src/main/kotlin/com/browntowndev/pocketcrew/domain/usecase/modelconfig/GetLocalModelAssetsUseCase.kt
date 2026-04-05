@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.modelconfig
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 
@@ -11,13 +11,13 @@ interface GetLocalModelAssetsUseCase {
 }
 
 class GetLocalModelAssetsUseCaseImpl @Inject constructor(
-    private val modelRegistry: ModelRegistryPort,
+    private val localModelRepository: LocalModelRepositoryPort,
 ) : GetLocalModelAssetsUseCase {
     override fun invoke(): Flow<List<LocalModelAsset>> {
-        return modelRegistry.observeAssets()
+        return localModelRepository.observeAllLocalAssets()
     }
 
     override suspend fun getSoftDeletedModels(): List<LocalModelAsset> {
-        return modelRegistry.getSoftDeletedModels()
+        return localModelRepository.getSoftDeletedModels()
     }
 }

@@ -337,15 +337,13 @@ fun CredentialsConfigurationForm(
             }
         )
 
-        if (asset.provider == ApiProvider.SELF_HOSTED) {
-            OutlinedTextField(
-                value = asset.baseUrl ?: "",
-                onValueChange = { onAssetChange(asset.copy(baseUrl = it)) },
-                label = { Text("Base URL") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
-        }
+        OutlinedTextField(
+            value = asset.baseUrl ?: "",
+            onValueChange = { onAssetChange(asset.copy(baseUrl = it)) },
+            label = { Text("Base URL (Optional)") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        )
 
         /* Removed Vision Support toggle: Vision APIs are distinct from chat completion APIs.
            Persistence remains for potential future vision-specific API implementation.
@@ -364,8 +362,7 @@ fun CredentialsConfigurationForm(
 
         val isSaveEnabled = asset.displayName.isNotBlank() &&
                 asset.modelId.isNotBlank() &&
-                apiKey.isNotBlank() &&
-                (asset.provider != ApiProvider.SELF_HOSTED || !asset.baseUrl.isNullOrBlank())
+                apiKey.isNotBlank()
 
         Button(
             onClick = onSave,

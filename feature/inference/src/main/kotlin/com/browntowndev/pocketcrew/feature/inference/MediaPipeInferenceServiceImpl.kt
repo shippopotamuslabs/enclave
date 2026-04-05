@@ -7,7 +7,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -27,7 +27,7 @@ import javax.inject.Inject
 class MediaPipeInferenceServiceImpl @Inject constructor(
     private val llmInference: LlmInferenceWrapper,
     private val modelType: ModelType,
-    private val modelRegistry: ModelRegistryPort,
+    private val activeModelProvider: ActiveModelProviderPort,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
 ) : LlmInferencePort {
 
@@ -59,11 +59,16 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
      * This operation is atomic to ensure history context is correctly injected.
      */
     private suspend fun getOrCreateAndSeedSessionLocked(options: GenerationOptions): LlmSessionPort {
-        val config = modelRegistry.getRegisteredConfiguration(modelType)
+        val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
+            ?: throw IllegalStateException("No active configuration for $modelType")
 
-        val targetTopK = options.topK ?: config?.topK ?: 40
-        val targetTopP = options.topP ?: config?.topP?.toFloat() ?: 0.95f
-        val targetTemperature = options.temperature ?: config?.temperature?.toFloat() ?: 0.7f
+        if (!activeConfig.isLocal) {
+            throw IllegalStateException("MediaPipeInferenceService cannot run API models. ModelType $modelType is mapped to an API configuration.")
+        }
+
+        val targetTopK = options.topK ?: activeConfig.topK ?: 40
+        val targetTopP = options.topP ?: activeConfig.topP?.toFloat() ?: 0.95f
+        val targetTemperature = options.temperature ?: activeConfig.temperature?.toFloat() ?: 0.7f
         val targetReasoningBudget = options.reasoningBudget
 
         val newSignature = SessionSignature(

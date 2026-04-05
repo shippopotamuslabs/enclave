@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.app
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -18,37 +18,7 @@ import org.junit.jupiter.api.Test
  */
 class EngineModuleTest {
 
-    /**
-     * BUG #5: App crashes at startup if DRAFT_ONE/DRAFT_TWO models aren't registered.
-     *
-     * Scenario: User hasn't downloaded DRAFT_ONE or DRAFT_TWO models
-     * Expected: App should handle gracefully (lazy loading or null returns)
-     * Current behavior: Throws IllegalStateException at startup
-     */
-    @Test
-    fun `model registry returns null for unregistered model types`() = runTest {
-        // Mock registry that returns null for DRAFT models
-        val mockRegistry = mockk<ModelRegistryPort>()
 
-        // When DRAFT_ONE is not registered
-        coEvery { mockRegistry.getRegisteredAsset(ModelType.DRAFT_ONE) } returns null
-        coEvery { mockRegistry.getRegisteredAsset(ModelType.DRAFT_TWO) } returns null
-
-        val fastAsset = mockk<LocalModelAsset>()
-        every { fastAsset.metadata } returns mockk {
-            every { localFileName } returns "fast.bin"
-        }
-        coEvery { mockRegistry.getRegisteredAsset(ModelType.FAST) } returns fastAsset
-
-        // Verify null handling
-        val draftOneAsset = mockRegistry.getRegisteredAsset(ModelType.DRAFT_ONE)
-        val draftTwoAsset = mockRegistry.getRegisteredAsset(ModelType.DRAFT_TWO)
-        val fastResult = mockRegistry.getRegisteredAsset(ModelType.FAST)
-
-        assertNull(draftOneAsset, "DRAFT_ONE should return null when not registered")
-        assertNull(draftTwoAsset, "DRAFT_TWO should return null when not registered")
-        assertNotNull(fastResult, "FAST should return asset when registered")
-    }
 
     /**
      * Verify that ModelType enum has all expected pipeline model types.

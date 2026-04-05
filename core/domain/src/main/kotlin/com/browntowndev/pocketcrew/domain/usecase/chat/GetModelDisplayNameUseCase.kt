@@ -1,14 +1,14 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import javax.inject.Inject
 
 /**
  * Use case for getting the display name of a model.
  */
 class GetModelDisplayNameUseCase @Inject constructor(
-    private val modelRegistry: ModelRegistryPort
+    private val activeModelProvider: ActiveModelProviderPort
 ) {
     /**
      * Returns the display name of the model for the given type.
@@ -17,6 +17,6 @@ class GetModelDisplayNameUseCase @Inject constructor(
      * @return The display name, or empty string if no model is registered
      */
     suspend operator fun invoke(modelType: ModelType): String {
-        return modelRegistry.getRegisteredAsset(modelType)?.metadata?.huggingFaceModelName ?: ""
+        return activeModelProvider.getActiveConfiguration(modelType)?.name ?: ""
     }
 }
