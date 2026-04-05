@@ -16,7 +16,10 @@ class ActivateLocalModelUseCase @Inject constructor(
     private val transactionProvider: TransactionProvider,
     private val logger: LoggingPort
 ) {
-    suspend operator fun invoke(modelType: ModelType, asset: LocalModelAsset): SlotResolvedLocalModel {
+    suspend operator fun invoke(
+        modelType: ModelType,
+        asset: LocalModelAsset
+    ): SlotResolvedLocalModel {
         return transactionProvider.runInTransaction {
             val assetId = localModelRepository.upsertLocalAsset(asset)
             val primaryConfig = asset.configurations.firstOrNull()
@@ -50,7 +53,10 @@ class ActivateLocalModelUseCase @Inject constructor(
             )
             
             val configId = localModelRepository.upsertLocalConfiguration(configToPersist)
-            defaultModelRepository.setDefault(modelType, localConfigId = configId, apiConfigId = null)
+            
+            if (existingAssignment == null) {
+                defaultModelRepository.setDefault(modelType, localConfigId = configId, apiConfigId = null)
+            }
             
             val finalAsset = localModelRepository.getAssetById(assetId)
                 ?: throw IllegalStateException("Failed to load asset after activation")
