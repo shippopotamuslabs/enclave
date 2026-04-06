@@ -27,6 +27,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.browntowndev.pocketcrew.domain.model.inference.SystemPromptTemplates
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -104,16 +111,53 @@ fun LocalModelConfigureScreen(
                 enabled = !config.isSystemPreset
             )
 
-            OutlinedTextField(
-                value = config.systemPrompt,
-                onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
-                label = { Text("System Prompt") },
-                modifier = Modifier.fillMaxWidth().height(120.dp),
-                shape = RoundedCornerShape(12.dp),
-                maxLines = 5,
-                readOnly = config.isSystemPreset,
-                enabled = !config.isSystemPreset
-            )
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("System Prompt")
+                        Spacer(modifier = Modifier.width(4.dp))
+                        PersistentTooltip(
+                            description = "Certain pipeline slots (like Crew Mode or Vision) require specialized system prompts to function correctly. Use the Import button to load a template."
+                        )
+                    }
+                    var expanded by remember { mutableStateOf(false) }
+                    Row {
+                        TextButton(
+                            onClick = { expanded = true },
+                            enabled = !config.isSystemPreset
+                        ) {
+                            Text("Import Template")
+                        }
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                        SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
+                            DropdownMenuItem(
+                                text = { Text(modelType.displayName()) },
+                                onClick = {
+                                    onConfigChange(config.copy(systemPrompt = prompt))
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+                }
+                OutlinedTextField(
+                    value = config.systemPrompt,
+                    onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
+                    modifier = Modifier.fillMaxWidth().height(120.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    maxLines = 5,
+                    readOnly = config.isSystemPreset,
+                    enabled = !config.isSystemPreset
+                )
+            }
 
             ConfigurationHeader("Context")
 
