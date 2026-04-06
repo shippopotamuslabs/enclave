@@ -53,6 +53,7 @@ class DownloadWorkScheduler @Inject constructor(
                 put("huggingFaceModelName", asset.metadata.huggingFaceModelName)
                 put("sizeInBytes", asset.metadata.sizeInBytes)
                 put("sha256", asset.metadata.sha256)
+                put("source", asset.metadata.source.name)
                 put("modelFileFormat", asset.metadata.modelFileFormat.name)
                 put("temperature", config?.temperature ?: 0.7)
                 put("topK", config?.topK ?: 40)

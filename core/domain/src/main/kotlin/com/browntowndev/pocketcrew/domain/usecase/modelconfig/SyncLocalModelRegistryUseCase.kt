@@ -10,7 +10,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPo
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import javax.inject.Inject
 
-class ActivateLocalModelUseCase @Inject constructor(
+class SyncLocalModelRegistryUseCase @Inject constructor(
     private val localModelRepository: LocalModelRepositoryPort,
     private val defaultModelRepository: DefaultModelRepositoryPort,
     private val transactionProvider: TransactionProvider,
@@ -46,8 +46,8 @@ class ActivateLocalModelUseCase @Inject constructor(
             )
             
             logger.debug(
-                "ActivateLocalModelUseCase",
-                "activateLocalModel($modelType): assetId=$assetId sha=${asset.metadata.sha256} " +
+                "SyncLocalModelRegistryUseCase",
+                "syncLocalModelRegistry($modelType): assetId=$assetId sha=${asset.metadata.sha256} " +
                     "file=${asset.metadata.localFileName} preset=${primaryConfig.displayName} " +
                     "thinking=${primaryConfig.thinkingEnabled} reusedConfigId=${reusableConfigId ?: 0L}"
             )

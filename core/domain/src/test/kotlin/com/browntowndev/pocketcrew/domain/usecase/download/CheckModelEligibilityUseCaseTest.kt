@@ -93,7 +93,6 @@ class CheckModelEligibilityUseCaseTest {
 
         val result = useCase.check(
             mapOf(ModelType.MAIN to asset),
-            mapOf(ModelType.MAIN to asset),
             scanResult
         )
 
@@ -102,7 +101,7 @@ class CheckModelEligibilityUseCaseTest {
     }
 
     @Test
-    fun `check handles empty original models list`() {
+    fun `check handles empty scan result (all valid)`() {
         val asset = createModelAsset(sha256 = "abc123")
         val scanResult = ModelScanResult(
             missingModels = emptyList(),
@@ -113,13 +112,11 @@ class CheckModelEligibilityUseCaseTest {
         )
 
         val result = useCase.check(
-            emptyMap(),
             mapOf(ModelType.MAIN to asset),
             scanResult
         )
 
-        // When originalModels is empty, all newModels are returned as needing download
-        assertTrue(result.isNotEmpty())
+        assertTrue(result.isEmpty())
     }
 
     @Test
@@ -141,7 +138,6 @@ class CheckModelEligibilityUseCaseTest {
         )
 
         val result = useCase.check(
-            mapOf(ModelType.MAIN to asset1, ModelType.VISION to asset2),
             mapOf(ModelType.MAIN to asset1, ModelType.VISION to asset2),
             scanResult
         )
@@ -165,7 +161,6 @@ class CheckModelEligibilityUseCaseTest {
 
         val result = useCase.check(
             mapOf(ModelType.MAIN to asset),
-            mapOf(ModelType.MAIN to asset),
             scanResult
         )
 
@@ -188,7 +183,6 @@ class CheckModelEligibilityUseCaseTest {
 
         val result = useCase.check(
             mapOf(ModelType.MAIN to asset),
-            mapOf(ModelType.MAIN to asset),
             scanResult
         )
 
@@ -196,29 +190,22 @@ class CheckModelEligibilityUseCaseTest {
     }
 
     @Test
-    fun `check includes invalid models due to format change`() {
-        val originalAsset = createModelAsset(
+    fun `check includes invalid models due to MD5 mismatch`() {
+        val asset = createModelAsset(
             sha256 = "abc123",
             localFileName = "main.litertlm"
-        )
-
-        val invalidAsset = originalAsset.copy(
-            metadata = originalAsset.metadata.copy(
-                modelFileFormat = ModelFileFormat.TASK
-            )
         )
 
         val scanResult = ModelScanResult(
             missingModels = emptyList(),
             partialDownloads = emptyMap(),
-            invalidModels = listOf(invalidAsset),
+            invalidModels = listOf(asset),
             allValid = false,
             directoryError = false
         )
 
         val result = useCase.check(
-            mapOf(ModelType.MAIN to originalAsset),
-            mapOf(ModelType.MAIN to originalAsset),
+            mapOf(ModelType.MAIN to asset),
             scanResult
         )
 
@@ -252,11 +239,6 @@ class CheckModelEligibilityUseCaseTest {
         )
 
         val result = useCase.check(
-            mapOf(
-                ModelType.VISION to asset1,
-                ModelType.FAST to asset2,
-                ModelType.THINKING to asset3
-            ),
             mapOf(
                 ModelType.VISION to asset1,
                 ModelType.FAST to asset2,
