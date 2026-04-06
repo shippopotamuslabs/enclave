@@ -55,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
+import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningControlStyle
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
@@ -89,9 +90,10 @@ fun ByokConfigureRoute(
                 viewModel.onSelectApiModelAsset(assetUi)
                 if (configUi != null) {
                     viewModel.onSelectApiModelConfig(configUi)
+                } else {
+                    viewModel.onBackToByokList()
+                    onNavigateBack()
                 }
-                viewModel.onBackToByokList()
-                onNavigateBack()
             })
         },
         onSaveApiModelConfig = {
@@ -142,7 +144,7 @@ fun ByokConfigureScreen(
             val selectedConfig = uiState.selectedApiModelConfig
             if (selectedConfig != null) {
                 PresetConfigurationForm(
-                    asset = uiState.selectedApiModelAsset,
+                    parameterSupport = uiState.selectedApiModelParameterSupport,
                     config = selectedConfig,
                     onConfigChange = onApiModelConfigFieldChange,
                     onNavigateToCustomHeaders = onNavigateToCustomHeaders,
@@ -486,18 +488,13 @@ fun CredentialsConfigurationForm(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PresetConfigurationForm(
-    asset: ApiModelAssetUi?,
+    parameterSupport: ApiModelParameterSupport,
     config: ApiModelConfigUi,
     onConfigChange: (ApiModelConfigUi) -> Unit,
     onNavigateToCustomHeaders: () -> Unit,
     onSave: () -> Unit
 ) {
-    val reasoningPolicy = remember(asset?.provider, asset?.modelId) {
-        ApiProviderModelPolicy.reasoningPolicy(
-            provider = asset?.provider ?: ApiProvider.ANTHROPIC,
-            modelId = asset?.modelId.orEmpty(),
-        )
-    }
+    val reasoningPolicy = parameterSupport.reasoningPolicy
     var reasoningDropdownExpanded by remember(config.reasoningEffort, reasoningPolicy) { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -537,99 +534,107 @@ fun PresetConfigurationForm(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next)
             )
 
-            OutlinedTextField(
-                modifier = Modifier.weight(1f),
-                value = config.maxTokens,
-                onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
-                label = { 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Max Tokens")
-                        Spacer(modifier = Modifier.width(4.dp))
-                        PersistentTooltip(description = "Maximum number of tokens the model can generate in a single response.")
-                    }
-                },
-                shape = RoundedCornerShape(12.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next)
-            )
+            if (parameterSupport.supportsMaxTokens) {
+                OutlinedTextField(
+                    modifier = Modifier.weight(1f),
+                    value = config.maxTokens,
+                    onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
+                    label = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Max Tokens")
+                            Spacer(modifier = Modifier.width(4.dp))
+                            PersistentTooltip(description = "Maximum number of tokens the model can generate in a single response.")
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next)
+                )
+            }
         }
 
         ConfigurationHeader("Tuning")
 
-        OutlinedTextField(
-            value = config.topK,
-            onValueChange = { onConfigChange(config.copy(topK = it)) },
-            label = { 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Top K")
-                    Spacer(modifier = Modifier.width(4.dp))
-                    PersistentTooltip(description = "Limits the next token choice to the K most likely tokens.")
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done)
-        )
-
-        ExposedDropdownMenuBox(
-            expanded = reasoningDropdownExpanded,
-            onExpandedChange = { reasoningDropdownExpanded = it },
-            modifier = Modifier.fillMaxWidth()
-        ) {
+        if (parameterSupport.supportsTopK) {
             OutlinedTextField(
-                value = reasoningSelectionLabel(config.reasoningEffort, reasoningPolicy),
-                onValueChange = {},
-                readOnly = true,
+                value = config.topK,
+                onValueChange = { onConfigChange(config.copy(topK = it)) },
                 label = {
-                    Text(if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) "Agent Count" else "Reasoning")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Top K")
+                        Spacer(modifier = Modifier.width(4.dp))
+                        PersistentTooltip(description = "Limits the next token choice to the K most likely tokens.")
+                    }
                 },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = reasoningDropdownExpanded) },
-                modifier = Modifier
-                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                placeholder = {
-                    Text(
-                        if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
-                            "Select agent count"
-                        } else {
-                            "Select reasoning level"
-                        }
-                    )
-                }
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Done)
             )
-            ExposedDropdownMenu(
-                expanded = reasoningDropdownExpanded,
-                onDismissRequest = { reasoningDropdownExpanded = false }
-            ) {
-                reasoningOptions(reasoningPolicy).forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option.label) },
-                        onClick = {
-                            onConfigChange(config.copy(reasoningEffort = option.effort))
-                            reasoningDropdownExpanded = false
-                        }
-                    )
-                }
-            }
         }
 
-        Text(
-            text = if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
-                "xAI multi-agent maps 4 agents to low reasoning and 16 agents to high reasoning."
-            } else {
-                "Reasoning support varies by provider and model. Unsupported values may be rejected by the provider."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        if (parameterSupport.supportsReasoningEffort) {
+            ExposedDropdownMenuBox(
+                expanded = reasoningDropdownExpanded,
+                onExpandedChange = { reasoningDropdownExpanded = it },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = reasoningSelectionLabel(config.reasoningEffort, reasoningPolicy),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = {
+                        Text(if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) "Agent Count" else "Reasoning")
+                    },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = reasoningDropdownExpanded) },
+                    modifier = Modifier
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    placeholder = {
+                        Text(
+                            if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
+                                "Select agent count"
+                            } else {
+                                "Select reasoning level"
+                            }
+                        )
+                    }
+                )
+                ExposedDropdownMenu(
+                    expanded = reasoningDropdownExpanded,
+                    onDismissRequest = { reasoningDropdownExpanded = false }
+                ) {
+                    reasoningOptions(reasoningPolicy).forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option.label) },
+                            onClick = {
+                                onConfigChange(config.copy(reasoningEffort = option.effort))
+                                reasoningDropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
 
-        TuningSlider(
-            label = "Min P",
-            description = "Limits the next token choice to tokens with probability at least P times the probability of the most likely token.",
-            value = config.minP.toFloat(),
-            range = 0f..1f,
-            onValueChange = { onConfigChange(config.copy(minP = it.toDouble())) }
-        )
+            Text(
+                text = if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
+                    "xAI multi-agent maps 4 agents to low reasoning and 16 agents to high reasoning."
+                } else {
+                    "Reasoning support varies by provider and model."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        if (parameterSupport.supportsMinP) {
+            TuningSlider(
+                label = "Min P",
+                description = "Limits the next token choice to tokens with probability at least P times the probability of the most likely token.",
+                value = config.minP.toFloat(),
+                range = 0f..1f,
+                onValueChange = { onConfigChange(config.copy(minP = it.toDouble())) }
+            )
+        }
 
         TuningSlider(
             label = "Temperature",
@@ -647,21 +652,25 @@ fun PresetConfigurationForm(
             onValueChange = { onConfigChange(config.copy(topP = it.toDouble())) }
         )
 
-        TuningSlider(
-            label = "Frequency Penalty",
-            description = "Penalizes tokens based on their frequency in the generated text so far.",
-            value = config.frequencyPenalty.toFloat(),
-            range = -2f..2f,
-            onValueChange = { onConfigChange(config.copy(frequencyPenalty = it.toDouble())) }
-        )
+        if (parameterSupport.supportsFrequencyPenalty) {
+            TuningSlider(
+                label = "Frequency Penalty",
+                description = "Penalizes tokens based on their frequency in the generated text so far.",
+                value = config.frequencyPenalty.toFloat(),
+                range = -2f..2f,
+                onValueChange = { onConfigChange(config.copy(frequencyPenalty = it.toDouble())) }
+            )
+        }
 
-        TuningSlider(
-            label = "Presence Penalty",
-            description = "Penalizes tokens based on whether they have appeared at least once in the generated text.",
-            value = config.presencePenalty.toFloat(),
-            range = -2f..2f,
-            onValueChange = { onConfigChange(config.copy(presencePenalty = it.toDouble())) }
-        )
+        if (parameterSupport.supportsPresencePenalty) {
+            TuningSlider(
+                label = "Presence Penalty",
+                description = "Penalizes tokens based on whether they have appeared at least once in the generated text.",
+                value = config.presencePenalty.toFloat(),
+                range = -2f..2f,
+                onValueChange = { onConfigChange(config.copy(presencePenalty = it.toDouble())) }
+            )
+        }
 
         ConfigurationHeader("Headers")
 
@@ -670,10 +679,12 @@ fun PresetConfigurationForm(
             onNavigateToCustomHeaders = onNavigateToCustomHeaders
         )
 
+        val maxTokensValid = !parameterSupport.supportsMaxTokens || config.maxTokens.isNotBlank()
+        val topKValid = !parameterSupport.supportsTopK || config.topK.isNotBlank()
         val isSaveEnabled = config.displayName.isNotBlank() &&
-                config.maxTokens.isNotBlank() &&
+                maxTokensValid &&
                 config.contextWindow.isNotBlank() &&
-                config.topK.isNotBlank()
+                topKValid
 
         Button(
             onClick = onSave,

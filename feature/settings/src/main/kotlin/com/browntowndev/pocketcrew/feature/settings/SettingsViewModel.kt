@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
@@ -133,6 +134,25 @@ class SettingsViewModel @Inject constructor(
         getDefaultModelsUseCase(),
         _transientState,
     ) { persistedSettings, localAssets, apiAssets, defaultModels, transientState ->
+        val selectedApiModelAsset = transientState.selectedApiModelAsset?.let { selected ->
+            if (selected.credentialsId != 0L) {
+                val dbAsset = apiAssets.find { it.credentials.id == selected.credentialsId }?.toUi()
+                if (dbAsset != null) {
+                    selected.copy(configurations = dbAsset.configurations)
+                } else {
+                    selected
+                }
+            } else {
+                selected
+            }
+        }
+        val selectedApiModelParameterSupport = selectedApiModelAsset?.let {
+            ApiProviderModelPolicy.parameterSupport(
+                provider = it.provider,
+                modelId = it.modelId,
+            )
+        } ?: ApiModelParameterSupport.DEFAULT
+
         SettingsUiState(
             // Persisted settings from repository
             theme = persistedSettings.theme,
@@ -176,19 +196,9 @@ class SettingsViewModel @Inject constructor(
             // BYOK Sheet
             showByokSheet = transientState.showByokSheet,
             apiModels = apiAssets.map { it.toUi() },
-            selectedApiModelAsset = transientState.selectedApiModelAsset?.let { selected ->
-                if (selected.credentialsId != 0L) {
-                    val dbAsset = apiAssets.find { it.credentials.id == selected.credentialsId }?.toUi()
-                    if (dbAsset != null) {
-                        selected.copy(configurations = dbAsset.configurations)
-                    } else {
-                        selected
-                    }
-                } else {
-                    selected
-                }
-            },
+            selectedApiModelAsset = selectedApiModelAsset,
             selectedApiModelConfig = transientState.selectedApiModelConfig,
+            selectedApiModelParameterSupport = selectedApiModelParameterSupport,
             discoveredApiModels = transientState.discoveredApiModels,
             isDiscoveringApiModels = transientState.isDiscoveringApiModels,
             // Default model assignments
@@ -198,7 +208,8 @@ class SettingsViewModel @Inject constructor(
                     source = if (def.apiConfigId != null) ModelSource.API else ModelSource.ON_DEVICE,
                     currentModelName = def.displayName ?: "Unknown",
                     displayLabel = def.modelType.displayLabel,
-                    providerName = def.providerName
+                    providerName = def.providerName,
+                    presetName = def.presetName
                 )
             },
             // Deletion Flow
@@ -857,19 +868,34 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    private fun ApiModelAssetUi.defaultReasoningEffort(): ApiReasoningEffort =
-        ApiProviderModelPolicy
-            .reasoningPolicy(provider = provider, modelId = modelId)
-            .defaultEffort
+    private fun ApiModelAssetUi.defaultReasoningEffort(): ApiReasoningEffort? {
+        val parameterSupport = ApiProviderModelPolicy.parameterSupport(
+            provider = provider,
+            modelId = modelId,
+        )
+        return if (parameterSupport.supportsReasoningEffort) {
+            parameterSupport.reasoningPolicy.defaultEffort
+        } else {
+            null
+        }
+    }
 
     private fun ApiModelConfigUi.withProviderDefaults(asset: ApiModelAssetUi?): ApiModelConfigUi {
-        if (asset == null || reasoningEffort != null) {
+        if (asset == null) {
+            return this
+        }
+        val parameterSupport = ApiProviderModelPolicy.parameterSupport(
+            provider = asset.provider,
+            modelId = asset.modelId,
+        )
+        if (!parameterSupport.supportsReasoningEffort) {
+            return copy(reasoningEffort = null)
+        }
+        if (reasoningEffort != null) {
             return this
         }
         return copy(
-            reasoningEffort = ApiProviderModelPolicy
-                .reasoningPolicy(provider = asset.provider, modelId = asset.modelId)
-                .defaultEffort
+            reasoningEffort = parameterSupport.reasoningPolicy.defaultEffort
         )
     }
 

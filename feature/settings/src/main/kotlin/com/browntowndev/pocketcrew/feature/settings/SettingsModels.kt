@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
+import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
 
 @Immutable
 data class StoredMemory(
@@ -50,6 +51,7 @@ data class SettingsUiState(
     val apiModels: List<ApiModelAssetUi> = emptyList(),
     val selectedApiModelAsset: ApiModelAssetUi? = null,
     val selectedApiModelConfig: ApiModelConfigUi? = null,
+    val selectedApiModelParameterSupport: ApiModelParameterSupport = ApiModelParameterSupport.DEFAULT,
     val discoveredApiModels: List<String> = emptyList(),
     val isDiscoveringApiModels: Boolean = false,
 
@@ -155,6 +157,7 @@ data class DefaultModelAssignmentUi(
     val currentModelName: String,
     val displayLabel: String,
     val providerName: String? = null,
+    val presetName: String? = null,
 )
 
 internal val ModelType.displayLabel: String

@@ -117,19 +117,25 @@ fun ByokBottomSheet(
                             asset = state.asset,
                             onBack = { onSelectApiModelAsset(null) },
                             onEditAsset = {
-                                onSelectApiModelConfig(null)
-                                hideAndNavigate(onNavigateToByokConfigure)
+                                hideAndNavigate {
+                                    onSelectApiModelConfig(null)
+                                    onNavigateToByokConfigure()
+                                }
                             },
                             onEditConfig = { config ->
-                                onSelectApiModelConfig(config)
-                                hideAndNavigate(onNavigateToByokConfigure)
+                                hideAndNavigate {
+                                    onSelectApiModelConfig(config)
+                                    onNavigateToByokConfigure()
+                                }
                             },
                             onRequestDeleteConfig = { config ->
                                 pendingDeleteTarget = ByokDeleteTarget.Config(config.id, config.displayName)
                             },
                             onAddConfig = {
-                                onSelectApiModelConfig(ApiModelConfigUi())
-                                hideAndNavigate(onNavigateToByokConfigure)
+                                hideAndNavigate {
+                                    onSelectApiModelConfig(ApiModelConfigUi())
+                                    onNavigateToByokConfigure()
+                                }
                             }
                         )
                     }
@@ -138,16 +144,20 @@ fun ByokBottomSheet(
                             apiModels = uiState.apiModels,
                             onSelectAsset = { asset -> onSelectApiModelAsset(asset) },
                             onEditAsset = { asset ->
-                                onSelectApiModelAsset(asset)
-                                onSelectApiModelConfig(null)
-                                hideAndNavigate(onNavigateToByokConfigure)
+                                hideAndNavigate {
+                                    onSelectApiModelAsset(asset)
+                                    onSelectApiModelConfig(null)
+                                    onNavigateToByokConfigure()
+                                }
                             },
                             onRequestDeleteAsset = { asset ->
                                 pendingDeleteTarget = ByokDeleteTarget.Asset(asset.credentialsId, asset.displayName)
                             },
                             onAddAsset = {
-                                onSelectApiModelAsset(null)
-                                hideAndNavigate(onNavigateToByokConfigure)
+                                hideAndNavigate {
+                                    onSelectApiModelAsset(null)
+                                    onNavigateToByokConfigure()
+                                }
                             }
                         )
                     }
