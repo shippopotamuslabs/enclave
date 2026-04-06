@@ -120,14 +120,11 @@ class ApiModelRepositoryImplTest {
         assertEquals(44L, id)
         coVerify {
             configurationsDao.upsert(match {
-                it.customHeaders.contains("__openrouter_provider_sort") &&
-                    it.customHeaders.contains("\"price\"") &&
-                    it.customHeaders.contains("__openrouter_allow_fallbacks") &&
-                    it.customHeaders.contains("false") &&
-                    it.customHeaders.contains("__openrouter_require_parameters") &&
-                    it.customHeaders.contains("__openrouter_data_collection") &&
-                    it.customHeaders.contains("\"allow\"") &&
-                    it.customHeaders.contains("__openrouter_zdr")
+                it.openRouterProviderSort == "price" &&
+                    it.openRouterAllowFallbacks == false &&
+                    it.openRouterRequireParameters == true &&
+                    it.openRouterDataCollectionPolicy == "allow" &&
+                    it.openRouterZeroDataRetention == true
             })
         }
     }
