@@ -90,11 +90,12 @@ class ApiModelRepositoryImpl @Inject constructor(
             presencePenalty = config.presencePenalty,
             systemPrompt = config.systemPrompt,
             reasoningEffort = config.reasoningEffort?.wireValue,
-            customHeaders = ApiModelMapper.serializeCustomHeaders(
-                config.customHeaders
-                    .filterKeys { !it.isOpenRouterRoutingKey() }
-                    .plus(config.openRouterRouting.toRoutingMetadataHeaders())
-            ),
+            customHeaders = ApiModelMapper.serializeCustomHeaders(config.customHeaders),
+            openRouterProviderSort = config.openRouterRouting.providerSort.wireValue,
+            openRouterAllowFallbacks = config.openRouterRouting.allowFallbacks,
+            openRouterRequireParameters = config.openRouterRouting.requireParameters,
+            openRouterDataCollectionPolicy = config.openRouterRouting.dataCollectionPolicy.wireValue,
+            openRouterZeroDataRetention = config.openRouterRouting.zeroDataRetention,
         )
         return apiModelConfigurationsDao.upsert(entity)
     }
@@ -131,38 +132,13 @@ class ApiModelRepositoryImpl @Inject constructor(
         presencePenalty = presencePenalty,
         systemPrompt = systemPrompt,
         reasoningEffort = ApiReasoningEffort.fromWireValue(reasoningEffort),
-        customHeaders = ApiModelMapper.deserializeCustomHeaders(customHeaders)
-            .filterKeys { !it.isOpenRouterRoutingKey() },
-        openRouterRouting = ApiModelMapper.deserializeCustomHeaders(customHeaders).toOpenRouterRoutingConfiguration()
+        customHeaders = ApiModelMapper.deserializeCustomHeaders(customHeaders),
+        openRouterRouting = OpenRouterRoutingConfiguration(
+            providerSort = OpenRouterProviderSort.fromWireValue(openRouterProviderSort),
+            allowFallbacks = openRouterAllowFallbacks ?: true,
+            requireParameters = openRouterRequireParameters ?: false,
+            dataCollectionPolicy = OpenRouterDataCollectionPolicy.fromWireValue(openRouterDataCollectionPolicy),
+            zeroDataRetention = openRouterZeroDataRetention ?: false
+        )
     )
-
-    private fun OpenRouterRoutingConfiguration.toRoutingMetadataHeaders(): Map<String, String> =
-        mapOf(
-            OPENROUTER_PROVIDER_SORT_KEY to providerSort.wireValue,
-            OPENROUTER_ALLOW_FALLBACKS_KEY to allowFallbacks.toString(),
-            OPENROUTER_REQUIRE_PARAMETERS_KEY to requireParameters.toString(),
-            OPENROUTER_DATA_COLLECTION_KEY to dataCollectionPolicy.wireValue,
-            OPENROUTER_ZDR_KEY to zeroDataRetention.toString(),
-        )
-
-    private fun Map<String, String>.toOpenRouterRoutingConfiguration(): OpenRouterRoutingConfiguration =
-        OpenRouterRoutingConfiguration(
-            providerSort = OpenRouterProviderSort.fromWireValue(this[OPENROUTER_PROVIDER_SORT_KEY]),
-            allowFallbacks = this[OPENROUTER_ALLOW_FALLBACKS_KEY]?.toBooleanStrictOrNull() ?: true,
-            requireParameters = this[OPENROUTER_REQUIRE_PARAMETERS_KEY]?.toBooleanStrictOrNull() ?: false,
-            dataCollectionPolicy = OpenRouterDataCollectionPolicy.fromWireValue(this[OPENROUTER_DATA_COLLECTION_KEY]),
-            zeroDataRetention = this[OPENROUTER_ZDR_KEY]?.toBooleanStrictOrNull() ?: false,
-        )
-
-    private fun String.isOpenRouterRoutingKey(): Boolean =
-        startsWith(OPENROUTER_METADATA_PREFIX)
-
-    companion object {
-        private const val OPENROUTER_METADATA_PREFIX = "__openrouter_"
-        private const val OPENROUTER_PROVIDER_SORT_KEY = "__openrouter_provider_sort"
-        private const val OPENROUTER_ALLOW_FALLBACKS_KEY = "__openrouter_allow_fallbacks"
-        private const val OPENROUTER_REQUIRE_PARAMETERS_KEY = "__openrouter_require_parameters"
-        private const val OPENROUTER_DATA_COLLECTION_KEY = "__openrouter_data_collection"
-        private const val OPENROUTER_ZDR_KEY = "__openrouter_zdr"
-    }
 }

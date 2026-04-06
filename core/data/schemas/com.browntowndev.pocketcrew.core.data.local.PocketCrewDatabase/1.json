@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "ca6ba9fd7efc49524a004e3f01b8721d",
+    "identityHash": "a95d1a45c6c8ec5e16361d3bca5b712f",
     "entities": [
       {
         "tableName": "chat",
@@ -510,7 +510,7 @@
       },
       {
         "tableName": "api_model_configurations",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `api_credentials_id` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `min_p` REAL NOT NULL, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `system_prompt` TEXT NOT NULL, `reasoning_effort` TEXT, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `api_credentials_id` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `min_p` REAL NOT NULL, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `system_prompt` TEXT NOT NULL, `reasoning_effort` TEXT, `openrouter_provider_sort` TEXT, `openrouter_allow_fallbacks` INTEGER, `openrouter_require_parameters` INTEGER, `openrouter_data_collection` TEXT, `openrouter_zdr` INTEGER, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -593,6 +593,31 @@
             "fieldPath": "reasoningEffort",
             "columnName": "reasoning_effort",
             "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "openRouterProviderSort",
+            "columnName": "openrouter_provider_sort",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "openRouterAllowFallbacks",
+            "columnName": "openrouter_allow_fallbacks",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "openRouterRequireParameters",
+            "columnName": "openrouter_require_parameters",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "openRouterDataCollectionPolicy",
+            "columnName": "openrouter_data_collection",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "openRouterZeroDataRetention",
+            "columnName": "openrouter_zdr",
+            "affinity": "INTEGER"
           },
           {
             "fieldPath": "updatedAt",
@@ -714,7 +739,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ca6ba9fd7efc49524a004e3f01b8721d')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a95d1a45c6c8ec5e16361d3bca5b712f')"
     ]
   }
 }
