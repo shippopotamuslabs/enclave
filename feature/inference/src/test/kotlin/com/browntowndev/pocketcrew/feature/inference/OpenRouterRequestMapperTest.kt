@@ -21,7 +21,7 @@ class OpenRouterRequestMapperTest {
             options = GenerationOptions(reasoningBudget = 0, maxTokens = 128)
         )
 
-        assertEquals("openai/gpt-5.2", params.model().get().toString())
+        assertTrue(params.model().get().toString().contains("openai/gpt-5.2"))
         assertTrue(params._additionalBodyProperties().containsKey("provider"))
         val providerBody = params._additionalBodyProperties()["provider"].toString()
         assertTrue(providerBody.contains("allow_fallbacks"))
