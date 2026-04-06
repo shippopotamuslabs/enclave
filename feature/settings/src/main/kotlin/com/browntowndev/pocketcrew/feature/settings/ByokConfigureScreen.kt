@@ -58,6 +58,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningControlStyle
+import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionPolicy
+import com.browntowndev.pocketcrew.domain.model.config.OpenRouterProviderSort
+import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import androidx.compose.ui.tooling.preview.Preview
 import kotlin.math.roundToInt
@@ -144,6 +147,7 @@ fun ByokConfigureScreen(
             val selectedConfig = uiState.selectedApiModelConfig
             if (selectedConfig != null) {
                 PresetConfigurationForm(
+                    provider = uiState.selectedApiModelAsset?.provider ?: ApiProvider.OPENAI,
                     parameterSupport = uiState.selectedApiModelParameterSupport,
                     config = selectedConfig,
                     onConfigChange = onApiModelConfigFieldChange,
@@ -244,6 +248,28 @@ fun PreviewByokConfigurePresetWithHeaders() {
             onFetchApiModels = {},
             onSaveApiCredentials = {},
             onSaveApiModelConfig = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "BYOK Configure - OpenRouter Preset")
+@Composable
+fun PreviewByokConfigureOpenRouterPreset() {
+    PocketCrewTheme {
+        ByokConfigureScreen(
+            uiState = MockSettingsData.baseUiState.copy(
+                selectedApiModelAsset = MockSettingsData.apiModels[2],
+                selectedApiModelConfig = MockSettingsData.apiModels[2].configurations[0]
+            ),
+            apiKey = "sk-or-....",
+            onNavigateBack = {},
+            onApiModelAssetFieldChange = {},
+            onApiModelConfigFieldChange = {},
+            onApiKeyChange = {},
+            onFetchApiModels = {},
+            onSaveApiCredentials = {},
+            onSaveApiModelConfig = {},
+            onNavigateToCustomHeaders = {}
         )
     }
 }
@@ -488,6 +514,7 @@ fun CredentialsConfigurationForm(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PresetConfigurationForm(
+    provider: ApiProvider,
     parameterSupport: ApiModelParameterSupport,
     config: ApiModelConfigUi,
     onConfigChange: (ApiModelConfigUi) -> Unit,
@@ -498,6 +525,7 @@ fun PresetConfigurationForm(
     var reasoningDropdownExpanded by remember(config.reasoningEffort, reasoningPolicy) { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+
         OutlinedTextField(
             value = config.displayName,
             onValueChange = { onConfigChange(config.copy(displayName = it)) },
@@ -515,6 +543,13 @@ fun PresetConfigurationForm(
             shape = RoundedCornerShape(12.dp),
             maxLines = 5
         )
+        
+        if (provider == ApiProvider.OPENROUTER) {
+            OpenRouterRoutingCard(
+                routing = config.openRouterRouting,
+                onRoutingChange = { onConfigChange(config.copy(openRouterRouting = it)) }
+            )
+        }
 
         ConfigurationHeader("Context")
 
@@ -697,6 +732,142 @@ fun PresetConfigurationForm(
         ) {
             Text("Save Preset", fontWeight = FontWeight.Bold)
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OpenRouterRoutingCard(
+    routing: OpenRouterRoutingConfiguration,
+    onRoutingChange: (OpenRouterRoutingConfiguration) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        ConfigurationHeader("OpenRouter Routing")
+        OpenRouterRoutingSection(
+            routing = routing,
+            onRoutingChange = onRoutingChange
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OpenRouterRoutingSection(
+    routing: OpenRouterRoutingConfiguration,
+    onRoutingChange: (OpenRouterRoutingConfiguration) -> Unit
+) {
+    var sortExpanded by remember(routing.providerSort) { mutableStateOf(false) }
+    var dataCollectionExpanded by remember(routing.dataCollectionPolicy) { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        ExposedDropdownMenuBox(
+            expanded = sortExpanded,
+            onExpandedChange = { sortExpanded = it },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = routing.providerSort.displayName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Provider Sort") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sortExpanded) },
+                modifier = Modifier
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+            ExposedDropdownMenu(
+                expanded = sortExpanded,
+                onDismissRequest = { sortExpanded = false }
+            ) {
+                OpenRouterProviderSort.entries.forEach { sort ->
+                    DropdownMenuItem(
+                        text = { Text(sort.displayName) },
+                        onClick = {
+                            onRoutingChange(routing.copy(providerSort = sort))
+                            sortExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        ExposedDropdownMenuBox(
+            expanded = dataCollectionExpanded,
+            onExpandedChange = { dataCollectionExpanded = it },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = routing.dataCollectionPolicy.displayName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Data Collection Policy") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dataCollectionExpanded) },
+                modifier = Modifier
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            )
+            ExposedDropdownMenu(
+                expanded = dataCollectionExpanded,
+                onDismissRequest = { dataCollectionExpanded = false }
+            ) {
+                OpenRouterDataCollectionPolicy.entries.forEach { policy ->
+                    DropdownMenuItem(
+                        text = { Text(policy.displayName) },
+                        onClick = {
+                            onRoutingChange(routing.copy(dataCollectionPolicy = policy))
+                            dataCollectionExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        RoutingSwitchRow(
+            label = "Allow Fallbacks",
+            description = "OpenRouter may fall back to alternate providers when the primary one is unavailable.",
+            checked = routing.allowFallbacks,
+            onCheckedChange = { onRoutingChange(routing.copy(allowFallbacks = it)) }
+        )
+
+        RoutingSwitchRow(
+            label = "Require Parameters",
+            description = "Only route to providers that support every parameter in the request.",
+            checked = routing.requireParameters,
+            onCheckedChange = { onRoutingChange(routing.copy(requireParameters = it)) }
+        )
+
+        RoutingSwitchRow(
+            label = "Zero Data Retention",
+            description = "Prefer providers that support zero data retention for this request.",
+            checked = routing.zeroDataRetention,
+            onCheckedChange = { onRoutingChange(routing.copy(zeroDataRetention = it)) }
+        )
+    }
+}
+
+@Composable
+private fun RoutingSwitchRow(
+    label: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            modifier = Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(label, fontWeight = FontWeight.Medium)
+            Spacer(modifier = Modifier.width(4.dp))
+            PersistentTooltip(description = description)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

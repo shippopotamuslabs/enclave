@@ -17,4 +17,5 @@ data class ApiModelConfiguration(
     val systemPrompt: String = "",
     val reasoningEffort: ApiReasoningEffort? = null,
     val customHeaders: Map<String, String> = emptyMap(),
+    val openRouterRouting: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
 ) : ModelTuningConfiguration

@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
+import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 
 @Immutable
 data class StoredMemory(
@@ -111,6 +112,7 @@ data class ApiModelConfigUi(
     val frequencyPenalty: Double = 0.0,
     val presencePenalty: Double = 0.0,
     val customHeaders: List<CustomHeaderUi> = emptyList(),
+    val openRouterRouting: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
     val thinkingEnabled: Boolean = false,
     val systemPrompt: String = "",
     val reasoningEffort: ApiReasoningEffort? = null
@@ -233,6 +235,24 @@ object MockSettingsData {
             credentialAlias = "Anthropic Work",
             configurations = listOf(
                 ApiModelConfigUi(id = 3, credentialsId = 2, displayName = "Standard", temperature = 0.7)
+            )
+        ),
+        ApiModelAssetUi(
+            credentialsId = 3,
+            displayName = "OpenRouter GPT-5.2",
+            provider = ApiProvider.OPENROUTER,
+            modelId = "openai/gpt-5.2",
+            baseUrl = ApiProvider.OPENROUTER.defaultBaseUrl(),
+            isVision = true,
+            credentialAlias = "OpenRouter",
+            configurations = listOf(
+                ApiModelConfigUi(
+                    id = 4,
+                    credentialsId = 3,
+                    displayName = "Reliability",
+                    temperature = 0.3,
+                    openRouterRouting = OpenRouterRoutingConfiguration()
+                )
             )
         )
     )

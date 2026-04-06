@@ -17,8 +17,12 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
         apiKey: String,
         baseUrl: String?
     ): List<String> = withContext(Dispatchers.IO) {
-        require(provider == ApiProvider.OPENAI || provider == ApiProvider.XAI) {
-            "Model discovery is currently supported for OpenAI and xAI."
+        require(
+            provider == ApiProvider.OPENAI ||
+                provider == ApiProvider.OPENROUTER ||
+                provider == ApiProvider.XAI
+        ) {
+            "Model discovery is currently supported for OpenAI, OpenRouter, and xAI."
         }
         val resolvedBaseUrl = baseUrl?.takeIf { it.isNotBlank() } ?: provider.defaultBaseUrl()
         val client = openAiClientProvider.getClient(

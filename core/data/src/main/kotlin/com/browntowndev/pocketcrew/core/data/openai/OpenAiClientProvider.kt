@@ -14,12 +14,18 @@ class OpenAiClientProvider @Inject constructor() {
         apiKey: String,
         baseUrl: String?,
         organizationId: String? = null,
-        projectId: String? = null
+        projectId: String? = null,
+        headers: Map<String, String> = emptyMap()
     ): OpenAIClient {
-        val key = "${apiKey.hashCode()}_${baseUrl}_${organizationId}_${projectId}"
+        val normalizedHeaders = headers
+            .filterValues { it.isNotBlank() }
+            .toSortedMap()
+            .entries
+            .joinToString(separator = "|") { (name, value) -> "$name=$value" }
+        val key = "${apiKey.hashCode()}_${baseUrl}_${organizationId}_${projectId}_$normalizedHeaders"
 
         return clientCache.getOrPut(key) {
-            OpenAIOkHttpClient.builder()
+            val builder = OpenAIOkHttpClient.builder()
                 .apiKey(apiKey)
                 .apply {
                     if (!baseUrl.isNullOrBlank()) {
@@ -32,7 +38,12 @@ class OpenAiClientProvider @Inject constructor() {
                         project(projectId)
                     }
                 }
-                .build()
+            headers
+                .filterValues { it.isNotBlank() }
+                .forEach { (name, value) ->
+                    builder.putHeader(name, value)
+                }
+            builder.build()
         }
     }
 }

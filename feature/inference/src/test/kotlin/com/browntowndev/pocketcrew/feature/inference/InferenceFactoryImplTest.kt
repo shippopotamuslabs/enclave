@@ -18,12 +18,14 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseC
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.openai.client.OpenAIClient
+import android.content.pm.ApplicationInfo
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import javax.inject.Provider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotSame
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -49,10 +51,15 @@ class InferenceFactoryImplTest {
 
     @BeforeEach
     fun setUp() {
+        val applicationInfo = mockk<ApplicationInfo>(relaxed = true)
+        every { context.packageName } returns "com.browntowndev.pocketcrew"
+        every { context.packageManager } returns mockk(relaxed = true)
+        every { context.applicationInfo } returns applicationInfo
+        every { applicationInfo.loadLabel(any()) } returns "Pocket Crew"
         every { inferenceLockManager.acquireLock(any()) } returns true
         every { inferenceLockManager.releaseLock() } returns Unit
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-        every { openAiClientProvider.getClient(any(), any(), any(), any()) } returns openAiClient
+        every { openAiClientProvider.getClient(any(), any(), any(), any(), any()) } returns openAiClient
 
         factory = InferenceFactoryImpl(
             context = context,
@@ -113,12 +120,31 @@ class InferenceFactoryImplTest {
         assertNotSame(fastService, thinkingService)
     }
 
-    private fun apiCredentials(modelId: String): ApiCredentials = ApiCredentials(
+    @Test
+    fun `withInferenceService routes openrouter credentials to dedicated service`() = runTest {
+        val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = 9L)
+        val config = ApiModelConfiguration(id = 9L, apiCredentialsId = 11L, displayName = "Router preset")
+        val credentials = apiCredentials(modelId = "openai/gpt-5.2:nitro", provider = ApiProvider.OPENROUTER)
+
+        coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
+        coEvery { apiModelRepository.getConfigurationById(9L) } returns config
+        coEvery { apiModelRepository.getCredentialsById(11L) } returns credentials
+        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+
+        val service = factory.withInferenceService(ModelType.THINKING) { it }
+
+        assertEquals("OpenRouterInferenceServiceImpl", service.javaClass.simpleName)
+    }
+
+    private fun apiCredentials(
+        modelId: String,
+        provider: ApiProvider = ApiProvider.OPENAI
+    ): ApiCredentials = ApiCredentials(
         id = 11L,
         displayName = "OpenAI",
-        provider = ApiProvider.OPENAI,
+        provider = provider,
         modelId = modelId,
-        baseUrl = "https://api.openai.com/v1",
+        baseUrl = provider.defaultBaseUrl() ?: "https://api.openai.com/v1",
         credentialAlias = "alias"
     )
 
