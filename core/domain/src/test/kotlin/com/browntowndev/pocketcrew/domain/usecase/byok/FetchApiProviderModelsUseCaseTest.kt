@@ -61,6 +61,25 @@ class FetchApiProviderModelsUseCaseTest {
     }
 
     @Test
+    fun `supports openrouter discovery with default base url`() = runTest {
+        coEvery {
+            apiModelCatalog.fetchModels(ApiProvider.OPENROUTER, "router-key", "https://openrouter.ai/api/v1")
+        } returns listOf("openai/gpt-5.2")
+
+        val models = useCase(
+            provider = ApiProvider.OPENROUTER,
+            currentApiKey = "router-key",
+            credentialAlias = "router-alias",
+            baseUrl = "https://openrouter.ai/api/v1",
+        )
+
+        assertEquals(listOf("openai/gpt-5.2"), models)
+        coVerify(exactly = 1) {
+            apiModelCatalog.fetchModels(ApiProvider.OPENROUTER, "router-key", "https://openrouter.ai/api/v1")
+        }
+    }
+
+    @Test
     fun `fails when no api key is available`() = runTest {
         every { apiKeyProvider.getApiKey(any()) } returns null
 

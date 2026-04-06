@@ -21,8 +21,9 @@ class ApiProviderModelPolicyTest {
     )
 
     @Test
-    fun `supports model discovery for openai and xai only`() {
+    fun `supports model discovery for openai openrouter and xai only`() {
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.OPENAI))
+        assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.OPENROUTER))
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.XAI))
         assertFalse(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.ANTHROPIC))
     }

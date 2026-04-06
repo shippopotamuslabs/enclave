@@ -109,7 +109,8 @@ class InferenceFactoryImpl @Inject constructor(
                 loggingPort.error(TAG, "Missing API configuration or credentials for $modelType. Config: ${apiConfig?.id}, Creds: ${apiCreds?.id}, Key present: ${apiKey != null}")
                 // Fallback to on-device logic below if we somehow have both set, though UI shouldn't allow this
             } else {
-                val requestedIdentity = buildApiIdentity(modelType, apiConfig, apiCreds)
+                val requestHeaders = buildRequestHeaders(apiCreds.provider, apiConfig.customHeaders)
+                val requestedIdentity = buildApiIdentity(modelType, apiConfig, apiCreds, requestHeaders)
                 
                 return mutex.withLock {
                     activeServices[modelType]?.let { currentService ->
@@ -120,12 +121,21 @@ class InferenceFactoryImpl @Inject constructor(
                         activeServices.remove(modelType)
                         activeIdentities.remove(modelType)
                     }
- 
+
                     val client = openAiClientProvider.getClient(
                         apiKey = apiKey,
-                        baseUrl = apiCreds.baseUrl
+                        baseUrl = apiCreds.baseUrl,
+                        headers = requestHeaders
                     )
                     val newService = when (apiCreds.provider) {
+                        ApiProvider.OPENROUTER -> OpenRouterInferenceServiceImpl(
+                            client = client,
+                            modelId = apiCreds.modelId,
+                            modelType = modelType,
+                            routing = apiConfig.openRouterRouting,
+                            baseUrl = apiCreds.baseUrl,
+                            loggingPort = loggingPort
+                        )
                         ApiProvider.XAI -> XaiInferenceServiceImpl(
                             client = client,
                             modelId = apiCreds.modelId,
@@ -218,7 +228,8 @@ class InferenceFactoryImpl @Inject constructor(
     private fun buildApiIdentity(
         modelType: ModelType,
         apiConfig: com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration,
-        apiCreds: com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
+        apiCreds: com.browntowndev.pocketcrew.domain.model.config.ApiCredentials,
+        requestHeaders: Map<String, String>
     ): String = buildString {
         append("api-")
         append(modelType)
@@ -234,6 +245,37 @@ class InferenceFactoryImpl @Inject constructor(
         append(apiCreds.baseUrl ?: "")
         append("-reasoning=")
         append(apiConfig.reasoningEffort?.wireValue ?: "")
+        append("-openRouterSort=")
+        append(apiConfig.openRouterRouting.providerSort.wireValue)
+        append("-openRouterAllowFallbacks=")
+        append(apiConfig.openRouterRouting.allowFallbacks)
+        append("-openRouterRequireParameters=")
+        append(apiConfig.openRouterRouting.requireParameters)
+        append("-openRouterDataCollection=")
+        append(apiConfig.openRouterRouting.dataCollectionPolicy.wireValue)
+        append("-openRouterZdr=")
+        append(apiConfig.openRouterRouting.zeroDataRetention)
+        append("-headers=")
+        append(requestHeaders.entries
+            .sortedBy { it.key.lowercase() }
+            .joinToString(separator = ",") { (key, value) -> "$key=$value" })
+    }
+
+    private fun buildRequestHeaders(
+        provider: ApiProvider,
+        customHeaders: Map<String, String>
+    ): Map<String, String> {
+        val normalizedCustomHeaders = customHeaders
+            .filterValues { it.isNotBlank() }
+        if (provider != ApiProvider.OPENROUTER) {
+            return normalizedCustomHeaders
+        }
+
+        val openRouterDefaults = mapOf(
+            "HTTP-Referer" to "android-app://${context.packageName}",
+            "X-OpenRouter-Title" to context.applicationInfo.loadLabel(context.packageManager).toString(),
+        )
+        return openRouterDefaults + normalizedCustomHeaders
     }
 
     private fun getModelPath(filename: String): String {

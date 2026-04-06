@@ -50,7 +50,7 @@ object ApiProviderModelPolicy {
     )
 
     fun supportsModelDiscovery(provider: ApiProvider): Boolean =
-        provider == ApiProvider.OPENAI || provider == ApiProvider.XAI
+        provider == ApiProvider.OPENAI || provider == ApiProvider.OPENROUTER || provider == ApiProvider.XAI
 
     fun isXaiMultiAgentModel(modelId: String): Boolean =
         modelId.matchesXaiMultiAgent()

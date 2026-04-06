@@ -19,6 +19,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -321,9 +322,9 @@ fun AssignmentSelectionContent(
                     if (localAssets.isNotEmpty()) {
                         localAssets.forEach { asset ->
                             items(asset.configurations) { config ->
-                                ModelCard(
+                                LocalAssignmentModelCard(
                                     title = asset.huggingFaceModelName,
-                                    subtitle = "Config: ${config.displayName}",
+                                    configName = config.displayName,
                                     isSelected = selectedLocalId == config.id,
                                     onClick = {
                                         selectedLocalId = config.id
@@ -346,9 +347,10 @@ fun AssignmentSelectionContent(
                     if (apiAssets.isNotEmpty()) {
                         apiAssets.forEach { asset ->
                             items(asset.configurations) { config ->
-                                ModelCard(
+                                AssignmentModelCard(
                                     title = asset.displayName,
-                                    subtitle = "Config: ${config.displayName}",
+                                    providerLabel = asset.provider.displayName,
+                                    presetLabel = config.displayName,
                                     isSelected = selectedApiId == config.id,
                                     onClick = {
                                         selectedApiId = config.id
@@ -421,6 +423,126 @@ private fun ModelCard(
             .clickable(onClick = onClick)
             .defaultMinSize(minHeight = 48.dp)
     )
+}
+
+@Composable
+private fun LocalAssignmentModelCard(
+    title: String,
+    configName: String,
+    isSelected: Boolean = false,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .let { m ->
+                if (isSelected) {
+                    m.border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                } else {
+                    m
+                }
+            }
+            .clickable(onClick = onClick)
+            .defaultMinSize(minHeight = 48.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Config: $configName",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun AssignmentModelCard(
+    title: String,
+    providerLabel: String,
+    presetLabel: String,
+    isSelected: Boolean = false,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .let { m ->
+                if (isSelected) {
+                    m.border(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f),
+                        shape = RoundedCornerShape(16.dp)
+                    )
+                } else {
+                    m
+                }
+            }
+            .clickable(onClick = onClick)
+            .defaultMinSize(minHeight = 48.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Provider: $providerLabel",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "Preset: $presetLabel",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }
 
 // ==================== PREVIEWS ====================

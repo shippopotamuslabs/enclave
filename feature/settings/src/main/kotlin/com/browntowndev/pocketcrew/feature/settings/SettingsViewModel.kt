@@ -1,10 +1,12 @@
 package com.browntowndev.pocketcrew.feature.settings
+
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
@@ -252,6 +254,7 @@ class SettingsViewModel @Inject constructor(
         frequencyPenalty = frequencyPenalty,
         presencePenalty = presencePenalty,
         customHeaders = customHeaders.map { CustomHeaderUi(it.key, it.value) },
+        openRouterRouting = openRouterRouting,
         thinkingEnabled = false,
         systemPrompt = systemPrompt,
         reasoningEffort = reasoningEffort
@@ -824,7 +827,12 @@ class SettingsViewModel @Inject constructor(
             reasoningEffort = configUi.reasoningEffort ?: defaultReasoningEffort,
             customHeaders = configUi.customHeaders
                 .filter { it.key.isNotBlank() && it.value.isNotBlank() }
-                .associate { it.key to it.value }
+                .associate { it.key to it.value },
+            openRouterRouting = if (assetUi.provider == ApiProvider.OPENROUTER) {
+                configUi.openRouterRouting
+            } else {
+                OpenRouterRoutingConfiguration()
+            }
         )
 
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API configuration", "Failed to save configuration")) {
