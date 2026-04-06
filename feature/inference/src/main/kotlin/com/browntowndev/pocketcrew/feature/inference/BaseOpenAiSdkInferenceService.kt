@@ -109,26 +109,14 @@ abstract class BaseOpenAiSdkInferenceService(
                 if (event.isOutputTextDelta()) {
                     val text = event.outputTextDelta().get().delta()
                     outputTextDeltaCount++
-                    loggingPort.debug(
-                        tag,
-                        "Responses stream output_text_delta[$outputTextDeltaCount] model=$modelId preview=${previewChunk(text)}"
-                    )
                     emitEvent(InferenceEvent.PartialResponse(text, modelType))
                 } else if (event.isReasoningTextDelta()) {
                     val text = event.reasoningTextDelta().get().delta()
                     reasoningTextDeltaCount++
-                    loggingPort.debug(
-                        tag,
-                        "Responses stream reasoning_text_delta[$reasoningTextDeltaCount] model=$modelId preview=${previewChunk(text)}"
-                    )
                     emitEvent(InferenceEvent.Thinking(text, modelType))
                 } else if (event.isReasoningSummaryTextDelta()) {
                     val text = event.reasoningSummaryTextDelta().get().delta()
                     reasoningSummaryDeltaCount++
-                    loggingPort.debug(
-                        tag,
-                        "Responses stream reasoning_summary_text_delta[$reasoningSummaryDeltaCount] model=$modelId preview=${previewChunk(text)}"
-                    )
                     emitEvent(InferenceEvent.Thinking(text, modelType))
                 } else if (event.isCompleted()) {
                     loggingPort.debug(
@@ -185,10 +173,6 @@ abstract class BaseOpenAiSdkInferenceService(
                     val text = delta.content().get()
                     if (text.isNotEmpty()) {
                         outputTextDeltaCount++
-                        loggingPort.debug(
-                            tag,
-                            "Chat stream content_delta[$outputTextDeltaCount] model=$modelId preview=${previewChunk(text)}"
-                        )
                         emitEvent(InferenceEvent.PartialResponse(text, modelType))
                     }
                 }
@@ -197,10 +181,6 @@ abstract class BaseOpenAiSdkInferenceService(
                     ?.convert(String::class.java)
                     ?.takeIf { it.isNotEmpty() }
                 if (reasoningText != null) {
-                    loggingPort.debug(
-                        tag,
-                        "Chat stream reasoning_content_delta model=$modelId preview=${previewChunk(reasoningText)}"
-                    )
                     emitEvent(InferenceEvent.Thinking(reasoningText, modelType))
                 }
 
