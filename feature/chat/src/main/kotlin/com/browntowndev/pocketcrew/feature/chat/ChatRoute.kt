@@ -9,6 +9,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 fun ChatRoute(
     onNavigateToHistory: () -> Unit,
     onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
+    onNewChat: () -> Unit,
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -16,7 +17,10 @@ fun ChatRoute(
     ChatScreen(
         uiState = uiState,
         onNavigateToHistory = onNavigateToHistory,
-        onNewChat = { /* viewModel.createNewChat() stub */ },
+        onNewChat = {
+            viewModel.createNewChat()
+            onNewChat()
+        },
         onSendMessage = { viewModel.onSendMessage() },
         onModeChange = viewModel::onModeChange,
         onInputChange = viewModel::onInputChange,

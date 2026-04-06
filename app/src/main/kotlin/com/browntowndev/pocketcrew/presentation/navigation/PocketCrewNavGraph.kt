@@ -92,6 +92,11 @@ fun PocketCrewNavGraph(
         ) {
             ChatRoute(
                 onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
+                onNewChat = {
+                    navController.navigate(Routes.CHAT) {
+                        popUpTo(Routes.CHAT_WITH_ID) { inclusive = true }
+                    }
+                },
                 onShowSnackbar = onShowSnackbar,
             )
         }
