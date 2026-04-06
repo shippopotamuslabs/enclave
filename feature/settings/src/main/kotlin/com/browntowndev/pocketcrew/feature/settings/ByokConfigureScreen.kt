@@ -24,6 +24,8 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -53,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
+import com.browntowndev.pocketcrew.domain.model.inference.SystemPromptTemplates
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
@@ -535,14 +538,50 @@ fun PresetConfigurationForm(
             keyboardOptions = KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Next)
         )
 
-        OutlinedTextField(
-            value = config.systemPrompt,
-            onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
-            label = { Text("System Prompt") },
-            modifier = Modifier.fillMaxWidth().height(120.dp),
-            shape = RoundedCornerShape(12.dp),
-            maxLines = 5
-        )
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("System Prompt")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    PersistentTooltip(
+                        description = "Certain pipeline slots (like Crew Mode or Vision) require specialized system prompts to function correctly. Use the Import button to load a template."
+                    )
+                }
+                var expanded by remember { mutableStateOf(false) }
+                Row {
+                    TextButton(
+                        onClick = { expanded = true }
+                    ) {
+                        Text("Import Template")
+                    }
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
+                            DropdownMenuItem(
+                                text = { Text(modelType.displayName()) },
+                                onClick = {
+                                    onConfigChange(config.copy(systemPrompt = prompt))
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+            OutlinedTextField(
+                value = config.systemPrompt,
+                onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
+                modifier = Modifier.fillMaxWidth().height(120.dp),
+                shape = RoundedCornerShape(12.dp),
+                maxLines = 5
+            )
+        }
         
         if (provider == ApiProvider.OPENROUTER) {
             OpenRouterRoutingCard(

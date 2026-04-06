@@ -122,6 +122,9 @@ data class ApiModelConfigUi(
 data class LocalModelAssetUi(
     val metadataId: Long,
     val huggingFaceModelName: String,
+    val friendlyName: String,
+    val providerName: String,
+    val format: String,
     val remoteFileName: String,
     val sizeInBytes: Long,
     val configurations: List<LocalModelConfigUi>,
@@ -192,6 +195,9 @@ object MockSettingsData {
         LocalModelAssetUi(
             metadataId = 1,
             huggingFaceModelName = "meta-llama/Meta-Llama-3-8B-Instruct",
+            friendlyName = "Meta Llama 3 8B Instruct",
+            providerName = "meta-llama",
+            format = "GGUF",
             remoteFileName = "Meta-Llama-3-8B-Instruct-Q4_K_M.gguf",
             sizeInBytes = 4_920_000_000L,
             configurations = listOf(
@@ -203,6 +209,9 @@ object MockSettingsData {
         LocalModelAssetUi(
             metadataId = 2,
             huggingFaceModelName = "google/gemma-2-9b-it",
+            friendlyName = "gemma 2 9b it",
+            providerName = "google",
+            format = "GGUF",
             remoteFileName = "gemma-2-9b-it-Q4_K_M.gguf",
             sizeInBytes = 5_400_000_000L,
             configurations = listOf(

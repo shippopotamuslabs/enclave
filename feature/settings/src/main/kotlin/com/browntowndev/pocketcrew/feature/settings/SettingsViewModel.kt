@@ -13,6 +13,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSuppo
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
@@ -260,14 +261,36 @@ class SettingsViewModel @Inject constructor(
         reasoningEffort = reasoningEffort
     )
 
-    private fun LocalModelAsset.toUi() = LocalModelAssetUi(
-        metadataId = metadata.id,
-        huggingFaceModelName = metadata.huggingFaceModelName,
-        remoteFileName = metadata.remoteFileName,
-        sizeInBytes = metadata.sizeInBytes,
-        configurations = configurations.map { it.toUi() },
-        visionCapable = metadata.visionCapable
-    )
+    private fun LocalModelAsset.toUi(): LocalModelAssetUi {
+        val rawName = metadata.huggingFaceModelName
+        val parts = rawName.split("/")
+        val providerName = if (parts.size >= 2) parts[0] else "Unknown"
+        val modelNamePart = if (parts.size >= 2) parts.drop(1).joinToString("/") else rawName
+        
+        val format = when (metadata.modelFileFormat) {
+            ModelFileFormat.GGUF -> "GGUF"
+            ModelFileFormat.LITERTLM -> "LiteRT"
+            ModelFileFormat.TASK -> "Task"
+        }
+        
+        val cleanName = modelNamePart
+            .replace(Regex("-GGUF$", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\.gguf$", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\.litertlm$", RegexOption.IGNORE_CASE), "")
+            .replace("-", " ")
+        
+        return LocalModelAssetUi(
+            metadataId = metadata.id,
+            huggingFaceModelName = rawName,
+            friendlyName = cleanName.ifBlank { rawName },
+            providerName = providerName,
+            format = format,
+            remoteFileName = metadata.remoteFileName,
+            sizeInBytes = metadata.sizeInBytes,
+            configurations = configurations.map { it.toUi() },
+            visionCapable = metadata.visionCapable
+        )
+    }
 
     private fun LocalModelConfiguration.toUi() = LocalModelConfigUi(
         id = id,
