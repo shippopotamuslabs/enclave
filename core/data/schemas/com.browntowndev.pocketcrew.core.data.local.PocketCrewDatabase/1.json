@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "c159972c7ede8c5f5a4e3741e4ef010b",
+    "identityHash": "ca6ba9fd7efc49524a004e3f01b8721d",
     "entities": [
       {
         "tableName": "chat",
@@ -48,7 +48,7 @@
       },
       {
         "tableName": "message",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chat_id` INTEGER NOT NULL, `content` TEXT NOT NULL, `role` TEXT NOT NULL, `user_message_id` INTEGER, `thinking_duration_seconds` INTEGER, `thinking_raw` TEXT, `thinking_start_time` INTEGER, `thinking_end_time` INTEGER, `message_state` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `model_type` TEXT, `pipeline_step` TEXT, FOREIGN KEY(`user_message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`chat_id`) REFERENCES `chat`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chat_id` INTEGER NOT NULL, `content` TEXT NOT NULL, `role` TEXT NOT NULL, `user_message_id` INTEGER, `thinking_duration_seconds` INTEGER, `thinking_raw` TEXT, `thinking_start_time` INTEGER, `thinking_end_time` INTEGER, `message_state` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `model_type` TEXT, `pipeline_step` TEXT, FOREIGN KEY(`user_message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`chat_id`) REFERENCES `chat`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -151,7 +151,7 @@
         "foreignKeys": [
           {
             "table": "message",
-            "onDelete": "RESTRICT",
+            "onDelete": "CASCADE",
             "onUpdate": "NO ACTION",
             "columns": [
               "user_message_id"
@@ -714,7 +714,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c159972c7ede8c5f5a4e3741e4ef010b')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ca6ba9fd7efc49524a004e3f01b8721d')"
     ]
   }
 }
