@@ -1,16 +1,16 @@
 package com.browntowndev.pocketcrew.app
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+
+import android.content.Context
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.pocketcrew.feature.inference.ConversationManagerImpl
 import io.mockk.coEvery
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
-
+import org.junit.jupiter.api.assertThrows
 
 /**
  * Tests for EngineModule model provider behavior.
@@ -18,7 +18,25 @@ import org.junit.jupiter.api.Test
  */
 class EngineModuleTest {
 
-
+    /**
+     * Verify that ConversationManager throws when no active configuration is registered.
+     * This replaces the old "model registry returns null" test with the new 
+     * ActiveModelProviderPort / LocalModelRepositoryPort logic.
+     */
+    @Test
+    fun `conversation manager throws when no active configuration exists`() = runTest {
+        val context = mockk<Context>(relaxed = true)
+        val localModelRepository = mockk<LocalModelRepositoryPort>()
+        val activeModelProvider = mockk<ActiveModelProviderPort>()
+        
+        coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns null
+        
+        val manager = ConversationManagerImpl(context, localModelRepository, activeModelProvider)
+        
+        assertThrows<IllegalStateException> {
+            manager.getConversation(ModelType.MAIN, null)
+        }
+    }
 
     /**
      * Verify that ModelType enum has all expected pipeline model types.
