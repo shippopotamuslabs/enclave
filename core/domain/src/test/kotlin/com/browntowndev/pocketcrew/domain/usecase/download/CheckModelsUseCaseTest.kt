@@ -73,18 +73,16 @@ class CheckModelsUseCaseTest {
 
         coEvery {
             fileScanner.scanAndCreateDirIfNotExist(
-                downloadedModels = any(),
                 expectedModels = any()
             )
         } returns scanResult
 
         coEvery {
-            checkModelEligibilityUseCase.check(any(), any(), any())
+            checkModelEligibilityUseCase.check(any(), any())
         } returns emptyList()
 
         // When
         val result = checkModelsUseCase(
-            mapOf(ModelType.FAST to testAsset),
             mapOf(ModelType.FAST to testAsset)
         )
 
@@ -105,17 +103,16 @@ class CheckModelsUseCaseTest {
 
         coEvery {
             fileScanner.scanAndCreateDirIfNotExist(
-                downloadedModels = any(),
                 expectedModels = any()
             )
         } returns scanResult
 
         coEvery {
-            checkModelEligibilityUseCase.check(any(), any(), any())
+            checkModelEligibilityUseCase.check(any(), any())
         } returns listOf(testAsset)
 
         // When
-        val result = checkModelsUseCase(emptyMap(), mapOf(ModelType.FAST to testAsset))
+        val result = checkModelsUseCase(mapOf(ModelType.FAST to testAsset))
 
         // Then
         assertEquals(1, result.modelsToDownload.size)
@@ -136,7 +133,6 @@ class CheckModelsUseCaseTest {
 
         coEvery {
             fileScanner.scanAndCreateDirIfNotExist(
-                downloadedModels = any(),
                 expectedModels = any()
             )
         } returns scanResultWithError
@@ -144,7 +140,7 @@ class CheckModelsUseCaseTest {
         // When/Then - Should throw ModelsDirectoryException
         var exception: ModelsDirectoryException? = null
         try {
-            checkModelsUseCase(emptyMap(), mapOf(ModelType.FAST to testAsset))
+            checkModelsUseCase(mapOf(ModelType.FAST to testAsset))
         } catch (e: ModelsDirectoryException) {
             exception = e
         }
@@ -158,17 +154,16 @@ class CheckModelsUseCaseTest {
         // Given
         coEvery {
             fileScanner.scanAndCreateDirIfNotExist(
-                downloadedModels = any(),
                 expectedModels = any()
             )
         } returns emptyScanResult
 
         coEvery {
-            checkModelEligibilityUseCase.check(any(), any(), any())
+            checkModelEligibilityUseCase.check(any(), any())
         } returns listOf(testAsset)
 
         // When
-        checkModelsUseCase(emptyMap(), mapOf(ModelType.FAST to testAsset))
+        checkModelsUseCase(mapOf(ModelType.FAST to testAsset))
 
         // Then
         verify { logger.info(eq("CheckModelsUseCase"), match { it.contains("1 assets need download: [TheBloke/Mistral-7B-v0.1-GGUF]") }) }
@@ -179,17 +174,16 @@ class CheckModelsUseCaseTest {
         // Given
         coEvery {
             fileScanner.scanAndCreateDirIfNotExist(
-                downloadedModels = any(),
                 expectedModels = any()
             )
         } returns emptyScanResult
 
         coEvery {
-            checkModelEligibilityUseCase.check(any(), any(), any())
+            checkModelEligibilityUseCase.check(any(), any())
         } returns emptyList()
 
         // When
-        checkModelsUseCase(mapOf(ModelType.FAST to testAsset), mapOf(ModelType.FAST to testAsset))
+        checkModelsUseCase(mapOf(ModelType.FAST to testAsset))
 
         // Then
         verify { logger.info(eq("CheckModelsUseCase"), eq("All 1 models are ready")) }

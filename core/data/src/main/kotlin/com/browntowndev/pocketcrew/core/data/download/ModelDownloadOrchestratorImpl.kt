@@ -9,7 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ActivateLocalModelUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import com.browntowndev.pocketcrew.domain.usecase.download.CheckModelEligibilityUseCase
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeFileProgressUseCase
 import com.browntowndev.pocketcrew.domain.usecase.download.ValidateDownloadConditionsUseCase
@@ -34,7 +34,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
     private val progressParser: WorkProgressParser,
     private val localModelRepository: com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort,
     private val activeModelProvider: com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort,
-    private val activateLocalModelUseCase: ActivateLocalModelUseCase,
+    private val syncLocalModelRegistryUseCase: SyncLocalModelRegistryUseCase,
     private val logger: LoggingPort,
     override val speedTracker: DownloadSpeedTrackerPort,
 ) : ModelDownloadOrchestratorPort {
@@ -186,7 +186,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
                             "(sha=${asset.metadata.sha256}, preset=${primaryConfig?.displayName}, " +
                             "thinking=${primaryConfig?.thinkingEnabled}, vision=${asset.metadata.visionCapable})"
                     )
-                    activateLocalModelUseCase(modelType, asset)
+                    syncLocalModelRegistryUseCase(modelType, asset)
                     logger.debug(TAG, "Successfully activated model $modelType post-download")
                 } catch (e: Exception) {
                     logger.error(

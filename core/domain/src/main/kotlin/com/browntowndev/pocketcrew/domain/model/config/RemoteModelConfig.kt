@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.model.config
 
+import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
@@ -12,6 +13,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
  * @property sha256 SHA256 hash for integrity verification
  * @property sizeInBytes Exact file size in bytes for validation
  * @property modelFileFormat The file format of the model (LITERTLM, GGUF, or TASK)
+ * @property source The source to download the model from (HF, R2)
  * @property temperature Sampling temperature for LLM generation
  * @property topK Top-k sampling parameter
  * @property topP Top-p (nucleus) sampling parameter
@@ -31,6 +33,7 @@ data class RemoteModelConfig(
     val sha256: String,
     val sizeInBytes: Long = 0L,
     val modelFileFormat: ModelFileFormat = ModelFileFormat.LITERTLM,
+    val source: DownloadSource = DownloadSource.HUGGING_FACE,
     val temperature: Double,
     val topK: Int,
     val topP: Double,

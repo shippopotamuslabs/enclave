@@ -4,6 +4,7 @@ import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.config.RemoteModelConfig
@@ -318,5 +319,123 @@ class ModelConfigFetcherImplTest {
         assertEquals(0.3, fastConfig.temperature)
         assertEquals(0.3, finalSynthesisConfig.temperature)
         assertEquals("You are a final synthesizer.", finalSynthesisConfig.systemPrompt)
+    }
+
+    @Test
+    fun toLocalModelAssets_preservesSource() = runTest {
+        // Given
+        val remoteConfigs = listOf(
+            RemoteModelConfig(
+                modelType = ModelType.MAIN,
+                fileName = "model.gguf",
+                huggingFaceModelName = "test/model",
+                displayName = "Test Model",
+                sha256 = "abc123",
+                sizeInBytes = 1000000L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                source = DownloadSource.CLOUDFLARE_R2,
+                temperature = 0.8,
+                topK = 50,
+                topP = 0.9,
+                repetitionPenalty = 1.2,
+                maxTokens = 4096,
+                contextWindow = 8192,
+                systemPrompt = "You are helpful."
+            )
+        )
+
+        // When
+        val modelAssets = fetcher.toLocalModelAssets(remoteConfigs)
+
+        // Then
+        val asset = modelAssets[ModelType.MAIN]!!
+        assertEquals(DownloadSource.CLOUDFLARE_R2, asset.metadata.source)
+    }
+
+    @Test
+    fun fetchRemoteConfig_parsesR2Source() = runTest {
+        // Given
+        val json = """
+            {
+                "main": {
+                    "fileName": "main.gguf",
+                    "displayName": "Main Model",
+                    "sha256": "abc123",
+                    "sizeInBytes": 1000000,
+                    "source": "R2",
+                    "temperature": 0.7,
+                    "topK": 40,
+                    "topP": 0.95,
+                    "minP": 0.05,
+                    "repetitionPenalty": 1.1,
+                    "maxTokens": 2048,
+                    "contextWindow": 4096,
+                    "systemPrompt": "Hi"
+                }
+            }
+        """.trimIndent()
+
+        val mockCall = mockk<okhttp3.Call>()
+        val response = Response.Builder()
+            .request(mockk())
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body(json.toResponseBody())
+            .build()
+
+        every { mockOkHttpClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns response
+
+        // When
+        val result = fetcher.fetchRemoteConfig()
+
+        // Then
+        assertTrue(result.isSuccess)
+        val assets = result.getOrNull()!!
+        assertEquals(DownloadSource.CLOUDFLARE_R2, assets[ModelType.MAIN]?.metadata?.source)
+    }
+
+    @Test
+    fun fetchRemoteConfig_defaultsToHFSource() = runTest {
+        // Given
+        val json = """
+            {
+                "main": {
+                    "fileName": "main.gguf",
+                    "displayName": "Main Model",
+                    "sha256": "abc123",
+                    "sizeInBytes": 1000000,
+                    "temperature": 0.7,
+                    "topK": 40,
+                    "topP": 0.95,
+                    "minP": 0.05,
+                    "repetitionPenalty": 1.1,
+                    "maxTokens": 2048,
+                    "contextWindow": 4096,
+                    "systemPrompt": "Hi"
+                }
+            }
+        """.trimIndent()
+
+        val mockCall = mockk<okhttp3.Call>()
+        val response = Response.Builder()
+            .request(mockk())
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body(json.toResponseBody())
+            .build()
+
+        every { mockOkHttpClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns response
+
+        // When
+        val result = fetcher.fetchRemoteConfig()
+
+        // Then
+        assertTrue(result.isSuccess)
+        val assets = result.getOrNull()!!
+        assertEquals(DownloadSource.HUGGING_FACE, assets[ModelType.MAIN]?.metadata?.source)
     }
 }

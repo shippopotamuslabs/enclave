@@ -15,7 +15,7 @@ import com.browntowndev.pocketcrew.core.data.download.ModelConfigFetcherImpl
 import com.browntowndev.pocketcrew.core.data.download.ModelDownloadOrchestratorImpl
 import com.browntowndev.pocketcrew.core.data.download.ModelFileScanner
 import com.browntowndev.pocketcrew.core.data.download.remote.HttpFileDownloader
-import com.browntowndev.pocketcrew.core.data.download.remote.HuggingFaceModelUrlProvider
+import com.browntowndev.pocketcrew.core.data.download.remote.DynamicModelUrlProvider
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
@@ -155,7 +155,7 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideHuggingFaceModelUrlProvider(): ModelUrlProviderPort = HuggingFaceModelUrlProvider()
+    fun provideModelUrlProvider(): ModelUrlProviderPort = DynamicModelUrlProvider()
 }
 
 @Module

@@ -7,6 +7,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
+import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
@@ -310,6 +311,11 @@ class ModelDownloadWorker @AssistedInject constructor(
                     ModelFileFormat.valueOf(json.getString("modelFileFormat"))
                 } catch (e: Exception) {
                     ModelFileFormat.LITERTLM
+                },
+                source = try {
+                    DownloadSource.valueOf(json.optString("source", "HUGGING_FACE"))
+                } catch (e: Exception) {
+                    DownloadSource.HUGGING_FACE
                 }
             )
 
