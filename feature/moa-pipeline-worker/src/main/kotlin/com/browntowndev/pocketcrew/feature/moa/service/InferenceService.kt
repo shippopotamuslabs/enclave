@@ -329,7 +329,7 @@ class InferenceService : Service() {
                 modelType = modelType
             )
 
-            service.sendPrompt(prompt, options = options, closeConversation = false).collect { event ->
+            service.sendPrompt(prompt, options = options, closeConversation = true).collect { event ->
                 when (event) {
                     is InferenceEvent.Thinking -> {
                         broadcastProgress(EXTRA_THINKING_CHUNK, event.chunk, getModelTypeForStep(step).name)
