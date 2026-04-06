@@ -64,14 +64,14 @@ class XaiInferenceServiceImpl(
                 tag,
                 "Responses API rejected xAI request. Falling back to chat completions. model=$modelId chatReasoningContentModel=$chatReasoningContentModel ${describeException(e)}"
             )
-        }
 
-        val chatParams = XaiRequestMapper.mapToChatCompletionParams(
-            modelId = modelId,
-            prompt = prompt,
-            history = requestHistory,
-            options = options
-        )
-        streamChatCompletions(chatParams, emitEvent)
+            val chatParams = XaiRequestMapper.mapToChatCompletionParams(
+                modelId = modelId,
+                prompt = prompt,
+                history = requestHistory,
+                options = options
+            )
+            streamChatCompletions(chatParams, emitEvent)
+        }
     }
 }
