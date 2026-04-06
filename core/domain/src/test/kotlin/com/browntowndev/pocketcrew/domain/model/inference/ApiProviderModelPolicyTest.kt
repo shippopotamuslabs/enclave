@@ -137,4 +137,43 @@ class ApiProviderModelPolicyTest {
             )
         }
     }
+
+    @Test
+    fun `xai parameter support reflects model family rules`() {
+        val multiAgent = ApiProviderModelPolicy.parameterSupport(
+            provider = ApiProvider.XAI,
+            modelId = "grok-4.20-multi-agent-0309",
+        )
+        assertFalse(multiAgent.supportsMaxTokens)
+        assertFalse(multiAgent.supportsTopK)
+        assertFalse(multiAgent.supportsMinP)
+        assertFalse(multiAgent.supportsFrequencyPenalty)
+        assertFalse(multiAgent.supportsPresencePenalty)
+        assertTrue(multiAgent.supportsReasoningEffort)
+
+        val grok4Reasoning = ApiProviderModelPolicy.parameterSupport(
+            provider = ApiProvider.XAI,
+            modelId = "grok-4-fast-reasoning",
+        )
+        assertTrue(grok4Reasoning.supportsMaxTokens)
+        assertFalse(grok4Reasoning.supportsReasoningEffort)
+        assertFalse(grok4Reasoning.supportsFrequencyPenalty)
+        assertFalse(grok4Reasoning.supportsPresencePenalty)
+
+        val grok3Mini = ApiProviderModelPolicy.parameterSupport(
+            provider = ApiProvider.XAI,
+            modelId = "grok-3-mini",
+        )
+        assertTrue(grok3Mini.supportsReasoningEffort)
+        assertFalse(grok3Mini.supportsFrequencyPenalty)
+        assertFalse(grok3Mini.supportsPresencePenalty)
+
+        val grok4NonReasoning = ApiProviderModelPolicy.parameterSupport(
+            provider = ApiProvider.XAI,
+            modelId = "grok-4-fast-non-reasoning",
+        )
+        assertTrue(grok4NonReasoning.supportsReasoningEffort)
+        assertTrue(grok4NonReasoning.supportsFrequencyPenalty)
+        assertTrue(grok4NonReasoning.supportsPresencePenalty)
+    }
 }

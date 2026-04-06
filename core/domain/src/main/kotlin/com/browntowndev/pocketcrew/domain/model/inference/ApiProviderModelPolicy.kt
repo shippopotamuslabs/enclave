@@ -6,6 +6,31 @@ data class ApiReasoningPolicy(
     val defaultEffort: ApiReasoningEffort,
 )
 
+data class ApiModelParameterSupport(
+    val reasoningPolicy: ApiReasoningPolicy,
+    val supportsMaxTokens: Boolean = true,
+    val supportsTopK: Boolean = true,
+    val supportsMinP: Boolean = true,
+    val supportsFrequencyPenalty: Boolean = true,
+    val supportsPresencePenalty: Boolean = true,
+    val supportsReasoningEffort: Boolean = true,
+) {
+    companion object {
+        val DEFAULT = ApiModelParameterSupport(
+            reasoningPolicy = ApiReasoningPolicy(
+                controlStyle = ApiReasoningControlStyle.STANDARD,
+                supportedEfforts = listOf(
+                    ApiReasoningEffort.LOW,
+                    ApiReasoningEffort.MEDIUM,
+                    ApiReasoningEffort.HIGH,
+                    ApiReasoningEffort.XHIGH,
+                ),
+                defaultEffort = ApiReasoningEffort.LOW,
+            ),
+        )
+    }
+}
+
 enum class ApiReasoningControlStyle {
     STANDARD,
     XAI_MULTI_AGENT,
@@ -53,6 +78,31 @@ object ApiProviderModelPolicy {
 
     fun isXaiChatReasoningContentModel(modelId: String): Boolean =
         modelId.matchesXaiChatReasoningContentModel()
+
+    fun parameterSupport(provider: ApiProvider, modelId: String): ApiModelParameterSupport {
+        val reasoningPolicy = reasoningPolicy(provider = provider, modelId = modelId)
+        if (provider != ApiProvider.XAI) {
+            return ApiModelParameterSupport(reasoningPolicy = reasoningPolicy)
+        }
+
+        val reasoningEffortSupported = when {
+            isXaiGrok3MiniModel(modelId) -> true
+            isXaiMultiAgentModel(modelId) -> true
+            isXaiGrok3Model(modelId) -> false
+            isXaiGrok4ReasoningFamily(modelId) -> false
+            else -> true
+        }
+
+        return ApiModelParameterSupport(
+            reasoningPolicy = reasoningPolicy,
+            supportsMaxTokens = !isXaiMultiAgentModel(modelId),
+            supportsTopK = false,
+            supportsMinP = false,
+            supportsFrequencyPenalty = !isXaiReasoningModel(modelId),
+            supportsPresencePenalty = !isXaiReasoningModel(modelId),
+            supportsReasoningEffort = reasoningEffortSupported,
+        )
+    }
 
     fun reasoningPolicy(provider: ApiProvider, modelId: String): ApiReasoningPolicy =
         if (provider == ApiProvider.XAI && isXaiMultiAgentModel(modelId)) {

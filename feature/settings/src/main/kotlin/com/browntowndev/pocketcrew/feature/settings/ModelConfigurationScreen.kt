@@ -202,6 +202,13 @@ fun DefaultAssignmentsCard(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+                            if (assignment.presetName != null) {
+                                Text(
+                                    text = "Preset: ${assignment.presetName}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                         IconButton(onClick = { onEditAssignment(assignment.modelType) }) {
                             Icon(
