@@ -1,14 +1,25 @@
 package com.browntowndev.pocketcrew.core.data.openai
 
+import android.util.LruCache
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class OpenAiClientProvider @Inject constructor() {
-    private val clientCache = ConcurrentHashMap<String, OpenAIClient>()
+    private val clientCache = object : LruCache<String, OpenAIClient>(8) {
+        override fun entryRemoved(
+            evicted: Boolean,
+            key: String,
+            oldValue: OpenAIClient,
+            newValue: OpenAIClient?
+        ) {
+            // Explicitly close the evicted client to free wrapper resources,
+            // which also shuts down its internal OkHttpClient dispatcher and connection pool.
+            oldValue.close()
+        }
+    }
 
     fun getClient(
         apiKey: String,
@@ -24,26 +35,34 @@ class OpenAiClientProvider @Inject constructor() {
             .joinToString(separator = "|") { (name, value) -> "$name=$value" }
         val key = "${apiKey.hashCode()}_${baseUrl}_${organizationId}_${projectId}_$normalizedHeaders"
 
-        return clientCache.getOrPut(key) {
-            val builder = OpenAIOkHttpClient.builder()
-                .apiKey(apiKey)
-                .apply {
-                    if (!baseUrl.isNullOrBlank()) {
-                        baseUrl(baseUrl)
-                    }
-                    if (!organizationId.isNullOrBlank()) {
-                        organization(organizationId)
-                    }
-                    if (!projectId.isNullOrBlank()) {
-                        project(projectId)
-                    }
+        var client = clientCache.get(key)
+        if (client == null) {
+            synchronized(this) {
+                client = clientCache.get(key)
+                if (client == null) {
+                    val builder = OpenAIOkHttpClient.builder()
+                        .apiKey(apiKey)
+                        .apply {
+                            if (!baseUrl.isNullOrBlank()) {
+                                baseUrl(baseUrl)
+                            }
+                            if (!organizationId.isNullOrBlank()) {
+                                organization(organizationId)
+                            }
+                            if (!projectId.isNullOrBlank()) {
+                                project(projectId)
+                            }
+                        }
+                    headers
+                        .filterValues { it.isNotBlank() }
+                        .forEach { (name, value) ->
+                            builder.putHeader(name, value)
+                        }
+                    client = builder.build()
+                    clientCache.put(key, client)
                 }
-            headers
-                .filterValues { it.isNotBlank() }
-                .forEach { (name, value) ->
-                    builder.putHeader(name, value)
-                }
-            builder.build()
+            }
         }
+        return client!!
     }
 }
