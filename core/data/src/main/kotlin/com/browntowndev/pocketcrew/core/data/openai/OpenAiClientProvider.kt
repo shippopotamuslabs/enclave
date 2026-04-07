@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.openai
 import android.util.LruCache
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,7 +34,7 @@ class OpenAiClientProvider @Inject constructor() {
             .toSortedMap()
             .entries
             .joinToString(separator = "|") { (name, value) -> "$name=$value" }
-        val key = "${apiKey.hashCode()}_${baseUrl}_${organizationId}_${projectId}_$normalizedHeaders"
+        val key = "${apiKey.sha256Hex()}_${baseUrl}_${organizationId}_${projectId}_$normalizedHeaders"
 
         var client = clientCache.get(key)
         if (client == null) {
@@ -64,5 +65,10 @@ class OpenAiClientProvider @Inject constructor() {
             }
         }
         return client!!
+    }
+
+    private fun String.sha256Hex(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(this.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
 }
