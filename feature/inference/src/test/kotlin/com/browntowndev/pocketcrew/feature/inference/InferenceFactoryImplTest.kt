@@ -136,15 +136,89 @@ class InferenceFactoryImplTest {
         assertEquals("OpenRouterInferenceServiceImpl", service.javaClass.simpleName)
     }
 
+    @Test
+    fun `withInferenceService resolves default baseUrl for openrouter when configured baseUrl is null`() = runTest {
+        val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = 9L)
+        val config = ApiModelConfiguration(id = 9L, apiCredentialsId = 11L, displayName = "Router preset")
+        val credentials = apiCredentials(modelId = "openai/gpt-5.2:nitro", provider = ApiProvider.OPENROUTER, baseUrl = null)
+
+        coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
+        coEvery { apiModelRepository.getConfigurationById(9L) } returns config
+        coEvery { apiModelRepository.getCredentialsById(11L) } returns credentials
+        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+
+        val service = factory.withInferenceService(ModelType.THINKING) { it }
+
+        assertEquals("OpenRouterInferenceServiceImpl", service.javaClass.simpleName)
+        // Verify the client provider was called with the resolved base URL
+        io.mockk.verify { 
+            openAiClientProvider.getClient(
+                apiKey = "secret", 
+                baseUrl = "https://openrouter.ai/api/v1", 
+                headers = any()
+            ) 
+        }
+    }
+
+    @Test
+    fun `withInferenceService resolves default baseUrl for xAI when configured baseUrl is blank`() = runTest {
+        val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = 9L)
+        val config = ApiModelConfiguration(id = 9L, apiCredentialsId = 11L, displayName = "xAI preset")
+        val credentials = apiCredentials(modelId = "grok-2", provider = ApiProvider.XAI, baseUrl = "   ")
+
+        coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
+        coEvery { apiModelRepository.getConfigurationById(9L) } returns config
+        coEvery { apiModelRepository.getCredentialsById(11L) } returns credentials
+        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+
+        val service = factory.withInferenceService(ModelType.THINKING) { it }
+
+        assertEquals("XaiInferenceServiceImpl", service.javaClass.simpleName)
+        // Verify the client provider was called with the resolved base URL
+        io.mockk.verify { 
+            openAiClientProvider.getClient(
+                apiKey = "secret", 
+                baseUrl = "https://api.x.ai/v1", 
+                headers = any()
+            ) 
+        }
+    }
+
+    @Test
+    fun `withInferenceService uses configured baseUrl when valid`() = runTest {
+        val customUrl = "https://custom.endpoint.com/v1"
+        val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = 9L)
+        val config = ApiModelConfiguration(id = 9L, apiCredentialsId = 11L, displayName = "Router preset")
+        val credentials = apiCredentials(modelId = "openai/gpt-5.2:nitro", provider = ApiProvider.OPENROUTER, baseUrl = customUrl)
+
+        coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
+        coEvery { apiModelRepository.getConfigurationById(9L) } returns config
+        coEvery { apiModelRepository.getCredentialsById(11L) } returns credentials
+        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+
+        val service = factory.withInferenceService(ModelType.THINKING) { it }
+
+        assertEquals("OpenRouterInferenceServiceImpl", service.javaClass.simpleName)
+        // Verify the client provider was called with the custom base URL
+        io.mockk.verify { 
+            openAiClientProvider.getClient(
+                apiKey = "secret", 
+                baseUrl = customUrl, 
+                headers = any()
+            ) 
+        }
+    }
+
     private fun apiCredentials(
         modelId: String,
-        provider: ApiProvider = ApiProvider.OPENAI
+        provider: ApiProvider = ApiProvider.OPENAI,
+        baseUrl: String? = provider.defaultBaseUrl() ?: "https://api.openai.com/v1"
     ): ApiCredentials = ApiCredentials(
         id = 11L,
         displayName = "OpenAI",
         provider = provider,
         modelId = modelId,
-        baseUrl = provider.defaultBaseUrl() ?: "https://api.openai.com/v1",
+        baseUrl = baseUrl,
         credentialAlias = "alias"
     )
 

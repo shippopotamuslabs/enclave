@@ -110,7 +110,8 @@ class InferenceFactoryImpl @Inject constructor(
                 // Fallback to on-device logic below if we somehow have both set, though UI shouldn't allow this
             } else {
                 val requestHeaders = buildRequestHeaders(apiCreds.provider, apiConfig.customHeaders)
-                val requestedIdentity = buildApiIdentity(modelType, apiConfig, apiCreds, requestHeaders)
+                val resolvedBaseUrl = apiCreds.baseUrl?.takeIf { it.isNotBlank() } ?: apiCreds.provider.defaultBaseUrl()
+                val requestedIdentity = buildApiIdentity(modelType, apiConfig, apiCreds, requestHeaders, resolvedBaseUrl)
                 
                 return mutex.withLock {
                     activeServices[modelType]?.let { currentService ->
@@ -124,7 +125,7 @@ class InferenceFactoryImpl @Inject constructor(
 
                     val client = openAiClientProvider.getClient(
                         apiKey = apiKey,
-                        baseUrl = apiCreds.baseUrl,
+                        baseUrl = resolvedBaseUrl,
                         headers = requestHeaders
                     )
                     val newService = when (apiCreds.provider) {
@@ -133,14 +134,14 @@ class InferenceFactoryImpl @Inject constructor(
                             modelId = apiCreds.modelId,
                             modelType = modelType,
                             routing = apiConfig.openRouterRouting,
-                            baseUrl = apiCreds.baseUrl,
+                            baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort
                         )
                         ApiProvider.XAI -> XaiInferenceServiceImpl(
                             client = client,
                             modelId = apiCreds.modelId,
                             modelType = modelType,
-                            baseUrl = apiCreds.baseUrl,
+                            baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort
                         )
                         else -> ApiInferenceServiceImpl(
@@ -148,7 +149,7 @@ class InferenceFactoryImpl @Inject constructor(
                             modelId = apiCreds.modelId,
                             provider = apiCreds.provider.name,
                             modelType = modelType,
-                            baseUrl = apiCreds.baseUrl,
+                            baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort
                         )
                     }
@@ -229,7 +230,8 @@ class InferenceFactoryImpl @Inject constructor(
         modelType: ModelType,
         apiConfig: com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration,
         apiCreds: com.browntowndev.pocketcrew.domain.model.config.ApiCredentials,
-        requestHeaders: Map<String, String>
+        requestHeaders: Map<String, String>,
+        resolvedBaseUrl: String?
     ): String = buildString {
         append("api-")
         append(modelType)
@@ -242,7 +244,7 @@ class InferenceFactoryImpl @Inject constructor(
         append("-model=")
         append(apiCreds.modelId)
         append("-baseUrl=")
-        append(apiCreds.baseUrl ?: "")
+        append(resolvedBaseUrl ?: "")
         append("-reasoning=")
         append(apiConfig.reasoningEffort?.wireValue ?: "")
         append("-openRouterSort=")
