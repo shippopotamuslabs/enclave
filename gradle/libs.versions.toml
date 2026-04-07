@@ -40,6 +40,8 @@ googleServicesVersion = "4.4.4"
 firebaseCrashlyticsPluginVersion = "3.0.6"
 firebaseBomVersion = "34.11.0"
 
+openai = "4.30.0"
+
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "androidx-core-splashscreen" }
@@ -97,6 +99,7 @@ turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbine
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBomVersion" }
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics", version.ref = "firebaseCrashlyticsVersion" }
+openai-java = { group = "com.openai", name = "openai-java", version.ref = "openai" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

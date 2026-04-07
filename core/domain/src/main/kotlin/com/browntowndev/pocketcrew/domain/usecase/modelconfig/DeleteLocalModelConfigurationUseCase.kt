@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.modelconfig
 
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import javax.inject.Inject
 
 interface DeleteLocalModelConfigurationUseCase {
@@ -8,11 +8,11 @@ interface DeleteLocalModelConfigurationUseCase {
 }
 
 class DeleteLocalModelConfigurationUseCaseImpl @Inject constructor(
-    private val modelRegistry: ModelRegistryPort,
+    private val localModelRepository: LocalModelRepositoryPort,
 ) : DeleteLocalModelConfigurationUseCase {
     override suspend fun invoke(configurationId: Long): Result<Unit> {
         return Result.runCatching {
-            modelRegistry.deleteConfiguration(configurationId)
+            localModelRepository.deleteConfiguration(configurationId)
         }
     }
 }

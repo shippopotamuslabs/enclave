@@ -9,7 +9,8 @@ import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
@@ -31,7 +32,8 @@ import javax.inject.Inject
  */
 class ConversationManagerImpl @Inject constructor(
     private val context: Context,
-    private val modelRegistry: ModelRegistryPort
+    private val localModelRepository: LocalModelRepositoryPort,
+    private val activeModelProvider: ActiveModelProviderPort
 ) : ConversationManagerPort {
 
     private val defaultSystemPrompt = """
@@ -95,23 +97,24 @@ class ConversationManagerImpl @Inject constructor(
     override suspend fun getConversation(modelType: ModelType, options: GenerationOptions?): ConversationPort {
         // Lock to avoid concurrent initializations and ensure consistent state
         return mutex.withLock {
-            val asset = modelRegistry.getRegisteredAsset(modelType)
-            val config = modelRegistry.getRegisteredConfiguration(modelType)
+            val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
+                ?: throw IllegalStateException("No active configuration for $modelType")
 
-            if (asset == null) {
-                throw IllegalStateException(
-                    "No registered asset for $modelType. Download a model first."
-                )
+            if (!activeConfig.isLocal) {
+                throw IllegalStateException("ConversationManager cannot run API models. ModelType $modelType is mapped to an API configuration.")
             }
 
+            val asset = localModelRepository.getAssetByConfigId(activeConfig.id)
+                ?: throw IllegalStateException("No registered asset for config ${activeConfig.id}. Download a model first.")
+
             val modelPath = getModelPath(asset.metadata.localFileName)
-            val configId = config?.id
-            val resolvedThinkingEnabled = config?.thinkingEnabled ?: false
-            val resolvedSystemPrompt = config?.systemPrompt ?: defaultSystemPrompt
+            val configId = activeConfig.id
+            val resolvedThinkingEnabled = false // LiteRT currently doesn't support reasoning budget
+            val resolvedSystemPrompt = activeConfig.systemPrompt ?: defaultSystemPrompt
             val targetSamplerConfig = SamplerConfig(
-                temperature = options?.temperature?.toDouble() ?: config?.temperature ?: 0.7,
-                topP = options?.topP?.toDouble() ?: config?.topP ?: 0.95,
-                topK = options?.topK ?: config?.topK ?: 40
+                temperature = options?.temperature?.toDouble() ?: activeConfig.temperature ?: 0.7,
+                topP = options?.topP?.toDouble() ?: activeConfig.topP ?: 0.95,
+                topK = options?.topK ?: activeConfig.topK ?: 40
             )
 
             val desiredSignature = ConversationSignature(

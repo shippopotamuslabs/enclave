@@ -5,6 +5,10 @@ import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionPolicy
+import com.browntowndev.pocketcrew.domain.model.config.OpenRouterProviderSort
+import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -93,5 +97,35 @@ class ApiModelRepositoryImplTest {
         assertEquals(1L, id)
         coVerify { credentialsDao.upsert(any()) }
         verify(exactly = 0) { apiKeyManager.save(any(), any()) }
+    }
+
+    @Test
+    fun `save configuration persists openrouter routing settings`() = runTest {
+        val config = ApiModelConfiguration(
+            apiCredentialsId = 9L,
+            displayName = "Router preset",
+            openRouterRouting = OpenRouterRoutingConfiguration(
+                providerSort = OpenRouterProviderSort.PRICE,
+                allowFallbacks = false,
+                requireParameters = true,
+                dataCollectionPolicy = OpenRouterDataCollectionPolicy.ALLOW,
+                zeroDataRetention = true
+            )
+        )
+
+        coEvery { configurationsDao.upsert(any()) } returns 44L
+
+        val id = repo.saveConfiguration(config)
+
+        assertEquals(44L, id)
+        coVerify {
+            configurationsDao.upsert(match {
+                it.openRouterProviderSort == "price" &&
+                    it.openRouterAllowFallbacks == false &&
+                    it.openRouterRequireParameters == true &&
+                    it.openRouterDataCollectionPolicy == "allow" &&
+                    it.openRouterZeroDataRetention == true
+            })
+        }
     }
 }

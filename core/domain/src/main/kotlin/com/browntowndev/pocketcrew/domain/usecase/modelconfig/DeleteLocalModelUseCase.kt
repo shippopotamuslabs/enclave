@@ -6,8 +6,8 @@ import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.LocalModelConfigurationsRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import javax.inject.Inject
 
 /**
@@ -20,10 +20,9 @@ import javax.inject.Inject
  * - User can reassign to a config from a DIFFERENT local model OR an API model config
  */
 class DeleteLocalModelUseCase @Inject constructor(
-    private val modelRegistry: ModelRegistryPort,
+    private val localModelRepository: LocalModelRepositoryPort,
     private val defaultModelRepository: DefaultModelRepositoryPort,
     private val modelFileScanner: ModelFileScannerPort,
-    private val localModelConfigurationsRepository: LocalModelConfigurationsRepositoryPort,
     private val apiModelRepository: ApiModelRepositoryPort,
     private val loggingPort: LoggingPort
 ) {
@@ -78,10 +77,10 @@ class DeleteLocalModelUseCase @Inject constructor(
             modelFileScanner.deleteModelFile(modelId)
 
             // Hard delete ALL configs for this model
-            localModelConfigurationsRepository.deleteAllForAsset(modelId)
+            localModelRepository.deleteAllConfigurationsForAsset(modelId)
 
             // LocalModelEntity is PRESERVED (soft-delete - metadata for re-download)
-            // NOT calling modelRegistry.deleteLocalModelMetadata() which would hard-delete
+            // NOT calling localModelRepository.deleteLocalModelMetadata() which would hard-delete
             loggingPort.info(TAG, "Soft-delete complete for model id: $modelId. File deleted, configs cleared, metadata preserved.")
         }.onFailure {
             loggingPort.error(TAG, "Failed to delete local model (id=$modelId): ${it.message}", it)
@@ -96,7 +95,7 @@ class DeleteLocalModelUseCase @Inject constructor(
      */
     suspend fun getModelTypesNeedingReassignment(modelId: Long): List<ModelType> {
         // Get all configs for this model
-        val modelConfigs = localModelConfigurationsRepository.getAllForAsset(modelId)
+        val modelConfigs = localModelRepository.getAllConfigurationsForAsset(modelId)
         val modelConfigIds = modelConfigs.map { it.id }.toSet()
 
         if (modelConfigIds.isEmpty()) return emptyList()
@@ -118,7 +117,7 @@ class DeleteLocalModelUseCase @Inject constructor(
      * - AND there are zero API models configured
      */
     suspend fun isLastModel(modelId: Long): Boolean {
-        val registeredModels = modelRegistry.getRegisteredAssets()
+        val registeredModels = localModelRepository.getAllLocalAssets()
 
         val hasApiModels = apiModelRepository.getAllCredentials().isNotEmpty()
         val hasOnlyOneLocalModel = registeredModels.size == 1

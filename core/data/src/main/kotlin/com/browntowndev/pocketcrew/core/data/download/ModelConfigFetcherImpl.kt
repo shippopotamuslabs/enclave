@@ -4,6 +4,7 @@ import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.config.RemoteModelConfig
@@ -115,6 +116,9 @@ class ModelConfigFetcherImpl @Inject constructor(
         // Get HuggingFace model name - defaults to empty if not present (for backward compatibility)
         val huggingFaceModelName = json.optString("huggingFaceModelName", "")
 
+        // Parse source - defaults to HUGGING_FACE if missing or invalid
+        val source = DownloadSource.fromSourceName(if (json.has("source")) json.getString("source") else null)
+
         return RemoteModelConfig(
             modelType = modelType,
             fileName = fileName,
@@ -123,6 +127,7 @@ class ModelConfigFetcherImpl @Inject constructor(
             sha256 = json.getString("sha256"),
             sizeInBytes = json.getLong("sizeInBytes"),
             modelFileFormat = modelFileFormat,
+            source = source,
             temperature = json.getDouble("temperature"),
             topK = json.getInt("topK"),
             topP = json.getDouble("topP"),
@@ -148,6 +153,7 @@ class ModelConfigFetcherImpl @Inject constructor(
     private fun parseModelFileFormat(format: String): ModelFileFormat {
         return when (format.uppercase()) {
             "TASK" -> ModelFileFormat.TASK
+            "LITERTLM" -> ModelFileFormat.LITERTLM
             "GGUF" -> ModelFileFormat.GGUF
             else -> ModelFileFormat.LITERTLM
         }
@@ -173,6 +179,7 @@ class ModelConfigFetcherImpl @Inject constructor(
                 sha256 = config.sha256,
                 sizeInBytes = config.sizeInBytes,
                 modelFileFormat = config.modelFileFormat,
+                source = config.source,
                 visionCapable = config.visionCapable
             )
 

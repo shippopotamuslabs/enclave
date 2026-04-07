@@ -23,7 +23,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -87,7 +87,7 @@ class InferenceService : Service() {
     lateinit var inferenceFactoryProvider: dagger.Lazy<InferenceFactoryPort>
 
     @Inject
-    lateinit var modelRegistry: ModelRegistryPort
+    lateinit var activeModelProvider: ActiveModelProviderPort
 
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var currentJob: Job? = null
@@ -323,13 +323,13 @@ class InferenceService : Service() {
 
         inferenceFactoryProvider.get().withInferenceService(modelType) { service ->
             // Fetch configuration to determine thinking/reasoning budget for this specific step
-            val config = modelRegistry.getRegisteredConfiguration(modelType)
+            val config = activeModelProvider.getActiveConfiguration(modelType)
             val options = GenerationOptions(
                 reasoningBudget = if (config?.thinkingEnabled == true) 1024 else 0,
                 modelType = modelType
             )
 
-            service.sendPrompt(prompt, options = options, closeConversation = false).collect { event ->
+            service.sendPrompt(prompt, options = options, closeConversation = true).collect { event ->
                 when (event) {
                     is InferenceEvent.Thinking -> {
                         broadcastProgress(EXTRA_THINKING_CHUNK, event.chunk, getModelTypeForStep(step).name)
@@ -427,7 +427,7 @@ class InferenceService : Service() {
                 state.stepOutputs[PipelineStep.DRAFT_TWO] ?: ""
             )
             PipelineStep.FINAL -> {
-                val userSystemPrompt = modelRegistry.getRegisteredConfiguration(ModelType.FAST)?.systemPrompt ?: ""
+                val userSystemPrompt = activeModelProvider.getActiveConfiguration(ModelType.FAST)?.systemPrompt ?: ""
                 buildFinalReviewPrompt(
                     userPrompt,
                     state.stepOutputs[PipelineStep.SYNTHESIS] ?: "",
@@ -497,7 +497,7 @@ Produce the final polished response for the user. Output ONLY the essay itself â
      */
     private suspend fun getModelDisplayNameForStep(step: PipelineStep): String {
         val modelType = getModelTypeForStep(step)
-        return modelRegistry.getRegisteredAsset(modelType)?.metadata?.huggingFaceModelName ?: modelType.name
+        return activeModelProvider.getActiveConfiguration(modelType)?.name ?: modelType.name
     }
 
     private fun createNotificationChannel() {

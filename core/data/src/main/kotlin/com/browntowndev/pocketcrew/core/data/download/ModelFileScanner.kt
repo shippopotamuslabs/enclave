@@ -4,17 +4,12 @@ import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
-import com.browntowndev.pocketcrew.domain.port.download.HashingPort
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
@@ -23,8 +18,8 @@ import javax.inject.Singleton
 @Singleton
 class ModelFileScanner @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val modelRegistry: ModelRegistryPort,
-    private val hashingPort: HashingPort
+    private val localModelRepository: com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort,
+    private val activeModelProvider: ActiveModelProviderPort
 ) : ModelFileScannerPort {
     companion object {
         private const val TAG = "ModelFileScanner"
@@ -32,13 +27,11 @@ class ModelFileScanner @Inject constructor(
 
     /**
      * Scan the models directory and create it if it doesn't exist.
-     * Validates against cache (expected models) for MD5 and format changes.
+     * Validates expected models against physical files on disk (existence and size).
      *
-     * @param downloadedModels Map of model types to assets actually downloaded (from registry)
      * @param expectedModels Map of model types to assets expected from remote config (from cache)
      */
     override suspend fun scanAndCreateDirIfNotExist(
-        downloadedModels: Map<ModelType, LocalModelAsset>,
         expectedModels: Map<ModelType, LocalModelAsset>
     ): ModelScanResult = withContext(Dispatchers.IO) {
         val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
@@ -60,92 +53,68 @@ class ModelFileScanner @Inject constructor(
         val partialDownloads = mutableMapOf<String, Long>()
         val invalidModels = mutableListOf<LocalModelAsset>()
 
-        // Collect files that need SHA256 verification for concurrent processing
-        val filesToVerify = mutableListOf<Triple<LocalModelAsset, File, String>>()
-
         // Iterate over expected models (what we want to have)
-        for ((modelType, expectedAsset) in expectedModels) {
+        for ((_, expectedAsset) in expectedModels) {
             val filename = expectedAsset.metadata.localFileName
 
             val file = File(modelsDir, filename)
             val tempFile = File(modelsDir, "${filename}${ModelConfig.TEMP_EXTENSION}")
+            val metaFile = File(modelsDir, "${filename}${ModelConfig.TEMP_META_EXTENSION}")
 
             val fileExists = file.exists()
-            // Skip size validation - rely 100% on MD5 verification for integrity
-            // Physical devices may add metadata/buffer bytes that cause size mismatches
-
             val tempExists = tempFile.exists()
             val tempLength = if (tempExists) tempFile.length() else 0L
 
-            // Get what's actually downloaded from registry
-            val downloadedAsset = downloadedModels[modelType]
-
-            // Detect if config changed by comparing expected (remote) vs downloaded (registry)
-            val configChanged = downloadedAsset != null && (
-                downloadedAsset.metadata.sha256 != expectedAsset.metadata.sha256 ||
-                downloadedAsset.metadata.modelFileFormat != expectedAsset.metadata.modelFileFormat ||
-                downloadedAsset.metadata.localFileName != expectedAsset.metadata.localFileName
-            )
-
             when {
-                // File exists and config hasn't changed - verify SHA256 to ensure file integrity
-                fileExists && !configChanged -> {
-                    // Add to list for concurrent SHA256 verification
-                    filesToVerify.add(Triple(expectedAsset, file, expectedAsset.metadata.sha256))
-                }
-                // Partial download exists - check against expected model from cache
+                // A temp file means a previous download did not complete cleanly.
                 tempExists && tempLength > 0 -> {
-                    // Trust partial if config hasn't changed
-                    if (!configChanged) {
-                        // Track the partial download so UI can show resume progress
+                    var isValidPartial = false
+                    if (metaFile.exists()) {
+                        try {
+                            val metaLines = metaFile.readLines()
+                            if (metaLines.size >= 2) {
+                                val expectedSize = metaLines[0].toLongOrNull()
+                                val expectedSha256 = metaLines[1]
+                                
+                                if (expectedSize == expectedAsset.metadata.sizeInBytes &&
+                                    expectedSha256 == expectedAsset.metadata.sha256 &&
+                                    tempLength < expectedSize) {
+                                    isValidPartial = true
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to read meta file for $filename", e)
+                        }
+                    }
+
+                    if (isValidPartial) {
                         partialDownloads[filename] = tempLength
-                        Log.d(TAG, "Model $filename has valid partial download (config unchanged)")
+                        Log.d(TAG, "Model $filename has valid partial download")
                     } else {
-                        // Not trusted - treat as missing, will re-download
+                        Log.w(TAG, "Model $filename has invalid/stale partial download. Deleting.")
+                        tempFile.delete()
+                        metaFile.delete()
                         missingModels.add(expectedAsset)
-                        Log.d(TAG, "Model $filename has untrusted partial download (config changed), will re-download")
                     }
                 }
-                // File exists but config changed - need to re-download
-                fileExists && configChanged -> {
-                    // Handle format change - delete old format file
-                    handleFormatChangeForType(modelType, downloadedAsset, modelsDir)
-                    invalidModels.add(expectedAsset)
-                    Log.d(TAG, "Model $filename is invalid (config changed), will re-download")
+                fileExists && file.length() == expectedAsset.metadata.sizeInBytes -> {
+                    Log.d(TAG, "Model $filename is valid (size matches)")
                 }
-                // File doesn't exist
+                fileExists -> {
+                    invalidModels.add(expectedAsset)
+                    Log.w(
+                        TAG,
+                        "Model $filename has size mismatch! Expected: ${expectedAsset.metadata.sizeInBytes}, Actual: ${file.length()}. Will re-download."
+                    )
+                }
                 else -> {
                     missingModels.add(expectedAsset)
                     Log.d(TAG, "Model $filename is missing")
-                }
-            }
-        }
-
-        // Process SHA256 verifications concurrently
-        if (filesToVerify.isNotEmpty()) {
-            // Group by SHA256 to avoid redundant verification of shared files
-            val uniqueFilesToVerify = filesToVerify.distinctBy { it.second.absolutePath }
-            
-            uniqueFilesToVerify.chunked(5).forEach { batch ->
-                // Launch concurrent async tasks for each file in batch
-                val deferredResults = batch.map { (asset, file, expectedSha256) ->
-                    CoroutineScope(Dispatchers.IO).async {
-                        val actualSha256 = hashingPort.calculateSha256(file)
-                        Triple(asset, expectedSha256, actualSha256)
+                    if (tempExists) {
+                        tempFile.delete()
                     }
-                }
-
-                // Await all results in this batch
-                val results = deferredResults.awaitAll()
-
-                // Process results
-                results.forEach { (asset, expectedSha256, actualSha256) ->
-                    val filename = asset.metadata.localFileName
-                    if (actualSha256 == expectedSha256) {
-                        Log.d(TAG, "Model $filename is valid (SHA256 matches)")
-                    } else {
-                        Log.w(TAG, "Model $filename has SHA256 mismatch! Expected: $expectedSha256, Actual: $actualSha256. Will re-download.")
-                        invalidModels.add(asset)
+                    if (metaFile.exists()) {
+                        metaFile.delete()
                     }
                 }
             }
@@ -162,56 +131,6 @@ class ModelFileScanner @Inject constructor(
     }
 
     /**
-     * Handle format change by deleting the old format file for a specific modelType.
-     */
-    private suspend fun handleFormatChangeForType(
-        modelType: ModelType,
-        registeredAsset: LocalModelAsset?,
-        modelsDir: File
-    ) {
-        if (registeredAsset == null) return
-
-        // Get the old filename with the previous format
-        val oldFormat = registeredAsset.metadata.modelFileFormat
-        val oldFilename = getFilenameForModel(modelType, oldFormat)
-        val oldFile = File(modelsDir, oldFilename)
-
-        if (oldFile.exists()) {
-            val deleted = oldFile.delete()
-            Log.d(TAG, "Deleted old format file $oldFilename: $deleted")
-        }
-
-        // Also check if there's a .tmp file with old format
-        val oldTempFile = File(modelsDir, "$oldFilename${ModelConfig.TEMP_EXTENSION}")
-        if (oldTempFile.exists()) {
-            val deleted = oldTempFile.delete()
-            Log.d(TAG, "Deleted old format temp file: $deleted")
-        }
-    }
-
-    /**
-     * Generate filename for a model based on its type and format.
-     * Note: This is only used for fallback when cache doesn't have the info.
-     * The actual filename comes from the config's localFileName.
-     */
-    private fun getFilenameForModel(modelType: ModelType, format: ModelFileFormat): String {
-        val extension = when (format) {
-            ModelFileFormat.LITERTLM -> "litertlm"
-            ModelFileFormat.TASK -> "task"
-            ModelFileFormat.GGUF -> "gguf"
-        }
-        return when (modelType) {
-            ModelType.VISION -> "vision.$extension"
-            ModelType.DRAFT_ONE -> "draft_one.$extension"
-            ModelType.DRAFT_TWO -> "draft_two.$extension"
-            ModelType.MAIN -> "main.$extension"
-            ModelType.FAST -> "fast.$extension"
-            ModelType.THINKING -> "thinking.$extension"
-            ModelType.FINAL_SYNTHESIS -> "final_synthesis.$extension"
-        }
-    }
-
-    /**
      * Deletes the physical model file from disk for the given local model ID.
      * Called during soft-delete of a local model.
      */
@@ -220,7 +139,7 @@ class ModelFileScanner @Inject constructor(
             val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
 
             // Look up the model to get its filename
-            val asset = modelRegistry.getAssetById(localModelId)
+            val asset = localModelRepository.getAssetById(localModelId)
             val filename = asset?.metadata?.localFileName
 
             if (filename != null && filename.isNotBlank()) {
@@ -240,6 +159,10 @@ class ModelFileScanner @Inject constructor(
                         Log.w(TAG, "Failed to delete temp file: ${tempFile.absolutePath}")
                     }
                 }
+                val metaFile = File(modelsDir, "$filename${ModelConfig.TEMP_META_EXTENSION}")
+                if (metaFile.exists()) {
+                    metaFile.delete()
+                }
             } else {
                 Log.w(TAG, "Could not find model with ID $localModelId to delete file")
             }
@@ -254,7 +177,12 @@ class ModelFileScanner @Inject constructor(
         val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
 
         // Get dynamic filenames from registry
-        val assetsByType = ModelType.entries.associateWith { modelRegistry.getRegisteredAsset(it) }
+        val assetsByType = ModelType.entries.associateWith { modelType -> 
+            val config = activeModelProvider.getActiveConfiguration(modelType)
+            if (config != null && config.isLocal) {
+                localModelRepository.getAssetByConfigId(config.id)
+            } else null
+        }
 
         // Check for model files - use localFileName from config
         val requiredFiles = listOfNotNull(
