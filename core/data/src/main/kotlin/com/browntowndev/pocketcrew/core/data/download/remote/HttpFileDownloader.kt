@@ -41,6 +41,9 @@ class HttpFileDownloader @Inject constructor(
         val filename = config.filename
         val targetFile = File(targetDir, filename)
         val tempFile = File(targetDir, "$filename${ModelConfig.TEMP_EXTENSION}")
+        val metaFile = File(targetDir, "$filename${ModelConfig.TEMP_META_EXTENSION}")
+
+        metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
 
         val request = Request.Builder()
             .url(downloadUrl)
@@ -62,6 +65,7 @@ class HttpFileDownloader @Inject constructor(
                     "HTTP 416 for $filename: Range not satisfiable. Deleting temp files and restarting."
                 )
                 tempFile.delete()
+                metaFile.delete()
                 val retryRequest = Request.Builder()
                     .url(downloadUrl)
                     .apply {
@@ -103,9 +107,6 @@ class HttpFileDownloader @Inject constructor(
 
             var totalBytesRead = actualExistingBytes
 
-            // Create SHA-256 digest for streaming validation
-            val digest = MessageDigest.getInstance("SHA-256")
-
             // Use FileChannel with force(true) for atomic write+flush to disk
             val channel = FileChannel.open(
                 tempFile.toPath(),
@@ -115,9 +116,7 @@ class HttpFileDownloader @Inject constructor(
             )
 
             try {
-                // Wrap input stream with DigestInputStream for streaming SHA-256
-                val digestInputStream = DigestInputStream(body.byteStream(), digest)
-                digestInputStream.use { inputStream ->
+                body.byteStream().use { inputStream ->
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
 
@@ -133,19 +132,20 @@ class HttpFileDownloader @Inject constructor(
                         progressCallback?.onProgress(totalBytesRead, actualTotalSize.coerceAtLeast(config.expectedSizeBytes))
                     }
                 }
-
-                // Verify SHA-256 hash after download completes
-                val computedHash = digest.digest().joinToString("") { "%02x".format(it) }.lowercase()
-                val expectedHash = config.expectedSha256.lowercase()
-                if (computedHash != expectedHash) {
-                    logger.error(TAG, "SHA-256 mismatch for ${config.filename}. Expected: $expectedHash, Got: $computedHash")
-                    tempFile.delete()
-                    throw IOException("SHA-256 hash mismatch after download")
-                }
-                logger.info(TAG, "SHA-256 verified for ${config.filename}")
             } finally {
                 channel.close()
             }
+
+            // Verify SHA-256 hash after download completes
+            val computedHash = computeSha256(tempFile)
+            val expectedHash = config.expectedSha256.lowercase()
+            if (computedHash != expectedHash) {
+                logger.error(TAG, "SHA-256 mismatch for ${config.filename}. Expected: $expectedHash, Got: $computedHash")
+                tempFile.delete()
+                metaFile.delete()
+                throw IOException("SHA-256 hash mismatch after download")
+            }
+            logger.info(TAG, "SHA-256 verified for ${config.filename}")
 
             if (totalBytesRead != config.expectedSizeBytes) {
                 logger.error(TAG, "[MISMATCHED FILE SIZE] Download failed for ${config.filename}")
@@ -167,6 +167,8 @@ class HttpFileDownloader @Inject constructor(
                 if (tempFile.exists()) {
                     throw Exception("Failed to rename downloaded file to target location")
                 }
+            } else {
+                metaFile.delete()
             }
 
             FileDownloaderPort.DownloadResult(
@@ -188,6 +190,9 @@ class HttpFileDownloader @Inject constructor(
         val filename = config.filename
         val targetFile = File(targetDir, filename)
         val tempFile = File(targetDir, "$filename${ModelConfig.TEMP_EXTENSION}")
+        val metaFile = File(targetDir, "$filename${ModelConfig.TEMP_META_EXTENSION}")
+
+        metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
 
         okHttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
@@ -213,9 +218,6 @@ class HttpFileDownloader @Inject constructor(
 
             var totalBytesRead = 0L
 
-            // Create SHA-256 digest for streaming validation
-            val digest = MessageDigest.getInstance("SHA-256")
-
             val channel = FileChannel.open(
                 tempFile.toPath(),
                 StandardOpenOption.CREATE_NEW,
@@ -223,9 +225,7 @@ class HttpFileDownloader @Inject constructor(
             )
 
             try {
-                // Wrap input stream with DigestInputStream for streaming SHA-256
-                val digestInputStream = DigestInputStream(body.byteStream(), digest)
-                digestInputStream.use { inputStream ->
+                body.byteStream().use { inputStream ->
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
 
@@ -241,19 +241,20 @@ class HttpFileDownloader @Inject constructor(
                         progressCallback?.onProgress(totalBytesRead, actualTotalSize)
                     }
                 }
-
-                // Verify SHA-256 hash after download completes
-                val computedHash = digest.digest().joinToString("") { "%02x".format(it) }.lowercase()
-                val expectedHash = config.expectedSha256.lowercase()
-                if (computedHash != expectedHash) {
-                    logger.error(TAG, "SHA-256 mismatch for ${config.filename}. Expected: $expectedHash, Got: $computedHash")
-                    tempFile.delete()
-                    throw IOException("SHA-256 hash mismatch after download")
-                }
-                logger.info(TAG, "SHA-256 verified for ${config.filename}")
             } finally {
                 channel.close()
             }
+
+            // Verify SHA-256 hash after download completes
+            val computedHash = computeSha256(tempFile)
+            val expectedHash = config.expectedSha256.lowercase()
+            if (computedHash != expectedHash) {
+                logger.error(TAG, "SHA-256 mismatch for ${config.filename}. Expected: $expectedHash, Got: $computedHash")
+                tempFile.delete()
+                metaFile.delete()
+                throw IOException("SHA-256 hash mismatch after download")
+            }
+            logger.info(TAG, "SHA-256 verified for ${config.filename}")
 
             // Rename temp file to target file
             if (targetFile.exists()) {
@@ -266,6 +267,8 @@ class HttpFileDownloader @Inject constructor(
                 if (tempFile.exists()) {
                     throw Exception("Failed to rename downloaded file to target location")
                 }
+            } else {
+                metaFile.delete()
             }
 
             FileDownloaderPort.DownloadResult(
@@ -300,5 +303,17 @@ class HttpFileDownloader @Inject constructor(
         } catch (e: Exception) {
             null
         }
+    }
+
+    private fun computeSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { fis ->
+            val buffer = ByteArray(8192)
+            var bytesRead: Int
+            while (fis.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 }

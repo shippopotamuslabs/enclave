@@ -59,6 +59,7 @@ class ModelFileScanner @Inject constructor(
 
             val file = File(modelsDir, filename)
             val tempFile = File(modelsDir, "${filename}${ModelConfig.TEMP_EXTENSION}")
+            val metaFile = File(modelsDir, "${filename}${ModelConfig.TEMP_META_EXTENSION}")
 
             val fileExists = file.exists()
             val tempExists = tempFile.exists()
@@ -67,8 +68,34 @@ class ModelFileScanner @Inject constructor(
             when {
                 // A temp file means a previous download did not complete cleanly.
                 tempExists && tempLength > 0 -> {
-                    partialDownloads[filename] = tempLength
-                    Log.d(TAG, "Model $filename has partial download")
+                    var isValidPartial = false
+                    if (metaFile.exists()) {
+                        try {
+                            val metaLines = metaFile.readLines()
+                            if (metaLines.size >= 2) {
+                                val expectedSize = metaLines[0].toLongOrNull()
+                                val expectedSha256 = metaLines[1]
+                                
+                                if (expectedSize == expectedAsset.metadata.sizeInBytes &&
+                                    expectedSha256 == expectedAsset.metadata.sha256 &&
+                                    tempLength < expectedSize) {
+                                    isValidPartial = true
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to read meta file for $filename", e)
+                        }
+                    }
+
+                    if (isValidPartial) {
+                        partialDownloads[filename] = tempLength
+                        Log.d(TAG, "Model $filename has valid partial download")
+                    } else {
+                        Log.w(TAG, "Model $filename has invalid/stale partial download. Deleting.")
+                        tempFile.delete()
+                        metaFile.delete()
+                        missingModels.add(expectedAsset)
+                    }
                 }
                 fileExists && file.length() == expectedAsset.metadata.sizeInBytes -> {
                     Log.d(TAG, "Model $filename is valid (size matches)")
@@ -83,6 +110,12 @@ class ModelFileScanner @Inject constructor(
                 else -> {
                     missingModels.add(expectedAsset)
                     Log.d(TAG, "Model $filename is missing")
+                    if (tempExists) {
+                        tempFile.delete()
+                    }
+                    if (metaFile.exists()) {
+                        metaFile.delete()
+                    }
                 }
             }
         }
@@ -125,6 +158,10 @@ class ModelFileScanner @Inject constructor(
                     if (!tempDeleted) {
                         Log.w(TAG, "Failed to delete temp file: ${tempFile.absolutePath}")
                     }
+                }
+                val metaFile = File(modelsDir, "$filename${ModelConfig.TEMP_META_EXTENSION}")
+                if (metaFile.exists()) {
+                    metaFile.delete()
                 }
             } else {
                 Log.w(TAG, "Could not find model with ID $localModelId to delete file")
