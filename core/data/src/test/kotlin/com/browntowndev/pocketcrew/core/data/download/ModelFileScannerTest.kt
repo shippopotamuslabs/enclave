@@ -85,10 +85,12 @@ class ModelFileScannerTest {
     }
 
     @Test
-    fun `scan treats temp file as partial download`() = kotlinx.coroutines.test.runTest {
-        val asset = createAsset(filename = "model.gguf", sizeBytes = 4L)
+    fun `scan treats temp file as partial download when meta file is valid`() = kotlinx.coroutines.test.runTest {
+        val asset = createAsset(filename = "model.gguf", sizeBytes = 4L, sha256 = "dummy-hash")
         File(modelsDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_EXTENSION}")
             .writeBytes(byteArrayOf(1, 2))
+        File(modelsDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_META_EXTENSION}")
+            .writeText("4\ndummy-hash")
 
         val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset))
 
@@ -99,11 +101,43 @@ class ModelFileScannerTest {
     }
 
     @Test
-    fun `scan prefers temp file over final file`() = kotlinx.coroutines.test.runTest {
+    fun `scan rejects partial download when meta file is missing`() = kotlinx.coroutines.test.runTest {
         val asset = createAsset(filename = "model.gguf", sizeBytes = 4L)
+        File(modelsDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_EXTENSION}")
+            .writeBytes(byteArrayOf(1, 2))
+
+        val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset))
+
+        assertTrue(result.partialDownloads.isEmpty())
+        assertEquals(1, result.missingModels.size)
+        assertTrue(result.invalidModels.isEmpty())
+        assertFalse(result.allValid)
+    }
+
+    @Test
+    fun `scan rejects partial download when meta file is stale`() = kotlinx.coroutines.test.runTest {
+        val asset = createAsset(filename = "model.gguf", sizeBytes = 4L, sha256 = "new-hash")
+        File(modelsDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_EXTENSION}")
+            .writeBytes(byteArrayOf(1, 2))
+        File(modelsDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_META_EXTENSION}")
+            .writeText("4\nold-hash")
+
+        val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset))
+
+        assertTrue(result.partialDownloads.isEmpty())
+        assertEquals(1, result.missingModels.size)
+        assertTrue(result.invalidModels.isEmpty())
+        assertFalse(result.allValid)
+    }
+
+    @Test
+    fun `scan prefers temp file over final file`() = kotlinx.coroutines.test.runTest {
+        val asset = createAsset(filename = "model.gguf", sizeBytes = 4L, sha256 = "dummy-hash")
         File(modelsDir, asset.metadata.localFileName).writeBytes(byteArrayOf(1, 2, 3, 4))
         File(modelsDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_EXTENSION}")
             .writeBytes(byteArrayOf(1, 2))
+        File(modelsDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_META_EXTENSION}")
+            .writeText("4\ndummy-hash")
 
         val result = scanner.scanAndCreateDirIfNotExist(mapOf(ModelType.MAIN to asset))
 
@@ -112,13 +146,13 @@ class ModelFileScannerTest {
         assertFalse(result.allValid)
     }
 
-    private fun createAsset(filename: String, sizeBytes: Long): LocalModelAsset {
+    private fun createAsset(filename: String, sizeBytes: Long, sha256: String = "unused-for-startup"): LocalModelAsset {
         return LocalModelAsset(
             metadata = LocalModelMetadata(
                 huggingFaceModelName = "test/model",
                 remoteFileName = filename,
                 localFileName = filename,
-                sha256 = "unused-for-startup",
+                sha256 = sha256,
                 sizeInBytes = sizeBytes,
                 modelFileFormat = ModelFileFormat.GGUF
             ),

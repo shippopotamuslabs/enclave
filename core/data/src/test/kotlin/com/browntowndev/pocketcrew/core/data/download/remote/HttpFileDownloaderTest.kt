@@ -177,11 +177,11 @@ class HttpFileDownloaderTest {
         val existingFile = File(tempDir, "test-model.gguf.tmp")
         existingFile.writeText(existingContent)
 
-        // Provide SHA-256 for just the new content (not the total)
-        // But expectedSizeBytes should be the total after resume completes
+        // Provide SHA-256 for the total content (existing + new)
+        // expectedSizeBytes should be the total after resume completes
         val testConfig = FileDownloaderPort.FileDownloadConfig(
             filename = "test-model.gguf",
-            expectedSha256 = computeSha256(newContent),
+            expectedSha256 = computeSha256(totalContent),
             expectedSizeBytes = totalContent.length.toLong()
         )
 
