@@ -161,7 +161,6 @@ class GenerateChatResponseUseCase @Inject constructor(
                     when (state) {
                         is MessageGenerationState.Processing -> {
                             if (loggedProcessingFor[state.modelType] == false) {
-                                loggingPort.debug(TAG, "Processing Started: ${state.modelType}")
                                 loggedProcessingFor[state.modelType] = true
                             }
 
@@ -172,39 +171,28 @@ class GenerateChatResponseUseCase @Inject constructor(
 
                         is MessageGenerationState.ThinkingLive -> {
                             if (loggedThinkingFor[state.modelType] == false) {
-                                loggingPort.debug(TAG, "Thinking Started: ${state.modelType}")
                                 loggedThinkingFor[state.modelType] = true
                             }
 
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
                             accumulator.appendThinking(state.thinkingChunk)
                             accumulator.currentState = MessageState.THINKING
-                            loggingPort.debug(
-                                TAG,
-                                "Accumulator THINKING messageId=${accumulator.messageId} modelType=${state.modelType} thinkingChars=${accumulator.thinkingRaw.length} contentChars=${accumulator.content.length}"
-                            )
                             emit(accumulatorManager.toMessagesState())
                         }
 
                         is MessageGenerationState.GeneratingText -> {
                             if (loggedGenerationFor[state.modelType] == false) {
-                                loggingPort.debug(TAG, "Generation Started: ${state.modelType}")
                                 loggedGenerationFor[state.modelType] = true
                             }
 
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
                             accumulator.appendContent(state.textDelta)
                             accumulator.currentState = MessageState.GENERATING
-                            loggingPort.debug(
-                                TAG,
-                                "Accumulator GENERATING messageId=${accumulator.messageId} modelType=${state.modelType} thinkingChars=${accumulator.thinkingRaw.length} contentChars=${accumulator.content.length} thinkingEnded=${accumulator.thinkingEndTime != null}"
-                            )
                             emit(accumulatorManager.toMessagesState())
                         }
 
                         is MessageGenerationState.StepCompleted -> {
                             if (loggedStepCompletionFor[state.modelType] == false) {
-                                loggingPort.debug(TAG, "Step Completed: ${state.modelType}")
                                 loggedStepCompletionFor[state.modelType] = true
                             }
 
@@ -218,10 +206,6 @@ class GenerateChatResponseUseCase @Inject constructor(
                             val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
                             accumulator.isComplete = true
                             accumulator.currentState = MessageState.COMPLETE
-                            loggingPort.debug(
-                                TAG,
-                                "Accumulator FINISHED messageId=${accumulator.messageId} modelType=${state.modelType} thinkingChars=${accumulator.thinkingRaw.length} contentChars=${accumulator.content.length} thinkingDurationSeconds=${accumulator.thinkingDurationSeconds}"
-                            )
                             emit(accumulatorManager.toMessagesState())
                         }
 
@@ -469,21 +453,12 @@ class GenerateChatResponseUseCase @Inject constructor(
         service.sendPrompt(prompt, options, closeConversation = false).collect { event ->
             when (event) {
                 is InferenceEvent.Thinking -> {
-                    loggingPort.debug(
-                        TAG,
-                        "InferenceEvent.Thinking modelType=$modelType chunkLen=${event.chunk.length} preview=${previewChunk(event.chunk)}"
-                    )
                     emit(MessageGenerationState.ThinkingLive(event.chunk, modelType))
                 }
                 is InferenceEvent.PartialResponse -> {
-                    loggingPort.debug(
-                        TAG,
-                        "InferenceEvent.PartialResponse modelType=${event.modelType} chunkLen=${event.chunk.length} preview=${previewChunk(event.chunk)}"
-                    )
                     emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
                 }
                 is InferenceEvent.Finished -> {
-                    loggingPort.debug(TAG, "InferenceEvent.Finished modelType=${event.modelType}")
                     emit(MessageGenerationState.Finished(event.modelType))
                 }
                 is InferenceEvent.SafetyBlocked -> {
@@ -497,8 +472,6 @@ class GenerateChatResponseUseCase @Inject constructor(
             }
         }
     }.flowOn(Dispatchers.Default)
-
-    private fun previewChunk(text: String): String = text.replace("\n", "\\n").take(120)
 }
 
 /**
