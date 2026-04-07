@@ -14,6 +14,24 @@ interface DefaultModelsDao {
     @Query("SELECT * FROM default_models")
     fun observeAll(): Flow<List<DefaultModelEntity>>
 
+    @Query("""
+        SELECT 
+            dm.model_type as modelType,
+            dm.local_config_id as localConfigId,
+            dm.api_config_id as apiConfigId,
+            lmc.display_name as localPresetName,
+            amc.display_name as apiPresetName,
+            lm.huggingface_model_name as localAssetName,
+            ac.display_name as apiAssetName,
+            ac.provider as apiProviderName
+        FROM default_models dm
+        LEFT JOIN local_model_configurations lmc ON dm.local_config_id = lmc.id
+        LEFT JOIN local_models lm ON lmc.local_model_id = lm.id
+        LEFT JOIN api_model_configurations amc ON dm.api_config_id = amc.id
+        LEFT JOIN api_credentials ac ON amc.api_credentials_id = ac.id
+    """)
+    fun observeAllWithDetails(): Flow<List<DefaultModelAssignmentView>>
+
     @Query("SELECT * FROM default_models")
     suspend fun getAll(): List<DefaultModelEntity>
 

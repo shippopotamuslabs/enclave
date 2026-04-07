@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.download
 
 import android.util.Log
-import com.browntowndev.pocketcrew.core.data.download.remote.HuggingFaceModelUrlProvider
+import com.browntowndev.pocketcrew.core.data.download.remote.DynamicModelUrlProvider
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
@@ -21,7 +21,7 @@ import org.json.JSONObject
  */
 class ModelDownloadWorkerTest {
 
-    private val urlProvider = HuggingFaceModelUrlProvider()
+    private val urlProvider = DynamicModelUrlProvider()
 
     @BeforeEach
     fun setup() {

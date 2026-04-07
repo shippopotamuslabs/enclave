@@ -14,7 +14,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -45,8 +45,7 @@ class GenerateChatResponseUseCase @Inject constructor(
     private val chatRepository: ChatRepository,
     private val messageRepository: MessageRepository,
     private val loggingPort: LoggingPort,
-    private val inferenceLockManager: InferenceLockManager,
-    private val modelRegistry: ModelRegistryPort,
+    private val activeModelProvider: ActiveModelProviderPort,
 ) {
     companion object {
         private const val TAG = "GenerateChatResponse"
@@ -162,7 +161,6 @@ class GenerateChatResponseUseCase @Inject constructor(
                     when (state) {
                         is MessageGenerationState.Processing -> {
                             if (loggedProcessingFor[state.modelType] == false) {
-                                loggingPort.debug(TAG, "Processing Started: ${state.modelType}")
                                 loggedProcessingFor[state.modelType] = true
                             }
 
@@ -173,7 +171,6 @@ class GenerateChatResponseUseCase @Inject constructor(
 
                         is MessageGenerationState.ThinkingLive -> {
                             if (loggedThinkingFor[state.modelType] == false) {
-                                loggingPort.debug(TAG, "Thinking Started: ${state.modelType}")
                                 loggedThinkingFor[state.modelType] = true
                             }
 
@@ -185,7 +182,6 @@ class GenerateChatResponseUseCase @Inject constructor(
 
                         is MessageGenerationState.GeneratingText -> {
                             if (loggedGenerationFor[state.modelType] == false) {
-                                loggingPort.debug(TAG, "Generation Started: ${state.modelType}")
                                 loggedGenerationFor[state.modelType] = true
                             }
 
@@ -197,7 +193,6 @@ class GenerateChatResponseUseCase @Inject constructor(
 
                         is MessageGenerationState.StepCompleted -> {
                             if (loggedStepCompletionFor[state.modelType] == false) {
-                                loggingPort.debug(TAG, "Step Completed: ${state.modelType}")
                                 loggedStepCompletionFor[state.modelType] = true
                             }
 
@@ -436,13 +431,19 @@ class GenerateChatResponseUseCase @Inject constructor(
             loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
         }
 
-        val config = modelRegistry.getRegisteredConfiguration(modelType)
-        val reasoningBudget = if (config?.thinkingEnabled == true) 2048 else 0
+        val config = activeModelProvider.getActiveConfiguration(modelType)
+        val reasoningBudget = if (config?.isLocal == true && config.thinkingEnabled) 2048 else 0
+        loggingPort.debug(
+            TAG,
+            "generateWithService config modelType=$modelType configName=${config?.name} isLocal=${config?.isLocal} thinkingEnabled=${config?.thinkingEnabled} reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget"
+        )
         
         // ARCHITECTURE: Explicitly provide modelType to options for event tagging
         val options = GenerationOptions(
             reasoningBudget = reasoningBudget,
             modelType = modelType,
+            systemPrompt = config?.systemPrompt,
+            reasoningEffort = config?.reasoningEffort,
             temperature = config?.temperature?.toFloat(),
             topK = config?.topK,
             topP = config?.topP?.toFloat(),
@@ -461,9 +462,11 @@ class GenerateChatResponseUseCase @Inject constructor(
                     emit(MessageGenerationState.Finished(event.modelType))
                 }
                 is InferenceEvent.SafetyBlocked -> {
+                    loggingPort.warning(TAG, "InferenceEvent.SafetyBlocked modelType=${event.modelType} reason=${event.reason}")
                     emit(MessageGenerationState.Blocked(event.reason, event.modelType))
                 }
                 is InferenceEvent.Error -> {
+                    loggingPort.error(TAG, "InferenceEvent.Error modelType=${event.modelType} message=${event.cause.message}", event.cause)
                     emit(MessageGenerationState.Failed(event.cause, event.modelType))
                 }
             }

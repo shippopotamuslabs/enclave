@@ -15,7 +15,7 @@ import org.robolectric.annotation.Config
 class PocketCrewDatabaseMigrationTest {
 
     @Test
-    fun `database exposes version 3 tables and omits legacy ones`() {
+    fun `database exposes expected tables and omits legacy ones`() {
         val db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
             PocketCrewDatabase::class.java

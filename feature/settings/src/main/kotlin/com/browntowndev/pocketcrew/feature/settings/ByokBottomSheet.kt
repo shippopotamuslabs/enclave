@@ -20,7 +20,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -116,16 +118,29 @@ fun ByokBottomSheet(
                         ByokConfigListView(
                             asset = state.asset,
                             onBack = { onSelectApiModelAsset(null) },
+                            onEditAsset = {
+                                hideAndNavigate {
+                                    onSelectApiModelConfig(null)
+                                    onNavigateToByokConfigure()
+                                }
+                            },
+                            onRequestDeleteAsset = { asset ->
+                                pendingDeleteTarget = ByokDeleteTarget.Asset(asset.credentialsId, asset.displayName)
+                            },
                             onEditConfig = { config ->
-                                onSelectApiModelConfig(config)
-                                hideAndNavigate(onNavigateToByokConfigure)
+                                hideAndNavigate {
+                                    onSelectApiModelConfig(config)
+                                    onNavigateToByokConfigure()
+                                }
                             },
                             onRequestDeleteConfig = { config ->
                                 pendingDeleteTarget = ByokDeleteTarget.Config(config.id, config.displayName)
                             },
                             onAddConfig = {
-                                onSelectApiModelConfig(ApiModelConfigUi())
-                                hideAndNavigate(onNavigateToByokConfigure)
+                                hideAndNavigate {
+                                    onSelectApiModelConfig(ApiModelConfigUi())
+                                    onNavigateToByokConfigure()
+                                }
                             }
                         )
                     }
@@ -133,12 +148,21 @@ fun ByokBottomSheet(
                         ByokAssetListView(
                             apiModels = uiState.apiModels,
                             onSelectAsset = { asset -> onSelectApiModelAsset(asset) },
+                            onEditAsset = { asset ->
+                                hideAndNavigate {
+                                    onSelectApiModelAsset(asset)
+                                    onSelectApiModelConfig(null)
+                                    onNavigateToByokConfigure()
+                                }
+                            },
                             onRequestDeleteAsset = { asset ->
                                 pendingDeleteTarget = ByokDeleteTarget.Asset(asset.credentialsId, asset.displayName)
                             },
                             onAddAsset = {
-                                onSelectApiModelAsset(null)
-                                hideAndNavigate(onNavigateToByokConfigure)
+                                hideAndNavigate {
+                                    onSelectApiModelAsset(null)
+                                    onNavigateToByokConfigure()
+                                }
                             }
                         )
                     }
@@ -197,6 +221,7 @@ fun ByokBottomSheet(
 private fun ByokAssetListView(
     apiModels: List<ApiModelAssetUi>,
     onSelectAsset: (ApiModelAssetUi) -> Unit,
+    onEditAsset: (ApiModelAssetUi) -> Unit,
     onRequestDeleteAsset: (ApiModelAssetUi) -> Unit,
     onAddAsset: () -> Unit
 ) {
@@ -212,6 +237,14 @@ private fun ByokAssetListView(
             text = "Manage your own API keys and model configurations.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = 4.dp)
+        )
+        
+        Text(
+            text = "Hint: long press to edit/delete the provider.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
@@ -250,9 +283,16 @@ private fun ByokAssetListView(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "${asset.provider.displayName} • ${asset.modelId} • ${asset.configurations.size} Presets",
+                                    text = "${asset.provider.displayName} • ${asset.modelId}",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 2.dp)
+                                )
+                                Text(
+                                    text = "${asset.configurations.size} Preset(s)",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(top = 4.dp)
                                 )
                             }
 
@@ -268,6 +308,13 @@ private fun ByokAssetListView(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false }
                     ) {
+                        DropdownMenuItem(
+                            text = { Text("Edit") },
+                            onClick = {
+                                menuExpanded = false
+                                onEditAsset(asset)
+                            }
+                        )
                         DropdownMenuItem(
                             text = { Text("Delete") },
                             onClick = {
@@ -300,6 +347,8 @@ private fun ByokAssetListView(
 private fun ByokConfigListView(
     asset: ApiModelAssetUi,
     onBack: () -> Unit,
+    onEditAsset: () -> Unit,
+    onRequestDeleteAsset: (ApiModelAssetUi) -> Unit,
     onEditConfig: (ApiModelConfigUi) -> Unit,
     onRequestDeleteConfig: (ApiModelConfigUi) -> Unit,
     onAddConfig: () -> Unit
@@ -312,7 +361,7 @@ private fun ByokConfigListView(
             IconButton(onClick = onBack, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to providers")
             }
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = asset.displayName,
                     style = MaterialTheme.typography.headlineSmall,
@@ -323,6 +372,39 @@ private fun ByokConfigListView(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            Box {
+                var menuExpanded by remember { mutableStateOf(false) }
+
+                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = "Options",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Edit") },
+                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                        onClick = {
+                            menuExpanded = false
+                            onEditAsset()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete") },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                        onClick = {
+                            menuExpanded = false
+                            onRequestDeleteAsset(asset)
+                        }
+                    )
+                }
             }
         }
 
@@ -352,7 +434,7 @@ private fun ByokConfigListView(
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text(
-                                text = "Temp: ${config.temperature} | Max: ${config.maxTokens}",
+                                text = "Temp: ${config.temperature.format(2)} | Max: ${config.maxTokens}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -425,6 +507,8 @@ private sealed interface ByokDeleteTarget {
         override val displayName: String
     ) : ByokDeleteTarget
 }
+
+private fun Double.format(digits: Int) = "%.${digits}f".format(this)
 
 // ==================== PREVIEWS ====================
 

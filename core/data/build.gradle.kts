@@ -1,20 +1,8 @@
-import java.io.FileInputStream
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.hilt)
 }
-
-// 1. Load properties
-val localProperties =
-    Properties().apply {
-        val localPropertiesFile = rootProject.file("local.properties")
-        if (localPropertiesFile.exists()) {
-            load(FileInputStream(localPropertiesFile))
-        }
-    }
 
 android {
     namespace = "com.browntowndev.pocketcrew.core.data"
@@ -22,8 +10,6 @@ android {
 
     defaultConfig {
         minSdk = 34
-
-        buildConfigField("String", "HUGGING_FACE_API_KEY", "\"${localProperties.getProperty("HUGGING_FACE_API_KEY") ?: ""}\"")
     }
 
     compileOptions {
@@ -73,6 +59,7 @@ dependencies {
     // OkHttp
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
+    implementation(libs.openai.java)
 
     // DataStore
     implementation(libs.androidx.datastore.preferences)

@@ -8,6 +8,10 @@ import com.browntowndev.pocketcrew.core.data.mapper.ApiModelMapper
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionPolicy
+import com.browntowndev.pocketcrew.domain.model.config.OpenRouterProviderSort
+import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -85,7 +89,13 @@ class ApiModelRepositoryImpl @Inject constructor(
             frequencyPenalty = config.frequencyPenalty,
             presencePenalty = config.presencePenalty,
             systemPrompt = config.systemPrompt,
-            customHeaders = ApiModelMapper.serializeCustomHeaders(config.customHeaders)
+            reasoningEffort = config.reasoningEffort?.wireValue,
+            customHeaders = ApiModelMapper.serializeCustomHeaders(config.customHeaders),
+            openRouterProviderSort = config.openRouterRouting.providerSort.wireValue,
+            openRouterAllowFallbacks = config.openRouterRouting.allowFallbacks,
+            openRouterRequireParameters = config.openRouterRouting.requireParameters,
+            openRouterDataCollectionPolicy = config.openRouterRouting.dataCollectionPolicy.wireValue,
+            openRouterZeroDataRetention = config.openRouterRouting.zeroDataRetention,
         )
         return apiModelConfigurationsDao.upsert(entity)
     }
@@ -121,6 +131,14 @@ class ApiModelRepositoryImpl @Inject constructor(
         frequencyPenalty = frequencyPenalty,
         presencePenalty = presencePenalty,
         systemPrompt = systemPrompt,
-        customHeaders = ApiModelMapper.deserializeCustomHeaders(customHeaders)
+        reasoningEffort = ApiReasoningEffort.fromWireValue(reasoningEffort),
+        customHeaders = ApiModelMapper.deserializeCustomHeaders(customHeaders),
+        openRouterRouting = OpenRouterRoutingConfiguration(
+            providerSort = OpenRouterProviderSort.fromWireValue(openRouterProviderSort),
+            allowFallbacks = openRouterAllowFallbacks ?: true,
+            requireParameters = openRouterRequireParameters ?: false,
+            dataCollectionPolicy = OpenRouterDataCollectionPolicy.fromWireValue(openRouterDataCollectionPolicy),
+            zeroDataRetention = openRouterZeroDataRetention ?: false
+        )
     )
 }

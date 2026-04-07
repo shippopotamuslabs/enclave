@@ -290,6 +290,15 @@ class ChatViewModel @Inject constructor(
         _selectedMode.value = mode
     }
 
+    fun createNewChat() {
+        _currentChatId.value = null
+        _inputText.value = ""
+        _inFlightMessages.value = emptyMap()
+        inferenceJob?.cancel()
+        // Ensure SavedStateHandle is also cleared so chatId doesn't persist on recreation
+        savedStateHandle["chatId"] = null
+    }
+
     fun onSendMessage() {
         val input = _inputText.value
         if (input.isNotBlank()) {

@@ -11,5 +11,6 @@ data class DefaultModelAssignment(
     val apiConfigId: Long? = null,
     // Resolved display data for the UI
     val displayName: String? = null,
+    val presetName: String? = null,
     val providerName: String? = null,
 )

@@ -6,7 +6,15 @@ package com.browntowndev.pocketcrew.domain.model.inference
 enum class ApiProvider(val displayName: String) {
     ANTHROPIC("Anthropic"),
     OPENAI("OpenAI"),
-    GOOGLE("Google"),
-    SELF_HOSTED("Self-Hosted"),
-    SUBSCRIPTION("Subscription")
+    OPENROUTER("OpenRouter"),
+    XAI("xAI"),
+    GOOGLE("Google")
+
+    ;
+
+    fun defaultBaseUrl(): String? = when (this) {
+        OPENROUTER -> "https://openrouter.ai/api/v1"
+        XAI -> "https://api.x.ai/v1"
+        else -> null
+    }
 }

@@ -3,8 +3,9 @@ package com.browntowndev.pocketcrew.domain.usecase.download
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -15,7 +16,9 @@ import javax.inject.Inject
  */
 class InitializeModelsUseCase @Inject constructor(
     private val modelConfigFetcher: ModelConfigFetcherPort,
-    private val modelRegistry: ModelRegistryPort,
+    private val activeModelProvider: ActiveModelProviderPort,
+    private val syncLocalModelRegistryUseCase: SyncLocalModelRegistryUseCase,
+    private val localModelRepository: com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort,
     private val modelDownloadOrchestrator: ModelDownloadOrchestratorPort,
     private val checkModelsUseCase: CheckModelsUseCase,
     private val logPort: LoggingPort
@@ -37,34 +40,32 @@ class InitializeModelsUseCase @Inject constructor(
      * This allows passing scan results downstream to avoid duplicate scanning.
      */
     private suspend fun checkModelsResult(): DownloadModelsResult {
-        // Get currently active models from registry
-        val currentModels = com.browntowndev.pocketcrew.domain.model.inference.ModelType.entries
-            .associateWith { modelRegistry.getRegisteredAsset(it) }
-            .filterValues { it != null }
-            .mapValues { it.value!! }
-
-        logPort.debug(TAG, "Current active models: ${
-            currentModels.map { (type, asset) -> 
-                "$type: ${asset.metadata.huggingFaceModelName}"
-            }
-        }")
-
         // Fetch remote config
         val remoteConfigResult = modelConfigFetcher.fetchRemoteConfig()
         val remoteConfigs = remoteConfigResult.getOrElse {
             logPort.error(TAG, "Failed to fetch remote config: ${it.message}")
 
+            // If config fetch error occurs, fallback to using current models
+            val currentModels = com.browntowndev.pocketcrew.domain.model.inference.ModelType.entries
+                .associateWith { modelType -> 
+                    val config = activeModelProvider.getActiveConfiguration(modelType)
+                    if (config != null && config.isLocal) {
+                        localModelRepository.getAssetByConfigId(config.id)
+                    } else null
+                }
+                .filterValues { it != null }
+                .mapValues { it.value!! }
+
             // If there are no current models, throw the error
             if (currentModels.isEmpty()) throw it
-
-            // If config fetch error occurs, fallback to using current models
+            
             currentModels
         }
 
         logPort.debug(TAG, "Fetched ${remoteConfigs.size} remote configs")
 
         // Source of truth for soft-deleted models is getSoftDeletedModels()
-        val softDeletedAssets = modelRegistry.getSoftDeletedModels()
+        val softDeletedAssets = localModelRepository.getSoftDeletedModels()
         
         if (softDeletedAssets.isNotEmpty()) {
             logPort.debug(TAG, "Found ${softDeletedAssets.size} soft-deleted models available for re-download: ${
@@ -82,33 +83,35 @@ class InitializeModelsUseCase @Inject constructor(
 
         // Check if models are ready using CheckModelsUseCase
         val modelsResult = checkModelsUseCase(
-            downloadedModels = currentModels,
             expectedModels = filteredRemoteConfigs
         )
 
         // Include soft-deleted models in availableToRedownload ONLY if they are still on remote.
-        val remoteShaSet = remoteConfigs.values.mapTo(mutableSetOf()) { it.metadata.sha256 }
-        val availableSoftDeleted = softDeletedAssets.filter { it.metadata.sha256 in remoteShaSet }
+        val remoteShaMap = remoteConfigs.values.associateBy { it.metadata.sha256 }
+        val availableSoftDeleted = softDeletedAssets
+            .filter { it.metadata.sha256 in remoteShaMap.keys }
+            .map { asset ->
+                val remoteAsset = remoteShaMap[asset.metadata.sha256]!!
+                asset.copy(
+                    metadata = asset.metadata.copy(
+                        source = remoteAsset.metadata.source
+                    )
+                )
+            }
         val availableToRedownload = (modelsResult.availableToRedownload + availableSoftDeleted)
             .distinctBy { it.metadata.sha256 }
 
         // Deferred Activation Strategy:
-        // 1. If remote SHA matches existing: Update registry immediately (tuning-only change).
-        // 2. If remote SHA differs: DO NOT update registry yet. Activation happens after download success.
+        // 1. If physical file is already valid (not in modelsToDownload): Update registry immediately (tuning-only change).
+        // 2. If physical file is missing/invalid: DO NOT update registry yet. Activation happens after download success.
+        
+        val modelsToDownloadShaSet = modelsResult.modelsToDownload.mapTo(mutableSetOf()) { it.metadata.sha256 }
         
         remoteConfigs.forEach { (modelType, remoteAsset) ->
-            val existingAsset = currentModels[modelType]
-            val sharedExistingAsset = currentModels.values.firstOrNull { asset ->
-                asset.metadata.sha256 == remoteAsset.metadata.sha256 &&
-                    asset.metadata.localFileName == remoteAsset.metadata.localFileName &&
-                    asset.metadata.modelFileFormat == remoteAsset.metadata.modelFileFormat
-            }
-
-            if (sharedExistingAsset != null) {
-                // The physical asset is already present locally, either for this slot or another slot
-                // sharing the same file. Apply the slot config immediately instead of waiting for
-                // a download that will never be scheduled.
-                modelRegistry.activateLocalModel(modelType, remoteAsset)
+            if (remoteAsset.metadata.sha256 !in modelsToDownloadShaSet) {
+                // The physical asset is already present locally and valid.
+                // Apply the slot config immediately instead of waiting for a download that will never be scheduled.
+                syncLocalModelRegistryUseCase(modelType, remoteAsset)
                 logPort.debug(TAG, "Applied slot activation for $modelType immediately")
             } else {
                 logPort.debug(TAG, "Deferring registration for $modelType until download success")

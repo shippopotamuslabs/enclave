@@ -1,16 +1,16 @@
 package com.browntowndev.pocketcrew.app
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+
+import android.content.Context
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.pocketcrew.feature.inference.ConversationManagerImpl
 import io.mockk.coEvery
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
-
+import org.junit.jupiter.api.assertThrows
 
 /**
  * Tests for EngineModule model provider behavior.
@@ -19,35 +19,23 @@ import org.junit.jupiter.api.Test
 class EngineModuleTest {
 
     /**
-     * BUG #5: App crashes at startup if DRAFT_ONE/DRAFT_TWO models aren't registered.
-     *
-     * Scenario: User hasn't downloaded DRAFT_ONE or DRAFT_TWO models
-     * Expected: App should handle gracefully (lazy loading or null returns)
-     * Current behavior: Throws IllegalStateException at startup
+     * Verify that ConversationManager throws when no active configuration is registered.
+     * This replaces the old "model registry returns null" test with the new 
+     * ActiveModelProviderPort / LocalModelRepositoryPort logic.
      */
     @Test
-    fun `model registry returns null for unregistered model types`() = runTest {
-        // Mock registry that returns null for DRAFT models
-        val mockRegistry = mockk<ModelRegistryPort>()
-
-        // When DRAFT_ONE is not registered
-        coEvery { mockRegistry.getRegisteredAsset(ModelType.DRAFT_ONE) } returns null
-        coEvery { mockRegistry.getRegisteredAsset(ModelType.DRAFT_TWO) } returns null
-
-        val fastAsset = mockk<LocalModelAsset>()
-        every { fastAsset.metadata } returns mockk {
-            every { localFileName } returns "fast.bin"
+    fun `conversation manager throws when no active configuration exists`() = runTest {
+        val context = mockk<Context>(relaxed = true)
+        val localModelRepository = mockk<LocalModelRepositoryPort>()
+        val activeModelProvider = mockk<ActiveModelProviderPort>()
+        
+        coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns null
+        
+        val manager = ConversationManagerImpl(context, localModelRepository, activeModelProvider)
+        
+        assertThrows<IllegalStateException> {
+            manager.getConversation(ModelType.MAIN, null)
         }
-        coEvery { mockRegistry.getRegisteredAsset(ModelType.FAST) } returns fastAsset
-
-        // Verify null handling
-        val draftOneAsset = mockRegistry.getRegisteredAsset(ModelType.DRAFT_ONE)
-        val draftTwoAsset = mockRegistry.getRegisteredAsset(ModelType.DRAFT_TWO)
-        val fastResult = mockRegistry.getRegisteredAsset(ModelType.FAST)
-
-        assertNull(draftOneAsset, "DRAFT_ONE should return null when not registered")
-        assertNull(draftTwoAsset, "DRAFT_TWO should return null when not registered")
-        assertNotNull(fastResult, "FAST should return asset when registered")
     }
 
     /**

@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.modelconfig
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -12,7 +12,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class SaveLocalModelMetadataUseCaseTest {
-    private val repository = mockk<ModelRegistryPort>()
+    private val repository = mockk<LocalModelRepositoryPort>()
     private lateinit var useCase: SaveLocalModelMetadataUseCase
 
     @BeforeEach

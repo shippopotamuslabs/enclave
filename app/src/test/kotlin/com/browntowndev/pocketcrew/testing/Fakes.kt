@@ -16,7 +16,7 @@ import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -135,46 +135,26 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
     }
 }
 
-class FakeModelRegistry : ModelRegistryPort {
-    private val _assets = MutableStateFlow<Map<ModelType, LocalModelAsset>>(emptyMap())
-    private val _configs = MutableStateFlow<Map<ModelType, LocalModelConfiguration>>(emptyMap())
+class FakeLocalModelRepository : LocalModelRepositoryPort {
+    private val _assets = MutableStateFlow<Map<Long, LocalModelAsset>>(emptyMap())
 
-    override suspend fun getRegisteredAsset(modelType: ModelType): LocalModelAsset? = _assets.value[modelType]
-    override suspend fun getRegisteredConfiguration(modelType: ModelType): LocalModelConfiguration? = _configs.value[modelType]
-    
-    override suspend fun getRegisteredAssets(): List<LocalModelAsset> = _assets.value.values.toList()
-    override suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration> = _configs.value.values.toList()
-
-    override fun observeAsset(modelType: ModelType): Flow<LocalModelAsset?> = _assets.map { it[modelType] }
-    override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> = flowOf(null)
-    override fun observeAssets(): Flow<List<LocalModelAsset>> = flowOf(emptyList())
+    override suspend fun getAllLocalAssets(): List<LocalModelAsset> = _assets.value.values.toList()
+    override fun observeAllLocalAssets(): Flow<List<LocalModelAsset>> = flowOf(emptyList())
+    override suspend fun getAssetByConfigId(configId: Long): LocalModelAsset? = null
 
     override suspend fun clearAll() {}
 
     override suspend fun upsertLocalAsset(asset: LocalModelAsset): Long = asset.metadata.id
     override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): Long = config.id
-    override suspend fun setDefaultLocalConfig(modelType: ModelType, configId: Long) {}
-    override suspend fun activateLocalModel(modelType: ModelType, asset: LocalModelAsset): SlotResolvedLocalModel {
-        val selectedConfig = asset.configurations.firstOrNull()
-            ?: throw IllegalArgumentException("Asset must contain at least one configuration")
-        _assets.value = _assets.value + (modelType to asset)
-        _configs.value = _configs.value + (modelType to selectedConfig)
-        return SlotResolvedLocalModel(modelType, asset, selectedConfig)
-    }
-    override suspend fun getRegisteredSelection(modelType: ModelType): SlotResolvedLocalModel? {
-        val asset = _assets.value[modelType] ?: return null
-        val config = _configs.value[modelType] ?: return null
-        return SlotResolvedLocalModel(modelType, asset, config)
-    }
+    
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long = 0L
     override suspend fun deleteLocalModelMetadata(id: Long) {}
     override suspend fun saveConfiguration(config: LocalModelConfiguration): Long = config.id
     override suspend fun deleteConfiguration(id: Long) {}
 
-    /**
-     * Deletes a model: hard-deletes configs, preserves LocalModelEntity for re-download.
-     */
-    override suspend fun deleteModel(modelId: Long, replacementLocalConfigId: Long?, replacementApiConfigId: Long?): Result<Unit> = Result.success(Unit)
+    override suspend fun getConfigurationById(id: Long): LocalModelConfiguration? = null
+    override suspend fun getAllConfigurationsForAsset(localModelId: Long): List<LocalModelConfiguration> = emptyList()
+    override suspend fun deleteAllConfigurationsForAsset(localModelId: Long) {}
 
     /**
      * Returns models that were previously downloaded but have been soft-deleted.

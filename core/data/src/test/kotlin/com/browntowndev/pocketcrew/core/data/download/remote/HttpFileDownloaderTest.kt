@@ -46,14 +46,12 @@ class HttpFileDownloaderTest {
         )
     }
 
-    private val testHfApiKey = "test_hf_api_key"
-
     @BeforeEach
     fun setup() {
         MockKAnnotations.init(this)
         mockClient = mockk()
         mockLogger = mockk(relaxed = true)
-        httpFileDownloader = HttpFileDownloader(mockClient, mockLogger, testHfApiKey)
+        httpFileDownloader = HttpFileDownloader(mockClient, mockLogger)
     }
 
     // ============ getServerFileSize Tests ============
@@ -74,48 +72,6 @@ class HttpFileDownloaderTest {
 
         // Then: Returns the size from header
         assertEquals(2048L, result)
-    }
-
-    @Test
-    fun getServerFileSize_addsHuggingFaceAuthHeader_whenUrlIsHuggingFace() = kotlinx.coroutines.test.runTest {
-        // Given: A Hugging Face URL
-        val hfUrl = "https://huggingface.co/google/gemma-2b-it/resolve/main/model.gguf"
-        val requestSlot = slot<Request>()
-        val mockCall = mockk<okhttp3.Call>(relaxed = true)
-        val mockResponse = mockk<Response>(relaxed = true)
-
-        every { mockClient.newCall(capture(requestSlot)) } returns mockCall
-        every { mockCall.execute() } returns mockResponse
-        every { mockResponse.isSuccessful } returns true
-        every { mockResponse.header("Content-Length") } returns "2048"
-
-        // When: Get server file size for HF URL
-        httpFileDownloader.getServerFileSize(hfUrl)
-
-        // Then: Request should have Authorization header
-        val authHeader = requestSlot.captured.header("Authorization")
-        assertEquals("Bearer $testHfApiKey", authHeader)
-    }
-
-    @Test
-    fun getServerFileSize_doesNotAddAuthHeader_whenUrlIsHttp() = kotlinx.coroutines.test.runTest {
-        // Given: A Hugging Face URL over plaintext HTTP
-        val hfUrl = "http://huggingface.co/google/gemma-2b-it/resolve/main/model.gguf"
-        val requestSlot = slot<Request>()
-        val mockCall = mockk<okhttp3.Call>(relaxed = true)
-        val mockResponse = mockk<Response>(relaxed = true)
-
-        every { mockClient.newCall(capture(requestSlot)) } returns mockCall
-        every { mockCall.execute() } returns mockResponse
-        every { mockResponse.isSuccessful } returns true
-        every { mockResponse.header("Content-Length") } returns "2048"
-
-        // When: Get server file size for HF URL
-        httpFileDownloader.getServerFileSize(hfUrl)
-
-        // Then: Request should not have Authorization header
-        val authHeader = requestSlot.captured.header("Authorization")
-        assertNull(authHeader)
     }
 
     @Test
@@ -198,11 +154,11 @@ class HttpFileDownloaderTest {
         val existingFile = File(tempDir, "test-model.gguf.tmp")
         existingFile.writeText(existingContent)
 
-        // Provide SHA-256 for just the new content (not the total)
-        // But expectedSizeBytes should be the total after resume completes
+        // Provide SHA-256 for the total content (existing + new)
+        // expectedSizeBytes should be the total after resume completes
         val testConfig = FileDownloaderPort.FileDownloadConfig(
             filename = "test-model.gguf",
-            expectedSha256 = computeSha256(newContent),
+            expectedSha256 = computeSha256(totalContent),
             expectedSizeBytes = totalContent.length.toLong()
         )
 
@@ -228,81 +184,56 @@ class HttpFileDownloaderTest {
             progressCallback = null
         )
 
-        // Then: Result indicates resume
+        // Then: Result indicates resume and content is correct
         assertTrue(result.isResumed)
-    }
-
-    @Test
-    fun downloadFile_addsHuggingFaceAuthHeader_whenUrlIsHuggingFace() = kotlinx.coroutines.test.runTest {
-        // Given: A Hugging Face URL
-        val hfUrl = "https://huggingface.co/google/gemma-2b-it/resolve/main/model.gguf"
-        val testContent = "test"
-        val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
-        val testConfig = createTestConfig(testContent)
-
-        val requestSlot = slot<Request>()
-        val mockCall = mockk<okhttp3.Call>(relaxed = true)
-        val mockResponse = mockk<Response>(relaxed = true)
-        val mockBody = mockk<ResponseBody>(relaxed = true)
-
-        every { mockClient.newCall(capture(requestSlot)) } returns mockCall
-        every { mockCall.execute() } returns mockResponse
-        every { mockResponse.isSuccessful } returns true
-        every { mockResponse.code } returns 200
-        every { mockResponse.body } returns mockBody
-        every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-        every { mockBody.byteStream() } returns contentBytes.inputStream()
-
-        // When: Download from HF URL
-        httpFileDownloader.downloadFile(
-            config = testConfig,
-            downloadUrl = hfUrl,
-            targetDir = tempDir,
-            existingBytes = 0L,
-            progressCallback = null
-        )
-
-        // Then: Request should have Authorization header
-        val authHeader = requestSlot.captured.header("Authorization")
-        assertEquals("Bearer $testHfApiKey", authHeader)
-    }
-
-    @Test
-    fun downloadFile_doesNotAddAuthHeader_whenUrlIsHttp() = kotlinx.coroutines.test.runTest {
-        // Given: A Hugging Face URL over plaintext HTTP
-        val hfUrl = "http://huggingface.co/google/gemma-2b-it/resolve/main/model.gguf"
-        val testContent = "test"
-        val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
-        val testConfig = createTestConfig(testContent)
-
-        val requestSlot = slot<Request>()
-        val mockCall = mockk<okhttp3.Call>(relaxed = true)
-        val mockResponse = mockk<Response>(relaxed = true)
-        val mockBody = mockk<ResponseBody>(relaxed = true)
-
-        every { mockClient.newCall(capture(requestSlot)) } returns mockCall
-        every { mockCall.execute() } returns mockResponse
-        every { mockResponse.isSuccessful } returns true
-        every { mockResponse.code } returns 200
-        every { mockResponse.body } returns mockBody
-        every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-        every { mockBody.byteStream() } returns contentBytes.inputStream()
-
-        // When: Download from HF URL
-        httpFileDownloader.downloadFile(
-            config = testConfig,
-            downloadUrl = hfUrl,
-            targetDir = tempDir,
-            existingBytes = 0L,
-            progressCallback = null
-        )
-
-        // Then: Request should not have Authorization header
-        val authHeader = requestSlot.captured.header("Authorization")
-        assertNull(authHeader)
+        assertEquals(totalContent, result.file.readText())
     }
 
     // ============ downloadFile Error Tests ============
+
+    @Test
+    fun downloadFile_throwsException_andDeletesTempFiles_onSha256Mismatch() = kotlinx.coroutines.test.runTest {
+        // Given: Server returns content that doesn't match expected SHA-256
+        val testContent = "wrong content"
+        val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
+        val testConfig = FileDownloaderPort.FileDownloadConfig(
+            filename = "test-model.gguf",
+            expectedSha256 = "invalid_hash_value_that_doesnt_match",
+            expectedSizeBytes = contentBytes.size.toLong()
+        )
+
+        val mockCall = mockk<okhttp3.Call>(relaxed = true)
+        val mockResponse = mockk<Response>(relaxed = true)
+        val mockBody = mockk<ResponseBody>(relaxed = true)
+
+        every { mockClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns mockResponse
+        every { mockResponse.isSuccessful } returns true
+        every { mockResponse.code } returns 200
+        every { mockResponse.body } returns mockBody
+        every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
+        every { mockBody.byteStream() } returns contentBytes.inputStream()
+
+        // When/Then: Exception is thrown for SHA-256 mismatch
+        try {
+            httpFileDownloader.downloadFile(
+                config = testConfig,
+                downloadUrl = "https://example.com/model.gguf",
+                targetDir = tempDir,
+                existingBytes = 0L,
+                progressCallback = null
+            )
+            throw AssertionError("Expected exception")
+        } catch (e: Exception) {
+            assertTrue(e.message?.contains("SHA-256") == true)
+            
+            // Verify temp and meta files are deleted
+            val tempFile = File(tempDir, "test-model.gguf.tmp")
+            val metaFile = File(tempDir, "test-model.gguf.tmp.meta")
+            assertFalse(tempFile.exists(), "Temp file should be deleted on SHA-256 mismatch")
+            assertFalse(metaFile.exists(), "Meta file should be deleted on SHA-256 mismatch")
+        }
+    }
 
     @Test
     fun downloadFile_throwsException_onHttpError() = kotlinx.coroutines.test.runTest {
@@ -424,6 +355,68 @@ class HttpFileDownloaderTest {
 
         // Then: File is created after retry
         assertTrue(result.file.exists())
+    }
+
+    @Test
+    fun downloadFile_retriesFromStart_andDeletesTempFiles_onSha256Mismatch() = kotlinx.coroutines.test.runTest {
+        // Given: Server returns 416 (Range not satisfiable), indicating stale temp file
+        val testContent = "wrong content after retry"
+        val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
+        val testConfig = FileDownloaderPort.FileDownloadConfig(
+            filename = "test-model.gguf",
+            expectedSha256 = "invalid_hash_value_that_doesnt_match",
+            expectedSizeBytes = contentBytes.size.toLong()
+        )
+
+        // First call returns 416
+        val mockCall416 = mockk<okhttp3.Call>(relaxed = true)
+        val mockResponse416 = mockk<Response>(relaxed = true)
+
+        every { mockClient.newCall(any()) } returns mockCall416
+        every { mockCall416.execute() } returns mockResponse416
+        every { mockResponse416.code } returns 416
+
+        // Need to capture both calls to handle the retry
+        val callSlot = slot<Request>()
+        every { mockClient.newCall(capture(callSlot)) } answers {
+            val mockCall = mockk<okhttp3.Call>(relaxed = true)
+            val mockResponse = mockk<Response>(relaxed = true)
+            val mockBody = mockk<ResponseBody>(relaxed = true)
+
+            if (callSlot.captured.header("Range") != null) {
+                // First call with Range header - return 416
+                every { mockCall.execute() } returns mockResponse416
+            } else {
+                // Retry without Range - return success but with wrong content
+                every { mockCall.execute() } returns mockResponse
+                every { mockResponse.isSuccessful } returns true
+                every { mockResponse.code } returns 200
+                every { mockResponse.body } returns mockBody
+                every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
+                every { mockBody.byteStream() } returns contentBytes.inputStream()
+            }
+            mockCall
+        }
+
+        // When/Then: Exception is thrown for SHA-256 mismatch
+        try {
+            httpFileDownloader.downloadFile(
+                config = testConfig,
+                downloadUrl = "https://example.com/model.gguf",
+                targetDir = tempDir,
+                existingBytes = 100L, // Try to resume with existing bytes
+                progressCallback = null
+            )
+            throw AssertionError("Expected exception")
+        } catch (e: Exception) {
+            assertTrue(e.message?.contains("SHA-256") == true)
+            
+            // Verify temp and meta files are deleted
+            val tempFile = File(tempDir, "test-model.gguf.tmp")
+            val metaFile = File(tempDir, "test-model.gguf.tmp.meta")
+            assertFalse(tempFile.exists(), "Temp file should be deleted on SHA-256 mismatch in retry")
+            assertFalse(metaFile.exists(), "Meta file should be deleted on SHA-256 mismatch in retry")
+        }
     }
 
     // ============ Progress Callback Tests ============

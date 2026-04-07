@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.core.data.download.remote
 
-import com.browntowndev.pocketcrew.core.data.BuildConfig
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -20,8 +19,7 @@ import javax.inject.Inject
 
 class HttpFileDownloader @Inject constructor(
     private val okHttpClient: OkHttpClient,
-    private val logger: LoggingPort,
-    private val hfApiKey: String = BuildConfig.HUGGING_FACE_API_KEY
+    private val logger: LoggingPort
 ) : FileDownloaderPort {
 
     companion object {
@@ -42,16 +40,15 @@ class HttpFileDownloader @Inject constructor(
         val filename = config.filename
         val targetFile = File(targetDir, filename)
         val tempFile = File(targetDir, "$filename${ModelConfig.TEMP_EXTENSION}")
+        val metaFile = File(targetDir, "$filename${ModelConfig.TEMP_META_EXTENSION}")
+
+        metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
 
         val request = Request.Builder()
             .url(downloadUrl)
             .apply {
                 if (existingBytes > 0) {
                     addHeader("Range", "bytes=$existingBytes-")
-                }
-                // Add HF Auth token if it's a HF URL
-                if (isHuggingFaceUrl(downloadUrl) && hfApiKey.isNotEmpty()) {
-                    addHeader("Authorization", "Bearer $hfApiKey")
                 }
             }
             .build()
@@ -63,14 +60,9 @@ class HttpFileDownloader @Inject constructor(
                     "HTTP 416 for $filename: Range not satisfiable. Deleting temp files and restarting."
                 )
                 tempFile.delete()
+                metaFile.delete()
                 val retryRequest = Request.Builder()
                     .url(downloadUrl)
-                    .apply {
-                        // Add HF Auth token if it's a HF URL
-                        if (isHuggingFaceUrl(downloadUrl) && hfApiKey.isNotEmpty()) {
-                            addHeader("Authorization", "Bearer $hfApiKey")
-                        }
-                    }
                     .build()
                 return@withContext downloadWithRetry(retryRequest, config, downloadUrl, targetDir, progressCallback)
             }
@@ -104,8 +96,23 @@ class HttpFileDownloader @Inject constructor(
 
             var totalBytesRead = actualExistingBytes
 
-            // Create SHA-256 digest for streaming validation
             val digest = MessageDigest.getInstance("SHA-256")
+
+            // If resuming, seed the digest with existing bytes from the temp file
+            if (isResuming && actualExistingBytes > 0 && tempFile.exists()) {
+                tempFile.inputStream().use { fis ->
+                    val buffer = ByteArray(8192)
+                    var bytesRead: Int
+                    var totalRead = 0L
+                    while (totalRead < actualExistingBytes) {
+                        val toRead = minOf(buffer.size.toLong(), actualExistingBytes - totalRead).toInt()
+                        bytesRead = fis.read(buffer, 0, toRead)
+                        if (bytesRead == -1) break
+                        digest.update(buffer, 0, bytesRead)
+                        totalRead += bytesRead
+                    }
+                }
+            }
 
             // Use FileChannel with force(true) for atomic write+flush to disk
             val channel = FileChannel.open(
@@ -116,9 +123,7 @@ class HttpFileDownloader @Inject constructor(
             )
 
             try {
-                // Wrap input stream with DigestInputStream for streaming SHA-256
-                val digestInputStream = DigestInputStream(body.byteStream(), digest)
-                digestInputStream.use { inputStream ->
+                DigestInputStream(body.byteStream(), digest).use { inputStream ->
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
 
@@ -134,19 +139,20 @@ class HttpFileDownloader @Inject constructor(
                         progressCallback?.onProgress(totalBytesRead, actualTotalSize.coerceAtLeast(config.expectedSizeBytes))
                     }
                 }
-
-                // Verify SHA-256 hash after download completes
-                val computedHash = digest.digest().joinToString("") { "%02x".format(it) }.lowercase()
-                val expectedHash = config.expectedSha256.lowercase()
-                if (computedHash != expectedHash) {
-                    logger.error(TAG, "SHA-256 mismatch for ${config.filename}. Expected: $expectedHash, Got: $computedHash")
-                    tempFile.delete()
-                    throw IOException("SHA-256 hash mismatch after download")
-                }
-                logger.info(TAG, "SHA-256 verified for ${config.filename}")
             } finally {
                 channel.close()
             }
+
+            // Verify SHA-256 hash after download completes
+            val computedHash = digest.digest().joinToString("") { "%02x".format(it) }
+            val expectedHash = config.expectedSha256.lowercase()
+            if (computedHash != expectedHash) {
+                logger.error(TAG, "SHA-256 mismatch for ${config.filename}. Expected: $expectedHash, Got: $computedHash")
+                tempFile.delete()
+                metaFile.delete()
+                throw IOException("SHA-256 hash mismatch after download")
+            }
+            logger.info(TAG, "SHA-256 verified for ${config.filename}")
 
             if (totalBytesRead != config.expectedSizeBytes) {
                 logger.error(TAG, "[MISMATCHED FILE SIZE] Download failed for ${config.filename}")
@@ -168,6 +174,8 @@ class HttpFileDownloader @Inject constructor(
                 if (tempFile.exists()) {
                     throw Exception("Failed to rename downloaded file to target location")
                 }
+            } else {
+                metaFile.delete()
             }
 
             FileDownloaderPort.DownloadResult(
@@ -189,6 +197,9 @@ class HttpFileDownloader @Inject constructor(
         val filename = config.filename
         val targetFile = File(targetDir, filename)
         val tempFile = File(targetDir, "$filename${ModelConfig.TEMP_EXTENSION}")
+        val metaFile = File(targetDir, "$filename${ModelConfig.TEMP_META_EXTENSION}")
+
+        metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
 
         okHttpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
@@ -213,8 +224,6 @@ class HttpFileDownloader @Inject constructor(
             logger.info(TAG, "[SIZE] Non-resume path - Using: $actualTotalSize")
 
             var totalBytesRead = 0L
-
-            // Create SHA-256 digest for streaming validation
             val digest = MessageDigest.getInstance("SHA-256")
 
             val channel = FileChannel.open(
@@ -224,9 +233,7 @@ class HttpFileDownloader @Inject constructor(
             )
 
             try {
-                // Wrap input stream with DigestInputStream for streaming SHA-256
-                val digestInputStream = DigestInputStream(body.byteStream(), digest)
-                digestInputStream.use { inputStream ->
+                DigestInputStream(body.byteStream(), digest).use { inputStream ->
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
 
@@ -242,19 +249,20 @@ class HttpFileDownloader @Inject constructor(
                         progressCallback?.onProgress(totalBytesRead, actualTotalSize)
                     }
                 }
-
-                // Verify SHA-256 hash after download completes
-                val computedHash = digest.digest().joinToString("") { "%02x".format(it) }.lowercase()
-                val expectedHash = config.expectedSha256.lowercase()
-                if (computedHash != expectedHash) {
-                    logger.error(TAG, "SHA-256 mismatch for ${config.filename}. Expected: $expectedHash, Got: $computedHash")
-                    tempFile.delete()
-                    throw IOException("SHA-256 hash mismatch after download")
-                }
-                logger.info(TAG, "SHA-256 verified for ${config.filename}")
             } finally {
                 channel.close()
             }
+
+            // Verify SHA-256 hash after download completes
+            val computedHash = digest.digest().joinToString("") { "%02x".format(it) }
+            val expectedHash = config.expectedSha256.lowercase()
+            if (computedHash != expectedHash) {
+                logger.error(TAG, "SHA-256 mismatch for ${config.filename}. Expected: $expectedHash, Got: $computedHash")
+                tempFile.delete()
+                metaFile.delete()
+                throw IOException("SHA-256 hash mismatch after download")
+            }
+            logger.info(TAG, "SHA-256 verified for ${config.filename}")
 
             // Rename temp file to target file
             if (targetFile.exists()) {
@@ -267,6 +275,8 @@ class HttpFileDownloader @Inject constructor(
                 if (tempFile.exists()) {
                     throw Exception("Failed to rename downloaded file to target location")
                 }
+            } else {
+                metaFile.delete()
             }
 
             FileDownloaderPort.DownloadResult(
@@ -283,12 +293,6 @@ class HttpFileDownloader @Inject constructor(
             val request = Request.Builder()
                 .url(url)
                 .head()
-                .apply {
-                    // Add HF Auth token if it's a HF URL
-                    if (isHuggingFaceUrl(url) && hfApiKey.isNotEmpty()) {
-                        addHeader("Authorization", "Bearer $hfApiKey")
-                    }
-                }
                 .build()
 
             okHttpClient.newCall(request).execute().use { response ->
@@ -300,19 +304,6 @@ class HttpFileDownloader @Inject constructor(
             }
         } catch (e: Exception) {
             null
-        }
-    }
-
-    private fun isHuggingFaceUrl(urlString: String): Boolean {
-        return try {
-            val url = URL(urlString)
-            if (!url.protocol.equals("https", ignoreCase = true)) {
-                return false
-            }
-            val host = url.host.lowercase()
-            host == "huggingface.co" || host.endsWith(".huggingface.co")
-        } catch (e: Exception) {
-            false
         }
     }
 }

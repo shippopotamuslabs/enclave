@@ -16,6 +16,7 @@ object ModelConfig {
     // Directory names
     const val MODELS_DIR = "models"
     const val TEMP_EXTENSION = ".tmp"
+    const val TEMP_META_EXTENSION = ".tmp.meta"
 
     /**
      * WorkManager tag for model download work

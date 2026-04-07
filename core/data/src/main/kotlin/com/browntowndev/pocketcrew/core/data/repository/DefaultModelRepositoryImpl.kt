@@ -29,8 +29,21 @@ class DefaultModelRepositoryImpl @Inject constructor(
     }
 
     override fun observeDefaults(): Flow<List<DefaultModelAssignment>> {
-        return defaultModelsDao.observeAll().map { entities ->
-            entities.map { resolveAssignment(it) }
+        return defaultModelsDao.observeAllWithDetails().map { views ->
+            views.map { view ->
+                val displayName = if (view.localConfigId != null) view.localAssetName else view.apiAssetName
+                val presetName = if (view.localConfigId != null) view.localPresetName else view.apiPresetName
+                val providerName = if (view.localConfigId != null) "Local" else view.apiProviderName?.displayName
+
+                DefaultModelAssignment(
+                    modelType = view.modelType,
+                    localConfigId = view.localConfigId,
+                    apiConfigId = view.apiConfigId,
+                    displayName = displayName,
+                    presetName = presetName,
+                    providerName = providerName
+                )
+            }
         }
     }
 

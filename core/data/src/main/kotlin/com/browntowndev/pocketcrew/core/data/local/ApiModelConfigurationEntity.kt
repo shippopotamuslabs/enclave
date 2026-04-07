@@ -60,6 +60,24 @@ data class ApiModelConfigurationEntity(
     @ColumnInfo(name = "system_prompt")
     val systemPrompt: String = "",
 
+    @ColumnInfo(name = "reasoning_effort")
+    val reasoningEffort: String? = null,
+
+    @ColumnInfo(name = "openrouter_provider_sort")
+    val openRouterProviderSort: String? = null,
+
+    @ColumnInfo(name = "openrouter_allow_fallbacks")
+    val openRouterAllowFallbacks: Boolean? = null,
+
+    @ColumnInfo(name = "openrouter_require_parameters")
+    val openRouterRequireParameters: Boolean? = null,
+
+    @ColumnInfo(name = "openrouter_data_collection")
+    val openRouterDataCollectionPolicy: String? = null,
+
+    @ColumnInfo(name = "openrouter_zdr")
+    val openRouterZeroDataRetention: Boolean? = null,
+
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis()
 )

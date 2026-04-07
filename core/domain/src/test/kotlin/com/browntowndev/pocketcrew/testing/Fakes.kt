@@ -35,7 +35,7 @@ import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestrato
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelRegistryPort
+import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -205,51 +205,28 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
     }
 }
 
-class FakeModelRegistry : ModelRegistryPort {
-    private val _assets = MutableStateFlow<Map<ModelType, LocalModelAsset>>(emptyMap())
-    private val _configs = MutableStateFlow<Map<ModelType, LocalModelConfiguration>>(emptyMap())
+class FakeLocalModelRepository : LocalModelRepositoryPort {
+    private val _assets = MutableStateFlow<Map<Long, LocalModelAsset>>(emptyMap())
 
     fun registerAsset(modelType: ModelType, asset: LocalModelAsset) {
-        _assets.value = _assets.value + (modelType to asset)
-        if (asset.configurations.isNotEmpty()) {
-            _configs.value = _configs.value + (modelType to asset.configurations.first())
-        }
+        _assets.value = _assets.value + (asset.metadata.id to asset)
     }
 
     fun clearModels() {
         _assets.value = emptyMap()
-        _configs.value = emptyMap()
     }
 
-    override suspend fun getRegisteredAsset(modelType: ModelType): LocalModelAsset? = _assets.value[modelType]
-    override suspend fun getRegisteredConfiguration(modelType: ModelType): LocalModelConfiguration? =
-        _configs.value[modelType]
-
-    override suspend fun getRegisteredAssets(): List<LocalModelAsset> = _assets.value.values.toList()
-    override suspend fun getRegisteredConfigurations(): List<LocalModelConfiguration> = _configs.value.values.toList()
-    override fun observeAsset(modelType: ModelType): Flow<LocalModelAsset?> = _assets.map { it[modelType] }
-    override fun observeConfiguration(modelType: ModelType): Flow<LocalModelConfiguration?> = flowOf(null)
-    override fun observeAssets(): Flow<List<LocalModelAsset>> = flowOf(emptyList())
+    override suspend fun getAllLocalAssets(): List<LocalModelAsset> = _assets.value.values.toList()
+    override fun observeAllLocalAssets(): Flow<List<LocalModelAsset>> = flowOf(emptyList())
+    override suspend fun getAssetByConfigId(configId: Long): LocalModelAsset? = null
 
     override suspend fun clearAll() { clearModels() }
 
     override suspend fun upsertLocalAsset(asset: LocalModelAsset): Long = asset.metadata.id
     override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): Long = config.id
-    override suspend fun setDefaultLocalConfig(modelType: ModelType, configId: Long) {}
-    override suspend fun activateLocalModel(modelType: ModelType, asset: LocalModelAsset): SlotResolvedLocalModel {
-        val selectedConfig = asset.configurations.firstOrNull()
-            ?: throw IllegalArgumentException("Asset must contain at least one configuration")
-        _assets.value = _assets.value + (modelType to asset)
-        _configs.value = _configs.value + (modelType to selectedConfig)
-        return SlotResolvedLocalModel(modelType, asset, selectedConfig)
-    }
-    override suspend fun getRegisteredSelection(modelType: ModelType): SlotResolvedLocalModel? {
-        val asset = _assets.value[modelType] ?: return null
-        val config = _configs.value[modelType] ?: return null
-        return SlotResolvedLocalModel(modelType, asset, config)
-    }
+
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long = 0L
-    override suspend fun deleteModel(modelId: Long, replacementLocalConfigId: Long?, replacementApiConfigId: Long?): Result<Unit> = Result.success(Unit)
+
     override suspend fun deleteLocalModelMetadata(id: Long) {
         val entryToDelete = _assets.value.entries.find { it.value.metadata.id == id }
         if (entryToDelete != null) {
@@ -257,19 +234,28 @@ class FakeModelRegistry : ModelRegistryPort {
         }
     }
 
+    private val _configs = MutableStateFlow<Map<Long, LocalModelConfiguration>>(emptyMap())
+
     override suspend fun saveConfiguration(config: LocalModelConfiguration): Long {
-        val modelType = _assets.value.entries.find { it.value.metadata.id == config.localModelId }?.key
-        if (modelType != null) {
-            _configs.value = _configs.value + (modelType to config)
-        }
+        _configs.value = _configs.value + (config.id to config)
         return config.id
     }
 
     override suspend fun deleteConfiguration(id: Long) {
-        val entryToDelete = _configs.value.entries.find { it.value.id == id }
-        if (entryToDelete != null) {
-            _configs.value = _configs.value - entryToDelete.key
-        }
+        _configs.value = _configs.value - id
+    }
+
+    override suspend fun getConfigurationById(id: Long): LocalModelConfiguration? {
+        return _configs.value[id]
+    }
+
+    override suspend fun getAllConfigurationsForAsset(localModelId: Long): List<LocalModelConfiguration> {
+        return _configs.value.values.filter { it.localModelId == localModelId }
+    }
+
+    override suspend fun deleteAllConfigurationsForAsset(localModelId: Long) {
+        val keysToRemove = _configs.value.entries.filter { it.value.localModelId == localModelId }.map { it.key }
+        _configs.value = _configs.value - keysToRemove.toSet()
     }
 
     override suspend fun getSoftDeletedModels(): List<LocalModelAsset> = emptyList()
