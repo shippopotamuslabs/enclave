@@ -17,26 +17,26 @@ import org.junit.jupiter.api.assertThrows
  * These tests verify fixes for Bug #5 (model registration crash on missing models).
  */
 class EngineModuleTest {
-
     /**
      * Verify that ConversationManager throws when no active configuration is registered.
-     * This replaces the old "model registry returns null" test with the new 
+     * This replaces the old "model registry returns null" test with the new
      * ActiveModelProviderPort / LocalModelRepositoryPort logic.
      */
     @Test
-    fun `conversation manager throws when no active configuration exists`() = runTest {
-        val context = mockk<Context>(relaxed = true)
-        val localModelRepository = mockk<LocalModelRepositoryPort>()
-        val activeModelProvider = mockk<ActiveModelProviderPort>()
-        
-        coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns null
-        
-        val manager = ConversationManagerImpl(context, localModelRepository, activeModelProvider)
-        
-        assertThrows<IllegalStateException> {
-            manager.getConversation(ModelType.MAIN, null)
+    fun `conversation manager throws when no active configuration exists`() =
+        runTest {
+            val context = mockk<Context>(relaxed = true)
+            val localModelRepository = mockk<LocalModelRepositoryPort>()
+            val activeModelProvider = mockk<ActiveModelProviderPort>()
+
+            coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns null
+
+            val manager = ConversationManagerImpl(context, localModelRepository, activeModelProvider)
+
+            assertThrows<IllegalStateException> {
+                manager.getConversation(ModelType.MAIN, null)
+            }
         }
-    }
 
     /**
      * Verify that ModelType enum has all expected pipeline model types.

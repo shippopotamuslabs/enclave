@@ -3,26 +3,21 @@ package com.browntowndev.pocketcrew.testing
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
-import com.browntowndev.pocketcrew.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
-import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOf
 
 class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
@@ -52,19 +47,25 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
         _downloadState.value = _downloadState.value.copy(status = status)
     }
 
-    fun emitProgress(progress: Float, modelsComplete: Int = 0, modelsTotal: Int = 0) {
-        _downloadState.value = _downloadState.value.copy(
-            overallProgress = progress,
-            modelsComplete = modelsComplete,
-            modelsTotal = modelsTotal
-        )
+    fun emitProgress(
+        progress: Float,
+        modelsComplete: Int = 0,
+        modelsTotal: Int = 0,
+    ) {
+        _downloadState.value =
+            _downloadState.value.copy(
+                overallProgress = progress,
+                modelsComplete = modelsComplete,
+                modelsTotal = modelsTotal,
+            )
     }
 
     fun emitError(message: String) {
-        _downloadState.value = _downloadState.value.copy(
-            status = DownloadStatus.ERROR,
-            errorMessage = message
-        )
+        _downloadState.value =
+            _downloadState.value.copy(
+                status = DownloadStatus.ERROR,
+                errorMessage = message,
+            )
     }
 
     fun emitCurrentDownloads(downloads: List<FileProgress>) {
@@ -79,32 +80,39 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
 
     override fun initializeWithStartupResult(result: DownloadModelsResult) {
         _lastModelsResult = result
-        _downloadState.value = when {
-            result.modelsToDownload.isEmpty() -> DownloadState(status = DownloadStatus.READY)
-            else -> DownloadState(status = DownloadStatus.IDLE)
-        }
+        _downloadState.value =
+            when {
+                result.modelsToDownload.isEmpty() -> DownloadState(status = DownloadStatus.READY)
+                else -> DownloadState(status = DownloadStatus.IDLE)
+            }
     }
 
-    override suspend fun startDownloads(modelsResult: DownloadModelsResult, wifiOnly: Boolean): Boolean {
+    override suspend fun startDownloads(
+        modelsResult: DownloadModelsResult,
+        wifiOnly: Boolean,
+    ): Boolean {
         _lastStartDownloadsParams = modelsResult to wifiOnly
         _lastModelsResult = modelsResult
-        _downloadState.value = DownloadState(
-            status = DownloadStatus.DOWNLOADING,
-            modelsTotal = modelsResult.modelsToDownload.size
-        )
+        _downloadState.value =
+            DownloadState(
+                status = DownloadStatus.DOWNLOADING,
+                modelsTotal = modelsResult.modelsToDownload.size,
+            )
         return true
     }
 
     override suspend fun startDownloads(wifiOnly: Boolean): Boolean {
-        val modelsResult = _lastModelsResult ?: DownloadModelsResult(
-            modelsToDownload = emptyList(),
-            allModels = emptyMap(),
-            scanResult = ModelScanResult(
-                missingModels = emptyList(),
-                partialDownloads = emptyMap(),
-                allValid = true
+        val modelsResult =
+            _lastModelsResult ?: DownloadModelsResult(
+                modelsToDownload = emptyList(),
+                allModels = emptyMap(),
+                scanResult =
+                    ModelScanResult(
+                        missingModels = emptyList(),
+                        partialDownloads = emptyMap(),
+                        allValid = true,
+                    ),
             )
-        )
         return startDownloads(modelsResult, wifiOnly)
     }
 
@@ -136,24 +144,32 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
 }
 
 class FakeLocalModelRepository : LocalModelRepositoryPort {
-    private val _assets = MutableStateFlow<Map<Long, LocalModelAsset>>(emptyMap())
+    private val assetsFlow = MutableStateFlow<Map<Long, LocalModelAsset>>(emptyMap())
 
-    override suspend fun getAllLocalAssets(): List<LocalModelAsset> = _assets.value.values.toList()
+    override suspend fun getAllLocalAssets(): List<LocalModelAsset> = assetsFlow.value.values.toList()
+
     override fun observeAllLocalAssets(): Flow<List<LocalModelAsset>> = flowOf(emptyList())
+
     override suspend fun getAssetByConfigId(configId: Long): LocalModelAsset? = null
 
     override suspend fun clearAll() {}
 
     override suspend fun upsertLocalAsset(asset: LocalModelAsset): Long = asset.metadata.id
+
     override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): Long = config.id
-    
+
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long = 0L
+
     override suspend fun deleteLocalModelMetadata(id: Long) {}
+
     override suspend fun saveConfiguration(config: LocalModelConfiguration): Long = config.id
+
     override suspend fun deleteConfiguration(id: Long) {}
 
     override suspend fun getConfigurationById(id: Long): LocalModelConfiguration? = null
+
     override suspend fun getAllConfigurationsForAsset(localModelId: Long): List<LocalModelConfiguration> = emptyList()
+
     override suspend fun deleteAllConfigurationsForAsset(localModelId: Long) {}
 
     /**
@@ -170,28 +186,59 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
      * @param id The LocalModelEntity database ID
      * @return The LocalModelAsset if found, null otherwise
      */
-    override suspend fun getAssetById(id: Long): LocalModelAsset? {
-        return _assets.value.values.find { it.metadata.id == id }
-    }
+    override suspend fun getAssetById(id: Long): LocalModelAsset? = assetsFlow.value.values.find { it.metadata.id == id }
 }
 
 class FakeLoggingPort : LoggingPort {
-    override fun debug(tag: String, message: String) {}
-    override fun info(tag: String, message: String) {}
-    override fun warning(tag: String, message: String) {}
-    override fun error(tag: String, message: String, throwable: Throwable?) {}
-    override fun recordException(tag: String, message: String, throwable: Throwable) {}
+    override fun debug(
+        tag: String,
+        message: String,
+    ) {}
+
+    override fun info(
+        tag: String,
+        message: String,
+    ) {}
+
+    override fun warning(
+        tag: String,
+        message: String,
+    ) {}
+
+    override fun error(
+        tag: String,
+        message: String,
+        throwable: Throwable?,
+    ) {}
+
+    override fun recordException(
+        tag: String,
+        message: String,
+        throwable: Throwable,
+    ) {}
 }
 
 class FakeSpeedTracker : DownloadSpeedTrackerPort {
-    override fun calculateSpeedAndEta(filename: String, bytesDownloaded: Long, totalSize: Long): Pair<Double, Long> = 0.0 to -1L
-    override fun calculateAggregateSpeedAndEta(totalBytesDownloaded: Long, totalSize: Long): Pair<Double, Long> = 0.0 to -1L
-    override fun formatEta(seconds: Long): String = when {
-        seconds < 0 -> "Calculating..."
-        seconds < 60 -> "< 1 min"
-        seconds < 3600 -> "${seconds / 60} min"
-        else -> "${seconds / 3600.0} hours"
-    }
+    override fun calculateSpeedAndEta(
+        filename: String,
+        bytesDownloaded: Long,
+        totalSize: Long,
+    ): Pair<Double, Long> = 0.0 to -1L
+
+    override fun calculateAggregateSpeedAndEta(
+        totalBytesDownloaded: Long,
+        totalSize: Long,
+    ): Pair<Double, Long> = 0.0 to -1L
+
+    override fun formatEta(seconds: Long): String =
+        when {
+            seconds < 0 -> "Calculating..."
+            seconds < 60 -> "< 1 min"
+            seconds < 3600 -> "${seconds / 60} min"
+            else -> "${seconds / 3600.0} hours"
+        }
+
     override fun clear(filename: String) { /* no-op */ }
+
     override fun clearAll() { /* no-op */ }
 }

@@ -37,5 +37,7 @@ abstract class ModelConfigUseCasesModule {
 
     @Binds
     @Singleton
-    abstract fun bindDeleteLocalModelConfigurationUseCase(impl: DeleteLocalModelConfigurationUseCaseImpl): DeleteLocalModelConfigurationUseCase
+    abstract fun bindDeleteLocalModelConfigurationUseCase(
+        impl: DeleteLocalModelConfigurationUseCaseImpl,
+    ): DeleteLocalModelConfigurationUseCase
 }

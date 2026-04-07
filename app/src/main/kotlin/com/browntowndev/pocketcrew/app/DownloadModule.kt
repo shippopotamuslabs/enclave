@@ -9,25 +9,18 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
-
 @Module
 @InstallIn(SingletonComponent::class)
 object DownloadModule {
-
     @Provides
     @Singleton
-    fun provideModelConfig(): ModelConfig {
-        return ModelConfig
-    }
+    fun provideModelConfig(): ModelConfig = ModelConfig
 }
 
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class DownloadPortModule {
-
     @Binds
     @Singleton
-    abstract fun bindModelConfigProvider(
-        modelConfigProviderImpl: ModelConfigProviderImpl
-    ): ModelConfigProvider
+    abstract fun bindModelConfigProvider(modelConfigProviderImpl: ModelConfigProviderImpl): ModelConfigProvider
 }

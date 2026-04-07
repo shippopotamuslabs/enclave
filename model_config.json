@@ -12,7 +12,7 @@
     "topP": 1.0,
     "minP": 0.05,
     "repetitionPenalty": 1.0,
-    "contextWindow": 16384,
+    "contextWindow": 4096,
     "maxTokens": 2048,
     "thinkingEnabled": false,
     "visionCapable": true
@@ -30,7 +30,7 @@
     "topP": 0.92,
     "minP": 0.1,
     "repetitionPenalty": 1.05,
-    "contextWindow": 16384,
+    "contextWindow": 4096,
     "maxTokens": 4096,
     "thinkingEnabled": true
   },
@@ -47,7 +47,7 @@
     "topP": 0.78,
     "minP": 0.1,
     "repetitionPenalty": 1.05,
-    "contextWindow": 16384,
+    "contextWindow": 4096,
     "maxTokens": 4096,
     "thinkingEnabled": true
   },
@@ -64,7 +64,7 @@
     "topP": 0.95,
     "minP": 0.05,
     "repetitionPenalty": 1.1,
-    "contextWindow": 16384,
+    "contextWindow": 12288,
     "maxTokens": 4096,
     "thinkingEnabled": true
   },
@@ -81,7 +81,7 @@
     "topP": 0.92,
     "minP": 0.05,
     "repetitionPenalty": 1.05,
-    "contextWindow": 16384,
+    "contextWindow": 8192,
     "maxTokens": 4096,
     "thinkingEnabled": true
   },
@@ -98,7 +98,7 @@
     "topP": 0.9,
     "minP": 0.07,
     "repetitionPenalty": 1.05,
-    "contextWindow": 16384,
+    "contextWindow": 4096,
     "maxTokens": 4096,
     "thinkingEnabled": false
   },
@@ -115,7 +115,7 @@
     "topP": 0.9,
     "minP": 0.1,
     "repetitionPenalty": 1.05,
-    "contextWindow": 16384,
+    "contextWindow": 8192,
     "maxTokens": 6144,
     "thinkingEnabled": true
   },
@@ -132,7 +132,7 @@
     "topP": 0.85,
     "minP": 0.08,
     "repetitionPenalty": 1.05,
-    "contextWindow": 16384,
+    "contextWindow": 8192,
     "maxTokens": 6144,
     "thinkingEnabled": false
   }
