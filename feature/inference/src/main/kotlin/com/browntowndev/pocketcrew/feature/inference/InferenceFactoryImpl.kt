@@ -16,9 +16,12 @@ import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPo
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
+import com.browntowndev.pocketcrew.feature.inference.llama.GpuProfiler
+import com.browntowndev.pocketcrew.feature.inference.llama.LlamaBackend
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -30,15 +33,25 @@ class MediaPipeInferenceServiceFactory @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val activeModelProvider: ActiveModelProviderPort,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
+    private val gpuProfiler: GpuProfiler,
 ) {
-    fun create(modelPath: String, modelType: ModelType): LlmInferencePort {
-        val options = com.google.mediapipe.tasks.genai.llminference.LlmInference.LlmInferenceOptions.builder()
+    suspend fun create(modelPath: String, modelType: ModelType): LlmInferencePort {
+        val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
+        val contextWindow = activeConfig?.contextWindow ?: activeConfig?.maxTokens ?: 16384
+        val detectedBackend = gpuProfiler.detectOptimalBackend()
+        val preferredBackend = if (detectedBackend != LlamaBackend.CPU) {
+            LlmInference.Backend.GPU
+        } else {
+            LlmInference.Backend.CPU
+        }
+
+        val options = LlmInference.LlmInferenceOptions.builder()
             .setModelPath(modelPath)
-            .setMaxTokens(16384)
-            .setPreferredBackend(com.google.mediapipe.tasks.genai.llminference.LlmInference.Backend.GPU)
+            .setMaxTokens(contextWindow)
+            .setPreferredBackend(preferredBackend)
             .build()
         return MediaPipeInferenceServiceImpl(
-            LlmInferenceWrapper(com.google.mediapipe.tasks.genai.llminference.LlmInference.createFromOptions(context, options)),
+            LlmInferenceWrapper(LlmInference.createFromOptions(context, options)),
             modelType,
             activeModelProvider,
             processThinkingTokens,

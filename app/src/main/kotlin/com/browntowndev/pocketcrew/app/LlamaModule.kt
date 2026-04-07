@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.app
 
 import com.browntowndev.pocketcrew.domain.port.inference.LlamaEnginePort
+import com.browntowndev.pocketcrew.feature.inference.llama.GpuProfiler
 import com.browntowndev.pocketcrew.feature.inference.llama.JniLlamaEngine
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import dagger.Module
@@ -17,7 +18,6 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object LlamaDispatchersModule {
-
     @Provides
     @Singleton
     fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
@@ -32,18 +32,12 @@ object LlamaDispatchersModule {
 @Module
 @InstallIn(SingletonComponent::class)
 object LlamaEngineModule {
-
     @Provides
     fun provideLlamaEngine(
-        ioDispatcher: CoroutineDispatcher
-    ): LlamaEnginePort {
-        return JniLlamaEngine(ioDispatcher)
-    }
+        gpuProfiler: GpuProfiler,
+        ioDispatcher: CoroutineDispatcher,
+    ): LlamaEnginePort = JniLlamaEngine(gpuProfiler, ioDispatcher)
 
     @Provides
-    fun provideLlamaChatSessionManager(
-        engine: LlamaEnginePort
-    ): LlamaChatSessionManager {
-        return LlamaChatSessionManager(engine)
-    }
+    fun provideLlamaChatSessionManager(engine: LlamaEnginePort): LlamaChatSessionManager = LlamaChatSessionManager(engine)
 }

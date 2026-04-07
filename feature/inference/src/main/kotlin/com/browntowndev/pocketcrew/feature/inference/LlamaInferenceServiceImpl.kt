@@ -53,7 +53,6 @@ class LlamaInferenceServiceImpl @Inject constructor(
         val topK: Int,
         val topP: Float,
         val maxTokens: Int,
-        val historyFingerprint: Int,
     )
 
     private var currentSignature: SessionSignature? = null
@@ -96,10 +95,11 @@ class LlamaInferenceServiceImpl @Inject constructor(
             topK = targetTopK,
             topP = targetTopP,
             maxTokens = targetMaxTokens,
-            historyFingerprint = history.hashCode(),
         )
 
         if (isInitialized && currentSignature == newSignature) {
+            // Only update history if the model/options haven't changed
+            sessionManager.setHistory(history)
             return
         }
 
