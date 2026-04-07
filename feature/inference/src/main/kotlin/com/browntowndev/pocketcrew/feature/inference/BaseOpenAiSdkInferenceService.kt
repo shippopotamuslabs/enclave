@@ -11,10 +11,14 @@ import com.openai.client.OpenAIClient
 import com.openai.errors.OpenAIServiceException
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.ResponseCreateParams
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.runInterruptible
 
 abstract class BaseOpenAiSdkInferenceService(
     protected val client: OpenAIClient,
@@ -55,6 +59,9 @@ abstract class BaseOpenAiSdkInferenceService(
             if (closeConversation) {
                 closeSession()
             }
+        } catch (e: CancellationException) {
+            loggingPort.debug(tag, "sendPrompt cancelled provider=$provider model=$modelId")
+            throw e
         } catch (e: Exception) {
             var errorMsg = e.message ?: "Unknown error"
             if (e is OpenAIServiceException) {
@@ -104,8 +111,8 @@ abstract class BaseOpenAiSdkInferenceService(
             var outputTextDeltaCount = 0
             var reasoningTextDeltaCount = 0
             var reasoningSummaryDeltaCount = 0
-            while (iterator.hasNext()) {
-                val event = iterator.next()
+            while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
+                val event = runInterruptible { iterator.next() }
                 if (event.isOutputTextDelta()) {
                     val text = event.outputTextDelta().get().delta()
                     outputTextDeltaCount++
@@ -159,8 +166,8 @@ abstract class BaseOpenAiSdkInferenceService(
             val iterator = streamResponse.stream().iterator()
             var finishedEmitted = false
             var outputTextDeltaCount = 0
-            while (iterator.hasNext()) {
-                val event = iterator.next()
+            while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
+                val event = runInterruptible { iterator.next() }
                 val choices = event.choices()
                 if (choices.isEmpty()) {
                     loggingPort.debug(tag, "Chat stream chunk had no choices model=$modelId")
