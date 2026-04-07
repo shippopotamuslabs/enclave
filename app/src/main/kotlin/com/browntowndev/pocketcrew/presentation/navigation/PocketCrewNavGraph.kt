@@ -11,9 +11,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.feature.chat.ChatRoute
-import com.browntowndev.pocketcrew.feature.history.HistoryRoute
-import com.browntowndev.pocketcrew.feature.settings.SettingsRoute
 import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
+import com.browntowndev.pocketcrew.feature.history.HistoryRoute
 import com.browntowndev.pocketcrew.feature.settings.navigation.settingsGraph
 
 private const val ANIMATION_DURATION = 300
@@ -53,18 +52,19 @@ fun PocketCrewNavGraph(
                     navController.navigate(Routes.CHAT) {
                         popUpTo(Routes.MODEL_DOWNLOAD) { inclusive = true }
                     }
-                }
+                },
             )
         }
         composable(
             route = Routes.CHAT_WITH_ID,
-            arguments = listOf(
-                navArgument("chatId") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                }
-            ),
+            arguments =
+                listOf(
+                    navArgument("chatId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
             enterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { it },
@@ -140,10 +140,10 @@ fun PocketCrewNavGraph(
                 onShowSnackbar = onShowSnackbar,
             )
         }
-        
+
         settingsGraph(
             navController = navController,
-            onShowSnackbar = onShowSnackbar
+            onShowSnackbar = onShowSnackbar,
         )
     }
 }

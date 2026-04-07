@@ -179,11 +179,70 @@ static std::mutex g_mutex;
 static const int THINK_TOKEN_LIMIT = 1000;
 static bool g_in_thinking_phase = false;
 static std::vector<llama_token> g_history_tokens; // Current tokens in KV cache
+static std::vector<llama_pos> g_history_positions; // Actual KV positions for each tracked token
+static llama_pos g_last_eval_pos = 0; // Next writable KV position for sequence 0
 static int g_think_token_count = 0;
 
 // Helper to get vocab from model (must be after g_model declaration)
 static inline const llama_vocab* get_model_vocab() {
     return llama_model_get_vocab(g_model);
+}
+
+static inline void clear_history_tracking() {
+    g_history_tokens.clear();
+    g_history_positions.clear();
+    g_last_eval_pos = 0;
+}
+
+static inline llama_pos sync_last_eval_pos_from_memory() {
+    if (!g_ctx) {
+        g_last_eval_pos = 0;
+        return g_last_eval_pos;
+    }
+
+    llama_memory_t mem = llama_get_memory(g_ctx);
+    if (!mem) {
+        g_last_eval_pos = 0;
+        return g_last_eval_pos;
+    }
+
+    const llama_pos pos_max = llama_memory_seq_pos_max(mem, 0);
+    g_last_eval_pos = pos_max >= 0 ? pos_max + 1 : 0;
+    return g_last_eval_pos;
+}
+
+static inline void clear_kv_cache_and_tracking() {
+    if (g_ctx) {
+        llama_memory_clear(llama_get_memory(g_ctx), true);
+    }
+    clear_history_tracking();
+}
+
+static inline size_t first_history_index_for_pos(llama_pos pos) {
+    for (size_t i = 0; i < g_history_positions.size(); ++i) {
+        if (g_history_positions[i] >= pos) {
+            return i;
+        }
+    }
+    return g_history_positions.size();
+}
+
+static inline size_t trim_history_from_pos(llama_pos trim_pos) {
+    if (!g_ctx) {
+        clear_history_tracking();
+        return 0;
+    }
+
+    llama_memory_seq_rm(llama_get_memory(g_ctx), 0, trim_pos, -1);
+
+    const size_t trim_index = first_history_index_for_pos(trim_pos);
+    if (trim_index < g_history_tokens.size()) {
+        g_history_tokens.resize(trim_index);
+        g_history_positions.resize(trim_index);
+    }
+
+    sync_last_eval_pos_from_memory();
+    return trim_index;
 }
 
 // Callback interface
@@ -429,16 +488,18 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeLo
         // Reset to zero state
         s_batch = {};
     }
-    // Initialize batch with capacity matching n_batch (2048) for stability
+    // Initialize batch with capacity matching n_batch for stability
     // This avoids mismatch between batch capacity and n_batch
     // Note: Large prompts are now chunked automatically in nativeStartCompletion
-    s_batch = llama_batch_init(2048, 0, 1);
+    s_batch = llama_batch_init(actualBatchSize, 0, 1);
     g_batch = &s_batch;
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Created reusable batch, n_tokens=%d, token=%p, logits=%p",
         s_batch.n_tokens, (void*)s_batch.token, (void*)s_batch.logits);
 
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== CONTEXT CREATED SUCCESSFULLY ===");
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "==========================");
+
+    clear_history_tracking();
 
     return JNI_TRUE;
 }
@@ -499,6 +560,8 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeUn
         g_model = nullptr;
     }
 
+    clear_history_tracking();
+
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Model and context unloaded");
 }
 
@@ -511,8 +574,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeCl
 
     // Clear the KV cache memory
     if (g_ctx) {
-        llama_memory_clear(llama_get_memory(g_ctx), true);
-        g_history_tokens.clear();
+        clear_kv_cache_and_tracking();
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache and history cleared");
     }
 
@@ -744,25 +806,51 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
     // ============================================================
     // Prefix Caching Logic
     // ============================================================
+    if (g_history_tokens.empty() && sync_last_eval_pos_from_memory() > 0) {
+        // We have KV state but no trusted token metadata (for example after state restore).
+        // Rebuild from scratch rather than attempting unsafe prefix reuse.
+        clear_kv_cache_and_tracking();
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Cleared untracked KV cache before prompt rebuild");
+    }
+
+    const std::vector<llama_pos> old_history_positions = g_history_positions;
     size_t n_past = 0;
     while (n_past < g_history_tokens.size() && n_past < (size_t)n_prompt_tokens && g_history_tokens[n_past] == tokens[n_past]) {
         n_past++;
     }
 
+    // Fix: If the prompt perfectly matches the prefix (or history), we MUST force evaluation 
+    // of at least one token (the last prompt token) to populate the logits for generation.
+    // If we don't, llama_decode is skipped entirely and the sampler uses stale logits.
+    if (n_past == n_prompt_tokens && n_past > 0) {
+        n_past--;
+    }
+
+    size_t rebuild_from = n_past;
     if (n_past < g_history_tokens.size()) {
         // Divergence or truncation: remove invalidated tokens from KV cache
-        llama_memory_seq_rm(llama_get_memory(g_ctx), -1, n_past, -1);
-        g_history_tokens.resize(n_past);
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache diverged at %zu, cleared tail", n_past);
+        const llama_pos trim_pos = old_history_positions[n_past];
+        rebuild_from = trim_history_from_pos(trim_pos);
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache diverged at token %zu, trimmed from pos %d, rebuilding from token %zu",
+            n_past, (int) trim_pos, rebuild_from);
     } else if (n_past > 0) {
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache reused prefix of %zu tokens", n_past);
+        sync_last_eval_pos_from_memory();
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache reused prefix of %zu tokens, next pos=%d",
+            n_past, (int) g_last_eval_pos);
     } else {
-        // No match: full clear natively handled if g_history_tokens was not empty.
+        sync_last_eval_pos_from_memory();
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache initialization: full evaluation (no match)");
     }
 
     int n_generated_tokens = 0;
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Prompt tokens: %d (evaluating from %zu)", n_prompt_tokens, n_past);
+    const llama_pos prompt_eval_start_pos = g_last_eval_pos;
+    std::vector<llama_pos> prompt_positions(n_prompt_tokens, 0);
+    for (size_t i = 0; i < std::min(rebuild_from, old_history_positions.size()) && i < prompt_positions.size(); ++i) {
+        prompt_positions[i] = old_history_positions[i];
+    }
+
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Prompt tokens: %d (evaluating from token %zu at pos %d)",
+        n_prompt_tokens, rebuild_from, (int) prompt_eval_start_pos);
     // Debug: print first few tokens
     for (int i = 0; i < std::min(5, n_prompt_tokens); i++) {
         const char* tokentext = llama_vocab_get_text(get_model_vocab(), tokens[i]);
@@ -802,7 +890,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
     const int n_batch = llama_n_batch(g_ctx);
 
     // Process prompt tokens in chunks - llama.cpp requires batch size <= n_batch
-    int processed_tokens = (int)n_past;
+    int processed_tokens = (int) rebuild_from;
     while (processed_tokens < n_prompt_tokens) {
         llama_batch_clear(*g_batch);
 
@@ -811,8 +899,9 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
 
         // Add chunk of tokens to batch
         for (int i = 0; i < chunk_size; i++) {
-            // Position continues from where we left off
-            llama_batch_add(*g_batch, tokens[processed_tokens + i], processed_tokens + i, { 0 }, false);
+            const llama_pos current_pos = prompt_eval_start_pos + (processed_tokens - (int) rebuild_from) + i;
+            prompt_positions[processed_tokens + i] = current_pos;
+            llama_batch_add(*g_batch, tokens[processed_tokens + i], current_pos, { 0 }, false);
         }
 
         // Only the last token of the entire prompt gets logits
@@ -837,7 +926,9 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
     // ============================================================
     // Update History Tracker with Prompt
     // ============================================================
-    g_history_tokens.assign(tokens.begin(), tokens.end());
+    g_history_tokens.assign(tokens.begin(), tokens.begin() + n_prompt_tokens);
+    g_history_positions = std::move(prompt_positions);
+    g_last_eval_pos = sync_last_eval_pos_from_memory();
 
     auto prompt_end = std::chrono::high_resolution_clock::now();
     double prompt_ms = std::chrono::duration<double, std::milli>(prompt_end - prompt_start).count();
@@ -963,7 +1054,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
                         false, true);
 
                     if (n_force > 0) {
-                        int force_pos = n_prompt_tokens + n_generated_tokens;
+                        llama_pos force_pos = g_last_eval_pos;
                         llama_batch_clear(*g_batch);
 
                         for (int i = 0; i < n_force; ++i) {
@@ -978,6 +1069,12 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
                         } else {
                             // CRITICAL: Update token count to account for injected force tokens
                             n_generated_tokens += n_force;
+                            // Add force tokens to history to keep KV cache strictly synchronized
+                            for (int i = 0; i < n_force; ++i) {
+                                g_history_tokens.push_back(force_tokens[i]);
+                                g_history_positions.push_back(force_pos + i);
+                            }
+                            g_last_eval_pos = sync_last_eval_pos_from_memory();
                         }
                     }
 
@@ -1000,7 +1097,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
         }
 
         // Calculate position after thinking check (position doesn't change if we skip)
-        int32_t current_pos = n_prompt_tokens + n_generated_tokens;
+        const llama_pos current_pos = g_last_eval_pos;
 
         // Accept the token (updates sampler state for next iteration)
         llama_sampler_accept(g_sampler, token);
@@ -1049,6 +1146,8 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
         // Update History Tracker with Generated Token
         // ============================================================
         g_history_tokens.push_back(token);
+        g_history_positions.push_back(current_pos);
+        g_last_eval_pos = sync_last_eval_pos_from_memory();
 
         if (n_generated_tokens % 100 == 0) {
             __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Generated %d tokens so far...", n_generated_tokens);
@@ -1099,22 +1198,16 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeGe
 }
 
 // Get current KV cache token count (positions used)
-// Note: This returns the sum of prompt + generated tokens as a proxy for context usage
-// since llama_memory_get_num_cells_used is not available in this llama.cpp version
 JNIEXPORT jint JNICALL
 Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeGetContextUsage(
     JNIEnv* env,
     jobject /* this */
 ) {
-    // We cannot directly get the KV cache cell count in this llama.cpp version
-    // Return 0 to indicate we can't track usage directly
-    // The Kotlin side will track token counts separately
     if (!g_ctx) {
         return 0;
     }
-    // Return the maximum context size as a placeholder
-    // The actual usage tracking happens in Kotlin via token counts
-    return llama_n_ctx(g_ctx);
+
+    return (jint) sync_last_eval_pos_from_memory();
 }
 
 // Compress context using position division
@@ -1145,7 +1238,17 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeCo
     // p1 = -1 means to the end
     llama_memory_seq_div(mem, seqId, -1, -1, factor);
 
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Context compressed by factor %d", factor);
+    if (seqId == 0) {
+        for (llama_pos & pos : g_history_positions) {
+            pos /= factor;
+        }
+        g_last_eval_pos = sync_last_eval_pos_from_memory();
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Context compressed by factor %d, next pos=%d",
+            factor, (int) g_last_eval_pos);
+    } else {
+        sync_last_eval_pos_from_memory();
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Context compressed by factor %d", factor);
+    }
 
     return JNI_TRUE;
 }
@@ -1219,7 +1322,10 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSe
     env->ReleaseByteArrayElements(stateArray, bytes, JNI_ABORT);
 
     if (ok) {
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "State restored successfully (%d bytes)", size);
+        clear_history_tracking();
+        g_last_eval_pos = sync_last_eval_pos_from_memory();
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "State restored successfully (%d bytes), next pos=%d, prefix metadata invalidated",
+            size, (int) g_last_eval_pos);
     } else {
         __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "Failed to restore state");
     }

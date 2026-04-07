@@ -15,10 +15,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.presentation.navigation.PocketCrewNavGraph
 import com.browntowndev.pocketcrew.presentation.navigation.Routes
-import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import kotlinx.coroutines.launch
 
 @Suppress("FunctionNaming")
@@ -27,7 +27,7 @@ fun PocketCrewApp(
     viewModel: PocketCrewAppViewModel = hiltViewModel(),
     initialRoute: String = Routes.MODEL_DOWNLOAD,
     modelsResult: DownloadModelsResult?,
-    errorMessage: String? = null
+    errorMessage: String? = null,
 ) {
     val themeUiState by viewModel.themeUiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -42,7 +42,7 @@ fun PocketCrewApp(
 
     PocketCrewTheme(
         darkTheme = themeUiState.darkTheme,
-        dynamicColor = themeUiState.dynamicColor
+        dynamicColor = themeUiState.dynamicColor,
     ) {
         val navController = rememberNavController()
         val scope = rememberCoroutineScope()
@@ -65,9 +65,10 @@ fun PocketCrewApp(
 
             SnackbarHost(
                 hostState = snackbarHostState,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding(),
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding(),
             )
         }
     }
