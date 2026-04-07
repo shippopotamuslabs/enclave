@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.core.data.download.remote
 
-import com.browntowndev.pocketcrew.core.data.BuildConfig
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -19,8 +18,7 @@ import javax.inject.Inject
 
 class HttpFileDownloader @Inject constructor(
     private val okHttpClient: OkHttpClient,
-    private val logger: LoggingPort,
-    private val hfApiKey: String = BuildConfig.HUGGING_FACE_API_KEY
+    private val logger: LoggingPort
 ) : FileDownloaderPort {
 
     companion object {
@@ -51,10 +49,6 @@ class HttpFileDownloader @Inject constructor(
                 if (existingBytes > 0) {
                     addHeader("Range", "bytes=$existingBytes-")
                 }
-                // Add HF Auth token if it's a HF URL
-                if (downloadUrl.startsWith("https://huggingface.co") && hfApiKey.isNotEmpty()) {
-                    addHeader("Authorization", "Bearer $hfApiKey")
-                }
             }
             .build()
 
@@ -68,12 +62,6 @@ class HttpFileDownloader @Inject constructor(
                 metaFile.delete()
                 val retryRequest = Request.Builder()
                     .url(downloadUrl)
-                    .apply {
-                        // Add HF Auth token if it's a HF URL
-                        if (downloadUrl.startsWith("https://huggingface.co") && hfApiKey.isNotEmpty()) {
-                            addHeader("Authorization", "Bearer $hfApiKey")
-                        }
-                    }
                     .build()
                 return@withContext downloadWithRetry(retryRequest, config, downloadUrl, targetDir, progressCallback)
             }
@@ -285,12 +273,6 @@ class HttpFileDownloader @Inject constructor(
             val request = Request.Builder()
                 .url(url)
                 .head()
-                .apply {
-                    // Add HF Auth token if it's a HF URL
-                    if (url.startsWith("https://huggingface.co") && hfApiKey.isNotEmpty()) {
-                        addHeader("Authorization", "Bearer $hfApiKey")
-                    }
-                }
                 .build()
 
             okHttpClient.newCall(request).execute().use { response ->
