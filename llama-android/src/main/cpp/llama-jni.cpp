@@ -178,6 +178,7 @@ static std::mutex g_mutex;
 // Thinking token limit - hard cutoff at 1000 tokens to prevent infinite thinking
 static const int THINK_TOKEN_LIMIT = 1000;
 static bool g_in_thinking_phase = false;
+static std::vector<llama_token> g_history_tokens; // Current tokens in KV cache
 static int g_think_token_count = 0;
 
 // Helper to get vocab from model (must be after g_model declaration)
@@ -511,7 +512,8 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeCl
     // Clear the KV cache memory
     if (g_ctx) {
         llama_memory_clear(llama_get_memory(g_ctx), true);
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache cleared");
+        g_history_tokens.clear();
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache and history cleared");
     }
 
     // Reset the sampler to clear any accumulated state (penalties, etc.)
@@ -549,10 +551,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
         return;
     }
 
-    // Clear KV cache between conversation turns to ensure clean state
-    // This prevents corruption from leftover state from previous completions
-    llama_memory_clear(llama_get_memory(g_ctx), true);
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Cleared KV cache for new completion");
+    // KV cache management moved after tokenization to enable prefix caching
 
     // Check if model has a vocabulary (required for tokenization)
     const int32_t n_vocab = llama_vocab_n_tokens(get_model_vocab());
@@ -741,9 +740,29 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
     }
 
     const int n_prompt_tokens = required_tokens;
+
+    // ============================================================
+    // Prefix Caching Logic
+    // ============================================================
+    size_t n_past = 0;
+    while (n_past < g_history_tokens.size() && n_past < (size_t)n_prompt_tokens && g_history_tokens[n_past] == tokens[n_past]) {
+        n_past++;
+    }
+
+    if (n_past < g_history_tokens.size()) {
+        // Divergence or truncation: remove invalidated tokens from KV cache
+        llama_memory_seq_rm(llama_get_memory(g_ctx), -1, n_past, -1);
+        g_history_tokens.resize(n_past);
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache diverged at %zu, cleared tail", n_past);
+    } else if (n_past > 0) {
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache reused prefix of %zu tokens", n_past);
+    } else {
+        // No match: full clear natively handled if g_history_tokens was not empty.
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache initialization: full evaluation (no match)");
+    }
+
     int n_generated_tokens = 0;
-    // Note: accumulated_output removed - no longer needed after fixing chat template
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Prompt tokens: %d", n_prompt_tokens);
+    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Prompt tokens: %d (evaluating from %zu)", n_prompt_tokens, n_past);
     // Debug: print first few tokens
     for (int i = 0; i < std::min(5, n_prompt_tokens); i++) {
         const char* tokentext = llama_vocab_get_text(get_model_vocab(), tokens[i]);
@@ -783,7 +802,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
     const int n_batch = llama_n_batch(g_ctx);
 
     // Process prompt tokens in chunks - llama.cpp requires batch size <= n_batch
-    int processed_tokens = 0;
+    int processed_tokens = (int)n_past;
     while (processed_tokens < n_prompt_tokens) {
         llama_batch_clear(*g_batch);
 
@@ -814,6 +833,11 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
 
         processed_tokens += chunk_size;
     }
+
+    // ============================================================
+    // Update History Tracker with Prompt
+    // ============================================================
+    g_history_tokens.assign(tokens.begin(), tokens.end());
 
     auto prompt_end = std::chrono::high_resolution_clock::now();
     double prompt_ms = std::chrono::duration<double, std::milli>(prompt_end - prompt_start).count();
@@ -1020,6 +1044,11 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
 
         // FIXED: Increment counter AFTER successful decode
         n_generated_tokens++;
+
+        // ============================================================
+        // Update History Tracker with Generated Token
+        // ============================================================
+        g_history_tokens.push_back(token);
 
         if (n_generated_tokens % 100 == 0) {
             __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Generated %d tokens so far...", n_generated_tokens);

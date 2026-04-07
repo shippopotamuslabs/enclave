@@ -274,7 +274,8 @@ class InferenceService : Service() {
             // This ensures ProcessingIndicator appears immediately in UI
             broadcastStepStarted(modelType)
 
-            val result = executeStepForPipeline(prompt, currentStep)
+            val maxTokensOverride = calculateMaxTokensForStep(currentStep)
+            val result = executeStepForPipeline(prompt, currentStep, maxTokensOverride)
 
             logger.info(TAG, "${currentStep.name} Response: ${result.output}")
 
@@ -317,6 +318,7 @@ class InferenceService : Service() {
     private suspend fun executeStepForPipeline(
         prompt: String,
         step: PipelineStep,
+        maxTokensOverride: Int? = null
     ): StepResult {
         var output = ""
         val modelType = getModelTypeForStep(step)
@@ -324,9 +326,18 @@ class InferenceService : Service() {
         inferenceFactoryProvider.get().withInferenceService(modelType) { service ->
             // Fetch configuration to determine thinking/reasoning budget for this specific step
             val config = activeModelProvider.getActiveConfiguration(modelType)
+            
+            val currentMaxTokens = config?.maxTokens ?: 1024
+            val finalMaxTokens = if (maxTokensOverride != null) {
+                kotlin.math.min(maxTokensOverride, currentMaxTokens)
+            } else {
+                currentMaxTokens
+            }
+
             val options = GenerationOptions(
                 reasoningBudget = if (config?.thinkingEnabled == true) 1024 else 0,
-                modelType = modelType
+                modelType = modelType,
+                maxTokens = finalMaxTokens
             )
 
             service.sendPrompt(prompt, options = options, closeConversation = true).collect { event ->
@@ -417,68 +428,147 @@ class InferenceService : Service() {
      */
     private suspend fun buildPromptForStep(state: PipelineState): String {
         val userPrompt = state.userMessage
+        val modelType = getModelTypeForStep(state.currentStep)
+        val config = activeModelProvider.getActiveConfiguration(modelType)
+        val contextWindow = config?.contextWindow ?: 4096
 
         return when (state.currentStep) {
-            PipelineStep.DRAFT_ONE -> buildAnalyticalDraftPrompt(userPrompt)
-            PipelineStep.DRAFT_TWO -> buildCreativeDraftPrompt(userPrompt)
+            PipelineStep.DRAFT_ONE -> buildAnalyticalDraftPrompt(userPrompt, config?.systemPrompt ?: "", contextWindow)
+            PipelineStep.DRAFT_TWO -> buildCreativeDraftPrompt(userPrompt, config?.systemPrompt ?: "", contextWindow)
             PipelineStep.SYNTHESIS -> buildMainSynthesisPrompt(
                 userPrompt,
                 state.stepOutputs[PipelineStep.DRAFT_ONE] ?: "",
-                state.stepOutputs[PipelineStep.DRAFT_TWO] ?: ""
+                state.stepOutputs[PipelineStep.DRAFT_TWO] ?: "",
+                config?.systemPrompt ?: "",
+                contextWindow
             )
             PipelineStep.FINAL -> {
                 val userSystemPrompt = activeModelProvider.getActiveConfiguration(ModelType.FAST)?.systemPrompt ?: ""
                 buildFinalReviewPrompt(
                     userPrompt,
                     state.stepOutputs[PipelineStep.SYNTHESIS] ?: "",
-                    userSystemPrompt
+                    userSystemPrompt,
+                    config?.systemPrompt ?: "",
+                    contextWindow
                 )
             }
         }
     }
 
-    private fun buildAnalyticalDraftPrompt(userPrompt: String): String = """
+    private suspend fun calculateMaxTokensForStep(step: PipelineStep): Int? {
+        return when (step) {
+            PipelineStep.DRAFT_ONE, PipelineStep.DRAFT_TWO -> {
+                val synthConfig = activeModelProvider.getActiveConfiguration(getModelTypeForStep(PipelineStep.SYNTHESIS))
+                val synthContext = synthConfig?.contextWindow ?: 4096
+                val synthSystemTokens = (synthConfig?.systemPrompt?.length ?: 0) / 3.5
+                val available = (synthContext * 0.75) - synthSystemTokens
+                (available * 0.40).toInt().coerceAtLeast(100)
+            }
+            PipelineStep.SYNTHESIS -> {
+                val finalConfig = activeModelProvider.getActiveConfiguration(getModelTypeForStep(PipelineStep.FINAL))
+                val finalContext = finalConfig?.contextWindow ?: 4096
+                val finalSystemTokens = (finalConfig?.systemPrompt?.length ?: 0) / 3.5
+                val available = (finalContext * 0.75) - finalSystemTokens
+                (available * 0.74).toInt().coerceAtLeast(100)
+            }
+            PipelineStep.FINAL -> null // Use default maxTokens from its own config
+        }
+    }
+
+    private fun truncateChars(text: String, maxTokens: Int): String {
+        // Conservative heuristic: 3.5 chars per token for English text
+        val maxChars = (maxTokens * 3.5).toInt()
+        if (text.length <= maxChars) return text
+        return text.take(maxChars) + "\n... [truncated to fit context window]"
+    }
+
+    private fun buildAnalyticalDraftPrompt(userPrompt: String, systemPrompt: String, contextWindow: Int): String {
+        // Simple draft budget: Reserve 20% for completion + system prompt, 80% for user prompt
+        val systemPromptTokens = (systemPrompt.length / 3.5).toInt()
+        val budget = (contextWindow * 0.80).toInt() - systemPromptTokens
+        val safeUserPrompt = truncateChars(userPrompt, budget.coerceAtLeast(100))
+
+        return """
 TASK: COMPLEX_DRAFT_ANALYTICAL
 
 USER_PROMPT:
-$userPrompt
+$safeUserPrompt
 """.trimIndent()
+    }
 
-    private fun buildCreativeDraftPrompt(userPrompt: String): String = """
+    private fun buildCreativeDraftPrompt(userPrompt: String, systemPrompt: String, contextWindow: Int): String {
+        // Simple draft budget: Reserve 20% for completion + system prompt, 80% for user prompt
+        val systemPromptTokens = (systemPrompt.length / 3.5).toInt()
+        val budget = (contextWindow * 0.80).toInt() - systemPromptTokens
+        val safeUserPrompt = truncateChars(userPrompt, budget.coerceAtLeast(100))
+
+        return """
 TASK: COMPLEX_DRAFT_CREATIVE
 
 USER_PROMPT:
-$userPrompt
+$safeUserPrompt
 """.trimIndent()
+    }
 
-    private fun buildMainSynthesisPrompt(userPrompt: String, draft1: String, draft2: String): String = """
+    private fun buildMainSynthesisPrompt(userPrompt: String, draft1: String, draft2: String, modelSystemPrompt: String, contextWindow: Int): String {
+        // Synthesis model budget strategy:
+        // Reserve 25% for completion + native model system prompt + overhead
+        // Divide remaining 75% as: 15% user prompt, 30% per draft
+        val systemPromptTokens = (modelSystemPrompt.length / 3.5).toInt()
+        val totalAvailable = (contextWindow * 0.75).toInt() - systemPromptTokens
+        
+        val draftBudget = (totalAvailable * 0.40).toInt() // 40% of available (30% of total) per draft
+        val promptBudget = (totalAvailable * 0.20).toInt() // 20% of available (15% of total) for user prompt
+
+        val safeUserPrompt = truncateChars(userPrompt, promptBudget.coerceAtLeast(100))
+        val safeDraft1 = truncateChars(draft1, draftBudget.coerceAtLeast(100))
+        val safeDraft2 = truncateChars(draft2, draftBudget.coerceAtLeast(100))
+
+        return """
 TASK: COMPLEX_SYNTHESIZE
 
 ORIGINAL_USER_PROMPT:
-$userPrompt
+$safeUserPrompt
 
 DRAFT_1:
-$draft1
+$safeDraft1
 
 DRAFT_2:
-$draft2
+$safeDraft2
 """.trimIndent()
+    }
 
-    private fun buildFinalReviewPrompt(userPrompt: String, candidateAnswer: String, userSystemPrompt: String): String = """
+    private fun buildFinalReviewPrompt(userPrompt: String, candidateAnswer: String, userSystemPrompt: String, modelSystemPrompt: String, contextWindow: Int): String {
+        // Final Review budget strategy:
+        // Reserve 25% for completion + native model system prompt + overhead
+        // Divide remaining 75% as: 10% user prompt, 10% user custom system prompt, 55% synthesis candidate
+        val modelSystemPromptTokens = (modelSystemPrompt.length / 3.5).toInt()
+        val totalAvailable = (contextWindow * 0.75).toInt() - modelSystemPromptTokens
+        
+        val userPromptBudget = (totalAvailable * 0.13).toInt() // ~10% of total
+        val userSystemBudget = (totalAvailable * 0.13).toInt() // ~10% of total
+        val candidateBudget = (totalAvailable * 0.74).toInt() // ~55% of total (scaled to available)
+
+        val safeUserPrompt = truncateChars(userPrompt, userPromptBudget.coerceAtLeast(100))
+        val safeCandidate = truncateChars(candidateAnswer, candidateBudget.coerceAtLeast(100))
+        val safeUserSystemPrompt = truncateChars(userSystemPrompt, userSystemBudget.coerceAtLeast(100))
+
+        return """
 TASK: FINAL_REVIEW_AND_REPLY
 
 ORIGINAL_USER_PROMPT:
-$userPrompt
+$safeUserPrompt
 
 CANDIDATE_ANSWER:
-$candidateAnswer
+$safeCandidate
 
 USER_SYSTEM_PROMPT:
-${userSystemPrompt.ifEmpty { "(none provided)" }}
+${safeUserSystemPrompt.ifEmpty { "(none provided)" }}
 
 OUTPUT_CONTRACT:
 Produce the final polished response for the user. Output ONLY the essay itself — no critique, no feedback, no suggestions, no headings. Just the clean final answer.
 """.trimIndent()
+    }
 
     /**
      * Maps a PipelineStep to its corresponding ModelType.
