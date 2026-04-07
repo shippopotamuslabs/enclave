@@ -20,15 +20,17 @@ object NetworkModule {
     @Provides
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
-        val dispatcher = Dispatcher().apply {
-            maxRequests = ModelConfig.CONCURRENT_DOWNLOADS
-            maxRequestsPerHost = ModelConfig.CONCURRENT_DOWNLOADS
-        }
+        val dispatcher =
+            Dispatcher().apply {
+                maxRequests = ModelConfig.CONCURRENT_DOWNLOADS
+                maxRequestsPerHost = ModelConfig.CONCURRENT_DOWNLOADS
+            }
 
-        return OkHttpClient.Builder()
+        return OkHttpClient
+            .Builder()
             .dispatcher(dispatcher)
             .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            .readTimeout(READ_TIMEOUT_MINUTES, TimeUnit.MINUTES)  // 5 minutes for large downloads
+            .readTimeout(READ_TIMEOUT_MINUTES, TimeUnit.MINUTES) // 5 minutes for large downloads
             .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .build()
     }

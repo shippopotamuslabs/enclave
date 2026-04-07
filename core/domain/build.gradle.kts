@@ -61,4 +61,7 @@ dependencies {
     testFixturesApi(libs.junit.jupiter)
     testFixturesImplementation("org.jetbrains.kotlin:kotlin-stdlib")
     testFixturesImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+
+    // Add JSON implementation for JVM unit tests
+    testImplementation("org.json:json:20231013")
 }

@@ -3,8 +3,8 @@ package com.browntowndev.pocketcrew.ui
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import com.browntowndev.pocketcrew.presentation.MainActivity
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.pocketcrew.presentation.MainActivity
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.test.runTest
@@ -15,7 +15,6 @@ import javax.inject.Inject
 
 @HiltAndroidTest
 class MainScreenErrorTest {
-
     @get:Rule(order = 0)
     val hiltRule = HiltAndroidRule(this)
 
@@ -31,13 +30,14 @@ class MainScreenErrorTest {
     }
 
     @Test
-    fun snackbarIsDisplayedOnErrorEvent() = runTest {
-        val errorMessage = "Test error message"
-        
-        // When
-        errorHandler.handleError("TestTag", "Dev message", RuntimeException(), errorMessage)
-        
-        // Then
-        composeTestRule.onNodeWithText(errorMessage).assertIsDisplayed()
-    }
+    fun snackbarIsDisplayedOnErrorEvent() =
+        runTest {
+            val errorMessage = "Test error message"
+
+            // When
+            errorHandler.handleError("TestTag", "Dev message", RuntimeException(), errorMessage)
+
+            // Then
+            composeTestRule.onNodeWithText(errorMessage).assertIsDisplayed()
+        }
 }

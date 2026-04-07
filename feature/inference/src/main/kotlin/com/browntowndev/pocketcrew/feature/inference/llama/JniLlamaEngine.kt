@@ -500,7 +500,7 @@ class JniLlamaEngine @Inject constructor(
     /**
      * Check if context needs compression and apply it if necessary.
      * Uses llama.cpp's position compression to reduce context window usage.
-     * Since we can't get exact KV cache usage, we use prompt + generated tokens as a proxy.
+     * Prefer native KV usage, falling back to tracked prompt/generated tokens only if needed.
      */
     private fun checkAndCompressContext() {
         if (!loaded.get()) return
@@ -513,9 +513,13 @@ class JniLlamaEngine @Inject constructor(
                 return
             }
 
-            // Use tracked tokens (prompt + generated) as proxy for context usage
-            // This is an approximation since we can't get exact KV cache cell count
-            val totalTokensUsed = lastPromptTokens + lastGeneratedTokens
+            val nativeUsage = nativeGetContextUsage()
+            val fallbackUsage = lastPromptTokens + lastGeneratedTokens
+            val totalTokensUsed = when {
+                nativeUsage > 0 -> nativeUsage
+                fallbackUsage > 0 -> fallbackUsage
+                else -> 0
+            }
 
             if (totalTokensUsed <= 0) {
                 Log.w(TAG, "No token usage data available yet")
@@ -523,7 +527,7 @@ class JniLlamaEngine @Inject constructor(
             }
 
             val usageRatio = totalTokensUsed.toFloat() / contextSize.toFloat()
-            Log.i(TAG, "Context estimate: $totalTokensUsed / $contextSize tokens (${(usageRatio * 100).toInt()}%)")
+            Log.i(TAG, "Context usage: $totalTokensUsed / $contextSize tokens (${(usageRatio * 100).toInt()}%)")
 
             // Compress if approaching threshold
             if (usageRatio >= COMPRESSION_THRESHOLD_RATIO) {
@@ -535,8 +539,6 @@ class JniLlamaEngine @Inject constructor(
                 val success = compressContext(COMPRESSION_FACTOR)
 
                 if (success) {
-                    // After compression, we need to re-evaluate prompt for next turn
-                    // The positions have been compressed, so next prompt starts fresh
                     Log.i(TAG, "Context compression applied successfully")
                 } else {
                     Log.w(TAG, "Compression failed, attempting to restore state")

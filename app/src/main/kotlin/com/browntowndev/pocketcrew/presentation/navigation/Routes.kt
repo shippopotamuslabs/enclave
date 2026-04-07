@@ -9,4 +9,3 @@ object Routes {
     const val MODEL_DOWNLOAD = "model_download"
     const val BYOK_CONFIGURE = "byok_configure"
 }
-
