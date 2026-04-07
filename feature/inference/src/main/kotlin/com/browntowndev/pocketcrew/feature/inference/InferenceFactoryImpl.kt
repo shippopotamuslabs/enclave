@@ -114,14 +114,11 @@ class InferenceFactoryImpl @Inject constructor(
                 val requestedIdentity = buildApiIdentity(modelType, apiConfig, apiCreds, requestHeaders, resolvedBaseUrl)
                 
                 return mutex.withLock {
-                    activeServices[modelType]?.let { currentService ->
-                        if (activeIdentities[modelType] == requestedIdentity) {
-                            return currentService
-                        }
-                        currentService.closeSession()
-                        activeServices.remove(modelType)
-                        activeIdentities.remove(modelType)
+                    if (activeIdentities[modelType] == requestedIdentity) {
+                        return@withLock activeServices[modelType]!!
                     }
+                    
+                    removeServiceFor(modelType)
 
                     val client = openAiClientProvider.getClient(
                         apiKey = apiKey,
@@ -181,19 +178,30 @@ class InferenceFactoryImpl @Inject constructor(
         
         val filename = asset.metadata.localFileName
         val extension = filename.substringAfterLast('.', "")
-        val requestedIdentity = "local-$modelType-${asset.metadata.sha256}-$extension-$localConfigId"
+        val requestedIdentity = "local-${asset.metadata.sha256}-$extension-$localConfigId"
  
         return mutex.withLock {
-            activeServices[modelType]?.let { currentService ->
-                val currentIdentity = activeIdentities[modelType]
-                if (currentIdentity == requestedIdentity) {
-                    return currentService
-                }
- 
-                currentService.closeSession()
-                activeServices.remove(modelType)
-                activeIdentities.remove(modelType)
+            if (activeIdentities[modelType] == requestedIdentity) {
+                return@withLock activeServices[modelType]!!
             }
+
+            // Check if ANY other modelType is already using this exact local identity
+            val existingEntry = activeIdentities.entries.find { it.value == requestedIdentity }
+            if (existingEntry != null) {
+                val existingService = activeServices[existingEntry.key]!!
+                removeServiceFor(modelType)
+                activeServices[modelType] = existingService
+                activeIdentities[modelType] = requestedIdentity
+                return@withLock existingService
+            }
+
+            // Enforce single local engine constraint to prevent OOM
+            val localIdentitiesToClose = activeIdentities.filterValues { it.startsWith("local-") }.keys.toList()
+            localIdentitiesToClose.forEach { key ->
+                removeServiceFor(key)
+            }
+
+            removeServiceFor(modelType)
 
             val newService = when (extension) {
                 "gguf" -> {
@@ -223,6 +231,19 @@ class InferenceFactoryImpl @Inject constructor(
             activeServices[modelType] = newService
             activeIdentities[modelType] = requestedIdentity
             return newService
+        }
+    }
+
+    private suspend fun removeServiceFor(modelType: ModelType) {
+        val currentIdentity = activeIdentities[modelType] ?: return
+        val currentService = activeServices[modelType] ?: return
+        
+        activeServices.remove(modelType)
+        activeIdentities.remove(modelType)
+        
+        // If no other modelType is using this identity, close the session
+        if (activeIdentities.none { it.value == currentIdentity }) {
+            currentService.closeSession()
         }
     }
 
