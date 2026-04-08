@@ -295,17 +295,6 @@ fun LocalModelConfigureScreen(
     }
 }
 
-@Composable
-private fun ConfigurationHeader(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 8.dp)
-    )
-}
-
 @Preview(showBackground = true, name = "Local Model Configure Screen - Editable")
 @Composable
 fun PreviewLocalModelConfigureScreenEditable() {
