@@ -51,6 +51,10 @@ dependencies {
 
     // OpenAI
     implementation(libs.openai.java)
+    implementation(libs.anthropic.java)
+    implementation(libs.google.genai) {
+        exclude(group = "com.google.protobuf", module = "protobuf-java")
+    }
 
     // Testing
     testImplementation(libs.junit.jupiter)
