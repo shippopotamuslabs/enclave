@@ -6,20 +6,22 @@ import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
-import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
-import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
+import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiCredentialsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiModelConfigurationUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.FetchApiProviderModelDetailUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.FetchApiProviderModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
@@ -73,9 +75,16 @@ private data class TransientState(
     // BYOK Sheet
     val showByokSheet: Boolean = false,
     val selectedApiModelAsset: ApiModelAssetUi? = null,
+    val apiCredentialDraft: ApiModelAssetUi? = null,
+    val selectedReusableApiCredentialAlias: String? = null,
+    val selectedReusableApiCredentialName: String? = null,
     val selectedApiModelConfig: ApiModelConfigUi? = null,
-    val discoveredApiModels: List<String> = emptyList(),
+    val discoveredApiModels: List<DiscoveredApiModel> = emptyList(),
+    val discoveredApiModelScope: ApiModelDiscoveryScope? = null,
     val isDiscoveringApiModels: Boolean = false,
+    val modelSearchQuery: String = "",
+    val modelProviderFilter: String? = null,
+    val modelSortOption: ModelSortOption = ModelSortOption.A_TO_Z,
     // Deletion Flow
     val showCannotDeleteLastModelAlert: Boolean = false,
     val pendingDeletionModelId: Long? = null,
@@ -87,6 +96,12 @@ private data class TransientState(
     // Assignment Selection Dialog
     val showAssignmentDialog: Boolean = false,
     val editingAssignmentSlot: ModelType? = null
+)
+
+private data class ApiModelDiscoveryScope(
+    val provider: ApiProvider,
+    val baseUrl: String,
+    val credentialAlias: String?,
 )
 
 @HiltViewModel
@@ -106,6 +121,7 @@ class SettingsViewModel @Inject constructor(
     private val deleteLocalModelMetadataUseCase: DeleteLocalModelMetadataUseCase,
     private val deleteLocalModelUseCase: DeleteLocalModelUseCase,
     private val getApiModelAssetsUseCase: GetApiModelAssetsUseCase,
+    private val fetchApiProviderModelDetailUseCase: FetchApiProviderModelDetailUseCase,
     private val fetchApiProviderModelsUseCase: FetchApiProviderModelsUseCase,
     private val saveApiCredentialsUseCase: SaveApiCredentialsUseCase,
     private val deleteApiCredentialsUseCase: DeleteApiCredentialsUseCase,
@@ -149,12 +165,79 @@ class SettingsViewModel @Inject constructor(
                 selected
             }
         }
-        val selectedApiModelParameterSupport = selectedApiModelAsset?.let {
+        val apiCredentialDraft = transientState.apiCredentialDraft
+        val activeApiAsset = apiCredentialDraft ?: selectedApiModelAsset
+        val selectedApiModelParameterSupport = activeApiAsset?.let {
             ApiProviderModelPolicy.parameterSupport(
                 provider = it.provider,
                 modelId = it.modelId,
             )
         } ?: ApiModelParameterSupport.DEFAULT
+        val selectedReusableApiCredential = transientState.selectedReusableApiCredentialAlias?.let { alias ->
+            apiAssets
+                .find { it.credentials.credentialAlias == alias }
+                ?.toReusableUi()
+                ?: transientState.selectedReusableApiCredentialName?.let { displayName ->
+                    ReusableApiCredentialUi(
+                        credentialsId = 0L,
+                        displayName = displayName,
+                        modelId = "",
+                        credentialAlias = alias,
+                    )
+                }
+        }
+        val selectedDiscoveredApiModel = transientState.discoveredApiModels.find {
+            it.id == activeApiAsset?.modelId
+        }
+        val selectedApiModelConfig = transientState.selectedApiModelConfig
+            ?.withProviderDefaults(activeApiAsset)
+            ?.withDiscoveredModelMetadata(selectedDiscoveredApiModel)
+
+        val discoveredApiModelsUi = transientState.discoveredApiModels.map(DiscoveredApiModel::toUi)
+        val filteredDiscoveredApiModels = discoveredApiModelsUi
+            .filter { model ->
+                val query = transientState.modelSearchQuery
+                if (query.isNotBlank()) {
+                    model.name?.contains(query, ignoreCase = true) == true ||
+                    model.modelId.contains(query, ignoreCase = true)
+                } else true
+            }
+            .filter { model ->
+                val provider = transientState.modelProviderFilter
+                if (provider != null) {
+                    model.providerName == provider
+                } else true
+            }
+            .sortedWith { a, b ->
+                when (transientState.modelSortOption) {
+                    ModelSortOption.NEWEST -> {
+                        val aCreated = a.created ?: 0L
+                        val bCreated = b.created ?: 0L
+                        if (aCreated != bCreated) bCreated.compareTo(aCreated)
+                        else (a.name ?: a.modelId).compareTo(b.name ?: b.modelId, ignoreCase = true)
+                    }
+                    ModelSortOption.PRICE_LOW_TO_HIGH -> {
+                        val aHasPrice = a.promptPrice != null || a.completionPrice != null
+                        val bHasPrice = b.promptPrice != null || b.completionPrice != null
+                        
+                        if (aHasPrice && bHasPrice) {
+                            val aPrice = (a.promptPrice ?: 0.0) + (a.completionPrice ?: 0.0)
+                            val bPrice = (b.promptPrice ?: 0.0) + (b.completionPrice ?: 0.0)
+                            if (aPrice != bPrice) aPrice.compareTo(bPrice)
+                            else (a.name ?: a.modelId).compareTo(b.name ?: b.modelId, ignoreCase = true)
+                        } else if (aHasPrice) {
+                            -1 // a comes first
+                        } else if (bHasPrice) {
+                            1 // b comes first
+                        } else {
+                            (a.name ?: a.modelId).compareTo(b.name ?: b.modelId, ignoreCase = true)
+                        }
+                    }
+                    ModelSortOption.A_TO_Z -> {
+                        (a.name ?: a.modelId).compareTo(b.name ?: b.modelId, ignoreCase = true)
+                    }
+                }
+            }
 
         SettingsUiState(
             // Persisted settings from repository
@@ -200,10 +283,16 @@ class SettingsViewModel @Inject constructor(
             showByokSheet = transientState.showByokSheet,
             apiModels = apiAssets.map { it.toUi() },
             selectedApiModelAsset = selectedApiModelAsset,
-            selectedApiModelConfig = transientState.selectedApiModelConfig,
+            apiCredentialDraft = apiCredentialDraft,
+            selectedReusableApiCredential = selectedReusableApiCredential,
+            selectedApiModelConfig = selectedApiModelConfig,
             selectedApiModelParameterSupport = selectedApiModelParameterSupport,
-            discoveredApiModels = transientState.discoveredApiModels,
+            discoveredApiModels = discoveredApiModelsUi,
+            filteredDiscoveredApiModels = filteredDiscoveredApiModels,
             isDiscoveringApiModels = transientState.isDiscoveringApiModels,
+            modelSearchQuery = transientState.modelSearchQuery,
+            modelProviderFilter = transientState.modelProviderFilter,
+            modelSortOption = transientState.modelSortOption,
             // Default model assignments
             defaultAssignments = defaultModels.map { def ->
                 DefaultModelAssignmentUi(
@@ -236,10 +325,17 @@ class SettingsViewModel @Inject constructor(
         displayName = credentials.displayName,
         provider = credentials.provider,
         modelId = credentials.modelId,
-        baseUrl = credentials.baseUrl,
+        baseUrl = credentials.baseUrl ?: credentials.provider.defaultBaseUrl(),
         isVision = credentials.isVision,
         credentialAlias = credentials.credentialAlias,
         configurations = configurations.map { it.toUi() }
+    )
+
+    private fun ApiModelAsset.toReusableUi() = ReusableApiCredentialUi(
+        credentialsId = credentials.id,
+        displayName = credentials.displayName,
+        modelId = credentials.modelId,
+        credentialAlias = credentials.credentialAlias,
     )
 
     private fun ApiModelConfiguration.toUi() = ApiModelConfigUi(
@@ -458,6 +554,9 @@ class SettingsViewModel @Inject constructor(
                 selectedLocalModelAsset = null,
                 selectedLocalModelConfig = null,
                 selectedApiModelAsset = null,
+                apiCredentialDraft = null,
+                selectedReusableApiCredentialAlias = null,
+                selectedReusableApiCredentialName = null,
                 selectedApiModelConfig = null
             )
         }
@@ -698,11 +797,39 @@ class SettingsViewModel @Inject constructor(
                 it.copy(
                     showByokSheet = true,
                     selectedApiModelAsset = null,
+                    apiCredentialDraft = null,
+                    selectedReusableApiCredentialAlias = null,
+                    selectedReusableApiCredentialName = null,
+                    discoveredApiModels = emptyList(),
+                    discoveredApiModelScope = null,
+                    isDiscoveringApiModels = false,
+                    modelSearchQuery = "",
+                    modelProviderFilter = null,
+                    modelSortOption = ModelSortOption.A_TO_Z,
                     selectedApiModelConfig = null
                 )
             } else {
                 it.copy(showByokSheet = false)
             }
+        }
+    }
+
+    fun onStartCreateApiModelAsset() {
+        _currentApiKey.value = ""
+        _transientState.update {
+            it.copy(
+                selectedApiModelAsset = null,
+                apiCredentialDraft = blankApiModelAssetDraft(),
+                selectedReusableApiCredentialAlias = null,
+                selectedReusableApiCredentialName = null,
+                selectedApiModelConfig = null,
+                discoveredApiModels = emptyList(),
+                discoveredApiModelScope = null,
+                isDiscoveringApiModels = false,
+                modelSearchQuery = "",
+                modelProviderFilter = null,
+                modelSortOption = ModelSortOption.A_TO_Z
+            )
         }
     }
 
@@ -712,29 +839,58 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onSelectApiModelAsset(asset: ApiModelAssetUi?) {
-        _transientState.update { 
-            it.copy(
-                selectedApiModelAsset = asset, 
+        _transientState.update { state ->
+            val keepDiscoveredModels =
+                state.selectedApiModelAsset.matchesDiscoveryScope(asset) ||
+                    state.discoveredApiModelScope.matches(asset)
+            val retainedModels = if (keepDiscoveredModels) {
+                state.discoveredApiModels
+            } else {
+                emptyList()
+            }
+            val mergedModels = retainedModels.mergeSelectedModel(asset)
+            state.copy(
+                selectedApiModelAsset = asset,
+                apiCredentialDraft = asset,
+                selectedReusableApiCredentialAlias = null,
+                selectedReusableApiCredentialName = null,
                 selectedApiModelConfig = null,
-                discoveredApiModels = asset?.modelId?.takeIf(String::isNotBlank)?.let(::listOf) ?: emptyList(),
-                isDiscoveringApiModels = false
-            ) 
+                discoveredApiModels = mergedModels,
+                discoveredApiModelScope = if (keepDiscoveredModels) state.discoveredApiModelScope else null,
+                isDiscoveringApiModels = false,
+                modelSearchQuery = "",
+                modelProviderFilter = null,
+                modelSortOption = ModelSortOption.A_TO_Z
+            )
         }
+        maybeFetchSelectedXaiModelMetadata(asset)
     }
 
     fun onSelectApiModelConfig(config: ApiModelConfigUi?) {
         _transientState.update { state ->
-            val normalizedConfig = config?.withProviderDefaults(state.selectedApiModelAsset)
+            val asset = state.apiCredentialDraft ?: state.selectedApiModelAsset
+            val normalizedConfig = config
+                ?.let { draft ->
+                    if (draft.credentialsId == 0L && asset != null) {
+                        draft.copy(credentialsId = asset.credentialsId)
+                    } else {
+                        draft
+                    }
+                }
+                ?.withProviderDefaults(asset)
+                ?.withDiscoveredModelMetadata(
+                    state.discoveredModelFor(asset)
+                )
             state.copy(selectedApiModelConfig = normalizedConfig)
         }
     }
 
     fun onApiModelAssetFieldChange(asset: ApiModelAssetUi) {
         _transientState.update {
-            val selectedAsset = it.selectedApiModelAsset
-            val previousProvider = selectedAsset?.provider
-            val previousCredentialsId = selectedAsset?.credentialsId
-            val previousBaseUrl = selectedAsset?.baseUrl?.trim().orEmpty()
+            val existingDraft = it.apiCredentialDraft
+            val previousProvider = existingDraft?.provider
+            val previousCredentialsId = existingDraft?.credentialsId
+            val previousBaseUrl = existingDraft?.baseUrl?.trim().orEmpty()
             val discoveryScopeChanged =
                 previousProvider != asset.provider ||
                     previousCredentialsId != asset.credentialsId ||
@@ -744,34 +900,77 @@ class SettingsViewModel @Inject constructor(
             } else {
                 it.discoveredApiModels
             }
-            val updatedModels = when {
-                asset.modelId.isBlank() -> existingModels
-                asset.modelId in existingModels -> existingModels
-                else -> listOf(asset.modelId) + existingModels
-            }
+            val updatedModels = existingModels.mergeSelectedModel(asset)
             it.copy(
-                selectedApiModelAsset = asset,
-                discoveredApiModels = updatedModels
+                apiCredentialDraft = asset,
+                selectedReusableApiCredentialAlias = if (previousProvider != asset.provider) null else it.selectedReusableApiCredentialAlias,
+                selectedReusableApiCredentialName = if (previousProvider != asset.provider) null else it.selectedReusableApiCredentialName,
+                discoveredApiModels = updatedModels,
+                discoveredApiModelScope = if (discoveryScopeChanged) null else it.discoveredApiModelScope
             )
         }
+        maybeFetchSelectedXaiModelMetadata(asset)
     }
 
     fun onApiModelConfigFieldChange(config: ApiModelConfigUi) {
-        _transientState.update { it.copy(selectedApiModelConfig = config) }
+        _transientState.update { state ->
+            val asset = state.apiCredentialDraft ?: state.selectedApiModelAsset
+            val normalizedConfig = config
+                .withProviderDefaults(asset)
+                .withDiscoveredModelMetadata(state.discoveredModelFor(asset))
+            state.copy(selectedApiModelConfig = normalizedConfig)
+        }
     }
 
     fun onApiKeyChange(key: String) {
         _currentApiKey.value = key
+        if (
+            key.isNotBlank() &&
+            _transientState.value.apiCredentialDraft?.credentialsId == 0L
+        ) {
+            _transientState.update {
+                it.copy(
+                    selectedReusableApiCredentialAlias = null,
+                    selectedReusableApiCredentialName = null,
+                )
+            }
+        }
+    }
+
+    fun onSelectReusableApiCredential(id: Long?) {
+        val reusableCredential = uiState.value.apiModels
+            .find { it.credentialsId == id }
+            ?.let { asset ->
+                ReusableApiCredentialUi(
+                    credentialsId = asset.credentialsId,
+                    displayName = asset.displayName,
+                    modelId = asset.modelId,
+                    credentialAlias = asset.credentialAlias,
+                )
+            }
+        _currentApiKey.value = ""
+        _transientState.update {
+            it.copy(
+                selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
+                selectedReusableApiCredentialName = reusableCredential?.displayName,
+            )
+        }
     }
 
     fun onSaveApiCredentials(onSuccess: (ApiModelAssetUi, ApiModelConfigUi?) -> Unit) {
-        val assetUi = _transientState.value.selectedApiModelAsset ?: return
+        val transientState = _transientState.value
+        val assetUi = transientState.apiCredentialDraft ?: return
         val apiKeyToSave = _currentApiKey.value
         val isNewAsset = assetUi.credentialsId == 0L
         val defaultReasoningEffort = assetUi.defaultReasoningEffort()
+        val sourceCredentialAlias = if (apiKeyToSave.isBlank()) {
+            transientState.selectedReusableApiCredentialAlias
+        } else {
+            null
+        }
         
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API credentials", "Failed to save credentials")) {
-            val finalAlias = if (assetUi.credentialAlias.isBlank()) {
+            val finalAlias = if (isNewAsset) {
                 generateUniqueAlias(assetUi.provider.name, assetUi.modelId)
             } else {
                 assetUi.credentialAlias
@@ -787,27 +986,55 @@ class SettingsViewModel @Inject constructor(
                 credentialAlias = finalAlias
             )
 
-            val id = saveApiCredentialsUseCase(credentials, apiKeyToSave)
-            
+            val id = saveApiCredentialsUseCase(
+                credentials = credentials,
+                apiKey = apiKeyToSave,
+                sourceCredentialAlias = sourceCredentialAlias,
+            )
+
+            val persistedAsset = apiModelAssetsFlow
+                .first { assets -> assets.any { it.credentials.id == id } }
+                .first { it.credentials.id == id }
             var configUi: ApiModelConfigUi? = null
             if (isNewAsset) {
+                val presetName = generateUniqueApiPresetName(persistedAsset.configurations)
                 val defaultConfig = ApiModelConfiguration(
                     apiCredentialsId = id,
-                    displayName = "Default Preset",
+                    displayName = presetName,
                     reasoningEffort = defaultReasoningEffort,
                 )
-                saveApiModelConfigurationUseCase(defaultConfig).onSuccess { configId ->
-                    configUi = defaultConfig.copy(id = configId).toUi()
-                }
+                val configId = saveApiModelConfigurationUseCase(defaultConfig).getOrThrow()
+                val persistedAssetWithConfig = apiModelAssetsFlow
+                    .first { assets ->
+                        assets.any { apiAsset ->
+                            apiAsset.credentials.id == id &&
+                                apiAsset.configurations.any { it.id == configId }
+                        }
+                    }
+                    .first { it.credentials.id == id }
+                configUi = persistedAssetWithConfig.configurations
+                    .firstOrNull { it.id == configId }
+                    ?.toUi()
+                    ?: defaultConfig.copy(id = configId).toUi()
             }
-            
-            val updatedAsset = assetUi.copy(
-                credentialsId = id,
-                credentialAlias = finalAlias,
-                configurations = configUi?.let { listOf(it) } ?: assetUi.configurations
-            )
-            
-            _currentApiKey.value = "" // Clear immediately after save
+
+            val updatedAsset = apiModelAssetsFlow
+                .first { assets -> assets.any { it.credentials.id == id } }
+                .first { it.credentials.id == id }
+                .toUi()
+
+            _currentApiKey.value = ""
+            _transientState.update { state ->
+                state.copy(
+                    selectedApiModelAsset = updatedAsset,
+                    apiCredentialDraft = updatedAsset,
+                    selectedApiModelConfig = configUi,
+                    selectedReusableApiCredentialAlias = null,
+                    selectedReusableApiCredentialName = null,
+                    discoveredApiModels = state.discoveredApiModels.mergeSelectedModel(updatedAsset),
+                    discoveredApiModelScope = updatedAsset.toDiscoveryScope(),
+                )
+            }
             onSuccess(updatedAsset, configUi)
         }
     }
@@ -829,14 +1056,31 @@ class SettingsViewModel @Inject constructor(
         return "$baseSlug-$counter"
     }
 
+    private fun generateUniqueApiPresetName(
+        existingConfigs: List<ApiModelConfiguration>
+    ): String {
+        val existingNames = existingConfigs.map(ApiModelConfiguration::displayName).toSet()
+        val baseName = "Default Preset"
+        if (baseName !in existingNames) return baseName
+
+        var counter = 2
+        while ("$baseName $counter" in existingNames) {
+            counter++
+        }
+        return "$baseName $counter"
+    }
+
     fun onSaveApiModelConfig(onSuccess: () -> Unit) {
-        val configUi = _transientState.value.selectedApiModelConfig ?: return
-        val assetUi = _transientState.value.selectedApiModelAsset ?: return
+        val assetUi = _transientState.value.apiCredentialDraft ?: _transientState.value.selectedApiModelAsset ?: return
+        val configUi = (_transientState.value.selectedApiModelConfig ?: return)
+            .withProviderDefaults(assetUi)
+            .withDiscoveredModelMetadata(_transientState.value.discoveredModelFor(assetUi))
         val defaultReasoningEffort = assetUi.defaultReasoningEffort()
+        val parentCredentialsId = configUi.credentialsId.takeIf { it != 0L } ?: assetUi.credentialsId
 
         val config = ApiModelConfiguration(
             id = configUi.id,
-            apiCredentialsId = assetUi.credentialsId,
+            apiCredentialsId = parentCredentialsId,
             displayName = configUi.displayName,
             maxTokens = configUi.maxTokens.toIntOrNull() ?: 4096,
             contextWindow = configUi.contextWindow.toIntOrNull() ?: 4096,
@@ -859,14 +1103,29 @@ class SettingsViewModel @Inject constructor(
         )
 
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API configuration", "Failed to save configuration")) {
-            saveApiModelConfigurationUseCase(config)
+            saveApiModelConfigurationUseCase(config).getOrThrow()
             onSuccess()
         }
     }
 
+    fun onUpdateModelSearchQuery(query: String) {
+        _transientState.update { it.copy(modelSearchQuery = query) }
+    }
+
+    fun onUpdateModelProviderFilter(provider: String?) {
+        _transientState.update { it.copy(modelProviderFilter = provider) }
+    }
+
+    fun onUpdateModelSortOption(option: ModelSortOption) {
+        _transientState.update { it.copy(modelSortOption = option) }
+    }
+
     fun onFetchApiModels() {
-        val assetUi = _transientState.value.selectedApiModelAsset ?: return
-        if (_currentApiKey.value.isBlank() && assetUi.credentialAlias.isBlank()) return
+        val assetUi = _transientState.value.apiCredentialDraft ?: _transientState.value.selectedApiModelAsset ?: return
+        val credentialAlias = _transientState.value.selectedReusableApiCredentialAlias
+            ?.takeIf { it.isNotBlank() }
+            ?: assetUi.credentialAlias.takeIf { it.isNotBlank() }
+        if (_currentApiKey.value.isBlank() && credentialAlias == null) return
 
         _transientState.update { it.copy(isDiscoveringApiModels = true) }
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch provider models", "Failed to fetch models")) {
@@ -874,23 +1133,47 @@ class SettingsViewModel @Inject constructor(
                 val models = fetchApiProviderModelsUseCase(
                     provider = assetUi.provider,
                     currentApiKey = _currentApiKey.value,
-                    credentialAlias = assetUi.credentialAlias,
+                    credentialAlias = credentialAlias,
                     baseUrl = assetUi.baseUrl
                 )
+                val selectedModelId = assetUi.modelId.takeIf(String::isNotBlank)
+                val selectedModelDetail = if (
+                    assetUi.provider == ApiProvider.XAI &&
+                    selectedModelId != null &&
+                    models.none { it.id == selectedModelId && it.contextWindowTokens != null }
+                ) {
+                    fetchApiProviderModelDetailUseCase(
+                        provider = assetUi.provider,
+                        modelId = selectedModelId,
+                        currentApiKey = _currentApiKey.value,
+                        credentialAlias = credentialAlias,
+                        baseUrl = assetUi.baseUrl,
+                    )
+                } else {
+                    null
+                }
 
                 _transientState.update { state ->
-                    val selectedAsset = state.selectedApiModelAsset
-                    val selectedModelId = selectedAsset?.modelId
+                    val selectedAsset = state.apiCredentialDraft ?: state.selectedApiModelAsset
+                    val selectedModelIdInState = selectedAsset?.modelId
                     val mergedModels = buildList {
-                        if (!selectedModelId.isNullOrBlank() && selectedModelId !in models) {
-                            add(selectedModelId)
+                        selectedModelDetail?.let(::add)
+                        if (
+                            !selectedModelIdInState.isNullOrBlank() &&
+                            models.none { it.id == selectedModelIdInState } &&
+                            selectedModelDetail?.id != selectedModelIdInState
+                        ) {
+                            add(DiscoveredApiModel(id = selectedModelIdInState))
                         }
                         addAll(models)
                     }
-                        .distinct()
+                        .distinctBy(DiscoveredApiModel::id)
 
                     state.copy(
-                        discoveredApiModels = mergedModels
+                        discoveredApiModels = mergedModels,
+                        discoveredApiModelScope = selectedAsset?.toDiscoveryScope(),
+                        selectedApiModelConfig = state.selectedApiModelConfig
+                            ?.withDiscoveredModelMetadata(mergedModels.find { it.id == selectedModelIdInState })
                     )
                 }
             } finally {
@@ -928,6 +1211,169 @@ class SettingsViewModel @Inject constructor(
         return copy(
             reasoningEffort = parameterSupport.reasoningPolicy.defaultEffort
         )
+    }
+
+    private fun ApiModelConfigUi.withDiscoveredModelMetadata(
+        discoveredModel: DiscoveredApiModel?
+    ): ApiModelConfigUi {
+        val currentMaxTokens = maxTokens.toIntOrNull()
+        val currentContextWindow = contextWindow.toIntOrNull()
+
+        var updated = this
+        discoveredModel?.contextWindowTokens?.let { contextWindowTokens ->
+            updated = updated.copy(contextWindow = contextWindowTokens.toString())
+        }
+
+        val suggestedMaxTokens = discoveredModel?.suggestedDefaultMaxTokens()
+        if (
+            suggestedMaxTokens != null &&
+            shouldAdoptSuggestedMaxTokens(
+                currentMaxTokens = currentMaxTokens,
+                currentContextWindow = currentContextWindow,
+                discoveredModel = discoveredModel,
+            )
+        ) {
+            updated = updated.copy(maxTokens = suggestedMaxTokens.toString())
+        }
+        return updated
+    }
+
+    private fun shouldAdoptSuggestedMaxTokens(
+        currentMaxTokens: Int?,
+        currentContextWindow: Int?,
+        discoveredModel: DiscoveredApiModel,
+    ): Boolean {
+        if (currentMaxTokens == null || currentMaxTokens <= 0) {
+            return true
+        }
+        if (currentMaxTokens == 4_096) {
+            return true
+        }
+        if (currentContextWindow != null && currentMaxTokens == currentContextWindow) {
+            return true
+        }
+        if (
+            discoveredModel.maxOutputTokens != null &&
+            currentMaxTokens == discoveredModel.maxOutputTokens
+        ) {
+            return true
+        }
+        if (
+            discoveredModel.contextWindowTokens?.let { discoveredContextWindow ->
+                currentMaxTokens >= discoveredContextWindow
+            } == true
+        ) {
+            return true
+        }
+        return false
+    }
+
+    private fun DiscoveredApiModel.suggestedDefaultMaxTokens(): Int? {
+        val upperBound = listOfNotNull(maxOutputTokens, contextWindowTokens)
+            .minOrNull()
+            ?: return null
+        return maxOf(1, upperBound / 4)
+    }
+
+    private fun TransientState.discoveredModelFor(asset: ApiModelAssetUi?): DiscoveredApiModel? =
+        discoveredApiModels.find { it.id == asset?.modelId }
+
+    private fun ApiModelAssetUi?.matchesDiscoveryScope(other: ApiModelAssetUi?): Boolean {
+        if (this == null || other == null) {
+            return false
+        }
+        if (provider != other.provider) {
+            return false
+        }
+        if (baseUrl?.trim().orEmpty() != other.baseUrl?.trim().orEmpty()) {
+            return false
+        }
+        val currentAlias = credentialAlias.takeIf(String::isNotBlank)
+        val nextAlias = other.credentialAlias.takeIf(String::isNotBlank)
+        return currentAlias == null || nextAlias == null || currentAlias == nextAlias
+    }
+
+    private fun ApiModelDiscoveryScope?.matches(asset: ApiModelAssetUi?): Boolean {
+        if (this == null || asset == null) {
+            return false
+        }
+        if (provider != asset.provider) {
+            return false
+        }
+        if (baseUrl != asset.baseUrl.normalizedBaseUrl()) {
+            return false
+        }
+        val assetAlias = asset.credentialAlias.takeIf(String::isNotBlank)
+        return credentialAlias == null || assetAlias == null || credentialAlias == assetAlias
+    }
+
+    private fun ApiModelAssetUi.toDiscoveryScope(): ApiModelDiscoveryScope =
+        ApiModelDiscoveryScope(
+            provider = provider,
+            baseUrl = baseUrl.normalizedBaseUrl(),
+            credentialAlias = credentialAlias.takeIf(String::isNotBlank),
+        )
+
+    private fun String?.normalizedBaseUrl(): String = this?.trim().orEmpty()
+
+    private fun blankApiModelAssetDraft(): ApiModelAssetUi = ApiModelAssetUi(
+        credentialsId = 0L,
+        displayName = "",
+        provider = ApiProvider.ANTHROPIC,
+        modelId = "",
+        baseUrl = ApiProvider.ANTHROPIC.defaultBaseUrl(),
+        isVision = false,
+        credentialAlias = "",
+        configurations = emptyList()
+    )
+
+    private fun maybeFetchSelectedXaiModelMetadata(asset: ApiModelAssetUi?) {
+        if (asset?.provider != ApiProvider.XAI || asset.modelId.isBlank()) {
+            return
+        }
+        val currentState = _transientState.value
+        if (currentState.discoveredModelFor(asset)?.contextWindowTokens != null) {
+            return
+        }
+        val credentialAlias = currentState.selectedReusableApiCredentialAlias
+            ?.takeIf { it.isNotBlank() }
+            ?: asset.credentialAlias.takeIf { it.isNotBlank() }
+        if (_currentApiKey.value.isBlank() && credentialAlias == null) {
+            return
+        }
+
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch xAI model details", "Failed to fetch model details")) {
+            val modelDetail = fetchApiProviderModelDetailUseCase(
+                provider = asset.provider,
+                modelId = asset.modelId,
+                currentApiKey = _currentApiKey.value,
+                credentialAlias = credentialAlias,
+                baseUrl = asset.baseUrl,
+            ) ?: return@launch
+
+            _transientState.update { state ->
+                val mergedModels = listOf(modelDetail) + state.discoveredApiModels
+                val dedupedModels = mergedModels.distinctBy(DiscoveredApiModel::id)
+                val activeAsset = state.apiCredentialDraft ?: state.selectedApiModelAsset
+                state.copy(
+                    discoveredApiModels = dedupedModels,
+                    discoveredApiModelScope = activeAsset?.toDiscoveryScope()
+                        ?: state.discoveredApiModelScope,
+                    selectedApiModelConfig = state.selectedApiModelConfig
+                        ?.withDiscoveredModelMetadata(
+                            dedupedModels.find { it.id == activeAsset?.modelId }
+                        )
+                )
+            }
+        }
+    }
+
+    private fun List<DiscoveredApiModel>.mergeSelectedModel(
+        asset: ApiModelAssetUi?
+    ): List<DiscoveredApiModel> = when {
+        asset == null || asset.modelId.isBlank() -> this
+        any { it.id == asset.modelId } -> this
+        else -> listOf(DiscoveredApiModel(id = asset.modelId)) + this
     }
 
     fun onAddCustomHeader() {
@@ -1088,7 +1534,16 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onBackToByokList() {
-        _transientState.update { it.copy(selectedApiModelAsset = null, selectedApiModelConfig = null) }
+        _currentApiKey.value = ""
+        _transientState.update {
+            it.copy(
+                selectedApiModelAsset = null,
+                apiCredentialDraft = null,
+                selectedReusableApiCredentialAlias = null,
+                selectedReusableApiCredentialName = null,
+                selectedApiModelConfig = null,
+            )
+        }
     }
 
     fun onCleanupCustomHeaders() {

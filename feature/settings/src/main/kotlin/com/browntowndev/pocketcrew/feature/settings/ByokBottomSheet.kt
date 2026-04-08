@@ -68,6 +68,7 @@ fun ByokBottomSheet(
     uiState: SettingsUiState,
     onDismiss: () -> Unit,
     onNavigateToByokConfigure: () -> Unit,
+    onStartCreateApiModelAsset: () -> Unit,
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
     onDeleteApiModelAsset: (Long) -> Unit,
@@ -160,7 +161,7 @@ fun ByokBottomSheet(
                             },
                             onAddAsset = {
                                 hideAndNavigate {
-                                    onSelectApiModelAsset(null)
+                                    onStartCreateApiModelAsset()
                                     onNavigateToByokConfigure()
                                 }
                             }
@@ -520,6 +521,7 @@ fun PreviewByokBottomSheetAssets() {
             uiState = MockSettingsData.baseUiState,
             onDismiss = {},
             onNavigateToByokConfigure = {},
+            onStartCreateApiModelAsset = {},
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
             onDeleteApiModelAsset = {},
@@ -540,6 +542,7 @@ fun PreviewByokBottomSheetContext() {
             ),
             onDismiss = {},
             onNavigateToByokConfigure = {},
+            onStartCreateApiModelAsset = {},
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
             onDeleteApiModelAsset = {},

@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.compose.runtime.Immutable
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
@@ -51,10 +52,16 @@ data class SettingsUiState(
     val showByokSheet: Boolean = false,
     val apiModels: List<ApiModelAssetUi> = emptyList(),
     val selectedApiModelAsset: ApiModelAssetUi? = null,
+    val apiCredentialDraft: ApiModelAssetUi? = null,
+    val selectedReusableApiCredential: ReusableApiCredentialUi? = null,
     val selectedApiModelConfig: ApiModelConfigUi? = null,
     val selectedApiModelParameterSupport: ApiModelParameterSupport = ApiModelParameterSupport.DEFAULT,
-    val discoveredApiModels: List<String> = emptyList(),
+    val discoveredApiModels: List<DiscoveredApiModelUi> = emptyList(),
+    val filteredDiscoveredApiModels: List<DiscoveredApiModelUi> = emptyList(),
     val isDiscoveringApiModels: Boolean = false,
+    val modelSearchQuery: String = "",
+    val modelProviderFilter: String? = null,
+    val modelSortOption: ModelSortOption = ModelSortOption.A_TO_Z,
 
     val defaultAssignments: List<DefaultModelAssignmentUi> = emptyList(),
 
@@ -93,10 +100,24 @@ data class ApiModelAssetUi(
 )
 
 @Immutable
+data class ReusableApiCredentialUi(
+    val credentialsId: Long,
+    val displayName: String,
+    val modelId: String,
+    val credentialAlias: String,
+)
+
+@Immutable
 data class CustomHeaderUi(
     val key: String = "",
     val value: String = ""
 )
+
+enum class ModelSortOption {
+    A_TO_Z,
+    NEWEST,
+    PRICE_LOW_TO_HIGH
+}
 
 @Immutable
 data class ApiModelConfigUi(
@@ -117,6 +138,32 @@ data class ApiModelConfigUi(
     val systemPrompt: String = "",
     val reasoningEffort: ApiReasoningEffort? = null
 )
+
+@Immutable
+data class DiscoveredApiModelUi(
+    val modelId: String,
+    val name: String? = null,
+    val contextWindowTokens: Int? = null,
+    val maxOutputTokens: Int? = null,
+    val created: Long? = null,
+    val promptPrice: Double? = null,
+    val completionPrice: Double? = null,
+    val providerName: String? = null,
+)
+
+internal fun DiscoveredApiModel.toUi(): DiscoveredApiModelUi {
+    val provider = if (id.contains("/")) id.substringBefore("/") else null
+    return DiscoveredApiModelUi(
+        modelId = id,
+        name = name,
+        contextWindowTokens = contextWindowTokens,
+        maxOutputTokens = maxOutputTokens,
+        created = created,
+        promptPrice = promptPrice,
+        completionPrice = completionPrice,
+        providerName = provider
+    )
+}
 
 @Immutable
 data class LocalModelAssetUi(
