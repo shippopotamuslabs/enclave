@@ -9,7 +9,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 @Entity(
     tableName = "api_credentials",
     indices = [
-        Index(value = ["provider", "model_id", "base_url"], unique = true),
         Index(value = ["credential_alias"], unique = true)
     ]
 )

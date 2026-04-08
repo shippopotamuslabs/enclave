@@ -5,13 +5,25 @@ import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import javax.inject.Inject
 
 interface SaveApiCredentialsUseCase {
-    suspend operator fun invoke(credentials: ApiCredentials, apiKey: String): Long
+    suspend operator fun invoke(
+        credentials: ApiCredentials,
+        apiKey: String,
+        sourceCredentialAlias: String? = null
+    ): Long
 }
 
 class SaveApiCredentialsUseCaseImpl @Inject constructor(
     private val apiModelRepository: ApiModelRepositoryPort,
 ) : SaveApiCredentialsUseCase {
-    override suspend fun invoke(credentials: ApiCredentials, apiKey: String): Long {
-        return apiModelRepository.saveCredentials(credentials, apiKey)
+    override suspend fun invoke(
+        credentials: ApiCredentials,
+        apiKey: String,
+        sourceCredentialAlias: String?
+    ): Long {
+        return apiModelRepository.saveCredentials(
+            credentials = credentials,
+            apiKey = apiKey,
+            sourceCredentialAlias = sourceCredentialAlias,
+        )
     }
 }

@@ -74,25 +74,28 @@ class ApiCredentialsDaoTest {
     }
     
     @Test
-    fun `duplicate API credential identity is rejected via upsert replace`() = runTest {
+    fun `duplicate API credential identity can be inserted as separate rows`() = runTest {
         val entity1 = ApiCredentialsEntity(
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "key1",
             displayName = "GPT-4o",
-            baseUrl = "https://api.openai.com/v1"
+            baseUrl = "https://api.openai.com/v1",
+            updatedAt = 1_000L
         )
         val entity2 = ApiCredentialsEntity(
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "key2",
             displayName = "GPT-4o Duplicate",
-            baseUrl = "https://api.openai.com/v1"
+            baseUrl = "https://api.openai.com/v1",
+            updatedAt = 2_000L
         )
         dao.upsert(entity1)
         dao.upsert(entity2)
         
         val list = dao.getAll()
-        assertEquals(1, list.size)
+        assertEquals(2, list.size)
+        assertEquals(listOf("key2", "key1"), list.map { it.credentialAlias })
     }
 }

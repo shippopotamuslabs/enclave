@@ -9,7 +9,11 @@ interface ApiModelRepositoryPort {
     fun observeAllConfigurations(): Flow<List<ApiModelConfiguration>>
     suspend fun getAllCredentials(): List<ApiCredentials>
     suspend fun getCredentialsById(id: Long): ApiCredentials?
-    suspend fun saveCredentials(credentials: ApiCredentials, apiKey: String): Long
+    suspend fun saveCredentials(
+        credentials: ApiCredentials,
+        apiKey: String,
+        sourceCredentialAlias: String? = null
+    ): Long
     suspend fun deleteCredentials(id: Long)
     suspend fun getConfigurationsForCredentials(credentialsId: Long): List<ApiModelConfiguration>
     suspend fun getConfigurationById(id: Long): ApiModelConfiguration?

@@ -41,25 +41,66 @@ class ApiModelRepositoryImpl @Inject constructor(
     override suspend fun getCredentialsById(id: Long): ApiCredentials? =
         apiCredentialsDao.getById(id)?.toDomain()
 
-    override suspend fun saveCredentials(credentials: ApiCredentials, apiKey: String): Long {
-        val entity = ApiCredentialsEntity(
-            id = credentials.id,
-            displayName = credentials.displayName,
-            provider = credentials.provider,
-            modelId = credentials.modelId,
-            baseUrl = credentials.baseUrl,
-            isVision = credentials.isVision,
-            credentialAlias = credentials.credentialAlias,
-            updatedAt = System.currentTimeMillis()
-        )
-        
-        val id = apiCredentialsDao.upsert(entity)
-        
-        if (apiKey.isNotBlank()) {
-            apiKeyManager.save(credentials.credentialAlias, apiKey)
+    override suspend fun saveCredentials(
+        credentials: ApiCredentials,
+        apiKey: String,
+        sourceCredentialAlias: String?
+    ): Long {
+        val sourceApiKey = when {
+            apiKey.isNotBlank() -> null
+            !sourceCredentialAlias.isNullOrBlank() &&
+                sourceCredentialAlias != credentials.credentialAlias -> {
+                requireNotNull(apiKeyManager.get(sourceCredentialAlias)) {
+                    "Stored API key not found for alias: $sourceCredentialAlias"
+                }
+            }
+            else -> null
+        }
+        val now = System.currentTimeMillis()
+        val persistedId = if (credentials.id == 0L) {
+            val entity = ApiCredentialsEntity(
+                displayName = credentials.displayName,
+                provider = credentials.provider,
+                modelId = credentials.modelId,
+                baseUrl = credentials.baseUrl,
+                isVision = credentials.isVision,
+                credentialAlias = credentials.credentialAlias,
+                createdAt = now,
+                updatedAt = now
+            )
+            apiCredentialsDao.insert(entity)
+        } else {
+            val existingEntity = requireNotNull(apiCredentialsDao.getById(credentials.id)) {
+                "API credentials not found: ${credentials.id}"
+            }
+            val entity = ApiCredentialsEntity(
+                id = credentials.id,
+                displayName = credentials.displayName,
+                provider = credentials.provider,
+                modelId = credentials.modelId,
+                baseUrl = credentials.baseUrl,
+                isVision = credentials.isVision,
+                credentialAlias = credentials.credentialAlias,
+                createdAt = existingEntity.createdAt,
+                updatedAt = now
+            )
+            apiCredentialsDao.update(entity)
+            credentials.id
+        }
+        val persistedCredentials = requireNotNull(apiCredentialsDao.getById(persistedId)) {
+            "Failed to resolve persisted API credentials for id $persistedId"
+        }
+
+        when {
+            apiKey.isNotBlank() -> {
+                apiKeyManager.save(credentials.credentialAlias, apiKey)
+            }
+            sourceApiKey != null -> {
+                apiKeyManager.save(credentials.credentialAlias, sourceApiKey)
+            }
         }
         
-        return id
+        return persistedCredentials.id
     }
 
     override suspend fun deleteCredentials(id: Long) {

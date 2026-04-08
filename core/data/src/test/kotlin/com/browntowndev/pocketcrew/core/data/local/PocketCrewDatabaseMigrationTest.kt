@@ -46,4 +46,27 @@ class PocketCrewDatabaseMigrationTest {
 
         db.close()
     }
+
+    @Test
+    fun `api credentials schema does not keep identity uniqueness index`() {
+        val db = Room.inMemoryDatabaseBuilder(
+            ApplicationProvider.getApplicationContext(),
+            PocketCrewDatabase::class.java
+        ).allowMainThreadQueries().build()
+        try {
+            val sqliteDb = db.openHelper.readableDatabase
+            val cursor = sqliteDb.query("PRAGMA index_list('api_credentials')")
+            val indexNames = buildList {
+                cursor.use {
+                    while (it.moveToNext()) {
+                        add(it.getString(it.getColumnIndexOrThrow("name")))
+                    }
+                }
+            }
+
+            assertFalse(indexNames.contains("index_api_credentials_provider_model_id_base_url"))
+        } finally {
+            db.close()
+        }
+    }
 }
