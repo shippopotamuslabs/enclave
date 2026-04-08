@@ -50,7 +50,11 @@ object ApiProviderModelPolicy {
     )
 
     fun supportsModelDiscovery(provider: ApiProvider): Boolean =
-        provider == ApiProvider.OPENAI || provider == ApiProvider.OPENROUTER || provider == ApiProvider.XAI
+        provider == ApiProvider.OPENAI ||
+            provider == ApiProvider.ANTHROPIC ||
+            provider == ApiProvider.GOOGLE ||
+            provider == ApiProvider.OPENROUTER ||
+            provider == ApiProvider.XAI
 
     fun isXaiMultiAgentModel(modelId: String): Boolean =
         modelId.matchesXaiMultiAgent()
@@ -81,6 +85,28 @@ object ApiProviderModelPolicy {
 
     fun parameterSupport(provider: ApiProvider, modelId: String): ApiModelParameterSupport {
         val reasoningPolicy = reasoningPolicy(provider = provider, modelId = modelId)
+        if (provider == ApiProvider.ANTHROPIC) {
+            return ApiModelParameterSupport(
+                reasoningPolicy = reasoningPolicy,
+                supportsTopK = true,
+                supportsMinP = false,
+                supportsFrequencyPenalty = false,
+                supportsPresencePenalty = false,
+                supportsReasoningEffort = true,
+            )
+        }
+
+        if (provider == ApiProvider.GOOGLE) {
+            return ApiModelParameterSupport(
+                reasoningPolicy = reasoningPolicy,
+                supportsTopK = true,
+                supportsMinP = false,
+                supportsFrequencyPenalty = false,
+                supportsPresencePenalty = false,
+                supportsReasoningEffort = false,
+            )
+        }
+
         if (provider != ApiProvider.XAI) {
             return ApiModelParameterSupport(reasoningPolicy = reasoningPolicy)
         }

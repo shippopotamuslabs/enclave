@@ -2,6 +2,8 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.core.data.anthropic.AnthropicClientProvider
+import com.browntowndev.pocketcrew.core.data.google.GoogleGenAiClientProvider
 import com.browntowndev.pocketcrew.core.data.openai.OpenAiClientProvider
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
@@ -22,6 +24,7 @@ import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManag
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.security.MessageDigest
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -76,6 +79,8 @@ class InferenceFactoryImpl @Inject constructor(
     private val conversationManagerProvider: Provider<ConversationManagerPort>,
     private val mediaPipeFactory: MediaPipeInferenceServiceFactory,
     private val openAiClientProvider: OpenAiClientProvider,
+    private val anthropicClientProvider: AnthropicClientProvider,
+    private val googleGenAiClientProvider: GoogleGenAiClientProvider,
     private val loggingPort: LoggingPort,
     private val inferenceLockManager: InferenceLockManager,
 ) : InferenceFactoryPort {
@@ -84,7 +89,37 @@ class InferenceFactoryImpl @Inject constructor(
         private const val TAG = "InferenceFactory"
     }
 
-    private val activeIdentities = mutableMapOf<ModelType, String>()
+    private sealed interface ServiceIdentity {
+        data class Api(
+            val modelType: ModelType,
+            val configId: Long,
+            val credentialsId: Long,
+            val provider: ApiProvider,
+            val modelId: String,
+            val baseUrl: String?,
+            val reasoningEffort: String?,
+            val openRouterRouting: OpenRouterRoutingIdentity,
+            val googleApiVersion: String?,
+            val headersHash: String,
+            val apiKeyHash: String,
+        ) : ServiceIdentity
+
+        data class Local(
+            val modelSha256: String,
+            val extension: String,
+            val localConfigId: Long,
+        ) : ServiceIdentity
+    }
+
+    private data class OpenRouterRoutingIdentity(
+        val providerSort: String,
+        val allowFallbacks: Boolean,
+        val requireParameters: Boolean,
+        val dataCollectionPolicy: String,
+        val zeroDataRetention: Boolean,
+    )
+
+    private val activeIdentities = mutableMapOf<ModelType, ServiceIdentity>()
     private val activeServices = mutableMapOf<ModelType, LlmInferencePort>()
 
     private val mutex = Mutex()
@@ -124,7 +159,14 @@ class InferenceFactoryImpl @Inject constructor(
             } else {
                 val requestHeaders = buildRequestHeaders(apiCreds.provider, apiConfig.customHeaders)
                 val resolvedBaseUrl = apiCreds.baseUrl?.takeIf { it.isNotBlank() } ?: apiCreds.provider.defaultBaseUrl()
-                val requestedIdentity = buildApiIdentity(modelType, apiConfig, apiCreds, requestHeaders, resolvedBaseUrl)
+                val requestedIdentity = createApiIdentity(
+                    modelType = modelType,
+                    apiConfig = apiConfig,
+                    apiCreds = apiCreds,
+                    apiKey = apiKey,
+                    requestHeaders = requestHeaders,
+                    resolvedBaseUrl = resolvedBaseUrl
+                )
                 
                 return mutex.withLock {
                     if (activeIdentities[modelType] == requestedIdentity) {
@@ -133,14 +175,35 @@ class InferenceFactoryImpl @Inject constructor(
                     
                     removeServiceFor(modelType)
 
-                    val client = openAiClientProvider.getClient(
-                        apiKey = apiKey,
-                        baseUrl = resolvedBaseUrl,
-                        headers = requestHeaders
-                    )
                     val newService = when (apiCreds.provider) {
+                        ApiProvider.ANTHROPIC -> AnthropicInferenceServiceImpl(
+                            client = anthropicClientProvider.getClient(
+                                apiKey = apiKey,
+                                baseUrl = resolvedBaseUrl,
+                                headers = requestHeaders
+                            ),
+                            modelId = apiCreds.modelId,
+                            modelType = modelType,
+                            baseUrl = resolvedBaseUrl,
+                            loggingPort = loggingPort
+                        )
+                        ApiProvider.GOOGLE -> GoogleInferenceServiceImpl(
+                            client = googleGenAiClientProvider.getClient(
+                                apiKey = apiKey,
+                                baseUrl = resolvedBaseUrl,
+                                headers = requestHeaders,
+                            ),
+                            modelId = apiCreds.modelId,
+                            modelType = modelType,
+                            baseUrl = resolvedBaseUrl,
+                            loggingPort = loggingPort
+                        )
                         ApiProvider.OPENROUTER -> OpenRouterInferenceServiceImpl(
-                            client = client,
+                            client = openAiClientProvider.getClient(
+                                apiKey = apiKey,
+                                baseUrl = resolvedBaseUrl,
+                                headers = requestHeaders
+                            ),
                             modelId = apiCreds.modelId,
                             modelType = modelType,
                             routing = apiConfig.openRouterRouting,
@@ -148,14 +211,22 @@ class InferenceFactoryImpl @Inject constructor(
                             loggingPort = loggingPort
                         )
                         ApiProvider.XAI -> XaiInferenceServiceImpl(
-                            client = client,
+                            client = openAiClientProvider.getClient(
+                                apiKey = apiKey,
+                                baseUrl = resolvedBaseUrl,
+                                headers = requestHeaders
+                            ),
                             modelId = apiCreds.modelId,
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort
                         )
                         else -> ApiInferenceServiceImpl(
-                            client = client,
+                            client = openAiClientProvider.getClient(
+                                apiKey = apiKey,
+                                baseUrl = resolvedBaseUrl,
+                                headers = requestHeaders
+                            ),
                             modelId = apiCreds.modelId,
                             provider = apiCreds.provider.name,
                             modelType = modelType,
@@ -191,7 +262,11 @@ class InferenceFactoryImpl @Inject constructor(
         
         val filename = asset.metadata.localFileName
         val extension = filename.substringAfterLast('.', "")
-        val requestedIdentity = "local-${asset.metadata.sha256}-$extension-$localConfigId"
+        val requestedIdentity = ServiceIdentity.Local(
+            modelSha256 = asset.metadata.sha256,
+            extension = extension,
+            localConfigId = localConfigId
+        )
  
         return mutex.withLock {
             if (activeIdentities[modelType] == requestedIdentity) {
@@ -209,7 +284,10 @@ class InferenceFactoryImpl @Inject constructor(
             }
 
             // Enforce single local engine constraint to prevent OOM
-            val localIdentitiesToClose = activeIdentities.filterValues { it.startsWith("local-") }.keys.toList()
+            val localIdentitiesToClose = activeIdentities
+                .filterValues { it is ServiceIdentity.Local }
+                .keys
+                .toList()
             localIdentitiesToClose.forEach { key ->
                 removeServiceFor(key)
             }
@@ -260,41 +338,43 @@ class InferenceFactoryImpl @Inject constructor(
         }
     }
 
-    private fun buildApiIdentity(
+    private fun createApiIdentity(
         modelType: ModelType,
         apiConfig: com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration,
         apiCreds: com.browntowndev.pocketcrew.domain.model.config.ApiCredentials,
+        apiKey: String,
         requestHeaders: Map<String, String>,
         resolvedBaseUrl: String?
-    ): String = buildString {
-        append("api-")
-        append(modelType)
-        append("-cfg=")
-        append(apiConfig.id)
-        append("-creds=")
-        append(apiCreds.id)
-        append("-provider=")
-        append(apiCreds.provider)
-        append("-model=")
-        append(apiCreds.modelId)
-        append("-baseUrl=")
-        append(resolvedBaseUrl ?: "")
-        append("-reasoning=")
-        append(apiConfig.reasoningEffort?.wireValue ?: "")
-        append("-openRouterSort=")
-        append(apiConfig.openRouterRouting.providerSort.wireValue)
-        append("-openRouterAllowFallbacks=")
-        append(apiConfig.openRouterRouting.allowFallbacks)
-        append("-openRouterRequireParameters=")
-        append(apiConfig.openRouterRouting.requireParameters)
-        append("-openRouterDataCollection=")
-        append(apiConfig.openRouterRouting.dataCollectionPolicy.wireValue)
-        append("-openRouterZdr=")
-        append(apiConfig.openRouterRouting.zeroDataRetention)
-        append("-headers=")
-        append(requestHeaders.entries
+    ): ServiceIdentity.Api = ServiceIdentity.Api(
+        modelType = modelType,
+        configId = apiConfig.id,
+        credentialsId = apiCreds.id,
+        provider = apiCreds.provider,
+        modelId = apiCreds.modelId,
+        baseUrl = resolvedBaseUrl,
+        reasoningEffort = apiConfig.reasoningEffort?.wireValue,
+        openRouterRouting = OpenRouterRoutingIdentity(
+            providerSort = apiConfig.openRouterRouting.providerSort.wireValue,
+            allowFallbacks = apiConfig.openRouterRouting.allowFallbacks,
+            requireParameters = apiConfig.openRouterRouting.requireParameters,
+            dataCollectionPolicy = apiConfig.openRouterRouting.dataCollectionPolicy.wireValue,
+            zeroDataRetention = apiConfig.openRouterRouting.zeroDataRetention
+        ),
+        googleApiVersion = if (apiCreds.provider == ApiProvider.GOOGLE) {
+            GoogleGenAiClientProvider.GEMINI_API_VERSION
+        } else {
+            null
+        },
+        headersHash = requestHeaders.entries
             .sortedBy { it.key.lowercase() }
-            .joinToString(separator = ",") { (key, value) -> "$key=$value" })
+            .joinToString(separator = ",") { (key, value) -> "$key=$value" }
+            .sha256Hex(),
+        apiKeyHash = apiKey.sha256Hex()
+    )
+
+    private fun String.sha256Hex(): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        return digest.digest(toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
     }
 
     private fun buildRequestHeaders(

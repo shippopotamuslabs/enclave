@@ -48,7 +48,7 @@ object OpenRouterRequestMapper {
         options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
-        options.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
+        options.safeOpenRouterMaxTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
 
         applyOpenRouterRoutingDefaults(builder, routing)
         return builder.build()
@@ -106,7 +106,7 @@ object OpenRouterRequestMapper {
         options.reasoningEffort?.let { builder.reasoning(ReasoningMapper.toSdkReasoning(it)) }
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
-        options.maxTokens?.let { builder.maxOutputTokens(it.toLong()) }
+        options.safeOpenRouterMaxTokens()?.let { builder.maxOutputTokens(it.toLong()) }
 
         applyOpenRouterRoutingDefaults(builder, routing)
         return builder.build()
@@ -152,4 +152,13 @@ object OpenRouterRequestMapper {
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
+
+    private fun GenerationOptions.safeOpenRouterMaxTokens(): Int? {
+        val configuredMaxTokens = maxTokens ?: return null
+        val configuredContextWindow = contextWindow
+        if (configuredContextWindow != null && configuredMaxTokens >= configuredContextWindow) {
+            return null
+        }
+        return configuredMaxTokens
+    }
 }

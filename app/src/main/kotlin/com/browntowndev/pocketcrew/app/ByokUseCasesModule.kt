@@ -5,6 +5,8 @@ import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiCredentialsUseCa
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiModelConfigurationUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiModelConfigurationUseCaseImpl
 import com.browntowndev.pocketcrew.domain.usecase.byok.FetchApiProviderModelsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.FetchApiProviderModelDetailUseCase
+import com.browntowndev.pocketcrew.domain.usecase.byok.FetchApiProviderModelDetailUseCaseImpl
 import com.browntowndev.pocketcrew.domain.usecase.byok.FetchApiProviderModelsUseCaseImpl
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCaseImpl
@@ -40,6 +42,12 @@ abstract class ByokUseCasesModule {
     @Binds
     @Singleton
     abstract fun bindFetchApiProviderModelsUseCase(impl: FetchApiProviderModelsUseCaseImpl): FetchApiProviderModelsUseCase
+
+    @Binds
+    @Singleton
+    abstract fun bindFetchApiProviderModelDetailUseCase(
+        impl: FetchApiProviderModelDetailUseCaseImpl
+    ): FetchApiProviderModelDetailUseCase
 
     @Binds
     @Singleton

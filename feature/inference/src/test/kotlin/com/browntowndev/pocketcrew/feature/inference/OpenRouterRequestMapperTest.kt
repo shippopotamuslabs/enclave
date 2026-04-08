@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -69,5 +70,37 @@ class OpenRouterRequestMapperTest {
         assertTrue(providerBody.contains("require_parameters"))
         assertTrue(providerBody.contains("allow"))
         assertTrue(providerBody.contains("zdr"))
+    }
+
+    @Test
+    fun `mapToResponseParams omits max output tokens when configured max equals context window`() {
+        val params = OpenRouterRequestMapper.mapToResponseParams(
+            modelId = "openai/gpt-5.2",
+            prompt = "hello",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                maxTokens = 262_144,
+                contextWindow = 262_144,
+            )
+        )
+
+        assertFalse(params.maxOutputTokens().isPresent)
+    }
+
+    @Test
+    fun `mapToChatCompletionParams omits max completion tokens when configured max equals context window`() {
+        val params = OpenRouterRequestMapper.mapToChatCompletionParams(
+            modelId = "openai/gpt-5.2",
+            prompt = "hello",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                maxTokens = 262_144,
+                contextWindow = 262_144,
+            )
+        )
+
+        assertFalse(params.maxCompletionTokens().isPresent)
     }
 }
