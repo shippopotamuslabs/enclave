@@ -277,11 +277,25 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     override suspend fun getAllCredentials(): List<ApiCredentials> = _credentials.value
     override suspend fun getCredentialsById(id: Long): ApiCredentials? = _credentials.value.find { it.id == id }
 
-    override suspend fun saveCredentials(credentials: ApiCredentials, apiKey: String): Long {
+    override suspend fun saveCredentials(
+        credentials: ApiCredentials,
+        apiKey: String,
+        sourceCredentialAlias: String?
+    ): Long {
         val id = if (credentials.id == 0L) nextCredId++ else credentials.id
         val saved = credentials.copy(id = id)
         _credentials.value = _credentials.value.filter { it.id != id } + saved
-        savedKeys[id] = apiKey
+        savedKeys[id] = if (apiKey.isNotBlank()) {
+            apiKey
+        } else {
+            sourceCredentialAlias?.let { alias ->
+                _credentials.value
+                    .firstOrNull { it.credentialAlias == alias }
+                    ?.id
+                    ?.let(savedKeys::get)
+                    .orEmpty()
+            }.orEmpty()
+        }
         return id
     }
 

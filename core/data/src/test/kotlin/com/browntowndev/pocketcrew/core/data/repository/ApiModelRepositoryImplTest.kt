@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import kotlin.test.assertFailsWith
 
 class ApiModelRepositoryImplTest {
 
@@ -45,14 +46,23 @@ class ApiModelRepositoryImplTest {
             isVision = true,
             credentialAlias = "my_key"
         )
-        
-        coEvery { credentialsDao.upsert(any()) } returns 1L
+
+        coEvery { credentialsDao.insert(any()) } returns 1L
+        coEvery { credentialsDao.getById(1L) } returns ApiCredentialsEntity(
+            id = 1L,
+            displayName = "Test",
+            provider = ApiProvider.OPENAI,
+            modelId = "gpt-4o",
+            baseUrl = "https://api.openai.com/v1",
+            isVision = true,
+            credentialAlias = "my_key",
+        )
 
         val id = repo.saveCredentials(creds, "sk-test")
 
         assertEquals(1L, id)
         coVerify { 
-            credentialsDao.upsert(match { 
+            credentialsDao.insert(match {
                 it.credentialAlias == "my_key" && 
                 it.displayName == "Test" &&
                 it.provider == ApiProvider.OPENAI &&
@@ -89,14 +99,98 @@ class ApiModelRepositoryImplTest {
             modelId = "gpt-4o",
             credentialAlias = "my_key"
         )
-        
-        coEvery { credentialsDao.upsert(any()) } returns 1L
 
-        val id = repo.saveCredentials(creds, "")
+        coEvery { credentialsDao.insert(any()) } returns 1L
+        coEvery { credentialsDao.getById(1L) } returns ApiCredentialsEntity(
+            id = 1L,
+            displayName = "Test",
+            provider = ApiProvider.OPENAI,
+            modelId = "gpt-4o",
+            credentialAlias = "my_key",
+            isVision = false,
+        )
+
+        val id = repo.saveCredentials(creds, "", null)
 
         assertEquals(1L, id)
-        coVerify { credentialsDao.upsert(any()) }
+        coVerify { credentialsDao.insert(any()) }
         verify(exactly = 0) { apiKeyManager.save(any(), any()) }
+    }
+
+    @Test
+    fun `save credentials can clone an existing stored key into a new alias`() = runTest {
+        val creds = ApiCredentials(
+            displayName = "Cloned",
+            provider = ApiProvider.XAI,
+            modelId = "grok-4.20",
+            credentialAlias = "new_alias"
+        )
+
+        coEvery { credentialsDao.insert(any()) } returns 5L
+        coEvery { credentialsDao.getById(5L) } returns ApiCredentialsEntity(
+            id = 5L,
+            displayName = "Cloned",
+            provider = ApiProvider.XAI,
+            modelId = "grok-4.20",
+            credentialAlias = "new_alias",
+            isVision = false,
+        )
+        io.mockk.every { apiKeyManager.get("existing_alias") } returns "stored-key"
+
+        val id = repo.saveCredentials(creds, "", "existing_alias")
+
+        assertEquals(5L, id)
+        verify(exactly = 1) { apiKeyManager.get("existing_alias") }
+        verify(exactly = 1) { apiKeyManager.save("new_alias", "stored-key") }
+    }
+
+    @Test
+    fun `save credentials inserts a new row when id is zero`() = runTest {
+        val creds = ApiCredentials(
+            displayName = "xAI Existing",
+            provider = ApiProvider.XAI,
+            modelId = "grok-4-fast-reasoning",
+            baseUrl = "https://api.x.ai/v1",
+            credentialAlias = "xai-existing-2",
+        )
+
+        coEvery { credentialsDao.insert(any()) } returns 77L
+        coEvery { credentialsDao.getById(77L) } returns ApiCredentialsEntity(
+            id = 77L,
+            displayName = "xAI Existing",
+            provider = ApiProvider.XAI,
+            modelId = "grok-4-fast-reasoning",
+            baseUrl = "https://api.x.ai/v1",
+            credentialAlias = "xai-existing-2",
+        )
+
+        val id = repo.saveCredentials(creds, "xai-key")
+
+        assertEquals(77L, id)
+        coVerify(exactly = 1) { credentialsDao.insert(any()) }
+        coVerify(exactly = 0) { credentialsDao.update(any()) }
+        verify { apiKeyManager.save("xai-existing-2", "xai-key") }
+    }
+
+    @Test
+    fun `save credentials with existing id fails fast when row is missing`() = runTest {
+        val creds = ApiCredentials(
+            id = 5L,
+            displayName = "Edited",
+            provider = ApiProvider.XAI,
+            modelId = "grok-4-fast-reasoning",
+            baseUrl = "https://api.x.ai/v1",
+            credentialAlias = "xai-edited",
+        )
+
+        coEvery { credentialsDao.getById(5L) } returns null
+
+        assertFailsWith<IllegalArgumentException> {
+            repo.saveCredentials(creds, "", null)
+        }
+
+        coVerify(exactly = 0) { credentialsDao.insert(any()) }
+        coVerify(exactly = 0) { credentialsDao.update(any()) }
     }
 
     @Test
