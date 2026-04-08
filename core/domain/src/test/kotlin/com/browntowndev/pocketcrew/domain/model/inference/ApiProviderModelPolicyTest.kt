@@ -21,11 +21,51 @@ class ApiProviderModelPolicyTest {
     )
 
     @Test
-    fun `supports model discovery for openai openrouter and xai only`() {
+    fun `supports model discovery for openai anthropic google openrouter and xai`() {
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.OPENAI))
+        assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.ANTHROPIC))
+        assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.GOOGLE))
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.OPENROUTER))
         assertTrue(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.XAI))
-        assertFalse(ApiProviderModelPolicy.supportsModelDiscovery(ApiProvider.ANTHROPIC))
+    }
+
+    @Test
+    fun `provider defaults include hosted endpoints for google openrouter and xai`() {
+        assertEquals("https://generativelanguage.googleapis.com", ApiProvider.GOOGLE.defaultBaseUrl())
+        assertEquals("https://openrouter.ai/api/v1", ApiProvider.OPENROUTER.defaultBaseUrl())
+        assertEquals("https://api.x.ai/v1", ApiProvider.XAI.defaultBaseUrl())
+        assertEquals(null, ApiProvider.OPENAI.defaultBaseUrl())
+        assertEquals(null, ApiProvider.ANTHROPIC.defaultBaseUrl())
+    }
+
+    @Test
+    fun `anthropic parameter support keeps the standard preset controls but hides unsupported sliders`() {
+        val support = ApiProviderModelPolicy.parameterSupport(
+            provider = ApiProvider.ANTHROPIC,
+            modelId = "claude-sonnet-4-20250514",
+        )
+
+        assertTrue(support.supportsReasoningEffort)
+        assertTrue(support.supportsTopK)
+        assertTrue(support.supportsMaxTokens)
+        assertFalse(support.supportsMinP)
+        assertFalse(support.supportsFrequencyPenalty)
+        assertFalse(support.supportsPresencePenalty)
+    }
+
+    @Test
+    fun `google parameter support exposes top-k but hides unsupported controls`() {
+        val support = ApiProviderModelPolicy.parameterSupport(
+            provider = ApiProvider.GOOGLE,
+            modelId = "gemini-2.5-flash",
+        )
+
+        assertFalse(support.supportsReasoningEffort)
+        assertTrue(support.supportsTopK)
+        assertTrue(support.supportsMaxTokens)
+        assertFalse(support.supportsMinP)
+        assertFalse(support.supportsFrequencyPenalty)
+        assertFalse(support.supportsPresencePenalty)
     }
 
     @Test

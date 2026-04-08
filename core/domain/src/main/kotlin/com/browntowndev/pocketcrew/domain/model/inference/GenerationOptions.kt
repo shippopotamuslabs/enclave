@@ -16,4 +16,5 @@ data class GenerationOptions(
     val topP: Float? = null,
     val minP: Float? = null,
     val maxTokens: Int? = null,
+    val contextWindow: Int? = null,
 )

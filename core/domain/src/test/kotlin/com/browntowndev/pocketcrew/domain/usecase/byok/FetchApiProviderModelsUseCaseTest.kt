@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.byok
 
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import io.mockk.coEvery
@@ -25,7 +26,7 @@ class FetchApiProviderModelsUseCaseTest {
     fun `uses in-memory api key when present`() = runTest {
         coEvery {
             apiModelCatalog.fetchModels(ApiProvider.OPENAI, "live-key", null)
-        } returns listOf("gpt-5")
+        } returns listOf(DiscoveredApiModel(id = "gpt-5"))
 
         val models = useCase(
             provider = ApiProvider.OPENAI,
@@ -34,7 +35,7 @@ class FetchApiProviderModelsUseCaseTest {
             baseUrl = null,
         )
 
-        assertEquals(listOf("gpt-5"), models)
+        assertEquals(listOf(DiscoveredApiModel(id = "gpt-5")), models)
         coVerify(exactly = 1) {
             apiModelCatalog.fetchModels(ApiProvider.OPENAI, "live-key", null)
         }
@@ -45,7 +46,7 @@ class FetchApiProviderModelsUseCaseTest {
         every { apiKeyProvider.getApiKey("saved-alias") } returns "stored-key"
         coEvery {
             apiModelCatalog.fetchModels(ApiProvider.XAI, "stored-key", "https://api.x.ai/v1")
-        } returns listOf("grok-4.20-multi-agent")
+        } returns listOf(DiscoveredApiModel(id = "grok-4.20-multi-agent"))
 
         val models = useCase(
             provider = ApiProvider.XAI,
@@ -54,7 +55,7 @@ class FetchApiProviderModelsUseCaseTest {
             baseUrl = "https://api.x.ai/v1",
         )
 
-        assertEquals(listOf("grok-4.20-multi-agent"), models)
+        assertEquals(listOf(DiscoveredApiModel(id = "grok-4.20-multi-agent")), models)
         coVerify(exactly = 1) {
             apiModelCatalog.fetchModels(ApiProvider.XAI, "stored-key", "https://api.x.ai/v1")
         }
@@ -64,7 +65,7 @@ class FetchApiProviderModelsUseCaseTest {
     fun `supports openrouter discovery with default base url`() = runTest {
         coEvery {
             apiModelCatalog.fetchModels(ApiProvider.OPENROUTER, "router-key", "https://openrouter.ai/api/v1")
-        } returns listOf("openai/gpt-5.2")
+        } returns listOf(DiscoveredApiModel(id = "openai/gpt-5.2"))
 
         val models = useCase(
             provider = ApiProvider.OPENROUTER,
@@ -73,9 +74,28 @@ class FetchApiProviderModelsUseCaseTest {
             baseUrl = "https://openrouter.ai/api/v1",
         )
 
-        assertEquals(listOf("openai/gpt-5.2"), models)
+        assertEquals(listOf(DiscoveredApiModel(id = "openai/gpt-5.2")), models)
         coVerify(exactly = 1) {
             apiModelCatalog.fetchModels(ApiProvider.OPENROUTER, "router-key", "https://openrouter.ai/api/v1")
+        }
+    }
+
+    @Test
+    fun `supports anthropic discovery with default base url`() = runTest {
+        coEvery {
+            apiModelCatalog.fetchModels(ApiProvider.ANTHROPIC, "anthropic-key", null)
+        } returns listOf(DiscoveredApiModel(id = "claude-sonnet-4-20250514"))
+
+        val models = useCase(
+            provider = ApiProvider.ANTHROPIC,
+            currentApiKey = "anthropic-key",
+            credentialAlias = "anthropic-alias",
+            baseUrl = null,
+        )
+
+        assertEquals(listOf(DiscoveredApiModel(id = "claude-sonnet-4-20250514")), models)
+        coVerify(exactly = 1) {
+            apiModelCatalog.fetchModels(ApiProvider.ANTHROPIC, "anthropic-key", null)
         }
     }
 

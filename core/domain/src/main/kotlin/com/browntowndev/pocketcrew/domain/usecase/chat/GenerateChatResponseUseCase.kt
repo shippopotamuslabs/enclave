@@ -447,7 +447,8 @@ class GenerateChatResponseUseCase @Inject constructor(
             temperature = config?.temperature?.toFloat(),
             topK = config?.topK,
             topP = config?.topP?.toFloat(),
-            maxTokens = config?.maxTokens
+            maxTokens = config?.maxTokens,
+            contextWindow = config?.contextWindow,
         )
 
         service.sendPrompt(prompt, options, closeConversation = false).collect { event ->
