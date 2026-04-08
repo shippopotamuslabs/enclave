@@ -60,6 +60,10 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.openai.java)
+    implementation(libs.anthropic.java)
+    implementation(libs.google.genai) {
+        exclude(group = "com.google.protobuf", module = "protobuf-java")
+    }
 
     // DataStore
     implementation(libs.androidx.datastore.preferences)

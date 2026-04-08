@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicBoolean
 
 class JniLlamaEnginePerformanceAuditTest {
-
     private val gpuProfiler: GpuProfiler = mockk(relaxed = true)
     private lateinit var engine: JniLlamaEngine
 
@@ -79,15 +78,17 @@ class JniLlamaEnginePerformanceAuditTest {
         lastGeneratedTokensField.isAccessible = true
         lastGeneratedTokensField.setInt(engine, 10)
 
-        every { engine["nativeGetContextSize"]() } returns 100
-        every { engine["nativeGetContextUsage"]() } returns 85
+        every { engine.getContextSizeForCompression() } returns 100
+        every { engine.getContextUsageForCompression() } returns 85
         every { engine.saveState() } returns null
-        every { engine["compressContext"](any<Int>()) } returns true
+        every { engine.applyCompressionForContext(any()) } returns true
 
-        engine["checkAndCompressContext"]()
+        val method = JniLlamaEngine::class.java.getDeclaredMethod("checkAndCompressContext")
+        method.isAccessible = true
+        method.invoke(engine)
 
-        verify { engine["nativeGetContextUsage"]() }
-        verify { engine["compressContext"](2) }
+        verify { engine.getContextUsageForCompression() }
+        verify { engine.applyCompressionForContext(2) }
     }
 
     @Test
@@ -106,15 +107,17 @@ class JniLlamaEnginePerformanceAuditTest {
         lastGeneratedTokensField.isAccessible = true
         lastGeneratedTokensField.setInt(engine, 25)
 
-        every { engine["nativeGetContextSize"]() } returns 100
-        every { engine["nativeGetContextUsage"]() } returns 0
+        every { engine.getContextSizeForCompression() } returns 100
+        every { engine.getContextUsageForCompression() } returns 0
         every { engine.saveState() } returns null
-        every { engine["compressContext"](any<Int>()) } returns true
+        every { engine.applyCompressionForContext(any()) } returns true
 
-        engine["checkAndCompressContext"]()
+        val method = JniLlamaEngine::class.java.getDeclaredMethod("checkAndCompressContext")
+        method.isAccessible = true
+        method.invoke(engine)
 
-        verify { engine["nativeGetContextUsage"]() }
-        verify { engine["compressContext"](2) }
+        verify { engine.getContextUsageForCompression() }
+        verify { engine.applyCompressionForContext(2) }
     }
 }
 
