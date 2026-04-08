@@ -3,9 +3,9 @@ package com.browntowndev.pocketcrew.core.data.download.remote
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
-import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
+import okhttp3.HttpUrl.Companion.toHttpUrl
 
 /**
  * Dynamic URL provider supporting multiple download sources.
@@ -16,44 +16,34 @@ import javax.inject.Singleton
 class DynamicModelUrlProvider @Inject constructor() : ModelUrlProviderPort {
 
     companion object {
-        private const val R2_BUCKET_URL = "https://config.pocketcrew.app"
-        private const val HF_BASE_URL = "https://huggingface.co"
+        private val R2_BUCKET_URL = "https://config.pocketcrew.app".toHttpUrl()
+        private val HF_BASE_URL = "https://huggingface.co".toHttpUrl()
     }
 
-    override fun getConfigUrl(): String = "$R2_BUCKET_URL/model_config.json"
+    override fun getConfigUrl(): String = R2_BUCKET_URL.newBuilder()
+        .addPathSegment("model_config.json")
+        .build()
+        .toString()
 
     override fun getModelDownloadUrl(asset: LocalModelAsset): String {
         return when (asset.metadata.source) {
-            DownloadSource.CLOUDFLARE_R2 -> "$R2_BUCKET_URL/${asset.metadata.remoteFileName}"
+            DownloadSource.CLOUDFLARE_R2 -> R2_BUCKET_URL.newBuilder()
+                .addPathSegment(DownloadSecurity.requireSafeFileName(asset.metadata.remoteFileName, "remoteFileName"))
+                .build()
+                .toString()
             DownloadSource.HUGGING_FACE -> {
-                // Construct HuggingFace download URL from model name and filename
-                // Format: https://huggingface.co/{modelName}/resolve/main/{filename}
-                val modelName = asset.metadata.huggingFaceModelName
-                if (modelName.isEmpty()) {
-                    throw IllegalStateException("HuggingFace model name is required for HUGGING_FACE source")
-                }
-                val fileName = asset.metadata.remoteFileName
-                val url = "$HF_BASE_URL/$modelName/resolve/main/$fileName"
-                
-                if (!isHuggingFaceUrl(url)) {
-                    throw SecurityException("Invalid Hugging Face URL constructed: $url")
-                }
-                
-                url
-            }
-        }
-    }
+                val (owner, repo) = DownloadSecurity.requireHuggingFaceRepoId(asset.metadata.huggingFaceModelName)
+                val fileName = DownloadSecurity.requireSafeFileName(asset.metadata.remoteFileName, "remoteFileName")
 
-    private fun isHuggingFaceUrl(urlString: String): Boolean {
-        return try {
-            val url = URL(urlString)
-            if (!url.protocol.equals("https", ignoreCase = true)) {
-                return false
+                HF_BASE_URL.newBuilder()
+                    .addPathSegment(owner)
+                    .addPathSegment(repo)
+                    .addPathSegment("resolve")
+                    .addPathSegment("main")
+                    .addPathSegment(fileName)
+                    .build()
+                    .toString()
             }
-            val host = url.host.lowercase()
-            host == "huggingface.co" || host.endsWith(".huggingface.co")
-        } catch (e: Exception) {
-            false
         }
     }
 }
