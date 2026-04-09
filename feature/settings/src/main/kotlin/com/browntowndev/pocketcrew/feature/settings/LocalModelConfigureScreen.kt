@@ -78,7 +78,7 @@ fun LocalModelConfigureScreen(
     onConfigChange: (LocalModelConfigUi) -> Unit,
     onSave: () -> Unit
 ) {
-    val config = uiState.selectedLocalModelConfig ?: LocalModelConfigUi()
+    val config = uiState.localModelEditor.configDraft ?: LocalModelConfigUi()
 
     Scaffold(
         topBar = {
@@ -114,16 +114,9 @@ fun LocalModelConfigureScreen(
             Column {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("System Prompt")
-                        Spacer(modifier = Modifier.width(4.dp))
-                        PersistentTooltip(
-                            description = "Certain pipeline slots (like Crew Mode or Vision) require specialized system prompts to function correctly. Use the Import button to load a template."
-                        )
-                    }
                     var expanded by remember { mutableStateOf(false) }
                     Row {
                         TextButton(
@@ -136,24 +129,34 @@ fun LocalModelConfigureScreen(
                             expanded = expanded,
                             onDismissRequest = { expanded = false }
                         ) {
-                        SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
-                            DropdownMenuItem(
-                                text = { Text(modelType.displayName()) },
-                                onClick = {
-                                    onConfigChange(config.copy(systemPrompt = prompt))
-                                    expanded = false
-                                }
-                            )
+                            SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
+                                DropdownMenuItem(
+                                    text = { Text(modelType.displayName()) },
+                                    onClick = {
+                                        onConfigChange(config.copy(systemPrompt = prompt))
+                                        expanded = false
+                                    }
+                                )
+                            }
                         }
                     }
-                }
                 }
                 OutlinedTextField(
                     value = config.systemPrompt,
                     onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
-                    modifier = Modifier.fillMaxWidth().height(120.dp),
+                    label = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("System Prompt")
+                            Spacer(modifier = Modifier.width(4.dp))
+                            PersistentTooltip(
+                                description = "Certain pipeline slots (like Crew Mode or Vision) require specialized system prompts to function correctly. Use the Import button to load a template."
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    maxLines = 5,
+                    minLines = 4,
+                    maxLines = 4,
                     readOnly = config.isSystemPreset,
                     enabled = !config.isSystemPreset
                 )
@@ -295,24 +298,15 @@ fun LocalModelConfigureScreen(
     }
 }
 
-@Composable
-private fun ConfigurationHeader(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(top = 8.dp)
-    )
-}
-
 @Preview(showBackground = true, name = "Local Model Configure Screen - Editable")
 @Composable
 fun PreviewLocalModelConfigureScreenEditable() {
     PocketCrewTheme {
         LocalModelConfigureScreen(
             uiState = MockSettingsData.baseUiState.copy(
-                selectedLocalModelConfig = MockSettingsData.localModels[0].configurations[0].copy(isSystemPreset = false)
+                localModelEditor = LocalModelEditorUiState(
+                    configDraft = MockSettingsData.localModels[0].configurations[0].copy(isSystemPreset = false)
+                )
             ),
             onNavigateBack = {},
             onConfigChange = {},
@@ -327,11 +321,28 @@ fun PreviewLocalModelConfigureScreenSystem() {
     PocketCrewTheme {
         LocalModelConfigureScreen(
             uiState = MockSettingsData.baseUiState.copy(
-                selectedLocalModelConfig = MockSettingsData.localModels[0].configurations[0].copy(isSystemPreset = true)
+                localModelEditor = LocalModelEditorUiState(
+                    configDraft = MockSettingsData.localModels[0].configurations[0].copy(isSystemPreset = true)
+                )
             ),
             onNavigateBack = {},
             onConfigChange = {},
             onSave = {}
+        )
+    }
+}
+
+@Preview(showBackground = true, name = "Assignment Selection Bottom Sheet (Local Model Screen)")
+@Composable
+fun PreviewLocalModelAssignmentSelectionBottomSheet() {
+    PocketCrewTheme {
+        AssignmentSelectionContent(
+            modifier = Modifier.padding(bottom = 32.dp),
+            slotLabel = "Main",
+            localAssets = MockSettingsData.localModels,
+            apiAssets = MockSettingsData.apiModels,
+            onDismiss = {},
+            onSelect = { _, _ -> }
         )
     }
 }

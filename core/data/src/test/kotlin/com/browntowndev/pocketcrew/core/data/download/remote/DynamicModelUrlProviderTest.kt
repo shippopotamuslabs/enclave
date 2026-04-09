@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -44,6 +45,31 @@ class DynamicModelUrlProviderTest {
 
         // Then
         assertTrue(url.startsWith("https://huggingface.co/user/repo/resolve/main/model.gguf"))
+    }
+
+    @Test
+    fun getModelDownloadUrl_rejectsTraversalInRemoteFileName() {
+        val asset = createMockAsset(
+            source = DownloadSource.CLOUDFLARE_R2,
+            fileName = "../secrets.db"
+        )
+
+        assertThrows(SecurityException::class.java) {
+            urlProvider.getModelDownloadUrl(asset)
+        }
+    }
+
+    @Test
+    fun getModelDownloadUrl_rejectsInvalidHuggingFaceRepoId() {
+        val asset = createMockAsset(
+            source = DownloadSource.HUGGING_FACE,
+            huggingFaceModelName = "user/repo/extra",
+            fileName = "model.gguf"
+        )
+
+        assertThrows(IllegalArgumentException::class.java) {
+            urlProvider.getModelDownloadUrl(asset)
+        }
     }
 
     private fun createMockAsset(

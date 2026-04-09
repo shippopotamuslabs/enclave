@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -100,13 +101,13 @@ fun LocalModelsBottomSheet(
         ) {
             val viewState = remember(uiState) {
                 when {
-                    uiState.modelTypesNeedingReassignment.isNotEmpty() -> 
+                    uiState.deletion.modelTypesNeedingReassignment.isNotEmpty() ->
                         LocalModelsSheetView.Reassignment(
-                            modelTypes = uiState.modelTypesNeedingReassignment,
-                            options = uiState.reassignmentOptions
+                            modelTypes = uiState.deletion.modelTypesNeedingReassignment,
+                            options = uiState.deletion.reassignmentOptions
                         )
-                    uiState.selectedLocalModelAsset != null -> 
-                        LocalModelsSheetView.ConfigList(uiState.selectedLocalModelAsset)
+                    uiState.localModelsSheet.selectedAsset != null ->
+                        LocalModelsSheetView.ConfigList(uiState.localModelsSheet.selectedAsset)
                     else -> 
                         LocalModelsSheetView.AssetList
                 }
@@ -136,8 +137,8 @@ fun LocalModelsBottomSheet(
                     }
                     is LocalModelsSheetView.AssetList -> {
                         LocalModelAssetListView(
-                            localModels = uiState.localModels,
-                            availableToDownloadModels = uiState.availableToDownloadModels,
+                            localModels = uiState.localModelsSheet.models,
+                            availableToDownloadModels = uiState.localModelsSheet.availableDownloads,
                             onSelectAsset = { asset -> onSelectLocalModelAsset(asset) },
                             onRequestDeleteAsset = { asset ->
                                 pendingDeleteTarget = LocalDeleteTarget.Asset(asset.metadataId, asset.friendlyName)
@@ -159,7 +160,7 @@ fun LocalModelsBottomSheet(
             }
         }
 
-        if (uiState.showCannotDeleteLastModelAlert) {
+        if (uiState.deletion.showLastModelAlert) {
             AlertDialog(
                 onDismissRequest = onDismissDeletionSafety,
                 title = { Text("Cannot Delete Model") },
@@ -422,38 +423,48 @@ private fun LocalModelConfigListView(
         ) {
             items(asset.configurations, key = { it.id }) { config ->
                 var menuExpanded by remember { mutableStateOf(false) }
+                val isDeleteEnabled = asset.configurations.size > 1
 
                 Box {
-                    Row(
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .combinedClickable(
                                 onClick = { onEditConfig(config) },
                                 onLongClick = { menuExpanded = true }
-                            )
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            ),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        )
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = config.displayName,
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text(
-                                text = "Temp: ${config.temperature.format(2)} | Max: ${config.maxTokens}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = config.displayName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Temp: ${config.temperature.format(2)} | Max: ${config.maxTokens}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
 
-                        IconButton(onClick = { onEditConfig(config) }, modifier = Modifier.size(40.dp)) {
-                            Icon(
-                                Icons.Default.Edit,
-                                contentDescription = "Edit Preset ${config.displayName}",
-                                modifier = Modifier.size(20.dp),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(40.dp)) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = "Options for ${config.displayName}",
+                                    modifier = Modifier.size(20.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
 
@@ -462,7 +473,15 @@ private fun LocalModelConfigListView(
                         onDismissRequest = { menuExpanded = false }
                     ) {
                         DropdownMenuItem(
+                            text = { Text("Edit") },
+                            onClick = {
+                                menuExpanded = false
+                                onEditConfig(config)
+                            }
+                        )
+                        DropdownMenuItem(
                             text = { Text("Delete") },
+                            enabled = isDeleteEnabled,
                             onClick = {
                                 menuExpanded = false
                                 onRequestDeleteConfig(config)
@@ -542,7 +561,9 @@ fun PreviewLocalModelsBottomSheetContext() {
     PocketCrewTheme {
         LocalModelsBottomSheet(
             uiState = MockSettingsData.baseUiState.copy(
-                selectedLocalModelAsset = MockSettingsData.localModels[0]
+                localModelsSheet = MockSettingsData.baseUiState.localModelsSheet.copy(
+                    selectedAsset = MockSettingsData.localModels[0]
+                )
             ),
             onDismiss = {},
             onNavigateToLocalModelConfigure = {},

@@ -39,8 +39,7 @@ jobs:
       with:
         languages: 'java-kotlin'
         build-mode: manual
-        # Optional: Add security-extended or security-and-quality queries
-        # queries: security-extended,security-and-quality
+        config-file: .github/codeql-config.yml
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@v4
@@ -55,16 +54,7 @@ jobs:
     - name: Accept Android SDK Licenses
       run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v4
-      with:
-        languages: 'java-kotlin'
-        build-mode: 'manual'
-        # Optional: Add security-extended or security-and-quality queries
-        # queries: security-extended,security-and-quality
-
     - name: Build with Gradle
-      # Manual build step to replace 'autobuild'
       # We use assembleDebug to ensure all Kotlin/Java code is compiled
       # --no-daemon and --no-build-cache are important so CodeQL can trace the full build
       run: |

@@ -56,7 +56,7 @@ class ActiveModelProviderImpl @Inject constructor(
                 maxTokens = config.maxTokens,
                 minP = null, // API models might not have minP
                 repetitionPenalty = null, // API models might not have repetitionPenalty
-                contextWindow = null, // API models might not have contextWindow
+                contextWindow = config.contextWindow,
                 thinkingEnabled = config.reasoningEffort != null
             )
         }

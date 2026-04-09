@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.feature.chat.components
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -26,6 +27,7 @@ fun ProcessingIndicator(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .offset(x = (-11).dp)
             .padding(top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
