@@ -21,6 +21,9 @@ interface ApiCredentialsDao {
     @Query("SELECT * FROM api_credentials WHERE credential_alias = :credentialAlias LIMIT 1")
     suspend fun getByCredentialAlias(credentialAlias: String): ApiCredentialsEntity?
 
+    @Query("SELECT * FROM api_credentials WHERE api_key_signature = :signature LIMIT 1")
+    suspend fun getByApiKeySignature(signature: String): ApiCredentialsEntity?
+
     @Insert
     suspend fun insert(entity: ApiCredentialsEntity): Long
 

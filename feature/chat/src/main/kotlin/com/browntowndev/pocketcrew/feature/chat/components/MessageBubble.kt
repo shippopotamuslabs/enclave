@@ -144,7 +144,6 @@ fun MessageBubble(
             ) {
                 Row(
                     modifier = Modifier.padding(top = 4.dp, end = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     // Edit
                     IconButton(
@@ -152,11 +151,12 @@ fun MessageBubble(
                             onEditClick(message.content.text)
                             showActions = false
                         },
+                        modifier = Modifier.size(32.dp),
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit Message",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp),
                         )
                     }
@@ -167,11 +167,12 @@ fun MessageBubble(
                             copyToClipboard(message.content.text)
                             showActions = false
                         },
+                        modifier = Modifier.size(32.dp),
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.content_copy),
                             contentDescription = "Copy message",
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(16.dp),
                         )
                     }

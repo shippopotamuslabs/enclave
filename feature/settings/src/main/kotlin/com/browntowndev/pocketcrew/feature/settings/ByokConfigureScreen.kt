@@ -1,28 +1,40 @@
 package com.browntowndev.pocketcrew.feature.settings
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import kotlinx.coroutines.flow.collect
 
 @Composable
 fun ByokConfigureRoute(
@@ -32,6 +44,13 @@ fun ByokConfigureRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val apiKey by viewModel.currentApiKey.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel) {
+        viewModel.snackbarMessages.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
 
     val handleBack: () -> Unit = {
         viewModel.onBackToByokList()
@@ -64,7 +83,8 @@ fun ByokConfigureRoute(
                 viewModel.onBackToByokList()
                 onNavigateBack()
             })
-        }
+        },
+        snackbarHostState = snackbarHostState,
     )
 }
 
@@ -84,11 +104,13 @@ fun ByokConfigureScreen(
     onUpdateModelProviderFilter: (String?) -> Unit,
     onUpdateModelSortOption: (ModelSortOption) -> Unit,
     onSaveApiCredentials: () -> Unit,
-    onSaveApiModelConfig: () -> Unit
+    onSaveApiModelConfig: () -> Unit,
+    snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) {
-    val isPresetMode = uiState.selectedApiModelConfig != null
+    val isPresetMode = uiState.apiProviderEditor.presetDraft != null
+    val selectedConfig = uiState.apiProviderEditor.presetDraft
     val title = if (isPresetMode) "Configure Preset" else "Provider Credentials"
-    val draftAsset = uiState.apiCredentialDraft ?: ApiModelAssetUi(
+    val draftAsset = uiState.apiProviderEditor.assetDraft ?: ApiModelAssetUi(
         credentialsId = 0,
         displayName = "",
         provider = ApiProvider.ANTHROPIC,
@@ -99,7 +121,27 @@ fun ByokConfigureScreen(
         configurations = emptyList()
     )
 
+    val isSaveEnabled = if (selectedConfig != null) {
+        val parameterSupport = uiState.apiProviderEditor.parameterSupport
+        val maxTokensValid = !parameterSupport.supportsMaxTokens || selectedConfig.maxTokens.isNotBlank()
+        val topKValid = !parameterSupport.supportsTopK || selectedConfig.topK.isNotBlank()
+        selectedConfig.displayName.isNotBlank() &&
+                maxTokensValid &&
+                selectedConfig.contextWindow.isNotBlank() &&
+                topKValid
+    } else {
+        if (draftAsset.credentialsId == 0L) {
+            draftAsset.displayName.isNotBlank() &&
+                    draftAsset.modelId.isNotBlank() &&
+                    (apiKey.isNotBlank() || uiState.apiProviderEditor.selectedReusableCredential != null)
+        } else {
+            draftAsset.displayName.isNotBlank() &&
+                    draftAsset.modelId.isNotBlank()
+        }
+    }
+
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(title, fontWeight = FontWeight.Bold) },
@@ -109,6 +151,30 @@ fun ByokConfigureScreen(
                     }
                 }
             )
+        },
+        bottomBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 20.dp),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Button(
+                    onClick = if (isPresetMode) onSaveApiModelConfig else onSaveApiCredentials,
+                    enabled = isSaveEnabled,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text(
+                        text = if (isPresetMode) "Save Preset" else "Save Credentials",
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
         }
     ) { padding ->
         Column(
@@ -116,25 +182,24 @@ fun ByokConfigureScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 20.dp)
+                .imePadding()
                 .verticalScroll(rememberScrollState())
         ) {
-            val selectedConfig = uiState.selectedApiModelConfig
             if (selectedConfig != null) {
                 PresetConfigurationForm(
                     provider = draftAsset.provider,
-                    parameterSupport = uiState.selectedApiModelParameterSupport,
+                    parameterSupport = uiState.apiProviderEditor.parameterSupport,
                     config = selectedConfig,
-                    selectedModelMetadata = uiState.discoveredApiModels.find {
+                    selectedModelMetadata = uiState.apiProviderEditor.discovery.models.find {
                         it.modelId == draftAsset.modelId
                     },
                     onConfigChange = onApiModelConfigFieldChange,
-                    onNavigateToCustomHeaders = onNavigateToCustomHeaders,
-                    onSave = onSaveApiModelConfig
+                    onNavigateToCustomHeaders = onNavigateToCustomHeaders
                 )
             } else {
                 CredentialsConfigurationForm(
                     asset = draftAsset,
-                    reusableCredentials = uiState.apiModels
+                    reusableCredentials = uiState.apiProvidersSheet.assets
                         .filter { existing ->
                             existing.provider == draftAsset.provider &&
                                 existing.credentialsId != draftAsset.credentialsId
@@ -147,22 +212,21 @@ fun ByokConfigureScreen(
                                 credentialAlias = existing.credentialAlias,
                             )
                         },
-                    selectedReusableCredential = uiState.selectedReusableApiCredential,
+                    selectedReusableCredential = uiState.apiProviderEditor.selectedReusableCredential,
                     apiKey = apiKey,
-                    availableModels = uiState.discoveredApiModels,
-                    filteredModels = uiState.filteredDiscoveredApiModels,
-                    isFetchingModels = uiState.isDiscoveringApiModels,
-                    searchQuery = uiState.modelSearchQuery,
-                    providerFilter = uiState.modelProviderFilter,
-                    sortOption = uiState.modelSortOption,
+                    availableModels = uiState.apiProviderEditor.discovery.models,
+                    filteredModels = uiState.apiProviderEditor.discovery.filteredModels,
+                    isFetchingModels = uiState.apiProviderEditor.discovery.isLoading,
+                    searchQuery = uiState.apiProviderEditor.discovery.searchQuery,
+                    providerFilter = uiState.apiProviderEditor.discovery.providerFilter,
+                    sortOption = uiState.apiProviderEditor.discovery.sortOption,
                     onAssetChange = onApiModelAssetFieldChange,
                     onApiKeyChange = onApiKeyChange,
                     onSelectReusableCredential = onSelectReusableApiCredential,
                     onFetchModels = onFetchApiModels,
                     onUpdateSearchQuery = onUpdateModelSearchQuery,
                     onUpdateProviderFilter = onUpdateModelProviderFilter,
-                    onUpdateSortOption = onUpdateModelSortOption,
-                    onSave = onSaveApiCredentials
+                    onUpdateSortOption = onUpdateModelSortOption
                 )
             }
             

@@ -9,7 +9,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 @Entity(
     tableName = "api_credentials",
     indices = [
-        Index(value = ["credential_alias"], unique = true)
+        Index(value = ["credential_alias"], unique = true),
+        Index(value = ["api_key_signature"], unique = true)
     ]
 )
 data class ApiCredentialsEntity(
@@ -33,6 +34,9 @@ data class ApiCredentialsEntity(
 
     @ColumnInfo(name = "credential_alias")
     val credentialAlias: String,
+
+    @ColumnInfo(name = "api_key_signature")
+    val apiKeySignature: String? = null,
 
     @ColumnInfo(name = "created_at")
     val createdAt: Long = System.currentTimeMillis(),

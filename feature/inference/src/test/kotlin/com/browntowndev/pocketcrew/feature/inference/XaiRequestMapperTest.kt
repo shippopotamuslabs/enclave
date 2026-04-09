@@ -119,6 +119,39 @@ class XaiRequestMapperTest {
     }
 
     @Test
+    fun `mapToChatCompletionParams removes reasoning effort for grok 4 non reasoning family`() {
+        val params = XaiRequestMapper.mapToChatCompletionParams(
+            modelId = "grok-4-1-fast-non-reasoning",
+            prompt = "hello",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                reasoningEffort = ApiReasoningEffort.LOW,
+                maxTokens = 100,
+            ),
+        )
+
+        assertFalse(params.reasoningEffort().isPresent)
+        assertTrue(params.maxCompletionTokens().isPresent)
+        assertEquals(100L, params.maxCompletionTokens().get())
+    }
+
+    @Test
+    fun `mapToResponseParams removes reasoning effort for grok 4 non reasoning family`() {
+        val params = XaiRequestMapper.mapToResponseParams(
+            modelId = "grok-4-1-fast-non-reasoning",
+            prompt = "hello",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                reasoningEffort = ApiReasoningEffort.LOW,
+            ),
+        )
+
+        assertFalse(params.reasoning().isPresent)
+    }
+
+    @Test
     fun `mapToResponseParams never sends max tokens for multi agent suffix model`() {
         val params = XaiRequestMapper.mapToResponseParams(
             modelId = "grok-4.20-multi-agent-0309",

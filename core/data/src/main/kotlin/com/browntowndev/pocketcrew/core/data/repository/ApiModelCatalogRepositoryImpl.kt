@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
+import android.util.Log
 import com.browntowndev.pocketcrew.core.data.anthropic.AnthropicClientProvider
 import com.browntowndev.pocketcrew.core.data.google.GoogleGenAiClientProvider
 import com.browntowndev.pocketcrew.core.data.openai.OpenAiClientProvider
@@ -24,6 +25,10 @@ class ApiModelCatalogRepositoryImpl(
     private val googleGenAiClientProvider: GoogleGenAiClientProvider,
     private val httpClient: Call.Factory,
 ) : ApiModelCatalogPort {
+    companion object {
+        private const val TAG = "ApiModelCatalog"
+    }
+
     @Inject
     constructor(
         openAiClientProvider: OpenAiClientProvider,
@@ -143,21 +148,29 @@ class ApiModelCatalogRepositoryImpl(
         apiKey: String,
         baseUrl: String,
     ): List<DiscoveredApiModel> {
-        val url = baseUrl
-            .toHttpUrl()
-            .newBuilder()
+        val trimmedApiKey = apiKey.trim()
+        val httpUrl = baseUrl.trimEnd('/').toHttpUrl()
+        val url = httpUrl.newBuilder()
+            .apply {
+                val segments = httpUrl.pathSegments
+                if (segments.isNotEmpty() && segments.last() == "models") {
+                    removePathSegment(segments.size - 1)
+                }
+            }
             .addPathSegments("models/user")
             .build()
         val request = Request.Builder()
             .url(url)
             .get()
-            .header("Authorization", "Bearer $apiKey")
+            .header("Authorization", "Bearer $trimmedApiKey")
             .header("User-Agent", "PocketCrew")
+            .header("Accept", "application/json")
             .build()
 
         httpClient.newCall(request).execute().use { response ->
-            check(response.isSuccessful) {
-                "OpenRouter model discovery failed with HTTP ${response.code}"
+            if (!response.isSuccessful) {
+                val errorBody = response.body.string()
+                error("OpenRouter model discovery failed with HTTP ${response.code}: $errorBody")
             }
             val body = response.body.string()
             return parseOpenRouterModels(body)
@@ -179,8 +192,8 @@ class ApiModelCatalogRepositoryImpl(
                         id = id,
                         name = model.optString("name").takeIf { it.isNotBlank() },
                         created = model.optLongOrNull("created"),
-                        promptPrice = pricing?.optString("prompt")?.toDoubleOrNull(),
-                        completionPrice = pricing?.optString("completion")?.toDoubleOrNull(),
+                        promptPrice = pricing?.optString("prompt")?.toDoubleOrNull()?.asUsdPerMillionFromPerToken(),
+                        completionPrice = pricing?.optString("completion")?.toDoubleOrNull()?.asUsdPerMillionFromPerToken(),
                         contextWindowTokens = model.optIntOrNull("context_length"),
                         maxOutputTokens = model
                             .optJSONObject("top_provider")
@@ -197,28 +210,31 @@ class ApiModelCatalogRepositoryImpl(
         apiKey: String,
         baseUrl: String,
     ): List<DiscoveredApiModel> {
-        val url = baseUrl
-            .toHttpUrl()
-            .newBuilder()
-            // We use /v1/language-models or similar endpoint that returns pricing/modalities
-            // If baseUrl is https://api.x.ai/v1, we need to replace the last segment or just append
-            // But since baseUrl is usually configured to end with /v1, we'll replace the last segment "models" if it exists,
-            // but the `baseUrl` here is just the base, it's not the full URL.
-            // Wait, the resolvedBaseUrl is passed from defaultBaseUrl() which is "https://api.x.ai/v1"
+        val trimmedApiKey = apiKey.trim()
+        val httpUrl = baseUrl.trimEnd('/').toHttpUrl()
+        val url = httpUrl.newBuilder()
+            .apply {
+                val segments = httpUrl.pathSegments
+                if (segments.isNotEmpty() && (segments.last() == "models" || segments.last() == "language-models")) {
+                    removePathSegment(segments.size - 1)
+                }
+            }
             .addPathSegments("language-models")
             .build()
             
         val request = Request.Builder()
             .url(url)
             .get()
-            .header("Authorization", "Bearer $apiKey")
-            .header("User-Agent", "PocketCrew")
+            .header("Authorization", "Bearer $trimmedApiKey")
+            .header("Accept", "application/json")
             .build()
 
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
+                val errorBody = response.body.string()
+                Log.e(TAG, "xAI model discovery (/v1/language-models) failed with HTTP ${response.code}: $errorBody")
                 // Fallback to /v1/models if /v1/language-models fails (e.g. they don't support it yet via this proxy)
-                return fetchXaiFallbackModels(apiKey, baseUrl)
+                return fetchXaiFallbackModels(trimmedApiKey, baseUrl)
             }
             val body = response.body.string()
             return parseXaiModels(body)
@@ -226,22 +242,29 @@ class ApiModelCatalogRepositoryImpl(
     }
     
     private fun fetchXaiFallbackModels(apiKey: String, baseUrl: String): List<DiscoveredApiModel> {
-        val url = baseUrl
-            .toHttpUrl()
-            .newBuilder()
+        val trimmedApiKey = apiKey.trim()
+        val httpUrl = baseUrl.trimEnd('/').toHttpUrl()
+        val url = httpUrl.newBuilder()
+            .apply {
+                val segments = httpUrl.pathSegments
+                if (segments.isNotEmpty() && (segments.last() == "models" || segments.last() == "language-models")) {
+                    removePathSegment(segments.size - 1)
+                }
+            }
             .addPathSegments("models")
             .build()
             
         val request = Request.Builder()
             .url(url)
             .get()
-            .header("Authorization", "Bearer $apiKey")
-            .header("User-Agent", "PocketCrew")
+            .header("Authorization", "Bearer $trimmedApiKey")
+            .header("Accept", "application/json")
             .build()
 
         httpClient.newCall(request).execute().use { response ->
-            check(response.isSuccessful) {
-                "xAI model discovery failed with HTTP ${response.code}"
+            if (!response.isSuccessful) {
+                val errorBody = response.body.string()
+                error("xAI model discovery failed with HTTP ${response.code}: $errorBody")
             }
             val body = response.body.string()
             return parseXaiModels(body)
@@ -253,9 +276,15 @@ class ApiModelCatalogRepositoryImpl(
         baseUrl: String,
         modelId: String,
     ): DiscoveredApiModel? {
-        val url = baseUrl
-            .toHttpUrl()
-            .newBuilder()
+        val trimmedApiKey = apiKey.trim()
+        val httpUrl = baseUrl.trimEnd('/').toHttpUrl()
+        val url = httpUrl.newBuilder()
+            .apply {
+                val segments = httpUrl.pathSegments
+                if (segments.isNotEmpty() && (segments.last() == "models" || segments.last() == "language-models")) {
+                    removePathSegment(segments.size - 1)
+                }
+            }
             .addPathSegments("language-models")
             .addPathSegment(modelId)
             .build()
@@ -263,12 +292,14 @@ class ApiModelCatalogRepositoryImpl(
         val request = Request.Builder()
             .url(url)
             .get()
-            .header("Authorization", "Bearer $apiKey")
-            .header("User-Agent", "PocketCrew")
+            .header("Authorization", "Bearer $trimmedApiKey")
+            .header("Accept", "application/json")
             .build()
 
         httpClient.newCall(request).execute().use { response ->
             if (!response.isSuccessful) {
+                val errorBody = response.body.string()
+                Log.e(TAG, "xAI model detail fetch failed with HTTP ${response.code}: $errorBody")
                 return null
             }
             return parseXaiModelDetail(
@@ -281,12 +312,13 @@ class ApiModelCatalogRepositoryImpl(
     internal fun parseXaiModels(responseBody: String): List<DiscoveredApiModel> {
         val payload = JSONObject(responseBody)
         val data = payload.optJSONArray("models") ?: payload.optJSONArray("data") ?: return emptyList()
+
         return buildList {
             for (index in 0 until data.length()) {
                 val model = data.optJSONObject(index) ?: continue
                 val id = model.optString("id")
                 if (id.isBlank()) continue
-                
+
                 val promptPrice = model.optDoubleOrNull("prompt_text_token_price")
                     ?: model.optDoubleOrNull("prompt_token_price")
                 val completionPrice = model.optDoubleOrNull("completion_text_token_price")
@@ -297,9 +329,9 @@ class ApiModelCatalogRepositoryImpl(
                         id = id,
                         name = model.optString("name").takeIf { it.isNotBlank() } ?: id,
                         created = model.optLongOrNull("created"),
-                        promptPrice = promptPrice,
-                        completionPrice = completionPrice,
-                        contextWindowTokens = model.optIntOrNull("max_prompt_length"),
+                        promptPrice = promptPrice?.asUsdPerMillionFromXai(),
+                        completionPrice = completionPrice?.asUsdPerMillionFromXai(),
+                        contextWindowTokens = null,
                     )
                 )
             }
@@ -337,12 +369,20 @@ class ApiModelCatalogRepositoryImpl(
             id = matchedAlias ?: requestedModelId.takeIf { it.isNotBlank() } ?: canonicalId,
             name = model.optString("name").takeIf { it.isNotBlank() } ?: matchedAlias ?: canonicalId,
             created = model.optLongOrNull("created"),
-            promptPrice = promptPrice,
-            completionPrice = completionPrice,
+            promptPrice = promptPrice?.asUsdPerMillionFromXai(),
+            completionPrice = completionPrice?.asUsdPerMillionFromXai(),
             contextWindowTokens = model.optIntOrNull("max_prompt_length")
                 ?: model.optIntOrNull("context_length"),
         )
     }
+
+    private fun Double.asUsdPerMillionFromPerToken(): Double? =
+        takeIf { isFinite() && this >= 0.0 }
+            ?.times(1_000_000.0)
+
+    private fun Double.asUsdPerMillionFromXai(): Double? =
+        takeIf { isFinite() && this >= 0.0 }
+            ?.div(10_000.0)
 
     private fun JSONObject.optIntOrNull(name: String): Int? =
         if (has(name) && !isNull(name)) {

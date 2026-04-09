@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.feature.settings
 
-import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
@@ -10,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiCredentialsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiModelConfigurationUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.FetchApiProviderModelDetailUseCase
@@ -20,11 +20,26 @@ import com.browntowndev.pocketcrew.domain.usecase.byok.SaveApiCredentialsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SaveApiModelConfigurationUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.DeleteLocalModelConfigurationUseCase
-import com.browntowndev.pocketcrew.domain.usecase.modelconfig.DeleteLocalModelMetadataUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.DeleteLocalModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SaveLocalModelConfigurationUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.DiscoverApiModelsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.ExecuteModelDeletionWithReassignmentUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.GetRestorableLocalModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.PrepareModelDeletionUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.ResolveAssignedModelSelectionUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.SaveApiPresetUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.SaveApiProviderDraftUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.SaveLocalModelPresetUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsApiProviderUseCasesImpl
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCasesImpl
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsDeletionUseCasesImpl
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUseCasesImpl
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCasesImpl
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateAllowMemoriesUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomPromptTextUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomizationEnabledUseCase
@@ -38,9 +53,11 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -66,7 +83,6 @@ class SettingsViewModelTest {
     private val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
     private val saveLocalModelConfigurationUseCase = mockk<SaveLocalModelConfigurationUseCase>(relaxed = true)
     private val deleteLocalModelConfigurationUseCase = mockk<DeleteLocalModelConfigurationUseCase>(relaxed = true)
-    private val deleteLocalModelMetadataUseCase = mockk<DeleteLocalModelMetadataUseCase>(relaxed = true)
     private val deleteLocalModelUseCase = mockk<DeleteLocalModelUseCase>(relaxed = true)
     private val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
     private val fetchApiProviderModelDetailUseCase = mockk<FetchApiProviderModelDetailUseCase>(relaxed = true)
@@ -77,6 +93,7 @@ class SettingsViewModelTest {
     private val deleteApiModelConfigurationUseCase = mockk<DeleteApiModelConfigurationUseCase>(relaxed = true)
     private val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
     private val setDefaultModelUseCase = mockk<SetDefaultModelUseCase>(relaxed = true)
+    private val apiModelRepository = mockk<ApiModelRepositoryPort>()
     private val errorHandler = object : ViewModelErrorHandler {
         override val errorEvents = MutableSharedFlow<String>()
 
@@ -162,7 +179,7 @@ class SettingsViewModelTest {
         viewModel.onSelectApiModelConfig(ApiModelConfigUi(displayName = "Creative"))
         runCurrent()
 
-        val config = viewModel.uiState.value.selectedApiModelConfig
+        val config = viewModel.uiState.value.apiProviderEditor.presetDraft
         assertEquals("128000", config?.contextWindow)
         assertEquals("4000", config?.maxTokens)
     }
@@ -270,7 +287,7 @@ class SettingsViewModelTest {
 
         viewModel.onSelectApiModelConfig(ApiModelConfigUi(displayName = "Creative"))
 
-        val config = viewModel.uiState.value.selectedApiModelConfig
+        val config = viewModel.uiState.value.apiProviderEditor.presetDraft
         assertEquals("131072", config?.contextWindow)
         assertEquals("32768", config?.maxTokens)
     }
@@ -321,7 +338,7 @@ class SettingsViewModelTest {
         runCurrent()
         viewModel.onSelectApiModelConfig(ApiModelConfigUi(displayName = "Default Preset"))
 
-        val config = viewModel.uiState.value.selectedApiModelConfig
+        val config = viewModel.uiState.value.apiProviderEditor.presetDraft
         assertEquals("256000", config?.contextWindow)
         assertEquals("64000", config?.maxTokens)
     }
@@ -386,7 +403,7 @@ class SettingsViewModelTest {
 
         assertEquals(88L, savedAsset?.credentialsId)
         assertEquals("Default Preset", savedConfig?.displayName)
-        assertEquals(88L, viewModel.uiState.value.apiCredentialDraft?.credentialsId)
+        assertEquals(88L, viewModel.uiState.value.apiProviderEditor.assetDraft?.credentialsId)
         coVerify(exactly = 1) {
             saveApiModelConfigurationUseCase(
                 match {
@@ -395,6 +412,88 @@ class SettingsViewModelTest {
                 }
             )
         }
+    }
+
+    @Test
+    fun `save api credentials auto-links duplicate provider and emits snackbar`() = runTest {
+        val persistedAsset = ApiModelAsset(
+            credentials = ApiCredentials(
+                id = 88L,
+                displayName = "Existing xAI",
+                provider = ApiProvider.XAI,
+                modelId = "grok-4-fast-reasoning",
+                baseUrl = ApiProvider.XAI.defaultBaseUrl(),
+                credentialAlias = "existing-xai"
+            ),
+            configurations = emptyList()
+        )
+        val persistedAssets = MutableStateFlow(listOf(persistedAsset))
+        val viewModel = createViewModel(apiAssetsFlow = persistedAssets)
+
+        viewModel.onStartCreateApiModelAsset()
+        viewModel.onApiModelAssetFieldChange(
+            ApiModelAssetUi(
+                credentialsId = 0L,
+                displayName = "New xAI",
+                provider = ApiProvider.XAI,
+                modelId = "grok-4-fast-reasoning",
+                baseUrl = ApiProvider.XAI.defaultBaseUrl(),
+                isVision = false,
+                credentialAlias = "",
+                configurations = emptyList()
+            )
+        )
+        viewModel.onApiKeyChange("xai-key")
+
+        coEvery {
+            apiModelRepository.findMatchingCredentials(
+                provider = ApiProvider.XAI,
+                modelId = "grok-4-fast-reasoning",
+                baseUrl = ApiProvider.XAI.defaultBaseUrl(),
+                apiKey = "xai-key",
+                sourceCredentialAlias = null,
+            )
+        } returns persistedAsset.credentials
+        coEvery { saveApiModelConfigurationUseCase(any()) } coAnswers {
+            val configuration = invocation.args[0] as ApiModelConfiguration
+            persistedAssets.value = listOf(
+                persistedAsset.copy(
+                    configurations = listOf(
+                        configuration.copy(
+                            id = 901L,
+                            apiCredentialsId = persistedAsset.credentials.id,
+                        )
+                    )
+                )
+            )
+            Result.success(901L)
+        }
+
+        val snackbarMessages = mutableListOf<String>()
+        val snackbarJob = launch {
+            viewModel.snackbarMessages.collect { snackbarMessages += it }
+        }
+        runCurrent()
+
+        var savedAsset: ApiModelAssetUi? = null
+        var savedConfig: ApiModelConfigUi? = null
+        viewModel.onSaveApiCredentials { assetUi, configUi ->
+            savedAsset = assetUi
+            savedConfig = configUi
+        }
+        runCurrent()
+
+        assertEquals(88L, savedAsset?.credentialsId)
+        assertEquals("Default Preset", savedConfig?.displayName)
+        assertEquals(
+            listOf("Automatically linked to \"Existing xAI\" API Model"),
+            snackbarMessages,
+        )
+        coVerify(exactly = 0) {
+            saveApiCredentialsUseCase(any(), any(), any())
+        }
+
+        snackbarJob.cancel()
     }
 
     @Test
@@ -522,7 +621,7 @@ class SettingsViewModelTest {
         val persistedAssets = MutableStateFlow(listOf(persistedAsset))
         val viewModel = createViewModel(apiAssetsFlow = persistedAssets)
 
-        val selectedAsset = viewModel.uiState.value.apiModels.single()
+        val selectedAsset = viewModel.uiState.value.apiProvidersSheet.assets.single()
         viewModel.onSelectApiModelAsset(selectedAsset)
         viewModel.onApiModelAssetFieldChange(
             selectedAsset.copy(
@@ -532,16 +631,16 @@ class SettingsViewModelTest {
         )
         runCurrent()
 
-        assertEquals("Unsaved Draft Name", viewModel.uiState.value.apiCredentialDraft?.displayName)
-        assertEquals("Persisted xAI", viewModel.uiState.value.apiModels.single().displayName)
+        assertEquals("Unsaved Draft Name", viewModel.uiState.value.apiProviderEditor.assetDraft?.displayName)
+        assertEquals("Persisted xAI", viewModel.uiState.value.apiProvidersSheet.assets.single().displayName)
 
         viewModel.onBackToByokList()
         runCurrent()
 
-        assertNull(viewModel.uiState.value.apiCredentialDraft)
-        assertNull(viewModel.uiState.value.selectedApiModelAsset)
-        assertNull(viewModel.uiState.value.selectedApiModelConfig)
-        assertEquals("Persisted xAI", viewModel.uiState.value.apiModels.single().displayName)
+        assertNull(viewModel.uiState.value.apiProviderEditor.assetDraft)
+        assertNull(viewModel.uiState.value.apiProvidersSheet.selectedAsset)
+        assertNull(viewModel.uiState.value.apiProviderEditor.presetDraft)
+        assertEquals("Persisted xAI", viewModel.uiState.value.apiProvidersSheet.assets.single().displayName)
     }
 
     @Test
@@ -560,7 +659,7 @@ class SettingsViewModelTest {
         val persistedAssets = MutableStateFlow(listOf(persistedAsset))
         val viewModel = createViewModel(apiAssetsFlow = persistedAssets)
 
-        val selectedAsset = viewModel.uiState.value.apiModels.single()
+        val selectedAsset = viewModel.uiState.value.apiProvidersSheet.assets.single()
         viewModel.onSelectApiModelAsset(selectedAsset)
         viewModel.onApiModelAssetFieldChange(
             selectedAsset.copy(displayName = "Unsaved Draft Name")
@@ -573,8 +672,8 @@ class SettingsViewModelTest {
         )
         runCurrent()
 
-        assertEquals("Unsaved Draft Name", viewModel.uiState.value.apiCredentialDraft?.displayName)
-        assertEquals("Room Refreshed Name", viewModel.uiState.value.apiModels.single().displayName)
+        assertEquals("Unsaved Draft Name", viewModel.uiState.value.apiProviderEditor.assetDraft?.displayName)
+        assertEquals("Room Refreshed Name", viewModel.uiState.value.apiProvidersSheet.assets.single().displayName)
     }
 
     @Test
@@ -600,7 +699,7 @@ class SettingsViewModelTest {
         val persistedAssets = MutableStateFlow(listOf(persistedAsset))
         val viewModel = createViewModel(apiAssetsFlow = persistedAssets)
 
-        val selectedAsset = viewModel.uiState.value.apiModels.single()
+        val selectedAsset = viewModel.uiState.value.apiProvidersSheet.assets.single()
         val selectedConfig = selectedAsset.configurations.single()
         viewModel.onSelectApiModelAsset(selectedAsset)
         viewModel.onSelectApiModelConfig(selectedConfig)
@@ -611,11 +710,11 @@ class SettingsViewModelTest {
 
         assertEquals(
             listOf(CustomHeaderUi("", ""), CustomHeaderUi("X-Test", "123")),
-            viewModel.uiState.value.selectedApiModelConfig?.customHeaders
+            viewModel.uiState.value.apiProviderEditor.presetDraft?.customHeaders
         )
         assertEquals(
             listOf(CustomHeaderUi("Authorization", "Bearer persisted")),
-            viewModel.uiState.value.apiModels.single().configurations.single().customHeaders
+            viewModel.uiState.value.apiProvidersSheet.assets.single().configurations.single().customHeaders
         )
 
         viewModel.onCleanupCustomHeaders()
@@ -623,11 +722,11 @@ class SettingsViewModelTest {
 
         assertEquals(
             listOf(CustomHeaderUi("X-Test", "123")),
-            viewModel.uiState.value.selectedApiModelConfig?.customHeaders
+            viewModel.uiState.value.apiProviderEditor.presetDraft?.customHeaders
         )
         assertEquals(
             listOf(CustomHeaderUi("Authorization", "Bearer persisted")),
-            viewModel.uiState.value.apiModels.single().configurations.single().customHeaders
+            viewModel.uiState.value.apiProvidersSheet.assets.single().configurations.single().customHeaders
         )
     }
 
@@ -641,31 +740,96 @@ class SettingsViewModelTest {
         every { getApiModelAssetsUseCase() } returns apiAssetsFlow
         every { getDefaultModelsUseCase() } returns flowOf(emptyList())
 
+        val applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase()
+        val localModelAssetUiMapper = LocalModelAssetUiMapper()
+        val apiModelAssetUiMapper = ApiModelAssetUiMapper()
+        val settingsUseCases = createSettingsUseCases(applyApiModelMetadataDefaultsUseCase)
+
+        coEvery {
+            apiModelRepository.findMatchingCredentials(
+                provider = any(),
+                modelId = any(),
+                baseUrl = any(),
+                apiKey = any(),
+                sourceCredentialAlias = any(),
+            )
+        } returns null
+
         return SettingsViewModel(
-            savedStateHandle = SavedStateHandle(),
-            getSettingsUseCase = getSettingsUseCase,
-            updateThemeUseCase = updateThemeUseCase,
-            updateHapticPressUseCase = updateHapticPressUseCase,
-            updateHapticResponseUseCase = updateHapticResponseUseCase,
-            updateCustomizationEnabledUseCase = updateCustomizationEnabledUseCase,
-            updateSelectedPromptOptionUseCase = updateSelectedPromptOptionUseCase,
-            updateCustomPromptTextUseCase = updateCustomPromptTextUseCase,
-            updateAllowMemoriesUseCase = updateAllowMemoriesUseCase,
-            getLocalModelAssetsUseCase = getLocalModelAssetsUseCase,
-            saveLocalModelConfigurationUseCase = saveLocalModelConfigurationUseCase,
-            deleteLocalModelConfigurationUseCase = deleteLocalModelConfigurationUseCase,
-            deleteLocalModelMetadataUseCase = deleteLocalModelMetadataUseCase,
-            deleteLocalModelUseCase = deleteLocalModelUseCase,
-            getApiModelAssetsUseCase = getApiModelAssetsUseCase,
-            fetchApiProviderModelDetailUseCase = fetchApiProviderModelDetailUseCase,
-            fetchApiProviderModelsUseCase = fetchApiProviderModelsUseCase,
-            saveApiCredentialsUseCase = saveApiCredentialsUseCase,
-            deleteApiCredentialsUseCase = deleteApiCredentialsUseCase,
-            saveApiModelConfigurationUseCase = saveApiModelConfigurationUseCase,
-            deleteApiModelConfigurationUseCase = deleteApiModelConfigurationUseCase,
-            getDefaultModelsUseCase = getDefaultModelsUseCase,
-            setDefaultModelUseCase = setDefaultModelUseCase,
+            settingsUseCases = settingsUseCases,
+            settingsUiStateFactory = SettingsUiStateFactory(
+                localModelAssetUiMapper = localModelAssetUiMapper,
+                apiModelAssetUiMapper = apiModelAssetUiMapper,
+                apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
+                applyApiModelMetadataDefaultsUseCase = applyApiModelMetadataDefaultsUseCase,
+            ),
+            localModelAssetUiMapper = localModelAssetUiMapper,
+            apiModelAssetUiMapper = apiModelAssetUiMapper,
+            reassignmentOptionUiMapper = ReassignmentOptionUiMapper(),
             errorHandler = errorHandler
+        )
+    }
+
+    private fun createSettingsUseCases(
+        applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
+    ): SettingsUseCases {
+        return SettingsUseCasesImpl(
+            preferences = SettingsPreferencesUseCasesImpl(
+                getSettings = getSettingsUseCase,
+                updateTheme = updateThemeUseCase,
+                updateHapticPress = updateHapticPressUseCase,
+                updateHapticResponse = updateHapticResponseUseCase,
+                updateCustomizationEnabled = updateCustomizationEnabledUseCase,
+                updateSelectedPromptOption = updateSelectedPromptOptionUseCase,
+                updateCustomPromptText = updateCustomPromptTextUseCase,
+                updateAllowMemories = updateAllowMemoriesUseCase,
+            ),
+            localModels = SettingsLocalModelUseCasesImpl(
+                getLocalModelAssets = getLocalModelAssetsUseCase,
+                getRestorableLocalModels = GetRestorableLocalModelsUseCase(getLocalModelAssetsUseCase),
+                saveLocalModelPreset = SaveLocalModelPresetUseCase(saveLocalModelConfigurationUseCase),
+            ),
+            apiProviders = SettingsApiProviderUseCasesImpl(
+                getApiModelAssets = getApiModelAssetsUseCase,
+                saveApiProviderDraft = SaveApiProviderDraftUseCase(
+                    saveApiCredentialsUseCase = saveApiCredentialsUseCase,
+                    saveApiModelConfigurationUseCase = saveApiModelConfigurationUseCase,
+                    getApiModelAssetsUseCase = getApiModelAssetsUseCase,
+                    apiModelRepository = apiModelRepository,
+                ),
+                saveApiPreset = SaveApiPresetUseCase(saveApiModelConfigurationUseCase),
+                discoverApiModels = DiscoverApiModelsUseCase(
+                    fetchApiProviderModelsUseCase = fetchApiProviderModelsUseCase,
+                    fetchApiProviderModelDetailUseCase = fetchApiProviderModelDetailUseCase,
+                ),
+                applyApiModelMetadataDefaults = applyApiModelMetadataDefaultsUseCase,
+            ),
+            assignments = SettingsAssignmentUseCasesImpl(
+                getDefaultModels = getDefaultModelsUseCase,
+                setDefaultModel = setDefaultModelUseCase,
+                resolveAssignedModelSelection = ResolveAssignedModelSelectionUseCase(
+                    getDefaultModelsUseCase = getDefaultModelsUseCase,
+                    getLocalModelAssetsUseCase = getLocalModelAssetsUseCase,
+                    getApiModelAssetsUseCase = getApiModelAssetsUseCase,
+                ),
+            ),
+            deletion = SettingsDeletionUseCasesImpl(
+                prepareModelDeletion = PrepareModelDeletionUseCase(
+                    getDefaultModelsUseCase = getDefaultModelsUseCase,
+                    getLocalModelAssetsUseCase = getLocalModelAssetsUseCase,
+                    getApiModelAssetsUseCase = getApiModelAssetsUseCase,
+                    deleteLocalModelUseCase = deleteLocalModelUseCase,
+                    deleteApiCredentialsUseCase = deleteApiCredentialsUseCase,
+                    deleteApiModelConfigurationUseCase = deleteApiModelConfigurationUseCase,
+                ),
+                executeModelDeletionWithReassignment = ExecuteModelDeletionWithReassignmentUseCase(
+                    deleteLocalModelUseCase = deleteLocalModelUseCase,
+                    deleteLocalModelConfigurationUseCase = deleteLocalModelConfigurationUseCase,
+                    deleteApiCredentialsUseCase = deleteApiCredentialsUseCase,
+                    deleteApiModelConfigurationUseCase = deleteApiModelConfigurationUseCase,
+                    setDefaultModelUseCase = setDefaultModelUseCase,
+                ),
+            ),
         )
     }
 }

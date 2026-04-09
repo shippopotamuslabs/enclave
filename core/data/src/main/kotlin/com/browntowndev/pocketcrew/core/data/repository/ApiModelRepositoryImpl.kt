@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
+import com.browntowndev.pocketcrew.core.data.local.buildApiCredentialsIdentitySignature
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationEntity
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.mapper.ApiModelMapper
@@ -12,6 +13,7 @@ import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionP
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -46,42 +48,51 @@ class ApiModelRepositoryImpl @Inject constructor(
         apiKey: String,
         sourceCredentialAlias: String?
     ): Long {
-        val sourceApiKey = when {
-            apiKey.isNotBlank() -> null
-            !sourceCredentialAlias.isNullOrBlank() &&
-                sourceCredentialAlias != credentials.credentialAlias -> {
-                requireNotNull(apiKeyManager.get(sourceCredentialAlias)) {
-                    "Stored API key not found for alias: $sourceCredentialAlias"
-                }
+        val existingEntity = credentials.id.takeIf { it != 0L }?.let { id ->
+            requireNotNull(apiCredentialsDao.getById(id)) {
+                "API credentials not found: $id"
             }
-            else -> null
         }
+        val storedBaseUrl = credentials.baseUrl?.trim()?.takeIf { it.isNotBlank() }
+            ?: credentials.provider.defaultBaseUrl()
+        val sourceApiKey = resolveApiKey(
+            apiKey = apiKey,
+            sourceCredentialAlias = sourceCredentialAlias,
+            fallbackAlias = existingEntity?.credentialAlias,
+        )
+        val apiKeySignature = sourceApiKey?.let {
+            buildApiCredentialsIdentitySignature(
+                provider = credentials.provider,
+                modelId = credentials.modelId,
+                baseUrl = storedBaseUrl,
+                apiKey = it,
+            )
+        } ?: existingEntity?.apiKeySignature
         val now = System.currentTimeMillis()
         val persistedId = if (credentials.id == 0L) {
             val entity = ApiCredentialsEntity(
                 displayName = credentials.displayName,
                 provider = credentials.provider,
                 modelId = credentials.modelId,
-                baseUrl = credentials.baseUrl,
+                baseUrl = storedBaseUrl,
                 isVision = credentials.isVision,
                 credentialAlias = credentials.credentialAlias,
+                apiKeySignature = apiKeySignature,
                 createdAt = now,
                 updatedAt = now
             )
             apiCredentialsDao.insert(entity)
         } else {
-            val existingEntity = requireNotNull(apiCredentialsDao.getById(credentials.id)) {
-                "API credentials not found: ${credentials.id}"
-            }
             val entity = ApiCredentialsEntity(
                 id = credentials.id,
                 displayName = credentials.displayName,
                 provider = credentials.provider,
                 modelId = credentials.modelId,
-                baseUrl = credentials.baseUrl,
+                baseUrl = storedBaseUrl,
                 isVision = credentials.isVision,
                 credentialAlias = credentials.credentialAlias,
-                createdAt = existingEntity.createdAt,
+                apiKeySignature = apiKeySignature,
+                createdAt = existingEntity?.createdAt ?: now,
                 updatedAt = now
             )
             apiCredentialsDao.update(entity)
@@ -101,6 +112,27 @@ class ApiModelRepositoryImpl @Inject constructor(
         }
         
         return persistedCredentials.id
+    }
+
+    override suspend fun findMatchingCredentials(
+        provider: ApiProvider,
+        modelId: String,
+        baseUrl: String?,
+        apiKey: String,
+        sourceCredentialAlias: String?,
+    ): ApiCredentials? {
+        val resolvedApiKey = resolveApiKey(
+            apiKey = apiKey,
+            sourceCredentialAlias = sourceCredentialAlias,
+            fallbackAlias = null,
+        ) ?: return null
+        val signature = buildApiCredentialsIdentitySignature(
+            provider = provider,
+            modelId = modelId,
+            baseUrl = baseUrl,
+            apiKey = resolvedApiKey,
+        )
+        return apiCredentialsDao.getByApiKeySignature(signature)?.toDomain()
     }
 
     override suspend fun deleteCredentials(id: Long) {
@@ -182,4 +214,23 @@ class ApiModelRepositoryImpl @Inject constructor(
             zeroDataRetention = openRouterZeroDataRetention ?: false
         )
     )
+
+    private fun resolveApiKey(
+        apiKey: String,
+        sourceCredentialAlias: String?,
+        fallbackAlias: String?,
+    ): String? {
+        if (apiKey.isNotBlank()) {
+            return apiKey
+        }
+        if (!sourceCredentialAlias.isNullOrBlank() && sourceCredentialAlias != fallbackAlias) {
+            return requireNotNull(apiKeyManager.get(sourceCredentialAlias)) {
+                "Stored API key not found for alias: $sourceCredentialAlias"
+            }
+        }
+        if (!fallbackAlias.isNullOrBlank()) {
+            return apiKeyManager.get(fallbackAlias)
+        }
+        return null
+    }
 }

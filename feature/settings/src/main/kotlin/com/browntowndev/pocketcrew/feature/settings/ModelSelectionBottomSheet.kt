@@ -27,6 +27,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -205,9 +208,16 @@ fun ModelSelectionContent(
                                 if (model.contextWindowTokens != null) {
                                     Text("Ctx: ${model.contextWindowTokens / 1000}k")
                                 }
-                                if (model.promptPrice != null) {
-                                    Text("Price: $${model.promptPrice}/1M")
-                                }
+                                model.promptPrice
+                                    ?.formatUsdPerMillion()
+                                    ?.let { formattedPrice ->
+                                        Text("In: $$formattedPrice/1M")
+                                    }
+                                model.completionPrice
+                                    ?.formatUsdPerMillion()
+                                    ?.let { formattedPrice ->
+                                        Text("Out: $$formattedPrice/1M")
+                                    }
                             }
                         }
                     },
@@ -274,6 +284,14 @@ fun PreviewModelSelectionBottomSheet() {
         )
     }
 }
+
+private fun usdPerMillionFormatter(): DecimalFormat = DecimalFormat(
+    "#,##0.####",
+    DecimalFormatSymbols(Locale.US)
+)
+
+internal fun Double.formatUsdPerMillion(): String? = takeIf { isFinite() && this >= 0.0 }
+    ?.let { usdPerMillionFormatter().format(it) }
 
 @Preview(showBackground = true, name = "Model Selection - Searching")
 @Composable

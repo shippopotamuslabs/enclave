@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "a272aea156e9c23f43bfb6dd95d23304",
+    "identityHash": "6e517e240085a481d606a313f1a5a50b",
     "entities": [
       {
         "tableName": "chat",
@@ -423,7 +423,7 @@
       },
       {
         "tableName": "api_credentials",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `display_name` TEXT NOT NULL, `provider` TEXT NOT NULL, `base_url` TEXT, `model_id` TEXT NOT NULL, `is_vision` INTEGER NOT NULL, `credential_alias` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `display_name` TEXT NOT NULL, `provider` TEXT NOT NULL, `base_url` TEXT, `model_id` TEXT NOT NULL, `is_vision` INTEGER NOT NULL, `credential_alias` TEXT NOT NULL, `api_key_signature` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -467,6 +467,11 @@
             "notNull": true
           },
           {
+            "fieldPath": "apiKeySignature",
+            "columnName": "api_key_signature",
+            "affinity": "TEXT"
+          },
+          {
             "fieldPath": "createdAt",
             "columnName": "created_at",
             "affinity": "INTEGER",
@@ -494,6 +499,15 @@
             ],
             "orders": [],
             "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_api_credentials_credential_alias` ON `${TABLE_NAME}` (`credential_alias`)"
+          },
+          {
+            "name": "index_api_credentials_api_key_signature",
+            "unique": true,
+            "columnNames": [
+              "api_key_signature"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_api_credentials_api_key_signature` ON `${TABLE_NAME}` (`api_key_signature`)"
           }
         ]
       },
@@ -728,7 +742,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a272aea156e9c23f43bfb6dd95d23304')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6e517e240085a481d606a313f1a5a50b')"
     ]
   }
 }

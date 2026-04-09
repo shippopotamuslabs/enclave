@@ -213,7 +213,7 @@ class ApiProviderModelPolicyTest {
             provider = ApiProvider.XAI,
             modelId = "grok-4-fast-non-reasoning",
         )
-        assertTrue(grok4NonReasoning.supportsReasoningEffort)
+        assertFalse(grok4NonReasoning.supportsReasoningEffort)
         assertTrue(grok4NonReasoning.supportsFrequencyPenalty)
         assertTrue(grok4NonReasoning.supportsPresencePenalty)
     }

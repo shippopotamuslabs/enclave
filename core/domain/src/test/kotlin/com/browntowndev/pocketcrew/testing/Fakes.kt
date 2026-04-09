@@ -28,6 +28,7 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadState
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
@@ -276,6 +277,28 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     override fun observeAllConfigurations(): Flow<List<ApiModelConfiguration>> = _configs
     override suspend fun getAllCredentials(): List<ApiCredentials> = _credentials.value
     override suspend fun getCredentialsById(id: Long): ApiCredentials? = _credentials.value.find { it.id == id }
+    override suspend fun findMatchingCredentials(
+        provider: ApiProvider,
+        modelId: String,
+        baseUrl: String?,
+        apiKey: String,
+        sourceCredentialAlias: String?,
+    ): ApiCredentials? {
+        val resolvedApiKey = when {
+            apiKey.isNotBlank() -> apiKey
+            !sourceCredentialAlias.isNullOrBlank() -> _credentials.value
+                .firstOrNull { it.credentialAlias == sourceCredentialAlias }
+                ?.let { savedKeys[it.id] }
+            else -> null
+        } ?: return null
+
+        return _credentials.value.firstOrNull { credential ->
+            credential.provider == provider &&
+                credential.modelId == modelId &&
+                credential.baseUrl.normalizedBaseUrl() == baseUrl.normalizedBaseUrl() &&
+                savedKeys[credential.id] == resolvedApiKey
+        }
+    }
 
     override suspend fun saveCredentials(
         credentials: ApiCredentials,
@@ -325,6 +348,8 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     override suspend fun deleteConfiguration(id: Long) {
         _configs.value = _configs.value.filter { it.id != id }
     }
+
+    private fun String?.normalizedBaseUrl(): String = this?.trim().orEmpty()
 }
 
 class FakeDefaultModelRepository : DefaultModelRepositoryPort {
