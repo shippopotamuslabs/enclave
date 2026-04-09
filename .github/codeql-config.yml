@@ -1,0 +1,15 @@
+name: CodeQL Configuration
+
+# Skip Kotlin analysis due to Kotlin 2.3.20 incompatibility
+# CodeQL supports Kotlin < 2.3.20
+# Reference: https://github.com/github/codeql-action
+
+disable-default-queries: false
+
+paths-ignore:
+  - third_party
+  - llama-android
+  - edge-gallery
+
+kotlin:
+  enabled: false
