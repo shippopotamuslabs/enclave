@@ -11,6 +11,7 @@ import com.openai.client.OpenAIClient
 import com.openai.errors.OpenAIServiceException
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.ResponseCreateParams
+import java.util.Optional
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -65,7 +66,7 @@ abstract class BaseOpenAiSdkInferenceService(
         } catch (e: Exception) {
             var errorMsg = e.message ?: "Unknown error"
             if (e is OpenAIServiceException) {
-                val bodyStr = serializeBody(e.body())
+                val bodyStr = safeSerializeBody(e)
                 if (bodyStr.isNotBlank() && !errorMsg.contains(bodyStr)) {
                     errorMsg += " | Body: $bodyStr"
                 }
@@ -111,20 +112,108 @@ abstract class BaseOpenAiSdkInferenceService(
             var outputTextDeltaCount = 0
             var reasoningTextDeltaCount = 0
             var reasoningSummaryDeltaCount = 0
+            val outputTextByPart = mutableMapOf<String, StringBuilder>()
+            val reasoningTextByPart = mutableMapOf<String, StringBuilder>()
+            val reasoningSummaryByPart = mutableMapOf<String, StringBuilder>()
             while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
                 val event = runInterruptible { iterator.next() }
                 if (event.isOutputTextDelta()) {
-                    val text = event.outputTextDelta().get().delta()
+                    val outputTextDelta = event.outputTextDelta().get()
+                    val text = outputTextDelta.delta()
                     outputTextDeltaCount++
+                    appendStreamDelta(
+                        parts = outputTextByPart,
+                        key = streamPartKey(
+                            itemId = outputTextDelta.itemId(),
+                            outputIndex = outputTextDelta.outputIndex(),
+                            contentIndex = outputTextDelta.contentIndex()
+                        ),
+                        text = text
+                    )
                     emitEvent(InferenceEvent.PartialResponse(text, modelType))
+                } else if (event.isOutputTextDone()) {
+                    val outputTextDone = event.outputTextDone().get()
+                    val key = streamPartKey(
+                        itemId = outputTextDone.itemId(),
+                        outputIndex = outputTextDone.outputIndex(),
+                        contentIndex = outputTextDone.contentIndex()
+                    )
+                    val fallbackText = resolveNovelStreamText(
+                        parts = outputTextByPart,
+                        key = key,
+                        finalizedText = outputTextDone.text()
+                    )
+                    if (fallbackText.isNotEmpty()) {
+                        loggingPort.debug(
+                            tag,
+                            "Responses stream emitted output_text.done fallback model=$modelId key=$key chars=${fallbackText.length}"
+                        )
+                        emitEvent(InferenceEvent.PartialResponse(fallbackText, modelType))
+                    }
                 } else if (event.isReasoningTextDelta()) {
-                    val text = event.reasoningTextDelta().get().delta()
+                    val reasoningTextDelta = event.reasoningTextDelta().get()
+                    val text = reasoningTextDelta.delta()
                     reasoningTextDeltaCount++
+                    appendStreamDelta(
+                        parts = reasoningTextByPart,
+                        key = streamPartKey(
+                            itemId = reasoningTextDelta.itemId(),
+                            outputIndex = reasoningTextDelta.outputIndex(),
+                            contentIndex = reasoningTextDelta.contentIndex()
+                        ),
+                        text = text
+                    )
                     emitEvent(InferenceEvent.Thinking(text, modelType))
+                } else if (event.isReasoningTextDone()) {
+                    val reasoningTextDone = event.reasoningTextDone().get()
+                    val key = streamPartKey(
+                        itemId = reasoningTextDone.itemId(),
+                        outputIndex = reasoningTextDone.outputIndex(),
+                        contentIndex = reasoningTextDone.contentIndex()
+                    )
+                    val fallbackText = resolveNovelStreamText(
+                        parts = reasoningTextByPart,
+                        key = key,
+                        finalizedText = reasoningTextDone.text()
+                    )
+                    if (fallbackText.isNotEmpty()) {
+                        loggingPort.debug(
+                            tag,
+                            "Responses stream emitted reasoning_text.done fallback model=$modelId key=$key chars=${fallbackText.length}"
+                        )
+                        emitEvent(InferenceEvent.Thinking(fallbackText, modelType))
+                    }
                 } else if (event.isReasoningSummaryTextDelta()) {
-                    val text = event.reasoningSummaryTextDelta().get().delta()
+                    val reasoningSummaryTextDelta = event.reasoningSummaryTextDelta().get()
+                    val text = reasoningSummaryTextDelta.delta()
                     reasoningSummaryDeltaCount++
+                    appendStreamDelta(
+                        parts = reasoningSummaryByPart,
+                        key = streamItemKey(
+                            itemId = reasoningSummaryTextDelta.itemId(),
+                            outputIndex = reasoningSummaryTextDelta.outputIndex()
+                        ),
+                        text = text
+                    )
                     emitEvent(InferenceEvent.Thinking(text, modelType))
+                } else if (event.isReasoningSummaryTextDone()) {
+                    val reasoningSummaryTextDone = event.reasoningSummaryTextDone().get()
+                    val key = streamItemKey(
+                        itemId = reasoningSummaryTextDone.itemId(),
+                        outputIndex = reasoningSummaryTextDone.outputIndex()
+                    )
+                    val fallbackText = resolveNovelStreamText(
+                        parts = reasoningSummaryByPart,
+                        key = key,
+                        finalizedText = reasoningSummaryTextDone.text()
+                    )
+                    if (fallbackText.isNotEmpty()) {
+                        loggingPort.debug(
+                            tag,
+                            "Responses stream emitted reasoning_summary_text.done fallback model=$modelId key=$key chars=${fallbackText.length}"
+                        )
+                        emitEvent(InferenceEvent.Thinking(fallbackText, modelType))
+                    }
                 } else if (event.isCompleted()) {
                     loggingPort.debug(
                         tag,
@@ -216,6 +305,60 @@ abstract class BaseOpenAiSdkInferenceService(
         return sanitized.take(STREAM_PREVIEW_CHARS)
     }
 
+    private fun appendStreamDelta(
+        parts: MutableMap<String, StringBuilder>,
+        key: String,
+        text: String
+    ) {
+        if (text.isEmpty()) {
+            return
+        }
+        parts.getOrPut(key) { StringBuilder() }.append(text)
+    }
+
+    private fun resolveNovelStreamText(
+        parts: MutableMap<String, StringBuilder>,
+        key: String,
+        finalizedText: String
+    ): String {
+        if (finalizedText.isEmpty()) {
+            return ""
+        }
+        val priorText = parts[key]?.toString().orEmpty()
+        val novelText = novelStreamSuffix(priorText, finalizedText)
+        parts[key] = StringBuilder(finalizedText)
+        return novelText
+    }
+
+    internal fun novelStreamSuffix(
+        streamedText: String,
+        finalizedText: String
+    ): String {
+        if (finalizedText.isEmpty()) {
+            return ""
+        }
+        if (streamedText.isEmpty()) {
+            return finalizedText
+        }
+        if (streamedText == finalizedText) {
+            return ""
+        }
+
+        val commonPrefixLength = streamedText.commonPrefixWith(finalizedText).length
+        return finalizedText.drop(commonPrefixLength)
+    }
+
+    private fun streamPartKey(
+        itemId: String,
+        outputIndex: Long,
+        contentIndex: Long
+    ): String = "$itemId:$outputIndex:$contentIndex"
+
+    private fun streamItemKey(
+        itemId: String,
+        outputIndex: Long
+    ): String = "$itemId:$outputIndex"
+
     private fun detectResponseEventType(event: com.openai.models.responses.ResponseStreamEvent): String =
         when {
             event.isCreated() -> "created"
@@ -266,25 +409,45 @@ abstract class BaseOpenAiSdkInferenceService(
             append(baseMessage)
             append(" status=")
             append(throwable.statusCode())
-            throwable.code().orElse(null)?.let {
+            safeOptionalField { throwable.code() }?.let {
                 append(" code=")
                 append(it)
             }
-            throwable.type().orElse(null)?.let {
+            safeOptionalField { throwable.type() }?.let {
                 append(" type=")
                 append(it)
             }
-            throwable.param().orElse(null)?.let {
+            safeOptionalField { throwable.param() }?.let {
                 append(" param=")
                 append(it)
             }
-            val body = serializeBody(throwable.body())
+            val body = safeSerializeBody(throwable)
             if (body.isNotBlank()) {
                 append(" body=")
                 append(truncateForLogs(body))
             }
         }
     }
+
+    private fun safeOptionalField(read: () -> Optional<String>): String? =
+        runCatching { read().orElse(null) }
+            .getOrElse { error ->
+                loggingPort.warning(
+                    tag,
+                    "Skipping malformed API error field while formatting exception. fieldError=${error.message ?: error::class.java.simpleName}"
+                )
+                null
+            }
+
+    private fun safeSerializeBody(throwable: OpenAIServiceException): String =
+        runCatching { serializeBody(throwable.body()) }
+            .getOrElse { error ->
+                loggingPort.warning(
+                    tag,
+                    "Skipping API error body while formatting exception. bodyError=${error.message ?: error::class.java.simpleName}"
+                )
+                ""
+            }
 
     private fun serializeBody(body: Any): String = body.toString()
 

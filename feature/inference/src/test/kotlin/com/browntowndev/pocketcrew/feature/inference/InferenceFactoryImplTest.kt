@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import android.content.Context
+import com.browntowndev.pocketcrew.core.data.anthropic.AnthropicClientProvider
+import com.browntowndev.pocketcrew.core.data.google.GoogleGenAiClientProvider
 import com.browntowndev.pocketcrew.core.data.openai.OpenAiClientProvider
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
@@ -17,6 +19,8 @@ import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
+import com.anthropic.client.AnthropicClient
+import com.google.genai.Client
 import com.openai.client.OpenAIClient
 import android.content.pm.ApplicationInfo
 import io.mockk.coEvery
@@ -43,9 +47,13 @@ class InferenceFactoryImplTest {
     private val conversationProvider = providerOf(mockk<ConversationManagerPort>(relaxed = true))
     private val mediaPipeFactory = mockk<MediaPipeInferenceServiceFactory>(relaxed = true)
     private val openAiClientProvider = mockk<OpenAiClientProvider>()
+    private val anthropicClientProvider = mockk<AnthropicClientProvider>()
+    private val googleGenAiClientProvider = mockk<GoogleGenAiClientProvider>()
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val inferenceLockManager = mockk<InferenceLockManager>()
     private val openAiClient = mockk<OpenAIClient>(relaxed = true)
+    private val anthropicClient = mockk<AnthropicClient>(relaxed = true)
+    private val googleClient = mockk<Client>(relaxed = true)
 
     private lateinit var factory: InferenceFactoryImpl
 
@@ -60,6 +68,8 @@ class InferenceFactoryImplTest {
         every { inferenceLockManager.releaseLock() } returns Unit
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
         every { openAiClientProvider.getClient(any(), any(), any(), any(), any()) } returns openAiClient
+        every { anthropicClientProvider.getClient(any(), any(), any()) } returns anthropicClient
+        every { googleGenAiClientProvider.getClient(any(), any(), any(), any()) } returns googleClient
 
         factory = InferenceFactoryImpl(
             context = context,
@@ -73,6 +83,8 @@ class InferenceFactoryImplTest {
             conversationManagerProvider = conversationProvider,
             mediaPipeFactory = mediaPipeFactory,
             openAiClientProvider = openAiClientProvider,
+            anthropicClientProvider = anthropicClientProvider,
+            googleGenAiClientProvider = googleGenAiClientProvider,
             loggingPort = loggingPort,
             inferenceLockManager = inferenceLockManager
         )
@@ -167,6 +179,26 @@ class InferenceFactoryImplTest {
         val first = factory.withInferenceService(ModelType.THINKING) { it }
 
         credentials = apiCredentials(modelId = "gpt-5")
+        val second = factory.withInferenceService(ModelType.THINKING) { it }
+
+        assertNotSame(first, second)
+    }
+
+    @Test
+    fun `withInferenceService recreates API service when api key changes under same config and alias`() = runTest {
+        val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = 7L)
+        val config = ApiModelConfiguration(id = 7L, apiCredentialsId = 11L, displayName = "Thinking preset")
+        val credentials = apiCredentials(modelId = "gpt-4o")
+        var apiKey = "secret-a"
+
+        coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
+        coEvery { apiModelRepository.getConfigurationById(7L) } returns config
+        coEvery { apiModelRepository.getCredentialsById(11L) } returns credentials
+        every { apiKeyProvider.getApiKey("alias") } answers { apiKey }
+
+        val first = factory.withInferenceService(ModelType.THINKING) { it }
+
+        apiKey = "secret-b"
         val second = factory.withInferenceService(ModelType.THINKING) { it }
 
         assertNotSame(first, second)
@@ -295,6 +327,46 @@ class InferenceFactoryImplTest {
         val service = factory.withInferenceService(ModelType.THINKING) { it }
 
         assertEquals("OpenRouterInferenceServiceImpl", service.javaClass.simpleName)
+    }
+
+    @Test
+    fun `withInferenceService routes anthropic credentials to dedicated service`() = runTest {
+        val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = 10L)
+        val config = ApiModelConfiguration(id = 10L, apiCredentialsId = 12L, displayName = "Anthropic preset")
+        val credentials = apiCredentials(
+            modelId = "claude-sonnet-4-20250514",
+            provider = ApiProvider.ANTHROPIC,
+            baseUrl = null
+        )
+
+        coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
+        coEvery { apiModelRepository.getConfigurationById(10L) } returns config
+        coEvery { apiModelRepository.getCredentialsById(12L) } returns credentials
+        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+
+        val service = factory.withInferenceService(ModelType.THINKING) { it }
+
+        assertEquals("AnthropicInferenceServiceImpl", service.javaClass.simpleName)
+    }
+
+    @Test
+    fun `withInferenceService routes google credentials to dedicated service`() = runTest {
+        val assignment = DefaultModelAssignment(modelType = ModelType.THINKING, apiConfigId = 13L)
+        val config = ApiModelConfiguration(id = 13L, apiCredentialsId = 12L, displayName = "Google preset")
+        val credentials = apiCredentials(
+            modelId = "gemini-2.5-flash",
+            provider = ApiProvider.GOOGLE,
+            baseUrl = null
+        )
+
+        coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
+        coEvery { apiModelRepository.getConfigurationById(13L) } returns config
+        coEvery { apiModelRepository.getCredentialsById(12L) } returns credentials
+        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+
+        val service = factory.withInferenceService(ModelType.THINKING) { it }
+
+        assertEquals("GoogleInferenceServiceImpl", service.javaClass.simpleName)
     }
 
     @Test

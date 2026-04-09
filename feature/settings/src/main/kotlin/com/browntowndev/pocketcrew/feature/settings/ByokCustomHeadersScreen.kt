@@ -45,7 +45,7 @@ fun ByokCustomHeadersRoute(
     }
 
     ByokCustomHeadersScreen(
-        headers = uiState.selectedApiModelConfig?.customHeaders ?: emptyList(),
+        headers = uiState.apiProviderEditor.presetDraft?.customHeaders ?: emptyList(),
         onNavigateBack = handleBack,
         onAddHeader = viewModel::onAddCustomHeader,
         onDeleteHeader = viewModel::onDeleteCustomHeader,

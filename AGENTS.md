@@ -131,15 +131,6 @@ mcpServers:
       - morph-mcp___codebase_search
       - morph-mcp___github_codebase_search
     purpose: Code editing and search
-  kimi-vision:
-    tools:
-      - kimi-vision___analyze_compose_ui
-      - kimi-vision___debug_visual_regression
-    purpose: UI screenshot analysis
-  MiniMax:
-    tools:
-      - (coding assistance via MiniMax model)
-    purpose: Code generation support
 ---
 
 # Agent Routing Contract — Pocket Crew
@@ -201,15 +192,18 @@ If synthitect tools are unavailable, fall back to:
 
 ---
 
-## 2. Legacy Agent Files
+### 2. AndroJack Level 3 Protocol
 
-**DEPRECATED**: The following files are obsolete:
-- `agents/DISCOVERY.md` — **DEPRECATED** (use synthitect MCP)
-- `agents/SPEC.md` — **DEPRECATED** (use synthitect MCP)
-- `agents/TDD.md` — **DEPRECATED** (use synthitect MCP)
-- `agents/IMPLEMENTATION.md` — **DEPRECATED** (use synthitect MCP)
+All Android development tasks in this workspace operate under the AndroJack Level 3 protocol. The AI agent operates using the following mandatory workflow:
 
-These files are kept for reference only. The synthitect MCP tools handle all workflow automation.
+#### 1. The Grounding Gate (Pre-Generation)
+Before writing code or proposing architectural solutions, the `androjack_grounding_gate` tool is called. The AI maps the current task to the appropriate ruleset (e.g., calling `material3_expressive` for Compose UI tasks or `gradle_dependency_checker` for build scripts) and applies those rules to the solution.
+
+#### 2. The Loop-Back Validator (Post-Generation)
+Every block of code generated (Kotlin, XML, Gradle, or shell scripts) is passed through the `android_code_validator` tool before the response is shown to the user. 
+
+#### 3. Strict Failure Handling
+If `android_code_validator` returns a `FAIL` verdict (due to deprecated APIs, Android 16/17 non-compliance, etc.), the AI corrects the code internally and re-runs the validator. Code with a `FAIL` verdict is never output in the final response.
 
 ---
 

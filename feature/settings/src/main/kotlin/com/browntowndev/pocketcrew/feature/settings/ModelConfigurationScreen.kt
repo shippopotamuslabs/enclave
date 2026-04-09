@@ -109,36 +109,36 @@ fun ModelConfigurationScreen(
             item {
                 DefaultAssignmentsCard(
                     title = "General Chat",
-                    assignments = uiState.defaultAssignments.filter { it.modelType in generalChatTypes },
+                    assignments = uiState.assignments.assignments.filter { it.modelType in generalChatTypes },
                     onEditAssignment = { onShowAssignmentDialog(true, it) }
                 )
             }
             item {
                 DefaultAssignmentsCard(
                     title = "Crew Mode",
-                    assignments = uiState.defaultAssignments.filter { it.modelType in crewModeTypes },
+                    assignments = uiState.assignments.assignments.filter { it.modelType in crewModeTypes },
                     onEditAssignment = { onShowAssignmentDialog(true, it) }
                 )
             }
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }
 
-        if (uiState.showAssignmentDialog && uiState.editingAssignmentSlot != null) {
-            val assignmentSlot = uiState.editingAssignmentSlot
-            val slotLabel = uiState.defaultAssignments
+        if (uiState.assignments.isDialogOpen && uiState.assignments.editingSlot != null) {
+            val assignmentSlot = uiState.assignments.editingSlot
+            val slotLabel = uiState.assignments.assignments
                 .find { it.modelType == assignmentSlot }
                 ?.displayLabel ?: assignmentSlot.name
             
             val isVisionSlot = assignmentSlot == ModelType.VISION
             val localAssets = if (isVisionSlot) {
-                uiState.localModels.filter { it.visionCapable }
+                uiState.localModelsSheet.models.filter { it.visionCapable }
             } else {
-                uiState.localModels
+                uiState.localModelsSheet.models
             }
             val apiAssets = if (isVisionSlot) {
-                uiState.apiModels.filter { it.isVision }
+                uiState.apiProvidersSheet.assets.filter { it.isVision }
             } else {
-                uiState.apiModels
+                uiState.apiProvidersSheet.assets
             }
 
             AssignmentSelectionBottomSheet(
@@ -328,7 +328,6 @@ fun AssignmentSelectionContent(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.background)
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     IconButton(onClick = { viewState = AssignmentSelectionView.AssetList }, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
@@ -664,9 +663,23 @@ fun PreviewModelConfigurationScreen() {
     }
 }
 
-@Preview(showBackground = true, name = "Assignment Selection Bottom Sheet")
+@Preview(showBackground = true, name = "Default Assignments Card")
 @Composable
-fun PreviewAssignmentSelectionBottomSheet() {
+fun PreviewDefaultAssignmentsCard() {
+    PocketCrewTheme {
+        Column(modifier = Modifier.padding(16.dp)) {
+            DefaultAssignmentsCard(
+                title = "General Chat",
+                assignments = MockSettingsData.baseUiState.assignments.assignments.take(3),
+                onEditAssignment = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Assignment Selection Content")
+@Composable
+fun PreviewAssignmentSelectionContent() {
     PocketCrewTheme {
         AssignmentSelectionContent(
             modifier = Modifier.padding(bottom = 32.dp),
@@ -676,5 +689,68 @@ fun PreviewAssignmentSelectionBottomSheet() {
             onDismiss = {},
             onSelect = { _, _ -> }
         )
+    }
+}
+
+@Preview(showBackground = true, name = "Assignment Asset Card")
+@Composable
+fun PreviewAssignmentAssetCard() {
+    PocketCrewTheme {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            AssignmentAssetCard(
+                title = "Meta Llama 3 8B",
+                subtitle = "meta-llama • GGUF",
+                presetCount = 3,
+                isSelected = false,
+                onClick = {}
+            )
+            AssignmentAssetCard(
+                title = "Meta Llama 3 8B",
+                subtitle = "meta-llama • GGUF",
+                presetCount = 3,
+                isSelected = true,
+                onClick = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Config Selection Card")
+@Composable
+fun PreviewConfigSelectionCard() {
+    PocketCrewTheme {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ConfigSelectionCard(
+                label = "Default",
+                isSelected = false,
+                onClick = {}
+            )
+            ConfigSelectionCard(
+                label = "Creative",
+                isSelected = true,
+                onClick = {}
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Model Card")
+@Composable
+fun PreviewModelCard() {
+    PocketCrewTheme {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ModelCard(
+                title = "Llama 3 8B",
+                subtitle = "Local • GGUF",
+                isSelected = false,
+                onClick = {}
+            )
+            ModelCard(
+                title = "GPT-4o",
+                subtitle = "OpenAI • Cloud",
+                isSelected = true,
+                onClick = {}
+            )
+        }
     }
 }

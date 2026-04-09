@@ -506,14 +506,14 @@ class JniLlamaEngine @Inject constructor(
         if (!loaded.get()) return
 
         try {
-            val contextSize = nativeGetContextSize()
+            val contextSize = getContextSizeForCompression()
 
             if (contextSize <= 0) {
                 Log.w(TAG, "Cannot check context: size=$contextSize")
                 return
             }
 
-            val nativeUsage = nativeGetContextUsage()
+            val nativeUsage = getContextUsageForCompression()
             val fallbackUsage = lastPromptTokens + lastGeneratedTokens
             val totalTokensUsed = when {
                 nativeUsage > 0 -> nativeUsage
@@ -536,7 +536,7 @@ class JniLlamaEngine @Inject constructor(
                 // Save state before compression (for potential rollback)
                 val stateBefore = saveState()
 
-                val success = compressContext(COMPRESSION_FACTOR)
+                val success = applyCompressionForContext(COMPRESSION_FACTOR)
 
                 if (success) {
                     Log.i(TAG, "Context compression applied successfully")
@@ -564,6 +564,12 @@ class JniLlamaEngine @Inject constructor(
             false
         }
     }
+
+    internal fun getContextSizeForCompression(): Int = nativeGetContextSize()
+
+    internal fun getContextUsageForCompression(): Int = nativeGetContextUsage()
+
+    internal fun applyCompressionForContext(factor: Int): Boolean = compressContext(factor)
 
     /**
      * Save the current llama state (KV cache + tokens) to a byte array.

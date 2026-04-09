@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.byok
 
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
 import javax.inject.Inject
@@ -11,7 +12,7 @@ interface FetchApiProviderModelsUseCase {
         currentApiKey: String,
         credentialAlias: String? = null,
         baseUrl: String? = null
-    ): List<String>
+    ): List<DiscoveredApiModel>
 }
 
 class FetchApiProviderModelsUseCaseImpl @Inject constructor(
@@ -23,7 +24,7 @@ class FetchApiProviderModelsUseCaseImpl @Inject constructor(
         currentApiKey: String,
         credentialAlias: String?,
         baseUrl: String?
-    ): List<String> {
+    ): List<DiscoveredApiModel> {
         val resolvedApiKey = currentApiKey.ifBlank {
             credentialAlias
                 ?.takeIf { it.isNotBlank() }

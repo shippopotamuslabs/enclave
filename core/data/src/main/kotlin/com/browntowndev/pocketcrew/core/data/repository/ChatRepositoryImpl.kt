@@ -46,6 +46,9 @@ class ChatRepositoryImpl @Inject constructor(
 
     override suspend fun updateMessageState(messageId: Long, messageState: MessageState) {
         messageDao.updateMessageState(messageId, messageState)
+        if (messageState == MessageState.COMPLETE) {
+            messageDao.updateMessageCreatedAt(messageId, System.currentTimeMillis())
+        }
     }
 
     override suspend fun updateMessageContent(messageId: Long, content: String) {
@@ -80,6 +83,7 @@ class ChatRepositoryImpl @Inject constructor(
         messageDao.updateThinkingStartTime(messageId, 0)
         messageDao.updateThinkingEndTime(messageId, 0)
         messageDao.updateMessageState(messageId, MessageState.COMPLETE)
+        messageDao.updateMessageCreatedAt(messageId, System.currentTimeMillis())
     }
 
     override suspend fun updateMessageModelType(messageId: Long, modelType: ModelType) {

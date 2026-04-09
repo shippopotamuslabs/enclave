@@ -39,6 +39,7 @@ fun SettingsRoute(
         onShowLocalModelsSheet = viewModel::onShowModelConfigSheet, // Reuse this state flag
         onShowByokSheet = viewModel::onShowByokSheet,
         onNavigateToByokConfigure = onNavigateToByokConfigure,
+        onStartCreateApiModelAsset = viewModel::onStartCreateApiModelAsset,
         onSelectApiModelAsset = viewModel::onSelectApiModelAsset,
         onSelectApiModelConfig = viewModel::onSelectApiModelConfig,
         onDeleteApiModelAsset = viewModel::onDeleteApiModelAsset,

@@ -44,6 +44,49 @@ class PocketCrewDatabaseMigrationTest {
         assertEquals(0, cursor.getInt(0))
         cursor.close()
 
+        val credentialsColumns = sqliteDb.query("PRAGMA table_info('api_credentials')")
+        val credentialColumnNames = buildList {
+            credentialsColumns.use {
+                while (it.moveToNext()) {
+                    add(it.getString(it.getColumnIndexOrThrow("name")))
+                }
+            }
+        }
+        assertTrue(credentialColumnNames.contains("api_key_signature"))
+
+        val indexCursor = sqliteDb.query("PRAGMA index_list('api_credentials')")
+        val indexNames = buildList {
+            indexCursor.use {
+                while (it.moveToNext()) {
+                    add(it.getString(it.getColumnIndexOrThrow("name")))
+                }
+            }
+        }
+        assertTrue(indexNames.contains("index_api_credentials_api_key_signature"))
+
         db.close()
+    }
+
+    @Test
+    fun `api credentials schema does not keep identity uniqueness index`() {
+        val db = Room.inMemoryDatabaseBuilder(
+            ApplicationProvider.getApplicationContext(),
+            PocketCrewDatabase::class.java
+        ).allowMainThreadQueries().build()
+        try {
+            val sqliteDb = db.openHelper.readableDatabase
+            val cursor = sqliteDb.query("PRAGMA index_list('api_credentials')")
+            val indexNames = buildList {
+                cursor.use {
+                    while (it.moveToNext()) {
+                        add(it.getString(it.getColumnIndexOrThrow("name")))
+                    }
+                }
+            }
+
+            assertFalse(indexNames.contains("index_api_credentials_provider_model_id_base_url"))
+        } finally {
+            db.close()
+        }
     }
 }

@@ -64,6 +64,7 @@ fun SettingsScreen(
     onShowLocalModelsSheet: (Boolean) -> Unit,
     onShowByokSheet: (Boolean) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
+    onStartCreateApiModelAsset: () -> Unit,
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
     onDeleteApiModelAsset: (Long) -> Unit,
@@ -104,7 +105,7 @@ fun SettingsScreen(
             item {
                 SectionHeader(text = "Appearance")
                 ThemeSelection(
-                    selectedTheme = uiState.theme,
+                    selectedTheme = uiState.home.theme,
                     onThemeChange = onThemeChange
                 )
             }
@@ -114,14 +115,14 @@ fun SettingsScreen(
                 SettingsToggle(
                     title = "Haptic Press",
                     icon = Icons.Default.TouchApp,
-                    checked = uiState.hapticPress,
+                    checked = uiState.home.hapticPress,
                     onCheckedChange = onHapticPressChange
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsToggle(
                     title = "Haptic Response",
                     icon = Icons.Default.Vibration,
-                    checked = uiState.hapticResponse,
+                    checked = uiState.home.hapticResponse,
                     onCheckedChange = onHapticResponseChange
                 )
             }
@@ -183,11 +184,12 @@ fun SettingsScreen(
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }
 
-        if (uiState.showByokSheet) {
+        if (uiState.home.isApiProvidersSheetOpen) {
             ByokBottomSheet(
                 uiState = uiState,
                 onDismiss = { onShowByokSheet(false) },
                 onNavigateToByokConfigure = onNavigateToByokConfigure,
+                onStartCreateApiModelAsset = onStartCreateApiModelAsset,
                 onSelectApiModelAsset = onSelectApiModelAsset,
                 onSelectApiModelConfig = onSelectApiModelConfig,
                 onDeleteApiModelAsset = onDeleteApiModelAsset,
@@ -197,7 +199,7 @@ fun SettingsScreen(
             )
         }
 
-        if (uiState.showModelConfigSheet) {
+        if (uiState.home.isLocalModelsSheetOpen) {
             LocalModelsBottomSheet(
                 uiState = uiState,
                 onDismiss = { onShowLocalModelsSheet(false) },
@@ -360,6 +362,7 @@ fun PreviewSettingsScreen() {
             onShowLocalModelsSheet = {},
             onShowByokSheet = {},
             onNavigateToByokConfigure = {},
+            onStartCreateApiModelAsset = {},
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
             onDeleteApiModelAsset = {},

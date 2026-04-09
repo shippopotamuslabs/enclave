@@ -17,6 +17,7 @@ import okhttp3.ResponseBody
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -266,15 +267,13 @@ class HttpFileDownloaderTest {
 
     @Test
     fun downloadFile_throwsException_onEmptyResponseBody() = kotlinx.coroutines.test.runTest {
-        // Note: okhttp3 Response.body is non-null, so this test verifies that
-        // a smaller than expected body throws an exception for size mismatch
-        val smallContent = "x" // 1 byte but we expect 100 bytes
-        val contentBytes = smallContent.toByteArray(StandardCharsets.UTF_8)
-        // Provide correct SHA-256 for the small content, but expect 100 bytes size
+        // Given: Server returns a response with body that throws when accessed
+        // (simulating a null/empty body scenario)
+        val testContent = "x"
         val testConfig = FileDownloaderPort.FileDownloadConfig(
             filename = "test-model.gguf",
-            expectedSha256 = computeSha256(smallContent),
-            expectedSizeBytes = 100L // Expect 100 bytes but only 1 received
+            expectedSha256 = computeSha256(testContent),
+            expectedSizeBytes = 100L
         )
 
         val mockCall = mockk<okhttp3.Call>(relaxed = true)
@@ -286,23 +285,22 @@ class HttpFileDownloaderTest {
         every { mockResponse.isSuccessful } returns true
         every { mockResponse.code } returns 200
         every { mockResponse.body } returns mockBody
-        every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-        every { mockBody.byteStream() } returns contentBytes.inputStream()
+        every { mockResponse.header("Content-Length") } returns "1"
+        every { mockBody.byteStream() } throws IOException("Empty response body")
 
-        // When/Then: Exception is thrown for incomplete download (smaller content vs expected size)
-        try {
-            httpFileDownloader.downloadFile(
-                config = testConfig,
-                downloadUrl = "https://example.com/model.gguf",
-                targetDir = tempDir,
-                existingBytes = 0L,
-                progressCallback = null
-            )
-            throw AssertionError("Expected exception")
-        } catch (e: Exception) {
-            // Verify it's a size mismatch error
-            assertTrue(e.message?.contains("Incomplete download") == true || e.message?.contains("MISMATCHED") == true)
+        // When/Then: IOException is thrown for empty body
+        val exception = assertThrows(IOException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                httpFileDownloader.downloadFile(
+                    config = testConfig,
+                    downloadUrl = "https://example.com/model.gguf",
+                    targetDir = tempDir,
+                    existingBytes = 0L,
+                    progressCallback = null
+                )
+            }
         }
+        assertEquals("Empty response body", exception.message)
     }
 
     // ============ HTTP 416 Range Not Satisfiable Tests ============
@@ -606,6 +604,44 @@ class HttpFileDownloaderTest {
     }
 
     @Test
+    fun downloadFile_rejectsPathTraversalFilename_beforeNetworkRequest() {
+        val testConfig = FileDownloaderPort.FileDownloadConfig(
+            filename = "../outside.gguf",
+            expectedSha256 = computeSha256("dummy"),
+            expectedSizeBytes = 5L
+        )
+
+        assertThrows(SecurityException::class.java) {
+            kotlinx.coroutines.test.runTest {
+                httpFileDownloader.downloadFile(
+                    config = testConfig,
+                    downloadUrl = "https://config.pocketcrew.app/model.gguf",
+                    targetDir = tempDir,
+                    existingBytes = 0L,
+                    progressCallback = null
+                )
+            }
+        }
+    }
+
+    @Test
+    fun downloadFile_rejectsInsecureDownloadUrl_beforeNetworkRequest() {
+        val testConfig = createTestConfig("dummy")
+
+        assertThrows(SecurityException::class.java) {
+            kotlinx.coroutines.test.runTest {
+                httpFileDownloader.downloadFile(
+                    config = testConfig,
+                    downloadUrl = "http://example.com/model.gguf",
+                    targetDir = tempDir,
+                    existingBytes = 0L,
+                    progressCallback = null
+                )
+            }
+        }
+    }
+
+    @Test
     fun downloadFile_throwsException_whenNoContentLengthHeader() = kotlinx.coroutines.test.runTest {
         // Given: Server does not provide Content-Length header
         val testContent = "test content"
@@ -788,6 +824,46 @@ class HttpFileDownloaderTest {
 
         // Then: Returns null because redirect isn't followed in HEAD request by default
         assertNull(result)
+    }
+
+    @Test
+    fun downloadFile_rejectsRedirectToUntrustedHost() {
+        val testContent = "trusted content"
+        val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
+        val testConfig = createTestConfig(testContent)
+
+        val requestedUrl = "https://huggingface.co/user/repo/resolve/main/model.gguf"
+        val redirectedRequest = Request.Builder()
+            .url("https://evil.example/model.gguf")
+            .build()
+
+        val mockCall = mockk<okhttp3.Call>(relaxed = true)
+        val mockResponse = mockk<Response>(relaxed = true)
+        val mockBody = mockk<ResponseBody>(relaxed = true)
+        val priorResponse = mockk<Response>(relaxed = true)
+
+        every { mockClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns mockResponse
+        every { mockResponse.priorResponse } returns priorResponse
+        every { priorResponse.isRedirect } returns true
+        every { mockResponse.request } returns redirectedRequest
+        every { mockResponse.isSuccessful } returns true
+        every { mockResponse.code } returns 200
+        every { mockResponse.body } returns mockBody
+        every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
+        every { mockBody.byteStream() } returns contentBytes.inputStream()
+
+        assertThrows(SecurityException::class.java) {
+            kotlinx.coroutines.test.runTest {
+                httpFileDownloader.downloadFile(
+                    config = testConfig,
+                    downloadUrl = requestedUrl,
+                    targetDir = tempDir,
+                    existingBytes = 0L,
+                    progressCallback = null
+                )
+            }
+        }
     }
 
     @Test

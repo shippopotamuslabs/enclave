@@ -10,7 +10,6 @@ import okhttp3.Request
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
-import java.net.URL
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
 import java.security.DigestInputStream
@@ -36,16 +35,17 @@ class HttpFileDownloader @Inject constructor(
         // Log model info for debugging
         logger.info(TAG, "[DOWNLOAD_START] url=$downloadUrl, sizeBytes=${config.expectedSizeBytes}, existingBytes=$existingBytes filename=${config.filename}")
 
-        // Use filename for the target file
-        val filename = config.filename
-        val targetFile = File(targetDir, filename)
-        val tempFile = File(targetDir, "$filename${ModelConfig.TEMP_EXTENSION}")
-        val metaFile = File(targetDir, "$filename${ModelConfig.TEMP_META_EXTENSION}")
+        val requestUrl = DownloadSecurity.requireTrustedDownloadUrl(downloadUrl)
+        val filename = DownloadSecurity.requireSafeFileName(config.filename)
+        val downloadPaths = DownloadSecurity.resolveDownloadPaths(targetDir, filename)
+        val targetFile = downloadPaths.targetFile
+        val tempFile = downloadPaths.tempFile
+        val metaFile = downloadPaths.metaFile
 
         metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
 
         val request = Request.Builder()
-            .url(downloadUrl)
+            .url(requestUrl)
             .apply {
                 if (existingBytes > 0) {
                     addHeader("Range", "bytes=$existingBytes-")
@@ -54,6 +54,10 @@ class HttpFileDownloader @Inject constructor(
             .build()
 
         okHttpClient.newCall(request).execute().use { response ->
+            if (response.priorResponse?.isRedirect == true) {
+                DownloadSecurity.requireTrustedRedirect(requestUrl, response.request.url)
+            }
+
             if (response.code == 416) {
                 logger.warning(
                     TAG,
@@ -62,9 +66,9 @@ class HttpFileDownloader @Inject constructor(
                 tempFile.delete()
                 metaFile.delete()
                 val retryRequest = Request.Builder()
-                    .url(downloadUrl)
+                    .url(requestUrl)
                     .build()
-                return@withContext downloadWithRetry(retryRequest, config, downloadUrl, targetDir, progressCallback)
+                return@withContext downloadWithRetry(retryRequest, config, targetDir, progressCallback)
             }
 
             if (!response.isSuccessful) {
@@ -77,11 +81,8 @@ class HttpFileDownloader @Inject constructor(
             val actualExistingBytes = if (isResuming) existingBytes else 0L
 
             val body = response.body ?: run {
-                logger.error(
-                    TAG,
-                    "Download failed for $filename: Empty response body"
-                )
-                throw Exception("Empty response body")
+                logger.error(TAG, "Download failed for $filename: Empty response body")
+                throw IOException("Empty response body")
             }
 
             // Use Content-Length when no resume (existingBytes == 0)
@@ -190,18 +191,22 @@ class HttpFileDownloader @Inject constructor(
     private suspend fun downloadWithRetry(
         request: Request,
         config: FileDownloaderPort.FileDownloadConfig,
-        downloadUrl: String,
         targetDir: File,
         progressCallback: FileDownloaderPort.ProgressCallback?
     ): FileDownloaderPort.DownloadResult = withContext(Dispatchers.IO) {
-        val filename = config.filename
-        val targetFile = File(targetDir, filename)
-        val tempFile = File(targetDir, "$filename${ModelConfig.TEMP_EXTENSION}")
-        val metaFile = File(targetDir, "$filename${ModelConfig.TEMP_META_EXTENSION}")
+        val filename = DownloadSecurity.requireSafeFileName(config.filename)
+        val downloadPaths = DownloadSecurity.resolveDownloadPaths(targetDir, filename)
+        val targetFile = downloadPaths.targetFile
+        val tempFile = downloadPaths.tempFile
+        val metaFile = downloadPaths.metaFile
 
         metaFile.writeText("${config.expectedSizeBytes}\n${config.expectedSha256}")
 
         okHttpClient.newCall(request).execute().use { response ->
+            if (response.priorResponse?.isRedirect == true) {
+                DownloadSecurity.requireTrustedRedirect(request.url, response.request.url)
+            }
+
             if (!response.isSuccessful) {
                 val errorMsg = "HTTP ${response.code}: ${response.message}"
                 logger.error(TAG, "Download retry failed for $filename: $errorMsg")
@@ -209,11 +214,8 @@ class HttpFileDownloader @Inject constructor(
             }
 
             val body = response.body ?: run {
-                logger.error(
-                    TAG,
-                    "Download retry failed for $filename: Empty response body"
-                )
-                throw Exception("Empty response body")
+                logger.error(TAG, "Download retry failed for $filename: Empty response body")
+                throw IOException("Empty response body")
             }
 
             val serverContentLength = response.header("Content-Length")?.toLongOrNull()
@@ -290,12 +292,16 @@ class HttpFileDownloader @Inject constructor(
 
     override suspend fun getServerFileSize(url: String): Long? = withContext(Dispatchers.IO) {
         try {
+            val requestUrl = DownloadSecurity.requireTrustedDownloadUrl(url)
             val request = Request.Builder()
-                .url(url)
+                .url(requestUrl)
                 .head()
                 .build()
 
             okHttpClient.newCall(request).execute().use { response ->
+                if (response.priorResponse?.isRedirect == true) {
+                    DownloadSecurity.requireTrustedRedirect(requestUrl, response.request.url)
+                }
                 if (response.isSuccessful) {
                     response.header("Content-Length")?.toLongOrNull()
                 } else {

@@ -143,7 +143,8 @@ object XaiRequestMapper {
         }
         if (
             ApiProviderModelPolicy.isXaiGrok3Model(modelId) ||
-            ApiProviderModelPolicy.isXaiGrok4ReasoningFamily(modelId)
+            ApiProviderModelPolicy.isXaiGrok4ReasoningFamily(modelId) ||
+            ApiProviderModelPolicy.isXaiGrok4NonReasoningFamily(modelId)
         ) {
             return null
         }
