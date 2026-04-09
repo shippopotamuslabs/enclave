@@ -8,12 +8,10 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
 import com.google.genai.types.Model
-import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Call
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
@@ -25,21 +23,9 @@ class ApiModelCatalogRepositoryImpl(
     private val googleGenAiClientProvider: GoogleGenAiClientProvider,
     private val httpClient: Call.Factory,
 ) : ApiModelCatalogPort {
-    companion object {
+    private companion object {
         private const val TAG = "ApiModelCatalog"
     }
-
-    @Inject
-    constructor(
-        openAiClientProvider: OpenAiClientProvider,
-        anthropicClientProvider: AnthropicClientProvider,
-        googleGenAiClientProvider: GoogleGenAiClientProvider,
-    ) : this(
-        openAiClientProvider = openAiClientProvider,
-        anthropicClientProvider = anthropicClientProvider,
-        googleGenAiClientProvider = googleGenAiClientProvider,
-        httpClient = OkHttpClient(),
-    )
 
     override suspend fun fetchModels(
         provider: ApiProvider,
