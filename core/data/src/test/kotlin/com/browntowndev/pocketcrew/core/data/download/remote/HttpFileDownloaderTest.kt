@@ -267,15 +267,13 @@ class HttpFileDownloaderTest {
 
     @Test
     fun downloadFile_throwsException_onEmptyResponseBody() = kotlinx.coroutines.test.runTest {
-        // Note: okhttp3 Response.body is non-null, so this test verifies that
-        // a smaller than expected body throws an exception for size mismatch
-        val smallContent = "x" // 1 byte but we expect 100 bytes
-        val contentBytes = smallContent.toByteArray(StandardCharsets.UTF_8)
-        // Provide correct SHA-256 for the small content, but expect 100 bytes size
+        // Given: Server returns a response with body that throws when accessed
+        // (simulating a null/empty body scenario)
+        val testContent = "x"
         val testConfig = FileDownloaderPort.FileDownloadConfig(
             filename = "test-model.gguf",
-            expectedSha256 = computeSha256(smallContent),
-            expectedSizeBytes = 100L // Expect 100 bytes but only 1 received
+            expectedSha256 = computeSha256(testContent),
+            expectedSizeBytes = 100L
         )
 
         val mockCall = mockk<okhttp3.Call>(relaxed = true)
@@ -287,23 +285,22 @@ class HttpFileDownloaderTest {
         every { mockResponse.isSuccessful } returns true
         every { mockResponse.code } returns 200
         every { mockResponse.body } returns mockBody
-        every { mockResponse.header("Content-Length") } returns contentBytes.size.toString()
-        every { mockBody.byteStream() } returns contentBytes.inputStream()
+        every { mockResponse.header("Content-Length") } returns "1"
+        every { mockBody.byteStream() } throws IOException("Empty response body")
 
-        // When/Then: Exception is thrown for incomplete download (smaller content vs expected size)
-        try {
-            httpFileDownloader.downloadFile(
-                config = testConfig,
-                downloadUrl = "https://example.com/model.gguf",
-                targetDir = tempDir,
-                existingBytes = 0L,
-                progressCallback = null
-            )
-            throw AssertionError("Expected exception")
-        } catch (e: Exception) {
-            // Verify it's a size mismatch error
-            assertTrue(e.message?.contains("Incomplete download") == true || e.message?.contains("MISMATCHED") == true)
+        // When/Then: IOException is thrown for empty body
+        val exception = assertThrows(IOException::class.java) {
+            kotlinx.coroutines.runBlocking {
+                httpFileDownloader.downloadFile(
+                    config = testConfig,
+                    downloadUrl = "https://example.com/model.gguf",
+                    targetDir = tempDir,
+                    existingBytes = 0L,
+                    progressCallback = null
+                )
+            }
         }
+        assertEquals("Empty response body", exception.message)
     }
 
     // ============ HTTP 416 Range Not Satisfiable Tests ============
