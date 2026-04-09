@@ -5,6 +5,10 @@ import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -32,6 +36,7 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.PrepareModelDeletionU
 import com.browntowndev.pocketcrew.domain.usecase.settings.ResolveAssignedModelSelectionUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SaveApiPresetUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SaveApiProviderDraftUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.SaveTavilyApiKeyUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SaveLocalModelPresetUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsApiProviderUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCasesImpl
@@ -40,11 +45,13 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUse
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCasesImpl
+import com.browntowndev.pocketcrew.domain.usecase.settings.ClearTavilyApiKeyUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateAllowMemoriesUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomPromptTextUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomizationEnabledUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateHapticPressUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateHapticResponseUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateSearchEnabledUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateSelectedPromptOptionUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateThemeUseCase
 import io.mockk.coEvery
@@ -80,6 +87,9 @@ class SettingsViewModelTest {
     private val updateSelectedPromptOptionUseCase = mockk<UpdateSelectedPromptOptionUseCase>(relaxed = true)
     private val updateCustomPromptTextUseCase = mockk<UpdateCustomPromptTextUseCase>(relaxed = true)
     private val updateAllowMemoriesUseCase = mockk<UpdateAllowMemoriesUseCase>(relaxed = true)
+    private val updateSearchEnabledUseCase = mockk<UpdateSearchEnabledUseCase>(relaxed = true)
+    private val saveTavilyApiKeyUseCase = mockk<SaveTavilyApiKeyUseCase>(relaxed = true)
+    private val clearTavilyApiKeyUseCase = mockk<ClearTavilyApiKeyUseCase>(relaxed = true)
     private val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
     private val saveLocalModelConfigurationUseCase = mockk<SaveLocalModelConfigurationUseCase>(relaxed = true)
     private val deleteLocalModelConfigurationUseCase = mockk<DeleteLocalModelConfigurationUseCase>(relaxed = true)
@@ -119,7 +129,7 @@ class SettingsViewModelTest {
             ),
             configurations = listOf(
                 ApiModelConfiguration(
-                    id = 7L,
+                    id = ApiModelConfigurationId("7"),
                     apiCredentialsId = 42L,
                     displayName = "Default Preset",
                 )
@@ -383,14 +393,14 @@ class SettingsViewModelTest {
                 persistedAsset.copy(
                     configurations = listOf(
                         ApiModelConfiguration(
-                            id = 92L,
+                            id = ApiModelConfigurationId("92"),
                             apiCredentialsId = 88L,
                             displayName = "Default Preset",
                         )
                     )
                 )
             )
-            Result.success(92L)
+            Result.success(ApiModelConfigurationId("92"))
         }
 
         var savedAsset: ApiModelAssetUi? = null
@@ -460,13 +470,13 @@ class SettingsViewModelTest {
                 persistedAsset.copy(
                     configurations = listOf(
                         configuration.copy(
-                            id = 901L,
+                            id = ApiModelConfigurationId("901"),
                             apiCredentialsId = persistedAsset.credentials.id,
                         )
                     )
                 )
             )
-            Result.success(901L)
+            Result.success(ApiModelConfigurationId("901"))
         }
 
         val snackbarMessages = mutableListOf<String>()
@@ -512,7 +522,7 @@ class SettingsViewModelTest {
         viewModel.onSelectApiModelAsset(asset)
         viewModel.onSelectApiModelConfig(
             ApiModelConfigUi(
-                id = 9L,
+                id = ApiModelConfigurationId("9"),
                 credentialsId = 42L,
                 displayName = "Default Preset"
             )
@@ -551,7 +561,7 @@ class SettingsViewModelTest {
         viewModel.onApiKeyChange("xai-key")
 
         coEvery { saveApiCredentialsUseCase(any(), any(), any()) } returns 88L
-        coEvery { saveApiModelConfigurationUseCase(any()) } returns Result.success(901L)
+        coEvery { saveApiModelConfigurationUseCase(any()) } returns Result.success(ApiModelConfigurationId("901"))
 
         var savedAsset: ApiModelAssetUi? = null
         var savedConfig: ApiModelConfigUi? = null
@@ -593,7 +603,7 @@ class SettingsViewModelTest {
         )
         viewModel.onApiModelAssetFieldChange(providerB)
 
-        coEvery { saveApiModelConfigurationUseCase(any()) } returns Result.success(44L)
+        coEvery { saveApiModelConfigurationUseCase(any()) } returns Result.success(ApiModelConfigurationId("44"))
 
         viewModel.onSaveApiModelConfig {}
         runCurrent()
@@ -689,7 +699,7 @@ class SettingsViewModelTest {
             ),
             configurations = listOf(
                 ApiModelConfiguration(
-                    id = 9L,
+                    id = ApiModelConfigurationId("9"),
                     apiCredentialsId = 64L,
                     displayName = "Default Preset",
                     customHeaders = mapOf("Authorization" to "Bearer persisted")
@@ -730,11 +740,97 @@ class SettingsViewModelTest {
         )
     }
 
+    @Test
+    fun `start configure search skill seeds editor from persisted settings`() = runTest {
+        val viewModel = createViewModel(
+            settingsFlow = flowOf(
+                SettingsData(
+                    searchEnabled = true,
+                    tavilyKeyPresent = true,
+                )
+            )
+        )
+
+        viewModel.onStartConfigureSearchSkill()
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.searchSkillEditor.isEditing)
+        assertTrue(viewModel.uiState.value.searchSkillEditor.enabled)
+        assertTrue(viewModel.uiState.value.searchSkillEditor.tavilyKeyPresent)
+    }
+
+    @Test
+    fun `closing byok sheet after starting search configuration preserves search editor mode`() = runTest {
+        val viewModel = createViewModel(
+            settingsFlow = flowOf(
+                SettingsData(
+                    searchEnabled = true,
+                    tavilyKeyPresent = true,
+                )
+            )
+        )
+
+        viewModel.onShowByokSheet(true)
+        viewModel.onStartConfigureSearchSkill()
+        viewModel.onShowByokSheet(false)
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.searchSkillEditor.isEditing)
+        assertTrue(viewModel.uiState.value.searchSkillEditor.enabled)
+        assertTrue(viewModel.uiState.value.searchSkillEditor.tavilyKeyPresent)
+    }
+
+    @Test
+    fun `save search skill settings persists toggle and Tavily key`() = runTest {
+        val viewModel = createViewModel()
+
+        viewModel.onStartConfigureSearchSkill()
+        viewModel.onSearchEnabledChange(true)
+        viewModel.onTavilyApiKeyChange("tavily-secret")
+        viewModel.onSaveSearchSkillSettings(onSuccess = {})
+        runCurrent()
+
+        coVerify { updateSearchEnabledUseCase(true) }
+        coVerify { saveTavilyApiKeyUseCase("tavily-secret") }
+        assertEquals("", viewModel.currentTavilyApiKey.value)
+        assertFalse(viewModel.uiState.value.searchSkillEditor.isEditing)
+    }
+
+    @Test
+    fun `clear Tavily key delegates to preferences use case`() = runTest {
+        val viewModel = createViewModel(
+            settingsFlow = flowOf(SettingsData(tavilyKeyPresent = true))
+        )
+
+        viewModel.onStartConfigureSearchSkill()
+        viewModel.onClearTavilyApiKey()
+        runCurrent()
+
+        coVerify { clearTavilyApiKeyUseCase() }
+        assertEquals("", viewModel.currentTavilyApiKey.value)
+    }
+
+    @Test
+    fun `save search skill settings rejects enabling search without a Tavily key`() = runTest {
+        val viewModel = createViewModel(
+            settingsFlow = flowOf(SettingsData(searchEnabled = false, tavilyKeyPresent = false))
+        )
+
+        viewModel.onStartConfigureSearchSkill()
+        viewModel.onSearchEnabledChange(true)
+        viewModel.onSaveSearchSkillSettings(onSuccess = {})
+        runCurrent()
+
+        coVerify(exactly = 0) { updateSearchEnabledUseCase(any()) }
+        coVerify(exactly = 0) { saveTavilyApiKeyUseCase(any()) }
+    }
+
     private fun createViewModel(
         apiAssets: List<ApiModelAsset> = emptyList(),
-        apiAssetsFlow: Flow<List<ApiModelAsset>> = flowOf(apiAssets)
+        apiAssetsFlow: Flow<List<ApiModelAsset>> = flowOf(apiAssets),
+        settingsFlow: Flow<SettingsData> = flowOf(SettingsData()),
     ): SettingsViewModel {
-        every { getSettingsUseCase() } returns flowOf(SettingsData())
+        every { getSettingsUseCase() } returns settingsFlow
         every { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
         coEvery { getLocalModelAssetsUseCase.getSoftDeletedModels() } returns emptyList()
         every { getApiModelAssetsUseCase() } returns apiAssetsFlow
@@ -783,6 +879,9 @@ class SettingsViewModelTest {
                 updateSelectedPromptOption = updateSelectedPromptOptionUseCase,
                 updateCustomPromptText = updateCustomPromptTextUseCase,
                 updateAllowMemories = updateAllowMemoriesUseCase,
+                updateSearchEnabled = updateSearchEnabledUseCase,
+                saveTavilyApiKey = saveTavilyApiKeyUseCase,
+                clearTavilyApiKey = clearTavilyApiKeyUseCase,
             ),
             localModels = SettingsLocalModelUseCasesImpl(
                 getLocalModelAssets = getLocalModelAssetsUseCase,

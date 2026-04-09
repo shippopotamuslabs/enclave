@@ -37,6 +37,8 @@ class SettingsRepositoryTest {
         assertEquals(SystemPromptOption.CONCISE, settings.selectedPromptOption)
         assertEquals("", settings.customPromptText)
         assertTrue(settings.allowMemories)
+        assertFalse(settings.searchEnabled)
+        assertFalse(settings.tavilyKeyPresent)
     }
 
     // Test updateTheme
@@ -174,6 +176,31 @@ class SettingsRepositoryTest {
         assertFalse(settings.allowMemories)
     }
 
+    @Test
+    fun `updateSearchEnabled updates value in settingsFlow`() = runTest {
+        repository.updateSearchEnabled(true)
+
+        val settings = repository.settingsFlow.first()
+        assertTrue(settings.searchEnabled)
+    }
+
+    @Test
+    fun `saveTavilyApiKey marks key as present in settingsFlow`() = runTest {
+        repository.saveTavilyApiKey("tavily-secret")
+
+        val settings = repository.settingsFlow.first()
+        assertTrue(settings.tavilyKeyPresent)
+    }
+
+    @Test
+    fun `clearTavilyApiKey clears key presence in settingsFlow`() = runTest {
+        repository.saveTavilyApiKey("tavily-secret")
+        repository.clearTavilyApiKey()
+
+        val settings = repository.settingsFlow.first()
+        assertFalse(settings.tavilyKeyPresent)
+    }
+
     // Test multiple settings updates
 
     @Test
@@ -186,6 +213,8 @@ class SettingsRepositoryTest {
         repository.updateSelectedPromptOption(SystemPromptOption.RIGOROUS)
         repository.updateCustomPromptText("Test prompt")
         repository.updateAllowMemories(false)
+        repository.updateSearchEnabled(true)
+        repository.saveTavilyApiKey("tavily-secret")
 
         // Then
         val settings = repository.settingsFlow.first()
@@ -196,6 +225,8 @@ class SettingsRepositoryTest {
         assertEquals(SystemPromptOption.RIGOROUS, settings.selectedPromptOption)
         assertEquals("Test prompt", settings.customPromptText)
         assertFalse(settings.allowMemories)
+        assertTrue(settings.searchEnabled)
+        assertTrue(settings.tavilyKeyPresent)
     }
 
     // Test error handling
@@ -276,5 +307,31 @@ class SettingsRepositoryTest {
             runTest { repository.updateAllowMemories(false) }
         }
     }
-}
 
+    @Test
+    fun `updateSearchEnabled throws exception when repository fails`() = runTest {
+        repository.shouldThrowOnUpdateSearchEnabled = true
+
+        assertThrows(RuntimeException::class.java) {
+            runTest { repository.updateSearchEnabled(true) }
+        }
+    }
+
+    @Test
+    fun `saveTavilyApiKey throws exception when repository fails`() = runTest {
+        repository.shouldThrowOnSaveTavilyApiKey = true
+
+        assertThrows(RuntimeException::class.java) {
+            runTest { repository.saveTavilyApiKey("tavily-secret") }
+        }
+    }
+
+    @Test
+    fun `clearTavilyApiKey throws exception when repository fails`() = runTest {
+        repository.shouldThrowOnClearTavilyApiKey = true
+
+        assertThrows(RuntimeException::class.java) {
+            runTest { repository.clearTavilyApiKey() }
+        }
+    }
+}

@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -44,13 +45,15 @@ class ApiModelConfigurationsDaoTest {
             displayName = "GPT-4o"
         ))
 
+        val configId = ApiModelConfigurationId("test-api-config-1")
         val config = ApiModelConfigurationEntity(
+            id = configId,
             apiCredentialsId = credId,
             displayName = "Default",
             temperature = 0.7,
             maxTokens = 4096
         )
-        val configId = configDao.upsert(config)
+        configDao.upsert(config)
         
         val retrieved = configDao.getById(configId)
         assertNotNull(retrieved)
@@ -66,8 +69,8 @@ class ApiModelConfigurationsDaoTest {
             displayName = "GPT-4o"
         ))
 
-        configDao.upsert(ApiModelConfigurationEntity(apiCredentialsId = credId, displayName = "Fast"))
-        configDao.upsert(ApiModelConfigurationEntity(apiCredentialsId = credId, displayName = "Thorough"))
+        configDao.upsert(ApiModelConfigurationEntity(id = ApiModelConfigurationId("test-api-config-1"), apiCredentialsId = credId, displayName = "Fast"))
+        configDao.upsert(ApiModelConfigurationEntity(id = ApiModelConfigurationId("test-api-config-2"), apiCredentialsId = credId, displayName = "Thorough"))
 
         val allConfigs = configDao.getAllForCredentials(credId)
         assertEquals(2, allConfigs.size)

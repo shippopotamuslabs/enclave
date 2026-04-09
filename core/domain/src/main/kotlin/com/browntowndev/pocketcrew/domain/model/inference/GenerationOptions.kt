@@ -17,4 +17,6 @@ data class GenerationOptions(
     val minP: Float? = null,
     val maxTokens: Int? = null,
     val contextWindow: Int? = null,
+    val toolingEnabled: Boolean = false,
+    val availableTools: List<ToolDefinition> = emptyList(),
 )

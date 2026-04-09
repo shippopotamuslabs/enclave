@@ -3,6 +3,8 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort

@@ -14,6 +14,9 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.ApiProviderDraft
 import com.browntowndev.pocketcrew.domain.usecase.settings.ModelDeletionTarget
 import com.browntowndev.pocketcrew.domain.usecase.settings.PreparedModelDeletion
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +43,7 @@ private data class TransientSettingsBundle(
     val feedbackText: String,
     val localModelsState: LocalModelsTransientState,
     val apiState: ApiProvidersTransientState,
+    val searchSkillState: SearchSkillTransientState,
     val assignmentState: AssignmentDialogTransientState,
     val deletionState: DeletionTransientState,
 )
@@ -49,6 +53,13 @@ private data class SheetTransientBundle(
     val memories: List<StoredMemory>,
     val feedbackText: String,
     val localModelsState: LocalModelsTransientState,
+)
+
+private data class DialogTransientBundle(
+    val searchSkillState: SearchSkillTransientState,
+    val apiState: ApiProvidersTransientState,
+    val assignmentState: AssignmentDialogTransientState,
+    val deletionState: DeletionTransientState,
 )
 
 @HiltViewModel
@@ -70,12 +81,15 @@ class SettingsViewModel @Inject constructor(
     private val _feedbackText = MutableStateFlow("")
     private val _localModelsState = MutableStateFlow(LocalModelsTransientState())
     private val _apiState = MutableStateFlow(ApiProvidersTransientState())
+    private val _searchSkillState = MutableStateFlow(SearchSkillTransientState())
     private val _assignmentState = MutableStateFlow(AssignmentDialogTransientState())
     private val _deletionState = MutableStateFlow(DeletionTransientState())
     private val _snackbarMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
     private val _currentApiKey = MutableStateFlow("")
+    private val _currentTavilyApiKey = MutableStateFlow("")
     val currentApiKey: StateFlow<String> = _currentApiKey
+    val currentTavilyApiKey: StateFlow<String> = _currentTavilyApiKey
     val snackbarMessages: SharedFlow<String> = _snackbarMessages.asSharedFlow()
 
     private val preferencesUseCases = settingsUseCases.preferences
@@ -113,11 +127,17 @@ class SettingsViewModel @Inject constructor(
         )
     }
     private val transientDialogBundle = combine(
+        _searchSkillState,
         _apiState,
         _assignmentState,
         _deletionState,
-    ) { apiState, assignmentState, deletionState ->
-        Triple(apiState, assignmentState, deletionState)
+    ) { searchSkillState, apiState, assignmentState, deletionState ->
+        DialogTransientBundle(
+            searchSkillState = searchSkillState,
+            apiState = apiState,
+            assignmentState = assignmentState,
+            deletionState = deletionState,
+        )
     }
     private val transientSettingsBundle = combine(
         transientSheetBundle,
@@ -128,9 +148,10 @@ class SettingsViewModel @Inject constructor(
             memories = sheetBundle.memories,
             feedbackText = sheetBundle.feedbackText,
             localModelsState = sheetBundle.localModelsState,
-            apiState = dialogBundle.first,
-            assignmentState = dialogBundle.second,
-            deletionState = dialogBundle.third,
+            apiState = dialogBundle.apiState,
+            searchSkillState = dialogBundle.searchSkillState,
+            assignmentState = dialogBundle.assignmentState,
+            deletionState = dialogBundle.deletionState,
         )
     }
 
@@ -148,6 +169,7 @@ class SettingsViewModel @Inject constructor(
             feedbackText = transient.feedbackText,
             localModelsState = transient.localModelsState,
             apiState = transient.apiState,
+            searchSkillState = transient.searchSkillState,
             assignmentsState = transient.assignmentState,
             deletionState = transient.deletionState,
         )
@@ -315,7 +337,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onDeleteLocalModelConfig(id: Long, onSuccess: () -> Unit) {
+    fun onDeleteLocalModelConfig(id: LocalModelConfigurationId, onSuccess: () -> Unit) {
         prepareDeletion(
             target = ModelDeletionTarget.LocalModelPreset(id),
             failureMessage = "Failed to delete local model configuration",
@@ -332,7 +354,7 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    fun onConfirmDeletionWithReassignment(replacementLocalConfigId: Long?, replacementApiConfigId: Long?) {
+    fun onConfirmDeletionWithReassignment(replacementLocalConfigId: LocalModelConfigurationId?, replacementApiConfigId: ApiModelConfigurationId?) {
         val deletionState = _deletionState.value
         val pendingTarget = deletionState.pendingTarget ?: return
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to complete deletion with reassignment", "Failed to delete")) {
@@ -372,10 +394,12 @@ class SettingsViewModel @Inject constructor(
                 modelSortOption = ModelSortOption.A_TO_Z,
             )
         }
+        _searchSkillState.value = SearchSkillTransientState()
     }
 
     fun onStartCreateApiModelAsset() {
         _currentApiKey.value = ""
+        _searchSkillState.value = SearchSkillTransientState()
         _apiState.update {
             it.copy(
                 selectedAsset = null,
@@ -391,6 +415,24 @@ class SettingsViewModel @Inject constructor(
                 modelSortOption = ModelSortOption.A_TO_Z,
             )
         }
+    }
+
+    fun onStartConfigureSearchSkill() {
+        val persistedState = uiState.value.searchSkillEditor
+        _currentTavilyApiKey.value = ""
+        _apiState.update {
+            it.copy(
+                selectedAsset = null,
+                assetDraft = null,
+                selectedReusableApiCredentialAlias = null,
+                selectedReusableApiCredentialName = null,
+                presetDraft = null,
+            )
+        }
+        _searchSkillState.value = SearchSkillTransientState(
+            isEditing = true,
+            enabled = persistedState.enabled,
+        )
     }
 
     fun onSelectApiModelAsset(id: Long?) {
@@ -467,6 +509,38 @@ class SettingsViewModel @Inject constructor(
                     selectedReusableApiCredentialName = null,
                 )
             }
+        }
+    }
+
+    fun onSearchEnabledChange(enabled: Boolean) {
+        _searchSkillState.update { it.copy(enabled = enabled) }
+    }
+
+    fun onTavilyApiKeyChange(key: String) {
+        _currentTavilyApiKey.value = key
+    }
+
+    fun onClearTavilyApiKey() {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to clear Tavily API key", "Failed to clear search key")) {
+            preferencesUseCases.clearTavilyApiKey()
+            _currentTavilyApiKey.value = ""
+        }
+    }
+
+    fun onSaveSearchSkillSettings(onSuccess: () -> Unit) {
+        val enabled = _searchSkillState.value.enabled ?: uiState.value.searchSkillEditor.enabled
+        val pendingApiKey = _currentTavilyApiKey.value.trim()
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save search skill settings", "Failed to save search settings")) {
+            if (enabled && pendingApiKey.isBlank() && !uiState.value.searchSkillEditor.tavilyKeyPresent) {
+                throw IllegalStateException("A Tavily API key is required to enable web search")
+            }
+            preferencesUseCases.updateSearchEnabled(enabled)
+            if (pendingApiKey.isNotBlank()) {
+                preferencesUseCases.saveTavilyApiKey(pendingApiKey)
+            }
+            _currentTavilyApiKey.value = ""
+            _searchSkillState.value = SearchSkillTransientState()
+            onSuccess()
         }
     }
 
@@ -628,7 +702,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onDeleteApiModelConfig(id: Long, onSuccess: () -> Unit) {
+    fun onDeleteApiModelConfig(id: ApiModelConfigurationId, onSuccess: () -> Unit) {
         prepareDeletion(
             target = ModelDeletionTarget.ApiPreset(id),
             failureMessage = "Failed to delete API configuration",
@@ -647,6 +721,8 @@ class SettingsViewModel @Inject constructor(
 
     fun onBackToByokList() {
         _currentApiKey.value = ""
+        _currentTavilyApiKey.value = ""
+        _searchSkillState.value = SearchSkillTransientState()
         _apiState.update {
             it.copy(
                 selectedAsset = null,
@@ -671,7 +747,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onSetDefaultModel(modelType: ModelType, localConfigId: Long?, apiConfigId: Long?) {
+    fun onSetDefaultModel(modelType: ModelType, localConfigId: LocalModelConfigurationId?, apiConfigId: ApiModelConfigurationId?) {
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to set default model", "Failed to update default model")) {
             assignmentUseCases.setDefaultModel(modelType, localConfigId, apiConfigId)
             onShowAssignmentDialog(false, null)

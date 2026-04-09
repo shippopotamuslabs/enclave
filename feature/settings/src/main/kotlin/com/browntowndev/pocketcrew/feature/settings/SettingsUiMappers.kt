@@ -6,6 +6,8 @@ import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource

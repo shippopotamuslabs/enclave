@@ -7,6 +7,8 @@ import com.browntowndev.pocketcrew.core.data.local.buildApiCredentialsIdentitySi
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionPolicy
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
@@ -17,6 +19,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import kotlin.test.assertFailsWith
@@ -276,11 +279,12 @@ class ApiModelRepositoryImplTest {
             )
         )
 
-        coEvery { configurationsDao.upsert(any()) } returns 44L
+        coEvery { configurationsDao.upsert(any()) } returns Unit
 
         val id = repo.saveConfiguration(config)
 
-        assertEquals(44L, id)
+        // Verify the id is a non-empty string (UUID)
+        assertTrue(id.value.isNotEmpty())
         coVerify {
             configurationsDao.upsert(match {
                 it.openRouterProviderSort == "price" &&

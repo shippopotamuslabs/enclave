@@ -10,6 +10,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationId
 
 @Immutable
 data class StoredMemory(
@@ -28,6 +31,7 @@ data class SettingsUiState(
     val localModelEditor: LocalModelEditorUiState = LocalModelEditorUiState(),
     val apiProvidersSheet: ApiProvidersSheetUiState = ApiProvidersSheetUiState(),
     val apiProviderEditor: ApiProviderEditorUiState = ApiProviderEditorUiState(),
+    val searchSkillEditor: SearchSkillEditorUiState = SearchSkillEditorUiState(),
     val assignments: ModelAssignmentsUiState = ModelAssignmentsUiState(),
     val deletion: DeletionFlowUiState = DeletionFlowUiState(),
 )
@@ -111,6 +115,13 @@ data class ApiProviderEditorUiState(
 )
 
 @Immutable
+data class SearchSkillEditorUiState(
+    val isEditing: Boolean = false,
+    val enabled: Boolean = false,
+    val tavilyKeyPresent: Boolean = false,
+)
+
+@Immutable
 data class ModelAssignmentsUiState(
     val assignments: List<DefaultModelAssignmentUi> = emptyList(),
     val isDialogOpen: Boolean = false,
@@ -127,9 +138,9 @@ data class DeletionFlowUiState(
 
 sealed interface PendingDeletionTarget {
     data class LocalModelAsset(val id: Long) : PendingDeletionTarget
-    data class LocalModelPreset(val id: Long) : PendingDeletionTarget
+    data class LocalModelPreset(val id: LocalModelConfigurationId) : PendingDeletionTarget
     data class ApiProvider(val id: Long) : PendingDeletionTarget
-    data class ApiPreset(val id: Long) : PendingDeletionTarget
+    data class ApiPreset(val id: ApiModelConfigurationId) : PendingDeletionTarget
 }
 
 internal fun ModelDeletionTarget.toUi(): PendingDeletionTarget = when (this) {
@@ -141,7 +152,7 @@ internal fun ModelDeletionTarget.toUi(): PendingDeletionTarget = when (this) {
 
 @Immutable
 data class ReassignmentOptionUi(
-    val configId: Long,
+    val configId: ModelConfigurationId,
     val displayName: String,
     val source: ModelSource,
     val providerName: String? = null,
@@ -183,7 +194,7 @@ enum class ModelSortOption {
 
 @Immutable
 data class ApiModelConfigUi(
-    val id: Long = 0,
+    val id: ApiModelConfigurationId = ApiModelConfigurationId(""),
     val credentialsId: Long = 0,
     val displayName: String = "",
     val maxTokens: String = "4096",
@@ -229,7 +240,7 @@ data class LocalModelAssetUi(
 
 @Immutable
 data class LocalModelConfigUi(
-    val id: Long = 0,
+    val id: LocalModelConfigurationId = LocalModelConfigurationId(""),
     val localModelId: Long = 0,
     val displayName: String = "",
     val maxTokens: String = "4096",
@@ -290,9 +301,9 @@ object MockSettingsData {
             remoteFileName = "Meta-Llama-3-8B-Instruct-Q4_K_M.gguf",
             sizeInBytes = 4_920_000_000L,
             configurations = listOf(
-                LocalModelConfigUi(id = 1, localModelId = 1, displayName = "Default", temperature = 0.7),
-                LocalModelConfigUi(id = 2, localModelId = 1, displayName = "Creative", temperature = 1.2),
-                LocalModelConfigUi(id = 3, localModelId = 1, displayName = "Precise", temperature = 0.1)
+                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-1"), localModelId = 1, displayName = "Default", temperature = 0.7),
+                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-2"), localModelId = 1, displayName = "Creative", temperature = 1.2),
+                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-3"), localModelId = 1, displayName = "Precise", temperature = 0.1)
             )
         ),
         LocalModelAssetUi(
@@ -304,7 +315,7 @@ object MockSettingsData {
             remoteFileName = "gemma-2-9b-it-Q4_K_M.gguf",
             sizeInBytes = 5_400_000_000L,
             configurations = listOf(
-                LocalModelConfigUi(id = 4, localModelId = 2, displayName = "Standard", temperature = 0.8)
+                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-4"), localModelId = 2, displayName = "Standard", temperature = 0.8)
             )
         )
     )
@@ -319,8 +330,8 @@ object MockSettingsData {
             isVision = true,
             credentialAlias = "OpenAI Primary",
             configurations = listOf(
-                ApiModelConfigUi(id = 1, credentialsId = 1, displayName = "Balanced", temperature = 0.7),
-                ApiModelConfigUi(id = 2, credentialsId = 1, displayName = "Creative", temperature = 1.0)
+                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-1"), credentialsId = 1, displayName = "Balanced", temperature = 0.7),
+                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-2"), credentialsId = 1, displayName = "Creative", temperature = 1.0)
             )
         ),
         ApiModelAssetUi(
@@ -332,7 +343,7 @@ object MockSettingsData {
             isVision = true,
             credentialAlias = "Anthropic Work",
             configurations = listOf(
-                ApiModelConfigUi(id = 3, credentialsId = 2, displayName = "Standard", temperature = 0.7)
+                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-3"), credentialsId = 2, displayName = "Standard", temperature = 0.7)
             )
         ),
         ApiModelAssetUi(
@@ -345,7 +356,7 @@ object MockSettingsData {
             credentialAlias = "OpenRouter",
             configurations = listOf(
                 ApiModelConfigUi(
-                    id = 4,
+                    id = ApiModelConfigurationId("cfg-4"),
                     credentialsId = 3,
                     displayName = "Reliability",
                     temperature = 0.3,

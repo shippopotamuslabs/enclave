@@ -7,10 +7,13 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.toList
 import javax.inject.Inject
 
 class LiteRtInferenceServiceImpl @Inject constructor(

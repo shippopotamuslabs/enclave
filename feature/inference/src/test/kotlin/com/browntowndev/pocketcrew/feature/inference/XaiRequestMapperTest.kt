@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -193,5 +194,21 @@ class XaiRequestMapperTest {
         assertTrue(XaiRequestMapper.isChatReasoningContentModel("grok-code-fast-1"))
         assertTrue(XaiRequestMapper.isChatReasoningContentModel("grok-code-fast-1-beta"))
         assertFalse(XaiRequestMapper.isChatReasoningContentModel("grok-4"))
+    }
+
+    @Test
+    fun `mapToResponseParams serializes tavily_web_search when tooling is enabled`() {
+        val params = XaiRequestMapper.mapToResponseParams(
+            modelId = "grok-4-1-fast-non-reasoning",
+            prompt = "find recent android tool news",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+            )
+        )
+
+        assertTrue(params.toString().contains("tavily_web_search"))
     }
 }

@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.domain.port.repository
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import kotlinx.coroutines.flow.Flow
 
@@ -12,14 +13,14 @@ interface LocalModelRepositoryPort {
     suspend fun clearAll()
 
     suspend fun upsertLocalAsset(asset: LocalModelAsset): Long
-    suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): Long
+    suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId
 
     suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long
     suspend fun deleteLocalModelMetadata(id: Long)
     
-    suspend fun saveConfiguration(config: LocalModelConfiguration): Long
-    suspend fun deleteConfiguration(id: Long)
-    suspend fun getConfigurationById(id: Long): LocalModelConfiguration?
+    suspend fun saveConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId
+    suspend fun deleteConfiguration(id: LocalModelConfigurationId)
+    suspend fun getConfigurationById(id: LocalModelConfigurationId): LocalModelConfiguration?
     suspend fun getAllConfigurationsForAsset(localModelId: Long): List<LocalModelConfiguration>
     suspend fun deleteAllConfigurationsForAsset(localModelId: Long)
 
@@ -45,5 +46,5 @@ interface LocalModelRepositoryPort {
      * @param configId The LocalModelConfiguration database ID
      * @return The LocalModelAsset if found, null otherwise
      */
-    suspend fun getAssetByConfigId(configId: Long): LocalModelAsset?
+    suspend fun getAssetByConfigId(configId: LocalModelConfigurationId): LocalModelAsset?
 }

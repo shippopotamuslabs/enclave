@@ -6,7 +6,8 @@ import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
-
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import javax.inject.Inject
 
@@ -39,8 +40,8 @@ class DeleteLocalModelUseCase @Inject constructor(
      */
     suspend operator fun invoke(
         modelId: Long,
-        replacementLocalConfigId: Long? = null,
-        replacementApiConfigId: Long? = null
+        replacementLocalConfigId: LocalModelConfigurationId? = null,
+        replacementApiConfigId: ApiModelConfigurationId? = null
     ): Result<Unit> {
         return Result.runCatching {
             // Step 1: Block deletion if this is the last model
@@ -68,7 +69,7 @@ class DeleteLocalModelUseCase @Inject constructor(
                         localConfigId = replacementLocalConfigId,
                         apiConfigId = replacementApiConfigId
                     )
-                    loggingPort.info(TAG, "Reassigned default slot for model type $modelType to config (local: $replacementLocalConfigId, api: $replacementApiConfigId)")
+                    loggingPort.info(TAG, "Reassigned default slot for model type $modelType to config (local: ${replacementLocalConfigId?.value}, api: ${replacementApiConfigId?.value})")
                 }
             }
 

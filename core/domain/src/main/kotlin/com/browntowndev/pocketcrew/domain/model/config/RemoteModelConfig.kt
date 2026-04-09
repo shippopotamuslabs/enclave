@@ -27,6 +27,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
  */
 data class RemoteModelConfig(
     val modelType: ModelType,
+    val configId: LocalModelConfigurationId,
     val fileName: String,
     val huggingFaceModelName: String = "", // Used for HuggingFace download URL
     val displayName: String,

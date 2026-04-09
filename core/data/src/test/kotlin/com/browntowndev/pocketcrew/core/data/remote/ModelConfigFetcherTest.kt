@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.remote
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -39,6 +40,7 @@ class ModelConfigFetcherTest {
                 ),
                 configurations = listOf(
                     LocalModelConfiguration(
+                        id = LocalModelConfigurationId("config-main-1"),
                         localModelId = 0,
                         displayName = "Main Model",
                         maxTokens = 2048,
@@ -82,6 +84,7 @@ class ModelConfigFetcherTest {
         // Given - RemoteModelConfig is the raw type from JSON parsing
         val remoteConfigs = listOf(
             RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-main-1"),
                 modelType = ModelType.MAIN,
                 fileName = "main.bin",
                 huggingFaceModelName = "model/main",
@@ -98,6 +101,7 @@ class ModelConfigFetcherTest {
                 systemPrompt = "You are a helpful assistant."
             ),
             RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-vision-1"),
                 modelType = ModelType.VISION,
                 fileName = "vision.bin",
                 huggingFaceModelName = "model/vision",
@@ -127,6 +131,7 @@ class ModelConfigFetcherTest {
                 ),
                 configurations = listOf(
                     LocalModelConfiguration(
+                        id = LocalModelConfigurationId("config-main-1"),
                         localModelId = 0,
                         displayName = "Main Model",
                         maxTokens = 2048,
@@ -150,6 +155,7 @@ class ModelConfigFetcherTest {
                 ),
                 configurations = listOf(
                     LocalModelConfiguration(
+                        id = LocalModelConfigurationId("config-vision-1"),
                         localModelId = 0,
                         displayName = "Vision Model",
                         maxTokens = 2048,
@@ -190,6 +196,7 @@ class ModelConfigFetcherTest {
                 ),
                 configurations = listOf(
                     LocalModelConfiguration(
+                        id = LocalModelConfigurationId("config-main-1"),
                         localModelId = 0,
                         displayName = "Main Model",
                         maxTokens = 2048,
@@ -213,6 +220,7 @@ class ModelConfigFetcherTest {
                 ),
                 configurations = listOf(
                     LocalModelConfiguration(
+                        id = LocalModelConfigurationId("config-vision-1"),
                         localModelId = 0,
                         displayName = "Vision Model",
                         maxTokens = 2048,
@@ -236,6 +244,7 @@ class ModelConfigFetcherTest {
                 ),
                 configurations = listOf(
                     LocalModelConfiguration(
+                        id = LocalModelConfigurationId("config-fast-1"),
                         localModelId = 0,
                         displayName = "Fast Model",
                         maxTokens = 1024,
@@ -259,6 +268,7 @@ class ModelConfigFetcherTest {
                 ),
                 configurations = listOf(
                     LocalModelConfiguration(
+                        id = LocalModelConfigurationId("config-draft-1"),
                         localModelId = 0,
                         displayName = "Draft Model",
                         maxTokens = 512,

@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.app
 import android.content.Context
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.feature.inference.ConversationManagerImpl
@@ -35,6 +36,12 @@ abstract class EngineModule {
             @ApplicationContext context: Context,
             localModelRepository: LocalModelRepositoryPort,
             activeModelProvider: ActiveModelProviderPort,
-        ): ConversationManagerPort = ConversationManagerImpl(context, localModelRepository, activeModelProvider)
+            toolExecutor: ToolExecutorPort,
+        ): ConversationManagerPort = ConversationManagerImpl(
+            context = context,
+            localModelRepository = localModelRepository,
+            activeModelProvider = activeModelProvider,
+            toolExecutor = toolExecutor,
+        )
     }
 }

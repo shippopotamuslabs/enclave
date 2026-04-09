@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.download
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
@@ -105,6 +106,7 @@ class ModelConfigFetcherImpl @Inject constructor(
     }
 
     private fun parseModelConfig(json: JSONObject, modelType: ModelType): RemoteModelConfig {
+        val configId = json.getString("configId")
         val fileName = json.getString("fileName")
         // Extract format from fileName extension if not explicitly provided in JSON
         val modelFileFormat = if (json.has("modelFileFormat")) {
@@ -121,6 +123,7 @@ class ModelConfigFetcherImpl @Inject constructor(
 
         return RemoteModelConfig(
             modelType = modelType,
+            configId = LocalModelConfigurationId(configId),
             fileName = fileName,
             huggingFaceModelName = huggingFaceModelName,
             displayName = json.getString("displayName"),
@@ -184,6 +187,7 @@ class ModelConfigFetcherImpl @Inject constructor(
             )
 
             val configuration = LocalModelConfiguration(
+                id = config.configId,
                 localModelId = 0, // Will be set by Room
                 displayName = config.displayName,
                 maxTokens = config.maxTokens,

@@ -1,7 +1,9 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiCredentialsUseCase
@@ -57,7 +59,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
         )
     }
 
-    private suspend fun prepareLocalModelPreset(id: Long): PreparedModelDeletion {
+    private suspend fun prepareLocalModelPreset(id: LocalModelConfigurationId): PreparedModelDeletion {
         val defaults = getDefaultModelsUseCase().first()
         val needingReassignment = defaults.filter { it.localConfigId == id }.map { it.modelType }
         if (needingReassignment.isEmpty()) {
@@ -103,7 +105,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
         )
     }
 
-    private suspend fun prepareApiPreset(id: Long): PreparedModelDeletion {
+    private suspend fun prepareApiPreset(id: ApiModelConfigurationId): PreparedModelDeletion {
         val needingReassignment = deleteApiModelConfigurationUseCase.getModelTypesNeedingReassignment(id)
         if (needingReassignment.isEmpty()) {
             return PreparedModelDeletion.Ready(target = ModelDeletionTarget.ApiPreset(id))
@@ -125,9 +127,9 @@ class PrepareModelDeletionUseCase @Inject constructor(
         localAssets: List<LocalModelAsset>,
         apiAssets: List<ApiModelAsset>,
         excludeLocalModelId: Long? = null,
-        excludeLocalConfigId: Long? = null,
+        excludeLocalConfigId: LocalModelConfigurationId? = null,
         excludeApiCredentialsId: Long? = null,
-        excludeApiConfigId: Long? = null,
+        excludeApiConfigId: ApiModelConfigurationId? = null,
         requireVisionCompatibility: Boolean,
     ): List<ReassignmentCandidate> {
         val candidates = mutableListOf<ReassignmentCandidate>()

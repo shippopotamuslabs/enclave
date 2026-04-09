@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.modelconfig
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -23,12 +24,13 @@ class SaveLocalModelConfigurationUseCaseTest {
     @Test
     fun `invoke calls repository saveConfiguration`() = runTest {
         val config = mockk<LocalModelConfiguration>()
-        coEvery { repository.saveConfiguration(config) } returns 1L
+        val expectedId = LocalModelConfigurationId("1")
+        coEvery { repository.saveConfiguration(config) } returns expectedId
 
         val result = useCase(config)
 
         assertTrue(result.isSuccess)
-        assertEquals(1L, result.getOrNull())
+        assertEquals(expectedId, result.getOrNull())
         coVerify(exactly = 1) { repository.saveConfiguration(config) }
     }
 }

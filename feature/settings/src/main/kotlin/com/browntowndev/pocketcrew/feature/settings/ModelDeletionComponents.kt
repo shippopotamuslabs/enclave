@@ -26,13 +26,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 
 @Composable
 fun ReassignmentView(
     modelTypes: List<ModelType>,
     reassignmentOptions: List<ReassignmentOptionUi>,
-    onConfirm: (Long?, Long?) -> Unit,
+    onConfirm: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onDismiss: () -> Unit
 ) {
     var selectedOption by remember { mutableStateOf<ReassignmentOptionUi?>(null) }
@@ -100,8 +103,8 @@ fun ReassignmentView(
                 onClick = {
                     selectedOption?.let { opt ->
                         onConfirm(
-                            if (opt.localModelId != null) opt.configId else null,
-                            if (opt.apiCredentialsId != null) opt.configId else null
+                            if (opt.source == ModelSource.ON_DEVICE) opt.configId as? LocalModelConfigurationId else null,
+                            if (opt.source == ModelSource.API) opt.configId as? ApiModelConfigurationId else null
                         )
                     }
                 },

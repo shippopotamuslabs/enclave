@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionP
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -102,5 +103,21 @@ class OpenRouterRequestMapperTest {
         )
 
         assertFalse(params.maxCompletionTokens().isPresent)
+    }
+
+    @Test
+    fun `mapToResponseParams serializes tavily_web_search when tooling is enabled`() {
+        val params = OpenRouterRequestMapper.mapToResponseParams(
+            modelId = "openai/gpt-5.2",
+            prompt = "find recent android tool news",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+            )
+        )
+
+        assertTrue(params.toString().contains("tavily_web_search"))
     }
 }

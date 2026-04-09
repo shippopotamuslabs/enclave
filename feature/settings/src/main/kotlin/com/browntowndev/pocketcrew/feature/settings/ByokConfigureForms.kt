@@ -32,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -57,6 +58,87 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSuppo
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningControlStyle
 import com.browntowndev.pocketcrew.domain.model.inference.SystemPromptTemplates
+
+@Composable
+fun SearchSkillConfigurationForm(
+    state: SearchSkillEditorUiState,
+    apiKey: String,
+    onEnabledChange: (Boolean) -> Unit,
+    onApiKeyChange: (String) -> Unit,
+    onClearSavedKey: () -> Unit,
+) {
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Enable Web Search",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "Supported models can call the Tavily-backed search skill when this is on.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+                checked = state.enabled,
+                onCheckedChange = onEnabledChange,
+            )
+        }
+
+        OutlinedTextField(
+            value = apiKey,
+            onValueChange = onApiKeyChange,
+            label = { Text("Tavily API Key") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            placeholder = {
+                if (state.tavilyKeyPresent) {
+                    Text("A saved Tavily key is already stored")
+                }
+            },
+            supportingText = {
+                Text(
+                    if (state.tavilyKeyPresent) {
+                        "A Tavily key is stored securely. Entering a new key replaces it."
+                    } else {
+                        "Save a Tavily key before enabling live web search."
+                    }
+                )
+            },
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        contentDescription = if (passwordVisible) "Hide Tavily API key" else "Show Tavily API key",
+                    )
+                }
+            }
+        )
+
+        if (state.tavilyKeyPresent) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onClearSavedKey) {
+                    Text("Clear Saved Key")
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -638,17 +720,22 @@ fun PreviewByokConfigureCredentials() {
             ),
             onNavigateToCustomHeaders = {},
             apiKey = "sk-....",
+            searchApiKey = "",
             onNavigateBack = {},
             onApiModelAssetFieldChange = {},
             onApiModelConfigFieldChange = {},
             onApiKeyChange = {},
+            onSearchEnabledChange = {},
+            onSearchApiKeyChange = {},
+            onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
             onUpdateModelSearchQuery = {},
             onUpdateModelProviderFilter = {},
             onUpdateModelSortOption = {},
             onSaveApiCredentials = {},
-            onSaveApiModelConfig = {}
+            onSaveApiModelConfig = {},
+            onSaveSearchSettings = {},
         )
     }
 }
@@ -665,18 +752,23 @@ fun PreviewByokConfigurePreset() {
                 )
             ),
             apiKey = "",
+            searchApiKey = "",
             onNavigateBack = {},
             onNavigateToCustomHeaders = {},
             onApiModelAssetFieldChange = {},
             onApiModelConfigFieldChange = {},
             onApiKeyChange = {},
+            onSearchEnabledChange = {},
+            onSearchApiKeyChange = {},
+            onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
             onUpdateModelSearchQuery = {},
             onUpdateModelProviderFilter = {},
             onUpdateModelSortOption = {},
             onSaveApiCredentials = {},
-            onSaveApiModelConfig = {}
+            onSaveApiModelConfig = {},
+            onSaveSearchSettings = {},
         )
     }
 }
@@ -703,18 +795,23 @@ fun PreviewByokConfigurePresetWithHeaders() {
                 )
             ),
             apiKey = "",
+            searchApiKey = "",
             onNavigateBack = {},
             onNavigateToCustomHeaders = {},
             onApiModelAssetFieldChange = {},
             onApiModelConfigFieldChange = {},
             onApiKeyChange = {},
+            onSearchEnabledChange = {},
+            onSearchApiKeyChange = {},
+            onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
             onUpdateModelSearchQuery = {},
             onUpdateModelProviderFilter = {},
             onUpdateModelSortOption = {},
             onSaveApiCredentials = {},
-            onSaveApiModelConfig = {}
+            onSaveApiModelConfig = {},
+            onSaveSearchSettings = {},
         )
     }
 }
@@ -731,18 +828,23 @@ fun PreviewByokConfigureOpenRouterPreset() {
                 )
             ),
             apiKey = "sk-or-....",
+            searchApiKey = "",
             onNavigateBack = {},
             onNavigateToCustomHeaders = {},
             onApiModelAssetFieldChange = {},
             onApiModelConfigFieldChange = {},
             onApiKeyChange = {},
+            onSearchEnabledChange = {},
+            onSearchApiKeyChange = {},
+            onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
             onUpdateModelSearchQuery = {},
             onUpdateModelProviderFilter = {},
             onUpdateModelSortOption = {},
             onSaveApiCredentials = {},
-            onSaveApiModelConfig = {}
+            onSaveApiModelConfig = {},
+            onSaveSearchSettings = {},
         )
     }
 }

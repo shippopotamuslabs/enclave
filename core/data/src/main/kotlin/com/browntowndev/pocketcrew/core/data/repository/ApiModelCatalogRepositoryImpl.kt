@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
 import com.google.genai.types.Model
+import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,7 +18,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 
 @Singleton
-class ApiModelCatalogRepositoryImpl(
+class ApiModelCatalogRepositoryImpl @Inject constructor(
     private val openAiClientProvider: OpenAiClientProvider,
     private val anthropicClientProvider: AnthropicClientProvider,
     private val googleGenAiClientProvider: GoogleGenAiClientProvider,
@@ -317,7 +318,7 @@ class ApiModelCatalogRepositoryImpl(
                         created = model.optLongOrNull("created"),
                         promptPrice = promptPrice?.asUsdPerMillionFromXai(),
                         completionPrice = completionPrice?.asUsdPerMillionFromXai(),
-                        contextWindowTokens = null,
+                        contextWindowTokens = model.optIntOrNull("max_prompt_length"),
                     )
                 )
             }

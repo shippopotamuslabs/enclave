@@ -1,5 +1,6 @@
 {
   "vision": {
+    "configId": "550e8400-e29b-41d4-a716-446655440001",
     "huggingFaceModelName": "litert-community/gemma-4-E4B-it-litert-lm",
     "fileName": "gemma-4-E4B-it.litertlm",
     "displayName": "Gemma 4 E4B (Vision)",
@@ -18,6 +19,7 @@
     "visionCapable": true
   },
   "draft": {
+    "configId": "550e8400-e29b-41d4-a716-446655440002",
     "huggingFaceModelName": "unsloth/LFM2.5-1.2B-Thinking-GGUF",
     "fileName": "LFM2.5-1.2B-Thinking-Q8_0.gguf",
     "displayName": "LFM 2.5 1.2B (Analytic Draft)",
@@ -35,6 +37,7 @@
     "thinkingEnabled": true
   },
   "draftTwo": {
+    "configId": "550e8400-e29b-41d4-a716-446655440003",
     "huggingFaceModelName": "Jackrong/Qwen3.5-2B-Claude-4.6-Opus-Reasoning-Distilled-GGUF",
     "fileName": "Qwen3.5-2B.Q8_0.gguf",
     "displayName": "Qwen 3.5 2B",
@@ -52,6 +55,7 @@
     "thinkingEnabled": true
   },
   "main": {
+    "configId": "550e8400-e29b-41d4-a716-446655440004",
     "huggingFaceModelName": "bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF",
     "fileName": "ai21labs_AI21-Jamba-Reasoning-3B-Q8_0.gguf",
     "displayName": "Jamba Reasoning 3B",
@@ -69,6 +73,7 @@
     "thinkingEnabled": true
   },
   "finalSynthesis": {
+    "configId": "550e8400-e29b-41d4-a716-446655440005",
     "huggingFaceModelName": "unsloth/Qwen3.5-4B-GGUF",
     "fileName": "Qwen3.5-4B-UD-Q4_K_XL.gguf",
     "displayName": "Qwen 3.5 4B",
@@ -86,6 +91,7 @@
     "thinkingEnabled": true
   },
   "fast": {
+    "configId": "550e8400-e29b-41d4-a716-446655440006",
     "huggingFaceModelName": "litert-community/gemma-4-E4B-it-litert-lm",
     "fileName": "gemma-4-E4B-it.litertlm",
     "displayName": "Gemma 4 E4B (Fast)",
@@ -103,6 +109,7 @@
     "thinkingEnabled": false
   },
   "thinking": {
+    "configId": "550e8400-e29b-41d4-a716-446655440007",
     "huggingFaceModelName": "litert-community/gemma-4-E4B-it-litert-lm",
     "fileName": "gemma-4-E4B-it.litertlm",
     "displayName": "Gemma 4 E4B (Thinking)",
@@ -120,6 +127,7 @@
     "thinkingEnabled": true
   },
   "code": {
+    "configId": "550e8400-e29b-41d4-a716-446655440008",
     "huggingFaceModelName": "unsloth/Qwen2.5-Coder-1.5B-Instruct-GGUF",
     "fileName": "Qwen2.5-Coder-1.5B-Instruct-Q5_K_M.gguf",
     "displayName": "Qwen 2.5 Coder 1.5B",

@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.local
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -91,6 +92,7 @@ class LocalModelsDaoTest {
         dao.upsert(oldEntity)
         configDao.upsert(
             LocalModelConfigurationEntity(
+                id = LocalModelConfigurationId("test-config-1"),
                 localModelId = currentId,
                 displayName = "Default"
             )
@@ -154,6 +156,7 @@ class LocalModelsDaoTest {
         val activeId = dao.upsert(activeEntity)
         val configDao = database.localModelConfigurationsDao()
         configDao.upsert(LocalModelConfigurationEntity(
+            id = LocalModelConfigurationId("test-config-1"),
             localModelId = activeId,
             displayName = "Llama Default",
             temperature = 0.7
@@ -203,6 +206,7 @@ class LocalModelsDaoTest {
         val activeId = dao.upsert(activeEntity)
         val configDao = database.localModelConfigurationsDao()
         configDao.upsert(LocalModelConfigurationEntity(
+            id = LocalModelConfigurationId("test-config-1"),
             localModelId = activeId,
             displayName = "Llama Default",
             temperature = 0.7

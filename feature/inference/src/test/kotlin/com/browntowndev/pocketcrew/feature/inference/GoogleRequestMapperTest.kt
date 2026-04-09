@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.feature.inference
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role as DomainRole
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -68,5 +69,33 @@ class GoogleRequestMapperTest {
         assertTrue(request.config.thinkingConfig().isEmpty)
         assertEquals(1, request.contents.size)
         assertEquals("user", request.contents.single().role().orElseThrow())
+    }
+
+    @Test
+    fun `mapToGenerateContentRequest adds function declarations when tooling is enabled`() {
+        val request = GoogleRequestMapper.mapToGenerateContentRequest(
+            prompt = "Find the latest Android tooling news.",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+            )
+        )
+
+        val tool = request.config.tools().orElseThrow().single()
+        val functionDeclaration = tool.functionDeclarations().orElseThrow().single()
+        val parameters = functionDeclaration.parameters().orElseThrow()
+
+        assertEquals("tavily_web_search", functionDeclaration.name().orElseThrow())
+        assertTrue(request.config.toolConfig().isPresent)
+        assertEquals(
+            listOf("tavily_web_search"),
+            request.config.toolConfig().orElseThrow()
+                .functionCallingConfig().orElseThrow()
+                .allowedFunctionNames().orElseThrow()
+        )
+        assertTrue(parameters.properties().orElseThrow().containsKey("query"))
+        assertEquals(listOf("query"), parameters.required().orElseThrow())
     }
 }

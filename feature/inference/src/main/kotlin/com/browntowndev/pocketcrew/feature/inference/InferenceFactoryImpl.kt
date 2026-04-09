@@ -5,20 +5,25 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.core.data.anthropic.AnthropicClientProvider
 import com.browntowndev.pocketcrew.core.data.google.GoogleGenAiClientProvider
 import com.browntowndev.pocketcrew.core.data.openai.OpenAiClientProvider
+import com.browntowndev.pocketcrew.core.data.repository.TavilySearchRepository
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
 import com.browntowndev.pocketcrew.feature.inference.llama.GpuProfiler
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaBackend
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
@@ -38,7 +43,7 @@ class MediaPipeInferenceServiceFactory @Inject constructor(
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
     private val gpuProfiler: GpuProfiler,
 ) {
-    suspend fun create(modelPath: String, modelType: ModelType): LlmInferencePort {
+    suspend fun create(modelPath: String, modelType: ModelType, toolExecutor: ToolExecutorPort): LlmInferencePort {
         val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
         val contextWindow = activeConfig?.contextWindow ?: activeConfig?.maxTokens ?: 16384
         val detectedBackend = gpuProfiler.detectOptimalBackend()
@@ -58,6 +63,7 @@ class MediaPipeInferenceServiceFactory @Inject constructor(
             modelType,
             activeModelProvider,
             processThinkingTokens,
+            toolExecutor,
         )
     }
 }
@@ -83,6 +89,7 @@ class InferenceFactoryImpl @Inject constructor(
     private val googleGenAiClientProvider: GoogleGenAiClientProvider,
     private val loggingPort: LoggingPort,
     private val inferenceLockManager: InferenceLockManager,
+    private val toolExecutor: ToolExecutorPort,
 ) : InferenceFactoryPort {
 
     companion object {
@@ -92,7 +99,7 @@ class InferenceFactoryImpl @Inject constructor(
     private sealed interface ServiceIdentity {
         data class Api(
             val modelType: ModelType,
-            val configId: Long,
+            val configId: ApiModelConfigurationId,
             val credentialsId: Long,
             val provider: ApiProvider,
             val modelId: String,
@@ -107,7 +114,7 @@ class InferenceFactoryImpl @Inject constructor(
         data class Local(
             val modelSha256: String,
             val extension: String,
-            val localConfigId: Long,
+            val localConfigId: LocalModelConfigurationId,
         ) : ServiceIdentity
     }
 
@@ -185,7 +192,8 @@ class InferenceFactoryImpl @Inject constructor(
                             modelId = apiCreds.modelId,
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
-                            loggingPort = loggingPort
+                            loggingPort = loggingPort,
+                            toolExecutor = toolExecutor,
                         )
                         ApiProvider.GOOGLE -> GoogleInferenceServiceImpl(
                             client = googleGenAiClientProvider.getClient(
@@ -196,7 +204,8 @@ class InferenceFactoryImpl @Inject constructor(
                             modelId = apiCreds.modelId,
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
-                            loggingPort = loggingPort
+                            loggingPort = loggingPort,
+                            toolExecutor = toolExecutor,
                         )
                         ApiProvider.OPENROUTER -> OpenRouterInferenceServiceImpl(
                             client = openAiClientProvider.getClient(
@@ -208,7 +217,8 @@ class InferenceFactoryImpl @Inject constructor(
                             modelType = modelType,
                             routing = apiConfig.openRouterRouting,
                             baseUrl = resolvedBaseUrl,
-                            loggingPort = loggingPort
+                            loggingPort = loggingPort,
+                            toolExecutor = toolExecutor,
                         )
                         ApiProvider.XAI -> XaiInferenceServiceImpl(
                             client = openAiClientProvider.getClient(
@@ -219,7 +229,8 @@ class InferenceFactoryImpl @Inject constructor(
                             modelId = apiCreds.modelId,
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
-                            loggingPort = loggingPort
+                            loggingPort = loggingPort,
+                            toolExecutor = toolExecutor,
                         )
                         else -> ApiInferenceServiceImpl(
                             client = openAiClientProvider.getClient(
@@ -231,7 +242,8 @@ class InferenceFactoryImpl @Inject constructor(
                             provider = apiCreds.provider.name,
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
-                            loggingPort = loggingPort
+                            loggingPort = loggingPort,
+                            toolExecutor = toolExecutor,
                         )
                     }
  
@@ -303,18 +315,19 @@ class InferenceFactoryImpl @Inject constructor(
                         localModelRepository = localModelRepository,
                         activeModelProvider = activeModelProvider,
                         context = context,
-                        modelType = modelType
+                        modelType = modelType,
+                        toolExecutor = toolExecutor,
                     )
                 }
                 "task" -> {
                     val modelPath = getModelPath(filename)
-                    mediaPipeFactory.create(modelPath, modelType)
+                    mediaPipeFactory.create(modelPath, modelType, toolExecutor)
                 }
                 else -> {
                     LiteRtInferenceServiceImpl(
                         conversationManager = conversationManagerProvider.get(),
                         processThinkingTokens = processThinkingTokens,
-                        modelType = modelType
+                        modelType = modelType,
                     )
                 }
             }

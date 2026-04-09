@@ -17,6 +17,8 @@ class FakeInferenceService(private val modelType: ModelType = ModelType.FAST) : 
     private var shouldThrowOnSendPrompt = false
     private var shouldThrowOnSetHistory = false
     private val sentPrompts = mutableListOf<String>()
+    private val sentOptions = mutableListOf<GenerationOptions>()
+    private var emittedEvents: List<InferenceEvent> = emptyList()
     private var historyMessages: List<ChatMessage> = emptyList()
 
     override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
@@ -25,11 +27,14 @@ class FakeInferenceService(private val modelType: ModelType = ModelType.FAST) : 
 
     override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = flow {
         sentPrompts.add(prompt)
+        sentOptions.add(options)
 
         if (shouldThrowOnSendPrompt) {
             shouldThrowOnSendPrompt = false
             throw RuntimeException("Simulated sendPrompt with options error")
         }
+
+        emittedEvents.forEach { emit(it) }
     }
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
@@ -47,10 +52,14 @@ class FakeInferenceService(private val modelType: ModelType = ModelType.FAST) : 
 
     fun getSentPrompts(): List<String> = sentPrompts.toList()
 
+    fun getSentOptions(): List<GenerationOptions> = sentOptions.toList()
+
     fun getHistory(): List<ChatMessage> = historyMessages
 
     fun reset() {
         sentPrompts.clear()
+        sentOptions.clear()
+        emittedEvents = emptyList()
         historyMessages = emptyList()
         shouldThrowOnSendPrompt = false
         shouldThrowOnSetHistory = false
@@ -62,6 +71,10 @@ class FakeInferenceService(private val modelType: ModelType = ModelType.FAST) : 
 
     fun setShouldThrowOnSetHistory(shouldThrow: Boolean) {
         shouldThrowOnSetHistory = shouldThrow
+    }
+
+    fun setEmittedEvents(events: List<InferenceEvent>) {
+        emittedEvents = events
     }
 
     /**

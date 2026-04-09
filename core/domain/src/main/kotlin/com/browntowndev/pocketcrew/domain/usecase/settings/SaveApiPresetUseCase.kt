@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
@@ -15,7 +16,7 @@ class SaveApiPresetUseCase @Inject constructor(
         parentCredentialsId: Long,
         defaultReasoningEffort: ApiReasoningEffort?,
         draft: ApiPresetDraft,
-    ): Result<Long> {
+    ): Result<ApiModelConfigurationId> {
         return saveApiModelConfigurationUseCase(
             ApiModelConfiguration(
                 id = draft.id,

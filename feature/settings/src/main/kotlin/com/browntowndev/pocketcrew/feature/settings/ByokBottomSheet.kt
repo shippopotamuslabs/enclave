@@ -50,6 +50,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.launch
 
@@ -72,8 +74,8 @@ fun ByokBottomSheet(
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
     onDeleteApiModelAsset: (Long) -> Unit,
-    onDeleteApiModelConfig: (Long) -> Unit,
-    onConfirmDeletionWithReassignment: (Long?, Long?) -> Unit,
+    onDeleteApiModelConfig: (ApiModelConfigurationId) -> Unit,
+    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onDismissDeletionSafety: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -413,7 +415,7 @@ private fun ByokConfigListView(
             modifier = Modifier.weight(1f, fill = false),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(asset.configurations, key = { it.id }) { config ->
+            items(asset.configurations, key = { it.id.value }) { config ->
                 var menuExpanded by remember { mutableStateOf(false) }
                 val isDeleteEnabled = asset.configurations.size > 1
 
@@ -511,16 +513,15 @@ private fun ByokConfigListView(
 }
 
 private sealed interface ByokDeleteTarget {
-    val id: Long
     val displayName: String
 
     data class Asset(
-        override val id: Long,
+        val id: Long,
         override val displayName: String
     ) : ByokDeleteTarget
 
     data class Config(
-        override val id: Long,
+        val id: ApiModelConfigurationId,
         override val displayName: String
     ) : ByokDeleteTarget
 }

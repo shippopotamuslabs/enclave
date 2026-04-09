@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import kotlinx.coroutines.test.runTest
 import org.junit.After
@@ -46,13 +47,15 @@ class LocalModelConfigurationsDaoTest {
             sizeInBytes = 100
         ))
         
+        val configId = LocalModelConfigurationId("test-config-1")
         val config = LocalModelConfigurationEntity(
+            id = configId,
             localModelId = modelId,
             displayName = "Creative",
             temperature = 0.9,
             systemPrompt = "You are a creative writer"
         )
-        val configId = configDao.upsert(config)
+        configDao.upsert(config)
         
         val retrieved = configDao.getById(configId)
         assertNotNull(retrieved)
@@ -75,8 +78,8 @@ class LocalModelConfigurationsDaoTest {
             sizeInBytes = 100
         ))
         
-        configDao.upsert(LocalModelConfigurationEntity(localModelId = modelId, displayName = "Precise"))
-        configDao.upsert(LocalModelConfigurationEntity(localModelId = modelId, displayName = "Creative"))
+        configDao.upsert(LocalModelConfigurationEntity(id = LocalModelConfigurationId("test-config-1"), localModelId = modelId, displayName = "Precise"))
+        configDao.upsert(LocalModelConfigurationEntity(id = LocalModelConfigurationId("test-config-2"), localModelId = modelId, displayName = "Creative"))
         
         val allConfigs = configDao.getAllForAsset(modelId)
         assertEquals(2, allConfigs.size)
@@ -93,8 +96,8 @@ class LocalModelConfigurationsDaoTest {
             sizeInBytes = 100
         ))
         
-        configDao.upsert(LocalModelConfigurationEntity(localModelId = modelId, displayName = "Creative"))
-        configDao.upsert(LocalModelConfigurationEntity(localModelId = modelId, displayName = "Creative"))
+        configDao.upsert(LocalModelConfigurationEntity(id = LocalModelConfigurationId("test-config-1"), localModelId = modelId, displayName = "Creative"))
+        configDao.upsert(LocalModelConfigurationEntity(id = LocalModelConfigurationId("test-config-2"), localModelId = modelId, displayName = "Creative"))
         
         val allConfigs = configDao.getAllForAsset(modelId)
         assertEquals(1, allConfigs.size)
@@ -109,8 +112,8 @@ class LocalModelConfigurationsDaoTest {
             modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "qwen2", remoteFilename = "qwen2.gguf", localFilename = "qwen2.gguf", sha256 = "abc2", sizeInBytes = 100
         ))
         
-        configDao.upsert(LocalModelConfigurationEntity(localModelId = model1Id, displayName = "Creative"))
-        configDao.upsert(LocalModelConfigurationEntity(localModelId = model2Id, displayName = "Creative"))
+        configDao.upsert(LocalModelConfigurationEntity(id = LocalModelConfigurationId("test-config-1"), localModelId = model1Id, displayName = "Creative"))
+        configDao.upsert(LocalModelConfigurationEntity(id = LocalModelConfigurationId("test-config-2"), localModelId = model2Id, displayName = "Creative"))
         
         val allConfigs1 = configDao.getAllForAsset(model1Id)
         val allConfigs2 = configDao.getAllForAsset(model2Id)

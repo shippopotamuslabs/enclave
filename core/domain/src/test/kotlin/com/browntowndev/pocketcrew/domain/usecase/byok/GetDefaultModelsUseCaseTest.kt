@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.byok
 
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.FakeDefaultModelRepository
 import kotlinx.coroutines.flow.first
@@ -23,7 +24,7 @@ class GetDefaultModelsUseCaseTest {
 
     @Test
     fun `returns seeded defaults`() = runTest {
-        repository.seed(ModelType.entries.map { DefaultModelAssignment(it, localConfigId = 1L) })
+        repository.seed(ModelType.entries.map { DefaultModelAssignment(it, localConfigId = LocalModelConfigurationId("1")) })
 
         val result = useCase().first()
 

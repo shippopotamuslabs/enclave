@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.download
 import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -180,7 +181,7 @@ class ModelFileScanner @Inject constructor(
         val assetsByType = ModelType.entries.associateWith { modelType -> 
             val config = activeModelProvider.getActiveConfiguration(modelType)
             if (config != null && config.isLocal) {
-                localModelRepository.getAssetByConfigId(config.id)
+                localModelRepository.getAssetByConfigId(config.id as LocalModelConfigurationId)
             } else null
         }
 

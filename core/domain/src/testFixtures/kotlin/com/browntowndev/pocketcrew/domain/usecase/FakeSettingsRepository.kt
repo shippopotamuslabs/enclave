@@ -32,6 +32,11 @@ class FakeSettingsRepository : SettingsRepository {
     private var lastCustomPromptTextValue: String? = null
     private var updateAllowMemoriesCallCount = 0
     private var lastAllowMemoriesValue: Boolean? = null
+    private var updateSearchEnabledCallCount = 0
+    private var lastSearchEnabledValue: Boolean? = null
+    private var saveTavilyApiKeyCallCount = 0
+    private var lastSavedTavilyApiKey: String? = null
+    private var clearTavilyApiKeyCallCount = 0
 
     // Methods to simulate errors
     var shouldThrowOnUpdateTheme = false
@@ -41,6 +46,9 @@ class FakeSettingsRepository : SettingsRepository {
     var shouldThrowOnUpdateSelectedPromptOption = false
     var shouldThrowOnUpdateCustomPromptText = false
     var shouldThrowOnUpdateAllowMemories = false
+    var shouldThrowOnUpdateSearchEnabled = false
+    var shouldThrowOnSaveTavilyApiKey = false
+    var shouldThrowOnClearTavilyApiKey = false
 
     override suspend fun updateTheme(theme: AppTheme) {
         if (shouldThrowOnUpdateTheme) throw RuntimeException("Simulated error")
@@ -89,6 +97,27 @@ class FakeSettingsRepository : SettingsRepository {
         updateAllowMemoriesCallCount++
         lastAllowMemoriesValue = allowed
         _settingsFlow.value = _settingsFlow.value.copy(allowMemories = allowed)
+    }
+
+    override suspend fun updateSearchEnabled(enabled: Boolean) {
+        if (shouldThrowOnUpdateSearchEnabled) throw RuntimeException("Simulated error")
+        updateSearchEnabledCallCount++
+        lastSearchEnabledValue = enabled
+        _settingsFlow.value = _settingsFlow.value.copy(searchEnabled = enabled)
+    }
+
+    override suspend fun saveTavilyApiKey(apiKey: String) {
+        if (shouldThrowOnSaveTavilyApiKey) throw RuntimeException("Simulated error")
+        saveTavilyApiKeyCallCount++
+        lastSavedTavilyApiKey = apiKey
+        _settingsFlow.value = _settingsFlow.value.copy(tavilyKeyPresent = apiKey.isNotBlank())
+    }
+
+    override suspend fun clearTavilyApiKey() {
+        if (shouldThrowOnClearTavilyApiKey) throw RuntimeException("Simulated error")
+        clearTavilyApiKeyCallCount++
+        lastSavedTavilyApiKey = null
+        _settingsFlow.value = _settingsFlow.value.copy(tavilyKeyPresent = false)
     }
 
     // Verification methods
@@ -141,6 +170,24 @@ class FakeSettingsRepository : SettingsRepository {
         }
     }
 
+    fun verifyUpdateSearchEnabledCalled(times: Int, enabled: Boolean? = null) {
+        assertEquals(times, updateSearchEnabledCallCount)
+        if (enabled != null) {
+            assertEquals(enabled, lastSearchEnabledValue)
+        }
+    }
+
+    fun verifySaveTavilyApiKeyCalled(times: Int, apiKey: String? = null) {
+        assertEquals(times, saveTavilyApiKeyCallCount)
+        if (apiKey != null) {
+            assertEquals(apiKey, lastSavedTavilyApiKey)
+        }
+    }
+
+    fun verifyClearTavilyApiKeyCalled(times: Int) {
+        assertEquals(times, clearTavilyApiKeyCallCount)
+    }
+
     fun resetCallCounts() {
         updateThemeCallCount = 0
         updateHapticPressCallCount = 0
@@ -149,6 +196,9 @@ class FakeSettingsRepository : SettingsRepository {
         updateSelectedPromptOptionCallCount = 0
         updateCustomPromptTextCallCount = 0
         updateAllowMemoriesCallCount = 0
+        updateSearchEnabledCallCount = 0
+        saveTavilyApiKeyCallCount = 0
+        clearTavilyApiKeyCallCount = 0
     }
 
     private fun assertEquals(expected: Any?, actual: Any?) {

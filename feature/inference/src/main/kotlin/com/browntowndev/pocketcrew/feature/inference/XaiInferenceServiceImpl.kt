@@ -5,25 +5,41 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
+import com.openai.models.responses.ResponseCreateParams
 
 class XaiInferenceServiceImpl(
     client: OpenAIClient,
     modelId: String,
     modelType: ModelType,
     baseUrl: String? = null,
-    loggingPort: LoggingPort
+    loggingPort: LoggingPort,
+    toolExecutor: ToolExecutorPort? = null,
 ) : BaseOpenAiSdkInferenceService(
     client = client,
     modelId = modelId,
     provider = "XAI",
     modelType = modelType,
     baseUrl = baseUrl,
-    loggingPort = loggingPort
+    loggingPort = loggingPort,
+    toolExecutor = toolExecutor,
 ) {
 
     override val tag: String = "XaiInferenceService"
+
+    override fun mapToolingResponseParams(
+        prompt: String,
+        options: GenerationOptions,
+        requestHistory: List<ChatMessage>,
+    ): ResponseCreateParams =
+        XaiRequestMapper.mapToResponseParams(
+            modelId = modelId,
+            prompt = prompt,
+            history = requestHistory,
+            options = options,
+        )
 
     override suspend fun executePrompt(
         prompt: String,
@@ -31,6 +47,11 @@ class XaiInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit
     ) {
+        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
+            executeToolingPrompt(prompt, options, requestHistory, emitEvent)
+            return
+        }
+
         val multiAgentModel = XaiRequestMapper.isMultiAgentModel(modelId)
         val chatFallbackAllowed = XaiRequestMapper.shouldAllowChatCompletionsFallback(modelId)
         val chatReasoningContentModel = XaiRequestMapper.isChatReasoningContentModel(modelId)
@@ -46,7 +67,10 @@ class XaiInferenceServiceImpl(
                 tag,
                 "Using Responses API for xAI model. model=$modelId chatFallbackAllowed=$chatFallbackAllowed chatReasoningContentModel=$chatReasoningContentModel reasoningEffort=${options.reasoningEffort} reasoningBudget=${options.reasoningBudget}"
             )
-            streamResponses(responseParams, emitEvent)
+            streamResponses(
+                params = responseParams,
+                emitEvent = emitEvent,
+            )
         } catch (e: Exception) {
             val badRequest = e is BadRequestException || e.message?.contains("400") == true || e.message?.contains("Bad Request") == true
             if (!badRequest || !chatFallbackAllowed) {

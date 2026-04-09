@@ -40,6 +40,7 @@ fun SettingsRoute(
         onShowByokSheet = viewModel::onShowByokSheet,
         onNavigateToByokConfigure = onNavigateToByokConfigure,
         onStartCreateApiModelAsset = viewModel::onStartCreateApiModelAsset,
+        onStartConfigureSearchSkill = viewModel::onStartConfigureSearchSkill,
         onSelectApiModelAsset = viewModel::onSelectApiModelAsset,
         onSelectApiModelConfig = viewModel::onSelectApiModelConfig,
         onDeleteApiModelAsset = viewModel::onDeleteApiModelAsset,
