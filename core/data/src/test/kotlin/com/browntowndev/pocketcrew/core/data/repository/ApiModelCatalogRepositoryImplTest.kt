@@ -131,8 +131,8 @@ class ApiModelCatalogRepositoryImplTest {
                   "name": "GPT 5.2",
                   "created": 1715644800,
                   "pricing": {
-                    "prompt": "0.01",
-                    "completion": "0.03"
+                    "prompt": "0.000005",
+                    "completion": "0.000015"
                   },
                   "context_length": 400000,
                   "top_provider": {
@@ -158,8 +158,8 @@ class ApiModelCatalogRepositoryImplTest {
                     id = "openai/gpt-5.2",
                     name = "GPT 5.2",
                     created = 1715644800L,
-                    promptPrice = 0.01,
-                    completionPrice = 0.03,
+                    promptPrice = 5.0,
+                    completionPrice = 15.0,
                     contextWindowTokens = 400_000,
                     maxOutputTokens = 128_000,
                 ),
@@ -177,8 +177,8 @@ class ApiModelCatalogRepositoryImplTest {
                 {
                   "id": "grok-2",
                   "created": 1723507200,
-                  "prompt_token_price": 0.002,
-                  "completion_token_price": 0.004
+                  "prompt_token_price": 2000,
+                  "completion_token_price": 4000
                 }
               ]
             }
@@ -191,8 +191,8 @@ class ApiModelCatalogRepositoryImplTest {
                     id = "grok-2",
                     name = "grok-2",
                     created = 1723507200L,
-                    promptPrice = 0.002,
-                    completionPrice = 0.004,
+                    promptPrice = 0.2,
+                    completionPrice = 0.4,
                 )
             ),
             models,
@@ -208,8 +208,8 @@ class ApiModelCatalogRepositoryImplTest {
                 {
                   "id": "grok-4.1-fast-reasoning",
                   "created": 1743465600,
-                  "prompt_text_token_price": 0.2,
-                  "completion_text_token_price": 0.5,
+                  "prompt_text_token_price": 2000,
+                  "completion_text_token_price": 5000,
                   "max_prompt_length": 131072
                 }
               ]
@@ -241,8 +241,8 @@ class ApiModelCatalogRepositoryImplTest {
               "name": "Grok 4 Fast",
               "aliases": ["grok-4-fast-reasoning"],
               "created": 1743465600,
-              "prompt_text_token_price": 0.2,
-              "completion_text_token_price": 0.5,
+              "prompt_text_token_price": 2000,
+              "completion_text_token_price": 5000,
               "max_prompt_length": 256000
             }
             """.trimIndent(),

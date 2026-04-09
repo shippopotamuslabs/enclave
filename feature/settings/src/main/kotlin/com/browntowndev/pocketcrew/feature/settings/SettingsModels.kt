@@ -2,7 +2,7 @@ package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.compose.runtime.Immutable
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
-import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.pocketcrew.domain.usecase.settings.ModelDeletionTarget
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
@@ -19,63 +19,125 @@ data class StoredMemory(
 
 @Immutable
 data class SettingsUiState(
+    val home: SettingsHomeUiState = SettingsHomeUiState(),
+    val customization: CustomizationUiState = CustomizationUiState(),
+    val dataControls: DataControlsUiState = DataControlsUiState(),
+    val memories: MemoriesUiState = MemoriesUiState(),
+    val feedback: FeedbackUiState = FeedbackUiState(),
+    val localModelsSheet: LocalModelsSheetUiState = LocalModelsSheetUiState(),
+    val localModelEditor: LocalModelEditorUiState = LocalModelEditorUiState(),
+    val apiProvidersSheet: ApiProvidersSheetUiState = ApiProvidersSheetUiState(),
+    val apiProviderEditor: ApiProviderEditorUiState = ApiProviderEditorUiState(),
+    val assignments: ModelAssignmentsUiState = ModelAssignmentsUiState(),
+    val deletion: DeletionFlowUiState = DeletionFlowUiState(),
+)
+
+@Immutable
+data class SettingsHomeUiState(
     val theme: AppTheme = AppTheme.SYSTEM,
     val hapticPress: Boolean = true,
     val hapticResponse: Boolean = true,
+    val isLocalModelsSheetOpen: Boolean = false,
+    val isApiProvidersSheetOpen: Boolean = false,
+    val isDataControlsSheetOpen: Boolean = false,
+    val isMemoriesSheetOpen: Boolean = false,
+    val isFeedbackSheetOpen: Boolean = false,
+)
 
-    // Customization Bottom Sheet
-    val showCustomizationSheet: Boolean = false,
-    val customizationEnabled: Boolean = true,
+@Immutable
+data class CustomizationUiState(
+    val isSheetOpen: Boolean = false,
+    val enabled: Boolean = true,
     val selectedPromptOption: SystemPromptOption = SystemPromptOption.CONCISE,
     val customPromptText: String = "",
+)
 
-    // Data Controls Bottom Sheet
-    val showDataControlsSheet: Boolean = false,
+@Immutable
+data class DataControlsUiState(
+    val isSheetOpen: Boolean = false,
     val allowMemories: Boolean = true,
+)
 
-    // Memories Bottom Sheet
-    val showMemoriesSheet: Boolean = false,
+@Immutable
+data class MemoriesUiState(
+    val isSheetOpen: Boolean = false,
     val memories: List<StoredMemory> = emptyList(),
+)
 
-    // Feedback Bottom Sheet
-    val showFeedbackSheet: Boolean = false,
+@Immutable
+data class FeedbackUiState(
+    val isSheetOpen: Boolean = false,
     val feedbackText: String = "",
+)
 
-    // Model Configuration Bottom Sheet
-    val showModelConfigSheet: Boolean = false,
-    val localModels: List<LocalModelAssetUi> = emptyList(),
-    val availableToDownloadModels: List<LocalModelAssetUi> = emptyList(),
-    val selectedLocalModelAsset: LocalModelAssetUi? = null,
-    val selectedLocalModelConfig: LocalModelConfigUi? = null,
-    val availableHuggingFaceModels: List<LocalModelMetadataUi> = emptyList(),
+@Immutable
+data class LocalModelsSheetUiState(
+    val isVisible: Boolean = false,
+    val models: List<LocalModelAssetUi> = emptyList(),
+    val availableDownloads: List<LocalModelAssetUi> = emptyList(),
+    val selectedAsset: LocalModelAssetUi? = null,
+)
 
-    val showByokSheet: Boolean = false,
-    val apiModels: List<ApiModelAssetUi> = emptyList(),
-    val selectedApiModelAsset: ApiModelAssetUi? = null,
-    val apiCredentialDraft: ApiModelAssetUi? = null,
-    val selectedReusableApiCredential: ReusableApiCredentialUi? = null,
-    val selectedApiModelConfig: ApiModelConfigUi? = null,
-    val selectedApiModelParameterSupport: ApiModelParameterSupport = ApiModelParameterSupport.DEFAULT,
-    val discoveredApiModels: List<DiscoveredApiModelUi> = emptyList(),
-    val filteredDiscoveredApiModels: List<DiscoveredApiModelUi> = emptyList(),
-    val isDiscoveringApiModels: Boolean = false,
-    val modelSearchQuery: String = "",
-    val modelProviderFilter: String? = null,
-    val modelSortOption: ModelSortOption = ModelSortOption.A_TO_Z,
+@Immutable
+data class LocalModelEditorUiState(
+    val selectedAsset: LocalModelAssetUi? = null,
+    val configDraft: LocalModelConfigUi? = null,
+)
 
-    val defaultAssignments: List<DefaultModelAssignmentUi> = emptyList(),
+@Immutable
+data class ApiProvidersSheetUiState(
+    val isVisible: Boolean = false,
+    val assets: List<ApiModelAssetUi> = emptyList(),
+    val selectedAsset: ApiModelAssetUi? = null,
+)
 
-    // Deletion Flow
-    val showCannotDeleteLastModelAlert: Boolean = false,
-    val pendingDeletionModelId: Long? = null,
-    val pendingDeletionConfigId: Long? = null,
+@Immutable
+data class ApiModelDiscoveryUiState(
+    val models: List<DiscoveredApiModelUi> = emptyList(),
+    val filteredModels: List<DiscoveredApiModelUi> = emptyList(),
+    val isLoading: Boolean = false,
+    val searchQuery: String = "",
+    val providerFilter: String? = null,
+    val sortOption: ModelSortOption = ModelSortOption.A_TO_Z,
+)
+
+@Immutable
+data class ApiProviderEditorUiState(
+    val assetDraft: ApiModelAssetUi? = null,
+    val selectedReusableCredential: ReusableApiCredentialUi? = null,
+    val presetDraft: ApiModelConfigUi? = null,
+    val parameterSupport: ApiModelParameterSupport = ApiModelParameterSupport.DEFAULT,
+    val discovery: ApiModelDiscoveryUiState = ApiModelDiscoveryUiState(),
+)
+
+@Immutable
+data class ModelAssignmentsUiState(
+    val assignments: List<DefaultModelAssignmentUi> = emptyList(),
+    val isDialogOpen: Boolean = false,
+    val editingSlot: ModelType? = null,
+)
+
+@Immutable
+data class DeletionFlowUiState(
+    val showLastModelAlert: Boolean = false,
+    val pendingTarget: PendingDeletionTarget? = null,
     val modelTypesNeedingReassignment: List<ModelType> = emptyList(),
     val reassignmentOptions: List<ReassignmentOptionUi> = emptyList(),
-
-    // Assignment Selection Dialog
-    val showAssignmentDialog: Boolean = false,
-    val editingAssignmentSlot: ModelType? = null
 )
+
+sealed interface PendingDeletionTarget {
+    data class LocalModelAsset(val id: Long) : PendingDeletionTarget
+    data class LocalModelPreset(val id: Long) : PendingDeletionTarget
+    data class ApiProvider(val id: Long) : PendingDeletionTarget
+    data class ApiPreset(val id: Long) : PendingDeletionTarget
+}
+
+internal fun ModelDeletionTarget.toUi(): PendingDeletionTarget = when (this) {
+    is ModelDeletionTarget.LocalModelAsset -> PendingDeletionTarget.LocalModelAsset(id)
+    is ModelDeletionTarget.LocalModelPreset -> PendingDeletionTarget.LocalModelPreset(id)
+    is ModelDeletionTarget.ApiProvider -> PendingDeletionTarget.ApiProvider(id)
+    is ModelDeletionTarget.ApiPreset -> PendingDeletionTarget.ApiPreset(id)
+}
 
 @Immutable
 data class ReassignmentOptionUi(
@@ -151,20 +213,6 @@ data class DiscoveredApiModelUi(
     val providerName: String? = null,
 )
 
-internal fun DiscoveredApiModel.toUi(): DiscoveredApiModelUi {
-    val provider = if (id.contains("/")) id.substringBefore("/") else null
-    return DiscoveredApiModelUi(
-        modelId = id,
-        name = name,
-        contextWindowTokens = contextWindowTokens,
-        maxOutputTokens = maxOutputTokens,
-        created = created,
-        promptPrice = promptPrice,
-        completionPrice = completionPrice,
-        providerName = provider
-    )
-}
-
 @Immutable
 data class LocalModelAssetUi(
     val metadataId: Long,
@@ -194,12 +242,6 @@ data class LocalModelConfigUi(
     val systemPrompt: String = "",
     val thinkingEnabled: Boolean = false,
     val isSystemPreset: Boolean = false
-)
-
-@Immutable
-data class LocalModelMetadataUi(
-    val id: Long = 0,
-    val huggingFaceModelName: String
 )
 
 @Immutable
@@ -321,13 +363,15 @@ object MockSettingsData {
     )
 
     val baseUiState = SettingsUiState(
-        theme = AppTheme.SYSTEM,
-        localModels = localModels,
-        apiModels = apiModels,
-        defaultAssignments = defaultAssignments,
-        memories = listOf(
-            StoredMemory("1", "User prefers concise answers."),
-            StoredMemory("2", "User is a senior software engineer.")
-        )
+        home = SettingsHomeUiState(theme = AppTheme.SYSTEM),
+        memories = MemoriesUiState(
+            memories = listOf(
+                StoredMemory("1", "User prefers concise answers."),
+                StoredMemory("2", "User is a senior software engineer.")
+            )
+        ),
+        localModelsSheet = LocalModelsSheetUiState(models = localModels),
+        apiProvidersSheet = ApiProvidersSheetUiState(assets = apiModels),
+        assignments = ModelAssignmentsUiState(assignments = defaultAssignments),
     )
 }

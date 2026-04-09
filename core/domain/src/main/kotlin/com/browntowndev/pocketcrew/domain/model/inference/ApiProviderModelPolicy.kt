@@ -116,6 +116,7 @@ object ApiProviderModelPolicy {
             isXaiMultiAgentModel(modelId) -> true
             isXaiGrok3Model(modelId) -> false
             isXaiGrok4ReasoningFamily(modelId) -> false
+            isXaiGrok4NonReasoningFamily(modelId) -> false
             else -> true
         }
 

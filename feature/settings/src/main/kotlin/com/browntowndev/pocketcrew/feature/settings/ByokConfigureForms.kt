@@ -15,7 +15,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -43,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -75,8 +77,7 @@ fun CredentialsConfigurationForm(
     onFetchModels: () -> Unit,
     onUpdateSearchQuery: (String) -> Unit,
     onUpdateProviderFilter: (String?) -> Unit,
-    onUpdateSortOption: (ModelSortOption) -> Unit,
-    onSave: () -> Unit
+    onUpdateSortOption: (ModelSortOption) -> Unit
 ) {
     var providerDropdownExpanded by remember { mutableStateOf(false) }
     var reusableCredentialDropdownExpanded by remember { mutableStateOf(false) }
@@ -139,29 +140,7 @@ fun CredentialsConfigurationForm(
 
         val canUseStoredCredential = asset.credentialsId == 0L && reusableCredentials.isNotEmpty()
 
-        Button(
-            onClick = onFetchModels,
-            enabled = !isFetchingModels &&
-                (apiKey.isNotBlank() || asset.credentialsId != 0L || selectedReusableCredential != null),
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(if (availableModels.isEmpty()) "Load Models" else "Refresh Models")
-                if (isFetchingModels) {
-                    CircularProgressIndicator(
-                        modifier = Modifier
-                            .align(Alignment.CenterStart)
-                            .padding(start = 16.dp)
-                            .size(18.dp),
-                        strokeWidth = 2.dp
-                    )
-                }
-            }
-        }
+        val canFetchModels = !isFetchingModels && (apiKey.isNotBlank() || asset.credentialsId != 0L || selectedReusableCredential != null)
 
         Box(modifier = Modifier.fillMaxWidth().clickable { showModelSelectionSheet = true }) {
             OutlinedTextField(
@@ -169,7 +148,15 @@ fun CredentialsConfigurationForm(
                 onValueChange = { onAssetChange(asset.copy(modelId = it)) },
                 readOnly = true,
                 enabled = false,
-                label = { Text("Model") },
+                label = { 
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Model")
+                        if (availableModels.isEmpty()) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            PersistentTooltip(description = "Model discovery is optional. You can always enter a model ID manually.")
+                        }
+                    }
+                },
                 placeholder = {
                     Text(
                         if (availableModels.isEmpty()) {
@@ -189,12 +176,46 @@ fun CredentialsConfigurationForm(
                     disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 ),
-                supportingText = {
-                    if (availableModels.isEmpty()) {
-                        Text("Model discovery is optional. You can always enter a model ID manually.")
-                    }
+                trailingIcon = {
+                    // Invisible spacer to reserve space for the overlaid icon
+                    Spacer(modifier = Modifier.size(24.dp))
                 }
             )
+            
+            Box(
+                modifier = Modifier.matchParentSize(),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                if (isFetchingModels) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .padding(end = 12.dp)
+                            .size(24.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else if (availableModels.isEmpty()) {
+                    IconButton(
+                        onClick = onFetchModels,
+                        enabled = canFetchModels,
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Load Models"
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = { showModelSelectionSheet = true },
+                        modifier = Modifier.padding(end = 4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = "Select Model"
+                        )
+                    }
+                }
+            }
         }
 
         if (showModelSelectionSheet) {
@@ -297,27 +318,6 @@ fun CredentialsConfigurationForm(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
-
-        val isSaveEnabled = if (asset.credentialsId == 0L) {
-            asset.displayName.isNotBlank() &&
-            asset.modelId.isNotBlank() &&
-            (apiKey.isNotBlank() || selectedReusableCredential != null)
-        } else {
-            asset.displayName.isNotBlank() &&
-            asset.modelId.isNotBlank()
-        }
-
-        Button(
-            onClick = onSave,
-            enabled = isSaveEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp)
-                .height(52.dp),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Text("Save Credentials", fontWeight = FontWeight.Bold)
-        }
     }
 }
 
@@ -329,8 +329,7 @@ fun PresetConfigurationForm(
     config: ApiModelConfigUi,
     selectedModelMetadata: DiscoveredApiModelUi?,
     onConfigChange: (ApiModelConfigUi) -> Unit,
-    onNavigateToCustomHeaders: () -> Unit,
-    onSave: () -> Unit
+    onNavigateToCustomHeaders: () -> Unit
 ) {
     val reasoningPolicy = parameterSupport.reasoningPolicy
     var reasoningDropdownExpanded by remember(config.reasoningEffort, reasoningPolicy) { mutableStateOf(false) }
@@ -349,42 +348,36 @@ fun PresetConfigurationForm(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
         )
 
-        Column {
-            Row(
+        Box(
+            modifier = Modifier.fillMaxWidth().clickable { showSystemPromptSheet = true }
+        ) {
+            OutlinedTextField(
+                value = config.systemPrompt.ifBlank { "Tap to edit system prompt" },
+                onValueChange = {},
+                label = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("System Prompt")
+                        Spacer(modifier = Modifier.width(4.dp))
+                        PersistentTooltip(
+                            description = "Certain pipeline slots (like Crew Mode or Vision) require specialized system prompts to function correctly. Use the Import button to load a template."
+                        )
+                    }
+                },
+                enabled = false,
+                readOnly = true,
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("System Prompt")
-                    Spacer(modifier = Modifier.width(4.dp))
-                    PersistentTooltip(
-                        description = "Certain pipeline slots (like Crew Mode or Vision) require specialized system prompts to function correctly. Use the Import button to load a template."
-                    )
-                }
-            }
-            
-            Box(
-                modifier = Modifier.fillMaxWidth().clickable { showSystemPromptSheet = true }
-            ) {
-                OutlinedTextField(
-                    value = config.systemPrompt.ifBlank { "Tap to edit system prompt" },
-                    onValueChange = {},
-                    enabled = false,
-                    readOnly = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    maxLines = 2,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                        disabledBorderColor = MaterialTheme.colorScheme.outline,
-                        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                shape = RoundedCornerShape(12.dp),
+                minLines = 4,
+                maxLines = 4,
+                colors = OutlinedTextFieldDefaults.colors(
+                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                    disabledBorderColor = MaterialTheme.colorScheme.outline,
+                    disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-            }
+            )
         }
         
         if (showSystemPromptSheet) {
@@ -442,7 +435,8 @@ fun PresetConfigurationForm(
                             .fillMaxWidth()
                             .weight(1f),
                         shape = RoundedCornerShape(12.dp),
-                        placeholder = { Text("Enter system prompt...") }
+                        placeholder = { Text("Enter system prompt...") },
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
                     )
                     
                     Spacer(modifier = Modifier.height(16.dp))
@@ -628,25 +622,6 @@ fun PresetConfigurationForm(
             customHeaders = config.customHeaders,
             onNavigateToCustomHeaders = onNavigateToCustomHeaders
         )
-
-        val maxTokensValid = !parameterSupport.supportsMaxTokens || config.maxTokens.isNotBlank()
-        val topKValid = !parameterSupport.supportsTopK || config.topK.isNotBlank()
-        val isSaveEnabled = config.displayName.isNotBlank() &&
-                maxTokensValid &&
-                config.contextWindow.isNotBlank() &&
-                topKValid
-
-        Button(
-            onClick = onSave,
-            enabled = isSaveEnabled,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp)
-                .height(52.dp),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Text("Save Preset", fontWeight = FontWeight.Bold)
-        }
     }
 }
 
@@ -656,8 +631,10 @@ fun PreviewByokConfigureCredentials() {
     PocketCrewTheme {
         ByokConfigureScreen(
             uiState = MockSettingsData.baseUiState.copy(
-                selectedApiModelAsset = MockSettingsData.apiModels[0],
-                selectedApiModelConfig = null
+                apiProviderEditor = ApiProviderEditorUiState(
+                    assetDraft = MockSettingsData.apiModels[0],
+                    presetDraft = null,
+                )
             ),
             onNavigateToCustomHeaders = {},
             apiKey = "sk-....",
@@ -682,8 +659,10 @@ fun PreviewByokConfigurePreset() {
     PocketCrewTheme {
         ByokConfigureScreen(
             uiState = MockSettingsData.baseUiState.copy(
-                selectedApiModelAsset = MockSettingsData.apiModels[0],
-                selectedApiModelConfig = MockSettingsData.apiModels[0].configurations[0]
+                apiProviderEditor = ApiProviderEditorUiState(
+                    assetDraft = MockSettingsData.apiModels[0],
+                    presetDraft = MockSettingsData.apiModels[0].configurations[0],
+                )
             ),
             apiKey = "",
             onNavigateBack = {},
@@ -718,8 +697,10 @@ fun PreviewByokConfigurePresetWithHeaders() {
 
         ByokConfigureScreen(
             uiState = MockSettingsData.baseUiState.copy(
-                selectedApiModelAsset = MockSettingsData.apiModels[0],
-                selectedApiModelConfig = mockConfig
+                apiProviderEditor = ApiProviderEditorUiState(
+                    assetDraft = MockSettingsData.apiModels[0],
+                    presetDraft = mockConfig,
+                )
             ),
             apiKey = "",
             onNavigateBack = {},
@@ -744,8 +725,10 @@ fun PreviewByokConfigureOpenRouterPreset() {
     PocketCrewTheme {
         ByokConfigureScreen(
             uiState = MockSettingsData.baseUiState.copy(
-                selectedApiModelAsset = MockSettingsData.apiModels[2],
-                selectedApiModelConfig = MockSettingsData.apiModels[2].configurations[0]
+                apiProviderEditor = ApiProviderEditorUiState(
+                    assetDraft = MockSettingsData.apiModels[2],
+                    presetDraft = MockSettingsData.apiModels[2].configurations[0],
+                )
             ),
             apiKey = "sk-or-....",
             onNavigateBack = {},

@@ -62,6 +62,9 @@ abstract class MessageDao {
     @Query("UPDATE message SET message_state = :messageState WHERE id = :id")
     abstract suspend fun updateMessageState(id: Long, messageState: MessageState)
 
+    @Query("UPDATE message SET created_at = :timestamp WHERE id = :id")
+    abstract suspend fun updateMessageCreatedAt(id: Long, timestamp: Long)
+
     @Query("UPDATE message SET content = :content WHERE id = :id")
     abstract suspend fun updateMessageContentText(id: Long, content: String)
 
@@ -138,5 +141,9 @@ abstract class MessageDao {
         updateMessagePipelineStep(messageId, pipelineStep)
         // Update state
         updateMessageState(messageId, messageState)
+
+        if (messageState == MessageState.COMPLETE) {
+            updateMessageCreatedAt(messageId, System.currentTimeMillis())
+        }
     }
 }

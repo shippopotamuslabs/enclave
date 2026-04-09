@@ -272,6 +272,7 @@ private fun ThoughtForHeader(
         modifier = modifier
             .padding(bottom = 8.dp)
             .fillMaxWidth()
+            .offset(x = (-11).dp)
             .clickable { onViewFullThinking() }
     ) {
         Box(

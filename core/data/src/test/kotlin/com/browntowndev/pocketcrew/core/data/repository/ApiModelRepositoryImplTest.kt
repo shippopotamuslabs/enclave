@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
+import com.browntowndev.pocketcrew.core.data.local.buildApiCredentialsIdentitySignature
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
@@ -61,6 +62,12 @@ class ApiModelRepositoryImplTest {
         val id = repo.saveCredentials(creds, "sk-test")
 
         assertEquals(1L, id)
+        val expectedSignature = buildApiCredentialsIdentitySignature(
+            provider = ApiProvider.OPENAI,
+            modelId = "gpt-4o",
+            baseUrl = "https://api.openai.com/v1",
+            apiKey = "sk-test",
+        )
         coVerify { 
             credentialsDao.insert(match {
                 it.credentialAlias == "my_key" && 
@@ -68,7 +75,8 @@ class ApiModelRepositoryImplTest {
                 it.provider == ApiProvider.OPENAI &&
                 it.modelId == "gpt-4o" &&
                 it.baseUrl == "https://api.openai.com/v1" &&
-                it.isVision == true
+                it.isVision == true &&
+                it.apiKeySignature == expectedSignature
             }) 
         }
         verify { apiKeyManager.save("my_key", "sk-test") }
@@ -142,6 +150,36 @@ class ApiModelRepositoryImplTest {
         assertEquals(5L, id)
         verify(exactly = 1) { apiKeyManager.get("existing_alias") }
         verify(exactly = 1) { apiKeyManager.save("new_alias", "stored-key") }
+    }
+
+    @Test
+    fun `find matching credentials resolves stored duplicate signature`() = runTest {
+        val expectedSignature = buildApiCredentialsIdentitySignature(
+            provider = ApiProvider.XAI,
+            modelId = "grok-4.20",
+            baseUrl = ApiProvider.XAI.defaultBaseUrl(),
+            apiKey = "xai-key",
+        )
+        coEvery { credentialsDao.getByApiKeySignature(expectedSignature) } returns ApiCredentialsEntity(
+            id = 11L,
+            displayName = "Existing xAI",
+            provider = ApiProvider.XAI,
+            modelId = "grok-4.20",
+            baseUrl = ApiProvider.XAI.defaultBaseUrl(),
+            credentialAlias = "existing-xai",
+            apiKeySignature = expectedSignature,
+        )
+
+        val result = repo.findMatchingCredentials(
+            provider = ApiProvider.XAI,
+            modelId = "grok-4.20",
+            baseUrl = ApiProvider.XAI.defaultBaseUrl(),
+            apiKey = "xai-key",
+        )
+
+        assertEquals(11L, result?.id)
+        assertEquals("existing-xai", result?.credentialAlias)
+        coVerify(exactly = 1) { credentialsDao.getByApiKeySignature(expectedSignature) }
     }
 
     @Test
