@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.usecase.settings
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
@@ -54,13 +55,14 @@ class SaveApiProviderDraftUseCaseTest {
         }
         coEvery { saveApiModelConfigurationUseCase(any()) } coAnswers {
             val configuration = invocation.args[0] as ApiModelConfiguration
+            val expectedId = ApiModelConfigurationId("123")
             persistedAssets.value = listOf(
                 ApiModelAsset(
                     credentials = persistedAssets.value.single().credentials,
-                    configurations = listOf(configuration.copy(id = 123L)),
+                    configurations = listOf(configuration.copy(id = expectedId)),
                 )
             )
-            Result.success(123L)
+            Result.success(expectedId)
         }
         coEvery {
             apiModelRepository.findMatchingCredentials(
@@ -107,7 +109,7 @@ class SaveApiProviderDraftUseCaseTest {
             ),
             configurations = listOf(
                 ApiModelConfiguration(
-                    id = 8L,
+                    id = ApiModelConfigurationId("8"),
                     apiCredentialsId = 42L,
                     displayName = "Default Preset",
                 )
@@ -127,14 +129,15 @@ class SaveApiProviderDraftUseCaseTest {
         coEvery { saveApiCredentialsUseCase(any(), any(), any()) } returns 0L
         coEvery { saveApiModelConfigurationUseCase(any()) } coAnswers {
             val configuration = invocation.args[0] as ApiModelConfiguration
+            val expectedId = ApiModelConfigurationId("99")
             persistedAssets.value = listOf(
                 existingAsset.copy(
                     configurations = listOf(
-                        configuration.copy(id = 99L, apiCredentialsId = existingAsset.credentials.id)
+                        configuration.copy(id = expectedId, apiCredentialsId = existingAsset.credentials.id)
                     )
                 )
             )
-            Result.success(99L)
+            Result.success(expectedId)
         }
 
         val result = SaveApiProviderDraftUseCase(

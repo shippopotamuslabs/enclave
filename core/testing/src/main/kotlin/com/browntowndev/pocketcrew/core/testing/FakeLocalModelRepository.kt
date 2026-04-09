@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.testing
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -11,6 +12,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * Fake implementation of LocalModelRepositoryPort for testing.
@@ -28,9 +31,8 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
     private val assignments = mutableMapOf<ModelType, LocalModelAsset>()
     private val assets = mutableListOf<LocalModelAsset>()
     private val softDeleted = mutableListOf<LocalModelAsset>()
-    private val configsById = mutableMapOf<Long, Pair<LocalModelAsset, LocalModelConfiguration>>()
+    private val configsById = mutableMapOf<LocalModelConfigurationId, Pair<LocalModelAsset, LocalModelConfiguration>>()
     private var nextAssetId = 1L
-    private var nextConfigId = 1L
 
     override suspend fun getAllLocalAssets(): List<LocalModelAsset> {
         return assets
@@ -40,7 +42,7 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
         return _registeredModelsFlow.map { assets }
     }
 
-    override suspend fun getAssetByConfigId(configId: Long): LocalModelAsset? {
+    override suspend fun getAssetByConfigId(configId: LocalModelConfigurationId): LocalModelAsset? {
         return configsById[configId]?.first
     }
 
@@ -60,8 +62,9 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
         return assignedId
     }
 
-    override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): Long {
-        val configId = if (config.id > 0) config.id else nextConfigId++
+    @OptIn(ExperimentalUuidApi::class)
+    override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId {
+        val configId = if (config.id.value.isNotEmpty()) config.id else LocalModelConfigurationId(Uuid.random().toString())
         val asset = assets.find { it.metadata.id == config.localModelId }
             ?: throw IllegalStateException("Asset ${config.localModelId} not found")
         val normalizedConfig = config.copy(id = configId, localModelId = asset.metadata.id)
@@ -85,14 +88,16 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
     override suspend fun deleteLocalModelMetadata(id: Long) {
     }
 
-    override suspend fun saveConfiguration(config: LocalModelConfiguration): Long {
-        return config.id
+    @OptIn(ExperimentalUuidApi::class)
+    override suspend fun saveConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId {
+        return if (config.id.value.isNotEmpty()) config.id else LocalModelConfigurationId(Uuid.random().toString())
     }
 
-    override suspend fun deleteConfiguration(id: Long) {
+    override suspend fun deleteConfiguration(id: LocalModelConfigurationId) {
+        configsById.remove(id)
     }
 
-    override suspend fun getConfigurationById(id: Long): LocalModelConfiguration? {
+    override suspend fun getConfigurationById(id: LocalModelConfigurationId): LocalModelConfiguration? {
         return configsById[id]?.second
     }
 

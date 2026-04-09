@@ -15,15 +15,18 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.onCompletion
 import java.util.concurrent.CancellationException
@@ -46,10 +49,14 @@ class GenerateChatResponseUseCase @Inject constructor(
     private val messageRepository: MessageRepository,
     private val loggingPort: LoggingPort,
     private val activeModelProvider: ActiveModelProviderPort,
+    private val settingsRepository: SettingsRepository,
+    private val searchToolPromptComposer: SearchToolPromptComposer,
 ) {
     companion object {
         private const val TAG = "GenerateChatResponse"
         private const val FLOW_BUFFER_SIZE = 64
+        private val TOOL_CALL_TRACE_REGEX = Regex("<tool_call>.*?</tool_call>", setOf(RegexOption.DOT_MATCHES_ALL))
+        private val TOOL_RESULT_TRACE_REGEX = Regex("<tool_result>.*?</tool_result>", setOf(RegexOption.DOT_MATCHES_ALL))
     }
 
     operator fun invoke(
@@ -277,12 +284,17 @@ class GenerateChatResponseUseCase @Inject constructor(
                 thinkingEndTime = accumulator.thinkingEndTime ?: 0L,
                 thinkingDuration = accumulator.thinkingDurationSeconds.toInt(),
                 thinkingRaw = accumulator.thinkingRaw.toString().ifBlank { null },
-                content = accumulator.content.toString(),
+                content = sanitizePersistedContent(accumulator.content.toString()),
                 messageState = finalState,
                 pipelineStep = pipelineStep
             )
         }
     }
+
+    private fun sanitizePersistedContent(content: String): String =
+        TOOL_RESULT_TRACE_REGEX
+            .replace(TOOL_CALL_TRACE_REGEX.replace(content, ""), "")
+            .trim()
 
     /**
      * Manager for accumulating message state across multiple events.
@@ -432,23 +444,34 @@ class GenerateChatResponseUseCase @Inject constructor(
         }
 
         val config = activeModelProvider.getActiveConfiguration(modelType)
+        val searchEnabled = settingsRepository.settingsFlow.first().searchEnabled
         val reasoningBudget = if (config?.isLocal == true && config.thinkingEnabled) 2048 else 0
         loggingPort.debug(
             TAG,
-            "generateWithService config modelType=$modelType configName=${config?.name} isLocal=${config?.isLocal} thinkingEnabled=${config?.thinkingEnabled} reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget"
+            "generateWithService config modelType=$modelType configName=${config?.name} isLocal=${config?.isLocal} searchEnabled=$searchEnabled thinkingEnabled=${config?.thinkingEnabled} reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget"
         )
         
         // ARCHITECTURE: Explicitly provide modelType to options for event tagging
+        val systemPrompt = when {
+            config?.isLocal == true && searchEnabled -> searchToolPromptComposer.compose(config.systemPrompt)
+            else -> config?.systemPrompt
+        }
         val options = GenerationOptions(
             reasoningBudget = reasoningBudget,
             modelType = modelType,
-            systemPrompt = config?.systemPrompt,
+            systemPrompt = systemPrompt,
             reasoningEffort = config?.reasoningEffort,
             temperature = config?.temperature?.toFloat(),
             topK = config?.topK,
             topP = config?.topP?.toFloat(),
             maxTokens = config?.maxTokens,
             contextWindow = config?.contextWindow,
+            toolingEnabled = searchEnabled,
+            availableTools = if (searchEnabled) {
+                listOf(ToolDefinition.TAVILY_WEB_SEARCH)
+            } else {
+                emptyList()
+            },
         )
 
         service.sendPrompt(prompt, options, closeConversation = false).collect { event ->

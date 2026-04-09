@@ -1,5 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.local
 
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import org.junit.Test
 
@@ -11,6 +13,6 @@ class DefaultModelEntityTest {
 
     @Test(expected = IllegalArgumentException::class)
     fun `both FKs non-null throws IllegalArgumentException`() {
-        DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = 5L, apiConfigId = 3L)
+        DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = LocalModelConfigurationId("5"), apiConfigId = ApiModelConfigurationId("3"))
     }
 }

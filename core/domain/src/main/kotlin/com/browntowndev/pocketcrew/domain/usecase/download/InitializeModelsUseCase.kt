@@ -3,6 +3,8 @@ package com.browntowndev.pocketcrew.domain.usecase.download
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
@@ -50,7 +52,7 @@ class InitializeModelsUseCase @Inject constructor(
                 .associateWith { modelType -> 
                     val config = activeModelProvider.getActiveConfiguration(modelType)
                     if (config != null && config.isLocal) {
-                        localModelRepository.getAssetByConfigId(config.id)
+                        localModelRepository.getAssetByConfigId(config.id as LocalModelConfigurationId)
                     } else null
                 }
                 .filterValues { it != null }

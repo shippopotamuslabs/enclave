@@ -4,13 +4,17 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.openai.client.OpenAIClient
 import com.openai.errors.OpenAIServiceException
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseInputItem
 import java.util.Optional
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -27,8 +31,18 @@ abstract class BaseOpenAiSdkInferenceService(
     protected val provider: String,
     protected val modelType: ModelType,
     protected val baseUrl: String? = null,
-    protected val loggingPort: LoggingPort
+    protected val loggingPort: LoggingPort,
+    internal val toolExecutor: ToolExecutorPort? = null,
 ) : LlmInferencePort {
+
+    protected data class StreamedOpenAiResponse(
+        val emittedAny: Boolean,
+        val functionCall: ToolCallRequest?,
+        val responseId: String?,
+        val providerToolCallId: String?,
+        val providerToolItemId: String?,
+        val assistantMessageText: String,
+    )
 
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
@@ -64,6 +78,11 @@ abstract class BaseOpenAiSdkInferenceService(
             loggingPort.debug(tag, "sendPrompt cancelled provider=$provider model=$modelId")
             throw e
         } catch (e: Exception) {
+            if (e is IllegalArgumentException || e is IllegalStateException) {
+                loggingPort.error(tag, "Tool request failed. ${describeException(e)}", e)
+                emit(InferenceEvent.Error(e, modelType))
+                return@flow
+            }
             var errorMsg = e.message ?: "Unknown error"
             if (e is OpenAIServiceException) {
                 val bodyStr = safeSerializeBody(e)
@@ -82,6 +101,106 @@ abstract class BaseOpenAiSdkInferenceService(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit
     )
+
+    protected open fun mapToolingResponseParams(
+        prompt: String,
+        options: GenerationOptions,
+        requestHistory: List<ChatMessage>,
+    ): ResponseCreateParams =
+        OpenAiRequestMapper.mapToResponseParams(
+            modelId = modelId,
+            prompt = prompt,
+            history = requestHistory,
+            options = options,
+        )
+
+    protected open fun mapToolingFollowUpResponseParams(
+        prompt: String,
+        options: GenerationOptions,
+        requestHistory: List<ChatMessage>,
+        initialResponse: StreamedOpenAiResponse,
+        toolResultJson: String,
+    ): ResponseCreateParams =
+        ResponseCreateParams.builder()
+            .model(modelId)
+            .previousResponseId(initialResponse.responseId ?: throw IllegalStateException("Missing previous response id for tool call"))
+            .inputOfResponse(
+                listOf(
+                    ResponseInputItem.ofFunctionCallOutput(
+                        ResponseInputItem.FunctionCallOutput.builder()
+                            .callId(initialResponse.providerToolCallId ?: throw IllegalStateException("Missing provider tool call id for tool call"))
+                            .output(toolResultJson)
+                            .build()
+                    )
+                )
+            )
+            .build()
+
+    protected suspend fun executeToolingPrompt(
+        prompt: String,
+        options: GenerationOptions,
+        requestHistory: List<ChatMessage>,
+        emitEvent: suspend (InferenceEvent) -> Unit
+    ) {
+        val executor = requireNotNull(toolExecutor) {
+            "Tool executor not configured for provider=$provider"
+        }
+        val initialParams = mapToolingResponseParams(
+            prompt = prompt,
+            options = options,
+            requestHistory = requestHistory,
+        )
+        val initialResponse = streamResponses(
+            params = initialParams,
+            allowToolCall = true,
+            emitEvent = emitEvent,
+        )
+        val toolCall = initialResponse.functionCall
+
+        if (toolCall == null) {
+            loggingPort.info(
+                tag,
+                "Tool loop complete without tool call provider=$provider model=$modelId modelType=$modelType"
+            )
+            if (!initialResponse.emittedAny) {
+                emitEvent(InferenceEvent.Finished(modelType))
+            }
+            return
+        }
+
+        SearchToolSupport.requireSupportedTool(toolCall.toolName)
+        val query = SearchToolSupport.extractRequiredQuery(toolCall.argumentsJson)
+        loggingPort.info(
+            tag,
+            "Tool call detected provider=$provider model=$modelId tool=${toolCall.toolName} query=$query"
+        )
+        val toolResult = executor.execute(toolCall)
+        loggingPort.info(
+            tag,
+            "Tool call completed provider=$provider model=$modelId tool=${toolCall.toolName} resultChars=${toolResult.resultJson.length}"
+        )
+
+        val followUpParams = mapToolingFollowUpResponseParams(
+            prompt = prompt,
+            options = options,
+            requestHistory = requestHistory,
+            initialResponse = initialResponse,
+            toolResultJson = toolResult.resultJson,
+        )
+
+        val followUpResponse = streamResponses(
+            params = followUpParams,
+            allowToolCall = false,
+            emitEvent = emitEvent,
+        )
+        if (followUpResponse.functionCall != null) {
+            loggingPort.warning(
+                tag,
+                "Recursive tool call detected provider=$provider model=$modelId tool=${followUpResponse.functionCall.toolName}"
+            )
+            throw IllegalStateException("Search skill recursion limit exceeded")
+        }
+    }
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
         conversationHistory.clear()
@@ -103,20 +222,54 @@ abstract class BaseOpenAiSdkInferenceService(
 
     protected suspend fun streamResponses(
         params: ResponseCreateParams,
+        allowToolCall: Boolean = false,
         emitEvent: suspend (InferenceEvent) -> Unit
-    ) {
+    ): StreamedOpenAiResponse {
         logResponsesRequest(params)
         client.responses().createStreaming(params).use { streamResponse ->
             val iterator = streamResponse.stream().iterator()
             var finishedEmitted = false
+            var emittedAny = false
             var outputTextDeltaCount = 0
             var reasoningTextDeltaCount = 0
             var reasoningSummaryDeltaCount = 0
+            var toolCallRequest: ToolCallRequest? = null
+            var responseId: String? = null
+            var providerToolCallId: String? = null
+            var providerToolItemId: String? = null
             val outputTextByPart = mutableMapOf<String, StringBuilder>()
             val reasoningTextByPart = mutableMapOf<String, StringBuilder>()
             val reasoningSummaryByPart = mutableMapOf<String, StringBuilder>()
-            while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
-                val event = runInterruptible { iterator.next() }
+            val streamedAssistantMessage = StringBuilder()
+            val capturedFunctionCallByKey = mutableMapOf<String, CapturedFunctionCall>()
+            loop@ while (currentCoroutineContext().isActive) {
+                val hasNext = try {
+                    runInterruptible { iterator.hasNext() }
+                } catch (e: RuntimeException) {
+                    if (!shouldRecoverFromStreamTermination(allowToolCall = allowToolCall, emittedAny = emittedAny, message = e.message)) {
+                        throw e
+                    }
+                    loggingPort.warning(
+                        tag,
+                        "Responses stream ended unexpectedly while checking next event; recovering with streamed output provider=$provider model=$modelId"
+                    )
+                    break@loop
+                }
+                if (!hasNext) {
+                    break@loop
+                }
+                val event = try {
+                    runInterruptible { iterator.next() }
+                } catch (e: RuntimeException) {
+                    if (!shouldRecoverFromStreamTermination(allowToolCall = allowToolCall, emittedAny = emittedAny, message = e.message)) {
+                        throw e
+                    }
+                    loggingPort.warning(
+                        tag,
+                        "Responses stream ended unexpectedly while reading next event; recovering with streamed output provider=$provider model=$modelId"
+                    )
+                    break@loop
+                }
                 if (event.isOutputTextDelta()) {
                     val outputTextDelta = event.outputTextDelta().get()
                     val text = outputTextDelta.delta()
@@ -130,6 +283,8 @@ abstract class BaseOpenAiSdkInferenceService(
                         ),
                         text = text
                     )
+                    emittedAny = true
+                    streamedAssistantMessage.append(text)
                     emitEvent(InferenceEvent.PartialResponse(text, modelType))
                 } else if (event.isOutputTextDone()) {
                     val outputTextDone = event.outputTextDone().get()
@@ -148,6 +303,8 @@ abstract class BaseOpenAiSdkInferenceService(
                             tag,
                             "Responses stream emitted output_text.done fallback model=$modelId key=$key chars=${fallbackText.length}"
                         )
+                        emittedAny = true
+                        streamedAssistantMessage.append(fallbackText)
                         emitEvent(InferenceEvent.PartialResponse(fallbackText, modelType))
                     }
                 } else if (event.isReasoningTextDelta()) {
@@ -163,6 +320,7 @@ abstract class BaseOpenAiSdkInferenceService(
                         ),
                         text = text
                     )
+                    emittedAny = true
                     emitEvent(InferenceEvent.Thinking(text, modelType))
                 } else if (event.isReasoningTextDone()) {
                     val reasoningTextDone = event.reasoningTextDone().get()
@@ -181,6 +339,7 @@ abstract class BaseOpenAiSdkInferenceService(
                             tag,
                             "Responses stream emitted reasoning_text.done fallback model=$modelId key=$key chars=${fallbackText.length}"
                         )
+                        emittedAny = true
                         emitEvent(InferenceEvent.Thinking(fallbackText, modelType))
                     }
                 } else if (event.isReasoningSummaryTextDelta()) {
@@ -195,6 +354,7 @@ abstract class BaseOpenAiSdkInferenceService(
                         ),
                         text = text
                     )
+                    emittedAny = true
                     emitEvent(InferenceEvent.Thinking(text, modelType))
                 } else if (event.isReasoningSummaryTextDone()) {
                     val reasoningSummaryTextDone = event.reasoningSummaryTextDone().get()
@@ -212,22 +372,83 @@ abstract class BaseOpenAiSdkInferenceService(
                             tag,
                             "Responses stream emitted reasoning_summary_text.done fallback model=$modelId key=$key chars=${fallbackText.length}"
                         )
+                        emittedAny = true
                         emitEvent(InferenceEvent.Thinking(fallbackText, modelType))
                     }
+                } else if (event.isFunctionCallArgumentsDone()) {
+                    val functionCallDone = event.functionCallArgumentsDone().get()
+                    val cachedFunctionCall = capturedFunctionCallByKey[functionCallDone.itemId()]
+                    val toolName = runCatching { functionCallDone.name() }
+                        .getOrElse { error ->
+                            cachedFunctionCall?.toolName?.let { return@getOrElse it }
+                            loggingPort.warning(
+                                tag,
+                                "Function call done event missing name provider=$provider model=$modelId; defaulting to ${ToolDefinition.TAVILY_WEB_SEARCH.name}. error=${error.message ?: error::class.java.simpleName}"
+                            )
+                            ToolDefinition.TAVILY_WEB_SEARCH.name
+                        }
+                    val argumentsJson = runCatching { functionCallDone.arguments() }
+                        .getOrElse { error ->
+                            cachedFunctionCall?.argumentsJson?.let { return@getOrElse it }
+                            throw IllegalStateException(
+                                "Function call done event missing arguments provider=$provider model=$modelId",
+                                error
+                            )
+                        }
+                    toolCallRequest = ToolCallRequest(
+                        toolName = toolName,
+                        argumentsJson = argumentsJson,
+                        provider = provider,
+                        modelType = modelType,
+                    )
+                    providerToolCallId = cachedFunctionCall?.callId ?: functionCallDone.itemId()
+                    providerToolItemId = cachedFunctionCall?.itemId ?: functionCallDone.itemId()
+                    if (!allowToolCall) {
+                        throw IllegalStateException("Search skill recursion limit exceeded")
+                    }
+                } else if (event.isOutputItemAdded()) {
+                    val outputItemAdded = event.outputItemAdded().get()
+                    captureFunctionCallMetadata(
+                        item = outputItemAdded.item(),
+                        sink = capturedFunctionCallByKey,
+                    )
+                } else if (event.isOutputItemDone()) {
+                    val outputItemDone = event.outputItemDone().get()
+                    captureFunctionCallMetadata(
+                        item = outputItemDone.item(),
+                        sink = capturedFunctionCallByKey,
+                    )
                 } else if (event.isCompleted()) {
+                    responseId = event.completed().get().response().id()
                     loggingPort.debug(
                         tag,
                         "Responses stream completed model=$modelId outputTextDeltas=$outputTextDeltaCount reasoningTextDeltas=$reasoningTextDeltaCount reasoningSummaryDeltas=$reasoningSummaryDeltaCount"
                     )
-                    emitEvent(InferenceEvent.Finished(modelType))
+                    if (!(allowToolCall && toolCallRequest != null)) {
+                        emitEvent(InferenceEvent.Finished(modelType))
+                    }
                     finishedEmitted = true
                 } else if (event.isFailed()) {
                     val failedEvent = event.failed().get()
                     val errorMsg = failedEvent.response().error().map { it.message() }.orElse("Unknown API error")
+                    if (shouldRecoverFromStreamTermination(allowToolCall = allowToolCall, emittedAny = emittedAny, message = errorMsg)) {
+                        loggingPort.warning(
+                            tag,
+                            "Responses stream reported recoverable API failure after partial output provider=$provider model=$modelId error=$errorMsg"
+                        )
+                        break@loop
+                    }
                     throw RuntimeException("API Error: $errorMsg")
                 } else if (event.isError()) {
                     val errorEvent = event.error().get()
                     val errorMsg = errorEvent.message()
+                    if (shouldRecoverFromStreamTermination(allowToolCall = allowToolCall, emittedAny = emittedAny, message = errorMsg)) {
+                        loggingPort.warning(
+                            tag,
+                            "Responses stream reported recoverable stream error after partial output provider=$provider model=$modelId error=$errorMsg"
+                        )
+                        break@loop
+                    }
                     throw RuntimeException("Stream Error: $errorMsg")
                 } else {
                     loggingPort.debug(
@@ -241,9 +462,57 @@ abstract class BaseOpenAiSdkInferenceService(
                     tag,
                     "Responses stream ended without completed event model=$modelId outputTextDeltas=$outputTextDeltaCount reasoningTextDeltas=$reasoningTextDeltaCount reasoningSummaryDeltas=$reasoningSummaryDeltaCount"
                 )
-                emitEvent(InferenceEvent.Finished(modelType))
+                if (!(allowToolCall && toolCallRequest != null)) {
+                    emitEvent(InferenceEvent.Finished(modelType))
+                }
             }
+            return StreamedOpenAiResponse(
+                emittedAny = emittedAny,
+                functionCall = toolCallRequest,
+                responseId = responseId,
+                providerToolCallId = providerToolCallId,
+                providerToolItemId = providerToolItemId,
+                assistantMessageText = streamedAssistantMessage.toString(),
+            )
         }
+    }
+
+    private data class CapturedFunctionCall(
+        val itemId: String,
+        val callId: String,
+        val toolName: String,
+        val argumentsJson: String,
+    )
+
+    private fun captureFunctionCallMetadata(
+        item: com.openai.models.responses.ResponseOutputItem,
+        sink: MutableMap<String, CapturedFunctionCall>,
+    ) {
+        if (!item.isFunctionCall()) {
+            return
+        }
+        val functionCall = item.asFunctionCall()
+        val itemId = functionCall.id().orElse(functionCall.callId())
+        val captured = CapturedFunctionCall(
+            itemId = itemId,
+            callId = functionCall.callId(),
+            toolName = functionCall.name(),
+            argumentsJson = functionCall.arguments(),
+        )
+        sink[itemId] = captured
+        sink[functionCall.callId()] = captured
+    }
+
+    private fun shouldRecoverFromStreamTermination(
+        allowToolCall: Boolean,
+        emittedAny: Boolean,
+        message: String?,
+    ): Boolean = !allowToolCall && emittedAny && isRecoverableStreamTermination(message)
+
+    private fun isRecoverableStreamTermination(message: String?): Boolean {
+        val normalized = message?.lowercase() ?: return false
+        return normalized.contains("internal stream ended unexpectedly") ||
+            normalized.contains("stream ended unexpectedly")
     }
 
     protected suspend fun streamChatCompletions(
@@ -468,4 +737,5 @@ abstract class BaseOpenAiSdkInferenceService(
         }
         return listOf(ChatMessage(role = Role.SYSTEM, content = normalizedPrompt)) + history
     }
+
 }

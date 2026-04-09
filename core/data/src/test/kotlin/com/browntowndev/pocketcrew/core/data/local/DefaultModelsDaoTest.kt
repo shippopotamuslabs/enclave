@@ -2,6 +2,8 @@ package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -42,7 +44,9 @@ class DefaultModelsDaoTest {
         val modelId = database.localModelsDao().upsert(LocalModelEntity(
             modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false, thinkingEnabled = false, isVision = false
         ))
-        val configId = database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
+        val configId = LocalModelConfigurationId("test-local-config-1")
+        database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
+            id = configId,
             localModelId = modelId, displayName = "c"
         ))
         
@@ -57,7 +61,9 @@ class DefaultModelsDaoTest {
         val credId = database.apiCredentialsDao().upsert(ApiCredentialsEntity(
             provider = ApiProvider.OPENAI, modelId = "gpt", credentialAlias = "key", displayName = "gpt"
         ))
-        val configId = database.apiModelConfigurationsDao().upsert(ApiModelConfigurationEntity(
+        val configId = ApiModelConfigurationId("test-api-config-1")
+        database.apiModelConfigurationsDao().upsert(ApiModelConfigurationEntity(
+            id = configId,
             apiCredentialsId = credId, displayName = "def"
         ))
 
@@ -72,21 +78,25 @@ class DefaultModelsDaoTest {
         val modelId = database.localModelsDao().upsert(LocalModelEntity(
             modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false, thinkingEnabled = false, isVision = false
         ))
-        val localConfigId = database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
+        val localId = LocalModelConfigurationId("test-local-config-1")
+        val apiId = ApiModelConfigurationId("test-api-config-1")
+        database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
+            id = localId,
             localModelId = modelId, displayName = "c"
         ))
         val credId = database.apiCredentialsDao().upsert(ApiCredentialsEntity(
             provider = ApiProvider.OPENAI, modelId = "gpt", credentialAlias = "key", displayName = "gpt"
         ))
-        val apiConfigId = database.apiModelConfigurationsDao().upsert(ApiModelConfigurationEntity(
+        database.apiModelConfigurationsDao().upsert(ApiModelConfigurationEntity(
+            id = apiId,
             apiCredentialsId = credId, displayName = "def"
         ))
 
-        dao.upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = localConfigId, apiConfigId = null))
-        dao.upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = null, apiConfigId = apiConfigId))
+        dao.upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = localId, apiConfigId = null))
+        dao.upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = null, apiConfigId = apiId))
         
         val retrieved = dao.getDefault(ModelType.MAIN)
-        assertEquals(apiConfigId, retrieved?.apiConfigId)
+        assertEquals(apiId, retrieved?.apiConfigId)
         assertNull(retrieved?.localConfigId)
     }
 
@@ -95,18 +105,22 @@ class DefaultModelsDaoTest {
         val modelId = database.localModelsDao().upsert(LocalModelEntity(
             modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false, thinkingEnabled = false, isVision = false
         ))
-        val localConfigId = database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
+        val localId = LocalModelConfigurationId("test-local-config-1")
+        val apiId = ApiModelConfigurationId("test-api-config-1")
+        database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
+            id = localId,
             localModelId = modelId, displayName = "c"
         ))
         val credId = database.apiCredentialsDao().upsert(ApiCredentialsEntity(
             provider = ApiProvider.OPENAI, modelId = "gpt", credentialAlias = "key", displayName = "gpt"
         ))
-        val apiConfigId = database.apiModelConfigurationsDao().upsert(ApiModelConfigurationEntity(
+        database.apiModelConfigurationsDao().upsert(ApiModelConfigurationEntity(
+            id = apiId,
             apiCredentialsId = credId, displayName = "def"
         ))
 
-        dao.upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = localConfigId, apiConfigId = null))
-        dao.upsert(DefaultModelEntity(modelType = ModelType.VISION, localConfigId = null, apiConfigId = apiConfigId))
+        dao.upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = localId, apiConfigId = null))
+        dao.upsert(DefaultModelEntity(modelType = ModelType.VISION, localConfigId = null, apiConfigId = apiId))
         
         val list = dao.observeAll().first()
         assertEquals(2, list.size)
@@ -114,11 +128,11 @@ class DefaultModelsDaoTest {
     
     @Test(expected = SQLiteConstraintException::class)
     fun `DefaultModelEntity FK references a non-existent local config`() = runTest {
-        dao.upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = 999, apiConfigId = null))
+        dao.upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = LocalModelConfigurationId("non-existent-id"), apiConfigId = null))
     }
 
     @Test(expected = SQLiteConstraintException::class)
     fun `DefaultModelEntity FK references a non-existent API config`() = runTest {
-        dao.upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = null, apiConfigId = 999))
+        dao.upsert(DefaultModelEntity(modelType = ModelType.MAIN, localConfigId = null, apiConfigId = ApiModelConfigurationId("non-existent-id")))
     }
 }

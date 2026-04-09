@@ -17,9 +17,11 @@
 package com.browntowndev.pocketcrew.testing
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
@@ -69,7 +71,7 @@ fun createFakeLocalModelAsset(
 )
 
 fun createFakeLocalModelConfiguration(
-    id: Long = 0,
+    id: LocalModelConfigurationId = LocalModelConfigurationId(""),
     localModelId: Long = 0,
     displayName: String = "Default Configuration",
     maxTokens: Int = 2048,
@@ -219,12 +221,12 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
 
     override suspend fun getAllLocalAssets(): List<LocalModelAsset> = _assets.value.values.toList()
     override fun observeAllLocalAssets(): Flow<List<LocalModelAsset>> = flowOf(emptyList())
-    override suspend fun getAssetByConfigId(configId: Long): LocalModelAsset? = null
+    override suspend fun getAssetByConfigId(configId: LocalModelConfigurationId): LocalModelAsset? = null
 
     override suspend fun clearAll() { clearModels() }
 
     override suspend fun upsertLocalAsset(asset: LocalModelAsset): Long = asset.metadata.id
-    override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): Long = config.id
+    override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId = config.id
 
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long = 0L
 
@@ -235,18 +237,18 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
         }
     }
 
-    private val _configs = MutableStateFlow<Map<Long, LocalModelConfiguration>>(emptyMap())
-
-    override suspend fun saveConfiguration(config: LocalModelConfiguration): Long {
+    private val _configs = MutableStateFlow<Map<LocalModelConfigurationId, LocalModelConfiguration>>(emptyMap())
+ 
+    override suspend fun saveConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId {
         _configs.value = _configs.value + (config.id to config)
         return config.id
     }
-
-    override suspend fun deleteConfiguration(id: Long) {
+ 
+    override suspend fun deleteConfiguration(id: LocalModelConfigurationId) {
         _configs.value = _configs.value - id
     }
-
-    override suspend fun getConfigurationById(id: Long): LocalModelConfiguration? {
+ 
+    override suspend fun getConfigurationById(id: LocalModelConfigurationId): LocalModelConfiguration? {
         return _configs.value[id]
     }
 
@@ -270,7 +272,6 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     private val _credentials = MutableStateFlow<List<ApiCredentials>>(emptyList())
     private val _configs = MutableStateFlow<List<ApiModelConfiguration>>(emptyList())
     private var nextCredId = 1L
-    private var nextConfigId = 1L
     val savedKeys = mutableMapOf<Long, String>()
 
     override fun observeAllCredentials(): Flow<List<ApiCredentials>> = _credentials
@@ -331,21 +332,21 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
     override suspend fun getConfigurationsForCredentials(credentialsId: Long): List<ApiModelConfiguration> =
         _configs.value.filter { it.apiCredentialsId == credentialsId }
 
-    override suspend fun getConfigurationById(id: Long): ApiModelConfiguration? =
+    override suspend fun getConfigurationById(id: ApiModelConfigurationId): ApiModelConfiguration? =
         _configs.value.find { it.id == id }
-
-    override suspend fun saveConfiguration(config: ApiModelConfiguration): Long {
-        val id = if (config.id == 0L) nextConfigId++ else config.id
+ 
+    override suspend fun saveConfiguration(config: ApiModelConfiguration): ApiModelConfigurationId {
+        val id = if (config.id.value.isEmpty()) ApiModelConfigurationId(java.util.UUID.randomUUID().toString()) else config.id
         val saved = config.copy(id = id)
         _configs.value = _configs.value.filter { it.id != id } + saved
         return id
     }
-
+ 
     override suspend fun deleteConfigurationsForCredentials(credentialsId: Long) {
         _configs.value = _configs.value.filter { it.apiCredentialsId != credentialsId }
     }
-
-    override suspend fun deleteConfiguration(id: Long) {
+ 
+    override suspend fun deleteConfiguration(id: ApiModelConfigurationId) {
         _configs.value = _configs.value.filter { it.id != id }
     }
 
@@ -360,7 +361,7 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
 
     override fun observeDefaults(): Flow<List<DefaultModelAssignment>> = _defaults
 
-    override suspend fun setDefault(modelType: ModelType, localConfigId: Long?, apiConfigId: Long?) {
+    override suspend fun setDefault(modelType: ModelType, localConfigId: LocalModelConfigurationId?, apiConfigId: ApiModelConfigurationId?) {
         val assignment = DefaultModelAssignment(modelType, localConfigId, apiConfigId)
         _defaults.value = _defaults.value.filter { it.modelType != modelType } + assignment
     }

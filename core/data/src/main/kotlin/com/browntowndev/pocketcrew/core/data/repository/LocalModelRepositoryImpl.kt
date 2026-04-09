@@ -8,10 +8,13 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelEntity
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -25,6 +28,9 @@ class LocalModelRepositoryImpl @Inject constructor(
     private val transactionProvider: TransactionProvider,
     private val logger: LoggingPort
 ) : LocalModelRepositoryPort {
+
+    @OptIn(ExperimentalUuidApi::class)
+    private fun generateGuid(): LocalModelConfigurationId = LocalModelConfigurationId(Uuid.random().toString())
 
     override suspend fun getAllLocalAssets(): List<LocalModelAsset> {
         return modelsDao.getAllActive().mapNotNull { loadAsset(it.id) }
@@ -61,12 +67,18 @@ class LocalModelRepositoryImpl @Inject constructor(
         return if (insertedId > 0) insertedId else existingModel?.id ?: 0L
     }
 
-    override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): Long {
+    override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId {
         require(config.localModelId > 0) {
             "LocalModelConfiguration.localModelId must be set before persisting a config"
         }
+        // Use existing configId if provided (from remote config), otherwise generate a new GUID
+        val configId = if (config.id.value.isNotEmpty()) {
+            config.id
+        } else {
+            generateGuid()
+        }
         val entity = LocalModelConfigurationEntity(
-            id = config.id,
+            id = configId,
             localModelId = config.localModelId,
             displayName = config.displayName,
             temperature = config.temperature,
@@ -80,8 +92,8 @@ class LocalModelRepositoryImpl @Inject constructor(
             systemPrompt = config.systemPrompt,
             isSystemPreset = config.isSystemPreset
         )
-        val insertedId = configsDao.upsert(entity)
-        return if (insertedId > 0) insertedId else config.id
+        configsDao.upsert(entity)
+        return configId
     }
 
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long {
@@ -105,15 +117,15 @@ class LocalModelRepositoryImpl @Inject constructor(
         modelsDao.deleteById(id)
     }
 
-    override suspend fun saveConfiguration(config: LocalModelConfiguration): Long {
+    override suspend fun saveConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId {
         return upsertLocalConfiguration(config)
     }
 
-    override suspend fun deleteConfiguration(id: Long) {
+    override suspend fun deleteConfiguration(id: LocalModelConfigurationId) {
         configsDao.deleteById(id)
     }
 
-    override suspend fun getConfigurationById(id: Long): LocalModelConfiguration? {
+    override suspend fun getConfigurationById(id: LocalModelConfigurationId): LocalModelConfiguration? {
         return configsDao.getById(id)?.let { entityToConfiguration(it) }
     }
 
@@ -135,12 +147,12 @@ class LocalModelRepositoryImpl @Inject constructor(
         return loadAsset(id)
     }
 
-    override suspend fun getAssetByConfigId(configId: Long): LocalModelAsset? {
+    override suspend fun getAssetByConfigId(configId: LocalModelConfigurationId): LocalModelAsset? {
         val config = configsDao.getById(configId) ?: return null
         return loadAsset(config.localModelId, preferredConfigId = configId)
     }
 
-    private suspend fun loadAsset(localModelId: Long, preferredConfigId: Long? = null): LocalModelAsset? {
+    private suspend fun loadAsset(localModelId: Long, preferredConfigId: LocalModelConfigurationId? = null): LocalModelAsset? {
         val entity = modelsDao.getById(localModelId) ?: return null
         val configs = configsDao.getAllForAsset(localModelId)
         val orderedConfigEntities = if (preferredConfigId == null) {
@@ -148,7 +160,7 @@ class LocalModelRepositoryImpl @Inject constructor(
         } else {
             configs.sortedWith(
                 compareByDescending<LocalModelConfigurationEntity> { it.id == preferredConfigId }
-                    .thenBy { it.id }
+                    .thenBy { it.id.value }
             )
         }
         return LocalModelAsset(

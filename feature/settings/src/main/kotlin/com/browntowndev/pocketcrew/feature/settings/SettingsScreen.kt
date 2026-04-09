@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
@@ -44,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 
@@ -65,16 +68,17 @@ fun SettingsScreen(
     onShowByokSheet: (Boolean) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
     onStartCreateApiModelAsset: () -> Unit,
+    onStartConfigureSearchSkill: () -> Unit,
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
     onDeleteApiModelAsset: (Long) -> Unit,
-    onDeleteApiModelConfig: (Long) -> Unit,
+    onDeleteApiModelConfig: (ApiModelConfigurationId) -> Unit,
     onNavigateToLocalModelConfigure: () -> Unit,
     onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
     onDeleteLocalModelAsset: (Long) -> Unit,
-    onDeleteLocalModelConfig: (Long) -> Unit,
-    onConfirmDeletionWithReassignment: (Long?, Long?) -> Unit,
+    onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
+    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onDismissDeletionSafety: () -> Unit
 ) {
     Scaffold(
@@ -148,6 +152,20 @@ fun SettingsScreen(
                     subtitle = "Manage API keys and presets",
                     icon = Icons.Default.Cloud,
                     onClick = { onShowByokSheet(true) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsNavigationItem(
+                    title = "Web Search",
+                    subtitle = buildString {
+                        append(if (uiState.searchSkillEditor.enabled) "Enabled" else "Disabled")
+                        append(" • ")
+                        append(if (uiState.searchSkillEditor.tavilyKeyPresent) "Tavily key saved" else "No Tavily key")
+                    },
+                    icon = Icons.Default.Public,
+                    onClick = {
+                        onStartConfigureSearchSkill()
+                        onNavigateToByokConfigure()
+                    }
                 )
             }
 
@@ -363,6 +381,7 @@ fun PreviewSettingsScreen() {
             onShowByokSheet = {},
             onNavigateToByokConfigure = {},
             onStartCreateApiModelAsset = {},
+            onStartConfigureSearchSkill = {},
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
             onDeleteApiModelAsset = {},

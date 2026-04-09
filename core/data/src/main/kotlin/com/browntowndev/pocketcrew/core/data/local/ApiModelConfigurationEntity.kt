@@ -6,6 +6,8 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+
 @Entity(
     tableName = "api_model_configurations",
     foreignKeys = [
@@ -21,8 +23,8 @@ import androidx.room.PrimaryKey
     ]
 )
 data class ApiModelConfigurationEntity(
-    @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
+    @PrimaryKey
+    val id: ApiModelConfigurationId,
 
     @ColumnInfo(name = "api_credentials_id")
     val apiCredentialsId: Long,

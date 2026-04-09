@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role as DomainRole
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -69,5 +70,22 @@ class AnthropicRequestMapperTest {
         assertEquals(4096L, params.thinking().get().asEnabled().budgetTokens())
         assertEquals(1, params.messages().size)
         assertEquals(MessageParam.Role.USER, params.messages().first().role())
+    }
+
+    @Test
+    fun `mapToMessageParams serializes tavily_web_search when tooling is enabled`() {
+        val params = AnthropicRequestMapper.mapToMessageParams(
+            modelId = "claude-sonnet-4-20250514",
+            prompt = "Find recent Android agent news",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+            )
+        )
+
+        assertTrue(params.toString().contains("tavily_web_search"))
+        assertTrue(params.toString().contains("query"))
     }
 }

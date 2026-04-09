@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.ColumnInfo
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
@@ -9,10 +11,10 @@ data class DefaultModelAssignmentView(
     val modelType: ModelType,
     
     @ColumnInfo(name = "localConfigId")
-    val localConfigId: Long?,
+    val localConfigId: LocalModelConfigurationId?,
     
     @ColumnInfo(name = "apiConfigId")
-    val apiConfigId: Long?,
+    val apiConfigId: ApiModelConfigurationId?,
     
     @ColumnInfo(name = "localPresetName")
     val localPresetName: String?,

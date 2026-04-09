@@ -4,11 +4,22 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.anthropic.client.AnthropicClient
+import com.anthropic.core.JsonValue
+import com.anthropic.models.messages.ContentBlock
+import com.anthropic.models.messages.ContentBlockParam
+import com.anthropic.models.messages.MessageCreateParams
+import com.anthropic.models.messages.MessageParam
 import com.anthropic.models.messages.RawMessageStreamEvent
+import com.anthropic.models.messages.ToolUseBlockParam
+import com.anthropic.models.messages.ToolResultBlockParam
+import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -23,14 +34,34 @@ class AnthropicInferenceServiceImpl(
     private val modelId: String,
     private val modelType: ModelType,
     private val baseUrl: String? = null,
-    private val loggingPort: LoggingPort
+    private val loggingPort: LoggingPort,
+    internal val toolExecutor: ToolExecutorPort? = null,
 ) : LlmInferencePort {
+
+    private data class StreamedAnthropicResponse(
+        val emittedAny: Boolean,
+        val toolUse: CapturedToolUse?,
+    )
+
+    private data class CapturedToolUse(
+        val id: String,
+        val toolName: String,
+        val argumentsJson: String,
+    )
+
+    private data class PendingToolUse(
+        val id: String,
+        val toolName: String,
+        val initialInput: JsonValue,
+        val streamedInputJson: StringBuilder = StringBuilder(),
+    )
 
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
         private const val STREAM_PREVIEW_CHARS = 120
         private const val TAG = "AnthropicInferenceService"
         private const val PROVIDER = "ANTHROPIC"
+        private val TOOL_INPUT_JSON_MAPPER = ObjectMapper()
     }
 
     private val conversationHistory = mutableListOf<ChatMessage>()
@@ -60,6 +91,11 @@ class AnthropicInferenceServiceImpl(
             loggingPort.debug(TAG, "sendPrompt cancelled provider=$PROVIDER model=$modelId")
             throw e
         } catch (e: Exception) {
+            if (e is IllegalArgumentException || e is IllegalStateException) {
+                loggingPort.error(TAG, "Tool request failed. ${describeException(e)}", e)
+                emit(InferenceEvent.Error(e, modelType))
+                return@flow
+            }
             val errorMsg = e.message ?: "Unknown error"
             loggingPort.error(TAG, "API request failed. ${describeException(e)}", e)
             emit(InferenceEvent.Error(Exception("API Error ($PROVIDER): $errorMsg", e), modelType))
@@ -72,6 +108,11 @@ class AnthropicInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit
     ) {
+        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
+            executeToolingPrompt(prompt, options, requestHistory, emitEvent)
+            return
+        }
+
         val params = AnthropicRequestMapper.mapToMessageParams(
             modelId = modelId,
             prompt = prompt,
@@ -84,81 +125,89 @@ class AnthropicInferenceServiceImpl(
             "Using Anthropic Messages API. model=$modelId reasoningEffort=${options.reasoningEffort} reasoningBudget=${options.reasoningBudget} maxTokens=${options.maxTokens}"
         )
         logRequest(params)
+        streamMessages(
+            params = params,
+            emitEvent = emitEvent,
+        )
+    }
 
-        client.messages().createStreaming(params).use { streamResponse ->
-            val iterator = streamResponse.stream().iterator()
-            var finishedEmitted = false
-            var outputTextDeltaCount = 0
-            var thinkingTextDeltaCount = 0
+    private suspend fun executeToolingPrompt(
+        prompt: String,
+        options: GenerationOptions,
+        requestHistory: List<ChatMessage>,
+        emitEvent: suspend (InferenceEvent) -> Unit
+    ) {
+        val executor = requireNotNull(toolExecutor) {
+            "Tool executor not configured for provider=$PROVIDER"
+        }
+        val initialParams = AnthropicRequestMapper.mapToMessageParams(
+            modelId = modelId,
+            prompt = prompt,
+            history = requestHistory,
+            options = options,
+        )
+        val initialResponse = streamMessages(
+            params = initialParams,
+            allowToolUse = true,
+            emitEvent = emitEvent,
+        )
+        val toolUse = initialResponse.toolUse
 
-            while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
-                val event = runInterruptible { iterator.next() }
-                val contentBlockStart = event.contentBlockStart()
-                if (contentBlockStart.isPresent) {
-                    val block = contentBlockStart.get().contentBlock()
-                    val startText = block.text().map { it.text() }.orElse("")
-                    if (startText.isNotEmpty()) {
-                        outputTextDeltaCount++
-                        emitEvent(InferenceEvent.PartialResponse(startText, modelType))
-                    }
-
-                    val startThinking = block.thinking().map { it.thinking() }.orElse("")
-                    if (startThinking.isNotEmpty()) {
-                        thinkingTextDeltaCount++
-                        emitEvent(InferenceEvent.Thinking(startThinking, modelType))
-                    }
-                }
-                val contentBlockDelta = event.contentBlockDelta()
-                if (contentBlockDelta.isPresent) {
-                    val deltaEvent = contentBlockDelta.get()
-                    val delta = deltaEvent.delta()
-                    val textDelta = delta.text()
-                    if (textDelta.isPresent) {
-                        val text = textDelta.get().text()
-                        if (text.isNotEmpty()) {
-                            outputTextDeltaCount++
-                            emitEvent(InferenceEvent.PartialResponse(text, modelType))
-                        }
-                    }
-                    val thinkingDelta = delta.thinking()
-                    if (thinkingDelta.isPresent) {
-                        val text = thinkingDelta.get().thinking()
-                        if (text.isNotEmpty()) {
-                            thinkingTextDeltaCount++
-                            emitEvent(InferenceEvent.Thinking(text, modelType))
-                        }
-                    }
-                }
-                if (event.messageStop().isPresent) {
-                    loggingPort.debug(
-                        TAG,
-                        "Anthropic stream completed model=$modelId outputTextDeltas=$outputTextDeltaCount thinkingTextDeltas=$thinkingTextDeltaCount"
-                    )
-                    emitEvent(InferenceEvent.Finished(modelType))
-                    finishedEmitted = true
-                }
-                if (event.messageDelta().isPresent) {
-                    loggingPort.debug(TAG, "Anthropic stream message delta model=$modelId")
-                }
-                if (event.contentBlockStart().isPresent) {
-                    loggingPort.debug(TAG, "Anthropic stream content block start model=$modelId")
-                }
-                if (event.contentBlockStop().isPresent) {
-                    loggingPort.debug(TAG, "Anthropic stream content block stop model=$modelId")
-                }
-                if (event.messageStart().isPresent) {
-                    loggingPort.debug(TAG, "Anthropic stream message start model=$modelId")
-                }
-            }
-
-            if (!finishedEmitted) {
-                loggingPort.debug(
-                    TAG,
-                    "Anthropic stream ended without message_stop model=$modelId outputTextDeltas=$outputTextDeltaCount thinkingTextDeltas=$thinkingTextDeltaCount"
-                )
+        if (toolUse == null) {
+            loggingPort.info(
+                TAG,
+                "Tool loop complete without tool call provider=$PROVIDER model=$modelId modelType=$modelType"
+            )
+            if (!initialResponse.emittedAny) {
                 emitEvent(InferenceEvent.Finished(modelType))
             }
+            return
         }
+
+        val toolRequest = ToolCallRequest(
+            toolName = toolUse.toolName,
+            argumentsJson = toolUse.argumentsJson,
+            provider = PROVIDER,
+            modelType = modelType,
+        )
+        SearchToolSupport.requireSupportedTool(toolRequest.toolName)
+        val query = SearchToolSupport.extractRequiredQuery(toolRequest.argumentsJson)
+        loggingPort.info(
+            TAG,
+            "Tool call detected provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} query=$query"
+        )
+        val toolResult = executor.execute(toolRequest)
+        loggingPort.info(
+            TAG,
+            "Tool call completed provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
+        )
+
+        val followUpParams = initialParams.toBuilder()
+            .messages(
+                initialParams.messages() + listOf(
+                    assistantToolUseMessage(toolUse),
+                    MessageParam.builder()
+                        .role(MessageParam.Role.USER)
+                        .contentOfBlockParams(
+                            listOf(
+                                ContentBlockParam.ofToolResult(
+                                    ToolResultBlockParam.builder()
+                                        .toolUseId(toolUse.id)
+                                        .content(toolResult.resultJson)
+                                        .build()
+                                )
+                            )
+                        )
+                        .build()
+                )
+            )
+            .build()
+
+        streamMessages(
+            params = followUpParams,
+            allowToolUse = false,
+            emitEvent = emitEvent,
+        )
     }
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
@@ -223,5 +272,214 @@ class AnthropicInferenceServiceImpl(
             event.contentBlockDelta().isPresent -> "content_block_delta"
             event.contentBlockStop().isPresent -> "content_block_stop"
             else -> "other"
+        }
+
+    private suspend fun streamMessages(
+        params: MessageCreateParams,
+        allowToolUse: Boolean = false,
+        emitEvent: suspend (InferenceEvent) -> Unit
+    ): StreamedAnthropicResponse {
+        logRequest(params)
+        client.messages().createStreaming(params).use { streamResponse ->
+            val iterator = streamResponse.stream().iterator()
+            var finishedEmitted = false
+            var emittedAny = false
+            var outputTextDeltaCount = 0
+            var thinkingTextDeltaCount = 0
+            var toolUseIndex: Long? = null
+            val pendingToolUses = mutableMapOf<Long, PendingToolUse>()
+
+            while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
+                val event = runInterruptible { iterator.next() }
+                val contentBlockStart = event.contentBlockStart()
+                if (contentBlockStart.isPresent) {
+                    val startEvent = contentBlockStart.get()
+                    val block = contentBlockStart.get().contentBlock()
+                    val startText = block.text().map { it.text() }.orElse("")
+                    if (startText.isNotEmpty()) {
+                        outputTextDeltaCount++
+                        emittedAny = true
+                        emitEvent(InferenceEvent.PartialResponse(startText, modelType))
+                    }
+
+                    val startThinking = block.thinking().map { it.thinking() }.orElse("")
+                    if (startThinking.isNotEmpty()) {
+                        thinkingTextDeltaCount++
+                        emittedAny = true
+                        emitEvent(InferenceEvent.Thinking(startThinking, modelType))
+                    }
+                    if (block.isToolUse()) {
+                        val startedToolUse = block.asToolUse()
+                        toolUseIndex = startEvent.index()
+                        pendingToolUses[startEvent.index()] = PendingToolUse(
+                            id = startedToolUse.id(),
+                            toolName = startedToolUse.name(),
+                            initialInput = startedToolUse._input(),
+                        )
+                        if (!allowToolUse) {
+                            throw IllegalStateException("Search skill recursion limit exceeded")
+                        }
+                    }
+
+                }
+                val contentBlockDelta = event.contentBlockDelta()
+                if (contentBlockDelta.isPresent) {
+                    val deltaEvent = contentBlockDelta.get()
+                    val delta = deltaEvent.delta()
+                    val textDelta = delta.text()
+                    if (textDelta.isPresent) {
+                        val text = textDelta.get().text()
+                        if (text.isNotEmpty()) {
+                            outputTextDeltaCount++
+                            emittedAny = true
+                            emitEvent(InferenceEvent.PartialResponse(text, modelType))
+                        }
+                    }
+                    val thinkingDelta = delta.thinking()
+                    if (thinkingDelta.isPresent) {
+                        val text = thinkingDelta.get().thinking()
+                        if (text.isNotEmpty()) {
+                            thinkingTextDeltaCount++
+                            emittedAny = true
+                            emitEvent(InferenceEvent.Thinking(text, modelType))
+                        }
+                    }
+                    val inputJsonDelta = delta.inputJson()
+                    if (inputJsonDelta.isPresent) {
+                        pendingToolUses[deltaEvent.index()]
+                            ?.streamedInputJson
+                            ?.append(inputJsonDelta.get().partialJson())
+                    }
+                }
+                if (event.messageStop().isPresent) {
+                    loggingPort.debug(
+                        TAG,
+                        "Anthropic stream completed model=$modelId outputTextDeltas=$outputTextDeltaCount thinkingTextDeltas=$thinkingTextDeltaCount"
+                    )
+                    if (!(allowToolUse && toolUseIndex != null)) {
+                        emitEvent(InferenceEvent.Finished(modelType))
+                    }
+                    finishedEmitted = true
+                }
+                if (event.messageDelta().isPresent) {
+                    loggingPort.debug(TAG, "Anthropic stream message delta model=$modelId")
+                }
+                if (event.contentBlockStart().isPresent) {
+                    loggingPort.debug(TAG, "Anthropic stream content block start model=$modelId type=${describeStreamEvent(event)}")
+                }
+                if (event.contentBlockStop().isPresent) {
+                    loggingPort.debug(TAG, "Anthropic stream content block stop model=$modelId")
+                }
+                if (event.messageStart().isPresent) {
+                    loggingPort.debug(TAG, "Anthropic stream message start model=$modelId")
+                }
+            }
+
+            if (!finishedEmitted) {
+                loggingPort.debug(
+                    TAG,
+                    "Anthropic stream ended without message_stop model=$modelId outputTextDeltas=$outputTextDeltaCount thinkingTextDeltas=$thinkingTextDeltaCount"
+                )
+                if (!(allowToolUse && toolUseIndex != null)) {
+                    emitEvent(InferenceEvent.Finished(modelType))
+                }
+            }
+            val capturedToolUse = toolUseIndex
+                ?.let { pendingToolUses[it] }
+                ?.toCapturedToolUse()
+            return StreamedAnthropicResponse(
+                emittedAny = emittedAny,
+                toolUse = capturedToolUse,
+            )
+        }
+    }
+
+    private suspend fun emitTextBlocks(
+        contentBlocks: List<ContentBlock>,
+        emitEvent: suspend (InferenceEvent) -> Unit
+    ) {
+        contentBlocks
+            .filter(ContentBlock::isText)
+            .map { it.asText().text() }
+            .filter(String::isNotBlank)
+            .forEach { emitEvent(InferenceEvent.PartialResponse(it, modelType)) }
+    }
+
+    private fun assistantToolUseMessage(toolUse: CapturedToolUse): MessageParam =
+        MessageParam.builder()
+            .role(MessageParam.Role.ASSISTANT)
+            .contentOfBlockParams(
+                listOf(
+                    ContentBlockParam.ofToolUse(
+                        ToolUseBlockParam.builder()
+                            .id(toolUse.id)
+                            .name(toolUse.toolName)
+                            .input(
+                                ToolUseBlockParam.Input.builder()
+                                    .putAllAdditionalProperties(toolUseInputProperties(toolUse.argumentsJson))
+                                    .build()
+                            )
+                            .build()
+                    )
+                )
+            )
+            .build()
+
+    private fun PendingToolUse.toCapturedToolUse(): CapturedToolUse =
+        CapturedToolUse(
+            id = id,
+            toolName = toolName,
+            argumentsJson = if (streamedInputJson.isNotEmpty()) {
+                toolUseArgumentsJson(streamedInputJson.toString())
+            } else {
+                toolUseArgumentsJson(initialInput)
+            },
+        )
+
+    private fun toolUseArgumentsJson(input: JsonValue): String {
+        val properties: Map<*, *> = input.convert(Map::class.java) ?: emptyMap<Any?, Any?>()
+        return canonicalToolArgumentsJson(properties)
+    }
+
+    private fun toolUseArgumentsJson(inputJson: String): String =
+        canonicalToolArgumentsJson(parseToolInputJson(inputJson))
+
+    private fun canonicalToolArgumentsJson(properties: Map<*, *>): String {
+        val query = (properties["query"] as? String)
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Tool argument 'query' is required")
+
+        return """{"query":"${escapeJson(query)}"}"""
+    }
+
+    private fun toolUseInputProperties(argumentsJson: String): Map<String, JsonValue> =
+        parseToolInputJson(argumentsJson).entries.associate { (key, value) ->
+            key to JsonValue.from(value)
+        }
+
+    private fun parseToolInputJson(inputJson: String): Map<String, Any?> =
+        runCatching {
+            TOOL_INPUT_JSON_MAPPER.readValue(
+                inputJson,
+                object : TypeReference<Map<String, Any?>>() {}
+            )
+        }
+            .getOrElse { error ->
+                throw IllegalArgumentException("Tool input JSON is invalid", error)
+            }
+
+    private fun escapeJson(value: String): String =
+        buildString(value.length) {
+            value.forEach { char ->
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(char)
+                }
+            }
         }
 }

@@ -4,6 +4,9 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
@@ -19,7 +22,7 @@ data class ResolvedAssignedModelSelection(
 )
 
 data class LocalModelPresetDraft(
-    val id: Long = 0,
+    val id: LocalModelConfigurationId = LocalModelConfigurationId(""),
     val displayName: String = "",
     val maxTokens: String = "4096",
     val contextWindow: String = "4096",
@@ -35,13 +38,13 @@ data class LocalModelPresetDraft(
 
 sealed interface ModelDeletionTarget {
     data class LocalModelAsset(val id: Long) : ModelDeletionTarget
-    data class LocalModelPreset(val id: Long) : ModelDeletionTarget
+    data class LocalModelPreset(val id: LocalModelConfigurationId) : ModelDeletionTarget
     data class ApiProvider(val id: Long) : ModelDeletionTarget
-    data class ApiPreset(val id: Long) : ModelDeletionTarget
+    data class ApiPreset(val id: ApiModelConfigurationId) : ModelDeletionTarget
 }
 
 data class ReassignmentCandidate(
-    val configId: Long,
+    val configId: ModelConfigurationId,
     val source: ModelSource,
     val assetDisplayName: String,
     val configDisplayName: String,
@@ -80,7 +83,7 @@ data class ApiProviderDraftSaveResult(
 )
 
 data class ApiPresetDraft(
-    val id: Long = 0,
+    val id: ApiModelConfigurationId = ApiModelConfigurationId(""),
     val credentialsId: Long = 0,
     val displayName: String = "",
     val maxTokens: String = "4096",
@@ -120,4 +123,9 @@ data class ApiModelMetadataDefaults(
     val reasoningEffort: ApiReasoningEffort?,
     val maxTokens: Int?,
     val contextWindow: Int?,
+)
+
+data class SearchSkillSettingsDraft(
+    val enabled: Boolean = false,
+    val tavilyKeyPresent: Boolean = false,
 )

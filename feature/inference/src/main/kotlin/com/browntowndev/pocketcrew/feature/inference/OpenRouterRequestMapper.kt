@@ -4,12 +4,17 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.openai.core.JsonValue
+import com.openai.models.FunctionDefinition
+import com.openai.models.FunctionParameters
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionFunctionTool
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
+import com.openai.models.responses.FunctionTool
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
 
@@ -49,6 +54,10 @@ object OpenRouterRequestMapper {
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
         options.safeOpenRouterMaxTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
+        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
+            options.availableTools.forEach { builder.addTool(it.toChatCompletionTool()) }
+            builder.parallelToolCalls(false)
+        }
 
         applyOpenRouterRoutingDefaults(builder, routing)
         return builder.build()
@@ -107,9 +116,21 @@ object OpenRouterRequestMapper {
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
         options.safeOpenRouterMaxTokens()?.let { builder.maxOutputTokens(it.toLong()) }
+        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
+            options.availableTools.forEach { builder.addTool(it.toResponsesTool()) }
+            builder.parallelToolCalls(false)
+            builder.maxToolCalls(1)
+        }
 
         applyOpenRouterRoutingDefaults(builder, routing)
         return builder.build()
+    }
+
+    fun applyRoutingDefaults(
+        builder: ResponseCreateParams.Builder,
+        routing: OpenRouterRoutingConfiguration
+    ) {
+        applyOpenRouterRoutingDefaults(builder, routing)
     }
 
     private fun applyOpenRouterRoutingDefaults(
@@ -161,4 +182,43 @@ object OpenRouterRequestMapper {
         }
         return configuredMaxTokens
     }
+
+    private fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool =
+        ChatCompletionFunctionTool.builder()
+            .function(
+                FunctionDefinition.builder()
+                    .name(name)
+                    .description(description)
+                    .parameters(
+                        FunctionParameters.builder()
+                            .putAdditionalProperty("type", JsonValue.from("object"))
+                            .putAdditionalProperty("properties", JsonValue.from(toolProperties()))
+                            .putAdditionalProperty("required", JsonValue.from(listOf("query")))
+                            .build()
+                    )
+                    .strict(true)
+                    .build()
+            )
+            .build()
+
+    private fun ToolDefinition.toResponsesTool(): FunctionTool =
+        FunctionTool.builder()
+            .name(name)
+            .description(description)
+            .parameters(
+                FunctionTool.Parameters.builder()
+                    .putAdditionalProperty("type", JsonValue.from("object"))
+                    .putAdditionalProperty("properties", JsonValue.from(toolProperties()))
+                    .putAdditionalProperty("required", JsonValue.from(listOf("query")))
+                    .build()
+            )
+            .strict(true)
+            .build()
+
+    private fun toolProperties(): Map<String, Any> =
+        mapOf(
+            "query" to mapOf(
+                "type" to "string"
+            )
+        )
 }

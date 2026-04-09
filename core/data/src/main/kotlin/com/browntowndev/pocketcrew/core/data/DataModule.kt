@@ -37,6 +37,7 @@ import com.browntowndev.pocketcrew.core.data.repository.ModelConfigProviderImpl
 import com.browntowndev.pocketcrew.core.data.repository.LocalModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.RoomTransactionProvider
+import com.browntowndev.pocketcrew.core.data.repository.SearchToolExecutorImpl
 import com.browntowndev.pocketcrew.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
@@ -45,6 +46,7 @@ import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestrato
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyProviderImpl
@@ -86,7 +88,7 @@ object DataModule {
             PocketCrewDatabase::class.java,
             "pocket_crew_db"
         )
-        .fallbackToDestructiveMigration(false)
+        .fallbackToDestructiveMigration()
         .build()
     }
 
@@ -226,5 +228,7 @@ abstract class DataRepositoryModule {
     @Singleton
     abstract fun bindActiveModelProvider(impl: ActiveModelProviderImpl): ActiveModelProviderPort
 
-
+    @Binds
+    @Singleton
+    abstract fun bindToolExecutor(impl: SearchToolExecutorImpl): ToolExecutorPort
 }

@@ -4,6 +4,8 @@ import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -11,8 +13,8 @@ import javax.inject.Inject
 interface DeleteApiCredentialsUseCase {
     suspend operator fun invoke(
         id: Long,
-        replacementLocalConfigId: Long? = null,
-        replacementApiConfigId: Long? = null
+        replacementLocalConfigId: LocalModelConfigurationId? = null,
+        replacementApiConfigId: ApiModelConfigurationId? = null
     ): Result<Unit>
     
     suspend fun getModelTypesNeedingReassignment(id: Long): List<ModelType>
@@ -28,8 +30,8 @@ class DeleteApiCredentialsUseCaseImpl @Inject constructor(
 ) : DeleteApiCredentialsUseCase {
     override suspend fun invoke(
         id: Long,
-        replacementLocalConfigId: Long?,
-        replacementApiConfigId: Long?
+        replacementLocalConfigId: LocalModelConfigurationId?,
+        replacementApiConfigId: ApiModelConfigurationId?
     ): Result<Unit> {
         return Result.runCatching {
             if (isLastModel(id)) {

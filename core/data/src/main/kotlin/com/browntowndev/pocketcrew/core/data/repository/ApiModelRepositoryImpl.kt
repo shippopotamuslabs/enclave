@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.core.data.mapper.ApiModelMapper
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionPolicy
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
@@ -146,12 +147,14 @@ class ApiModelRepositoryImpl @Inject constructor(
     override suspend fun getConfigurationsForCredentials(credentialsId: Long): List<ApiModelConfiguration> =
         apiModelConfigurationsDao.getAllForCredentials(credentialsId).map { it.toDomain() }
 
-    override suspend fun getConfigurationById(id: Long): ApiModelConfiguration? =
+    override suspend fun getConfigurationById(id: ApiModelConfigurationId): ApiModelConfiguration? =
         apiModelConfigurationsDao.getById(id)?.toDomain()
 
-    override suspend fun saveConfiguration(config: ApiModelConfiguration): Long {
+    @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
+    override suspend fun saveConfiguration(config: ApiModelConfiguration): ApiModelConfigurationId {
+        val entityId = if (config.id.value.isNotEmpty()) config.id else ApiModelConfigurationId(kotlin.uuid.Uuid.random().toString())
         val entity = ApiModelConfigurationEntity(
-            id = config.id,
+            id = entityId,
             apiCredentialsId = config.apiCredentialsId,
             displayName = config.displayName,
             maxTokens = config.maxTokens,
@@ -171,10 +174,11 @@ class ApiModelRepositoryImpl @Inject constructor(
             openRouterDataCollectionPolicy = config.openRouterRouting.dataCollectionPolicy.wireValue,
             openRouterZeroDataRetention = config.openRouterRouting.zeroDataRetention,
         )
-        return apiModelConfigurationsDao.upsert(entity)
+        apiModelConfigurationsDao.upsert(entity)
+        return entityId
     }
 
-    override suspend fun deleteConfiguration(id: Long) {
+    override suspend fun deleteConfiguration(id: ApiModelConfigurationId) {
         apiModelConfigurationsDao.deleteById(id)
     }
 

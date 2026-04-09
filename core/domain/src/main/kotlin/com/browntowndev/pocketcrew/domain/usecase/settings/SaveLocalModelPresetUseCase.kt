@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SaveLocalModelConfigurationUseCase
 import javax.inject.Inject
 
@@ -10,9 +11,9 @@ class SaveLocalModelPresetUseCase @Inject constructor(
     suspend operator fun invoke(
         localModelId: Long,
         draft: LocalModelPresetDraft,
-    ): Result<Long> {
+    ): Result<LocalModelConfigurationId> {
         if (draft.isSystemPreset) {
-            return Result.failure(IllegalStateException("System presets are read-only"))
+            return Result.failure<LocalModelConfigurationId>(IllegalStateException("System presets are read-only"))
         }
 
         return saveLocalModelConfigurationUseCase(

@@ -7,16 +7,19 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
 import com.browntowndev.pocketcrew.feature.inference.llama.ChatMessage
 import com.browntowndev.pocketcrew.feature.inference.llama.ChatRole
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -39,6 +42,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
     private val activeModelProvider: ActiveModelProviderPort,
     @ApplicationContext private val context: Context,
     private val modelType: ModelType,
+    internal val toolExecutor: ToolExecutorPort? = null,
 ) : LlmInferencePort {
 
     companion object {
@@ -47,12 +51,20 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
     private data class SessionSignature(
         val modelId: Long,
-        val configId: Long?,
+        val configId: LocalModelConfigurationId,
         val reasoningBudget: Int,
         val temperature: Float,
         val topK: Int,
         val topP: Float,
         val maxTokens: Int,
+    )
+
+    private data class BufferedGeneration(
+        val fullText: String,
+    )
+
+    private data class BufferedToolPass(
+        val fullText: String,
     )
 
     private var currentSignature: SessionSignature? = null
@@ -78,7 +90,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
             throw IllegalStateException("LlamaInferenceService cannot run API models. ModelType $modelType is mapped to an API configuration.")
         }
 
-        val asset = localModelRepository.getAssetByConfigId(activeConfig.id)
+        val configId = activeConfig.id as LocalModelConfigurationId
+        val asset = localModelRepository.getAssetByConfigId(configId)
             ?: throw IllegalStateException("No registered asset for config ${activeConfig.id}. Download a model first.")
 
         val targetReasoningBudget = options.reasoningBudget
@@ -89,7 +102,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
         val newSignature = SessionSignature(
             modelId = asset.metadata.id,
-            configId = activeConfig.id,
+            configId = configId,
             reasoningBudget = targetReasoningBudget,
             temperature = targetTemperature,
             topK = targetTopK,
@@ -211,6 +224,14 @@ class LlamaInferenceServiceImpl @Inject constructor(
         try {
             sessionManager.sendUserMessage(prompt)
 
+            if (SearchToolSupport.hasLocalToolContract(options.systemPrompt)) {
+                executeToolingPrompt(options, targetModelType) { emit(it) }
+                if (closeConversation) {
+                    sessionManager.clearConversation()
+                }
+                return@flow
+            }
+
             // Use options-aware streaming instead of mutating samplingConfig
             sessionManager.streamAssistantResponseWithOptions(options).collect { event ->
                 when (event) {
@@ -256,6 +277,177 @@ class LlamaInferenceServiceImpl @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error during inference", e)
             emit(InferenceEvent.Error(e, targetModelType))
+        }
+    }
+
+    private suspend fun executeToolingPrompt(
+        options: GenerationOptions,
+        targetModelType: ModelType,
+        emitEvent: suspend (InferenceEvent) -> Unit,
+    ) {
+        val executor = requireNotNull(toolExecutor) {
+            "Tool executor not configured for local search"
+        }
+
+        val firstPass = collectToolPreparationPass(
+            events = sessionManager.streamAssistantResponseWithOptions(options),
+            targetModelType = targetModelType,
+            emitEvent = emitEvent,
+        )
+        val envelope = SearchToolSupport.extractLocalToolEnvelope(firstPass.fullText)
+        if (envelope == null) {
+            Log.i(TAG, "Tool loop complete without tool call provider=LLAMA modelType=$targetModelType")
+            emitProcessedText(firstPass.fullText, targetModelType, emitEvent)
+            emitEvent(InferenceEvent.Finished(targetModelType))
+            return
+        }
+
+        val toolRequest = ToolCallRequest(
+            toolName = envelope.toolName,
+            argumentsJson = envelope.argumentsJson,
+            provider = "LLAMA",
+            modelType = targetModelType,
+        )
+        SearchToolSupport.requireSupportedTool(toolRequest.toolName)
+        val query = SearchToolSupport.extractRequiredQuery(toolRequest.argumentsJson)
+        Log.i(TAG, "Tool call detected provider=LLAMA tool=${toolRequest.toolName} query=$query")
+        val toolResult = executor.execute(toolRequest)
+        Log.i(
+            TAG,
+            "Tool call completed provider=LLAMA tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
+        )
+
+        sessionManager.sendUserMessage(SearchToolSupport.buildLocalToolResultMessage(toolResult.resultJson))
+
+        val followUpGeneration = try {
+            streamBufferedGeneration(
+                events = sessionManager.streamAssistantResponseWithOptions(options),
+                targetModelType = targetModelType,
+                emitVisible = true,
+                emitEvent = emitEvent,
+            )
+        } catch (error: Exception) {
+            throw IllegalStateException("Failed to resume llama generation after tool replay", error)
+        }
+        if (SearchToolSupport.extractLocalToolEnvelope(followUpGeneration.fullText) != null) {
+            Log.w(TAG, "Recursive tool call detected provider=LLAMA modelType=$targetModelType")
+            throw IllegalStateException("Search skill recursion limit exceeded")
+        }
+
+        emitProcessedText(envelope.visiblePrefix, targetModelType, emitEvent)
+        emitProcessedText(envelope.visibleSuffix, targetModelType, emitEvent)
+        emitEvent(InferenceEvent.Finished(targetModelType))
+    }
+
+    private suspend fun collectToolPreparationPass(
+        events: Flow<GenerationEvent>,
+        targetModelType: ModelType,
+        emitEvent: suspend (InferenceEvent) -> Unit,
+    ): BufferedToolPass {
+        val buffered = streamBufferedGeneration(
+            events = events,
+            targetModelType = targetModelType,
+            emitVisible = false,
+            emitEvent = emitEvent,
+        )
+        return BufferedToolPass(fullText = buffered.fullText)
+    }
+
+    private suspend fun streamBufferedGeneration(
+        events: Flow<GenerationEvent>,
+        targetModelType: ModelType,
+        emitVisible: Boolean,
+        emitEvent: suspend (InferenceEvent) -> Unit,
+    ): BufferedGeneration {
+        var completedText: String? = null
+        var isThinking = false
+        var buffer = ""
+        var sawToken = false
+
+        events.catch { throw it }.collect { event ->
+            when (event) {
+                is GenerationEvent.Token -> {
+                    sawToken = true
+                    val state = processThinkingTokens(
+                        currentBuffer = buffer,
+                        newChunk = event.text,
+                        isThinking = isThinking
+                    )
+                    buffer = state.buffer
+                    isThinking = state.isThinking
+
+                    state.emittedSegments.forEach { segment ->
+                        when (segment.kind) {
+                            SegmentKind.THINKING -> emitEvent(InferenceEvent.Thinking(segment.text, targetModelType))
+                            SegmentKind.VISIBLE -> if (emitVisible) {
+                                emitEvent(InferenceEvent.PartialResponse(segment.text, targetModelType))
+                            }
+                        }
+                    }
+                }
+                is GenerationEvent.Completed -> {
+                    if (sawToken) {
+                        if (buffer.isNotEmpty()) {
+                            if (isThinking) {
+                                emitEvent(InferenceEvent.Thinking(buffer, targetModelType))
+                            } else if (emitVisible) {
+                                emitEvent(InferenceEvent.PartialResponse(buffer, targetModelType))
+                            }
+                        }
+                    } else if (event.fullText.isNotBlank()) {
+                        emitProcessedText(
+                            rawText = event.fullText,
+                            targetModelType = targetModelType,
+                            emitEvent = { streamedEvent ->
+                                when (streamedEvent) {
+                                    is InferenceEvent.Thinking -> emitEvent(streamedEvent)
+                                    is InferenceEvent.PartialResponse -> if (emitVisible) emitEvent(streamedEvent)
+                                    else -> Unit
+                                }
+                            }
+                        )
+                    }
+                    completedText = event.fullText
+                }
+                is GenerationEvent.Error -> {
+                    throw event.throwable
+                }
+            }
+        }
+
+        return BufferedGeneration(
+            fullText = completedText.orEmpty(),
+        )
+    }
+
+    private suspend fun emitProcessedText(
+        rawText: String,
+        targetModelType: ModelType,
+        emitEvent: suspend (InferenceEvent) -> Unit,
+    ) {
+        var isThinking = false
+        var buffer = ""
+        val state = processThinkingTokens(
+            currentBuffer = buffer,
+            newChunk = rawText,
+            isThinking = isThinking,
+        )
+        buffer = state.buffer
+        isThinking = state.isThinking
+
+        state.emittedSegments.forEach { segment ->
+            when (segment.kind) {
+                SegmentKind.THINKING -> emitEvent(InferenceEvent.Thinking(segment.text, targetModelType))
+                SegmentKind.VISIBLE -> emitEvent(InferenceEvent.PartialResponse(segment.text, targetModelType))
+            }
+        }
+
+        if (buffer.isNotEmpty()) {
+            if (isThinking) {
+                emitEvent(InferenceEvent.Thinking(buffer, targetModelType))
+            } else {
+                emitEvent(InferenceEvent.PartialResponse(buffer, targetModelType))
+            }
         }
     }
 }

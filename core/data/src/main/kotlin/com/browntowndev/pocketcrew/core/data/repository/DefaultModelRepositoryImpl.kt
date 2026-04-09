@@ -6,7 +6,9 @@ import com.browntowndev.pocketcrew.core.data.local.DefaultModelEntity
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
@@ -47,7 +49,7 @@ class DefaultModelRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun setDefault(modelType: ModelType, localConfigId: Long?, apiConfigId: Long?) {
+    override suspend fun setDefault(modelType: ModelType, localConfigId: LocalModelConfigurationId?, apiConfigId: ApiModelConfigurationId?) {
         val entity = DefaultModelEntity(
             modelType = modelType,
             localConfigId = localConfigId,

@@ -39,6 +39,11 @@ internal data class ApiProvidersTransientState(
     val modelSortOption: ModelSortOption = ModelSortOption.A_TO_Z,
 )
 
+internal data class SearchSkillTransientState(
+    val isEditing: Boolean = false,
+    val enabled: Boolean? = null,
+)
+
 internal data class AssignmentDialogTransientState(
     val isOpen: Boolean = false,
     val editingSlot: com.browntowndev.pocketcrew.domain.model.inference.ModelType? = null,
@@ -67,6 +72,7 @@ class SettingsUiStateFactory @Inject constructor(
         feedbackText: String,
         localModelsState: LocalModelsTransientState,
         apiState: ApiProvidersTransientState,
+        searchSkillState: SearchSkillTransientState,
         assignmentsState: AssignmentDialogTransientState,
         deletionState: DeletionTransientState,
     ): SettingsUiState {
@@ -200,6 +206,11 @@ class SettingsUiStateFactory @Inject constructor(
                     providerFilter = apiState.modelProviderFilter,
                     sortOption = apiState.modelSortOption,
                 ),
+            ),
+            searchSkillEditor = SearchSkillEditorUiState(
+                isEditing = searchSkillState.isEditing,
+                enabled = searchSkillState.enabled ?: persistedSettings.searchEnabled,
+                tavilyKeyPresent = persistedSettings.tavilyKeyPresent,
             ),
             assignments = ModelAssignmentsUiState(
                 assignments = defaultModels.map(DefaultModelAssignment::toUi),

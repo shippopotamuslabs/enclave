@@ -6,6 +6,8 @@ import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+
 @Entity(
     tableName = "local_model_configurations",
     foreignKeys = [
@@ -21,8 +23,8 @@ import androidx.room.PrimaryKey
     ]
 )
 data class LocalModelConfigurationEntity(
-    @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
+    @PrimaryKey
+    val id: LocalModelConfigurationId,
 
     @ColumnInfo(name = "local_model_id")
     val localModelId: Long,

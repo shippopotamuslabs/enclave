@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -109,5 +110,25 @@ class OpenAiRequestMapperTest {
         )
 
         assertEquals(2, params.messages().size)
+    }
+
+    @Test
+    fun `mapToResponseParams serializes tavily_web_search when tooling is enabled`() {
+        val params = OpenAiRequestMapper.mapToResponseParams(
+            modelId = "gpt-4o",
+            prompt = "Find recent Android agent news",
+            history = listOf(
+                ChatMessage(Role.SYSTEM, "Be concise."),
+                ChatMessage(Role.USER, "Hello"),
+            ),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+            )
+        )
+
+        assertTrue(params.toString().contains("tavily_web_search"))
+        assertTrue(params.toString().contains("query"))
     }
 }

@@ -7,8 +7,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
  */
 data class DefaultModelAssignment(
     val modelType: ModelType,
-    val localConfigId: Long? = null,
-    val apiConfigId: Long? = null,
+    val localConfigId: LocalModelConfigurationId? = null,
+    val apiConfigId: ApiModelConfigurationId? = null,
     // Resolved display data for the UI
     val displayName: String? = null,
     val presetName: String? = null,

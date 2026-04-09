@@ -4,8 +4,11 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.anthropic.core.JsonValue
 import com.anthropic.models.messages.MessageCreateParams
 import com.anthropic.models.messages.ThinkingConfigEnabled
+import com.anthropic.models.messages.Tool
 
 object AnthropicRequestMapper {
     private const val SYNTHETIC_API_ERROR_PREFIX = "Error: API Error"
@@ -47,9 +50,37 @@ object AnthropicRequestMapper {
             }
 
         builder.addUserMessage(prompt)
+        if (options.toolingEnabled) {
+            options.availableTools.forEach { builder.addTool(it.toAnthropicTool()) }
+        }
 
         return builder.build()
     }
+
+    private fun ToolDefinition.toAnthropicTool(): Tool =
+        Tool.builder()
+            .name(name)
+            .description(description)
+            .inputSchema(
+                Tool.InputSchema.builder()
+                    .type(JsonValue.from("object"))
+                    .properties(
+                        Tool.InputSchema.Properties.builder()
+                            .putAdditionalProperty(
+                                "query",
+                                JsonValue.from(
+                                    mapOf(
+                                        "type" to "string"
+                                    )
+                                )
+                            )
+                            .build()
+                    )
+                    .required(listOf("query"))
+                    .build()
+            )
+            .strict(true)
+            .build()
 
     private fun buildSystemPrompt(
         history: List<ChatMessage>,

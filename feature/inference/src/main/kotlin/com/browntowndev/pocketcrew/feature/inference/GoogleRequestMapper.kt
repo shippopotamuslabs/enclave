@@ -3,10 +3,18 @@ package com.browntowndev.pocketcrew.feature.inference
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.google.genai.types.Content
+import com.google.genai.types.FunctionCallingConfig
+import com.google.genai.types.FunctionCallingConfigMode
+import com.google.genai.types.FunctionDeclaration
 import com.google.genai.types.GenerateContentConfig
 import com.google.genai.types.Part
+import com.google.genai.types.Schema
 import com.google.genai.types.ThinkingConfig
+import com.google.genai.types.Tool
+import com.google.genai.types.ToolConfig
+import com.google.genai.types.Type
 
 object GoogleRequestMapper {
     private const val SYNTHETIC_API_ERROR_PREFIX = "Error: API Error"
@@ -41,6 +49,7 @@ object GoogleRequestMapper {
         options.topK?.let { builder.topK(it.toFloat()) }
         options.maxTokens?.let { builder.maxOutputTokens(it) }
         resolveThinkingConfig(options)?.let { builder.thinkingConfig(it) }
+        applyTools(builder, options)
 
         buildSystemInstruction(history, options.systemPrompt)
             ?.let { builder.systemInstruction(Content.fromParts(Part.fromText(it))) }
@@ -90,6 +99,53 @@ object GoogleRequestMapper {
             .includeThoughts(true)
             .build()
     }
+
+    private fun applyTools(
+        builder: GenerateContentConfig.Builder,
+        options: GenerationOptions,
+    ) {
+        if (!options.toolingEnabled || options.availableTools.isEmpty()) {
+            return
+        }
+
+        builder.tools(options.availableTools.map { it.toGoogleTool() })
+        builder.toolConfig(
+            ToolConfig.builder()
+                .functionCallingConfig(
+                    FunctionCallingConfig.builder()
+                        .mode(FunctionCallingConfigMode.Known.ANY)
+                        .allowedFunctionNames(options.availableTools.map(ToolDefinition::name))
+                        .build()
+                )
+                .build()
+        )
+    }
+
+    private fun ToolDefinition.toGoogleTool(): Tool =
+        Tool.builder()
+            .functionDeclarations(
+                listOf(
+                    FunctionDeclaration.builder()
+                        .name(name)
+                        .description(description)
+                        .parameters(
+                            Schema.builder()
+                                .type(Type(Type.Known.OBJECT))
+                                .properties(
+                                    mapOf(
+                                        "query" to Schema.builder()
+                                            .type(Type(Type.Known.STRING))
+                                            .description("The search query to execute")
+                                            .build()
+                                    )
+                                )
+                                .required(listOf("query"))
+                                .build()
+                        )
+                        .build()
+                )
+            )
+            .build()
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)

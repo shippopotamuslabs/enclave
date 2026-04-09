@@ -5,17 +5,23 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMe
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.CancellationException
 import javax.inject.Inject
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * LLM inference implementation backed by MediaPipe's LlmInference API.
@@ -29,6 +35,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
     private val modelType: ModelType,
     private val activeModelProvider: ActiveModelProviderPort,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
+    private val toolExecutor: ToolExecutorPort? = null,
 ) : LlmInferencePort {
 
     companion object {
@@ -44,6 +51,17 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
     )
 
     private val mutex = Mutex()
+
+    private data class BufferedResponse(
+        val thought: String,
+        val text: String,
+    )
+
+    private data class BufferedToolPass(
+        val thought: String,
+        val text: String,
+        val thoughtAlreadyEmitted: Boolean,
+    )
 
     // Session is stateful — maintains multi-turn conversation context.
     private var session: LlmSessionPort? = null
@@ -151,6 +169,12 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
             val currentSession = mutex.withLock {
                 getOrCreateAndSeedSessionLocked(options)
             }
+
+            if (SearchToolSupport.hasLocalToolContract(options.systemPrompt)) {
+                executeToolingPrompt(currentSession, prompt, targetModelType) { trySend(it) }
+                close()
+                return@callbackFlow
+            }
             
             currentSession.addQueryChunk(prompt)
 
@@ -207,6 +231,174 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                     session = null
                 }
             }
+        }
+    }
+
+    private suspend fun executeToolingPrompt(
+        session: LlmSessionPort,
+        prompt: String,
+        targetModelType: ModelType,
+        emitEvent: (InferenceEvent) -> Unit,
+    ) {
+        val executor = requireNotNull(toolExecutor) {
+            "Tool executor not configured for local search"
+        }
+
+        session.addQueryChunk(prompt)
+        val firstPass = collectToolPreparationPass(session, targetModelType, emitEvent)
+        val envelope = SearchToolSupport.extractLocalToolEnvelope(firstPass.text)
+        if (envelope == null) {
+            Log.i(TAG, "Tool loop complete without tool call provider=MEDIAPIPE modelType=$targetModelType")
+            emitBufferedResponse(firstPass, targetModelType, emitEvent)
+            emitEvent(InferenceEvent.Finished(targetModelType))
+            return
+        }
+
+        val toolRequest = ToolCallRequest(
+            toolName = envelope.toolName,
+            argumentsJson = envelope.argumentsJson,
+            provider = "MEDIAPIPE",
+            modelType = targetModelType,
+        )
+        SearchToolSupport.requireSupportedTool(toolRequest.toolName)
+        val query = SearchToolSupport.extractRequiredQuery(toolRequest.argumentsJson)
+        Log.i(TAG, "Tool call detected provider=MEDIAPIPE tool=${toolRequest.toolName} query=$query")
+        val toolResult = executor.execute(toolRequest)
+        Log.i(
+            TAG,
+            "Tool call completed provider=MEDIAPIPE tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
+        )
+
+        session.addQueryChunk(SearchToolSupport.buildLocalToolResultMessage(toolResult.resultJson))
+        streamSessionResponse(
+            session = session,
+            targetModelType = targetModelType,
+            emitVisible = true,
+            emitEvent = emitEvent,
+        )
+
+        emitVisibleText(envelope.visiblePrefix, targetModelType, emitEvent)
+        emitVisibleText(envelope.visibleSuffix, targetModelType, emitEvent)
+        emitEvent(InferenceEvent.Finished(targetModelType))
+    }
+
+    private suspend fun collectToolPreparationPass(
+        session: LlmSessionPort,
+        targetModelType: ModelType,
+        emitEvent: (InferenceEvent) -> Unit,
+    ): BufferedToolPass {
+        val buffered = streamSessionResponse(
+            session = session,
+            targetModelType = targetModelType,
+            emitVisible = false,
+            emitEvent = emitEvent,
+        )
+        return BufferedToolPass(
+            thought = buffered.thought,
+            text = buffered.text,
+            thoughtAlreadyEmitted = true,
+        )
+    }
+
+    private suspend fun streamSessionResponse(
+        session: LlmSessionPort,
+        targetModelType: ModelType,
+        emitVisible: Boolean,
+        emitEvent: (InferenceEvent) -> Unit,
+    ): BufferedResponse =
+        suspendCancellableCoroutine { continuation ->
+            val thought = StringBuilder()
+            val text = StringBuilder()
+            var isThinking = false
+            var buffer = ""
+
+            try {
+                val future = session.generateResponseAsync { partialResult, done ->
+                    try {
+                        val chunkText = partialResult ?: ""
+                        if (chunkText.isNotEmpty()) {
+                            val state = processThinkingTokens(
+                                currentBuffer = buffer,
+                                newChunk = chunkText,
+                                isThinking = isThinking,
+                            )
+                            buffer = state.buffer
+                            isThinking = state.isThinking
+                            state.emittedSegments.forEach { segment ->
+                                when (segment.kind) {
+                                    ProcessThinkingTokensUseCase.SegmentKind.THINKING -> {
+                                        thought.append(segment.text)
+                                        emitEvent(InferenceEvent.Thinking(segment.text, targetModelType))
+                                    }
+                                    ProcessThinkingTokensUseCase.SegmentKind.VISIBLE -> {
+                                        text.append(segment.text)
+                                        if (emitVisible) {
+                                            emitEvent(InferenceEvent.PartialResponse(segment.text, targetModelType))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (done && continuation.isActive) {
+                            if (buffer.isNotEmpty()) {
+                                if (isThinking) {
+                                    thought.append(buffer)
+                                    emitEvent(InferenceEvent.Thinking(buffer, targetModelType))
+                                } else {
+                                    text.append(buffer)
+                                    if (emitVisible) {
+                                        emitEvent(InferenceEvent.PartialResponse(buffer, targetModelType))
+                                    }
+                                }
+                            }
+                            continuation.resume(
+                                BufferedResponse(
+                                    thought = thought.toString(),
+                                    text = text.toString(),
+                                )
+                            )
+                        }
+                    } catch (error: Exception) {
+                        continuation.resumeWithSafeException(error)
+                    }
+                }
+                continuation.invokeOnCancellation {
+                    future.cancel(true)
+                }
+            } catch (error: Exception) {
+                continuation.resumeWithSafeException(error)
+            }
+        }
+
+    private fun CancellableContinuation<BufferedResponse>.resumeWithSafeException(error: Exception) {
+        if (isActive) {
+            if (error is CancellationException) {
+                cancel(error)
+            } else {
+                resumeWithException(error)
+            }
+        }
+    }
+
+    private fun emitBufferedResponse(
+        response: BufferedToolPass,
+        targetModelType: ModelType,
+        emitEvent: (InferenceEvent) -> Unit,
+    ) {
+        if (response.thought.isNotBlank() && !response.thoughtAlreadyEmitted) {
+            emitEvent(InferenceEvent.Thinking(response.thought, targetModelType))
+        }
+        emitVisibleText(response.text, targetModelType, emitEvent)
+    }
+
+    private fun emitVisibleText(
+        text: String,
+        targetModelType: ModelType,
+        emitEvent: (InferenceEvent) -> Unit,
+    ) {
+        if (text.isNotBlank()) {
+            emitEvent(InferenceEvent.PartialResponse(text, targetModelType))
         }
     }
 }

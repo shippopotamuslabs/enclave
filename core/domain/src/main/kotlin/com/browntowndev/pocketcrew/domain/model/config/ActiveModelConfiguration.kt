@@ -3,7 +3,7 @@ package com.browntowndev.pocketcrew.domain.model.config
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 
 data class ActiveModelConfiguration(
-    val id: Long,
+    val id: ModelConfigurationId,
     val isLocal: Boolean,
     val name: String,
     val systemPrompt: String?,

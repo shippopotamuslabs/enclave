@@ -3,12 +3,16 @@ package com.browntowndev.pocketcrew.feature.inference
 import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.google.ai.edge.litertlm.Contents
@@ -18,8 +22,14 @@ import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.SamplerConfig
+import com.google.ai.edge.litertlm.Tool
+import com.google.ai.edge.litertlm.ToolParam
+import com.google.ai.edge.litertlm.ToolSet
+import com.google.ai.edge.litertlm.tool
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
+
 
 /**
  * Implementation of [ConversationManagerPort] that manages LiteRT conversation lifecycle.
@@ -33,7 +43,8 @@ import javax.inject.Inject
 class ConversationManagerImpl @Inject constructor(
     private val context: Context,
     private val localModelRepository: LocalModelRepositoryPort,
-    private val activeModelProvider: ActiveModelProviderPort
+    private val activeModelProvider: ActiveModelProviderPort,
+    private val toolExecutor: ToolExecutorPort? = null,
 ) : ConversationManagerPort {
 
     private val defaultSystemPrompt = """
@@ -44,18 +55,19 @@ class ConversationManagerImpl @Inject constructor(
 
     private data class ConversationSignature(
         val modelType: ModelType,
-        val configId: Long?,
+        val configId: LocalModelConfigurationId,
         val thinkingEnabled: Boolean,
         val systemPrompt: String,
         val temperature: Double,
         val topP: Double,
         val topK: Int,
+        val hasSearchTool: Boolean,
     )
 
     // Cached state: updated whenever reloadIfNeeded is called.
     private var currentModelPath: String? = null
     private var currentModelType: ModelType? = null
-    private var currentConfigId: Long? = null
+    private var currentConfigId: LocalModelConfigurationId? = null
     private var currentThinkingEnabled: Boolean? = null
     private var currentSystemPrompt: String = defaultSystemPrompt
     private var currentSamplerConfig: SamplerConfig? = null
@@ -104,11 +116,11 @@ class ConversationManagerImpl @Inject constructor(
                 throw IllegalStateException("ConversationManager cannot run API models. ModelType $modelType is mapped to an API configuration.")
             }
 
-            val asset = localModelRepository.getAssetByConfigId(activeConfig.id)
+            val configId = activeConfig.id as LocalModelConfigurationId
+            val asset = localModelRepository.getAssetByConfigId(configId)
                 ?: throw IllegalStateException("No registered asset for config ${activeConfig.id}. Download a model first.")
 
             val modelPath = getModelPath(asset.metadata.localFileName)
-            val configId = activeConfig.id
             val resolvedThinkingEnabled = false // LiteRT currently doesn't support reasoning budget
             val resolvedSystemPrompt = activeConfig.systemPrompt ?: defaultSystemPrompt
             val targetSamplerConfig = SamplerConfig(
@@ -116,6 +128,7 @@ class ConversationManagerImpl @Inject constructor(
                 topP = options?.topP?.toDouble() ?: activeConfig.topP ?: 0.95,
                 topK = options?.topK ?: activeConfig.topK ?: 40
             )
+            val hasSearchTool = options?.availableTools?.contains(ToolDefinition.TAVILY_WEB_SEARCH) == true
 
             val desiredSignature = ConversationSignature(
                 modelType = modelType,
@@ -125,6 +138,7 @@ class ConversationManagerImpl @Inject constructor(
                 temperature = targetSamplerConfig.temperature,
                 topP = targetSamplerConfig.topP,
                 topK = targetSamplerConfig.topK,
+                hasSearchTool = hasSearchTool,
             )
 
             val engineChanged = currentModelPath != modelPath || engine == null
@@ -172,7 +186,12 @@ class ConversationManagerImpl @Inject constructor(
                         }
                     },
                     samplerConfig = targetSamplerConfig,
-                    automaticToolCalling = false,
+                    automaticToolCalling = true,
+                    tools = if (hasSearchTool && toolExecutor != null) {
+                        listOf(tool(LocalSearchToolset(toolExecutor, modelType)))
+                    } else {
+                        emptyList()
+                    }
                 )
 
                 conversation = eng.createConversation(conversationConfig)
@@ -200,6 +219,32 @@ class ConversationManagerImpl @Inject constructor(
             return@withLock conversationPort!!
         }
     }
+
+    /**
+     * ToolSet for local inference models to access device capabilities.
+     * Maps LiteRT native tool calls to the domain [ToolExecutorPort].
+     */
+    private inner class LocalSearchToolset(
+        private val toolExecutor: ToolExecutorPort,
+        private val modelType: ModelType,
+    ) : ToolSet {
+        @Tool(description = "Search the web for information.")
+        fun tavily_web_search(
+            @ToolParam(description = "The search query.") query: String
+        ): String {
+            Log.d(TAG, "Executing native tool call: tavily_web_search with query: $query")
+            return runBlocking {
+                val request = ToolCallRequest(
+                    toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
+                    argumentsJson = SearchToolSupport.buildArgumentsJson(query),
+                    provider = "LITERT",
+                    modelType = modelType
+                )
+                toolExecutor.execute(request).resultJson
+            }
+        }
+    }
+
 
     private fun ensureEngineInitializedLocked(modelPath: String) {
         if (engine == null) {

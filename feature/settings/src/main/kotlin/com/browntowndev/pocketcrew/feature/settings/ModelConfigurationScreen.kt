@@ -58,6 +58,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 @Composable
@@ -81,7 +83,7 @@ fun ModelConfigurationRoute(
 fun ModelConfigurationScreen(
     uiState: SettingsUiState,
     onNavigateBack: () -> Unit,
-    onSetDefaultModel: (ModelType, Long?, Long?) -> Unit,
+    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onShowAssignmentDialog: (Boolean, ModelType?) -> Unit
 ) {
     Scaffold(
@@ -239,7 +241,7 @@ fun AssignmentSelectionBottomSheet(
     localAssets: List<LocalModelAssetUi>,
     apiAssets: List<ApiModelAssetUi>,
     onDismiss: () -> Unit,
-    onSelect: (localId: Long?, apiId: Long?) -> Unit
+    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -274,10 +276,10 @@ fun AssignmentSelectionContent(
     localAssets: List<LocalModelAssetUi>,
     apiAssets: List<ApiModelAssetUi>,
     onDismiss: () -> Unit,
-    onSelect: (localId: Long?, apiId: Long?) -> Unit
+    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?) -> Unit
 ) {
-    var selectedLocalId by remember { mutableStateOf<Long?>(null) }
-    var selectedApiId by remember { mutableStateOf<Long?>(null) }
+    var selectedLocalId by remember { mutableStateOf<LocalModelConfigurationId?>(null) }
+    var selectedApiId by remember { mutableStateOf<ApiModelConfigurationId?>(null) }
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Local Models", "API Models")
     var viewState by remember { mutableStateOf<AssignmentSelectionView>(AssignmentSelectionView.AssetList) }
@@ -451,7 +453,7 @@ fun AssignmentSelectionContent(
                             .padding(top = 16.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(state.asset.configurations, key = { it.id }) { config ->
+                        items(state.asset.configurations, key = { it.id.value }) { config ->
                             ConfigSelectionCard(
                                 label = config.displayName,
                                 isSelected = selectedLocalId == config.id,
@@ -471,7 +473,7 @@ fun AssignmentSelectionContent(
                             .padding(top = 16.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(state.asset.configurations, key = { it.id }) { config ->
+                        items(state.asset.configurations, key = { it.id.value }) { config ->
                             ConfigSelectionCard(
                                 label = config.displayName,
                                 isSelected = selectedApiId == config.id,
