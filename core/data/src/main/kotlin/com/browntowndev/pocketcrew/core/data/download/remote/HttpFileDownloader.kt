@@ -80,7 +80,10 @@ class HttpFileDownloader @Inject constructor(
             val isResuming = response.code == 206
             val actualExistingBytes = if (isResuming) existingBytes else 0L
 
-            val body = response.body
+            val body = response.body ?: run {
+                logger.error(TAG, "Download failed for $filename: Empty response body")
+                throw IOException("Empty response body")
+            }
 
             // Use Content-Length when no resume (existingBytes == 0)
             // Use Content-Range total when resuming (existingBytes > 0)
@@ -210,7 +213,10 @@ class HttpFileDownloader @Inject constructor(
                 throw Exception(errorMsg)
             }
 
-            val body = response.body
+            val body = response.body ?: run {
+                logger.error(TAG, "Download retry failed for $filename: Empty response body")
+                throw IOException("Empty response body")
+            }
 
             val serverContentLength = response.header("Content-Length")?.toLongOrNull()
             val contentRange = response.header("Content-Range")

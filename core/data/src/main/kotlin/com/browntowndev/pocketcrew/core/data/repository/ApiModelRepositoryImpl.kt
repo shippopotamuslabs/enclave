@@ -126,10 +126,11 @@ class ApiModelRepositoryImpl @Inject constructor(
             sourceCredentialAlias = sourceCredentialAlias,
             fallbackAlias = null,
         ) ?: return null
+        val normalizedBaseUrl = baseUrl?.trim()?.takeIf { it.isNotBlank() } ?: provider.defaultBaseUrl()
         val signature = buildApiCredentialsIdentitySignature(
             provider = provider,
             modelId = modelId,
-            baseUrl = baseUrl,
+            baseUrl = normalizedBaseUrl,
             apiKey = resolvedApiKey,
         )
         return apiCredentialsDao.getByApiKeySignature(signature)?.toDomain()

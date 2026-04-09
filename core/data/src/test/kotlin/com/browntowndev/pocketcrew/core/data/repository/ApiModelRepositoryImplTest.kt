@@ -173,12 +173,43 @@ class ApiModelRepositoryImplTest {
         val result = repo.findMatchingCredentials(
             provider = ApiProvider.XAI,
             modelId = "grok-4.20",
-            baseUrl = ApiProvider.XAI.defaultBaseUrl(),
+            baseUrl = null,
             apiKey = "xai-key",
         )
 
         assertEquals(11L, result?.id)
         assertEquals("existing-xai", result?.credentialAlias)
+        coVerify(exactly = 1) { credentialsDao.getByApiKeySignature(expectedSignature) }
+    }
+
+    @Test
+    fun `find matching credentials normalizes blank baseUrl to provider default`() = runTest {
+        val provider = ApiProvider.XAI
+        val defaultBaseUrl = provider.defaultBaseUrl()
+        val expectedSignature = buildApiCredentialsIdentitySignature(
+            provider = provider,
+            modelId = "grok-4.20",
+            baseUrl = defaultBaseUrl,
+            apiKey = "xai-key",
+        )
+        coEvery { credentialsDao.getByApiKeySignature(expectedSignature) } returns ApiCredentialsEntity(
+            id = 22L,
+            displayName = "Existing xAI blank baseUrl",
+            provider = provider,
+            modelId = "grok-4.20",
+            baseUrl = defaultBaseUrl,
+            credentialAlias = "existing-xai-blank",
+            apiKeySignature = expectedSignature,
+        )
+
+        val result = repo.findMatchingCredentials(
+            provider = provider,
+            modelId = "grok-4.20",
+            baseUrl = "  ",
+            apiKey = "xai-key",
+        )
+
+        assertEquals(22L, result?.id)
         coVerify(exactly = 1) { credentialsDao.getByApiKeySignature(expectedSignature) }
     }
 
