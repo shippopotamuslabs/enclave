@@ -400,7 +400,7 @@ fun AssignmentSelectionContent(
                             ) {
                                 if (tabIndex == 0) {
                                     if (localAssets.isNotEmpty()) {
-                                        items(localAssets, key = { "local_${it.metadataId}" }) { asset ->
+                                        items(localAssets, key = { "local_${it.metadataId.value}" }) { asset ->
                                             AssignmentAssetCard(
                                                 title = asset.friendlyName,
                                                 subtitle = "${asset.providerName} • ${asset.format}",
@@ -421,7 +421,7 @@ fun AssignmentSelectionContent(
                                     }
                                 } else {
                                     if (apiAssets.isNotEmpty()) {
-                                        items(apiAssets, key = { "api_${it.credentialsId}" }) { asset ->
+                                        items(apiAssets, key = { "api_${it.credentialsId.value}" }) { asset ->
                                             AssignmentAssetCard(
                                                 title = asset.displayName,
                                                 subtitle = "${asset.provider.displayName} • ${asset.modelId}",

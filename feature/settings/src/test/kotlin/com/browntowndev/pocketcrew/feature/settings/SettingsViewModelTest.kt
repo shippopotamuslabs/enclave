@@ -7,7 +7,9 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
@@ -120,7 +122,7 @@ class SettingsViewModelTest {
     fun `add config reuses fetched metadata for same asset after returning to list`() = runTest {
         val asset = ApiModelAsset(
             credentials = ApiCredentials(
-                id = 42L,
+                id = ApiCredentialsId("42"),
                 displayName = "OpenAI",
                 provider = ApiProvider.OPENAI,
                 modelId = "gpt-4.1",
@@ -130,7 +132,7 @@ class SettingsViewModelTest {
             configurations = listOf(
                 ApiModelConfiguration(
                     id = ApiModelConfigurationId("7"),
-                    apiCredentialsId = 42L,
+                    apiCredentialsId = ApiCredentialsId("42"),
                     displayName = "Default Preset",
                 )
             )
@@ -198,7 +200,7 @@ class SettingsViewModelTest {
     fun `fetch models uses selected reusable credential alias for new asset`() = runTest {
         val reusableAsset = ApiModelAsset(
             credentials = ApiCredentials(
-                id = 99L,
+                id = ApiCredentialsId("99"),
                 displayName = "Saved xAI",
                 provider = ApiProvider.XAI,
                 modelId = "grok-3",
@@ -209,7 +211,7 @@ class SettingsViewModelTest {
         )
         val viewModel = createViewModel(apiAssets = listOf(reusableAsset))
         val newAsset = ApiModelAssetUi(
-            credentialsId = 0L,
+            credentialsId = ApiCredentialsId(""),
             displayName = "New xAI",
             provider = ApiProvider.XAI,
             modelId = "",
@@ -238,7 +240,7 @@ class SettingsViewModelTest {
         } returns null
 
         viewModel.onSelectApiModelAsset(newAsset)
-        viewModel.onSelectReusableApiCredential(99L)
+        viewModel.onSelectReusableApiCredential(ApiCredentialsId("99"))
         viewModel.onFetchApiModels()
         runCurrent()
 
@@ -255,7 +257,7 @@ class SettingsViewModelTest {
     @Test
     fun `xai discovered context window populates config and suggests max tokens`() = runTest {
         val asset = ApiModelAssetUi(
-            credentialsId = 42L,
+            credentialsId = ApiCredentialsId("42"),
             displayName = "xAI",
             provider = ApiProvider.XAI,
             modelId = "grok-4.1-fast-reasoning",
@@ -305,7 +307,7 @@ class SettingsViewModelTest {
     @Test
     fun `xai model selection fetches detail when list response lacks context`() = runTest {
         val assetWithoutModel = ApiModelAssetUi(
-            credentialsId = 0L,
+            credentialsId = ApiCredentialsId(""),
             displayName = "xAI",
             provider = ApiProvider.XAI,
             modelId = "",
@@ -354,12 +356,57 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `discovered model vision metadata normalizes api asset draft`() = runTest {
+        val asset = ApiModelAssetUi(
+            credentialsId = ApiCredentialsId(""),
+            displayName = "OpenRouter Vision Candidate",
+            provider = ApiProvider.OPENROUTER,
+            modelId = "openai/gpt-4.1-mini",
+            baseUrl = ApiProvider.OPENROUTER.defaultBaseUrl(),
+            isVision = false,
+            credentialAlias = "",
+            configurations = emptyList()
+        )
+
+        coEvery {
+            fetchApiProviderModelsUseCase(
+                provider = ApiProvider.OPENROUTER,
+                currentApiKey = "openrouter-key",
+                credentialAlias = null,
+                baseUrl = ApiProvider.OPENROUTER.defaultBaseUrl(),
+            )
+        } returns listOf(
+            DiscoveredApiModel(
+                id = "openai/gpt-4.1-mini",
+                visionCapable = true,
+            )
+        )
+        coEvery {
+            fetchApiProviderModelDetailUseCase(
+                provider = ApiProvider.OPENROUTER,
+                modelId = any(),
+                currentApiKey = any(),
+                credentialAlias = any(),
+                baseUrl = any(),
+            )
+        } returns null
+
+        val viewModel = createViewModel()
+        viewModel.onSelectApiModelAsset(asset)
+        viewModel.onApiKeyChange("openrouter-key")
+        viewModel.onFetchApiModels()
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.apiProviderEditor.assetDraft?.isVision == true)
+    }
+
+    @Test
     fun `save api credentials continues into preset editing after Room emits the inserted asset`() = runTest {
         val persistedAssets = MutableStateFlow<List<ApiModelAsset>>(emptyList())
         val viewModel = createViewModel(apiAssetsFlow = persistedAssets)
         val persistedAsset = ApiModelAsset(
             credentials = ApiCredentials(
-                id = 88L,
+                id = ApiCredentialsId("88"),
                 displayName = "New xAI",
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
@@ -372,7 +419,7 @@ class SettingsViewModelTest {
         viewModel.onStartCreateApiModelAsset()
         viewModel.onApiModelAssetFieldChange(
             ApiModelAssetUi(
-                credentialsId = 0L,
+                credentialsId = ApiCredentialsId(""),
                 displayName = "New xAI",
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
@@ -386,7 +433,7 @@ class SettingsViewModelTest {
 
         coEvery { saveApiCredentialsUseCase(any(), any(), any()) } coAnswers {
             persistedAssets.value = listOf(persistedAsset)
-            88L
+            ApiCredentialsId("88")
         }
         coEvery { saveApiModelConfigurationUseCase(any()) } coAnswers {
             persistedAssets.value = listOf(
@@ -394,7 +441,7 @@ class SettingsViewModelTest {
                     configurations = listOf(
                         ApiModelConfiguration(
                             id = ApiModelConfigurationId("92"),
-                            apiCredentialsId = 88L,
+                            apiCredentialsId = ApiCredentialsId("88"),
                             displayName = "Default Preset",
                         )
                     )
@@ -411,13 +458,13 @@ class SettingsViewModelTest {
         }
         runCurrent()
 
-        assertEquals(88L, savedAsset?.credentialsId)
+        assertEquals(ApiCredentialsId("88"), savedAsset?.credentialsId)
         assertEquals("Default Preset", savedConfig?.displayName)
-        assertEquals(88L, viewModel.uiState.value.apiProviderEditor.assetDraft?.credentialsId)
+        assertEquals(ApiCredentialsId("88"), viewModel.uiState.value.apiProviderEditor.assetDraft?.credentialsId)
         coVerify(exactly = 1) {
             saveApiModelConfigurationUseCase(
                 match {
-                    it.apiCredentialsId == 88L &&
+                    it.apiCredentialsId == ApiCredentialsId("88") &&
                         it.displayName == "Default Preset"
                 }
             )
@@ -428,7 +475,7 @@ class SettingsViewModelTest {
     fun `save api credentials auto-links duplicate provider and emits snackbar`() = runTest {
         val persistedAsset = ApiModelAsset(
             credentials = ApiCredentials(
-                id = 88L,
+                id = ApiCredentialsId("88"),
                 displayName = "Existing xAI",
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
@@ -443,7 +490,7 @@ class SettingsViewModelTest {
         viewModel.onStartCreateApiModelAsset()
         viewModel.onApiModelAssetFieldChange(
             ApiModelAssetUi(
-                credentialsId = 0L,
+                credentialsId = ApiCredentialsId(""),
                 displayName = "New xAI",
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
@@ -493,7 +540,7 @@ class SettingsViewModelTest {
         }
         runCurrent()
 
-        assertEquals(88L, savedAsset?.credentialsId)
+        assertEquals(ApiCredentialsId("88"), savedAsset?.credentialsId)
         assertEquals("Default Preset", savedConfig?.displayName)
         assertEquals(
             listOf("Automatically linked to \"Existing xAI\" API Model"),
@@ -509,7 +556,7 @@ class SettingsViewModelTest {
     @Test
     fun `save api model config does not navigate on failure`() = runTest {
         val asset = ApiModelAssetUi(
-            credentialsId = 42L,
+            credentialsId = ApiCredentialsId("42"),
             displayName = "xAI",
             provider = ApiProvider.XAI,
             modelId = "grok-4-fast-reasoning",
@@ -523,7 +570,7 @@ class SettingsViewModelTest {
         viewModel.onSelectApiModelConfig(
             ApiModelConfigUi(
                 id = ApiModelConfigurationId("9"),
-                credentialsId = 42L,
+                credentialsId = ApiCredentialsId("42"),
                 displayName = "Default Preset"
             )
         )
@@ -548,7 +595,7 @@ class SettingsViewModelTest {
 
         viewModel.onSelectApiModelAsset(
             ApiModelAssetUi(
-                credentialsId = 0L,
+                credentialsId = ApiCredentialsId(""),
                 displayName = "New xAI",
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
@@ -560,7 +607,7 @@ class SettingsViewModelTest {
         )
         viewModel.onApiKeyChange("xai-key")
 
-        coEvery { saveApiCredentialsUseCase(any(), any(), any()) } returns 88L
+        coEvery { saveApiCredentialsUseCase(any(), any(), any()) } returns ApiCredentialsId("88")
         coEvery { saveApiModelConfigurationUseCase(any()) } returns Result.success(ApiModelConfigurationId("901"))
 
         var savedAsset: ApiModelAssetUi? = null
@@ -578,7 +625,7 @@ class SettingsViewModelTest {
     @Test
     fun `save preset uses draft parent id instead of currently selected asset id`() = runTest {
         val providerA = ApiModelAssetUi(
-            credentialsId = 11L,
+            credentialsId = ApiCredentialsId("11"),
             displayName = "Provider A",
             provider = ApiProvider.XAI,
             modelId = "grok-4-fast-reasoning",
@@ -588,7 +635,7 @@ class SettingsViewModelTest {
             configurations = emptyList()
         )
         val providerB = providerA.copy(
-            credentialsId = 22L,
+            credentialsId = ApiCredentialsId("22"),
             displayName = "Provider B",
             credentialAlias = "provider-b"
         )
@@ -597,7 +644,7 @@ class SettingsViewModelTest {
         viewModel.onSelectApiModelAsset(providerA)
         viewModel.onSelectApiModelConfig(
             ApiModelConfigUi(
-                credentialsId = 11L,
+                credentialsId = ApiCredentialsId("11"),
                 displayName = "New Preset"
             )
         )
@@ -610,7 +657,7 @@ class SettingsViewModelTest {
 
         coVerify {
             saveApiModelConfigurationUseCase(
-                match { it.apiCredentialsId == 11L }
+                match { it.apiCredentialsId == ApiCredentialsId("11") }
             )
         }
     }
@@ -619,7 +666,7 @@ class SettingsViewModelTest {
     fun `canceling byok editor discards unsaved draft edits and preserves persisted list`() = runTest {
         val persistedAsset = ApiModelAsset(
             credentials = ApiCredentials(
-                id = 42L,
+                id = ApiCredentialsId("42"),
                 displayName = "Persisted xAI",
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
@@ -657,7 +704,7 @@ class SettingsViewModelTest {
     fun `room emission does not splice over unsaved api credential draft`() = runTest {
         val persistedAsset = ApiModelAsset(
             credentials = ApiCredentials(
-                id = 51L,
+                id = ApiCredentialsId("51"),
                 displayName = "Persisted OpenAI",
                 provider = ApiProvider.OPENAI,
                 modelId = "gpt-4.1",
@@ -690,7 +737,7 @@ class SettingsViewModelTest {
     fun `custom header edits stay in draft and cleanup trims blank rows only from draft`() = runTest {
         val persistedAsset = ApiModelAsset(
             credentials = ApiCredentials(
-                id = 64L,
+                id = ApiCredentialsId("64"),
                 displayName = "Persisted xAI",
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
@@ -700,7 +747,7 @@ class SettingsViewModelTest {
             configurations = listOf(
                 ApiModelConfiguration(
                     id = ApiModelConfigurationId("9"),
-                    apiCredentialsId = 64L,
+                    apiCredentialsId = ApiCredentialsId("64"),
                     displayName = "Default Preset",
                     customHeaders = mapOf("Authorization" to "Bearer persisted")
                 )

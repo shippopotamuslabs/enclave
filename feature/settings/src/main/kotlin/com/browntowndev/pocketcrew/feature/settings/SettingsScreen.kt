@@ -45,8 +45,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 
@@ -71,12 +73,12 @@ fun SettingsScreen(
     onStartConfigureSearchSkill: () -> Unit,
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
-    onDeleteApiModelAsset: (Long) -> Unit,
+    onDeleteApiModelAsset: (ApiCredentialsId) -> Unit,
     onDeleteApiModelConfig: (ApiModelConfigurationId) -> Unit,
     onNavigateToLocalModelConfigure: () -> Unit,
     onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
-    onDeleteLocalModelAsset: (Long) -> Unit,
+    onDeleteLocalModelAsset: (LocalModelId) -> Unit,
     onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
     onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onDismissDeletionSafety: () -> Unit

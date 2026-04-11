@@ -1,8 +1,10 @@
 package com.browntowndev.pocketcrew.feature.settings
 
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
@@ -78,7 +80,7 @@ class SettingsUiStateFactory @Inject constructor(
     ): SettingsUiState {
         val localModels = localAssets.map(localModelAssetUiMapper::map)
         val refreshedSelectedLocalAsset = localModelsState.selectedAsset?.let { selected ->
-            if (selected.metadataId == 0L) {
+            if (selected.metadataId.value.isEmpty()) {
                 selected
             } else {
                 localModels.find { it.metadataId == selected.metadataId }?.let { refreshed ->
@@ -89,7 +91,7 @@ class SettingsUiStateFactory @Inject constructor(
 
         val apiModels = apiAssets.map(apiModelAssetUiMapper::map)
         val refreshedSelectedApiAsset = apiState.selectedAsset?.let { selected ->
-            if (selected.credentialsId == 0L) {
+            if (selected.credentialsId.value.isEmpty()) {
                 selected
             } else {
                 apiModels.find { it.credentialsId == selected.credentialsId }?.let { refreshed ->
@@ -111,7 +113,7 @@ class SettingsUiStateFactory @Inject constructor(
                 ?.let(apiModelAssetUiMapper::mapReusable)
                 ?: apiState.selectedReusableApiCredentialName?.let { displayName ->
                     ReusableApiCredentialUi(
-                        credentialsId = 0L,
+                        credentialsId = ApiCredentialsId(""),
                         displayName = displayName,
                         modelId = "",
                         credentialAlias = alias,
@@ -121,9 +123,9 @@ class SettingsUiStateFactory @Inject constructor(
         val selectedDiscoveredModel = apiState.discoveredApiModels.find { it.id == activeApiAsset?.modelId }
         val normalizedPresetDraft = apiState.presetDraft?.let { draft ->
             val parentCredentialsId = when {
-                draft.credentialsId != 0L -> draft.credentialsId
+                draft.credentialsId.value.isNotEmpty() -> draft.credentialsId
                 activeApiAsset != null -> activeApiAsset.credentialsId
-                else -> 0L
+                else -> ApiCredentialsId("")
             }
             val normalized = applyApiModelMetadataDefaultsUseCase(
                 provider = activeApiAsset?.provider,

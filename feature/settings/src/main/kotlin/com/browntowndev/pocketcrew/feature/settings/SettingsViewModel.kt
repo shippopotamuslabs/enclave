@@ -14,7 +14,9 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.ApiProviderDraft
 import com.browntowndev.pocketcrew.domain.usecase.settings.ModelDeletionTarget
 import com.browntowndev.pocketcrew.domain.usecase.settings.PreparedModelDeletion
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationId
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -346,7 +348,7 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    fun onDeleteLocalModelAsset(id: Long) {
+    fun onDeleteLocalModelAsset(id: LocalModelId) {
         prepareDeletion(
             target = ModelDeletionTarget.LocalModelAsset(id),
             failureMessage = "Failed to delete local model asset",
@@ -435,7 +437,7 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    fun onSelectApiModelAsset(id: Long?) {
+    fun onSelectApiModelAsset(id: ApiCredentialsId?) {
         val asset = uiState.value.apiProvidersSheet.assets.find { it.credentialsId == id }
         onSelectApiModelAsset(asset)
     }
@@ -445,13 +447,14 @@ class SettingsViewModel @Inject constructor(
             val keepDiscoveredModels =
                 state.selectedAsset.matchesDiscoveryScope(asset) || state.discoveredApiModelScope.matches(asset)
             val retainedModels = if (keepDiscoveredModels) state.discoveredApiModels else emptyList()
+            val normalizedAsset = state.normalizeVisionCapability(asset, retainedModels)
             state.copy(
                 selectedAsset = asset,
-                assetDraft = asset,
+                assetDraft = normalizedAsset,
                 selectedReusableApiCredentialAlias = null,
                 selectedReusableApiCredentialName = null,
                 presetDraft = null,
-                discoveredApiModels = retainedModels.mergeSelectedModel(asset),
+                discoveredApiModels = retainedModels.mergeSelectedModel(normalizedAsset),
                 discoveredApiModelScope = if (keepDiscoveredModels) state.discoveredApiModelScope else null,
                 isDiscoveringApiModels = false,
                 modelSearchQuery = "",
@@ -466,7 +469,7 @@ class SettingsViewModel @Inject constructor(
         _apiState.update { state ->
             val activeAsset = state.assetDraft ?: state.selectedAsset
             val normalizedConfig = config?.let { draft ->
-                if (draft.credentialsId == 0L && activeAsset != null) {
+                if (draft.credentialsId.value.isEmpty() && activeAsset != null) {
                     draft.copy(credentialsId = activeAsset.credentialsId)
                 } else {
                     draft
@@ -485,11 +488,12 @@ class SettingsViewModel @Inject constructor(
                     existingDraft.credentialsId != asset.credentialsId ||
                     existingDraft.baseUrl.normalizedBaseUrl() != asset.baseUrl.normalizedBaseUrl()
             val existingModels = if (discoveryScopeChanged) emptyList() else it.discoveredApiModels
+            val normalizedAsset = it.normalizeVisionCapability(asset, existingModels)
             it.copy(
-                assetDraft = asset,
+                assetDraft = normalizedAsset,
                 selectedReusableApiCredentialAlias = if (existingDraft?.provider != asset.provider) null else it.selectedReusableApiCredentialAlias,
                 selectedReusableApiCredentialName = if (existingDraft?.provider != asset.provider) null else it.selectedReusableApiCredentialName,
-                discoveredApiModels = existingModels.mergeSelectedModel(asset),
+                discoveredApiModels = existingModels.mergeSelectedModel(normalizedAsset),
                 discoveredApiModelScope = if (discoveryScopeChanged) null else it.discoveredApiModelScope,
             )
         }
@@ -502,7 +506,7 @@ class SettingsViewModel @Inject constructor(
 
     fun onApiKeyChange(key: String) {
         _currentApiKey.value = key
-        if (key.isNotBlank() && _apiState.value.assetDraft?.credentialsId == 0L) {
+        if (key.isNotBlank() && _apiState.value.assetDraft?.credentialsId?.value?.isEmpty() == true) {
             _apiState.update {
                 it.copy(
                     selectedReusableApiCredentialAlias = null,
@@ -544,7 +548,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onSelectReusableApiCredential(id: Long?) {
+    fun onSelectReusableApiCredential(id: ApiCredentialsId?) {
         val reusableCredential = uiState.value.apiProvidersSheet.assets
             .find { it.credentialsId == id }
             ?.let {
@@ -616,7 +620,7 @@ class SettingsViewModel @Inject constructor(
     fun onSaveApiModelConfig(onSuccess: () -> Unit) {
         val assetDraft = _apiState.value.assetDraft ?: _apiState.value.selectedAsset ?: return
         val presetDraft = uiState.value.apiProviderEditor.presetDraft ?: return
-        val parentCredentialsId = presetDraft.credentialsId.takeIf { it != 0L } ?: assetDraft.credentialsId
+        val parentCredentialsId = if (presetDraft.credentialsId.value.isNotEmpty()) presetDraft.credentialsId else assetDraft.credentialsId
 
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API configuration", "Failed to save configuration")) {
             apiProviderUseCases.saveApiPreset(
@@ -665,6 +669,7 @@ class SettingsViewModel @Inject constructor(
                     state.copy(
                         discoveredApiModels = result.models,
                         discoveredApiModelScope = result.scope,
+                        assetDraft = state.normalizeVisionCapability(state.assetDraft, result.models),
                     )
                 }
             } finally {
@@ -711,7 +716,7 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    fun onDeleteApiModelAsset(id: Long) {
+    fun onDeleteApiModelAsset(id: ApiCredentialsId) {
         prepareDeletion(
             target = ModelDeletionTarget.ApiProvider(id),
             failureMessage = "Failed to delete API provider",
@@ -814,6 +819,7 @@ class SettingsViewModel @Inject constructor(
                 state.copy(
                     discoveredApiModels = result.models,
                     discoveredApiModelScope = result.scope,
+                    assetDraft = state.normalizeVisionCapability(state.assetDraft, result.models),
                 )
             }
         }
@@ -825,6 +831,17 @@ class SettingsViewModel @Inject constructor(
 
     private fun ApiProvidersTransientState.discoveredModelFor(asset: ApiModelAssetUi?): DiscoveredApiModel? =
         discoveredApiModels.find { it.id == asset?.modelId }
+
+    private fun ApiProvidersTransientState.normalizeVisionCapability(
+        asset: ApiModelAssetUi?,
+        models: List<DiscoveredApiModel> = discoveredApiModels,
+    ): ApiModelAssetUi? {
+        if (asset == null) return null
+        val discoveredVisionCapability = models
+            .find { it.id == asset.modelId }
+            ?.visionCapable
+        return discoveredVisionCapability?.let { asset.copy(isVision = it) } ?: asset
+    }
 
     private fun ApiModelAssetUi?.matchesDiscoveryScope(other: ApiModelAssetUi?): Boolean {
         if (this == null || other == null) return false

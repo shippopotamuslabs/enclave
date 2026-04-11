@@ -19,6 +19,8 @@
 #include "llama.h"
 #include "ggml-backend.h"
 #include "ggml.h"
+#include "mtmd.h"
+#include "mtmd-helper.h"
 
 // prctl-based SVE detection - more reliable than /proc filesystem
 // Returns vector length in bits, or 0 if SVE not available
@@ -172,6 +174,7 @@ static llama_context* g_ctx = nullptr;
 static llama_sampler* g_sampler = nullptr;
 static llama_batch* g_batch = nullptr;  // Points to s_batch
 static llama_batch s_batch;  // The actual static batch - needs to be at file scope for unload to access
+static mtmd_context* g_mtmd = nullptr;
 static std::atomic<bool> g_generating(false);
 static std::mutex g_mutex;
 
@@ -182,6 +185,7 @@ static std::vector<llama_token> g_history_tokens; // Current tokens in KV cache
 static std::vector<llama_pos> g_history_positions; // Actual KV positions for each tracked token
 static llama_pos g_last_eval_pos = 0; // Next writable KV position for sequence 0
 static int g_think_token_count = 0;
+static bool g_last_prompt_was_multimodal = false;
 
 // Helper to get vocab from model (must be after g_model declaration)
 static inline const llama_vocab* get_model_vocab() {
@@ -284,6 +288,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeLo
     JNIEnv* env,
     jobject /* this */,
     jstring modelPath,
+    jstring mmprojPath,
     jint contextSize,
     jint batchSize,
     jint gpuLayers,
@@ -373,6 +378,11 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeLo
         llama_free(g_ctx);
         g_ctx = nullptr;
     }
+    if (g_mtmd) {
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Unloading existing multimodal projector");
+        mtmd_free(g_mtmd);
+        g_mtmd = nullptr;
+    }
     if (g_model) {
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Unloading existing model");
         llama_model_free(g_model);
@@ -380,6 +390,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeLo
     }
 
     std::string path = jstringToString(env, modelPath);
+    std::string mmproj_path = jstringToString(env, mmprojPath);
 
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Loading model: %s", path.c_str());
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Model path: %s", path.c_str());
@@ -478,6 +489,25 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeLo
         llama_attach_threadpool(g_ctx, g_threadpool, g_threadpool_batch);
     }
 
+    if (!mmproj_path.empty()) {
+        mtmd_context_params mparams = mtmd_context_params_default();
+        mparams.use_gpu = actualGpuLayers > 0 && g_supportsGpu;
+        mparams.n_threads = actualThreads;
+        mparams.flash_attn_type = LLAMA_FLASH_ATTN_TYPE_DISABLED;
+
+        g_mtmd = mtmd_init_from_file(mmproj_path.c_str(), g_model, mparams);
+        if (!g_mtmd) {
+            __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "FAILED to load multimodal projector from: %s", mmproj_path.c_str());
+            llama_detach_threadpool(g_ctx);
+            llama_free(g_ctx);
+            g_ctx = nullptr;
+            llama_model_free(g_model);
+            g_model = nullptr;
+            cleanupThreadpool();
+            return JNI_FALSE;
+        }
+    }
+
     // Create reusable batch (like official example)
     // Note: llama_batch_init returns llama_batch, not pointer
     // CRITICAL: If batch was previously used, free it first to avoid memory issues
@@ -500,6 +530,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeLo
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "==========================");
 
     clear_history_tracking();
+    g_last_prompt_was_multimodal = false;
 
     return JNI_TRUE;
 }
@@ -533,6 +564,11 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeUn
         g_sampler = nullptr;
     }
 
+    if (g_mtmd) {
+        mtmd_free(g_mtmd);
+        g_mtmd = nullptr;
+    }
+
     // Detach and cleanup threadpool with CPU affinity
     if (g_ctx) {
         llama_detach_threadpool(g_ctx);
@@ -561,6 +597,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeUn
     }
 
     clear_history_tracking();
+    g_last_prompt_was_multimodal = false;
 
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Model and context unloaded");
 }
@@ -575,6 +612,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeCl
     // Clear the KV cache memory
     if (g_ctx) {
         clear_kv_cache_and_tracking();
+        g_last_prompt_was_multimodal = false;
         __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache and history cleared");
     }
 
@@ -591,6 +629,7 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
     jobject /* this */,
     jobjectArray roles,  // Array of role strings
     jobjectArray contents,  // Array of content strings
+    jobjectArray imagePaths,  // Array of image paths for multimodal prompts
     jfloat temperature,
     jint topK,
     jfloat topP,
@@ -611,6 +650,34 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
         g_generating = false;
         env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Model not loaded");
         return;
+    }
+
+    std::vector<std::string> image_paths;
+    if (imagePaths) {
+        const jsize num_images = env->GetArrayLength(imagePaths);
+        image_paths.reserve(num_images);
+        for (jsize i = 0; i < num_images; ++i) {
+            jstring imagePath = (jstring) env->GetObjectArrayElement(imagePaths, i);
+            image_paths.push_back(jstringToString(env, imagePath));
+            env->DeleteLocalRef(imagePath);
+        }
+    }
+
+    if (!image_paths.empty()) {
+        if (!g_mtmd) {
+            g_generating = false;
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Multimodal projector is not loaded for this GGUF model.");
+            return;
+        }
+        if (!mtmd_support_vision(g_mtmd)) {
+            g_generating = false;
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Loaded multimodal projector does not support vision input.");
+            return;
+        }
+        if (g_last_prompt_was_multimodal) {
+            clear_kv_cache_and_tracking();
+            g_last_prompt_was_multimodal = false;
+        }
     }
 
     // KV cache management moved after tokenization to enable prefix caching
@@ -788,154 +855,227 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
         return;
     }
 
-    // Tokenize prompt - first call to get required buffer size
-    // FIXED: For chat-templated prompts, the template already added special tokens (including BOS if needed)
-    // So we set add_bos=false to avoid double-adding BOS
-    // Use 8192 token buffer to handle large synthesis prompts
-    std::vector<llama_token> tokens(8192);
-    const int required_tokens = llama_tokenize(get_model_vocab(), promptStr.c_str(), promptStr.size(), tokens.data(), 8192, false, true);
-    if (required_tokens <= 0) {
-        g_generating = false;
-        std::string errorMsg = "Failed to tokenize prompt: required_tokens=" + std::to_string(required_tokens);
-        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), errorMsg.c_str());
-        return;
-    }
-
-    const int n_prompt_tokens = required_tokens;
+    int n_prompt_tokens = 0;
+    std::vector<llama_token> tokens;
 
     // ============================================================
     // Prefix Caching Logic
     // ============================================================
-    if (g_history_tokens.empty() && sync_last_eval_pos_from_memory() > 0) {
-        // We have KV state but no trusted token metadata (for example after state restore).
-        // Rebuild from scratch rather than attempting unsafe prefix reuse.
-        clear_kv_cache_and_tracking();
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Cleared untracked KV cache before prompt rebuild");
-    }
-
-    const std::vector<llama_pos> old_history_positions = g_history_positions;
-    size_t n_past = 0;
-    while (n_past < g_history_tokens.size() && n_past < (size_t)n_prompt_tokens && g_history_tokens[n_past] == tokens[n_past]) {
-        n_past++;
-    }
-
-    // Fix: If the prompt perfectly matches the prefix (or history), we MUST force evaluation 
-    // of at least one token (the last prompt token) to populate the logits for generation.
-    // If we don't, llama_decode is skipped entirely and the sampler uses stale logits.
-    if (n_past == n_prompt_tokens && n_past > 0) {
-        n_past--;
-    }
-
-    size_t rebuild_from = n_past;
-    if (n_past < g_history_tokens.size()) {
-        // Divergence or truncation: remove invalidated tokens from KV cache
-        const llama_pos trim_pos = old_history_positions[n_past];
-        rebuild_from = trim_history_from_pos(trim_pos);
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache diverged at token %zu, trimmed from pos %d, rebuilding from token %zu",
-            n_past, (int) trim_pos, rebuild_from);
-    } else if (n_past > 0) {
-        sync_last_eval_pos_from_memory();
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache reused prefix of %zu tokens, next pos=%d",
-            n_past, (int) g_last_eval_pos);
-    } else {
-        sync_last_eval_pos_from_memory();
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache initialization: full evaluation (no match)");
-    }
-
+    size_t rebuild_from = 0;
     int n_generated_tokens = 0;
-    const llama_pos prompt_eval_start_pos = g_last_eval_pos;
-    std::vector<llama_pos> prompt_positions(n_prompt_tokens, 0);
-    for (size_t i = 0; i < std::min(rebuild_from, old_history_positions.size()) && i < prompt_positions.size(); ++i) {
-        prompt_positions[i] = old_history_positions[i];
-    }
-
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Prompt tokens: %d (evaluating from token %zu at pos %d)",
-        n_prompt_tokens, rebuild_from, (int) prompt_eval_start_pos);
-    // Debug: print first few tokens
-    for (int i = 0; i < std::min(5, n_prompt_tokens); i++) {
-        const char* tokentext = llama_vocab_get_text(get_model_vocab(), tokens[i]);
-        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "  token[%d] = %d: '%s'", i, tokens[i], tokentext);
-    }
 
     // Callback methods
     jmethodID onTokenMethod = getCallbackMethod(env, g_callback, "onToken", "(Ljava/lang/String;)V");
     jmethodID onCompleteMethod = getCallbackMethod(env, g_callback, "onComplete", "(II)V");
     jmethodID onErrorMethod = getCallbackMethod(env, g_callback, "onError", "(Ljava/lang/String;)V");
 
-    // Check if model context can hold prompt
-    if (n_prompt_tokens > n_ctx) {
-        g_generating = false;
-        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Prompt too long for context");
-        return;
-    }
-
-    // Log timing info
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Evaluating prompt: %d tokens", n_prompt_tokens);
-
-    // Evaluate prompt
-    auto prompt_start = std::chrono::high_resolution_clock::now();
-
-    // Clear batch and validate
-    llama_batch_clear(*g_batch);
-
-    // DEFENSIVE: Check batch validity
-    if (!g_batch || !g_batch->token || !g_batch->logits) {
-        __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: Batch is invalid before prompt eval!");
-        g_generating = false;
-        env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Batch is invalid - model may not be properly loaded");
-        return;
-    }
-
-    // Get the actual batch capacity from context
-    const int n_batch = llama_n_batch(g_ctx);
-
-    // Process prompt tokens in chunks - llama.cpp requires batch size <= n_batch
-    int processed_tokens = (int) rebuild_from;
-    while (processed_tokens < n_prompt_tokens) {
-        llama_batch_clear(*g_batch);
-
-        // Calculate how many tokens in this chunk
-        int chunk_size = std::min(n_batch, n_prompt_tokens - processed_tokens);
-
-        // Add chunk of tokens to batch
-        for (int i = 0; i < chunk_size; i++) {
-            const llama_pos current_pos = prompt_eval_start_pos + (processed_tokens - (int) rebuild_from) + i;
-            prompt_positions[processed_tokens + i] = current_pos;
-            llama_batch_add(*g_batch, tokens[processed_tokens + i], current_pos, { 0 }, false);
-        }
-
-        // Only the last token of the entire prompt gets logits
-        if (processed_tokens + chunk_size == n_prompt_tokens) {
-            if (g_batch->logits) {
-                g_batch->logits[g_batch->n_tokens - 1] = true;
-            }
-        }
-
-        // Call llama_decode with this chunk
-        int decode_result = llama_decode(g_ctx, *g_batch);
-        if (decode_result != 0) {
-            __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: llama_decode failed at token %d, result=%d", processed_tokens, decode_result);
+    if (image_paths.empty()) {
+        // Tokenize prompt - first call to get required buffer size
+        // FIXED: For chat-templated prompts, the template already added special tokens (including BOS if needed)
+        // So we set add_bos=false to avoid double-adding BOS
+        // Use 8192 token buffer to handle large synthesis prompts
+        tokens.resize(8192);
+        const int required_tokens = llama_tokenize(get_model_vocab(), promptStr.c_str(), promptStr.size(), tokens.data(), 8192, false, true);
+        if (required_tokens <= 0) {
             g_generating = false;
-            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode prompt chunk");
+            std::string errorMsg = "Failed to tokenize prompt: required_tokens=" + std::to_string(required_tokens);
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), errorMsg.c_str());
             return;
         }
 
-        processed_tokens += chunk_size;
+        n_prompt_tokens = required_tokens;
+
+        if (g_history_tokens.empty() && sync_last_eval_pos_from_memory() > 0) {
+            // We have KV state but no trusted token metadata (for example after state restore).
+            // Rebuild from scratch rather than attempting unsafe prefix reuse.
+            clear_kv_cache_and_tracking();
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Cleared untracked KV cache before prompt rebuild");
+        }
+
+        const std::vector<llama_pos> old_history_positions = g_history_positions;
+        size_t n_past = 0;
+        while (n_past < g_history_tokens.size() && n_past < (size_t) n_prompt_tokens && g_history_tokens[n_past] == tokens[n_past]) {
+            n_past++;
+        }
+
+        // If the prompt perfectly matches the prefix, force one token eval to refresh logits.
+        if (n_past == (size_t) n_prompt_tokens && n_past > 0) {
+            n_past--;
+        }
+
+        rebuild_from = n_past;
+        if (n_past < g_history_tokens.size()) {
+            const llama_pos trim_pos = old_history_positions[n_past];
+            rebuild_from = trim_history_from_pos(trim_pos);
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache diverged at token %zu, trimmed from pos %d, rebuilding from token %zu",
+                n_past, (int) trim_pos, rebuild_from);
+        } else if (n_past > 0) {
+            sync_last_eval_pos_from_memory();
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache reused prefix of %zu tokens, next pos=%d",
+                n_past, (int) g_last_eval_pos);
+        } else {
+            sync_last_eval_pos_from_memory();
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "KV cache initialization: full evaluation (no match)");
+        }
+
+        const llama_pos prompt_eval_start_pos = g_last_eval_pos;
+        std::vector<llama_pos> prompt_positions(n_prompt_tokens, 0);
+        for (size_t i = 0; i < std::min(rebuild_from, old_history_positions.size()) && i < prompt_positions.size(); ++i) {
+            prompt_positions[i] = old_history_positions[i];
+        }
+
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Prompt tokens: %d (evaluating from token %zu at pos %d)",
+            n_prompt_tokens, rebuild_from, (int) prompt_eval_start_pos);
+        for (int i = 0; i < std::min(5, n_prompt_tokens); i++) {
+            const char* tokentext = llama_vocab_get_text(get_model_vocab(), tokens[i]);
+            __android_log_print(ANDROID_LOG_INFO, "llama-jni", "  token[%d] = %d: '%s'", i, tokens[i], tokentext);
+        }
+
+        if (n_prompt_tokens > n_ctx) {
+            g_generating = false;
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Prompt too long for context");
+            return;
+        }
+
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Evaluating prompt: %d tokens", n_prompt_tokens);
+        auto prompt_start = std::chrono::high_resolution_clock::now();
+
+        llama_batch_clear(*g_batch);
+        if (!g_batch || !g_batch->token || !g_batch->logits) {
+            __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: Batch is invalid before prompt eval!");
+            g_generating = false;
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Batch is invalid - model may not be properly loaded");
+            return;
+        }
+
+        const int n_batch = llama_n_batch(g_ctx);
+        int processed_tokens = (int) rebuild_from;
+        while (processed_tokens < n_prompt_tokens) {
+            llama_batch_clear(*g_batch);
+
+            int chunk_size = std::min(n_batch, n_prompt_tokens - processed_tokens);
+            for (int i = 0; i < chunk_size; i++) {
+                const llama_pos current_pos = prompt_eval_start_pos + (processed_tokens - (int) rebuild_from) + i;
+                prompt_positions[processed_tokens + i] = current_pos;
+                llama_batch_add(*g_batch, tokens[processed_tokens + i], current_pos, { 0 }, false);
+            }
+
+            if (processed_tokens + chunk_size == n_prompt_tokens && g_batch->logits) {
+                g_batch->logits[g_batch->n_tokens - 1] = true;
+            }
+
+            const int decode_result = llama_decode(g_ctx, *g_batch);
+            if (decode_result != 0) {
+                __android_log_print(ANDROID_LOG_ERROR, "llama-jni", "ERROR: llama_decode failed at token %d, result=%d", processed_tokens, decode_result);
+                g_generating = false;
+                env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to decode prompt chunk");
+                return;
+            }
+
+            processed_tokens += chunk_size;
+        }
+
+        g_history_tokens.assign(tokens.begin(), tokens.begin() + n_prompt_tokens);
+        g_history_positions = std::move(prompt_positions);
+        g_last_eval_pos = sync_last_eval_pos_from_memory();
+        g_last_prompt_was_multimodal = false;
+
+        auto prompt_end = std::chrono::high_resolution_clock::now();
+        double prompt_ms = std::chrono::duration<double, std::milli>(prompt_end - prompt_start).count();
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Prompt evaluation took %.2f ms (%.2f ms/token)",
+            prompt_ms, prompt_ms / n_prompt_tokens);
+    } else {
+        clear_kv_cache_and_tracking();
+
+        std::vector<mtmd_bitmap *> bitmaps;
+        bitmaps.reserve(image_paths.size());
+        for (const auto& image_path : image_paths) {
+            mtmd_bitmap * bitmap = mtmd_helper_bitmap_init_from_file(g_mtmd, image_path.c_str());
+            if (!bitmap) {
+                for (mtmd_bitmap * loaded_bitmap : bitmaps) {
+                    mtmd_bitmap_free(loaded_bitmap);
+                }
+                g_generating = false;
+                std::string errorMsg = "Failed to load image for multimodal inference: " + image_path;
+                env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), errorMsg.c_str());
+                return;
+            }
+            bitmaps.push_back(bitmap);
+        }
+
+        mtmd_input_text text = {
+            promptStr.c_str(),
+            false,
+            true,
+        };
+        mtmd_input_chunks * chunks = mtmd_input_chunks_init();
+        if (!chunks) {
+            for (mtmd_bitmap * bitmap : bitmaps) {
+                mtmd_bitmap_free(bitmap);
+            }
+            g_generating = false;
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Failed to allocate multimodal chunks");
+            return;
+        }
+
+        const int32_t tokenize_result = mtmd_tokenize(g_mtmd, chunks, &text, const_cast<const mtmd_bitmap **>(bitmaps.data()), bitmaps.size());
+        if (tokenize_result != 0) {
+            mtmd_input_chunks_free(chunks);
+            for (mtmd_bitmap * bitmap : bitmaps) {
+                mtmd_bitmap_free(bitmap);
+            }
+            g_generating = false;
+            std::string errorMsg = "Failed to tokenize multimodal prompt: result=" + std::to_string(tokenize_result);
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), errorMsg.c_str());
+            return;
+        }
+
+        n_prompt_tokens = (int) mtmd_helper_get_n_tokens(chunks);
+        if (n_prompt_tokens > n_ctx) {
+            mtmd_input_chunks_free(chunks);
+            for (mtmd_bitmap * bitmap : bitmaps) {
+                mtmd_bitmap_free(bitmap);
+            }
+            g_generating = false;
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Prompt too long for context");
+            return;
+        }
+
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Evaluating multimodal prompt: %d tokens, %zu images", n_prompt_tokens, image_paths.size());
+        auto prompt_start = std::chrono::high_resolution_clock::now();
+
+        llama_pos new_n_past = 0;
+        const int eval_result = mtmd_helper_eval_chunks(
+            g_mtmd,
+            g_ctx,
+            chunks,
+            0,
+            0,
+            llama_n_batch(g_ctx),
+            true,
+            &new_n_past
+        );
+
+        mtmd_input_chunks_free(chunks);
+        for (mtmd_bitmap * bitmap : bitmaps) {
+            mtmd_bitmap_free(bitmap);
+        }
+
+        if (eval_result != 0) {
+            g_generating = false;
+            std::string errorMsg = "Failed to evaluate multimodal prompt chunks: result=" + std::to_string(eval_result);
+            env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), errorMsg.c_str());
+            return;
+        }
+
+        g_last_eval_pos = new_n_past;
+        g_last_prompt_was_multimodal = true;
+
+        auto prompt_end = std::chrono::high_resolution_clock::now();
+        double prompt_ms = std::chrono::duration<double, std::milli>(prompt_end - prompt_start).count();
+        __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Multimodal prompt evaluation took %.2f ms (%.2f ms/token)",
+            prompt_ms, prompt_ms / std::max(n_prompt_tokens, 1));
     }
-
-    // ============================================================
-    // Update History Tracker with Prompt
-    // ============================================================
-    g_history_tokens.assign(tokens.begin(), tokens.begin() + n_prompt_tokens);
-    g_history_positions = std::move(prompt_positions);
-    g_last_eval_pos = sync_last_eval_pos_from_memory();
-
-    auto prompt_end = std::chrono::high_resolution_clock::now();
-    double prompt_ms = std::chrono::duration<double, std::milli>(prompt_end - prompt_start).count();
-    __android_log_print(ANDROID_LOG_INFO, "llama-jni", "Prompt evaluation took %.2f ms (%.2f ms/token)",
-        prompt_ms, prompt_ms / n_prompt_tokens);
-
-    // Keep the batch for reuse in generation loop
 
     // Sample and generate tokens
     __android_log_print(ANDROID_LOG_INFO, "llama-jni", "=== GENERATING TOKENS ===");
