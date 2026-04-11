@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -52,7 +53,7 @@ class ChatRepositoryImplTest {
     fun `D1 maps Entity to Domain correctly`() = runTest {
         // Given: ChatEntity with id=1, name="Test", pinned=true
         val entity = ChatEntity(
-            id = 1,
+            id = ChatId("1"),
             name = "Test",
             created = testDate,
             lastModified = testDate,
@@ -66,7 +67,7 @@ class ChatRepositoryImplTest {
         // Then: Flow emits Chat with matching id, name, pinned
         assertEquals(1, result.size)
         val chat = result.first()
-        assertEquals(1L, chat.id)
+        assertEquals(ChatId("1"), chat.id)
         assertEquals("Test", chat.name)
         assertTrue(chat.pinned)
         assertEquals(testDate, chat.created)
@@ -84,20 +85,20 @@ class ChatRepositoryImplTest {
     fun `D2 togglePinStatus updates database from false to true`() = runTest {
         // Given: Chat id=5 with pinned=false (existing in DB)
         val entity = ChatEntity(
-            id = 5,
+            id = ChatId("5"),
             name = "Test Chat",
             created = testDate,
             lastModified = testDate,
             pinned = false
         )
-        coEvery { chatDao.getChatById(5) } returns entity
-        coEvery { chatDao.updatePinStatus(5) } returns 1
+        coEvery { chatDao.getChatById(ChatId("5")) } returns entity
+        coEvery { chatDao.updatePinStatus(ChatId("5")) } returns 1
 
         // When: togglePinStatus(5) called
-        repository.togglePinStatus(5)
+        repository.togglePinStatus(ChatId("5"))
 
         // Then: updatePinStatus was called on the DAO
-        coVerify { chatDao.updatePinStatus(5) }
+        coVerify { chatDao.updatePinStatus(ChatId("5")) }
     }
 
     /**
@@ -111,19 +112,19 @@ class ChatRepositoryImplTest {
     fun `D3 togglePinStatus toggles from true to false`() = runTest {
         // Given: Chat id=10 with pinned=true
         val entity = ChatEntity(
-            id = 10,
+            id = ChatId("10"),
             name = "Pinned Chat",
             created = testDate,
             lastModified = testDate,
             pinned = true
         )
-        coEvery { chatDao.getChatById(10) } returns entity
-        coEvery { chatDao.updatePinStatus(10) } returns 1
+        coEvery { chatDao.getChatById(ChatId("10")) } returns entity
+        coEvery { chatDao.updatePinStatus(ChatId("10")) } returns 1
 
         // When: togglePinStatus(10) called
-        repository.togglePinStatus(10)
+        repository.togglePinStatus(ChatId("10"))
 
         // Then: updatePinStatus was called on the DAO
-        coVerify { chatDao.updatePinStatus(10) }
+        coVerify { chatDao.updatePinStatus(ChatId("10")) }
     }
 }

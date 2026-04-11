@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
@@ -13,14 +14,14 @@ class SaveApiPresetUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(
         provider: ApiProvider,
-        parentCredentialsId: Long,
+        parentCredentialsId: ApiCredentialsId,
         defaultReasoningEffort: ApiReasoningEffort?,
         draft: ApiPresetDraft,
     ): Result<ApiModelConfigurationId> {
         return saveApiModelConfigurationUseCase(
             ApiModelConfiguration(
                 id = draft.id,
-                apiCredentialsId = draft.credentialsId.takeIf { it != 0L } ?: parentCredentialsId,
+                apiCredentialsId = draft.credentialsId.takeIf { it.value.isNotEmpty() } ?: parentCredentialsId,
                 displayName = draft.displayName,
                 maxTokens = draft.maxTokens.toIntOrNull() ?: 4096,
                 contextWindow = draft.contextWindow.toIntOrNull() ?: 4096,

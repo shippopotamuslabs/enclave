@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -23,16 +24,16 @@ abstract class ChatDao {
     abstract fun getAllChats(): Flow<List<ChatEntity>>
 
     @Query("SELECT * FROM chat WHERE id = :id")
-    abstract suspend fun getChatById(id: Long): ChatEntity?
+    abstract suspend fun getChatById(id: ChatId): ChatEntity?
 
     @Query("UPDATE chat SET pinned = NOT pinned WHERE id = :chatId")
-    abstract suspend fun updatePinStatus(chatId: Long): Int
+    abstract suspend fun updatePinStatus(chatId: ChatId): Int
 
     @Query("DELETE FROM chat WHERE id = :chatId")
-    abstract suspend fun deleteById(chatId: Long): Int
+    abstract suspend fun deleteById(chatId: ChatId): Int
 
     @Query("UPDATE chat SET name = :newName WHERE id = :chatId")
-    abstract suspend fun updateName(chatId: Long, newName: String): Int
+    abstract suspend fun updateName(chatId: ChatId, newName: String): Int
 
     @Query("""
         SELECT * FROM (

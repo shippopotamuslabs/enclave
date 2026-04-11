@@ -5,6 +5,8 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -28,17 +30,19 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
     ]
 )
 data class MessageEntity(
-    @PrimaryKey(autoGenerate = true)
+    @PrimaryKey
     @ColumnInfo(name = "id")
-    val id: Long = 0,
+    val id: MessageId,
     @ColumnInfo(name = "chat_id")
-    val chatId: Long,
+    val chatId: ChatId,
     @ColumnInfo(name = "content")
     val content: String,
+    @ColumnInfo(name = "image_uri")
+    val imageUri: String? = null,
     @ColumnInfo(name = "role")
     val role: Role,
     @ColumnInfo(name = "user_message_id")
-    val userMessageId: Long? = null,
+    val userMessageId: MessageId? = null,
     @ColumnInfo(name = "thinking_duration_seconds")
     val thinkingDurationSeconds: Long? = null,
     @ColumnInfo(name = "thinking_raw")

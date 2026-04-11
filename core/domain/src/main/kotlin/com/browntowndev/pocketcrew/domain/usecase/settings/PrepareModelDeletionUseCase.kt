@@ -1,9 +1,11 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiCredentialsUseCase
@@ -32,7 +34,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
         }
     }
 
-    private suspend fun prepareLocalModelAsset(id: Long): PreparedModelDeletion {
+    private suspend fun prepareLocalModelAsset(id: LocalModelId): PreparedModelDeletion {
         if (deleteLocalModelUseCase.isLastModel(id)) {
             return PreparedModelDeletion.BlockedLastModel
         }
@@ -83,7 +85,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
         )
     }
 
-    private suspend fun prepareApiProvider(id: Long): PreparedModelDeletion {
+    private suspend fun prepareApiProvider(id: ApiCredentialsId): PreparedModelDeletion {
         if (deleteApiCredentialsUseCase.isLastModel(id)) {
             return PreparedModelDeletion.BlockedLastModel
         }
@@ -126,9 +128,9 @@ class PrepareModelDeletionUseCase @Inject constructor(
     private fun buildReassignmentCandidates(
         localAssets: List<LocalModelAsset>,
         apiAssets: List<ApiModelAsset>,
-        excludeLocalModelId: Long? = null,
+        excludeLocalModelId: LocalModelId? = null,
         excludeLocalConfigId: LocalModelConfigurationId? = null,
-        excludeApiCredentialsId: Long? = null,
+        excludeApiCredentialsId: ApiCredentialsId? = null,
         excludeApiConfigId: ApiModelConfigurationId? = null,
         requireVisionCompatibility: Boolean,
     ): List<ReassignmentCandidate> {

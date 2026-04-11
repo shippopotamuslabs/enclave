@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
@@ -30,7 +31,10 @@ class LocalModelRepositoryImpl @Inject constructor(
 ) : LocalModelRepositoryPort {
 
     @OptIn(ExperimentalUuidApi::class)
-    private fun generateGuid(): LocalModelConfigurationId = LocalModelConfigurationId(Uuid.random().toString())
+    private fun generateConfigGuid(): LocalModelConfigurationId = LocalModelConfigurationId(Uuid.random().toString())
+
+    @OptIn(ExperimentalUuidApi::class)
+    private fun generateModelGuid(): LocalModelId = LocalModelId(Uuid.random().toString())
 
     override suspend fun getAllLocalAssets(): List<LocalModelAsset> {
         return modelsDao.getAllActive().mapNotNull { loadAsset(it.id) }
@@ -49,10 +53,10 @@ class LocalModelRepositoryImpl @Inject constructor(
         allModels.forEach { modelsDao.deleteById(it.id) }
     }
 
-    override suspend fun upsertLocalAsset(asset: LocalModelAsset): Long {
+    override suspend fun upsertLocalAsset(asset: LocalModelAsset): LocalModelId {
         val existingModel = modelsDao.getBySha256(asset.metadata.sha256)
         val entity = LocalModelEntity(
-            id = existingModel?.id ?: 0L,
+            id = existingModel?.id ?: generateModelGuid(),
             modelFileFormat = asset.metadata.modelFileFormat,
             huggingFaceModelName = asset.metadata.huggingFaceModelName,
             remoteFilename = asset.metadata.remoteFileName,
@@ -60,22 +64,23 @@ class LocalModelRepositoryImpl @Inject constructor(
             sha256 = asset.metadata.sha256,
             sizeInBytes = asset.metadata.sizeInBytes,
             visionCapable = asset.metadata.visionCapable,
+            mmprojRemoteFilename = asset.metadata.mmprojRemoteFileName,
+            mmprojLocalFilename = asset.metadata.mmprojLocalFileName,
+            mmprojSha256 = asset.metadata.mmprojSha256,
+            mmprojSizeInBytes = asset.metadata.mmprojSizeInBytes,
             thinkingEnabled = asset.configurations.any { it.thinkingEnabled },
             isVision = asset.metadata.visionCapable
         )
-        val insertedId = modelsDao.upsert(entity)
-        return if (insertedId > 0) insertedId else existingModel?.id ?: 0L
+        modelsDao.upsert(entity)
+        return entity.id
     }
 
     override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId {
-        require(config.localModelId > 0) {
-            "LocalModelConfiguration.localModelId must be set before persisting a config"
-        }
         // Use existing configId if provided (from remote config), otherwise generate a new GUID
         val configId = if (config.id.value.isNotEmpty()) {
             config.id
         } else {
-            generateGuid()
+            generateConfigGuid()
         }
         val entity = LocalModelConfigurationEntity(
             id = configId,
@@ -96,24 +101,28 @@ class LocalModelRepositoryImpl @Inject constructor(
         return configId
     }
 
-    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long {
-        return modelsDao.upsert(
-            LocalModelEntity(
-                id = metadata.id,
-                modelFileFormat = metadata.modelFileFormat,
-                huggingFaceModelName = metadata.huggingFaceModelName,
-                remoteFilename = metadata.remoteFileName,
-                localFilename = metadata.localFileName,
-                sha256 = metadata.sha256,
-                sizeInBytes = metadata.sizeInBytes,
-                visionCapable = metadata.visionCapable,
-                thinkingEnabled = false,
-                isVision = false
-            )
+    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): LocalModelId {
+        val entity = LocalModelEntity(
+            id = metadata.id,
+            modelFileFormat = metadata.modelFileFormat,
+            huggingFaceModelName = metadata.huggingFaceModelName,
+            remoteFilename = metadata.remoteFileName,
+            localFilename = metadata.localFileName,
+            sha256 = metadata.sha256,
+            sizeInBytes = metadata.sizeInBytes,
+            visionCapable = metadata.visionCapable,
+            mmprojRemoteFilename = metadata.mmprojRemoteFileName,
+            mmprojLocalFilename = metadata.mmprojLocalFileName,
+            mmprojSha256 = metadata.mmprojSha256,
+            mmprojSizeInBytes = metadata.mmprojSizeInBytes,
+            thinkingEnabled = false,
+            isVision = false
         )
+        modelsDao.upsert(entity)
+        return entity.id
     }
 
-    override suspend fun deleteLocalModelMetadata(id: Long) {
+    override suspend fun deleteLocalModelMetadata(id: LocalModelId) {
         modelsDao.deleteById(id)
     }
 
@@ -129,11 +138,11 @@ class LocalModelRepositoryImpl @Inject constructor(
         return configsDao.getById(id)?.let { entityToConfiguration(it) }
     }
 
-    override suspend fun getAllConfigurationsForAsset(localModelId: Long): List<LocalModelConfiguration> {
+    override suspend fun getAllConfigurationsForAsset(localModelId: LocalModelId): List<LocalModelConfiguration> {
         return configsDao.getAllForAsset(localModelId).map { entityToConfiguration(it) }
     }
 
-    override suspend fun deleteAllConfigurationsForAsset(localModelId: Long) {
+    override suspend fun deleteAllConfigurationsForAsset(localModelId: LocalModelId) {
         configsDao.deleteAllForAsset(localModelId)
     }
 
@@ -143,7 +152,7 @@ class LocalModelRepositoryImpl @Inject constructor(
         return modelsDao.getSoftDeletedModels().mapNotNull { loadAsset(it.id) }
     }
 
-    override suspend fun getAssetById(id: Long): LocalModelAsset? {
+    override suspend fun getAssetById(id: LocalModelId): LocalModelAsset? {
         return loadAsset(id)
     }
 
@@ -152,7 +161,7 @@ class LocalModelRepositoryImpl @Inject constructor(
         return loadAsset(config.localModelId, preferredConfigId = configId)
     }
 
-    private suspend fun loadAsset(localModelId: Long, preferredConfigId: LocalModelConfigurationId? = null): LocalModelAsset? {
+    private suspend fun loadAsset(localModelId: LocalModelId, preferredConfigId: LocalModelConfigurationId? = null): LocalModelAsset? {
         val entity = modelsDao.getById(localModelId) ?: return null
         val configs = configsDao.getAllForAsset(localModelId)
         val orderedConfigEntities = if (preferredConfigId == null) {
@@ -172,7 +181,11 @@ class LocalModelRepositoryImpl @Inject constructor(
                 sha256 = entity.sha256,
                 sizeInBytes = entity.sizeInBytes,
                 modelFileFormat = entity.modelFileFormat,
-                visionCapable = entity.visionCapable
+                visionCapable = entity.visionCapable,
+                mmprojRemoteFileName = entity.mmprojRemoteFilename,
+                mmprojLocalFileName = entity.mmprojLocalFilename,
+                mmprojSha256 = entity.mmprojSha256,
+                mmprojSizeInBytes = entity.mmprojSizeInBytes,
             ),
             configurations = orderedConfigEntities.map { entityToConfiguration(it) }
         )

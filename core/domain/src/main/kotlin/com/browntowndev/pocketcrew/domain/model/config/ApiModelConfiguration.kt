@@ -4,7 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 
 data class ApiModelConfiguration(
     val id: ApiModelConfigurationId = ApiModelConfigurationId(""),
-    val apiCredentialsId: Long,
+    val apiCredentialsId: ApiCredentialsId,
     override val displayName: String,
     override val maxTokens: Int = 4096,
     override val contextWindow: Int = 4096,

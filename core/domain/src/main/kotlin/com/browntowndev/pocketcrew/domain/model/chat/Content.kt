@@ -11,5 +11,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
  */
 data class Content(
     val text: String,
-    val pipelineStep: PipelineStep? = null
+    val pipelineStep: PipelineStep? = null,
+    val imageUri: String? = null,
 )

@@ -4,6 +4,7 @@ import android.util.Log
 import com.browntowndev.pocketcrew.core.data.download.remote.DynamicModelUrlProvider
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -334,7 +335,8 @@ class ModelDownloadWorkerTest {
                 return null
             }
 
-            val metadata = com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata(
+            val metadata = LocalModelMetadata(
+                id = LocalModelId("0"),
                 huggingFaceModelName = json.optString("huggingFaceModelName", ""),
                 remoteFileName = json.getString("remoteFileName"),
                 localFileName = json.getString("localFileName"),
@@ -348,7 +350,7 @@ class ModelDownloadWorkerTest {
             )
 
             val configuration = LocalModelConfiguration(
-                localModelId = 0,
+                localModelId = LocalModelId("0"),
                 displayName = json.getString("presetName"),
                 temperature = json.optDouble("temperature", 0.7),
                 topK = json.optInt("topK", 40),

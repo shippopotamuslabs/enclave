@@ -16,12 +16,14 @@
 
 package com.browntowndev.pocketcrew.testing
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
@@ -49,7 +51,7 @@ import kotlinx.coroutines.flow.flowOf
 
 
 fun createFakeLocalModelAsset(
-    id: Long = 0,
+    id: LocalModelId = LocalModelId("0"),
     huggingFaceModelName: String = "test/model",
     remoteFileName: String = "model.bin",
     localFileName: String = "model.bin",
@@ -72,7 +74,7 @@ fun createFakeLocalModelAsset(
 
 fun createFakeLocalModelConfiguration(
     id: LocalModelConfigurationId = LocalModelConfigurationId(""),
-    localModelId: Long = 0,
+    localModelId: LocalModelId = LocalModelId("0"),
     displayName: String = "Default Configuration",
     maxTokens: Int = 2048,
     contextWindow: Int = 2048,
@@ -209,7 +211,7 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
 }
 
 class FakeLocalModelRepository : LocalModelRepositoryPort {
-    private val _assets = MutableStateFlow<Map<Long, LocalModelAsset>>(emptyMap())
+    private val _assets = MutableStateFlow<Map<LocalModelId, LocalModelAsset>>(emptyMap())
 
     fun registerAsset(modelType: ModelType, asset: LocalModelAsset) {
         _assets.value = _assets.value + (asset.metadata.id to asset)
@@ -225,12 +227,12 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
 
     override suspend fun clearAll() { clearModels() }
 
-    override suspend fun upsertLocalAsset(asset: LocalModelAsset): Long = asset.metadata.id
+    override suspend fun upsertLocalAsset(asset: LocalModelAsset): LocalModelId = asset.metadata.id
     override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId = config.id
 
-    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long = 0L
+    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): LocalModelId = metadata.id
 
-    override suspend fun deleteLocalModelMetadata(id: Long) {
+    override suspend fun deleteLocalModelMetadata(id: LocalModelId) {
         val entryToDelete = _assets.value.entries.find { it.value.metadata.id == id }
         if (entryToDelete != null) {
             _assets.value = _assets.value - entryToDelete.key
@@ -252,18 +254,18 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
         return _configs.value[id]
     }
 
-    override suspend fun getAllConfigurationsForAsset(localModelId: Long): List<LocalModelConfiguration> {
+    override suspend fun getAllConfigurationsForAsset(localModelId: LocalModelId): List<LocalModelConfiguration> {
         return _configs.value.values.filter { it.localModelId == localModelId }
     }
 
-    override suspend fun deleteAllConfigurationsForAsset(localModelId: Long) {
+    override suspend fun deleteAllConfigurationsForAsset(localModelId: LocalModelId) {
         val keysToRemove = _configs.value.entries.filter { it.value.localModelId == localModelId }.map { it.key }
         _configs.value = _configs.value - keysToRemove.toSet()
     }
 
     override suspend fun getSoftDeletedModels(): List<LocalModelAsset> = emptyList()
 
-    override suspend fun getAssetById(id: Long): LocalModelAsset? {
+    override suspend fun getAssetById(id: LocalModelId): LocalModelAsset? {
         return _assets.value.values.find { it.metadata.id == id }
     }
 }
@@ -271,13 +273,13 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
 class FakeApiModelRepository : ApiModelRepositoryPort {
     private val _credentials = MutableStateFlow<List<ApiCredentials>>(emptyList())
     private val _configs = MutableStateFlow<List<ApiModelConfiguration>>(emptyList())
-    private var nextCredId = 1L
-    val savedKeys = mutableMapOf<Long, String>()
+    private var nextCredId = 1
+    val savedKeys = mutableMapOf<ApiCredentialsId, String>()
 
     override fun observeAllCredentials(): Flow<List<ApiCredentials>> = _credentials
     override fun observeAllConfigurations(): Flow<List<ApiModelConfiguration>> = _configs
     override suspend fun getAllCredentials(): List<ApiCredentials> = _credentials.value
-    override suspend fun getCredentialsById(id: Long): ApiCredentials? = _credentials.value.find { it.id == id }
+    override suspend fun getCredentialsById(id: ApiCredentialsId): ApiCredentials? = _credentials.value.find { it.id == id }
     override suspend fun findMatchingCredentials(
         provider: ApiProvider,
         modelId: String,
@@ -305,8 +307,8 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
         credentials: ApiCredentials,
         apiKey: String,
         sourceCredentialAlias: String?
-    ): Long {
-        val id = if (credentials.id == 0L) nextCredId++ else credentials.id
+    ): ApiCredentialsId {
+        val id = if (credentials.id.value.isEmpty()) ApiCredentialsId((nextCredId++).toString()) else credentials.id
         val saved = credentials.copy(id = id)
         _credentials.value = _credentials.value.filter { it.id != id } + saved
         savedKeys[id] = if (apiKey.isNotBlank()) {
@@ -323,13 +325,13 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
         return id
     }
 
-    override suspend fun deleteCredentials(id: Long) {
+    override suspend fun deleteCredentials(id: ApiCredentialsId) {
         _credentials.value = _credentials.value.filter { it.id != id }
         savedKeys.remove(id)
         deleteConfigurationsForCredentials(id)
     }
 
-    override suspend fun getConfigurationsForCredentials(credentialsId: Long): List<ApiModelConfiguration> =
+    override suspend fun getConfigurationsForCredentials(credentialsId: ApiCredentialsId): List<ApiModelConfiguration> =
         _configs.value.filter { it.apiCredentialsId == credentialsId }
 
     override suspend fun getConfigurationById(id: ApiModelConfigurationId): ApiModelConfiguration? =
@@ -342,7 +344,7 @@ class FakeApiModelRepository : ApiModelRepositoryPort {
         return id
     }
  
-    override suspend fun deleteConfigurationsForCredentials(credentialsId: Long) {
+    override suspend fun deleteConfigurationsForCredentials(credentialsId: ApiCredentialsId) {
         _configs.value = _configs.value.filter { it.apiCredentialsId != credentialsId }
     }
  

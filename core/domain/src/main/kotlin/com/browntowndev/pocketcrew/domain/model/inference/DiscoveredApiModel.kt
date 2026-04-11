@@ -7,5 +7,6 @@ data class DiscoveredApiModel(
     val maxOutputTokens: Int? = null,
     val created: Long? = null,
     val promptPrice: Double? = null,
-    val completionPrice: Double? = null
+    val completionPrice: Double? = null,
+    val visionCapable: Boolean? = null,
 )

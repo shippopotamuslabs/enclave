@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.usecase.download
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -64,6 +65,7 @@ class ValidateDownloadConditionsUseCaseTest {
     private fun createLocalModelAsset(modelType: ModelType, sha256: String): LocalModelAsset {
         return LocalModelAsset(
             metadata = LocalModelMetadata(
+                id = LocalModelId("1"),
                 huggingFaceModelName = "test/model",
                 remoteFileName = "${modelType.name.lowercase()}.litertlm",
                 localFileName = "${modelType.name.lowercase()}.litertlm",
@@ -73,7 +75,7 @@ class ValidateDownloadConditionsUseCaseTest {
             ),
             configurations = listOf(
                 LocalModelConfiguration(
-                    localModelId = 1L,
+                    localModelId = LocalModelId("1"),
                     displayName = "Test Config",
                     maxTokens = 2048,
                     contextWindow = 2048,

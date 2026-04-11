@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.port.repository
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import kotlinx.coroutines.flow.Flow
 
@@ -12,17 +13,17 @@ interface LocalModelRepositoryPort {
     
     suspend fun clearAll()
 
-    suspend fun upsertLocalAsset(asset: LocalModelAsset): Long
+    suspend fun upsertLocalAsset(asset: LocalModelAsset): LocalModelId
     suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId
 
-    suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long
-    suspend fun deleteLocalModelMetadata(id: Long)
+    suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): LocalModelId
+    suspend fun deleteLocalModelMetadata(id: LocalModelId)
     
     suspend fun saveConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId
     suspend fun deleteConfiguration(id: LocalModelConfigurationId)
     suspend fun getConfigurationById(id: LocalModelConfigurationId): LocalModelConfiguration?
-    suspend fun getAllConfigurationsForAsset(localModelId: Long): List<LocalModelConfiguration>
-    suspend fun deleteAllConfigurationsForAsset(localModelId: Long)
+    suspend fun getAllConfigurationsForAsset(localModelId: LocalModelId): List<LocalModelConfiguration>
+    suspend fun deleteAllConfigurationsForAsset(localModelId: LocalModelId)
 
     /**
      * Returns models that were previously downloaded but have been soft-deleted.
@@ -38,7 +39,7 @@ interface LocalModelRepositoryPort {
      * @param id The LocalModelEntity database ID
      * @return The LocalModelAsset if found, null otherwise
      */
-    suspend fun getAssetById(id: Long): LocalModelAsset?
+    suspend fun getAssetById(id: LocalModelId): LocalModelAsset?
 
     /**
      * Gets a LocalModelAsset that contains the specified configuration ID.

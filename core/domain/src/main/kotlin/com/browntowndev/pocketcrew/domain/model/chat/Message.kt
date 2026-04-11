@@ -20,8 +20,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
  * @property modelType The model type used to generate this message (for Crew mode tracking)
  */
 data class Message(
-    val id: Long = 0,
-    val chatId: Long,
+    val id: MessageId,
+    val chatId: ChatId,
     val content: Content,
     val role: Role = Role.USER,
     val messageState: MessageState = MessageState.PROCESSING,

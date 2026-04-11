@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.usecase.download
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
@@ -216,6 +217,7 @@ class InitializeFileProgressUseCaseTest {
     ): LocalModelAsset {
         return LocalModelAsset(
             metadata = LocalModelMetadata(
+                id = LocalModelId("1"),
                 huggingFaceModelName = "test/model",
                 remoteFileName = localFileName,
                 localFileName = localFileName,
@@ -225,7 +227,7 @@ class InitializeFileProgressUseCaseTest {
             ),
             configurations = listOf(
                 LocalModelConfiguration(
-                    localModelId = 1L,
+                    localModelId = LocalModelId("1"),
                     displayName = "${modelType.name} Config",
                     maxTokens = 2048,
                     contextWindow = 2048,

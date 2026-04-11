@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
@@ -149,6 +150,7 @@ class ModelFileScannerTest {
     private fun createAsset(filename: String, sizeBytes: Long, sha256: String = "unused-for-startup"): LocalModelAsset {
         return LocalModelAsset(
             metadata = LocalModelMetadata(
+                id = LocalModelId("1"),
                 huggingFaceModelName = "test/model",
                 remoteFileName = filename,
                 localFileName = filename,
@@ -158,7 +160,7 @@ class ModelFileScannerTest {
             ),
             configurations = listOf(
                 LocalModelConfiguration(
-                    localModelId = 1L,
+                    localModelId = LocalModelId("1"),
                     displayName = "Test",
                     maxTokens = 2048,
                     contextWindow = 4096,

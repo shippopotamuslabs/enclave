@@ -20,10 +20,15 @@ import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
+import com.browntowndev.pocketcrew.core.data.local.MIGRATION_2_3
+import com.browntowndev.pocketcrew.core.data.local.MIGRATION_3_4
+import com.browntowndev.pocketcrew.core.data.local.MIGRATION_4_5
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
+import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
+import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelCatalogRepositoryImpl
@@ -44,6 +49,7 @@ import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
+import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
@@ -88,7 +94,10 @@ object DataModule {
             PocketCrewDatabase::class.java,
             "pocket_crew_db"
         )
-        .fallbackToDestructiveMigration()
+        .addMigrations(MIGRATION_2_3)
+        .addMigrations(MIGRATION_3_4)
+        .addMigrations(MIGRATION_4_5)
+        .fallbackToDestructiveMigration(dropAllTables = false)
         .build()
     }
 
@@ -97,6 +106,10 @@ object DataModule {
 
     @Provides
     fun provideMessageDao(database: PocketCrewDatabase): MessageDao = database.messageDao()
+
+    @Provides
+    fun provideMessageVisionAnalysisDao(database: PocketCrewDatabase): MessageVisionAnalysisDao =
+        database.messageVisionAnalysisDao()
 
     @Provides
     fun provideLocalModelsDao(database: PocketCrewDatabase): LocalModelsDao = database.localModelsDao()
@@ -175,6 +188,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindDeviceEnvironmentRepository(impl: DeviceEnvironmentRepository): DeviceEnvironmentRepositoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindImageAttachmentStorage(impl: CachedImageAttachmentStorage): ImageAttachmentStoragePort
 
     @Binds
     @Singleton

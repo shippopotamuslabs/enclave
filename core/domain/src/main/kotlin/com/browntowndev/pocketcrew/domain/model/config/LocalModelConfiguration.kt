@@ -11,7 +11,7 @@ package com.browntowndev.pocketcrew.domain.model.config
  */
 data class LocalModelConfiguration(
     val id: LocalModelConfigurationId = LocalModelConfigurationId(""),
-    val localModelId: Long,
+    val localModelId: LocalModelId,
     override val displayName: String,
     override val maxTokens: Int,
     override val contextWindow: Int,

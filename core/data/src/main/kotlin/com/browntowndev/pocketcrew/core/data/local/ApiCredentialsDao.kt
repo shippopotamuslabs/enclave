@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
 import androidx.room.Upsert
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -16,7 +17,7 @@ interface ApiCredentialsDao {
     suspend fun getAll(): List<ApiCredentialsEntity>
 
     @Query("SELECT * FROM api_credentials WHERE id = :id")
-    suspend fun getById(id: Long): ApiCredentialsEntity?
+    suspend fun getById(id: ApiCredentialsId): ApiCredentialsEntity?
 
     @Query("SELECT * FROM api_credentials WHERE credential_alias = :credentialAlias LIMIT 1")
     suspend fun getByCredentialAlias(credentialAlias: String): ApiCredentialsEntity?
@@ -34,5 +35,5 @@ interface ApiCredentialsDao {
     suspend fun upsert(entity: ApiCredentialsEntity): Long
 
     @Query("DELETE FROM api_credentials WHERE id = :id")
-    suspend fun deleteById(id: Long)
+    suspend fun deleteById(id: ApiCredentialsId)
 }

@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.remote
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -31,6 +32,7 @@ class ModelConfigFetcherTest {
         val mockAssets = mapOf(
             ModelType.MAIN to LocalModelAsset(
                 metadata = LocalModelMetadata(
+                    id = LocalModelId("0"),
                     huggingFaceModelName = "model/main",
                     remoteFileName = "main.bin",
                     localFileName = "main.bin",
@@ -41,7 +43,7 @@ class ModelConfigFetcherTest {
                 configurations = listOf(
                     LocalModelConfiguration(
                         id = LocalModelConfigurationId("config-main-1"),
-                        localModelId = 0,
+                        localModelId = LocalModelId("0"),
                         displayName = "Main Model",
                         maxTokens = 2048,
                         contextWindow = 2048,
@@ -122,6 +124,7 @@ class ModelConfigFetcherTest {
         val expectedModelAssets = mapOf(
             ModelType.MAIN to LocalModelAsset(
                 metadata = LocalModelMetadata(
+                    id = LocalModelId("0"),
                     huggingFaceModelName = "model/main",
                     remoteFileName = "main.bin",
                     localFileName = "main.bin",
@@ -132,7 +135,7 @@ class ModelConfigFetcherTest {
                 configurations = listOf(
                     LocalModelConfiguration(
                         id = LocalModelConfigurationId("config-main-1"),
-                        localModelId = 0,
+                        localModelId = LocalModelId("0"),
                         displayName = "Main Model",
                         maxTokens = 2048,
                         contextWindow = 2048,
@@ -146,6 +149,7 @@ class ModelConfigFetcherTest {
             ),
             ModelType.VISION to LocalModelAsset(
                 metadata = LocalModelMetadata(
+                    id = LocalModelId("0"),
                     huggingFaceModelName = "model/vision",
                     remoteFileName = "vision.bin",
                     localFileName = "vision.bin",
@@ -156,7 +160,7 @@ class ModelConfigFetcherTest {
                 configurations = listOf(
                     LocalModelConfiguration(
                         id = LocalModelConfigurationId("config-vision-1"),
-                        localModelId = 0,
+                        localModelId = LocalModelId("0"),
                         displayName = "Vision Model",
                         maxTokens = 2048,
                         contextWindow = 2048,
@@ -187,6 +191,7 @@ class ModelConfigFetcherTest {
         val mockAssets = mapOf(
             ModelType.MAIN to LocalModelAsset(
                 metadata = LocalModelMetadata(
+                    id = LocalModelId("0"),
                     huggingFaceModelName = "model/main",
                     remoteFileName = "main.bin",
                     localFileName = "main.bin",
@@ -197,7 +202,7 @@ class ModelConfigFetcherTest {
                 configurations = listOf(
                     LocalModelConfiguration(
                         id = LocalModelConfigurationId("config-main-1"),
-                        localModelId = 0,
+                        localModelId = LocalModelId("0"),
                         displayName = "Main Model",
                         maxTokens = 2048,
                         contextWindow = 2048,
@@ -211,6 +216,7 @@ class ModelConfigFetcherTest {
             ),
             ModelType.VISION to LocalModelAsset(
                 metadata = LocalModelMetadata(
+                    id = LocalModelId("0"),
                     huggingFaceModelName = "model/vision",
                     remoteFileName = "vision.bin",
                     localFileName = "vision.bin",
@@ -221,7 +227,7 @@ class ModelConfigFetcherTest {
                 configurations = listOf(
                     LocalModelConfiguration(
                         id = LocalModelConfigurationId("config-vision-1"),
-                        localModelId = 0,
+                        localModelId = LocalModelId("0"),
                         displayName = "Vision Model",
                         maxTokens = 2048,
                         contextWindow = 2048,
@@ -235,6 +241,7 @@ class ModelConfigFetcherTest {
             ),
             ModelType.FAST to LocalModelAsset(
                 metadata = LocalModelMetadata(
+                    id = LocalModelId("0"),
                     huggingFaceModelName = "model/fast",
                     remoteFileName = "fast.bin",
                     localFileName = "fast.bin",
@@ -245,7 +252,7 @@ class ModelConfigFetcherTest {
                 configurations = listOf(
                     LocalModelConfiguration(
                         id = LocalModelConfigurationId("config-fast-1"),
-                        localModelId = 0,
+                        localModelId = LocalModelId("0"),
                         displayName = "Fast Model",
                         maxTokens = 1024,
                         contextWindow = 2048,
@@ -259,6 +266,7 @@ class ModelConfigFetcherTest {
             ),
             ModelType.DRAFT_ONE to LocalModelAsset(
                 metadata = LocalModelMetadata(
+                    id = LocalModelId("0"),
                     huggingFaceModelName = "model/draft",
                     remoteFileName = "draft.bin",
                     localFileName = "draft.bin",
@@ -269,7 +277,7 @@ class ModelConfigFetcherTest {
                 configurations = listOf(
                     LocalModelConfiguration(
                         id = LocalModelConfigurationId("config-draft-1"),
-                        localModelId = 0,
+                        localModelId = LocalModelId("0"),
                         displayName = "Draft Model",
                         maxTokens = 512,
                         contextWindow = 2048,

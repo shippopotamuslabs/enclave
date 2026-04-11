@@ -1,10 +1,12 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
@@ -37,9 +39,9 @@ data class LocalModelPresetDraft(
 )
 
 sealed interface ModelDeletionTarget {
-    data class LocalModelAsset(val id: Long) : ModelDeletionTarget
+    data class LocalModelAsset(val id: LocalModelId) : ModelDeletionTarget
     data class LocalModelPreset(val id: LocalModelConfigurationId) : ModelDeletionTarget
-    data class ApiProvider(val id: Long) : ModelDeletionTarget
+    data class ApiProvider(val id: ApiCredentialsId) : ModelDeletionTarget
     data class ApiPreset(val id: ApiModelConfigurationId) : ModelDeletionTarget
 }
 
@@ -49,8 +51,8 @@ data class ReassignmentCandidate(
     val assetDisplayName: String,
     val configDisplayName: String,
     val providerName: String? = null,
-    val apiCredentialsId: Long? = null,
-    val localModelId: Long? = null,
+    val apiCredentialsId: ApiCredentialsId? = null,
+    val localModelId: LocalModelId? = null,
 )
 
 sealed interface PreparedModelDeletion {
@@ -64,7 +66,7 @@ sealed interface PreparedModelDeletion {
 }
 
 data class ApiProviderDraft(
-    val id: Long = 0,
+    val id: ApiCredentialsId = ApiCredentialsId(""),
     val displayName: String,
     val provider: ApiProvider,
     val modelId: String,
@@ -84,7 +86,7 @@ data class ApiProviderDraftSaveResult(
 
 data class ApiPresetDraft(
     val id: ApiModelConfigurationId = ApiModelConfigurationId(""),
-    val credentialsId: Long = 0,
+    val credentialsId: ApiCredentialsId = ApiCredentialsId(""),
     val displayName: String = "",
     val maxTokens: String = "4096",
     val contextWindow: String = "4096",

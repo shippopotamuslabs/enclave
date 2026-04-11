@@ -1,5 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.inference.FastModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.ThinkingModelEngine
 import com.browntowndev.pocketcrew.domain.model.MessageState
@@ -22,6 +24,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.emitAll
@@ -51,29 +54,39 @@ class GenerateChatResponseUseCase @Inject constructor(
     private val activeModelProvider: ActiveModelProviderPort,
     private val settingsRepository: SettingsRepository,
     private val searchToolPromptComposer: SearchToolPromptComposer,
+    private val analyzeImageUseCase: AnalyzeImageUseCase,
 ) {
     companion object {
         private const val TAG = "GenerateChatResponse"
         private const val FLOW_BUFFER_SIZE = 64
+        private const val PROMPT_LOG_CHUNK_SIZE = 2_000
         private val TOOL_CALL_TRACE_REGEX = Regex("<tool_call>.*?</tool_call>", setOf(RegexOption.DOT_MATCHES_ALL))
         private val TOOL_RESULT_TRACE_REGEX = Regex("<tool_result>.*?</tool_result>", setOf(RegexOption.DOT_MATCHES_ALL))
     }
 
     operator fun invoke(
         prompt: String,
-        userMessageId: Long,
-        assistantMessageId: Long,
-        chatId: Long,
+        userMessageId: MessageId,
+        assistantMessageId: MessageId,
+        chatId: ChatId,
         mode: Mode
     ): Flow<AccumulatedMessages> {
         return flow {
+            val userMessage = messageRepository.getMessageById(userMessageId)
+                ?: throw IllegalStateException("User message $userMessageId was not found")
             val baseFlow: Flow<MessageGenerationState> = when (mode) {
                 Mode.FAST -> flow {
                     try {
+                        if (userMessage.content.imageUri != null) {
+                            emit(MessageGenerationState.Processing(ModelType.FAST))
+                        }
+                        val effectivePrompt = withContext(Dispatchers.IO) {
+                            preparePrompt(prompt, userMessage)
+                        }
                         inferenceFactory.withInferenceService(ModelType.FAST) { service ->
                             emitAll(
                                 generateWithService(
-                                    prompt, userMessageId, assistantMessageId, chatId, service, ModelType.FAST
+                                    effectivePrompt, userMessageId, assistantMessageId, chatId, service, ModelType.FAST
                                 )
                             )
                         }
@@ -97,10 +110,16 @@ class GenerateChatResponseUseCase @Inject constructor(
 
                 Mode.THINKING -> flow {
                     try {
+                        if (userMessage.content.imageUri != null) {
+                            emit(MessageGenerationState.Processing(ModelType.THINKING))
+                        }
+                        val effectivePrompt = withContext(Dispatchers.IO) {
+                            preparePrompt(prompt, userMessage)
+                        }
                         inferenceFactory.withInferenceService(ModelType.THINKING) { service ->
                             emitAll(
                                 generateWithService(
-                                    prompt, userMessageId, assistantMessageId, chatId, service, ModelType.THINKING
+                                    effectivePrompt, userMessageId, assistantMessageId, chatId, service, ModelType.THINKING
                                 )
                             )
                         }
@@ -122,10 +141,32 @@ class GenerateChatResponseUseCase @Inject constructor(
                     }
                 }
 
-                Mode.CREW -> pipelineExecutor.executePipeline(
-                    chatId = chatId.toString(),
-                    userMessage = prompt,
-                )
+                Mode.CREW -> flow {
+                    try {
+                        if (userMessage.content.imageUri != null) {
+                            emit(MessageGenerationState.Processing(ModelType.MAIN))
+                        }
+                        val effectivePrompt = withContext(Dispatchers.IO) {
+                            preparePrompt(prompt, userMessage)
+                        }
+                        emitAll(
+                            pipelineExecutor.executePipeline(
+                                chatId = chatId.value,
+                                userMessage = effectivePrompt,
+                            )
+                        )
+                    } catch (e: InferenceBusyException) {
+                        emitBusyState(ModelType.MAIN)
+                    } catch (e: IllegalStateException) {
+                        emit(MessageGenerationState.Failed(e, ModelType.MAIN))
+                    } catch (e: java.io.IOException) {
+                        emit(MessageGenerationState.Failed(e, ModelType.MAIN))
+                    } catch (e: Exception) {
+                        if (e is CancellationException) throw e
+                        loggingPort.error(TAG, "Unexpected error in CREW mode", e)
+                        emit(MessageGenerationState.Failed(e, ModelType.MAIN))
+                    }
+                }
             }
 
             val assistantMessageIds = mutableMapOf(ModelType.DRAFT_ONE to assistantMessageId)
@@ -241,12 +282,14 @@ class GenerateChatResponseUseCase @Inject constructor(
                 }
             } finally {
                 try {
-                    persistAccumulatedMessages(accumulatorManager)
+                    withContext(Dispatchers.IO) {
+                        persistAccumulatedMessages(accumulatorManager)
+                    }
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to persist messages", e)
                 }
             }
-        }.buffer(FLOW_BUFFER_SIZE)
+        }.buffer(FLOW_BUFFER_SIZE).flowOn(Dispatchers.Default)
     }
 
     private suspend fun kotlinx.coroutines.flow.FlowCollector<MessageGenerationState>.emitBusyState(
@@ -302,13 +345,13 @@ class GenerateChatResponseUseCase @Inject constructor(
      */
     private inner class MessageAccumulatorManager(
         private val mode: Mode,
-        private val chatId: Long,
-        private val userMessageId: Long,
-        private val defaultAssistantMessageId: Long,
-        private val assistantMessageIds: MutableMap<ModelType, Long> = mutableMapOf()
+        private val chatId: ChatId,
+        private val userMessageId: MessageId,
+        private val defaultAssistantMessageId: MessageId,
+        private val assistantMessageIds: MutableMap<ModelType, MessageId> = mutableMapOf()
     ) {
-        private val _messages = mutableMapOf<Long, MessageAccumulator>()
-        val messages: Map<Long, MessageAccumulator> = _messages
+        private val _messages = mutableMapOf<MessageId, MessageAccumulator>()
+        val messages: Map<MessageId, MessageAccumulator> = _messages
 
         suspend fun getOrCreateAccumulator(modelType: ModelType): MessageAccumulator {
             val messageId = if (mode != Mode.CREW) {
@@ -348,7 +391,7 @@ class GenerateChatResponseUseCase @Inject constructor(
      * This is the primary emission type after the flow transformation.
      */
     data class AccumulatedMessages(
-        val messages: Map<Long, MessageSnapshot>
+        val messages: Map<MessageId, MessageSnapshot>
     )
 
     /**
@@ -356,7 +399,7 @@ class GenerateChatResponseUseCase @Inject constructor(
      * NOT a data class - allows efficient StringBuilder mutation.
      */
     private class MessageAccumulator(
-        val messageId: Long,
+        val messageId: MessageId,
         val modelType: ModelType,
         val content: StringBuilder = StringBuilder(),
         val thinkingRaw: StringBuilder = StringBuilder(),
@@ -410,18 +453,23 @@ class GenerateChatResponseUseCase @Inject constructor(
     }
 
     private suspend fun rehydrateHistory(
-        chatId: Long,
-        userMessageId: Long,
-        assistantMessageId: Long,
+        chatId: ChatId,
+        userMessageId: MessageId,
+        assistantMessageId: MessageId,
         service: LlmInferencePort
     ) {
         val messages = messageRepository.getMessagesForChat(chatId)
-            .filter { it.content.text.isNotBlank() }
+            .filter { it.content.text.isNotBlank() || it.content.imageUri != null }
             .filter { it.id != userMessageId }
             .filter { it.id != assistantMessageId }
-        
+        val analysesByMessage = messageRepository.getVisionAnalysesForMessages(messages.map { it.id })
+
         val chatMessages = messages.map { message ->
-            ChatMessage(role = message.role, content = message.content.text)
+            val visionAnalyses = analysesByMessage[message.id].orEmpty()
+            ChatMessage(
+                role = message.role,
+                content = buildHistoryContent(message, visionAnalyses)
+            )
         }
         
         service.setHistory(chatMessages)
@@ -430,9 +478,9 @@ class GenerateChatResponseUseCase @Inject constructor(
 
     private fun generateWithService(
         prompt: String,
-        userMessageId: Long,
-        assistantMessageId: Long,
-        chatId: Long,
+        userMessageId: MessageId,
+        assistantMessageId: MessageId,
+        chatId: ChatId,
         service: LlmInferencePort,
         modelType: ModelType,
     ): Flow<MessageGenerationState> = flow {
@@ -450,6 +498,9 @@ class GenerateChatResponseUseCase @Inject constructor(
             TAG,
             "generateWithService config modelType=$modelType configName=${config?.name} isLocal=${config?.isLocal} searchEnabled=$searchEnabled thinkingEnabled=${config?.thinkingEnabled} reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget"
         )
+        if (config?.isLocal == true) {
+            logLocalPrompt(prompt, modelType)
+        }
         
         // ARCHITECTURE: Explicitly provide modelType to options for event tagging
         val systemPrompt = when {
@@ -496,6 +547,100 @@ class GenerateChatResponseUseCase @Inject constructor(
             }
         }
     }.flowOn(Dispatchers.Default)
+
+    private suspend fun preparePrompt(
+        prompt: String,
+        userMessage: com.browntowndev.pocketcrew.domain.model.chat.Message,
+    ): String {
+        val imageUri = userMessage.content.imageUri ?: return prompt
+        val description = messageRepository
+            .getVisionAnalysesForMessages(listOf(userMessage.id))[userMessage.id]
+            .orEmpty()
+            .firstOrNull { it.imageUri == imageUri }
+            ?.analysisText
+            ?: analyzeImageUseCase(imageUri, prompt).also { analysisText ->
+                messageRepository.saveVisionAnalysis(
+                    userMessageId = userMessage.id,
+                    imageUri = imageUri,
+                    promptText = prompt,
+                    analysisText = analysisText,
+                    modelType = ModelType.VISION,
+                )
+             }
+        loggingPort.debug(
+            TAG,
+            "preparePrompt image analysis chars=${description.length} containsDataUri=${description.contains("data:image", ignoreCase = true)} containsBase64Marker=${description.contains("base64,", ignoreCase = true)} containsMarkdownImage=${description.contains("![](") || description.contains("![")}"
+        )
+        return if (prompt.isBlank()) {
+            """
+            The user attached an image without additional text.
+
+            Attached image description:
+            $description
+
+            Respond helpfully based on the image description.
+            """.trimIndent()
+        } else {
+            """
+            Attached image description:
+            $description
+
+            User request:
+            $prompt
+            """.trimIndent()
+        }
+    }
+
+    private fun logLocalPrompt(
+        prompt: String,
+        modelType: ModelType,
+    ) {
+        val containsImageDescription = prompt.contains("Attached image description:")
+        val chunks = prompt.chunked(PROMPT_LOG_CHUNK_SIZE)
+        loggingPort.debug(
+            TAG,
+            "Local prompt handoff modelType=$modelType chars=${prompt.length} containsImageDescription=$containsImageDescription containsDataUri=${prompt.contains("data:image", ignoreCase = true)} containsBase64Marker=${prompt.contains("base64,", ignoreCase = true)}"
+        )
+        chunks.forEachIndexed { index, chunk ->
+            loggingPort.debug(
+                TAG,
+                "Local prompt handoff chunk ${index + 1}/${chunks.size} modelType=$modelType:\n$chunk"
+            )
+        }
+    }
+
+    private fun buildHistoryContent(
+        message: com.browntowndev.pocketcrew.domain.model.chat.Message,
+        visionAnalyses: List<com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis>,
+    ): String {
+        if (visionAnalyses.isEmpty()) {
+            return message.content.text.ifBlank {
+                if (message.content.imageUri != null) {
+                    "[User attached an image]"
+                } else {
+                    ""
+                }
+            }
+        }
+
+        val analysisBlock = visionAnalyses.joinToString(separator = "\n\n") { analysis ->
+            """
+            Attached image description:
+            ${analysis.analysisText}
+            """.trimIndent()
+        }
+
+        return if (message.content.text.isBlank()) {
+            analysisBlock
+        } else {
+            """
+            $analysisBlock
+
+            User request:
+            ${message.content.text}
+            """.trimIndent()
+        }
+    }
 }
 
 /**
@@ -503,7 +648,7 @@ class GenerateChatResponseUseCase @Inject constructor(
  * Used by AccumulatedMessages for UI consumption.
  */
 data class MessageSnapshot(
-    val messageId: Long,
+    val messageId: MessageId,
     val modelType: ModelType,
     val content: String,
     val thinkingRaw: String,

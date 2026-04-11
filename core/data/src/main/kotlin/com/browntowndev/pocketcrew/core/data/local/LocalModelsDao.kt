@@ -3,12 +3,13 @@ package com.browntowndev.pocketcrew.core.data.local
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LocalModelsDao {
     @Query("SELECT * FROM local_models WHERE id = :id")
-    suspend fun getById(id: Long): LocalModelEntity?
+    suspend fun getById(id: LocalModelId): LocalModelEntity?
 
     @Query("SELECT * FROM local_models WHERE sha256 = :sha256")
     suspend fun getBySha256(sha256: String): LocalModelEntity?
@@ -50,5 +51,5 @@ interface LocalModelsDao {
     suspend fun upsert(entity: LocalModelEntity): Long
 
     @Query("DELETE FROM local_models WHERE id = :id")
-    suspend fun deleteById(id: Long)
+    suspend fun deleteById(id: LocalModelId)
 }
