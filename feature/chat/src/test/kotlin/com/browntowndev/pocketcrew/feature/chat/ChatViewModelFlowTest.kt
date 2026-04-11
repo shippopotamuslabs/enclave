@@ -2,8 +2,11 @@ package com.browntowndev.pocketcrew.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
@@ -35,6 +38,7 @@ class ChatViewModelFlowTest {
     private lateinit var chatUseCases: ChatUseCases
     private lateinit var inferenceLockManager: InferenceLockManager
     private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
+    private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
     private lateinit var errorHandler: ViewModelErrorHandler
 
     @BeforeEach
@@ -43,6 +47,7 @@ class ChatViewModelFlowTest {
         chatUseCases = mockk(relaxed = true)
         inferenceLockManager = mockk(relaxed = true)
         modelDisplayNamesUseCase = mockk(relaxed = true)
+        stageImageAttachmentUseCase = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
 
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
@@ -53,6 +58,7 @@ class ChatViewModelFlowTest {
         chatViewModel = ChatViewModel(
             settingsUseCases = settingsUseCases,
             chatUseCases = chatUseCases,
+            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             savedStateHandle = savedStateHandle,
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
@@ -65,8 +71,8 @@ class ChatViewModelFlowTest {
         val stateWithGenerating = ChatUiState(
             messages = listOf(
                 ChatMessage(
-                    id = 1L,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi("Thinking..."),
                     formattedTimestamp = "Now",
@@ -84,8 +90,8 @@ class ChatViewModelFlowTest {
         val stateWithComplete = ChatUiState(
             messages = listOf(
                 ChatMessage(
-                    id = 1L,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi("Done"),
                     formattedTimestamp = "Now",
@@ -113,8 +119,8 @@ class ChatViewModelFlowTest {
         val stateWithThinking = ChatUiState(
             messages = listOf(
                 ChatMessage(
-                    id = 1L,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi("Thinking..."),
                     formattedTimestamp = "Now",
@@ -132,8 +138,8 @@ class ChatViewModelFlowTest {
         val stateWithProcessing = ChatUiState(
             messages = listOf(
                 ChatMessage(
-                    id = 1L,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi("Processing..."),
                     formattedTimestamp = "Now",

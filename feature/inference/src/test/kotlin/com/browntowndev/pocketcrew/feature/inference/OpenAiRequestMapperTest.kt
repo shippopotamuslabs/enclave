@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import java.io.File
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -130,5 +131,28 @@ class OpenAiRequestMapperTest {
 
         assertTrue(params.toString().contains("tavily_web_search"))
         assertTrue(params.toString().contains("query"))
+    }
+
+    @Test
+    fun `mapToResponseParams includes input image content when image uris are present`() {
+        val imageUri = createTempImageUri()
+
+        val params = OpenAiRequestMapper.mapToResponseParams(
+            modelId = "gpt-4o",
+            prompt = "Describe this",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                imageUris = listOf(imageUri),
+            )
+        )
+
+        assertTrue(params.input().orElseThrow().toString().contains("data:image/jpeg;base64"))
+    }
+
+    private fun createTempImageUri(): String {
+        val file = File.createTempFile("openai-image", ".jpg")
+        file.writeBytes(byteArrayOf(1, 2, 3, 4))
+        return file.toURI().toString()
     }
 }

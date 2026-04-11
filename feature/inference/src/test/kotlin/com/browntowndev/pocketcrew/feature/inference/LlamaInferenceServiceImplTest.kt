@@ -5,6 +5,7 @@ import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
@@ -23,7 +24,9 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
+import io.mockk.slot
 import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -77,7 +80,7 @@ class LlamaInferenceServiceImplTest {
         )
         coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("7")) } returns LocalModelAsset(
             metadata = LocalModelMetadata(
-                id = 99L,
+                id = LocalModelId("99"),
                 huggingFaceModelName = "test/llama",
                 remoteFileName = "model.gguf",
                 localFileName = "model.gguf",
@@ -191,7 +194,107 @@ class LlamaInferenceServiceImplTest {
         assertEquals("Failed to resume llama generation after tool replay", error.cause.message)
     }
 
-    private fun createService(): LlamaInferenceServiceImpl =
+    @Test
+    fun `sendPrompt forwards imageUris to llama generation options`() = runTest {
+        coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns ActiveModelConfiguration(
+            id = LocalModelConfigurationId("9"),
+            isLocal = true,
+            name = "Llama Vision",
+            systemPrompt = "You describe images.",
+            reasoningEffort = null,
+            temperature = 0.7,
+            topK = 40,
+            topP = 0.9,
+            maxTokens = 512,
+            minP = 0.0,
+            repetitionPenalty = 1.1,
+            contextWindow = 4096,
+            thinkingEnabled = false,
+        )
+        coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("9")) } returns LocalModelAsset(
+            metadata = LocalModelMetadata(
+                id = LocalModelId("199"),
+                huggingFaceModelName = "test/llama-vision",
+                remoteFileName = "model.gguf",
+                localFileName = "model.gguf",
+                sha256 = "abc123",
+                sizeInBytes = 1024L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                visionCapable = true,
+                mmprojLocalFileName = "mmproj.gguf",
+            ),
+            configurations = emptyList(),
+        )
+        coEvery { sessionManager.sendUserMessage(any()) } returns Unit
+        every { sessionManager.streamAssistantResponseWithOptions(any()) } returns flowOf(
+            GenerationEvent.Completed("Detailed image description")
+        )
+
+        val optionsSlot = slot<GenerationOptions>()
+        val service = createService(ModelType.VISION)
+
+        service.sendPrompt(
+            prompt = "Describe this image in detail",
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                modelType = ModelType.VISION,
+                imageUris = listOf("file:///tmp/cat.jpg"),
+            ),
+            closeConversation = false,
+        ).toList()
+
+        verify { sessionManager.streamAssistantResponseWithOptions(capture(optionsSlot)) }
+        assertEquals(listOf("file:///tmp/cat.jpg"), optionsSlot.captured.imageUris)
+    }
+
+    @Test
+    fun `sendPrompt returns typed error when vision capable gguf model is missing mmproj`() = runTest {
+        coEvery { activeModelProvider.getActiveConfiguration(ModelType.VISION) } returns ActiveModelConfiguration(
+            id = LocalModelConfigurationId("9"),
+            isLocal = true,
+            name = "Llama Vision",
+            systemPrompt = "You describe images.",
+            reasoningEffort = null,
+            temperature = 0.7,
+            topK = 40,
+            topP = 0.9,
+            maxTokens = 512,
+            minP = 0.0,
+            repetitionPenalty = 1.1,
+            contextWindow = 4096,
+            thinkingEnabled = false,
+        )
+        coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("9")) } returns LocalModelAsset(
+            metadata = LocalModelMetadata(
+                id = LocalModelId("199"),
+                huggingFaceModelName = "test/llama-vision",
+                remoteFileName = "model.gguf",
+                localFileName = "model.gguf",
+                sha256 = "abc123",
+                sizeInBytes = 1024L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                visionCapable = true,
+            ),
+            configurations = emptyList(),
+        )
+
+        val service = createService(ModelType.VISION)
+        val events = service.sendPrompt(
+            prompt = "Describe this image in detail",
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                modelType = ModelType.VISION,
+                imageUris = listOf("file:///tmp/cat.jpg"),
+            ),
+            closeConversation = false,
+        ).toList()
+
+        val error = events.filterIsInstance<InferenceEvent.Error>().single()
+        assertTrue(error.cause is IllegalStateException)
+        assertEquals("Vision-capable GGUF model requires an mmproj companion file.", error.cause.message)
+    }
+
+    private fun createService(modelType: ModelType = ModelType.FAST): LlamaInferenceServiceImpl =
         LlamaInferenceServiceImpl(
             sessionManager = sessionManager,
             processThinkingTokens = ProcessThinkingTokensUseCase(),

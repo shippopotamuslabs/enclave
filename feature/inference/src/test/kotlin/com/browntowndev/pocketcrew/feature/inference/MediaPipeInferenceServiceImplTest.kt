@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
@@ -32,6 +33,7 @@ class MediaPipeInferenceServiceImplTest {
     private lateinit var session: LlmSessionPort
     private lateinit var activeModelProvider: ActiveModelProviderPort
     private lateinit var toolExecutor: ToolExecutorPort
+    private lateinit var context: Context
 
     @BeforeEach
     fun setup() {
@@ -44,6 +46,7 @@ class MediaPipeInferenceServiceImplTest {
         session = mockk(relaxed = true)
         activeModelProvider = mockk()
         toolExecutor = mockk()
+        context = mockk(relaxed = true)
 
         coEvery { activeModelProvider.getActiveConfiguration(ModelType.FAST) } returns ActiveModelConfiguration(
             id = LocalModelConfigurationId("7"),
@@ -89,6 +92,7 @@ class MediaPipeInferenceServiceImplTest {
 
         val service = MediaPipeInferenceServiceImpl(
             llmInference = llmInference,
+            context = context,
             modelType = ModelType.FAST,
             activeModelProvider = activeModelProvider,
             processThinkingTokens = ProcessThinkingTokensUseCase(),
@@ -125,6 +129,7 @@ class MediaPipeInferenceServiceImplTest {
 
         val service = MediaPipeInferenceServiceImpl(
             llmInference = llmInference,
+            context = context,
             modelType = ModelType.FAST,
             activeModelProvider = activeModelProvider,
             processThinkingTokens = ProcessThinkingTokensUseCase(),

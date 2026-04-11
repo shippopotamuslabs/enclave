@@ -13,12 +13,12 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -43,6 +43,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import coil3.compose.AsyncImage
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.feature.chat.ContentUi
@@ -92,9 +95,26 @@ fun MessageBubble(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
+                    message.content.imageUri?.let { imageUri ->
+                        AsyncImage(
+                            model = imageUri,
+                            contentDescription = "Attached image",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 120.dp, max = 240.dp)
+                                .padding(bottom = if (message.content.text.isBlank()) 0.dp else 8.dp)
+                        )
+                    }
                     SelectionContainer(modifier = Modifier.fillMaxWidth()) {
                         val contentText = message.content.text
-                        if (contentText.contains("```")) {
+                        if (contentText.isBlank()) {
+                            if (message.content.imageUri == null) {
+                                Text(
+                                    text = "",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                            }
+                        } else if (contentText.contains("```")) {
                             val codeContent = contentText
                                 .substringAfter("```")
                                 .substringBeforeLast("```")
@@ -189,7 +209,7 @@ fun MessageBubble(
 private fun PreviewMessageBubbleUser() {
     PocketCrewTheme {
         MessageBubble(
-            message = ChatMessage(id = 1L, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Hello!"), formattedTimestamp = "10:30 AM"),
+            message = ChatMessage(id = MessageId("1"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Hello!"), formattedTimestamp = "10:30 AM"),
         )
     }
 }
@@ -200,8 +220,8 @@ private fun PreviewMessageBubbleCode() {
     PocketCrewTheme {
         MessageBubble(
             message = ChatMessage(
-                id = 3L,
-                chatId = 1L,
+                id = MessageId("3"),
+                chatId = ChatId("1"),
                 role = MessageRole.User,
                 content = ContentUi(text = """
 ```
@@ -222,8 +242,8 @@ private fun PreviewMessageBubbleLong() {
     PocketCrewTheme {
         MessageBubble(
             message = ChatMessage(
-                id = 4L,
-                chatId = 1L,
+                id = MessageId("4"),
+                chatId = ChatId("1"),
                 role = MessageRole.User,
                 content = ContentUi(text = "This is a longer message that spans multiple lines to verify layout behavior and make sure the action buttons align properly beneath the bubble."),
                 formattedTimestamp = "10:33 AM",

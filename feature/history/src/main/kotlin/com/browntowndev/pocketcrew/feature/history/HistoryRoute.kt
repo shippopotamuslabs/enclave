@@ -4,11 +4,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 
 @Composable
 fun HistoryRoute(
     onNavigateBack: () -> Unit,
-    onNavigateToChat: (Long?) -> Unit,
+    onNavigateToChat: (ChatId?) -> Unit,
     onNavigateToSettings: () -> Unit,
     onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
     viewModel: HistoryViewModel = hiltViewModel(),
@@ -22,7 +23,7 @@ fun HistoryRoute(
         onSearchQueryChange = viewModel::onSearchQueryChange,
         onBackClick = onNavigateBack,
         onChatClick = onNavigateToChat,
-        onNewChatClick = { onNavigateToChat(-1L) },
+        onNewChatClick = { onNavigateToChat(null) },
         onDeleteChat = viewModel::deleteChat,
         onRenameChat = viewModel::renameChat,
         onPinChat = viewModel::pinChat,

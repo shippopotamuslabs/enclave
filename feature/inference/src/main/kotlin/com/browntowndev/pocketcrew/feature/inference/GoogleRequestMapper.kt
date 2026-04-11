@@ -38,7 +38,7 @@ object GoogleRequestMapper {
                 add(
                     Content.builder()
                         .role("user")
-                        .parts(listOf(Part.fromText(prompt)))
+                        .parts(buildUserParts(prompt, options.imageUris))
                         .build()
                 )
             }
@@ -149,4 +149,14 @@ object GoogleRequestMapper {
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
+
+    private fun buildUserParts(
+        prompt: String,
+        imageUris: List<String>,
+    ): List<Part> = buildList {
+        add(Part.fromText(prompt))
+        ImagePayloads.fromUris(imageUris).forEach { payload ->
+            add(Part.fromBytes(payload.bytes, payload.mimeType))
+        }
+    }
 }

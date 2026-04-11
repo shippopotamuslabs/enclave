@@ -1,7 +1,10 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import android.content.Context
+import android.os.Debug
 import android.util.Log
+import com.google.android.gms.tasks.Tasks
+import com.google.android.gms.tflite.gpu.support.TfLiteGpu
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
@@ -15,6 +18,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
@@ -26,8 +30,10 @@ import com.google.ai.edge.litertlm.Tool
 import com.google.ai.edge.litertlm.ToolParam
 import com.google.ai.edge.litertlm.ToolSet
 import com.google.ai.edge.litertlm.tool
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 
@@ -89,6 +95,11 @@ class ConversationManagerImpl @Inject constructor(
     @Volatile
     private var engine: Engine? = null
 
+    // Track which backend the engine was initialized with
+    // NPU backends require samplerConfig=null (runtime doesn't support custom sampling on NPU)
+    @Volatile
+    private var activeBackendIsNpu: Boolean = false
+
     private fun getModelPath(filename: String): String {
         // Use getExternalFilesDir to match ModelFileScanner's directory choice
         val modelsDir = java.io.File(context.getExternalFilesDir(null), "models")
@@ -106,9 +117,9 @@ class ConversationManagerImpl @Inject constructor(
      * @return The active ConversationPort instance wrapping the LiteRT Conversation
      * @throws IllegalStateException if no model is registered for this model type
      */
-    override suspend fun getConversation(modelType: ModelType, options: GenerationOptions?): ConversationPort {
+    override suspend fun getConversation(modelType: ModelType, options: GenerationOptions?): ConversationPort = withContext(Dispatchers.IO) {
         // Lock to avoid concurrent initializations and ensure consistent state
-        return mutex.withLock {
+        mutex.withLock {
             val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
                 ?: throw IllegalStateException("No active configuration for $modelType")
 
@@ -149,32 +160,28 @@ class ConversationManagerImpl @Inject constructor(
             if (engineChanged) {
                 Log.d(
                     TAG,
-                    "Recreating LiteRT engine for modelType=$modelType, modelPath=$modelPath"
+                    "Recreating LiteRT engine for modelType=$modelType, modelPath=$modelPath memory=${memorySnapshot()}"
                 )
                 closeEngineLocked()
                 currentModelPath = modelPath
             } else if (conversationChanged) {
                 Log.d(
                     TAG,
-                    "Recreating LiteRT conversation for modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled"
+                    "Recreating LiteRT conversation for modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled memory=${memorySnapshot()}"
                 )
                 closeConversationLocked()
             } else {
                 Log.d(
                     TAG,
-                    "Reusing LiteRT conversation for modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled"
+                    "Reusing LiteRT conversation for modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled memory=${memorySnapshot()}"
                 )
             }
 
-            ensureEngineInitializedLocked(modelPath)
+            ensureEngineInitializedLocked(modelPath, modelType, activeConfig.contextWindow ?: 2048)
             val eng = engine ?: throw IllegalStateException("Engine not initialized")
 
             if (conversation == null || conversation?.isAlive != true) {
                 conversation?.close()
-
-                if (!eng.isInitialized()) {
-                    eng.initialize()
-                }
 
                 val conversationConfig = ConversationConfig(
                     systemInstruction = Contents.of(resolvedSystemPrompt),
@@ -185,7 +192,9 @@ class ConversationManagerImpl @Inject constructor(
                             Role.SYSTEM -> Message.system(domainMsg.content)
                         }
                     },
-                    samplerConfig = targetSamplerConfig,
+                    // NPU backends don't support custom sampler configs.
+                    // Passing one causes redundant CPU-side sampling allocation.
+                    samplerConfig = if (activeBackendIsNpu) null else targetSamplerConfig,
                     automaticToolCalling = true,
                     tools = if (hasSearchTool && toolExecutor != null) {
                         listOf(tool(LocalSearchToolset(toolExecutor, modelType)))
@@ -194,14 +203,22 @@ class ConversationManagerImpl @Inject constructor(
                     }
                 )
 
+                Log.d(
+                    TAG,
+                    "Creating LiteRT conversation for modelType=$modelType historySize=${history.size} hasSearchTool=$hasSearchTool memoryBeforeCreate=${memorySnapshot()}"
+                )
                 conversation = eng.createConversation(conversationConfig)
+                Log.d(
+                    TAG,
+                    "LiteRT conversation created for modelType=$modelType memoryAfterCreate=${memorySnapshot()}"
+                )
             }
 
             val liteRtConversation = conversation ?: throw IllegalStateException("Conversation not initialized")
             
             // Re-wrap if conversation was recreated
             if (conversationPort == null) {
-                conversationPort = ConversationImpl(liteRtConversation)
+                conversationPort = ConversationImpl(context, liteRtConversation)
             }
 
             currentSignature = desiredSignature
@@ -213,7 +230,7 @@ class ConversationManagerImpl @Inject constructor(
 
             Log.d(
                 TAG,
-                "getConversation decision: modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled, systemPrompt=${resolvedSystemPrompt.take(120)}, samplerConfig=$targetSamplerConfig, engineRecreated=$engineChanged, conversationRecreated=$conversationRecreated"
+                "getConversation decision: modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled, systemPrompt=${resolvedSystemPrompt.take(120)}, samplerConfig=$targetSamplerConfig, engineRecreated=$engineChanged, conversationRecreated=$conversationRecreated, memory=${memorySnapshot()}"
             )
             
             return@withLock conversationPort!!
@@ -233,7 +250,7 @@ class ConversationManagerImpl @Inject constructor(
             @ToolParam(description = "The search query.") query: String
         ): String {
             Log.d(TAG, "Executing native tool call: tavily_web_search with query: $query")
-            return runBlocking {
+            return runBlocking(Dispatchers.IO) {
                 val request = ToolCallRequest(
                     toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
                     argumentsJson = SearchToolSupport.buildArgumentsJson(query),
@@ -246,9 +263,141 @@ class ConversationManagerImpl @Inject constructor(
     }
 
 
-    private fun ensureEngineInitializedLocked(modelPath: String) {
-        if (engine == null) {
-            engine = Engine(EngineConfig(modelPath))
+    private fun ensureEngineInitializedLocked(
+        modelPath: String,
+        modelType: ModelType,
+        contextWindow: Int
+    ) {
+        if (engine != null) return
+
+        val cacheDir = cacheDirFor(modelPath)
+
+        if (modelType == ModelType.VISION) {
+            initializeVisionEngine(modelPath, contextWindow, cacheDir)
+        } else {
+            initializeTextEngine(modelPath, contextWindow, cacheDir)
+        }
+    }
+
+    private fun initializeVisionEngine(
+        modelPath: String,
+        contextWindow: Int,
+        cacheDir: String?
+    ) {
+        val backend = Backend.GPU()
+
+        try {
+                Log.d(
+                    TAG,
+                    "Initializing LiteRT vision engine with GPU backend, " +
+                        "contextWindow=$contextWindow memoryBeforeInit=${memorySnapshot()}"
+                )
+
+            engine = createEngine(
+                modelPath = modelPath,
+                backend = backend,
+                visionBackend = backend,
+                contextWindow = contextWindow,
+                cacheDir = cacheDir
+            )
+
+            engine?.initialize()
+            activeBackendIsNpu = false
+
+            Log.d(TAG, "LiteRT vision engine initialized successfully with GPU backend memoryAfterInit=${memorySnapshot()}")
+        } catch (t: Throwable) {
+            try {
+                engine?.close()
+            } catch (_: Throwable) {
+            }
+            
+            Log.w(TAG, "LiteRT vision engine failed during initialize() memoryAfterFailure=${memorySnapshot()}", t)
+            throw t
+        }
+    }
+
+    private fun initializeTextEngine(
+        modelPath: String,
+        contextWindow: Int,
+        cacheDir: String?
+    ) {
+        val useGpu = isGpuBackendAvailable()
+        val backendName = if (useGpu) "GPU" else "CPU"
+        val backend = if (useGpu) Backend.GPU() else Backend.CPU()
+        var candidate: Engine? = null
+
+        try {
+            Log.d(
+                TAG,
+                "Initializing LiteRT text engine with $backendName backend, " +
+                    "contextWindow=$contextWindow memoryBeforeInit=${memorySnapshot()}"
+            )
+
+            candidate = createEngine(
+                modelPath = modelPath,
+                backend = backend,
+                visionBackend = null,
+                contextWindow = contextWindow,
+                cacheDir = cacheDir
+            )
+
+            candidate.initialize()
+
+            engine = candidate
+            activeBackendIsNpu = false
+
+            Log.d(
+                TAG,
+                "LiteRT text engine initialized successfully with $backendName backend " +
+                    "(isNpu=$activeBackendIsNpu) memoryAfterInit=${memorySnapshot()}"
+            )
+        } catch (t: Throwable) {
+            Log.w(TAG, "LiteRT $backendName backend failed during initialize() memoryAfterFailure=${memorySnapshot()}", t)
+            try {
+                candidate?.close()
+            } catch (_: Throwable) {
+            }
+            throw IllegalStateException(
+                "Failed to initialize LiteRT text engine with $backendName backend",
+                t
+            )
+        }
+    }
+
+    private fun isGpuBackendAvailable(): Boolean {
+        return try {
+            val available = Tasks.await(TfLiteGpu.isGpuDelegateAvailable(context))
+            Log.d(TAG, "TfLiteGpu.isGpuDelegateAvailable returned $available")
+            available
+        } catch (t: Throwable) {
+            Log.w(TAG, "TfLiteGpu.isGpuDelegateAvailable failed; falling back to CPU", t)
+            false
+        }
+    }
+
+    private fun createEngine(
+        modelPath: String,
+        backend: Backend,
+        visionBackend: Backend?,
+        contextWindow: Int,
+        cacheDir: String?
+    ): Engine {
+        return Engine(
+            EngineConfig(
+                modelPath = modelPath,
+                backend = backend,
+                visionBackend = visionBackend,
+                maxNumTokens = contextWindow,
+                cacheDir = cacheDir
+            )
+        )
+    }
+
+    private fun cacheDirFor(modelPath: String): String? {
+        return if (modelPath.startsWith("/data/local/tmp")) {
+            context.getExternalFilesDir(null)?.absolutePath
+        } else {
+            null
         }
     }
 
@@ -263,9 +412,11 @@ class ConversationManagerImpl @Inject constructor(
     }
 
     private fun closeConversationLocked() {
+        Log.d(TAG, "Closing LiteRT conversation memoryBeforeClose=${memorySnapshot()}")
         conversation?.close()
         conversation = null
         conversationPort = null
+        Log.d(TAG, "Closed LiteRT conversation memoryAfterClose=${memorySnapshot()}")
     }
 
     override suspend fun setHistory(messages: List<DomainChatMessage>) {
@@ -303,6 +454,7 @@ class ConversationManagerImpl @Inject constructor(
     }
 
     private fun closeEngineLocked() {
+        Log.d(TAG, "Closing LiteRT engine memoryBeforeClose=${memorySnapshot()}")
         closeConversationLocked()
         engine?.close()
         engine = null
@@ -313,6 +465,17 @@ class ConversationManagerImpl @Inject constructor(
         currentSystemPrompt = defaultSystemPrompt
         currentSamplerConfig = null
         currentSignature = null
+        activeBackendIsNpu = false
+        Log.d(TAG, "Closed LiteRT engine memoryAfterClose=${memorySnapshot()}")
+    }
+
+    private fun memorySnapshot(): String {
+        val runtime = Runtime.getRuntime()
+        val usedJvmMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
+        val totalJvmMb = runtime.totalMemory() / (1024 * 1024)
+        val maxJvmMb = runtime.maxMemory() / (1024 * 1024)
+        val nativeHeapMb = Debug.getNativeHeapAllocatedSize() / (1024 * 1024)
+        return "jvmUsedMb=$usedJvmMb jvmTotalMb=$totalJvmMb jvmMaxMb=$maxJvmMb nativeHeapMb=$nativeHeapMb"
     }
 
     companion object {

@@ -37,7 +37,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -56,7 +55,6 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -64,9 +62,11 @@ import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.component.shimmerEffect
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
-import com.browntowndev.pocketcrew.feature.history.R as HistoryR
 import com.browntowndev.pocketcrew.core.ui.R as CoreR
-import com.browntowndev.pocketcrew.feature.history.HistoryViewModel
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 private sealed interface HistoryOptionsState {
     data object Hidden : HistoryOptionsState
@@ -81,12 +81,12 @@ fun HistoryScreen(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     onBackClick: () -> Unit,
-    onChatClick: (Long) -> Unit,
+    onChatClick: (ChatId) -> Unit,
     onNewChatClick: () -> Unit,
-    onDeleteChat: (Long) -> Unit,
-    onRenameChat: (Long, String) -> Unit,
-    onPinChat: (Long) -> Unit,
-    onUnpinChat: (Long) -> Unit,
+    onDeleteChat: (ChatId) -> Unit,
+    onRenameChat: (ChatId, String) -> Unit,
+    onPinChat: (ChatId) -> Unit,
+    onUnpinChat: (ChatId) -> Unit,
     onSettingsClick: () -> Unit,
     @Suppress("UNUSED_PARAMETER") onShowSnackbar: (String, String?) -> Unit
 ) {
@@ -155,7 +155,7 @@ fun HistoryScreen(
                     }
                     items(
                         items = uiState.pinnedChats,
-                        key = { it.id }
+                        key = { it.id.value }
                     ) { chat ->
                         HistoryChatItem(
                             chat = chat,
@@ -173,7 +173,7 @@ fun HistoryScreen(
                     }
                     items(
                         items = uiState.otherChats,
-                        key = { it.id }
+                        key = { it.id.value }
                     ) { chat ->
                         HistoryChatItem(
                             chat = chat,
@@ -553,10 +553,10 @@ private fun PreviewHistoryScreenLight() {
     PocketCrewTheme {
         HistoryScreen(
             uiState = HistoryUiState(
-                pinnedChats = listOf(HistoryChat(1, "Important Project", "10:30 AM", true)),
+                pinnedChats = listOf(HistoryChat(ChatId("1"), "Important Project", "10:30 AM", true)),
                 otherChats = listOf(
-                    HistoryChat(2, "Weekend Plans", "Yesterday", false),
-                    HistoryChat(3, "Recipe Ideas", "2 days ago", false)
+                    HistoryChat(ChatId("2"), "Weekend Plans", "Yesterday", false),
+                    HistoryChat(ChatId("3"), "Recipe Ideas", "2 days ago", false)
                 )
             ),
             searchQuery = "",
@@ -580,10 +580,10 @@ private fun PreviewHistoryScreenDark() {
     PocketCrewTheme(darkTheme = true) {
         HistoryScreen(
             uiState = HistoryUiState(
-                pinnedChats = listOf(HistoryChat(1, "Important Project", "10:30 AM", true)),
+                pinnedChats = listOf(HistoryChat(ChatId("1"), "Important Project", "10:30 AM", true)),
                 otherChats = listOf(
-                    HistoryChat(2, "Weekend Plans", "Yesterday", false),
-                    HistoryChat(3, "Recipe Ideas", "2 days ago", false)
+                    HistoryChat(ChatId("2"), "Weekend Plans", "Yesterday", false),
+                    HistoryChat(ChatId("3"), "Recipe Ideas", "2 days ago", false)
                 )
             ),
             searchQuery = "",

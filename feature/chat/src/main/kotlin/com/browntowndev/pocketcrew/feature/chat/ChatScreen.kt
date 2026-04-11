@@ -1,5 +1,8 @@
 package com.browntowndev.pocketcrew.feature.chat
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -28,9 +31,16 @@ fun ChatScreen(
     onModeChange: (ChatModeUi) -> Unit,
     onInputChange: (String) -> Unit,
     onEditMessage: (String) -> Unit,
-    onAttach: () -> Unit,
+    onImageSelected: (String?) -> Unit,
+    onClearImage: () -> Unit,
     onShieldTap: () -> Unit,
 ) {
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        onImageSelected(uri?.toString())
+    }
+
     Scaffold(
         topBar = {
             ChatTopBar(
@@ -72,13 +82,19 @@ fun ChatScreen(
             InputBar(
                 modifier = Modifier.fillMaxWidth(),
                 inputText = uiState.inputText,
+                selectedImageUri = uiState.selectedImageUri,
                 selectedMode = uiState.selectedMode,
                 isGenerating = uiState.isGenerating,
                 isGlobalInferenceBlocked = uiState.isGlobalInferenceBlocked,
                 onInputChange = onInputChange,
                 onModeChange = onModeChange,
                 onSend = onSendMessage,
-                onAttach = onAttach,
+                onAttach = {
+                    imagePickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                },
+                onClearAttachment = onClearImage,
             )
         }
     }
@@ -98,7 +114,8 @@ private fun PreviewChatScreenLight() {
             onModeChange = {},
             onInputChange = {},
             onEditMessage = {},
-            onAttach = {},
+            onImageSelected = {},
+            onClearImage = {},
             onShieldTap = {},
         )
     }
@@ -135,7 +152,8 @@ private fun PreviewChatScreenWithMessages() {
             onModeChange = {},
             onInputChange = {},
             onEditMessage = {},
-            onAttach = {},
+            onImageSelected = {},
+            onClearImage = {},
             onShieldTap = {},
         )
     }
@@ -155,7 +173,8 @@ private fun PreviewChatScreenThinking() {
             onModeChange = {},
             onInputChange = {},
             onEditMessage = {},
-            onAttach = {},
+            onImageSelected = {},
+            onClearImage = {},
             onShieldTap = {},
         )
     }
@@ -175,7 +194,8 @@ private fun PreviewChatScreenShield() {
             onModeChange = {},
             onInputChange = {},
             onEditMessage = {},
-            onAttach = {},
+            onImageSelected = {},
+            onClearImage = {},
             onShieldTap = {},
         )
     }
@@ -195,7 +215,8 @@ private fun PreviewChatScreenExpandedInput() {
             onModeChange = {},
             onInputChange = {},
             onEditMessage = {},
-            onAttach = {},
+            onImageSelected = {},
+            onClearImage = {},
             onShieldTap = {},
         )
     }

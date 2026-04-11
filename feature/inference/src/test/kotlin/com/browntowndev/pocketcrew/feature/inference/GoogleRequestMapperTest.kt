@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role as DomainRole
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import java.io.File
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -97,5 +98,27 @@ class GoogleRequestMapperTest {
         )
         assertTrue(parameters.properties().orElseThrow().containsKey("query"))
         assertEquals(listOf("query"), parameters.required().orElseThrow())
+    }
+
+    @Test
+    fun `mapToGenerateContentRequest includes inline image parts when image uris are present`() {
+        val request = GoogleRequestMapper.mapToGenerateContentRequest(
+            prompt = "Describe this",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                imageUris = listOf(createTempImageUri()),
+            )
+        )
+
+        val parts = request.contents.single().parts().orElseThrow()
+        assertEquals(2, parts.size)
+        assertTrue(parts[1].inlineData().isPresent)
+    }
+
+    private fun createTempImageUri(): String {
+        val file = File.createTempFile("google-image", ".jpg")
+        file.writeBytes(byteArrayOf(1, 2, 3, 4))
+        return file.toURI().toString()
     }
 }

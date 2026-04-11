@@ -4,13 +4,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
+import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
@@ -19,6 +22,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -47,6 +51,7 @@ import kotlinx.coroutines.launch
 class ChatViewModel @Inject constructor(
     settingsUseCases: SettingsUseCases,
     private val chatUseCases: ChatUseCases,
+    private val stageImageAttachmentUseCase: StageImageAttachmentUseCase,
     private val savedStateHandle: SavedStateHandle,
     inferenceLockManager: InferenceLockManager,
     private val modelDisplayNamesUseCase: GetModelDisplayNameUseCase,
@@ -61,8 +66,8 @@ class ChatViewModel @Inject constructor(
      * Optional chat ID for continuing an existing conversation.
      * Can be passed via navigation or set programmatically.
      */
-    val initialChatId: Long?
-        get() = savedStateHandle.get<String>("chatId")?.toLongOrNull()
+    val initialChatId: ChatId?
+        get() = savedStateHandle.get<String>("chatId")?.let { ChatId(it) }
 
     // Mutable state for input text (not persisted, managed locally)
     private val _inputText = MutableStateFlow("")
@@ -70,12 +75,14 @@ class ChatViewModel @Inject constructor(
     // Mutable state for selected mode (not persisted, managed locally)
     private val _selectedMode = MutableStateFlow(ChatModeUi.FAST)
 
+    private val _selectedImageUri = MutableStateFlow<String?>(null)
+
     // Track current chat ID for continuing conversations
-    private val _currentChatId = MutableStateFlow<Long?>(null)
+    private val _currentChatId = MutableStateFlow<ChatId?>(null)
 
     // Accumulates real-time inference updates before database persistence
     // Merged with database messages in uiState for real-time UI updates
-    private val _inFlightMessages = MutableStateFlow<Map<Long, MessageSnapshot>>(emptyMap())
+    private val _inFlightMessages = MutableStateFlow<Map<MessageId, MessageSnapshot>>(emptyMap())
 
     // Holds dynamically loaded display names
     private val _modelDisplayNames = MutableStateFlow<Map<ModelType, String>>(emptyMap())
@@ -104,14 +111,15 @@ class ChatViewModel @Inject constructor(
         combine(
             settingsUseCases.getSettings(),
             _inputText,
-            _selectedMode
-        ) { settings: SettingsData, inputText: String, selectedMode: ChatModeUi ->
-            Triple(settings, inputText, selectedMode)
+            _selectedMode,
+            _selectedImageUri,
+        ) { settings: SettingsData, inputText: String, selectedMode: ChatModeUi, selectedImageUri: String? ->
+            UiInputs(settings, inputText, selectedMode, selectedImageUri)
         },
         inferenceLockManager.isInferenceBlocked,
-        _currentChatId.flatMapLatest { chatId: Long? ->
-            val id: Long = chatId ?: initialChatId ?: 0L
-            if (id == 0L) {
+        _currentChatId.flatMapLatest { chatId: ChatId? ->
+            val id: ChatId? = chatId ?: initialChatId
+            if (id == null) {
                 flowOf(emptyList())
             } else {
                 chatUseCases.getChat(id).debounce(50)
@@ -119,24 +127,24 @@ class ChatViewModel @Inject constructor(
         },
         _inFlightMessages
     ) { 
-        triple: Triple<SettingsData, String, ChatModeUi>,
+        inputs: UiInputs,
         isBlocked: Boolean,
         messages: List<Message>,
-        inFlight: Map<Long, MessageSnapshot> ->
-        
-        val settings: SettingsData = triple.first
-        val inputText: String = triple.second
-        val selectedMode: ChatModeUi = triple.third
+        inFlight: Map<MessageId, MessageSnapshot> ->
+
+        val settings: SettingsData = inputs.settings
+        val inputText: String = inputs.inputText
+        val selectedMode: ChatModeUi = inputs.selectedMode
         
         // Convert DB messages to map for merging
-        val dbMessagesMap: Map<Long, Message> = messages.associateBy { m: Message -> m.id }
+        val dbMessagesMap: Map<MessageId, Message> = messages.associateBy { m: Message -> m.id }
         
         // Convert in-flight MessageSnapshots to Message objects for merging
-        val inFlightMessagesMap: Map<Long, Message> = inFlight.mapValues { entry: Map.Entry<Long, MessageSnapshot> ->
+        val inFlightMessagesMap: Map<MessageId, Message> = inFlight.mapValues { entry: Map.Entry<MessageId, MessageSnapshot> ->
             val snapshot: MessageSnapshot = entry.value
             Message(
                 id = snapshot.messageId,
-                chatId = snapshot.messageId,
+                chatId = _currentChatId.value ?: initialChatId ?: ChatId(""),
                 role = Role.ASSISTANT,
                 content = Content(text = snapshot.content, pipelineStep = snapshot.pipelineStep),
                 thinkingRaw = snapshot.thinkingRaw.ifBlank { null },
@@ -150,7 +158,7 @@ class ChatViewModel @Inject constructor(
         }
         
         // Merge using use case - DB COMPLETE wins, otherwise use in-flight
-        val mergedMessages: Map<Long, Message> = dbMessagesMap.mapValues { (id, dbMessage) ->
+        val mergedMessages: Map<MessageId, Message> = dbMessagesMap.mapValues { (id, dbMessage) ->
             val inFlightMessage = inFlightMessagesMap[id]
             chatUseCases.mergeMessagesUseCase(dbMessage, inFlightMessage) ?: dbMessage
         }
@@ -158,32 +166,35 @@ class ChatViewModel @Inject constructor(
         // Also include any in-flight messages that don't have a DB counterpart
         val allMergedMessages = mergedMessages + inFlightMessagesMap.filterKeys { it !in mergedMessages }
         
-        // Map domain messages to UI messages
+        // Sort chronologically and map domain messages to UI messages
         var isGenerating = false
         var hasActiveIndicator = false
-        val chatMessages: List<ChatMessage> = allMergedMessages.values.map { message: Message ->
-            val chatMessage = mapToChatMessage(message)
-            val state = chatMessage.indicatorState
-            if (state != null && state !is IndicatorState.None) {
-                hasActiveIndicator = true
-                if (!isGenerating && (state is IndicatorState.Generating ||
-                    state is IndicatorState.Thinking ||
-                    state is IndicatorState.Processing)
-                ) {
-                    isGenerating = true
+        val chatMessages: List<ChatMessage> = allMergedMessages.values
+            .sortedBy { it.createdAt }
+            .map { message: Message ->
+                val chatMessage = mapToChatMessage(message)
+                val state = chatMessage.indicatorState
+                if (state != null && state !is IndicatorState.None) {
+                    hasActiveIndicator = true
+                    if (!isGenerating && (state is IndicatorState.Generating ||
+                        state is IndicatorState.Thinking ||
+                        state is IndicatorState.Processing)
+                    ) {
+                        isGenerating = true
+                    }
                 }
+                chatMessage
             }
-            chatMessage
-        }
 
         ChatUiState(
             messages = chatMessages,
             inputText = inputText,
+            selectedImageUri = inputs.selectedImageUri,
             selectedMode = selectedMode,
             isGlobalInferenceBlocked = isBlocked,
             hapticPress = settings.hapticPress,
             hapticResponse = settings.hapticResponse,
-            chatId = _currentChatId.value ?: initialChatId ?: -1L,
+            chatId = _currentChatId.value ?: initialChatId,
             isGenerating = isGenerating,
             hasActiveIndicator = hasActiveIndicator
         )
@@ -212,7 +223,8 @@ class ChatViewModel @Inject constructor(
             role = role,
             content = ContentUi(
                 text = message.content.text,
-                pipelineStep = message.content.pipelineStep
+                pipelineStep = message.content.pipelineStep,
+                imageUri = message.content.imageUri,
             ),
             formattedTimestamp = formatTimestamp(message.createdAt),
             indicatorState = computeIndicatorState(message),
@@ -290,9 +302,31 @@ class ChatViewModel @Inject constructor(
         _selectedMode.value = mode
     }
 
+    fun onImageSelected(uri: String?) {
+        if (uri == null) {
+            _selectedImageUri.value = null
+            return
+        }
+
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to prepare image",
+                "Could not attach the selected image. Please try again.",
+            )
+        ) {
+            _selectedImageUri.value = stageImageAttachmentUseCase(uri)
+        }
+    }
+
+    fun clearSelectedImage() {
+        _selectedImageUri.value = null
+    }
+
     fun createNewChat() {
         _currentChatId.value = null
         _inputText.value = ""
+        _selectedImageUri.value = null
         _inFlightMessages.value = emptyMap()
         inferenceJob?.cancel()
         // Ensure SavedStateHandle is also cleared so chatId doesn't persist on recreation
@@ -301,15 +335,16 @@ class ChatViewModel @Inject constructor(
 
     fun onSendMessage() {
         val input = _inputText.value
-        if (input.isNotBlank()) {
-            // Determine the chat ID: prefer currentChatId, then initialChatId, otherwise 0
-            val chatIdForMessage = _currentChatId.value ?: initialChatId ?: 0L
+        val selectedImageUri = _selectedImageUri.value
+        if (input.isNotBlank() || selectedImageUri != null) {
+            // Determine the chat ID: prefer currentChatId, then initialChatId, otherwise empty
+            val chatIdForMessage = _currentChatId.value ?: initialChatId ?: ChatId("")
 
             // Create domain message for persistence
             val domainMessage = Message(
-                id = 0L,
+                id = MessageId(UUID.randomUUID().toString()),
                 chatId = chatIdForMessage,
-                content = Content(text = input),
+                content = Content(text = input, imageUri = selectedImageUri),
                 role = Role.USER
             )
 
@@ -323,6 +358,7 @@ class ChatViewModel @Inject constructor(
 
                 // Clear input text
                 _inputText.value = ""
+                _selectedImageUri.value = null
 
                 // Clear previous in-flight messages
                 _inFlightMessages.value = emptyMap()
@@ -374,6 +410,13 @@ class ChatViewModel @Inject constructor(
      * Internal test helper to allow unit tests to verify mapping logic.
      */
     internal fun mapToChatMessageForTesting(message: Message): ChatMessage = mapToChatMessage(message)
+
+    private data class UiInputs(
+        val settings: SettingsData,
+        val inputText: String,
+        val selectedMode: ChatModeUi,
+        val selectedImageUri: String?,
+    )
 
     override fun onCleared() {
         super.onCleared()

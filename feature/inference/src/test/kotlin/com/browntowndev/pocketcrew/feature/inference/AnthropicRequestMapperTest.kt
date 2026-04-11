@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role as DomainRole
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import java.io.File
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -87,5 +88,28 @@ class AnthropicRequestMapperTest {
 
         assertTrue(params.toString().contains("tavily_web_search"))
         assertTrue(params.toString().contains("query"))
+    }
+
+    @Test
+    fun `mapToMessageParams includes image blocks when image uris are present`() {
+        val params = AnthropicRequestMapper.mapToMessageParams(
+            modelId = "claude-sonnet-4-20250514",
+            prompt = "Describe this",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                imageUris = listOf(createTempImageUri()),
+            )
+        )
+
+        assertEquals(1, params.messages().size)
+        assertTrue(params.messages().single().toString().contains("image"))
+        assertTrue(params.messages().single().toString().contains("base64"))
+    }
+
+    private fun createTempImageUri(): String {
+        val file = File.createTempFile("anthropic-image", ".jpg")
+        file.writeBytes(byteArrayOf(1, 2, 3, 4))
+        return file.toURI().toString()
     }
 }

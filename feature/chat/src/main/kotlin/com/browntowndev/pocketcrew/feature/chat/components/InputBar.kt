@@ -10,14 +10,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -37,8 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -48,6 +52,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
@@ -56,6 +61,7 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 @Composable
 fun InputBar(
     inputText: String,
+    selectedImageUri: String?,
     selectedMode: ChatModeUi,
     isGenerating: Boolean,
     isGlobalInferenceBlocked: Boolean = false,
@@ -63,6 +69,7 @@ fun InputBar(
     onModeChange: (ChatModeUi) -> Unit,
     onSend: (String) -> Unit,
     onAttach: () -> Unit,
+    onClearAttachment: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var modeExpanded by remember { mutableStateOf(false) }
@@ -118,6 +125,32 @@ fun InputBar(
                 else -> Arrangement.spacedBy(6.dp)
             }
         ) {
+            if (selectedImageUri != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(92.dp)
+                ) {
+                    AsyncImage(
+                        model = selectedImageUri,
+                        contentDescription = "Selected image preview",
+                        modifier = Modifier
+                            .size(92.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                    )
+                    IconButton(
+                        onClick = onClearAttachment,
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Remove selected image",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+
             // Expanded: use a Box wrapper that fills remaining space and handles clicks
             if (isExpanded) {
                 Box(
@@ -299,10 +332,11 @@ fun InputBar(
                 }
 
                 // Send
+                val hasSendableContent = textFieldValue.text.isNotBlank() || selectedImageUri != null
                 val isSendDisabled = isGenerating || isGlobalInferenceBlocked
                 IconButton(
                     onClick = {
-                        if (textFieldValue.text.isNotBlank() && !isSendDisabled) {
+                        if (hasSendableContent && !isSendDisabled) {
                             val textToSend = textFieldValue.text
                             onSend(textToSend) // Send FIRST while inputText still has value
                             textFieldValue = TextFieldValue("") // Clear locally
@@ -311,14 +345,14 @@ fun InputBar(
                             focusManager.clearFocus()
                         }
                     },
-                    enabled = textFieldValue.text.isNotBlank() && !isSendDisabled
+                    enabled = hasSendableContent && !isSendDisabled
                 ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send message",
                         tint = when {
                             isSendDisabled -> MaterialTheme.colorScheme.onSurfaceVariant
-                            textFieldValue.text.isNotBlank() -> MaterialTheme.colorScheme.primary
+                            hasSendableContent -> MaterialTheme.colorScheme.primary
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
                     )
@@ -336,12 +370,14 @@ fun PreviewInputBar() {
     PocketCrewTheme {
         InputBar(
             inputText = "",
+            selectedImageUri = null,
             selectedMode = ChatModeUi.FAST,
             isGenerating = false,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
-            onAttach = {}
+            onAttach = {},
+            onClearAttachment = {},
         )
     }
 }
@@ -356,12 +392,14 @@ fun PreviewInputBarExpanded() {
                 Line 2.
                 Line 3: showing collapse icon.
             """.trimIndent(),
+            selectedImageUri = null,
             selectedMode = ChatModeUi.CREW,
             isGenerating = false,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
-            onAttach = {}
+            onAttach = {},
+            onClearAttachment = {},
         )
     }
 }
@@ -372,12 +410,14 @@ fun PreviewInputBarSingleLine() {
     PocketCrewTheme {
         InputBar(
             inputText = "Single line message",
+            selectedImageUri = null,
             selectedMode = ChatModeUi.FAST,
             isGenerating = false,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
-            onAttach = {}
+            onAttach = {},
+            onClearAttachment = {},
         )
     }
 }
@@ -388,12 +428,14 @@ fun PreviewInputBarThinking() {
     PocketCrewTheme {
         InputBar(
             inputText = "Message while thinking",
+            selectedImageUri = null,
             selectedMode = ChatModeUi.FAST,
             isGenerating = true,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
-            onAttach = {}
+            onAttach = {},
+            onClearAttachment = {},
         )
     }
 }
@@ -404,12 +446,14 @@ fun PreviewInputBarThinkingMode() {
     PocketCrewTheme {
         InputBar(
             inputText = "Tell me about quantum physics",
+            selectedImageUri = null,
             selectedMode = ChatModeUi.THINKING,
             isGenerating = false,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
-            onAttach = {}
+            onAttach = {},
+            onClearAttachment = {},
         )
     }
 }

@@ -1,5 +1,8 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import android.content.Context
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
@@ -11,10 +14,16 @@ import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.google.mediapipe.framework.image.BitmapImageBuilder
+import com.google.mediapipe.framework.image.MPImage
+import com.google.mediapipe.tasks.genai.llminference.GraphOptions
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -32,6 +41,7 @@ import kotlin.coroutines.resumeWithException
  */
 class MediaPipeInferenceServiceImpl @Inject constructor(
     private val llmInference: LlmInferenceWrapper,
+    @ApplicationContext private val context: Context,
     private val modelType: ModelType,
     private val activeModelProvider: ActiveModelProviderPort,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
@@ -112,6 +122,11 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                 .setTopK(targetTopK)
                 .setTopP(targetTopP)
                 .setTemperature(targetTemperature)
+                .setGraphOptions(
+                    GraphOptions.builder()
+                        .setEnableVisionModality(true)
+                        .build()
+                )
                 .build()
         )
 
@@ -177,6 +192,9 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
             }
             
             currentSession.addQueryChunk(prompt)
+            options.imageUris.forEach { imageUri ->
+                currentSession.addImage(loadMpImage(imageUri))
+            }
 
             currentSession.generateResponseAsync { partialResult, done ->
                 val chunkText = partialResult ?: ""
@@ -232,7 +250,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                 }
             }
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
     private suspend fun executeToolingPrompt(
         session: LlmSessionPort,
@@ -400,5 +418,10 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         if (text.isNotBlank()) {
             emitEvent(InferenceEvent.PartialResponse(text, targetModelType))
         }
+    }
+
+    private suspend fun loadMpImage(imageUri: String): MPImage {
+        val bitmap = ImageDownscaler.downscale(context, imageUri)
+        return BitmapImageBuilder(bitmap).build()
     }
 }
