@@ -55,6 +55,7 @@ import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningControlStyle
 import com.browntowndev.pocketcrew.domain.model.inference.SystemPromptTemplates
@@ -149,13 +150,14 @@ fun CredentialsConfigurationForm(
     apiKey: String,
     availableModels: List<DiscoveredApiModelUi>,
     filteredModels: List<DiscoveredApiModelUi>,
+    selectedModelMetadata: DiscoveredApiModelUi?,
     isFetchingModels: Boolean,
     searchQuery: String,
     providerFilter: String?,
     sortOption: ModelSortOption,
     onAssetChange: (ApiModelAssetUi) -> Unit,
     onApiKeyChange: (String) -> Unit,
-    onSelectReusableCredential: (Long?) -> Unit,
+    onSelectReusableCredential: (ApiCredentialsId?) -> Unit,
     onFetchModels: () -> Unit,
     onUpdateSearchQuery: (String) -> Unit,
     onUpdateProviderFilter: (String?) -> Unit,
@@ -165,6 +167,7 @@ fun CredentialsConfigurationForm(
     var reusableCredentialDropdownExpanded by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
     var showModelSelectionSheet by remember { mutableStateOf(false) }
+    val discoveredVisionCapability = selectedModelMetadata?.visionCapable
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Provider Selection
@@ -220,9 +223,9 @@ fun CredentialsConfigurationForm(
             shape = RoundedCornerShape(12.dp)
         )
 
-        val canUseStoredCredential = asset.credentialsId == 0L && reusableCredentials.isNotEmpty()
+        val canUseStoredCredential = asset.credentialsId.value.isEmpty() && reusableCredentials.isNotEmpty()
 
-        val canFetchModels = !isFetchingModels && (apiKey.isNotBlank() || asset.credentialsId != 0L || selectedReusableCredential != null)
+        val canFetchModels = !isFetchingModels && (apiKey.isNotBlank() || asset.credentialsId.value.isNotEmpty() || selectedReusableCredential != null)
 
         Box(modifier = Modifier.fillMaxWidth().clickable { showModelSelectionSheet = true }) {
             OutlinedTextField(
@@ -314,6 +317,35 @@ fun CredentialsConfigurationForm(
                     onAssetChange(asset.copy(modelId = selectedModelId))
                 },
                 onDismissRequest = { showModelSelectionSheet = false }
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Vision Enabled",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = when (discoveredVisionCapability) {
+                        true -> "This model reports image input support, so vision is enabled automatically."
+                        false -> "This model reports text-only input, so vision is disabled automatically."
+                        null -> "Turn this on when the selected model can accept image input."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+                checked = discoveredVisionCapability ?: asset.isVision,
+                onCheckedChange = { onAssetChange(asset.copy(isVision = it)) },
+                enabled = discoveredVisionCapability == null,
             )
         }
 

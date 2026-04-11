@@ -10,7 +10,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationId
 
@@ -137,9 +139,9 @@ data class DeletionFlowUiState(
 )
 
 sealed interface PendingDeletionTarget {
-    data class LocalModelAsset(val id: Long) : PendingDeletionTarget
+    data class LocalModelAsset(val id: LocalModelId) : PendingDeletionTarget
     data class LocalModelPreset(val id: LocalModelConfigurationId) : PendingDeletionTarget
-    data class ApiProvider(val id: Long) : PendingDeletionTarget
+    data class ApiProvider(val id: ApiCredentialsId) : PendingDeletionTarget
     data class ApiPreset(val id: ApiModelConfigurationId) : PendingDeletionTarget
 }
 
@@ -156,13 +158,13 @@ data class ReassignmentOptionUi(
     val displayName: String,
     val source: ModelSource,
     val providerName: String? = null,
-    val apiCredentialsId: Long? = null,
-    val localModelId: Long? = null
+    val apiCredentialsId: ApiCredentialsId? = null,
+    val localModelId: LocalModelId? = null
 )
 
 @Immutable
 data class ApiModelAssetUi(
-    val credentialsId: Long,
+    val credentialsId: ApiCredentialsId,
     val displayName: String,
     val provider: ApiProvider,
     val modelId: String,
@@ -174,7 +176,7 @@ data class ApiModelAssetUi(
 
 @Immutable
 data class ReusableApiCredentialUi(
-    val credentialsId: Long,
+    val credentialsId: ApiCredentialsId,
     val displayName: String,
     val modelId: String,
     val credentialAlias: String,
@@ -195,7 +197,7 @@ enum class ModelSortOption {
 @Immutable
 data class ApiModelConfigUi(
     val id: ApiModelConfigurationId = ApiModelConfigurationId(""),
-    val credentialsId: Long = 0,
+    val credentialsId: ApiCredentialsId = ApiCredentialsId(""),
     val displayName: String = "",
     val maxTokens: String = "4096",
     val contextWindow: String = "4096",
@@ -222,11 +224,12 @@ data class DiscoveredApiModelUi(
     val promptPrice: Double? = null,
     val completionPrice: Double? = null,
     val providerName: String? = null,
+    val visionCapable: Boolean? = null,
 )
 
 @Immutable
 data class LocalModelAssetUi(
-    val metadataId: Long,
+    val metadataId: LocalModelId,
     val huggingFaceModelName: String,
     val friendlyName: String,
     val providerName: String,
@@ -241,7 +244,7 @@ data class LocalModelAssetUi(
 @Immutable
 data class LocalModelConfigUi(
     val id: LocalModelConfigurationId = LocalModelConfigurationId(""),
-    val localModelId: Long = 0,
+    val localModelId: LocalModelId = LocalModelId(""),
     val displayName: String = "",
     val maxTokens: String = "4096",
     val contextWindow: String = "4096",
@@ -293,7 +296,7 @@ internal val ModelType.description: String
 object MockSettingsData {
     val localModels = listOf(
         LocalModelAssetUi(
-            metadataId = 1,
+            metadataId = LocalModelId("1"),
             huggingFaceModelName = "meta-llama/Meta-Llama-3-8B-Instruct",
             friendlyName = "Meta Llama 3 8B Instruct",
             providerName = "meta-llama",
@@ -301,13 +304,13 @@ object MockSettingsData {
             remoteFileName = "Meta-Llama-3-8B-Instruct-Q4_K_M.gguf",
             sizeInBytes = 4_920_000_000L,
             configurations = listOf(
-                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-1"), localModelId = 1, displayName = "Default", temperature = 0.7),
-                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-2"), localModelId = 1, displayName = "Creative", temperature = 1.2),
-                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-3"), localModelId = 1, displayName = "Precise", temperature = 0.1)
+                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-1"), localModelId = LocalModelId("1"), displayName = "Default", temperature = 0.7),
+                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-2"), localModelId = LocalModelId("1"), displayName = "Creative", temperature = 1.2),
+                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-3"), localModelId = LocalModelId("1"), displayName = "Precise", temperature = 0.1)
             )
         ),
         LocalModelAssetUi(
-            metadataId = 2,
+            metadataId = LocalModelId("2"),
             huggingFaceModelName = "google/gemma-2-9b-it",
             friendlyName = "gemma 2 9b it",
             providerName = "google",
@@ -315,14 +318,14 @@ object MockSettingsData {
             remoteFileName = "gemma-2-9b-it-Q4_K_M.gguf",
             sizeInBytes = 5_400_000_000L,
             configurations = listOf(
-                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-4"), localModelId = 2, displayName = "Standard", temperature = 0.8)
+                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-4"), localModelId = LocalModelId("2"), displayName = "Standard", temperature = 0.8)
             )
         )
     )
 
     val apiModels = listOf(
         ApiModelAssetUi(
-            credentialsId = 1,
+            credentialsId = ApiCredentialsId("1"),
             displayName = "GPT-4o",
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
@@ -330,12 +333,12 @@ object MockSettingsData {
             isVision = true,
             credentialAlias = "OpenAI Primary",
             configurations = listOf(
-                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-1"), credentialsId = 1, displayName = "Balanced", temperature = 0.7),
-                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-2"), credentialsId = 1, displayName = "Creative", temperature = 1.0)
+                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-1"), credentialsId = ApiCredentialsId("1"), displayName = "Balanced", temperature = 0.7),
+                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-2"), credentialsId = ApiCredentialsId("1"), displayName = "Creative", temperature = 1.0)
             )
         ),
         ApiModelAssetUi(
-            credentialsId = 2,
+            credentialsId = ApiCredentialsId("2"),
             displayName = "Claude 3.5 Sonnet",
             provider = ApiProvider.ANTHROPIC,
             modelId = "claude-3-5-sonnet-20240620",
@@ -343,11 +346,11 @@ object MockSettingsData {
             isVision = true,
             credentialAlias = "Anthropic Work",
             configurations = listOf(
-                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-3"), credentialsId = 2, displayName = "Standard", temperature = 0.7)
+                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-3"), credentialsId = ApiCredentialsId("2"), displayName = "Standard", temperature = 0.7)
             )
         ),
         ApiModelAssetUi(
-            credentialsId = 3,
+            credentialsId = ApiCredentialsId("3"),
             displayName = "OpenRouter GPT-5.2",
             provider = ApiProvider.OPENROUTER,
             modelId = "openai/gpt-5.2",
@@ -357,7 +360,7 @@ object MockSettingsData {
             configurations = listOf(
                 ApiModelConfigUi(
                     id = ApiModelConfigurationId("cfg-4"),
-                    credentialsId = 3,
+                    credentialsId = ApiCredentialsId("3"),
                     displayName = "Reliability",
                     temperature = 0.3,
                     openRouterRouting = OpenRouterRoutingConfiguration()

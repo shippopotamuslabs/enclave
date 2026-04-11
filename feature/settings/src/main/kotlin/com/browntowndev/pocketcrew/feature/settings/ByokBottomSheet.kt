@@ -50,6 +50,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -73,7 +74,7 @@ fun ByokBottomSheet(
     onStartCreateApiModelAsset: () -> Unit,
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
-    onDeleteApiModelAsset: (Long) -> Unit,
+    onDeleteApiModelAsset: (ApiCredentialsId) -> Unit,
     onDeleteApiModelConfig: (ApiModelConfigurationId) -> Unit,
     onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onDismissDeletionSafety: () -> Unit
@@ -255,7 +256,7 @@ private fun ByokAssetListView(
             modifier = Modifier.weight(1f, fill = false),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            items(apiModels, key = { it.credentialsId }) { asset ->
+            items(apiModels, key = { it.credentialsId.value }) { asset ->
                 var menuExpanded by remember { mutableStateOf(false) }
 
                 Box {
@@ -516,7 +517,7 @@ private sealed interface ByokDeleteTarget {
     val displayName: String
 
     data class Asset(
-        val id: Long,
+        val id: ApiCredentialsId,
         override val displayName: String
     ) : ByokDeleteTarget
 

@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.feature.settings
 
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
@@ -192,7 +193,7 @@ internal fun DefaultModelAssignment.toUi(): DefaultModelAssignmentUi = DefaultMo
 )
 
 internal fun blankApiModelAssetDraft(): ApiModelAssetUi = ApiModelAssetUi(
-    credentialsId = 0L,
+    credentialsId = ApiCredentialsId(""),
     displayName = "",
     provider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.ANTHROPIC,
     modelId = "",
@@ -217,5 +218,6 @@ internal fun DiscoveredApiModel.toUi(): DiscoveredApiModelUi {
         promptPrice = promptPrice,
         completionPrice = completionPrice,
         providerName = provider,
+        visionCapable = visionCapable,
     )
 }

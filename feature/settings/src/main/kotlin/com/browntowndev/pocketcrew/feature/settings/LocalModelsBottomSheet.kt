@@ -53,6 +53,7 @@ import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSh
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.launch
 
@@ -73,7 +74,7 @@ fun LocalModelsBottomSheet(
     onNavigateToLocalModelConfigure: () -> Unit,
     onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
-    onDeleteLocalModelAsset: (Long) -> Unit,
+    onDeleteLocalModelAsset: (LocalModelId) -> Unit,
     onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
     onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onDismissDeletionSafety: () -> Unit
@@ -246,7 +247,7 @@ private fun LocalModelAssetListView(
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
-                items(localModels, key = { it.metadataId }) { asset ->
+                items(localModels, key = { it.metadataId.value }) { asset ->
                     LocalModelAssetCard(
                         asset = asset,
                         onSelectAsset = onSelectAsset,
@@ -265,7 +266,7 @@ private fun LocalModelAssetListView(
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
-                items(availableToDownloadModels, key = { "dl_${it.metadataId}" }) { asset ->
+                items(availableToDownloadModels, key = { "dl_${it.metadataId.value}" }) { asset ->
                     LocalModelAssetCard(
                         asset = asset,
                         onSelectAsset = { /* Re-download logic */ },
@@ -524,7 +525,7 @@ private sealed interface LocalDeleteTarget {
     val displayName: String
 
     data class Asset(
-        val id: Long,
+        val id: LocalModelId,
         override val displayName: String
     ) : LocalDeleteTarget
 

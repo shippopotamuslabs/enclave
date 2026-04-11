@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.collect
 
@@ -113,7 +114,7 @@ fun ByokConfigureScreen(
     onSearchEnabledChange: (Boolean) -> Unit,
     onSearchApiKeyChange: (String) -> Unit,
     onClearSearchApiKey: () -> Unit,
-    onSelectReusableApiCredential: (Long?) -> Unit,
+    onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
     onFetchApiModels: () -> Unit,
     onUpdateModelSearchQuery: (String) -> Unit,
     onUpdateModelProviderFilter: (String?) -> Unit,
@@ -132,7 +133,7 @@ fun ByokConfigureScreen(
         else -> "Provider Credentials"
     }
     val draftAsset = uiState.apiProviderEditor.assetDraft ?: ApiModelAssetUi(
-        credentialsId = 0,
+        credentialsId = ApiCredentialsId(""),
         displayName = "",
         provider = ApiProvider.ANTHROPIC,
         modelId = "",
@@ -155,7 +156,7 @@ fun ByokConfigureScreen(
                 selectedConfig.contextWindow.isNotBlank() &&
                 topKValid
     } else {
-        if (draftAsset.credentialsId == 0L) {
+        if (draftAsset.credentialsId.value.isEmpty()) {
             draftAsset.displayName.isNotBlank() &&
                     draftAsset.modelId.isNotBlank() &&
                     (apiKey.isNotBlank() || uiState.apiProviderEditor.selectedReusableCredential != null)
@@ -257,6 +258,9 @@ fun ByokConfigureScreen(
                     apiKey = apiKey,
                     availableModels = uiState.apiProviderEditor.discovery.models,
                     filteredModels = uiState.apiProviderEditor.discovery.filteredModels,
+                    selectedModelMetadata = uiState.apiProviderEditor.discovery.models.find {
+                        it.modelId == draftAsset.modelId
+                    },
                     isFetchingModels = uiState.apiProviderEditor.discovery.isLoading,
                     searchQuery = uiState.apiProviderEditor.discovery.searchQuery,
                     providerFilter = uiState.apiProviderEditor.discovery.providerFilter,
