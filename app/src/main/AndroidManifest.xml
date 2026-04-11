@@ -16,6 +16,11 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="false"
         android:theme="@style/Theme.PocketCrew">
+        
+        <!-- Required for LiteRT GPU Backend support on Android -->
+        <uses-native-library android:name="libvndksupport.so" android:required="false" />
+        <uses-native-library android:name="libOpenCL.so" android:required="false" />
+        
         <activity
             android:name=".presentation.MainActivity"
             android:exported="true"

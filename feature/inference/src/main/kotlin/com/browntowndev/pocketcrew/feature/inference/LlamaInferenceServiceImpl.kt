@@ -19,13 +19,16 @@ import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManag
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import javax.inject.Inject
 
 /**
@@ -50,7 +53,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
     }
 
     private data class SessionSignature(
-        val modelId: Long,
+        val modelId: LocalModelId,
         val configId: LocalModelConfigurationId,
         val reasoningBudget: Int,
         val temperature: Float,
@@ -122,6 +125,14 @@ class LlamaInferenceServiceImpl @Inject constructor(
         hasTriedCpuFallback = false
 
         val modelPath = getModelPath(asset.metadata.localFileName)
+        val mmprojPath = asset.metadata.mmprojLocalFileName?.let(::getModelPath)
+        if (options.imageUris.isNotEmpty() &&
+            asset.metadata.visionCapable &&
+            asset.metadata.modelFileFormat == com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.GGUF &&
+            mmprojPath.isNullOrBlank()
+        ) {
+            throw IllegalStateException("Vision-capable GGUF model requires an mmproj companion file.")
+        }
         val systemPrompt = activeConfig.systemPrompt ?: "You are a helpful assistant."
         val samplingConfig = LlamaSamplingConfig(
             temperature = targetTemperature,
@@ -140,6 +151,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             sessionManager.initializeEngine(
                 LlamaModelConfig(
                     modelPath = modelPath,
+                    mmprojPath = mmprojPath,
                     systemPrompt = systemPrompt,
                     sampling = samplingConfig
                 )
@@ -157,6 +169,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 sessionManager.initializeEngine(
                     LlamaModelConfig(
                         modelPath = modelPath,
+                        mmprojPath = mmprojPath,
                         systemPrompt = systemPrompt,
                         sampling = cpuConfig
                     )
@@ -211,8 +224,23 @@ class LlamaInferenceServiceImpl @Inject constructor(
         // Get model type from options (we'll need to add it to GenerationOptions)
         val targetModelType = options.modelType ?: ModelType.FAST
 
+        // Downscale images and save them to temporary files for the JNI engine
+        val processedOptions = if (options.imageUris.isNotEmpty()) {
+            val downscaledUris = options.imageUris.map { uri ->
+                try {
+                    "file://" + ImageDownscaler.downscaleToTempFile(context, uri)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to downscale image $uri", e)
+                    uri // fallback to original if it fails
+                }
+            }
+            options.copy(imageUris = downscaledUris)
+        } else {
+            options
+        }
+
         try {
-            ensureModelLoaded(targetModelType, options)
+            ensureModelLoaded(targetModelType, processedOptions)
         } catch (e: Exception) {
             emit(InferenceEvent.Error(e, targetModelType))
             return@flow
@@ -224,8 +252,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
         try {
             sessionManager.sendUserMessage(prompt)
 
-            if (SearchToolSupport.hasLocalToolContract(options.systemPrompt)) {
-                executeToolingPrompt(options, targetModelType) { emit(it) }
+            if (SearchToolSupport.hasLocalToolContract(processedOptions.systemPrompt)) {
+                executeToolingPrompt(processedOptions, targetModelType) { emit(it) }
                 if (closeConversation) {
                     sessionManager.clearConversation()
                 }
@@ -233,7 +261,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             }
 
             // Use options-aware streaming instead of mutating samplingConfig
-            sessionManager.streamAssistantResponseWithOptions(options).collect { event ->
+            sessionManager.streamAssistantResponseWithOptions(processedOptions).collect { event ->
                 when (event) {
                     is GenerationEvent.Token -> {
                         val state = processThinkingTokens(
@@ -277,8 +305,26 @@ class LlamaInferenceServiceImpl @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error during inference", e)
             emit(InferenceEvent.Error(e, targetModelType))
+        } finally {
+            // Clean up temp files created for this prompt
+            if (options.imageUris.isNotEmpty()) {
+                processedOptions.imageUris.forEach { uriString ->
+                    if (uriString.startsWith("file://")) {
+                        try {
+                            val path = uriString.removePrefix("file://")
+                            val file = java.io.File(path)
+                            if (file.exists() && file.parentFile?.name == context.cacheDir.name) {
+                                file.delete()
+                                Log.d(TAG, "Cleaned up temp image: $path")
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to clean up temp image $uriString", e)
+                        }
+                    }
+                }
+            }
         }
-    }
+    }.flowOn(Dispatchers.Default)
 
     private suspend fun executeToolingPrompt(
         options: GenerationOptions,

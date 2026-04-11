@@ -24,14 +24,17 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
 import com.browntowndev.pocketcrew.feature.inference.llama.GpuProfiler
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaBackend
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.MessageDigest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Provider
 import javax.inject.Singleton
@@ -43,9 +46,9 @@ class MediaPipeInferenceServiceFactory @Inject constructor(
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
     private val gpuProfiler: GpuProfiler,
 ) {
-    suspend fun create(modelPath: String, modelType: ModelType, toolExecutor: ToolExecutorPort): LlmInferencePort {
+    suspend fun create(modelPath: String, modelType: ModelType, toolExecutor: ToolExecutorPort): LlmInferencePort = withContext(Dispatchers.IO) {
         val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
-        val contextWindow = activeConfig?.contextWindow ?: activeConfig?.maxTokens ?: 16384
+        val contextWindow = activeConfig?.contextWindow ?: activeConfig?.maxTokens ?: 4096
         val detectedBackend = gpuProfiler.detectOptimalBackend()
         val preferredBackend = if (detectedBackend != LlamaBackend.CPU) {
             LlmInference.Backend.GPU
@@ -56,10 +59,12 @@ class MediaPipeInferenceServiceFactory @Inject constructor(
         val options = LlmInference.LlmInferenceOptions.builder()
             .setModelPath(modelPath)
             .setMaxTokens(contextWindow)
+            .setMaxNumImages(10)
             .setPreferredBackend(preferredBackend)
             .build()
-        return MediaPipeInferenceServiceImpl(
+        return@withContext MediaPipeInferenceServiceImpl(
             LlmInferenceWrapper(LlmInference.createFromOptions(context, options)),
+            context,
             modelType,
             activeModelProvider,
             processThinkingTokens,
@@ -100,7 +105,7 @@ class InferenceFactoryImpl @Inject constructor(
         data class Api(
             val modelType: ModelType,
             val configId: ApiModelConfigurationId,
-            val credentialsId: Long,
+            val credentialsId: ApiCredentialsId,
             val provider: ApiProvider,
             val modelId: String,
             val baseUrl: String?,
@@ -114,7 +119,6 @@ class InferenceFactoryImpl @Inject constructor(
         data class Local(
             val modelSha256: String,
             val extension: String,
-            val localConfigId: LocalModelConfigurationId,
         ) : ServiceIdentity
     }
 
@@ -139,9 +143,17 @@ class InferenceFactoryImpl @Inject constructor(
             throw InferenceBusyException()
         }
 
-        try {
-            val service = resolveService(modelType)
-            return block(service)
+        val service = try {
+            withContext(Dispatchers.IO) {
+                resolveService(modelType)
+            }
+        } catch (e: Exception) {
+            inferenceLockManager.releaseLock()
+            throw e
+        }
+
+        return try {
+            block(service)
         } finally {
             inferenceLockManager.releaseLock()
         }
@@ -277,7 +289,6 @@ class InferenceFactoryImpl @Inject constructor(
         val requestedIdentity = ServiceIdentity.Local(
             modelSha256 = asset.metadata.sha256,
             extension = extension,
-            localConfigId = localConfigId
         )
  
         return mutex.withLock {
@@ -322,6 +333,13 @@ class InferenceFactoryImpl @Inject constructor(
                 "task" -> {
                     val modelPath = getModelPath(filename)
                     mediaPipeFactory.create(modelPath, modelType, toolExecutor)
+                }
+                "litertlm" -> {
+                    LiteRtInferenceServiceImpl(
+                        conversationManager = conversationManagerProvider.get(),
+                        processThinkingTokens = processThinkingTokens,
+                        modelType = modelType,
+                    )
                 }
                 else -> {
                     LiteRtInferenceServiceImpl(

@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.testing
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
@@ -113,6 +114,7 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
                         partialDownloads = emptyMap(),
                         allValid = true,
                     ),
+                availableToRedownload = emptyList()
             )
         return startDownloads(modelsResult, wifiOnly)
     }
@@ -145,7 +147,7 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
 }
 
 class FakeLocalModelRepository : LocalModelRepositoryPort {
-    private val assetsFlow = MutableStateFlow<Map<Long, LocalModelAsset>>(emptyMap())
+    private val assetsFlow = MutableStateFlow<Map<LocalModelId, LocalModelAsset>>(emptyMap())
 
     override suspend fun getAllLocalAssets(): List<LocalModelAsset> = assetsFlow.value.values.toList()
 
@@ -155,13 +157,13 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
 
     override suspend fun clearAll() {}
 
-    override suspend fun upsertLocalAsset(asset: LocalModelAsset): Long = asset.metadata.id
+    override suspend fun upsertLocalAsset(asset: LocalModelAsset): LocalModelId = asset.metadata.id
 
     override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId = config.id
 
-    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long = 0L
+    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): LocalModelId = metadata.id
 
-    override suspend fun deleteLocalModelMetadata(id: Long) {}
+    override suspend fun deleteLocalModelMetadata(id: LocalModelId) {}
 
     override suspend fun saveConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId = config.id
 
@@ -169,9 +171,9 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
 
     override suspend fun getConfigurationById(id: LocalModelConfigurationId): LocalModelConfiguration? = null
 
-    override suspend fun getAllConfigurationsForAsset(localModelId: Long): List<LocalModelConfiguration> = emptyList()
+    override suspend fun getAllConfigurationsForAsset(localModelId: LocalModelId): List<LocalModelConfiguration> = emptyList()
 
-    override suspend fun deleteAllConfigurationsForAsset(localModelId: Long) {}
+    override suspend fun deleteAllConfigurationsForAsset(localModelId: LocalModelId) {}
 
     /**
      * Returns models that were previously downloaded but have been soft-deleted.
@@ -187,7 +189,7 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
      * @param id The LocalModelEntity database ID
      * @return The LocalModelAsset if found, null otherwise
      */
-    override suspend fun getAssetById(id: Long): LocalModelAsset? = assetsFlow.value.values.find { it.metadata.id == id }
+    override suspend fun getAssetById(id: LocalModelId): LocalModelAsset? = assetsFlow.value.values.find { it.metadata.id == id }
 }
 
 class FakeLoggingPort : LoggingPort {

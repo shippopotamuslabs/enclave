@@ -11,10 +11,12 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
+import io.mockk.slot
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -58,5 +60,21 @@ class LiteRtInferenceServiceImplGenerationOptionsTest {
         // Actually collect the flow to exercise the implementation
         val events = service.sendPrompt("hello", options, closeConversation = false).toList()
         assertTrue(events.isNotEmpty(), "Flow must emit events, not throw NotImplementedError")
+    }
+
+    @Test
+    fun `sendPrompt with image uris forwards multimodal options to conversation`() = runTest {
+        val options = GenerationOptions(
+            reasoningBudget = 0,
+            imageUris = listOf("file:///tmp/test-image.jpg"),
+        )
+        val optionSlot = slot<GenerationOptions>()
+        val responses = flowOf(ConversationResponse(text = "response"))
+        every { mockConversation.sendMessageAsync(any(), capture(optionSlot)) } returns responses
+
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.VISION)
+        service.sendPrompt("describe", options, closeConversation = false).toList()
+
+        assertEquals(listOf("file:///tmp/test-image.jpg"), optionSlot.captured.imageUris)
     }
 }

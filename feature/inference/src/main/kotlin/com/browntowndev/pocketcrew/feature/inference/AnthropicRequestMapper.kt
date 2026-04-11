@@ -6,7 +6,12 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.anthropic.core.JsonValue
+import com.anthropic.models.messages.Base64ImageSource
 import com.anthropic.models.messages.MessageCreateParams
+import com.anthropic.models.messages.MessageParam
+import com.anthropic.models.messages.ContentBlockParam
+import com.anthropic.models.messages.ImageBlockParam
+import com.anthropic.models.messages.TextBlockParam
 import com.anthropic.models.messages.ThinkingConfigEnabled
 import com.anthropic.models.messages.Tool
 
@@ -49,7 +54,7 @@ object AnthropicRequestMapper {
                 }
             }
 
-        builder.addUserMessage(prompt)
+        builder.addMessage(buildUserMessage(prompt, options.imageUris))
         if (options.toolingEnabled) {
             options.availableTools.forEach { builder.addTool(it.toAnthropicTool()) }
         }
@@ -115,4 +120,47 @@ object AnthropicRequestMapper {
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
+
+    private fun buildUserMessage(
+        prompt: String,
+        imageUris: List<String>,
+    ): MessageParam {
+        if (imageUris.isEmpty()) {
+            return MessageParam.builder()
+                .role(MessageParam.Role.USER)
+                .content(prompt)
+                .build()
+        }
+
+        val blocks = buildList {
+            add(ContentBlockParam.ofText(TextBlockParam.builder().text(prompt).build()))
+            ImagePayloads.fromUris(imageUris).forEach { payload ->
+                add(
+                    ContentBlockParam.ofImage(
+                        ImageBlockParam.builder()
+                            .source(
+                                Base64ImageSource.builder()
+                                    .data(payload.base64)
+                                    .mediaType(payload.mimeType.toAnthropicMediaType())
+                                    .build()
+                            )
+                            .build()
+                    )
+                )
+            }
+        }
+
+        return MessageParam.builder()
+            .role(MessageParam.Role.USER)
+            .contentOfBlockParams(blocks)
+            .build()
+    }
+
+    private fun String.toAnthropicMediaType(): Base64ImageSource.MediaType =
+        when (lowercase()) {
+            "image/png" -> Base64ImageSource.MediaType.IMAGE_PNG
+            "image/gif" -> Base64ImageSource.MediaType.IMAGE_GIF
+            "image/webp" -> Base64ImageSource.MediaType.IMAGE_WEBP
+            else -> Base64ImageSource.MediaType.IMAGE_JPEG
+        }
 }

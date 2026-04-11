@@ -20,23 +20,29 @@ import app.cash.turbine.test
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
+import com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import io.mockk.*
 import java.io.IOException
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 
 
 
@@ -50,6 +56,7 @@ import org.junit.jupiter.api.Test
  *
  * REF: Bug fix - thinkingDurationSeconds was requireNotNull'd but never set during THINKING state
  */
+@ExtendWith(MainDispatcherRule::class)
 class ChatViewModelTest {
 
     private lateinit var chatViewModel: ChatViewModel
@@ -57,6 +64,7 @@ class ChatViewModelTest {
     private lateinit var chatUseCases: ChatUseCases
     private lateinit var inferenceLockManager: InferenceLockManager
     private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
+    private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
     private lateinit var errorHandler: ViewModelErrorHandler
 
     @BeforeEach
@@ -65,6 +73,7 @@ class ChatViewModelTest {
         chatUseCases = mockk(relaxed = true)
         inferenceLockManager = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
+        stageImageAttachmentUseCase = mockk(relaxed = true)
         
         // Stub coroutineExceptionHandler to return a real one to avoid ClassCastException with MockK
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
@@ -78,6 +87,7 @@ class ChatViewModelTest {
         chatViewModel = ChatViewModel(
             settingsUseCases = settingsUseCases,
             chatUseCases = chatUseCases,
+            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             savedStateHandle = savedStateHandle,
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
@@ -108,6 +118,31 @@ class ChatViewModelTest {
         }
     }
 
+    @Test
+    fun `onSendMessage allows image only messages`() = runTest {
+        coEvery { stageImageAttachmentUseCase.invoke(any()) } returns "file:///tmp/cached.jpg"
+        coEvery { chatUseCases.processPrompt(any()) } returns CreateUserMessageUseCase.PromptResult(
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            chatId = ChatId("chat"),
+        )
+        coEvery { chatUseCases.generateChatResponse(any(), any(), any(), any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
+
+        chatViewModel.onImageSelected("content://picked/image")
+        advanceUntilIdle()
+        chatViewModel.onSendMessage()
+        advanceUntilIdle()
+
+        coVerify {
+            chatUseCases.processPrompt(
+                match {
+                    it.content.imageUri == "file:///tmp/cached.jpg" &&
+                        it.content.text.isBlank()
+                }
+            )
+        }
+    }
+
     // ========================================================================
     // Bug Fix Test: Nullable duration during THINKING state
     // The app was crashing with IllegalArgumentException: Required value was null
@@ -120,8 +155,8 @@ class ChatViewModelTest {
         // Given: A message in THINKING state with null thinkingDurationSeconds
         // This simulates the bug scenario where duration was never set during THINKING
         val message = Message(
-            id = 1L,
-            chatId = 1L,
+            id = MessageId("1"),
+            chatId = ChatId("1"),
             content = Content(text = "Thinking..."),
             role = Role.ASSISTANT,
             messageState = MessageState.THINKING,
@@ -149,8 +184,8 @@ class ChatViewModelTest {
     fun `computeIndicatorState THINKING with duration works correctly`() = runTest {
         // Given: A message in THINKING state with duration set
         val message = Message(
-            id = 1L,
-            chatId = 1L,
+            id = MessageId("1"),
+            chatId = ChatId("1"),
             content = Content(text = "Thinking..."),
             role = Role.ASSISTANT,
             messageState = MessageState.THINKING,
@@ -172,8 +207,8 @@ class ChatViewModelTest {
     fun `computeIndicatorState PROCESSING returns Processing state`() = runTest {
         // Given: A message in PROCESSING state
         val message = Message(
-            id = 1L,
-            chatId = 1L,
+            id = MessageId("1"),
+            chatId = ChatId("1"),
             content = Content(text = "Processing..."),
             role = Role.ASSISTANT,
             messageState = MessageState.PROCESSING
@@ -190,8 +225,8 @@ class ChatViewModelTest {
     fun `computeIndicatorState GENERATING with null duration returns null thinkingData`() = runTest {
         // Given: A message in GENERATING state with null duration
         val message = Message(
-            id = 1L,
-            chatId = 1L,
+            id = MessageId("1"),
+            chatId = ChatId("1"),
             content = Content(text = "Generating..."),
             role = Role.ASSISTANT,
             messageState = MessageState.GENERATING,
@@ -212,8 +247,8 @@ class ChatViewModelTest {
     fun `computeIndicatorState GENERATING with duration returns thinkingData`() = runTest {
         // Given: A message in GENERATING state with duration set
         val message = Message(
-            id = 1L,
-            chatId = 1L,
+            id = MessageId("1"),
+            chatId = ChatId("1"),
             content = Content(text = "Generating response..."),
             role = Role.ASSISTANT,
             messageState = MessageState.GENERATING,
@@ -236,8 +271,8 @@ class ChatViewModelTest {
     fun `computeIndicatorState COMPLETE with duration returns thinkingData`() = runTest {
         // Given: A message in COMPLETE state with duration set
         val message = Message(
-            id = 1L,
-            chatId = 1L,
+            id = MessageId("1"),
+            chatId = ChatId("1"),
             content = Content(text = "Response complete"),
             role = Role.ASSISTANT,
             messageState = MessageState.COMPLETE,
@@ -260,8 +295,8 @@ class ChatViewModelTest {
     fun `computeIndicatorState USER returns None`() = runTest {
         // Given: A user message
         val message = Message(
-            id = 1L,
-            chatId = 1L,
+            id = MessageId("1"),
+            chatId = ChatId("1"),
             content = Content(text = "User message"),
             role = Role.USER,
             messageState = MessageState.COMPLETE
@@ -278,8 +313,8 @@ class ChatViewModelTest {
     fun `computeIndicatorState COMPLETE with null duration returns null thinkingData`() = runTest {
         // Given: A message in COMPLETE state with null duration (edge case)
         val message = Message(
-            id = 1L,
-            chatId = 1L,
+            id = MessageId("1"),
+            chatId = ChatId("1"),
             content = Content(text = "Response complete"),
             role = Role.ASSISTANT,
             messageState = MessageState.COMPLETE,
@@ -306,8 +341,8 @@ class ChatViewModelTest {
         val expectedPipelineStep = PipelineStep.DRAFT_ONE
 
         val message = Message(
-            id = 2L,
-            chatId = 1L,
+            id = MessageId("2"),
+            chatId = ChatId("1"),
             content = Content(text = "Response content", pipelineStep = expectedPipelineStep),
             role = Role.ASSISTANT,
             messageState = MessageState.GENERATING,
@@ -330,8 +365,8 @@ class ChatViewModelTest {
     fun `mapToChatMessage with null pipelineStep returns null`() = runTest {
         // Given: A message with null pipelineStep
         val message = Message(
-            id = 2L,
-            chatId = 1L,
+            id = MessageId("2"),
+            chatId = ChatId("1"),
             content = Content(text = "Response content", pipelineStep = null),
             role = Role.ASSISTANT,
             messageState = MessageState.GENERATING

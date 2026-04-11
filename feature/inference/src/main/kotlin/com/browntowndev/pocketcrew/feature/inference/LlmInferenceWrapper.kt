@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import com.google.mediapipe.framework.image.MPImage
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession
@@ -10,6 +11,7 @@ import com.google.mediapipe.tasks.genai.llminference.ProgressListener
  */
 interface LlmSessionPort : AutoCloseable {
     fun addQueryChunk(chunk: String)
+    fun addImage(image: MPImage)
     fun generateResponseAsync(progressListener: ProgressListener<String>): ListenableFuture<String>
     override fun close()
 }
@@ -20,6 +22,10 @@ interface LlmSessionPort : AutoCloseable {
 class MediaPipeSessionWrapper(private val session: LlmInferenceSession) : LlmSessionPort {
     override fun addQueryChunk(chunk: String) {
         session.addQueryChunk(chunk)
+    }
+
+    override fun addImage(image: MPImage) {
+        session.addImage(image)
     }
 
     override fun generateResponseAsync(progressListener: ProgressListener<String>): ListenableFuture<String> {

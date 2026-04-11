@@ -40,6 +40,7 @@ dependencies {
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
     // Compose
@@ -54,6 +55,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.text)
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.coil.compose)
 
     // Navigation
     implementation(libs.navigation.compose)

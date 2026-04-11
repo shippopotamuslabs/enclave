@@ -3,6 +3,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
@@ -16,12 +17,9 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
@@ -111,7 +109,7 @@ class HistoryViewModel @Inject constructor(
         )
     }
 
-    fun deleteChat(id: Long) {
+    fun deleteChat(id: ChatId) {
         viewModelScope.launch {
             try {
                 deleteChatUseCase(id)
@@ -121,7 +119,7 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
-    fun renameChat(id: Long, newName: String) {
+    fun renameChat(id: ChatId, newName: String) {
         viewModelScope.launch {
             try {
                 renameChatUseCase(id, newName)
@@ -131,11 +129,11 @@ class HistoryViewModel @Inject constructor(
         }
     }
 
-    fun pinChat(id: Long) = togglePin(id)
+    fun pinChat(id: ChatId) = togglePin(id)
 
-    fun unpinChat(id: Long) = togglePin(id)
+    fun unpinChat(id: ChatId) = togglePin(id)
 
-    private fun togglePin(id: Long) {
+    private fun togglePin(id: ChatId) {
         viewModelScope.launch {
             try {
                 togglePinChatUseCase(id)

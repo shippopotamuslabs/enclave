@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.feature.history
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
@@ -80,7 +81,7 @@ class HistoryViewModelTest {
     }.time
 
     private fun createTestChat(
-        id: Long,
+        id: ChatId,
         name: String,
         lastModified: Date,
         pinned: Boolean
@@ -132,10 +133,10 @@ class HistoryViewModelTest {
     @Test
     fun `B1 loads chats on initialization`() = runTest(testDispatcher) {
         val testChats = listOf(
-            createTestChat(1, "Alpha", today, pinned = true),
-            createTestChat(2, "Beta", yesterday, pinned = true),
-            createTestChat(3, "Gamma", oct24, pinned = false),
-            createTestChat(4, "Delta", today, pinned = false)
+            createTestChat(ChatId("1"), "Alpha", today, pinned = true),
+            createTestChat(ChatId("2"), "Beta", yesterday, pinned = true),
+            createTestChat(ChatId("3"), "Gamma", oct24, pinned = false),
+            createTestChat(ChatId("4"), "Delta", today, pinned = false)
         )
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
@@ -154,7 +155,7 @@ class HistoryViewModelTest {
 
     @Test
     fun `B2 maps Chat to HistoryChat correctly`() = runTest(testDispatcher) {
-        val testChat = createTestChat(42, "Test Chat", today, pinned = false)
+        val testChat = createTestChat(ChatId("42"), "Test Chat", today, pinned = false)
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
@@ -167,7 +168,7 @@ class HistoryViewModelTest {
         val state = viewModel.uiState.value
         assertEquals(1, state.otherChats.size)
         val historyChat = state.otherChats.first()
-        assertEquals(42L, historyChat.id)
+        assertEquals(ChatId("42"), historyChat.id)
         assertEquals("Test Chat", historyChat.name)
         assertEquals("Today, 10:30 AM", historyChat.lastMessageDateTime)
         assertFalse(historyChat.isPinned)
@@ -175,7 +176,7 @@ class HistoryViewModelTest {
 
     @Test
     fun `B3 pinned chats appear in pinned section`() = runTest(testDispatcher) {
-        val pinnedChat = createTestChat(1, "Pinned Chat", today, pinned = true)
+        val pinnedChat = createTestChat(ChatId("1"), "Pinned Chat", today, pinned = true)
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
@@ -186,13 +187,13 @@ class HistoryViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertTrue(state.pinnedChats.any { it.id == 1L })
+        assertTrue(state.pinnedChats.any { it.id == ChatId("1") })
         assertEquals(1, state.pinnedChats.size)
     }
 
     @Test
     fun `B4 unpinned chats appear in recent section`() = runTest(testDispatcher) {
-        val unpinnedChat = createTestChat(1, "Recent Chat", today, pinned = false)
+        val unpinnedChat = createTestChat(ChatId("1"), "Recent Chat", today, pinned = false)
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
@@ -203,7 +204,7 @@ class HistoryViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertTrue(state.otherChats.any { it.id == 1L })
+        assertTrue(state.otherChats.any { it.id == ChatId("1") })
         assertEquals(1, state.otherChats.size)
     }
 
@@ -225,9 +226,9 @@ class HistoryViewModelTest {
 
     @Test
     fun `B6 chats maintain DAO sort order`() = runTest(testDispatcher) {
-        val chat1 = createTestChat(1, "Most Recent", Date(1700), pinned = false)
-        val chat2 = createTestChat(2, "Middle", Date(1500), pinned = false)
-        val chat3 = createTestChat(3, "Oldest", Date(1200), pinned = false)
+        val chat1 = createTestChat(ChatId("1"), "Most Recent", Date(1700), pinned = false)
+        val chat2 = createTestChat(ChatId("2"), "Middle", Date(1500), pinned = false)
+        val chat3 = createTestChat(ChatId("3"), "Oldest", Date(1200), pinned = false)
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
@@ -239,9 +240,9 @@ class HistoryViewModelTest {
 
         val state = viewModel.uiState.value
         assertEquals(3, state.otherChats.size)
-        assertEquals(1L, state.otherChats[0].id)
-        assertEquals(2L, state.otherChats[1].id)
-        assertEquals(3L, state.otherChats[2].id)
+        assertEquals(ChatId("1"), state.otherChats[0].id)
+        assertEquals(ChatId("2"), state.otherChats[1].id)
+        assertEquals(ChatId("3"), state.otherChats[2].id)
     }
 
     @Test
@@ -256,7 +257,7 @@ class HistoryViewModelTest {
 
     @Test
     fun `B8 loading state false after data arrives`() = runTest(testDispatcher) {
-        val testChat = createTestChat(1, "Test", today, pinned = false)
+        val testChat = createTestChat(ChatId("1"), "Test", today, pinned = false)
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
@@ -272,8 +273,8 @@ class HistoryViewModelTest {
 
     @Test
     fun `B9 pinned chats are sorted by lastModified descending`() = runTest(testDispatcher) {
-        val chat1 = createTestChat(1, "Older Pinned", Date(1000), pinned = true)
-        val chat2 = createTestChat(2, "Newer Pinned", Date(2000), pinned = true)
+        val chat1 = createTestChat(ChatId("1"), "Older Pinned", Date(1000), pinned = true)
+        val chat2 = createTestChat(ChatId("2"), "Newer Pinned", Date(2000), pinned = true)
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
@@ -285,14 +286,14 @@ class HistoryViewModelTest {
 
         val state = viewModel.uiState.value
         assertEquals(2, state.pinnedChats.size)
-        assertEquals(2L, state.pinnedChats[0].id)
-        assertEquals(1L, state.pinnedChats[1].id)
+        assertEquals(ChatId("2"), state.pinnedChats[0].id)
+        assertEquals(ChatId("1"), state.pinnedChats[1].id)
     }
 
     @Test
     fun `deleteChat error invokes errorHandler`() = runTest(testDispatcher) {
         // Given
-        val chatId = 1L
+        val chatId = ChatId("1")
         val exception = RuntimeException("Delete Error")
         coEvery { mockDeleteChatUseCase.invoke(chatId) } throws exception
         
@@ -306,7 +307,7 @@ class HistoryViewModelTest {
         io.mockk.verify {
             mockErrorHandler.handleError(
                 tag = "HistoryViewModel",
-                message = "Failed to delete chat with id: 1",
+                message = "Failed to delete chat with id: ChatId(value=1)",
                 throwable = exception,
                 userMessage = "Failed to delete chat"
             )
@@ -323,7 +324,7 @@ class HistoryViewModelTest {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }.time
-        val testChat = createTestChat(1, "Test", todayDate, pinned = false)
+        val testChat = createTestChat(ChatId("1"), "Test", todayDate, pinned = false)
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
@@ -346,7 +347,7 @@ class HistoryViewModelTest {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }.time
-        val testChat = createTestChat(1, "Test", yesterdayDate, pinned = false)
+        val testChat = createTestChat(ChatId("1"), "Test", yesterdayDate, pinned = false)
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
@@ -370,7 +371,7 @@ class HistoryViewModelTest {
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
         }.time
-        val testChat = createTestChat(1, "Test", oct24Date, pinned = false)
+        val testChat = createTestChat(ChatId("1"), "Test", oct24Date, pinned = false)
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
@@ -400,7 +401,7 @@ class HistoryViewModelTest {
         TimeZone.setDefault(TimeZone.getTimeZone("America/New_York")) // UTC-5 (or -4)
         
         try {
-            val testChat = createTestChat(1, "Test", utcDate, pinned = false)
+            val testChat = createTestChat(ChatId("1"), "Test", utcDate, pinned = false)
             val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
             every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
 
@@ -442,8 +443,8 @@ class HistoryViewModelTest {
     @Test
     fun `E2 empty pinned section when all chats unpinned`() = runTest(testDispatcher) {
         val unpinnedChats = listOf(
-            createTestChat(1, "Chat A", today, pinned = false),
-            createTestChat(2, "Chat B", today, pinned = false)
+            createTestChat(ChatId("1"), "Chat A", today, pinned = false),
+            createTestChat(ChatId("2"), "Chat B", today, pinned = false)
         )
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
@@ -462,8 +463,8 @@ class HistoryViewModelTest {
     @Test
     fun `E3 empty recent section when all chats pinned`() = runTest(testDispatcher) {
         val pinnedChats = listOf(
-            createTestChat(1, "Chat A", today, pinned = true),
-            createTestChat(2, "Chat B", today, pinned = true)
+            createTestChat(ChatId("1"), "Chat A", today, pinned = true),
+            createTestChat(ChatId("2"), "Chat B", today, pinned = true)
         )
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
@@ -488,9 +489,10 @@ class HistoryViewModelTest {
         backgroundScope.launch(UnconfinedTestDispatcher()) { viewModel.uiState.collect() }
         advanceUntilIdle()
         
-        coEvery { mockTogglePinChatUseCase.invoke(9999L) } throws IllegalArgumentException("Chat not found")
-        viewModel.pinChat(9999L)
-        viewModel.unpinChat(9999L)
+        val nonExistentId = ChatId("9999")
+        coEvery { mockTogglePinChatUseCase.invoke(nonExistentId) } throws IllegalArgumentException("Chat not found")
+        viewModel.pinChat(nonExistentId)
+        viewModel.unpinChat(nonExistentId)
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
@@ -500,7 +502,7 @@ class HistoryViewModelTest {
 
     @Test
     fun `E5 settings flow error uses defaults`() = runTest(testDispatcher) {
-        val testChat = createTestChat(1, "Test", today, pinned = false)
+        val testChat = createTestChat(ChatId("1"), "Test", today, pinned = false)
         val chatsFlow = MutableStateFlow(listOf(testChat))
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
         
@@ -547,9 +549,9 @@ class HistoryViewModelTest {
         }.time
 
         val chats = listOf(
-            createTestChat(1, "Alpha", todayDate, pinned = true),
-            createTestChat(2, "Beta", yesterdayDate, pinned = false),
-            createTestChat(3, "Gamma", oct15Date, pinned = true)
+            createTestChat(ChatId("1"), "Alpha", todayDate, pinned = true),
+            createTestChat(ChatId("2"), "Beta", yesterdayDate, pinned = false),
+            createTestChat(ChatId("3"), "Gamma", oct15Date, pinned = true)
         )
         val chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
@@ -585,9 +587,9 @@ class HistoryViewModelTest {
     @Test
     fun `Scenario 1 Initial State Shows All Chats`() = runTest(testDispatcher) {
         val testChats = listOf(
-            createTestChat(1, "Chat 1", today, pinned = false),
-            createTestChat(2, "Chat 2", today, pinned = false),
-            createTestChat(3, "Chat 3", today, pinned = false)
+            createTestChat(ChatId("1"), "Chat 1", today, pinned = false),
+            createTestChat(ChatId("2"), "Chat 2", today, pinned = false),
+            createTestChat(ChatId("3"), "Chat 3", today, pinned = false)
         )
         val chatsFlow = MutableStateFlow(testChats)
         every { mockGetAllChatsUseCase.invoke() } returns chatsFlow
@@ -607,7 +609,7 @@ class HistoryViewModelTest {
     @Test
     fun `Scenario 2 Search by Chat Name`() = runTest(testDispatcher) {
         val allChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-        val matchingChat = createTestChat(1, "Project Plan", today, false)
+        val matchingChat = createTestChat(ChatId("1"), "Project Plan", today, false)
         val searchChatsFlow = MutableStateFlow(listOf(matchingChat))
         
         every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
@@ -623,13 +625,13 @@ class HistoryViewModelTest {
         val allVisibleChats = state.otherChats + state.pinnedChats
         assertEquals(1, allVisibleChats.size)
         assertEquals("Project Plan", allVisibleChats.first().name)
-        assertEquals(1L, allVisibleChats.first().id)
+        assertEquals(ChatId("1"), allVisibleChats.first().id)
     }
 
     @Test
     fun `Scenario 3 Search by Message Content`() = runTest(testDispatcher) {
         val allChatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-        val matchingChat = createTestChat(10, "Kotlin Chat", today, false)
+        val matchingChat = createTestChat(ChatId("10"), "Kotlin Chat", today, false)
         val searchChatsFlow = MutableStateFlow(listOf(matchingChat))
         
         every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
@@ -644,7 +646,7 @@ class HistoryViewModelTest {
         val state = viewModel.uiState.value
         val allVisibleChats = state.otherChats + state.pinnedChats
         assertEquals(1, allVisibleChats.size)
-        assertEquals(10L, allVisibleChats.first().id)
+        assertEquals(ChatId("10"), allVisibleChats.first().id)
     }
 
     @Test
@@ -697,14 +699,14 @@ class HistoryViewModelTest {
     @Test
     fun `Scenario 6 Clear Search Query Restores All Chats`() = runTest(testDispatcher) {
         val testChats = listOf(
-            createTestChat(1, "Chat 1", today, false),
-            createTestChat(2, "Chat 2", today, false),
-            createTestChat(3, "Chat 3", today, false),
-            createTestChat(4, "Chat 4", today, false),
-            createTestChat(5, "Chat 5", today, false)
+            createTestChat(ChatId("1"), "Chat 1", today, false),
+            createTestChat(ChatId("2"), "Chat 2", today, false),
+            createTestChat(ChatId("3"), "Chat 3", today, false),
+            createTestChat(ChatId("4"), "Chat 4", today, false),
+            createTestChat(ChatId("5"), "Chat 5", today, false)
         )
         val allChatsFlow = MutableStateFlow(testChats)
-        val searchResult = createTestChat(1, "Project Chat", today, false)
+        val searchResult = createTestChat(ChatId("1"), "Project Chat", today, false)
         val searchChatsFlow = MutableStateFlow(listOf(searchResult))
         
         every { mockGetAllChatsUseCase.invoke() } returns allChatsFlow
@@ -728,7 +730,7 @@ class HistoryViewModelTest {
         state = viewModel.uiState.value
         assertEquals(5, state.otherChats.size + state.pinnedChats.size)
         val chatIds = (state.otherChats + state.pinnedChats).map { it.id }.toSet()
-        assertEquals(setOf(1L, 2L, 3L, 4L, 5L), chatIds)
+        assertEquals(setOf(ChatId("1"), ChatId("2"), ChatId("3"), ChatId("4"), ChatId("5")), chatIds)
     }
 
     @Test
@@ -753,4 +755,3 @@ class HistoryViewModelTest {
         assertTrue(viewModel.uiState.value.otherChats.isEmpty())
     }
 }
-
