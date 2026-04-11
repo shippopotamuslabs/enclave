@@ -1,7 +1,9 @@
 package com.browntowndev.pocketcrew.domain.usecase
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
@@ -19,18 +21,18 @@ import org.junit.jupiter.api.Assertions
 class FakeChatRepository : ChatRepository {
 
     private val createdChats = mutableListOf<Chat>()
-    private var nextChatId = 1L
+    private var nextChatId = 1
     var shouldThrowOnCreateChat = false
-    private val savedAssistantMessages = mutableListOf<Pair<Long, String>>()
+    private val savedAssistantMessages = mutableListOf<Pair<MessageId, String>>()
 
-    private val messagesFlows = mutableMapOf<Long, MutableStateFlow<List<Message>>>()
+    private val messagesFlows = mutableMapOf<ChatId, MutableStateFlow<List<Message>>>()
     
     // Track incomplete crew messages for testing
     private var incompleteCrewMessages: List<Message> = emptyList()
 
     // For getAllChats and togglePinStatus tests
     private val _chatsFlow = MutableStateFlow<List<Chat>>(emptyList())
-    private val pinnedChats = mutableMapOf<Long, Boolean>()
+    private val pinnedChats = mutableMapOf<ChatId, Boolean>()
     
     fun setChats(chats: List<Chat>) {
         _chatsFlow.value = chats
@@ -39,7 +41,7 @@ class FakeChatRepository : ChatRepository {
     
     override fun getAllChats(): Flow<List<Chat>> = _chatsFlow
     
-    override suspend fun togglePinStatus(chatId: Long) {
+    override suspend fun togglePinStatus(chatId: ChatId) {
         val current = pinnedChats[chatId] ?: return
         pinnedChats[chatId] = !current
         // Update the flow with modified chat
@@ -52,66 +54,67 @@ class FakeChatRepository : ChatRepository {
         incompleteCrewMessages = messages
     }
 
-    override fun getMessagesForChat(chatId: Long): Flow<List<Message>> {
+    override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> {
         return messagesFlows.getOrPut(chatId) { MutableStateFlow(emptyList()) }
     }
 
-    fun setMessagesForChat(chatId: Long, messages: List<Message>) {
+    fun setMessagesForChat(chatId: ChatId, messages: List<Message>) {
         messagesFlows.getOrPut(chatId) { MutableStateFlow(emptyList()) }.value = messages
     }
 
-    override suspend fun updateMessageState(messageId: Long, messageState: MessageState) {
+    override suspend fun updateMessageState(messageId: MessageId, messageState: MessageState) {
         // No-op for testing
     }
 
-    override suspend fun updateMessageContent(messageId: Long, content: String) {
+    override suspend fun updateMessageContent(messageId: MessageId, content: String) {
         // No-op for testing
     }
 
-    override suspend fun appendMessageContent(messageId: Long, content: String) {
+    override suspend fun appendMessageContent(messageId: MessageId, content: String) {
         // No-op for testing
     }
 
-    override suspend fun setThinkingStartTime(messageId: Long) {
+    override suspend fun setThinkingStartTime(messageId: MessageId) {
         // No-op for testing
     }
 
-    override suspend fun setThinkingEndTime(messageId: Long) {
+    override suspend fun setThinkingEndTime(messageId: MessageId) {
         // No-op for testing
     }
 
-    override suspend fun appendThinkingRaw(messageId: Long, thinkingText: String) {
+    override suspend fun appendThinkingRaw(messageId: MessageId, thinkingText: String) {
         // No-op for testing
     }
 
-    override suspend fun clearThinking(messageId: Long) {
+    override suspend fun clearThinking(messageId: MessageId) {
         // No-op for testing
     }
 
-    override suspend fun updateMessageModelType(messageId: Long, modelType: ModelType) {
+    override suspend fun updateMessageModelType(messageId: MessageId, modelType: ModelType) {
         // No-op for testing
     }
 
-    override suspend fun createChat(chat: Chat): Long {
+    override suspend fun createChat(chat: Chat): ChatId {
         if (shouldThrowOnCreateChat) {
             throw RuntimeException("Simulated error on createChat")
         }
-        val chatWithId = chat.copy(id = nextChatId)
+        val id = ChatId((nextChatId++).toString())
+        val chatWithId = chat.copy(id = id)
         createdChats.add(chatWithId)
-        return nextChatId++
+        return id
     }
 
     override suspend fun saveAssistantMessage(
-        messageId: Long,
+        messageId: MessageId,
         content: String,
         thinkingData: ThinkingData?
     ) {
         savedAssistantMessages.add(messageId to content)
     }
 
-    override suspend fun createAssistantMessage(chatId: Long, userMessageId: Long, modelType: ModelType, pipelineStep: PipelineStep?): Long {
+    override suspend fun createAssistantMessage(chatId: ChatId, userMessageId: MessageId, modelType: ModelType, pipelineStep: PipelineStep?): MessageId {
         // Return a fake message ID
-        return nextChatId++
+        return MessageId((nextChatId++).toString())
     }
 
     fun getCreatedChats(): List<Chat> = createdChats.toList()
@@ -129,7 +132,7 @@ class FakeChatRepository : ChatRepository {
 
     fun reset() {
         createdChats.clear()
-        nextChatId = 1L
+        nextChatId = 1
         shouldThrowOnCreateChat = false
         savedAssistantMessages.clear()
     }
@@ -139,7 +142,7 @@ class FakeChatRepository : ChatRepository {
      * for CREW pipeline resume.
      * This is the new behavior being tested.
      */
-    override suspend fun getIncompleteCrewMessages(chatId: Long): List<Message> {
+    override suspend fun getIncompleteCrewMessages(chatId: ChatId): List<Message> {
         val messages = messagesFlows[chatId]?.value ?: return emptyList()
         return messages.filter { message ->
             message.messageState == MessageState.PROCESSING ||
@@ -148,14 +151,14 @@ class FakeChatRepository : ChatRepository {
         }
     }
 
-    private val deletedChatIds = mutableListOf<Long>()
+    private val deletedChatIds = mutableListOf<ChatId>()
 
-    override suspend fun deleteChat(chatId: Long) {
+    override suspend fun deleteChat(chatId: ChatId) {
         deletedChatIds.add(chatId)
         _chatsFlow.value = _chatsFlow.value.filter { it.id != chatId }
     }
 
-    override suspend fun renameChat(chatId: Long, newName: String) {
+    override suspend fun renameChat(chatId: ChatId, newName: String) {
         _chatsFlow.value = _chatsFlow.value.map { chat ->
             if (chat.id == chatId) chat.copy(name = newName) else chat
         }
@@ -168,7 +171,7 @@ class FakeChatRepository : ChatRepository {
     }
 
     override suspend fun persistAllMessageData(
-        messageId: Long,
+        messageId: MessageId,
         modelType: ModelType,
         thinkingStartTime: Long,
         thinkingEndTime: Long,

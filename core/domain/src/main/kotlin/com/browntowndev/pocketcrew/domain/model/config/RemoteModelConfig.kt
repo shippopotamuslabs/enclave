@@ -44,5 +44,8 @@ data class RemoteModelConfig(
     val contextWindow: Int,
     val systemPrompt: String,
     val thinkingEnabled: Boolean = false,
-    val visionCapable: Boolean = false
+    val visionCapable: Boolean = false,
+    val mmprojFileName: String? = null,
+    val mmprojSha256: String? = null,
+    val mmprojSizeInBytes: Long? = null,
 )

@@ -127,6 +127,41 @@ class ModelConfigFetcherImplTest {
     }
 
     @Test
+    fun toLocalModelAssets_preservesOptionalMmprojMetadata() = runTest {
+        val remoteConfigs = listOf(
+            RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-vision-1"),
+                modelType = ModelType.VISION,
+                fileName = "vision.gguf",
+                huggingFaceModelName = "test/vision",
+                displayName = "Vision Model",
+                sha256 = "def456",
+                sizeInBytes = 2000000L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.95,
+                repetitionPenalty = 1.1,
+                maxTokens = 2048,
+                contextWindow = 4096,
+                systemPrompt = "You are a vision assistant.",
+                visionCapable = true,
+                mmprojFileName = "mmproj.gguf",
+                mmprojSha256 = "proj123",
+                mmprojSizeInBytes = 123456L,
+            )
+        )
+
+        val modelAssets = fetcher.toLocalModelAssets(remoteConfigs)
+
+        val metadata = modelAssets[ModelType.VISION]!!.metadata
+        assertEquals("mmproj.gguf", metadata.mmprojRemoteFileName)
+        assertEquals("mmproj.gguf", metadata.mmprojLocalFileName)
+        assertEquals("proj123", metadata.mmprojSha256)
+        assertEquals(123456L, metadata.mmprojSizeInBytes)
+    }
+
+    @Test
     fun toLocalModelAssets_setsIsSystemPresetToTrue() = runTest {
         // Given
         val remoteConfigs = listOf(

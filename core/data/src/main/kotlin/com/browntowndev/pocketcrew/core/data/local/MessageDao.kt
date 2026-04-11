@@ -5,6 +5,8 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import kotlinx.coroutines.flow.Flow
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -19,7 +21,7 @@ abstract class MessageDao {
     abstract suspend fun insertMessageSearch(messageSearch: MessageSearch): Long
 
     @Query("SELECT * FROM message WHERE id = :id")
-    abstract suspend fun getMessageById(id: Long): MessageEntity?
+    abstract suspend fun getMessageById(id: MessageId): MessageEntity?
 
     @Query("""
         SELECT message.* FROM message
@@ -28,22 +30,22 @@ abstract class MessageDao {
     """)
     abstract fun searchMessages(query: String): Flow<List<MessageEntity>>
 
-    @Query("SELECT * FROM message ORDER BY id ASC")
+    @Query("SELECT * FROM message ORDER BY created_at ASC")
     abstract fun getAllMessages(): Flow<List<MessageEntity>>
 
     @Query("UPDATE message SET content = :content, thinking_duration_seconds = :thinkingDuration, thinking_raw = :thinkingRaw WHERE id = :id")
     abstract suspend fun updateMessageContent(
-        id: Long,
+        id: MessageId,
         content: String,
         thinkingDuration: Int?,
         thinkingRaw: String?
     )
 
-    @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY id ASC")
-    abstract suspend fun getMessagesByChatId(chatId: Long): List<MessageEntity>
+    @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY created_at ASC")
+    abstract suspend fun getMessagesByChatId(chatId: ChatId): List<MessageEntity>
 
-    @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY id ASC")
-    abstract fun getMessagesByChatIdFlow(chatId: Long): Flow<List<MessageEntity>>
+    @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY created_at ASC")
+    abstract fun getMessagesByChatIdFlow(chatId: ChatId): Flow<List<MessageEntity>>
 
     /**
      * Get messages by their message states.
@@ -53,41 +55,41 @@ abstract class MessageDao {
      * @param states The list of message states to filter by (PROCESSING, THINKING, GENERATING)
      * @return List of messages matching the given states
      */
-    @Query("SELECT * FROM message WHERE chat_id = :chatId AND message_state IN (:states) ORDER BY id ASC")
+    @Query("SELECT * FROM message WHERE chat_id = :chatId AND message_state IN (:states) ORDER BY created_at ASC")
     abstract suspend fun getMessagesByStates(
-        chatId: Long,
+        chatId: ChatId,
         states: List<MessageState>
     ): List<MessageEntity>
 
     @Query("UPDATE message SET message_state = :messageState WHERE id = :id")
-    abstract suspend fun updateMessageState(id: Long, messageState: MessageState)
+    abstract suspend fun updateMessageState(id: MessageId, messageState: MessageState)
 
     @Query("UPDATE message SET created_at = :timestamp WHERE id = :id")
-    abstract suspend fun updateMessageCreatedAt(id: Long, timestamp: Long)
+    abstract suspend fun updateMessageCreatedAt(id: MessageId, timestamp: Long)
 
     @Query("UPDATE message SET content = :content WHERE id = :id")
-    abstract suspend fun updateMessageContentText(id: Long, content: String)
+    abstract suspend fun updateMessageContentText(id: MessageId, content: String)
 
     @Query("UPDATE message SET model_type = :modelType WHERE id = :id")
-    abstract suspend fun updateMessageModelType(id: Long, modelType: ModelType)
+    abstract suspend fun updateMessageModelType(id: MessageId, modelType: ModelType)
 
     @Query("UPDATE message SET thinking_duration_seconds = :thinkingDuration WHERE id = :id")
-    abstract suspend fun updateThinkingDuration(id: Long, thinkingDuration: Int)
+    abstract suspend fun updateThinkingDuration(id: MessageId, thinkingDuration: Int)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     abstract suspend fun insert(messageEntity: MessageEntity): Long
 
     @Query("UPDATE message SET thinking_start_time = :startTime WHERE id = :messageId")
-    abstract suspend fun updateThinkingStartTime(messageId: Long, startTime: Long)
+    abstract suspend fun updateThinkingStartTime(messageId: MessageId, startTime: Long)
 
     @Query("UPDATE message SET thinking_end_time = :endTime WHERE id = :messageId")
-    abstract suspend fun updateThinkingEndTime(messageId: Long, endTime: Long)
+    abstract suspend fun updateThinkingEndTime(messageId: MessageId, endTime: Long)
 
     @Query("UPDATE message SET thinking_raw = :thinkingRaw WHERE id = :messageId")
-    abstract suspend fun updateThinkingRaw(messageId: Long, thinkingRaw: String?)
+    abstract suspend fun updateThinkingRaw(messageId: MessageId, thinkingRaw: String?)
 
     @Query("UPDATE message SET pipeline_step = :pipelineStep WHERE id = :messageId")
-    abstract suspend fun updateMessagePipelineStep(messageId: Long, pipelineStep: PipelineStep?)
+    abstract suspend fun updateMessagePipelineStep(messageId: MessageId, pipelineStep: PipelineStep?)
 
     open suspend fun insertMessageWithSearch(messageEntity: MessageEntity): Long {
         return insertMessage(messageEntity)
@@ -109,7 +111,7 @@ abstract class MessageDao {
      */
     @Transaction
     open suspend fun persistAllMessageData(
-        messageId: Long,
+        messageId: MessageId,
         modelType: ModelType,
         thinkingStartTime: Long,
         thinkingEndTime: Long,

@@ -10,8 +10,10 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelEntity
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -47,6 +49,7 @@ class DefaultModelRepositoryImplTest {
     @Test
     fun `get default with resolved display data for local model`() = runTest {
         val configId = LocalModelConfigurationId("test-local-config-1")
+        val modelId = LocalModelId("10")
         coEvery { defaultModelsDao.getDefault(ModelType.MAIN) } returns DefaultModelEntity(
             modelType = ModelType.MAIN,
             localConfigId = configId,
@@ -54,11 +57,11 @@ class DefaultModelRepositoryImplTest {
         )
         coEvery { localConfigsDao.getById(configId) } returns LocalModelConfigurationEntity(
             id = configId,
-            localModelId = 10L,
+            localModelId = modelId,
             displayName = "Precise"
         )
-        coEvery { localModelsDao.getById(10L) } returns LocalModelEntity(
-            id = 10L,
+        coEvery { localModelsDao.getById(modelId) } returns LocalModelEntity(
+            id = modelId,
             modelFileFormat = ModelFileFormat.GGUF,
             huggingFaceModelName = "qwen",
             remoteFilename = "qwen.gguf",
@@ -78,6 +81,7 @@ class DefaultModelRepositoryImplTest {
     @Test
     fun `get default with resolved display data for API model`() = runTest {
         val configId = ApiModelConfigurationId("test-api-config-1")
+        val credId = ApiCredentialsId("12")
         coEvery { defaultModelsDao.getDefault(ModelType.VISION) } returns DefaultModelEntity(
             modelType = ModelType.VISION,
             localConfigId = null,
@@ -85,11 +89,11 @@ class DefaultModelRepositoryImplTest {
         )
         coEvery { apiConfigsDao.getById(configId) } returns ApiModelConfigurationEntity(
             id = configId,
-            apiCredentialsId = 12L,
+            apiCredentialsId = credId,
             displayName = "Default"
         )
-        coEvery { apiCredentialsDao.getById(12L) } returns ApiCredentialsEntity(
-            id = 12L,
+        coEvery { apiCredentialsDao.getById(credId) } returns ApiCredentialsEntity(
+            id = credId,
             displayName = "GPT-4o",
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",

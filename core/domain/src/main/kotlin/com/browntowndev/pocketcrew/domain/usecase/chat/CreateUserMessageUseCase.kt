@@ -1,13 +1,16 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import java.util.Date
+import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -40,9 +43,9 @@ class CreateUserMessageUseCase @Inject constructor(
      * Result of processing a user prompt - contains IDs needed for the response flow.
      */
     data class PromptResult(
-        val userMessageId: Long,
-        val assistantMessageId: Long,
-        val chatId: Long
+        val userMessageId: MessageId,
+        val assistantMessageId: MessageId,
+        val chatId: ChatId
     )
 
     /**
@@ -56,23 +59,25 @@ class CreateUserMessageUseCase @Inject constructor(
      */
     suspend operator fun invoke(message: Message): PromptResult {
         return transactionProvider.runInTransaction {
-            // If message.chatId == 0, create a new chat and update message.chatId
-            // (0 is the default value that triggers auto-generation in Room)
-            if (message.chatId == 0L) {
+            // If message.chatId.value is empty, create a new chat and update message.chatId
+            if (message.chatId.value.isEmpty()) {
                 val now = Date()
                 val chatName = generateChatName(message.content.text)
+                val newChatId = ChatId(UUID.randomUUID().toString())
                 val newChat = Chat(
+                    id = newChatId,
                     name = chatName,
                     created = now,
                     lastModified = now,
                     pinned = false
                 )
-                val newChatId = chatRepository.createChat(newChat)
+                chatRepository.createChat(newChat)
                 val updatedMessage = message.copy(chatId = newChatId)
                 val userMessageId = messageRepository.saveMessage(updatedMessage)
 
                 // Create placeholder assistant message (empty content, will be updated after generation)
                 val assistantMessage = Message(
+                    id = MessageId(UUID.randomUUID().toString()),
                     chatId = newChatId,
                     content = Content(text = ""),
                     role = Role.ASSISTANT
@@ -84,6 +89,7 @@ class CreateUserMessageUseCase @Inject constructor(
 
                 // Create placeholder assistant message for existing chat too
                 val assistantMessage = Message(
+                    id = MessageId(UUID.randomUUID().toString()),
                     chatId = message.chatId,
                     content = Content(text = ""),
                     role = Role.ASSISTANT

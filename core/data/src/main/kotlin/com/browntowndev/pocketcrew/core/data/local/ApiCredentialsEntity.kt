@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 
 @Entity(
@@ -14,8 +15,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
     ]
 )
 data class ApiCredentialsEntity(
-    @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
+    @PrimaryKey
+    val id: ApiCredentialsId,
 
     @ColumnInfo(name = "display_name")
     val displayName: String,

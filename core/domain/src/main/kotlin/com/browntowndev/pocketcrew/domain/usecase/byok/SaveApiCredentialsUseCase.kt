@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.byok
 
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import javax.inject.Inject
 
@@ -9,7 +10,7 @@ interface SaveApiCredentialsUseCase {
         credentials: ApiCredentials,
         apiKey: String,
         sourceCredentialAlias: String? = null
-    ): Long
+    ): ApiCredentialsId
 }
 
 class SaveApiCredentialsUseCaseImpl @Inject constructor(
@@ -19,7 +20,7 @@ class SaveApiCredentialsUseCaseImpl @Inject constructor(
         credentials: ApiCredentials,
         apiKey: String,
         sourceCredentialAlias: String?
-    ): Long {
+    ): ApiCredentialsId {
         return apiModelRepository.saveCredentials(
             credentials = credentials,
             apiKey = apiKey,

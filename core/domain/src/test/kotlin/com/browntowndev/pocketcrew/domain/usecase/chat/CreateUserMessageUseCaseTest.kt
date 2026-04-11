@@ -2,8 +2,10 @@ package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
@@ -17,6 +19,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import java.util.Date
 
 /**
  * Unit tests for CreateUserMessageUseCase.
@@ -67,18 +70,18 @@ class CreateUserMessageUseCaseTest {
         }
 
         coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers {
-            42L
+            ChatId("42")
         }
 
         // Track calls to return correct IDs based on call order
         coEvery { messageRepository.saveMessage(any<Message>()) } coAnswers {
             callCount++
-            if (callCount == 1) 1L else 2L
+            if (callCount == 1) MessageId("1") else MessageId("2")
         }
 
         val message = Message(
-            id = 0L,
-            chatId = 0L, // Triggers new chat creation
+            id = MessageId(""),
+            chatId = ChatId(""), // Triggers new chat creation
             content = Content(text = ""),
             role = Role.USER
         )
@@ -88,9 +91,9 @@ class CreateUserMessageUseCaseTest {
 
         // Then
         assertEquals("New Chat", chatSlot.captured.name)
-        assertEquals(1L, result.userMessageId)
-        assertEquals(2L, result.assistantMessageId)
-        assertEquals(42L, result.chatId)
+        assertEquals(MessageId("1"), result.userMessageId)
+        assertEquals(MessageId("2"), result.assistantMessageId)
+        assertEquals(chatSlot.captured.id, result.chatId)
     }
 
     // ========================================================================
@@ -110,15 +113,15 @@ class CreateUserMessageUseCaseTest {
             lambda()
         }
 
-        coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers { 1L }
+        coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers { ChatId("1") }
         coEvery { messageRepository.saveMessage(any<Message>()) } coAnswers {
             callCount++
-            if (callCount == 1) 1L else 2L
+            if (callCount == 1) MessageId("1") else MessageId("2")
         }
 
         val message = Message(
-            id = 0L,
-            chatId = 0L,
+            id = MessageId(""),
+            chatId = ChatId(""),
             content = Content(text = "Hello"),
             role = Role.USER
         )
@@ -147,15 +150,15 @@ class CreateUserMessageUseCaseTest {
             lambda()
         }
 
-        coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers { 1L }
+        coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers { ChatId("1") }
         coEvery { messageRepository.saveMessage(any<Message>()) } coAnswers {
             callCount++
-            if (callCount == 1) 1L else 2L
+            if (callCount == 1) MessageId("1") else MessageId("2")
         }
 
         val message = Message(
-            id = 0L,
-            chatId = 0L,
+            id = MessageId(""),
+            chatId = ChatId(""),
             content = Content(text = "The quick brown fox jumps"),
             role = Role.USER
         )
@@ -184,15 +187,15 @@ class CreateUserMessageUseCaseTest {
             lambda()
         }
 
-        coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers { 1L }
+        coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers { ChatId("1") }
         coEvery { messageRepository.saveMessage(any<Message>()) } coAnswers {
             callCount++
-            if (callCount == 1) 1L else 2L
+            if (callCount == 1) MessageId("1") else MessageId("2")
         }
 
         val message = Message(
-            id = 0L,
-            chatId = 0L,
+            id = MessageId(""),
+            chatId = ChatId(""),
             content = Content(text = "The quick brown fox jumps over the lazy dog"),
             role = Role.USER
         )
@@ -221,17 +224,17 @@ class CreateUserMessageUseCaseTest {
             lambda()
         }
 
-        coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers { 1L }
+        coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers { ChatId("1") }
         coEvery { messageRepository.saveMessage(any<Message>()) } coAnswers {
             callCount++
-            if (callCount == 1) 1L else 2L
+            if (callCount == 1) MessageId("1") else MessageId("2")
         }
 
         // "aaaaaaaaa..." - 35 chars with no spaces
         val longString = "a".repeat(35)
         val message = Message(
-            id = 0L,
-            chatId = 0L,
+            id = MessageId(""),
+            chatId = ChatId(""),
             content = Content(text = longString),
             role = Role.USER
         )
@@ -260,15 +263,15 @@ class CreateUserMessageUseCaseTest {
             lambda()
         }
 
-        coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers { 1L }
+        coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers { ChatId("1") }
         coEvery { messageRepository.saveMessage(any<Message>()) } coAnswers {
             callCount++
-            if (callCount == 1) 1L else 2L
+            if (callCount == 1) MessageId("1") else MessageId("2")
         }
 
         val message = Message(
-            id = 0L,
-            chatId = 0L,
+            id = MessageId(""),
+            chatId = ChatId(""),
             content = Content(text = "Hello @user! How's #testing?"),
             role = Role.USER
         )
@@ -297,15 +300,15 @@ class CreateUserMessageUseCaseTest {
             lambda()
         }
 
-        coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers { 1L }
+        coEvery { chatRepository.createChat(capture(chatSlot)) } coAnswers { ChatId("1") }
         coEvery { messageRepository.saveMessage(any<Message>()) } coAnswers {
             callCount++
-            if (callCount == 1) 1L else 2L
+            if (callCount == 1) MessageId("1") else MessageId("2")
         }
 
         val message = Message(
-            id = 0L,
-            chatId = 0L,
+            id = MessageId(""),
+            chatId = ChatId(""),
             content = Content(text = "12345"),
             role = Role.USER
         )
@@ -326,7 +329,7 @@ class CreateUserMessageUseCaseTest {
     @Test
     fun `existing chat id uses that chat without creating new one`() = runTest {
         // Given
-        val existingChatId = 99L
+        val existingChatId = ChatId("99")
         var callCount = 0
 
         coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
@@ -336,11 +339,11 @@ class CreateUserMessageUseCaseTest {
 
         coEvery { messageRepository.saveMessage(any<Message>()) } coAnswers {
             callCount++
-            if (callCount == 1) 10L else 11L
+            if (callCount == 1) MessageId("10") else MessageId("11")
         }
 
         val message = Message(
-            id = 0L,
+            id = MessageId(""),
             chatId = existingChatId, // Existing chat
             content = Content(text = "Continuing conversation"),
             role = Role.USER
@@ -350,8 +353,8 @@ class CreateUserMessageUseCaseTest {
         val result = createUserMessageUseCase(message)
 
         // Then
-        assertEquals(10L, result.userMessageId)
-        assertEquals(11L, result.assistantMessageId)
+        assertEquals(MessageId("10"), result.userMessageId)
+        assertEquals(MessageId("11"), result.assistantMessageId)
         assertEquals(existingChatId, result.chatId)
         // Should NOT create a new chat
         coVerify(exactly = 0) { chatRepository.createChat(any()) }
@@ -373,16 +376,16 @@ class CreateUserMessageUseCaseTest {
             lambda()
         }
 
-        coEvery { chatRepository.createChat(any()) } coAnswers { 1L }
+        coEvery { chatRepository.createChat(any()) } coAnswers { ChatId("1") }
         coEvery { messageRepository.saveMessage(any<Message>()) } coAnswers {
             callCount++
-            if (callCount == 1) 1L else 2L
+            if (callCount == 1) MessageId("1") else MessageId("2")
         }
-        coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } coAnswers { 2L }
+        coEvery { messageRepository.saveMessage(capture(assistantMessageSlot)) } coAnswers { MessageId("2") }
 
         val message = Message(
-            id = 0L,
-            chatId = 0L,
+            id = MessageId(""),
+            chatId = ChatId(""),
             content = Content(text = "Hello"),
             role = Role.USER
         )
@@ -410,15 +413,15 @@ class CreateUserMessageUseCaseTest {
             lambda()
         }
 
-        coEvery { chatRepository.createChat(any()) } coAnswers { 1L }
+        coEvery { chatRepository.createChat(any()) } coAnswers { ChatId("1") }
         coEvery { messageRepository.saveMessage(any<Message>()) } coAnswers {
             callCount++
-            if (callCount == 1) 1L else 2L
+            if (callCount == 1) MessageId("1") else MessageId("2")
         }
 
         val message = Message(
-            id = 0L,
-            chatId = 0L,
+            id = MessageId(""),
+            chatId = ChatId(""),
             content = Content(text = "Test"),
             role = Role.USER
         )

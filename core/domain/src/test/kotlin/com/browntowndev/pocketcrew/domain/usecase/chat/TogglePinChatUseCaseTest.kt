@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -35,7 +36,7 @@ class TogglePinChatUseCaseTest {
     @Test
     fun `toggling pin status delegates to repository`() = runTest {
         // Given
-        val chatId = 123L
+        val chatId = ChatId("123")
         coEvery { mockRepository.togglePinStatus(chatId) } returns Unit
 
         // When
@@ -55,7 +56,7 @@ class TogglePinChatUseCaseTest {
     @Test
     fun `repository exceptions are propagated`() = runTest {
         // Given
-        val chatId = 456L
+        val chatId = ChatId("456")
         val expectedException = RuntimeException("Database error")
         coEvery { mockRepository.togglePinStatus(chatId) } throws expectedException
 

@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.port.download
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
@@ -23,5 +24,5 @@ interface ModelFileScannerPort {
      * Deletes the physical model file from disk for the given local model ID.
      * Called during soft-delete of a local model.
      */
-    suspend fun deleteModelFile(localModelId: Long)
+    suspend fun deleteModelFile(localModelId: LocalModelId)
 }

@@ -55,7 +55,10 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
                     DiscoveredApiModel(
                         id = it.id(),
                         name = it.displayName(),
-                        created = it.createdAt()?.toEpochSecond()
+                        created = it.createdAt().toEpochSecond(),
+                        visionCapable = it.capabilities()
+                            .map { capabilities -> capabilities.imageInput().supported() }
+                            .orElse(null),
                     )
                 }
                 .distinctBy(DiscoveredApiModel::id)
@@ -185,6 +188,10 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
                         maxOutputTokens = model
                             .optJSONObject("top_provider")
                             ?.optIntOrNull("max_completion_tokens"),
+                        visionCapable = model
+                            .optJSONObject("architecture")
+                            ?.optJSONArray("input_modalities")
+                            ?.supportsImageInput(),
                     )
                 )
             }
@@ -319,6 +326,7 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
                         promptPrice = promptPrice?.asUsdPerMillionFromXai(),
                         completionPrice = completionPrice?.asUsdPerMillionFromXai(),
                         contextWindowTokens = model.optIntOrNull("max_prompt_length"),
+                        visionCapable = model.optJSONArray("input_modalities")?.supportsImageInput(),
                     )
                 )
             }
@@ -360,6 +368,7 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
             completionPrice = completionPrice?.asUsdPerMillionFromXai(),
             contextWindowTokens = model.optIntOrNull("max_prompt_length")
                 ?: model.optIntOrNull("context_length"),
+            visionCapable = model.optJSONArray("input_modalities")?.supportsImageInput(),
         )
     }
 
@@ -391,4 +400,13 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
         } else {
             null
         }
+
+    private fun org.json.JSONArray.supportsImageInput(): Boolean {
+        for (index in 0 until length()) {
+            if (optString(index).equals("image", ignoreCase = true)) {
+                return true
+            }
+        }
+        return false
+    }
 }

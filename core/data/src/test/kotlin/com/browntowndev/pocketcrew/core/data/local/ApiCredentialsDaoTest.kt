@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.local
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import android.database.sqlite.SQLiteConstraintException
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -15,6 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.UUID
 import kotlin.test.assertFailsWith
 
 @RunWith(RobolectricTestRunner::class)
@@ -37,16 +39,20 @@ class ApiCredentialsDaoTest {
         database.close()
     }
 
+    private fun nextId() = ApiCredentialsId(UUID.randomUUID().toString())
+
     @Test
     fun `insert and retrieve API credentials`() = runTest {
+        val entityId = nextId()
         val entity = ApiCredentialsEntity(
+            id = entityId,
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "my_openai_key",
             displayName = "GPT-4o"
         )
-        val id = dao.upsert(entity)
-        val retrieved = dao.getById(id)
+        dao.upsert(entity)
+        val retrieved = dao.getById(entityId)
         assertNotNull(retrieved)
         assertEquals("my_openai_key", retrieved?.credentialAlias)
     }
@@ -54,6 +60,7 @@ class ApiCredentialsDaoTest {
     @Test
     fun `observe all credentials ordered by updated_at DESC`() = runTest {
         val entity1 = ApiCredentialsEntity(
+            id = nextId(),
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4",
             credentialAlias = "key1",
@@ -61,6 +68,7 @@ class ApiCredentialsDaoTest {
             updatedAt = 1000
         )
         val entity2 = ApiCredentialsEntity(
+            id = nextId(),
             provider = ApiProvider.ANTHROPIC,
             modelId = "claude",
             credentialAlias = "key2",
@@ -79,6 +87,7 @@ class ApiCredentialsDaoTest {
     @Test
     fun `duplicate API credential identity can be inserted as separate rows`() = runTest {
         val entity1 = ApiCredentialsEntity(
+            id = nextId(),
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "key1",
@@ -87,6 +96,7 @@ class ApiCredentialsDaoTest {
             updatedAt = 1_000L
         )
         val entity2 = ApiCredentialsEntity(
+            id = nextId(),
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "key2",
@@ -106,6 +116,7 @@ class ApiCredentialsDaoTest {
     fun `duplicate API key signature is rejected`() = runTest {
         val signature = "duplicate-signature"
         val entity1 = ApiCredentialsEntity(
+            id = nextId(),
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "key1",
@@ -114,6 +125,7 @@ class ApiCredentialsDaoTest {
             apiKeySignature = signature,
         )
         val entity2 = entity1.copy(
+            id = nextId(),
             credentialAlias = "key2",
             displayName = "GPT-4o Duplicate",
         )

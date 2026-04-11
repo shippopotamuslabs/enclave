@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import kotlinx.coroutines.test.runTest
@@ -13,6 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.UUID
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -36,9 +38,13 @@ class ApiModelConfigurationsDaoTest {
         database.close()
     }
 
+    private fun nextCredId() = ApiCredentialsId(UUID.randomUUID().toString())
+
     @Test
     fun `insert and retrieve an API tuning preset`() = runTest {
-        val credId = credDao.upsert(ApiCredentialsEntity(
+        val credId = nextCredId()
+        credDao.upsert(ApiCredentialsEntity(
+            id = credId,
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "key1",
@@ -62,7 +68,9 @@ class ApiModelConfigurationsDaoTest {
 
     @Test
     fun `multiple presets per API credential`() = runTest {
-        val credId = credDao.upsert(ApiCredentialsEntity(
+        val credId = nextCredId()
+        credDao.upsert(ApiCredentialsEntity(
+            id = credId,
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "key1",

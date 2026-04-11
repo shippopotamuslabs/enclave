@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.modelconfig
 
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -20,7 +21,7 @@ class DeleteLocalModelMetadataUseCaseTest {
 
     @Test
     fun `invoke calls repository deleteLocalModelMetadata`() = runTest {
-        val id = 1L
+        val id = LocalModelId("1")
         coEvery { repository.deleteLocalModelMetadata(id) } returns Unit
 
         val result = useCase(id)

@@ -1,6 +1,10 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 /**
  * Port (interface) for message persistence.
@@ -19,7 +23,7 @@ interface MessageRepository {
      * @param message The message to save
      * @return The ID of the saved message
      */
-    suspend fun saveMessage(message: Message): Long
+    suspend fun saveMessage(message: Message): MessageId
 
     /**
      * Retrieves a message by its ID.
@@ -27,7 +31,7 @@ interface MessageRepository {
      * @param id The message ID
      * @return The message if found, null otherwise
      */
-    suspend fun getMessageById(id: Long): Message?
+    suspend fun getMessageById(id: MessageId): Message?
 
     /**
      * Retrieves all messages for a specific chat, ordered by ID ascending.
@@ -35,5 +39,17 @@ interface MessageRepository {
      * @param chatId The chat ID
      * @return List of messages in chronological order
      */
-    suspend fun getMessagesForChat(chatId: Long): List<Message>
+    suspend fun getMessagesForChat(chatId: ChatId): List<Message>
+
+    suspend fun saveVisionAnalysis(
+        userMessageId: MessageId,
+        imageUri: String,
+        promptText: String,
+        analysisText: String,
+        modelType: ModelType,
+    )
+
+    suspend fun getVisionAnalysesForMessages(
+        userMessageIds: List<MessageId>
+    ): Map<MessageId, List<MessageVisionAnalysis>>
 }

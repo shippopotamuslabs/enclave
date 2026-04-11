@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import app.cash.turbine.test
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import io.mockk.every
 import io.mockk.mockk
@@ -26,7 +27,7 @@ class GetAllChatsUseCaseTest {
     private val testDate = Date(1700_000_000_000L)
 
     private fun createTestChat(
-        id: Long,
+        id: ChatId,
         name: String,
         pinned: Boolean = false
     ): Chat = Chat(
@@ -58,9 +59,9 @@ class GetAllChatsUseCaseTest {
     fun `A1 returns chats from repository`() = runTest {
         // Given: Repository returns Flow with 3 chats
         val testChats = listOf(
-            createTestChat(1, "Alpha"),
-            createTestChat(2, "Beta"),
-            createTestChat(3, "Gamma")
+            createTestChat(ChatId("1"), "Alpha"),
+            createTestChat(ChatId("2"), "Beta"),
+            createTestChat(ChatId("3"), "Gamma")
         )
         val chatFlow = MutableStateFlow<List<Chat>>(testChats)
         every { mockRepository.getAllChats() } returns chatFlow
@@ -126,8 +127,8 @@ class GetAllChatsUseCaseTest {
 
             // Emit second list with 2 chats
             chatFlow.value = listOf(
-                createTestChat(1, "Chat A"),
-                createTestChat(2, "Chat B")
+                createTestChat(ChatId("1"), "Chat A"),
+                createTestChat(ChatId("2"), "Chat B")
             )
 
             // Second emission - 2 chats

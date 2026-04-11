@@ -4,7 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 
 data class LocalModelMetadata(
-    val id: Long = 0,
+    val id: LocalModelId,
     val huggingFaceModelName: String,
     val remoteFileName: String,
     val localFileName: String,
@@ -12,5 +12,43 @@ data class LocalModelMetadata(
     val sizeInBytes: Long,
     val modelFileFormat: ModelFileFormat,
     val source: DownloadSource = DownloadSource.HUGGING_FACE,
-    val visionCapable: Boolean = false
+    val visionCapable: Boolean = false,
+    val mmprojRemoteFileName: String? = null,
+    val mmprojLocalFileName: String? = null,
+    val mmprojSha256: String? = null,
+    val mmprojSizeInBytes: Long? = null,
 )
+
+data class LocalModelArtifact(
+    val remoteFileName: String,
+    val localFileName: String,
+    val sha256: String,
+    val sizeInBytes: Long,
+)
+
+fun LocalModelMetadata.requiredArtifacts(): List<LocalModelArtifact> {
+    val artifacts = mutableListOf(
+        LocalModelArtifact(
+            remoteFileName = remoteFileName,
+            localFileName = localFileName,
+            sha256 = sha256,
+            sizeInBytes = sizeInBytes,
+        )
+    )
+    if (
+        !mmprojRemoteFileName.isNullOrBlank() &&
+        !mmprojLocalFileName.isNullOrBlank() &&
+        !mmprojSha256.isNullOrBlank() &&
+        mmprojSizeInBytes != null
+    ) {
+        artifacts += LocalModelArtifact(
+            remoteFileName = mmprojRemoteFileName,
+            localFileName = mmprojLocalFileName,
+            sha256 = mmprojSha256,
+            sizeInBytes = mmprojSizeInBytes,
+        )
+    }
+    return artifacts
+}
+
+fun LocalModelMetadata.totalArtifactSizeInBytes(): Long = requiredArtifacts().sumOf { it.sizeInBytes }

@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.byok
 
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
-import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import io.mockk.every
@@ -24,8 +24,9 @@ class GetApiModelAssetsUseCaseTest {
 
     @Test
     fun `invoke returns stream of api model assets`() = runTest {
-        val creds = mockk<ApiCredentials> { every { id } returns 1L }
-        val config = mockk<ApiModelConfiguration> { every { apiCredentialsId } returns 1L }
+        val credId = ApiCredentialsId("1")
+        val creds = mockk<ApiCredentials> { every { id } returns credId }
+        val config = mockk<ApiModelConfiguration> { every { apiCredentialsId } returns credId }
         val configs = listOf(config)
         
         every { repository.observeAllCredentials() } returns flowOf(listOf(creds))

@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.testing
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.SlotResolvedLocalModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -26,13 +27,13 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
 
     // Soft-deleted models: LocalModelEntity rows with no configs
     // Key = model ID, Value = LocalModelAsset (metadata only, no configs)
-    private val softDeletedModels = mutableMapOf<Long, LocalModelAsset>()
+    private val softDeletedModels = mutableMapOf<LocalModelId, LocalModelAsset>()
 
     private val assignments = mutableMapOf<ModelType, LocalModelAsset>()
     private val assets = mutableListOf<LocalModelAsset>()
     private val softDeleted = mutableListOf<LocalModelAsset>()
     private val configsById = mutableMapOf<LocalModelConfigurationId, Pair<LocalModelAsset, LocalModelConfiguration>>()
-    private var nextAssetId = 1L
+    private var nextAssetId = 1
 
     override suspend fun getAllLocalAssets(): List<LocalModelAsset> {
         return assets
@@ -46,12 +47,12 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
         return configsById[configId]?.first
     }
 
-    override suspend fun upsertLocalAsset(asset: LocalModelAsset): Long {
+    override suspend fun upsertLocalAsset(asset: LocalModelAsset): LocalModelId {
         val existingIndex = assets.indexOfFirst { it.metadata.id == asset.metadata.id || it.metadata.sha256 == asset.metadata.sha256 }
         val assignedId = when {
-            asset.metadata.id > 0 -> asset.metadata.id
+            asset.metadata.id.value.isNotEmpty() && asset.metadata.id.value != "0" -> asset.metadata.id
             existingIndex >= 0 -> assets[existingIndex].metadata.id
-            else -> nextAssetId++
+            else -> LocalModelId((nextAssetId++).toString())
         }
         val normalizedAsset = asset.copy(metadata = asset.metadata.copy(id = assignedId))
         if (existingIndex >= 0) {
@@ -81,11 +82,11 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
         configsById.clear()
     }
 
-    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): Long {
+    override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): LocalModelId {
         return metadata.id
     }
 
-    override suspend fun deleteLocalModelMetadata(id: Long) {
+    override suspend fun deleteLocalModelMetadata(id: LocalModelId) {
     }
 
     @OptIn(ExperimentalUuidApi::class)
@@ -101,11 +102,11 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
         return configsById[id]?.second
     }
 
-    override suspend fun getAllConfigurationsForAsset(localModelId: Long): List<LocalModelConfiguration> {
+    override suspend fun getAllConfigurationsForAsset(localModelId: LocalModelId): List<LocalModelConfiguration> {
         return configsById.values.filter { it.first.metadata.id == localModelId }.map { it.second }
     }
 
-    override suspend fun deleteAllConfigurationsForAsset(localModelId: Long) {
+    override suspend fun deleteAllConfigurationsForAsset(localModelId: LocalModelId) {
         configsById.entries.removeIf { it.value.first.metadata.id == localModelId }
     }
 
@@ -130,7 +131,7 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
         return softDeletedModels.values.toList()
     }
 
-    override suspend fun getAssetById(id: Long): LocalModelAsset? {
+    override suspend fun getAssetById(id: LocalModelId): LocalModelAsset? {
         // First check active models
         modelsMap.values.find { it.first.metadata.id == id }?.let { return it.first }
         // Then check soft-deleted models
@@ -141,7 +142,7 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
      * Test helper: registers a model as soft-deleted (metadata preserved, no configs).
      * This simulates the state after a soft-delete operation.
      */
-    fun registerSoftDeletedModel(modelId: Long, asset: LocalModelAsset) {
+    fun registerSoftDeletedModel(modelId: LocalModelId, asset: LocalModelAsset) {
         softDeletedModels[modelId] = asset.copy(
             metadata = asset.metadata.copy(id = modelId)
         )
