@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
@@ -185,8 +186,8 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                 getOrCreateAndSeedSessionLocked(options)
             }
 
-            if (SearchToolSupport.hasLocalToolContract(options.systemPrompt)) {
-                executeToolingPrompt(currentSession, prompt, targetModelType) { trySend(it) }
+            if (ToolEnvelopeParser.hasLocalToolContract(options.systemPrompt)) {
+                executeToolingPrompt(currentSession, prompt, options, targetModelType) { trySend(it) }
                 close()
                 return@callbackFlow
             }
@@ -255,6 +256,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
     private suspend fun executeToolingPrompt(
         session: LlmSessionPort,
         prompt: String,
+        options: GenerationOptions,
         targetModelType: ModelType,
         emitEvent: (InferenceEvent) -> Unit,
     ) {
@@ -264,7 +266,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
 
         session.addQueryChunk(prompt)
         val firstPass = collectToolPreparationPass(session, targetModelType, emitEvent)
-        val envelope = SearchToolSupport.extractLocalToolEnvelope(firstPass.text)
+        val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(firstPass.text)
         if (envelope == null) {
             Log.i(TAG, "Tool loop complete without tool call provider=MEDIAPIPE modelType=$targetModelType")
             emitBufferedResponse(firstPass, targetModelType, emitEvent)
@@ -277,17 +279,22 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
             argumentsJson = envelope.argumentsJson,
             provider = "MEDIAPIPE",
             modelType = targetModelType,
+            chatId = options.chatId,
+            userMessageId = options.userMessageId,
         )
-        SearchToolSupport.requireSupportedTool(toolRequest.toolName)
-        val query = SearchToolSupport.extractRequiredQuery(toolRequest.argumentsJson)
-        Log.i(TAG, "Tool call detected provider=MEDIAPIPE tool=${toolRequest.toolName} query=$query")
+        ToolEnvelopeParser.requireSupportedTool(toolRequest.toolName)
+        val toolArg = when (toolRequest.toolName) {
+            ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolRequest.argumentsJson)
+            else -> ToolEnvelopeParser.extractRequiredQuery(toolRequest.argumentsJson)
+        }
+        Log.i(TAG, "Tool call detected provider=MEDIAPIPE tool=${toolRequest.toolName} arg=$toolArg")
         val toolResult = executor.execute(toolRequest)
         Log.i(
             TAG,
             "Tool call completed provider=MEDIAPIPE tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
         )
 
-        session.addQueryChunk(SearchToolSupport.buildLocalToolResultMessage(toolResult.resultJson))
+        session.addQueryChunk(ToolEnvelopeParser.buildLocalToolResultMessage(toolResult.resultJson))
         streamSessionResponse(
             session = session,
             targetModelType = targetModelType,

@@ -23,37 +23,68 @@ class AnalyzeImageUseCase @Inject constructor(
 
     suspend operator fun invoke(imageUri: String, prompt: String): String =
         withContext(Dispatchers.IO) {
-            inferenceFactory.withInferenceService(ModelType.VISION) { service ->
-                service.setHistory(emptyList())
+            val effectivePrompt = buildPrompt(prompt)
+            loggingPort.info(
+                TAG,
+                "Starting vision analysis imageUri=$imageUri promptChars=${effectivePrompt.length}"
+            )
+            try {
+                inferenceFactory.withInferenceService(ModelType.VISION) { service ->
+                    loggingPort.info(TAG, "Resolved vision inference service for imageUri=$imageUri")
+                    service.setHistory(emptyList())
 
-                val description = StringBuilder()
-                service.sendPrompt(
-                    prompt = buildPrompt(prompt),
-                    options = GenerationOptions(
-                        reasoningBudget = 0,
-                        modelType = ModelType.VISION,
-                        systemPrompt = SystemPromptTemplates.VISION,
-                        imageUris = listOf(imageUri),
-                    ),
-                    closeConversation = true,
-                ).collect { event ->
-                    when (event) {
-                        is InferenceEvent.PartialResponse -> description.append(event.chunk)
-                        is InferenceEvent.Thinking -> Unit
-                        is InferenceEvent.Finished -> Unit
-                        is InferenceEvent.SafetyBlocked -> {
-                            throw IllegalStateException("Vision analysis blocked: ${event.reason}")
+                    val description = StringBuilder()
+                    service.sendPrompt(
+                        prompt = effectivePrompt,
+                        options = GenerationOptions(
+                            reasoningBudget = 0,
+                            modelType = ModelType.VISION,
+                            systemPrompt = SystemPromptTemplates.VISION,
+                            imageUris = listOf(imageUri),
+                        ),
+                        closeConversation = true,
+                    ).collect { event ->
+                        when (event) {
+                            is InferenceEvent.PartialResponse -> description.append(event.chunk)
+                            is InferenceEvent.Thinking -> Unit
+                            is InferenceEvent.Finished -> {
+                                loggingPort.info(
+                                    TAG,
+                                    "Vision analysis finished imageUri=$imageUri responseChars=${description.length}"
+                                )
+                            }
+                            is InferenceEvent.SafetyBlocked -> {
+                                loggingPort.error(
+                                    TAG,
+                                    "Vision analysis safety blocked imageUri=$imageUri reason=${event.reason}"
+                                )
+                                throw IllegalStateException("Vision analysis blocked: ${event.reason}")
+                            }
+                            is InferenceEvent.Error -> {
+                                loggingPort.error(
+                                    TAG,
+                                    "Vision analysis inference error imageUri=$imageUri cause=${event.cause::class.java.simpleName}: ${event.cause.message}",
+                                    event.cause
+                                )
+                                throw event.cause
+                            }
                         }
-                        is InferenceEvent.Error -> throw event.cause
                     }
-                }
 
-                description.toString().trim().also { result ->
-                    if (result.isBlank()) {
-                        loggingPort.warning(TAG, "Vision model returned an empty description")
-                        throw IllegalStateException("Vision model returned an empty description")
+                    description.toString().trim().also { result ->
+                        if (result.isBlank()) {
+                            loggingPort.warning(TAG, "Vision model returned an empty description imageUri=$imageUri")
+                            throw IllegalStateException("Vision model returned an empty description")
+                        }
                     }
                 }
+            } catch (t: Throwable) {
+                loggingPort.error(
+                    TAG,
+                    "Vision analysis failed imageUri=$imageUri cause=${t::class.java.simpleName}: ${t.message}",
+                    t
+                )
+                throw t
             }
         }
 

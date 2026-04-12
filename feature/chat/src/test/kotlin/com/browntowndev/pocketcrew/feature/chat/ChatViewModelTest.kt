@@ -19,13 +19,18 @@ import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
@@ -34,17 +39,32 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import io.mockk.*
 import java.io.IOException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 
+private class FakeActiveModelProvider : ActiveModelProviderPort {
+    private val configurations = mutableMapOf<ModelType, ActiveModelConfiguration?>()
 
+    fun setConfiguration(modelType: ModelType, configuration: ActiveModelConfiguration?) {
+        configurations[modelType] = configuration
+    }
+
+    override suspend fun getActiveConfiguration(modelType: ModelType): ActiveModelConfiguration? =
+        configurations[modelType]
+}
 
 /**
  * Tests for ChatViewModel's mapping logic.
@@ -57,6 +77,7 @@ import org.junit.jupiter.api.extension.ExtendWith
  * REF: Bug fix - thinkingDurationSeconds was requireNotNull'd but never set during THINKING state
  */
 @ExtendWith(MainDispatcherRule::class)
+@OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelTest {
 
     private lateinit var chatViewModel: ChatViewModel
@@ -65,6 +86,7 @@ class ChatViewModelTest {
     private lateinit var inferenceLockManager: InferenceLockManager
     private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
     private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
+    private lateinit var activeModelProvider: FakeActiveModelProvider
     private lateinit var errorHandler: ViewModelErrorHandler
 
     @BeforeEach
@@ -74,10 +96,49 @@ class ChatViewModelTest {
         inferenceLockManager = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
         stageImageAttachmentUseCase = mockk(relaxed = true)
+        activeModelProvider = FakeActiveModelProvider()
+        activeModelProvider.setConfiguration(
+            ModelType.FAST,
+            ActiveModelConfiguration(
+                id = LocalModelConfigurationId("fast"),
+                isLocal = true,
+                name = "Fast Vision",
+                systemPrompt = "Describe images briefly.",
+                reasoningEffort = null,
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 512,
+                minP = 0.0,
+                repetitionPenalty = 1.1,
+                contextWindow = 4096,
+                thinkingEnabled = false,
+                visionCapable = true,
+            )
+        )
+        activeModelProvider.setConfiguration(
+            ModelType.VISION,
+            ActiveModelConfiguration(
+                id = LocalModelConfigurationId("vision"),
+                isLocal = false,
+                name = "Vision API",
+                systemPrompt = "Describe images briefly.",
+                reasoningEffort = null,
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.95,
+                maxTokens = 512,
+                minP = 0.0,
+                repetitionPenalty = 1.1,
+                contextWindow = 4096,
+                thinkingEnabled = false,
+                visionCapable = true,
+            )
+        )
         
         // Stub coroutineExceptionHandler to return a real one to avoid ClassCastException with MockK
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
-
+        every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
         // Create a simple fake for GetModelDisplayNameUseCase
         modelDisplayNamesUseCase = mockk(relaxed = true)
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
@@ -91,6 +152,7 @@ class ChatViewModelTest {
             savedStateHandle = savedStateHandle,
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            activeModelProvider = activeModelProvider,
             errorHandler = errorHandler
         )
     }
@@ -128,18 +190,30 @@ class ChatViewModelTest {
         )
         coEvery { chatUseCases.generateChatResponse(any(), any(), any(), any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
 
-        chatViewModel.onImageSelected("content://picked/image")
-        advanceUntilIdle()
-        chatViewModel.onSendMessage()
-        advanceUntilIdle()
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        try {
+            runCurrent()
 
-        coVerify {
-            chatUseCases.processPrompt(
-                match {
-                    it.content.imageUri == "file:///tmp/cached.jpg" &&
-                        it.content.text.isBlank()
-                }
-            )
+            chatViewModel.onImageSelected("content://picked/image")
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) {
+                stageImageAttachmentUseCase("content://picked/image")
+            }
+
+            chatViewModel.onSendMessage()
+            advanceUntilIdle()
+
+            coVerify {
+                chatUseCases.processPrompt(
+                    match {
+                        it.content.imageUri == "file:///tmp/cached.jpg" &&
+                            it.content.text.isBlank()
+                    }
+                )
+            }
+        } finally {
+            collectJob.cancel()
         }
     }
 

@@ -41,6 +41,8 @@ data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val inputText: String = "",
     val selectedImageUri: String? = null,
+    val isPhotoAttachmentEnabled: Boolean = false,
+    val photoAttachmentDisabledReason: String? = null,
     val selectedMode: ChatModeUi = ChatModeUi.FAST,
     val isGlobalInferenceBlocked: Boolean = false,
     val shieldReason: String? = null,

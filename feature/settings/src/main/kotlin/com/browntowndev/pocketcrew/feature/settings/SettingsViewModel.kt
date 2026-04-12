@@ -199,6 +199,12 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun onAlwaysUseVisionModelChange(enabled: Boolean) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update vision routing setting", "Failed to update setting")) {
+            preferencesUseCases.updateAlwaysUseVisionModel(enabled)
+        }
+    }
+
     fun onShowCustomizationSheet(show: Boolean) {
         _sheetVisibility.update { it.copy(customization = show) }
     }
@@ -251,6 +257,10 @@ class SettingsViewModel @Inject constructor(
 
     fun onShowFeedbackSheet(show: Boolean) {
         _sheetVisibility.update { it.copy(feedback = show) }
+    }
+
+    fun onShowVisionSettingsSheet(show: Boolean) {
+        _sheetVisibility.update { it.copy(visionSettings = show) }
     }
 
     fun onFeedbackTextChange(text: String) {

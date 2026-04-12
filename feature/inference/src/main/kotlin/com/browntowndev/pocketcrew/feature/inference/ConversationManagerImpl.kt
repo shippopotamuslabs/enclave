@@ -5,6 +5,8 @@ import android.os.Debug
 import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.tflite.gpu.support.TfLiteGpu
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
@@ -15,6 +17,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMe
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
@@ -30,6 +33,7 @@ import com.google.ai.edge.litertlm.Tool
 import com.google.ai.edge.litertlm.ToolParam
 import com.google.ai.edge.litertlm.ToolSet
 import com.google.ai.edge.litertlm.tool
+import java.lang.reflect.InvocationTargetException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.withLock
@@ -50,6 +54,7 @@ class ConversationManagerImpl @Inject constructor(
     private val context: Context,
     private val localModelRepository: LocalModelRepositoryPort,
     private val activeModelProvider: ActiveModelProviderPort,
+    private val loggingPort: LoggingPort,
     private val toolExecutor: ToolExecutorPort? = null,
 ) : ConversationManagerPort {
 
@@ -68,6 +73,7 @@ class ConversationManagerImpl @Inject constructor(
         val topP: Double,
         val topK: Int,
         val hasSearchTool: Boolean,
+        val hasImageTool: Boolean,
     )
 
     // Cached state: updated whenever reloadIfNeeded is called.
@@ -120,8 +126,13 @@ class ConversationManagerImpl @Inject constructor(
     override suspend fun getConversation(modelType: ModelType, options: GenerationOptions?): ConversationPort = withContext(Dispatchers.IO) {
         // Lock to avoid concurrent initializations and ensure consistent state
         mutex.withLock {
+            val executor = toolExecutor
             val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
                 ?: throw IllegalStateException("No active configuration for $modelType")
+
+            if (modelType == ModelType.VISION) {
+                throw IllegalStateException("ConversationManager does not run vision models. Vision is API-only.")
+            }
 
             if (!activeConfig.isLocal) {
                 throw IllegalStateException("ConversationManager cannot run API models. ModelType $modelType is mapped to an API configuration.")
@@ -134,12 +145,15 @@ class ConversationManagerImpl @Inject constructor(
             val modelPath = getModelPath(asset.metadata.localFileName)
             val resolvedThinkingEnabled = false // LiteRT currently doesn't support reasoning budget
             val resolvedSystemPrompt = activeConfig.systemPrompt ?: defaultSystemPrompt
+            val chatId = options?.chatId
+            val userMessageId = options?.userMessageId
             val targetSamplerConfig = SamplerConfig(
                 temperature = options?.temperature?.toDouble() ?: activeConfig.temperature ?: 0.7,
                 topP = options?.topP?.toDouble() ?: activeConfig.topP ?: 0.95,
                 topK = options?.topK ?: activeConfig.topK ?: 40
             )
             val hasSearchTool = options?.availableTools?.contains(ToolDefinition.TAVILY_WEB_SEARCH) == true
+            val hasImageTool = options?.availableTools?.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT) == true
 
             val desiredSignature = ConversationSignature(
                 modelType = modelType,
@@ -150,6 +164,7 @@ class ConversationManagerImpl @Inject constructor(
                 topP = targetSamplerConfig.topP,
                 topK = targetSamplerConfig.topK,
                 hasSearchTool = hasSearchTool,
+                hasImageTool = hasImageTool,
             )
 
             val engineChanged = currentModelPath != modelPath || engine == null
@@ -196,10 +211,22 @@ class ConversationManagerImpl @Inject constructor(
                     // Passing one causes redundant CPU-side sampling allocation.
                     samplerConfig = if (activeBackendIsNpu) null else targetSamplerConfig,
                     automaticToolCalling = true,
-                    tools = if (hasSearchTool && toolExecutor != null) {
-                        listOf(tool(LocalSearchToolset(toolExecutor, modelType)))
-                    } else {
-                        emptyList()
+                    tools = buildList {
+                        if (executor != null && hasSearchTool) {
+                            add(tool(LocalSearchToolset(executor, modelType)))
+                        }
+                        if (executor != null && hasImageTool) {
+                            add(
+                                tool(
+                                    LocalImageInspectToolset(
+                                        toolExecutor = executor,
+                                        modelType = modelType,
+                                        chatId = chatId,
+                                        userMessageId = userMessageId,
+                                    )
+                                )
+                            )
+                        }
                     }
                 )
 
@@ -250,17 +277,138 @@ class ConversationManagerImpl @Inject constructor(
             @ToolParam(description = "The search query.") query: String
         ): String {
             Log.d(TAG, "Executing native tool call: tavily_web_search with query: $query")
-            return runBlocking(Dispatchers.IO) {
-                val request = ToolCallRequest(
-                    toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
-                    argumentsJson = SearchToolSupport.buildArgumentsJson(query),
-                    provider = "LITERT",
-                    modelType = modelType
+            loggingPort.info(
+                TAG,
+                "Native tool call requested tool=${ToolDefinition.TAVILY_WEB_SEARCH.name} modelType=$modelType queryChars=${query.length}"
+            )
+            return try {
+                runBlocking(Dispatchers.IO) {
+                    loggingPort.info(
+                        TAG,
+                        "Entered native tool coroutine tool=${ToolDefinition.TAVILY_WEB_SEARCH.name} modelType=$modelType"
+                    )
+                    val request = ToolCallRequest(
+                        toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
+                        argumentsJson = ToolEnvelopeParser.buildArgumentsJson(query),
+                        provider = "LITERT",
+                        modelType = modelType
+                    )
+                    loggingPort.info(
+                        TAG,
+                        "Dispatching native tool call tool=${request.toolName} provider=${request.provider} modelType=${request.modelType}"
+                    )
+                    executeToolSafely(request)
+                }
+            } catch (t: Throwable) {
+                val rootCause = t.rootCause()
+                loggingPort.error(
+                    TAG,
+                    "Native tool method failed before safe execution tool=${ToolDefinition.TAVILY_WEB_SEARCH.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                    rootCause
                 )
-                toolExecutor.execute(request).resultJson
+                buildToolErrorJson(ToolDefinition.TAVILY_WEB_SEARCH.name, rootCause)
             }
         }
     }
+
+    private inner class LocalImageInspectToolset(
+        private val toolExecutor: ToolExecutorPort,
+        private val modelType: ModelType,
+        private val chatId: ChatId?,
+        private val userMessageId: MessageId?,
+    ) : ToolSet {
+        @Tool(description = "Inspect a previously attached image.")
+        fun attached_image_inspect(
+            @ToolParam(description = "The question about the image.") question: String
+        ): String {
+            Log.d(TAG, "Executing native tool call: attached_image_inspect with question: $question")
+            loggingPort.info(
+                TAG,
+                "Native tool call requested tool=${ToolDefinition.ATTACHED_IMAGE_INSPECT.name} modelType=$modelType chatId=${chatId?.value ?: "<none>"} userMessageId=${userMessageId?.value ?: "<none>"} questionChars=${question.length}"
+            )
+            return try {
+                runBlocking(Dispatchers.IO) {
+                    loggingPort.info(
+                        TAG,
+                        "Entered native tool coroutine tool=${ToolDefinition.ATTACHED_IMAGE_INSPECT.name} modelType=$modelType chatId=${chatId?.value ?: "<none>"} userMessageId=${userMessageId?.value ?: "<none>"}"
+                    )
+                    val request = ToolCallRequest(
+                        toolName = ToolDefinition.ATTACHED_IMAGE_INSPECT.name,
+                        argumentsJson = ToolEnvelopeParser.buildImageInspectArgumentsJson(question),
+                        provider = "LITERT",
+                        modelType = modelType,
+                        chatId = chatId,
+                        userMessageId = userMessageId,
+                    )
+                    loggingPort.info(
+                        TAG,
+                        "Dispatching native tool call tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"}"
+                    )
+                    executeToolSafely(request)
+                }
+            } catch (t: Throwable) {
+                val rootCause = t.rootCause()
+                loggingPort.error(
+                    TAG,
+                    "Native tool method failed before safe execution tool=${ToolDefinition.ATTACHED_IMAGE_INSPECT.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                    rootCause
+                )
+                buildToolErrorJson(ToolDefinition.ATTACHED_IMAGE_INSPECT.name, rootCause)
+            }
+        }
+    }
+
+    private suspend fun executeToolSafely(request: ToolCallRequest): String {
+        return try {
+            loggingPort.debug(
+                TAG,
+                "executeToolSafely entered tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"}"
+            )
+            val executor = requireNotNull(toolExecutor) {
+                "Tool executor is not available for native tool calls"
+            }
+            loggingPort.debug(
+                TAG,
+                "Resolved ToolExecutorPort for native tool call tool=${request.toolName}"
+            )
+            val resultJson = executor.execute(request).resultJson
+            loggingPort.debug(
+                TAG,
+                "Native tool call completed tool=${request.toolName} payload=${resultJson.take(2000)}"
+            )
+            if (resultJson.contains("\"error\"")) {
+                loggingPort.error(
+                    TAG,
+                    "Native tool call returned error payload tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"} payload=${resultJson.take(2000)}"
+                )
+            }
+            resultJson
+        } catch (t: Throwable) {
+            val rootCause = t.rootCause()
+            loggingPort.error(
+                TAG,
+                "Native tool call failed tool=${request.toolName} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                rootCause,
+            )
+            buildToolErrorJson(request.toolName, rootCause)
+        }
+    }
+
+    private fun buildToolErrorJson(toolName: String, throwable: Throwable): String =
+        """{"error":"tool_execution_failed","tool":"${escapeJson(toolName)}","exception":"${escapeJson(throwable::class.java.simpleName)}","message":"${escapeJson(throwable.message ?: "Unknown error")}"}"""
+
+    private fun Throwable.rootCause(): Throwable {
+        val cause = when (this) {
+            is InvocationTargetException -> targetException ?: cause
+            else -> cause
+        }
+        return if (cause == null || cause === this) this else cause.rootCause()
+    }
+
+    private fun escapeJson(value: String): String =
+        value
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
 
 
     private fun ensureEngineInitializedLocked(
@@ -271,49 +419,7 @@ class ConversationManagerImpl @Inject constructor(
         if (engine != null) return
 
         val cacheDir = cacheDirFor(modelPath)
-
-        if (modelType == ModelType.VISION) {
-            initializeVisionEngine(modelPath, contextWindow, cacheDir)
-        } else {
-            initializeTextEngine(modelPath, contextWindow, cacheDir)
-        }
-    }
-
-    private fun initializeVisionEngine(
-        modelPath: String,
-        contextWindow: Int,
-        cacheDir: String?
-    ) {
-        val backend = Backend.GPU()
-
-        try {
-                Log.d(
-                    TAG,
-                    "Initializing LiteRT vision engine with GPU backend, " +
-                        "contextWindow=$contextWindow memoryBeforeInit=${memorySnapshot()}"
-                )
-
-            engine = createEngine(
-                modelPath = modelPath,
-                backend = backend,
-                visionBackend = backend,
-                contextWindow = contextWindow,
-                cacheDir = cacheDir
-            )
-
-            engine?.initialize()
-            activeBackendIsNpu = false
-
-            Log.d(TAG, "LiteRT vision engine initialized successfully with GPU backend memoryAfterInit=${memorySnapshot()}")
-        } catch (t: Throwable) {
-            try {
-                engine?.close()
-            } catch (_: Throwable) {
-            }
-            
-            Log.w(TAG, "LiteRT vision engine failed during initialize() memoryAfterFailure=${memorySnapshot()}", t)
-            throw t
-        }
+        initializeTextEngine(modelPath, contextWindow, cacheDir)
     }
 
     private fun initializeTextEngine(

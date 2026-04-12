@@ -53,17 +53,6 @@ class ModelConfigFetcherImpl @Inject constructor(
 
                 val configs = mutableListOf<RemoteModelConfig>()
 
-                // Parse vision model
-                json.optJSONObject("vision")?.let { vision ->
-                    val config = parseModelConfig(vision, ModelType.VISION)
-                    if (!config.visionCapable) {
-                        return@withContext Result.failure(
-                            Exception("Model configured for 'vision' slot must have 'visionCapable' set to true")
-                        )
-                    }
-                    configs.add(config)
-                }
-
                 // Parse draft_one model
                 json.optJSONObject("draft")?.let { draftOne ->
                     configs.add(parseModelConfig(draftOne, ModelType.DRAFT_ONE))

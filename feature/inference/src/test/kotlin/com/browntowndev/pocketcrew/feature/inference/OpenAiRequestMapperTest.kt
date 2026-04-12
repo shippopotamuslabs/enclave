@@ -134,6 +134,24 @@ class OpenAiRequestMapperTest {
     }
 
     @Test
+    fun `mapToResponseParams serializes attached image inspect with question parameter`() {
+        val params = OpenAiRequestMapper.mapToResponseParams(
+            modelId = "gpt-4o",
+            prompt = "Inspect the image",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
+            )
+        )
+
+        assertTrue(params.toString().contains("attached_image_inspect"))
+        assertTrue(params.toString().contains("question"))
+        assertFalse(params.toString().contains("\"required\"=[\"query\"]"))
+    }
+
+    @Test
     fun `mapToResponseParams includes input image content when image uris are present`() {
         val imageUri = createTempImageUri()
 

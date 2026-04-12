@@ -9,6 +9,9 @@ import com.openai.core.JsonValue
 import com.openai.models.FunctionDefinition
 import com.openai.models.FunctionParameters
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
+import com.openai.models.chat.completions.ChatCompletionContentPart
+import com.openai.models.chat.completions.ChatCompletionContentPartImage
+import com.openai.models.chat.completions.ChatCompletionContentPartText
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionFunctionTool
 import com.openai.models.chat.completions.ChatCompletionMessageParam
@@ -16,6 +19,7 @@ import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.responses.FunctionTool
 import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseInputImage
 import com.openai.models.responses.ResponseInputItem
 
 object OpenRouterRequestMapper {
@@ -47,7 +51,11 @@ object OpenRouterRequestMapper {
             }
         }
 
-        messages.add(ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder().content(prompt).build()))
+        messages.add(
+            ChatCompletionMessageParam.ofUser(
+                buildChatCompletionUserMessage(prompt, options.imageUris)
+            )
+        )
         builder.messages(messages)
 
         options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
@@ -97,14 +105,7 @@ object OpenRouterRequestMapper {
             )
         }
 
-        messages.add(
-            ResponseInputItem.ofMessage(
-                ResponseInputItem.Message.builder()
-                    .role(ResponseInputItem.Message.Role.of("user"))
-                    .addInputTextContent(prompt)
-                    .build()
-            )
-        )
+        messages.add(ResponseInputItem.ofMessage(buildResponseUserMessage(prompt, options.imageUris)))
 
         builder.inputOfResponse(messages)
         systemMessages
@@ -221,4 +222,65 @@ object OpenRouterRequestMapper {
                 "type" to "string"
             )
         )
+
+    private fun buildChatCompletionUserMessage(
+        prompt: String,
+        imageUris: List<String>,
+    ): ChatCompletionUserMessageParam {
+        if (imageUris.isEmpty()) {
+            return ChatCompletionUserMessageParam.builder()
+                .content(prompt)
+                .build()
+        }
+
+        val parts = buildList {
+            add(
+                ChatCompletionContentPart.ofText(
+                    ChatCompletionContentPartText.builder()
+                        .text(prompt)
+                        .build()
+                )
+            )
+            ImagePayloads.fromUris(imageUris).forEach { payload ->
+                ImagePayloads.validate(payload)
+                add(
+                    ChatCompletionContentPart.ofImageUrl(
+                        ChatCompletionContentPartImage.builder()
+                            .imageUrl(
+                                ChatCompletionContentPartImage.ImageUrl.builder()
+                                    .url(payload.dataUrl)
+                                    .build()
+                            )
+                            .build()
+                    )
+                )
+            }
+        }
+
+        return ChatCompletionUserMessageParam.builder()
+            .contentOfArrayOfContentParts(parts)
+            .build()
+    }
+
+    private fun buildResponseUserMessage(
+        prompt: String,
+        imageUris: List<String>,
+    ): ResponseInputItem.Message {
+        val builder = ResponseInputItem.Message.builder()
+            .role(ResponseInputItem.Message.Role.of("user"))
+            .addInputTextContent(prompt)
+
+        ImagePayloads.fromUris(imageUris).forEach { payload ->
+            ImagePayloads.validate(payload)
+            builder.addContent(
+                ResponseInputImage.builder()
+                    .detail(ResponseInputImage.Detail.AUTO)
+                    .imageUrl(payload.dataUrl)
+                    .build()
+            )
+        }
+
+        return builder.build()
+    }
 }
+

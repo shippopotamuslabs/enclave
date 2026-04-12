@@ -5,29 +5,22 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
-import com.google.genai.Client
-import com.google.genai.Models
-import com.google.genai.ResponseStream
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCall
-import com.google.genai.types.GenerateContentResponse
 import com.google.genai.types.Part
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.runInterruptible
 
 class GoogleInferenceServiceImpl(
-    private val client: Client,
-    private val explicitModelsApi: Models? = null,
+    private val sdkClient: GoogleGenAiSdkClient,
     private val modelId: String,
     private val modelType: ModelType,
     private val baseUrl: String? = null,
@@ -35,20 +28,11 @@ class GoogleInferenceServiceImpl(
     internal val toolExecutor: ToolExecutorPort? = null,
 ) : LlmInferencePort {
 
-    private data class StreamedGoogleResponse(
-        val emittedAny: Boolean,
-        val functionCall: FunctionCall?,
-        val assistantContent: Content?,
-    )
-
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
         private const val TAG = "GoogleInferenceService"
         private const val PROVIDER = "GOOGLE"
     }
-
-    private val modelsApi: Models
-        get() = explicitModelsApi ?: client.models
 
     private val conversationHistory = mutableListOf<ChatMessage>()
 
@@ -99,6 +83,8 @@ class GoogleInferenceServiceImpl(
             return
         }
 
+        logImagePayloads(options)
+
         val request = GoogleRequestMapper.mapToGenerateContentRequest(
             prompt = prompt,
             history = requestHistory,
@@ -114,11 +100,7 @@ class GoogleInferenceServiceImpl(
             "GenerateContent request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(request.config.toString())}"
         )
 
-        runInterruptible {
-            modelsApi.generateContentStream(modelId, request.contents, request.config)
-        }.use { responseStream ->
-            streamResponses(responseStream, emitEvent)
-        }
+        sdkClient.generateContentStream(modelId, request.contents, request.config, emitEvent)
     }
 
     private suspend fun executeToolingPrompt(
@@ -132,6 +114,7 @@ class GoogleInferenceServiceImpl(
         }
 
         try {
+            logImagePayloads(options)
             val request = GoogleRequestMapper.mapToGenerateContentRequest(
                 prompt = prompt,
                 history = requestHistory,
@@ -142,12 +125,7 @@ class GoogleInferenceServiceImpl(
                 "GenerateContent tool request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(request.config.toString())}"
             )
 
-            val initialStream = runInterruptible {
-                modelsApi.generateContentStream(modelId, request.contents, request.config)
-            }
-            val initialResponse = initialStream.use { responseStream ->
-                streamResponses(responseStream, emitEvent)
-            }
+            val initialResponse = sdkClient.generateContentStream(modelId, request.contents, request.config, emitEvent)
             val functionCall = initialResponse.functionCall
             if (functionCall == null) {
                 loggingPort.info(
@@ -161,15 +139,20 @@ class GoogleInferenceServiceImpl(
                 toolName = functionCall.name().orElseThrow {
                     IllegalStateException("Google tool execution failed before final response")
                 },
-                argumentsJson = SearchToolSupport.buildArgumentsJson(functionCall.args().orElse(emptyMap())),
+                argumentsJson = ToolEnvelopeParser.buildArgumentsJson(functionCall.args().orElse(emptyMap())),
                 provider = PROVIDER,
                 modelType = modelType,
+                chatId = options.chatId,
+                userMessageId = options.userMessageId,
             )
-            SearchToolSupport.requireSupportedTool(toolRequest.toolName)
-            val query = SearchToolSupport.extractRequiredQuery(toolRequest.argumentsJson)
+            ToolEnvelopeParser.requireSupportedTool(toolRequest.toolName)
+            val toolArg = when (toolRequest.toolName) {
+                ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolRequest.argumentsJson)
+                else -> ToolEnvelopeParser.extractRequiredQuery(toolRequest.argumentsJson)
+            }
             loggingPort.info(
                 TAG,
-                "Tool call detected provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} query=$query"
+                "Tool call detected provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} arg=$toolArg"
             )
             val toolResult = executor.execute(toolRequest)
             loggingPort.info(
@@ -189,12 +172,7 @@ class GoogleInferenceServiceImpl(
                     .build()
             )
 
-            val followUpStream = runInterruptible {
-                modelsApi.generateContentStream(modelId, followUpContents, request.config)
-            }
-            val followUpResponse = followUpStream.use { responseStream ->
-                streamResponses(responseStream, emitEvent)
-            }
+            val followUpResponse = sdkClient.generateContentStream(modelId, followUpContents, request.config, emitEvent)
             if (followUpResponse.functionCall != null) {
                 loggingPort.warning(
                     TAG,
@@ -213,80 +191,6 @@ class GoogleInferenceServiceImpl(
         } catch (e: Exception) {
             throw IllegalStateException("Google tool execution failed before final response", e)
         }
-    }
-
-    private suspend fun streamResponses(
-        responseStream: ResponseStream<GenerateContentResponse>,
-        emitEvent: suspend (InferenceEvent) -> Unit,
-    ): StreamedGoogleResponse {
-        val iterator = responseStream.iterator()
-        var emittedAny = false
-        var lastFunctionCall: FunctionCall? = null
-        var assistantContent: Content? = null
-        while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
-            val response = runInterruptible { iterator.next() }
-            response.candidates().orElse(emptyList()).forEach { candidate ->
-                val content = candidate.content().orElse(null)
-                if (content != null) {
-                    assistantContent = content
-                    emittedAny = emitContentParts(content, emitEvent) || emittedAny
-                }
-            }
-            lastFunctionCall = response.functionCalls()?.firstOrNull() ?: lastFunctionCall
-
-            val responseText = response.text().orEmpty()
-            if (responseText.isNotBlank() && !emittedAny) {
-                emitEvent(InferenceEvent.PartialResponse(responseText, modelType))
-                emittedAny = true
-            }
-        }
-
-        emitEvent(InferenceEvent.Finished(modelType))
-        return StreamedGoogleResponse(
-            emittedAny = emittedAny,
-            functionCall = lastFunctionCall,
-            assistantContent = assistantContent,
-        )
-    }
-
-    private suspend fun emitContentParts(
-        content: Content,
-        emitEvent: suspend (InferenceEvent) -> Unit,
-    ): Boolean {
-        var emitted = false
-        content.parts().orElse(emptyList()).forEach { part ->
-            val text = part.text().orElse("")
-            if (text.isNotBlank()) {
-                val isThought = part.thought().orElse(false)
-                emitted = true
-                if (isThought) {
-                    emitEvent(InferenceEvent.Thinking(text, modelType))
-                } else {
-                    emitEvent(InferenceEvent.PartialResponse(text, modelType))
-                }
-            }
-        }
-        return emitted
-    }
-
-    private suspend fun emitResponseText(
-        response: GenerateContentResponse,
-        emitEvent: suspend (InferenceEvent) -> Unit,
-    ): Boolean {
-        var emittedAny = false
-        response.candidates().orElse(emptyList()).forEach { candidate ->
-            val content = candidate.content().orElse(null)
-            if (content != null) {
-                emittedAny = emitContentParts(content, emitEvent) || emittedAny
-            }
-        }
-
-        val responseText = response.text().orEmpty()
-        if (responseText.isNotBlank() && !emittedAny) {
-            emitEvent(InferenceEvent.PartialResponse(responseText, modelType))
-            emittedAny = true
-        }
-        return emittedAny
     }
 
     private fun buildFunctionResponsePart(
@@ -334,5 +238,29 @@ class GoogleInferenceServiceImpl(
             return value
         }
         return value.take(MAX_LOG_BODY_CHARS) + "...<truncated>"
+    }
+
+    private fun logImagePayloads(options: GenerationOptions) {
+        if (options.imageUris.isEmpty()) {
+            return
+        }
+        val payloads = runCatching {
+            ImagePayloads.fromUris(options.imageUris)
+        }.getOrElse { error ->
+            loggingPort.error(
+                TAG,
+                "Failed to load image payloads provider=$PROVIDER model=$modelId message=${error.message}",
+                error,
+            )
+            return
+        }
+
+        val details = payloads.joinToString(separator = "; ") { payload ->
+            "file=${payload.filename}, mime=${payload.mimeType}, bytes=${payload.byteCount}, sha256=${payload.sha256.take(8)}"
+        }
+        loggingPort.info(
+            TAG,
+            "Image payloads provider=$PROVIDER model=$modelId count=${payloads.size} $details"
+        )
     }
 }

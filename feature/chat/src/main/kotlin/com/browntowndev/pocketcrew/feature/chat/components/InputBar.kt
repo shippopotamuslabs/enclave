@@ -62,6 +62,8 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 fun InputBar(
     inputText: String,
     selectedImageUri: String?,
+    isPhotoAttachmentEnabled: Boolean,
+    photoAttachmentDisabledReason: String?,
     selectedMode: ChatModeUi,
     isGenerating: Boolean,
     isGlobalInferenceBlocked: Boolean = false,
@@ -281,11 +283,18 @@ fun InputBar(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 // Attachment (left-aligned)
-                IconButton(onClick = onAttach) {
+                IconButton(
+                    onClick = onAttach,
+                    enabled = isPhotoAttachmentEnabled,
+                ) {
                     Icon(
                         painter = painterResource(R.drawable.attach_file),
                         contentDescription = "Attach file",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (isPhotoAttachmentEnabled) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                        }
                     )
                 }
 
@@ -358,6 +367,15 @@ fun InputBar(
                     )
                 }
             }
+
+            if (!isPhotoAttachmentEnabled && !photoAttachmentDisabledReason.isNullOrBlank()) {
+                Text(
+                    text = photoAttachmentDisabledReason,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, top = 2.dp)
+                )
+            }
         }
     }
 }
@@ -371,6 +389,8 @@ fun PreviewInputBar() {
         InputBar(
             inputText = "",
             selectedImageUri = null,
+            isPhotoAttachmentEnabled = true,
+            photoAttachmentDisabledReason = null,
             selectedMode = ChatModeUi.FAST,
             isGenerating = false,
             onInputChange = {},
@@ -393,6 +413,8 @@ fun PreviewInputBarExpanded() {
                 Line 3: showing collapse icon.
             """.trimIndent(),
             selectedImageUri = null,
+            isPhotoAttachmentEnabled = false,
+            photoAttachmentDisabledReason = "Crew mode requires an API vision model.",
             selectedMode = ChatModeUi.CREW,
             isGenerating = false,
             onInputChange = {},
@@ -411,6 +433,8 @@ fun PreviewInputBarSingleLine() {
         InputBar(
             inputText = "Single line message",
             selectedImageUri = null,
+            isPhotoAttachmentEnabled = true,
+            photoAttachmentDisabledReason = null,
             selectedMode = ChatModeUi.FAST,
             isGenerating = false,
             onInputChange = {},
@@ -429,6 +453,8 @@ fun PreviewInputBarThinking() {
         InputBar(
             inputText = "Message while thinking",
             selectedImageUri = null,
+            isPhotoAttachmentEnabled = true,
+            photoAttachmentDisabledReason = null,
             selectedMode = ChatModeUi.FAST,
             isGenerating = true,
             onInputChange = {},
@@ -447,6 +473,8 @@ fun PreviewInputBarThinkingMode() {
         InputBar(
             inputText = "Tell me about quantum physics",
             selectedImageUri = null,
+            isPhotoAttachmentEnabled = true,
+            photoAttachmentDisabledReason = null,
             selectedMode = ChatModeUi.THINKING,
             isGenerating = false,
             onInputChange = {},

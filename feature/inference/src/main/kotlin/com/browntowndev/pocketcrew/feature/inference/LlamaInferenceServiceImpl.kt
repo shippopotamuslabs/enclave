@@ -15,6 +15,7 @@ import com.browntowndev.pocketcrew.feature.inference.llama.ChatRole
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
@@ -252,7 +253,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
         try {
             sessionManager.sendUserMessage(prompt)
 
-            if (SearchToolSupport.hasLocalToolContract(processedOptions.systemPrompt)) {
+            if (ToolEnvelopeParser.hasLocalToolContract(processedOptions.systemPrompt)) {
                 executeToolingPrompt(processedOptions, targetModelType) { emit(it) }
                 if (closeConversation) {
                     sessionManager.clearConversation()
@@ -340,7 +341,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             targetModelType = targetModelType,
             emitEvent = emitEvent,
         )
-        val envelope = SearchToolSupport.extractLocalToolEnvelope(firstPass.fullText)
+        val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(firstPass.fullText)
         if (envelope == null) {
             Log.i(TAG, "Tool loop complete without tool call provider=LLAMA modelType=$targetModelType")
             emitProcessedText(firstPass.fullText, targetModelType, emitEvent)
@@ -353,17 +354,22 @@ class LlamaInferenceServiceImpl @Inject constructor(
             argumentsJson = envelope.argumentsJson,
             provider = "LLAMA",
             modelType = targetModelType,
+            chatId = options.chatId,
+            userMessageId = options.userMessageId,
         )
-        SearchToolSupport.requireSupportedTool(toolRequest.toolName)
-        val query = SearchToolSupport.extractRequiredQuery(toolRequest.argumentsJson)
-        Log.i(TAG, "Tool call detected provider=LLAMA tool=${toolRequest.toolName} query=$query")
+        ToolEnvelopeParser.requireSupportedTool(toolRequest.toolName)
+        val toolArg = when (toolRequest.toolName) {
+            ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolRequest.argumentsJson)
+            else -> ToolEnvelopeParser.extractRequiredQuery(toolRequest.argumentsJson)
+        }
+        Log.i(TAG, "Tool call detected provider=LLAMA tool=${toolRequest.toolName} arg=$toolArg")
         val toolResult = executor.execute(toolRequest)
         Log.i(
             TAG,
             "Tool call completed provider=LLAMA tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
         )
 
-        sessionManager.sendUserMessage(SearchToolSupport.buildLocalToolResultMessage(toolResult.resultJson))
+        sessionManager.sendUserMessage(ToolEnvelopeParser.buildLocalToolResultMessage(toolResult.resultJson))
 
         val followUpGeneration = try {
             streamBufferedGeneration(
@@ -375,7 +381,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
         } catch (error: Exception) {
             throw IllegalStateException("Failed to resume llama generation after tool replay", error)
         }
-        if (SearchToolSupport.extractLocalToolEnvelope(followUpGeneration.fullText) != null) {
+        if (ToolEnvelopeParser.extractLocalToolEnvelope(followUpGeneration.fullText) != null) {
             Log.w(TAG, "Recursive tool call detected provider=LLAMA modelType=$targetModelType")
             throw IllegalStateException("Search skill recursion limit exceeded")
         }

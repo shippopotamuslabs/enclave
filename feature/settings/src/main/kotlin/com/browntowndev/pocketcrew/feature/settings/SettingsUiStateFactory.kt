@@ -17,6 +17,7 @@ internal data class SheetVisibilityState(
     val dataControls: Boolean = false,
     val memories: Boolean = false,
     val feedback: Boolean = false,
+    val visionSettings: Boolean = false,
 )
 
 internal data class LocalModelsTransientState(
@@ -156,11 +157,13 @@ class SettingsUiStateFactory @Inject constructor(
                 theme = persistedSettings.theme,
                 hapticPress = persistedSettings.hapticPress,
                 hapticResponse = persistedSettings.hapticResponse,
+                alwaysUseVisionModel = persistedSettings.alwaysUseVisionModel,
                 isLocalModelsSheetOpen = localModelsState.isSheetOpen,
                 isApiProvidersSheetOpen = apiState.isSheetOpen,
                 isDataControlsSheetOpen = sheetVisibility.dataControls,
                 isMemoriesSheetOpen = sheetVisibility.memories,
                 isFeedbackSheetOpen = sheetVisibility.feedback,
+                isVisionSettingsSheetOpen = sheetVisibility.visionSettings,
             ),
             customization = CustomizationUiState(
                 isSheetOpen = sheetVisibility.customization,
@@ -215,7 +218,22 @@ class SettingsUiStateFactory @Inject constructor(
                 tavilyKeyPresent = persistedSettings.tavilyKeyPresent,
             ),
             assignments = ModelAssignmentsUiState(
-                assignments = defaultModels.map(DefaultModelAssignment::toUi),
+                assignments = defaultModels.map { assignment ->
+                    val isVision = when {
+                        assignment.apiConfigId != null -> {
+                            apiModels.any { asset ->
+                                asset.isVision && asset.configurations.any { it.id == assignment.apiConfigId }
+                            }
+                        }
+                        assignment.localConfigId != null -> {
+                            localModels.any { asset ->
+                                asset.visionCapable && asset.configurations.any { it.id == assignment.localConfigId }
+                            }
+                        }
+                        else -> false
+                    }
+                    assignment.toUi(isVision)
+                },
                 isDialogOpen = assignmentsState.isOpen,
                 editingSlot = assignmentsState.editingSlot,
             ),

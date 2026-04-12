@@ -106,6 +106,51 @@ class OpenRouterRequestMapperTest {
     }
 
     @Test
+    fun `mapToResponseParams includes image uris in user message`() {
+        val tempFile = java.io.File.createTempFile("test", ".png").apply {
+            writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+            deleteOnExit()
+        }
+        val params = OpenRouterRequestMapper.mapToResponseParams(
+            modelId = "openai/gpt-5.2",
+            prompt = "what is in this image?",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                imageUris = listOf(tempFile.toURI().toString())
+            )
+        )
+
+        // The image_url check in Responses API is through ResponseInputImage
+        val input = params.input().orElseThrow().toString()
+        assertTrue(input.contains("what is in this image?"))
+        assertTrue(input.contains("imageUrl"))
+        assertTrue(input.contains("data:image/png;base64,"))
+    }
+
+    @Test
+    fun `mapToChatCompletionParams includes image uris in user message`() {
+        val tempFile = java.io.File.createTempFile("test", ".png").apply {
+            writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+            deleteOnExit()
+        }
+        val params = OpenRouterRequestMapper.mapToChatCompletionParams(
+            modelId = "openai/gpt-5.2",
+            prompt = "describe image",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                imageUris = listOf(tempFile.toURI().toString())
+            )
+        )
+
+        val chatBody = params.toString()
+        assertTrue(chatBody.contains("describe image"))
+        assertTrue(chatBody.contains("image_url"))
+        assertTrue(chatBody.contains("data:image/png;base64,"))
+    }
+
+    @Test
     fun `mapToResponseParams serializes tavily_web_search when tooling is enabled`() {
         val params = OpenRouterRequestMapper.mapToResponseParams(
             modelId = "openai/gpt-5.2",

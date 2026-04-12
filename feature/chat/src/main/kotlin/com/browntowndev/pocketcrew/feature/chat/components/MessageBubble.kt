@@ -8,20 +8,24 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,12 +40,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.zIndex
 import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
@@ -62,12 +71,51 @@ fun MessageBubble(
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
     var showActions by remember { mutableStateOf(false) }
+    var showFullscreenPreview by remember { mutableStateOf(false) }
 
     val copyToClipboard: (String) -> Unit = { content ->
         coroutineScope.launch {
             clipboardManager.setClipEntry(
                 ClipEntry(ClipData.newPlainText("Pocket Crew Response", content)),
             )
+        }
+    }
+
+    if (showFullscreenPreview && message.content.imageUri != null) {
+        Dialog(
+            onDismissRequest = { showFullscreenPreview = false },
+            properties = DialogProperties(
+                usePlatformDefaultWidth = false,
+                decorFitsSystemWindows = false
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.8f))
+                    .systemBarsPadding()
+            ) {
+                AsyncImage(
+                    model = message.content.imageUri,
+                    contentDescription = "Fullscreen preview",
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentScale = ContentScale.Fit
+                )
+                IconButton(
+                    onClick = { showFullscreenPreview = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(16.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close preview",
+                        tint = Color.White
+                    )
+                }
+            }
         }
     }
 
@@ -78,6 +126,20 @@ fun MessageBubble(
         Column(
             horizontalAlignment = Alignment.End,
         ) {
+            // Image Preview (above the bubble)
+            message.content.imageUri?.let { imageUri ->
+                AsyncImage(
+                    model = imageUri,
+                    contentDescription = "Attached image",
+                    modifier = Modifier
+                        .fillMaxWidth(fraction = 0.375f)
+                        .heightIn(max = 120.dp)
+                        .padding(bottom = 4.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { showFullscreenPreview = true }
+                )
+            }
+
             // Bubble
             Surface(
                 modifier = Modifier
@@ -95,16 +157,6 @@ fun MessageBubble(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
-                    message.content.imageUri?.let { imageUri ->
-                        AsyncImage(
-                            model = imageUri,
-                            contentDescription = "Attached image",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 120.dp, max = 240.dp)
-                                .padding(bottom = if (message.content.text.isBlank()) 0.dp else 8.dp)
-                        )
-                    }
                     SelectionContainer(modifier = Modifier.fillMaxWidth()) {
                         val contentText = message.content.text
                         if (contentText.isBlank()) {

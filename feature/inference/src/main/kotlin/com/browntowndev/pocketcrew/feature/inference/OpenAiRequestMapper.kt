@@ -134,7 +134,7 @@ object OpenAiRequestMapper {
                         FunctionParameters.builder()
                             .putAdditionalProperty("type", JsonValue.from("object"))
                             .putAdditionalProperty("properties", JsonValue.from(toolProperties()))
-                            .putAdditionalProperty("required", JsonValue.from(listOf("query")))
+                            .putAdditionalProperty("required", JsonValue.from(requiredArguments()))
                             .build()
                     )
                     .strict(true)
@@ -150,18 +150,33 @@ object OpenAiRequestMapper {
                 FunctionTool.Parameters.builder()
                     .putAdditionalProperty("type", JsonValue.from("object"))
                     .putAdditionalProperty("properties", JsonValue.from(toolProperties()))
-                    .putAdditionalProperty("required", JsonValue.from(listOf("query")))
+                    .putAdditionalProperty("required", JsonValue.from(requiredArguments()))
                     .build()
             )
             .strict(true)
             .build()
 
-    private fun toolProperties(): Map<String, Any> =
-        mapOf(
-            "query" to mapOf(
-                "type" to "string"
+    private fun ToolDefinition.toolProperties(): Map<String, Any> =
+        when (this) {
+            ToolDefinition.TAVILY_WEB_SEARCH -> mapOf(
+                "query" to mapOf(
+                    "type" to "string"
+                )
             )
-        )
+            ToolDefinition.ATTACHED_IMAGE_INSPECT -> mapOf(
+                "question" to mapOf(
+                    "type" to "string"
+                )
+            )
+            else -> error("Unsupported tool: $name")
+        }
+
+    private fun ToolDefinition.requiredArguments(): List<String> =
+        when (this) {
+            ToolDefinition.TAVILY_WEB_SEARCH -> listOf("query")
+            ToolDefinition.ATTACHED_IMAGE_INSPECT -> listOf("question")
+            else -> error("Unsupported tool: $name")
+        }
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
@@ -185,6 +200,7 @@ object OpenAiRequestMapper {
                 )
             )
             ImagePayloads.fromUris(imageUris).forEach { payload ->
+                ImagePayloads.validate(payload)
                 add(
                     ChatCompletionContentPart.ofImageUrl(
                         ChatCompletionContentPartImage.builder()
@@ -213,6 +229,7 @@ object OpenAiRequestMapper {
             .addInputTextContent(prompt)
 
         ImagePayloads.fromUris(imageUris).forEach { payload ->
+            ImagePayloads.validate(payload)
             builder.addContent(
                 ResponseInputImage.builder()
                     .detail(ResponseInputImage.Detail.AUTO)

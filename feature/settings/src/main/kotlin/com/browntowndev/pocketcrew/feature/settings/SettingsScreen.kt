@@ -41,6 +41,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -60,12 +63,15 @@ fun SettingsScreen(
     onThemeChange: (AppTheme) -> Unit,
     onHapticPressChange: (Boolean) -> Unit,
     onHapticResponseChange: (Boolean) -> Unit,
+    onAlwaysUseVisionModelChange: (Boolean) -> Unit,
     onShowCustomizationSheet: (Boolean) -> Unit,
     onShowDataControlsSheet: (Boolean) -> Unit,
     onShowMemoriesSheet: (Boolean) -> Unit,
     onOpenToS: () -> Unit,
     onShowFeedbackSheet: (Boolean) -> Unit,
+    onShowVisionSettingsSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
+    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onShowLocalModelsSheet: (Boolean) -> Unit,
     onShowByokSheet: (Boolean) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
@@ -155,19 +161,29 @@ fun SettingsScreen(
                     icon = Icons.Default.Cloud,
                     onClick = { onShowByokSheet(true) }
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            item {
+                SectionHeader(text = "Tools")
                 SettingsNavigationItem(
                     title = "Web Search",
                     subtitle = buildString {
                         append(if (uiState.searchSkillEditor.enabled) "Enabled" else "Disabled")
                         append(" • ")
-                        append(if (uiState.searchSkillEditor.tavilyKeyPresent) "Tavily key saved" else "No Tavily key")
+                        append(if (uiState.searchSkillEditor.tavilyKeyPresent) "Tavily key Saved" else "No Tavily Key")
                     },
                     icon = Icons.Default.Public,
                     onClick = {
                         onStartConfigureSearchSkill()
                         onNavigateToByokConfigure()
                     }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsNavigationItem(
+                    title = "Vision",
+                    subtitle = ModelType.VISION.description,
+                    icon = painterResource(R.drawable.photo),
+                    onClick = { onShowVisionSettingsSheet(true) }
                 )
             }
 
@@ -202,6 +218,15 @@ fun SettingsScreen(
             }
             
             item { Spacer(modifier = Modifier.height(24.dp)) }
+        }
+
+        if (uiState.home.isVisionSettingsSheetOpen) {
+            VisionSettingsBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowVisionSettingsSheet(false) },
+                onAlwaysUseVisionModelChange = onAlwaysUseVisionModelChange,
+                onSetDefaultModel = onSetDefaultModel
+            )
         }
 
         if (uiState.home.isApiProvidersSheetOpen) {
@@ -321,15 +346,19 @@ fun ThemeOption(
 @Composable
 fun SettingsToggle(
     title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    subtitle: String? = null
 ) {
     ListItem(
         leadingContent = {
-            Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Box(contentAlignment = Alignment.Center) {
+                Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         },
         headlineContent = { Text(title) },
+        supportingContent = subtitle?.let { text -> { Text(text) } },
         trailingContent = {
             Switch(checked = checked, onCheckedChange = onCheckedChange)
         },
@@ -343,12 +372,42 @@ fun SettingsToggle(
 fun SettingsNavigationItem(
     title: String,
     subtitle: String? = null,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: Painter,
+    onClick: () -> Unit
+) {
+    SettingsNavigationItem(
+        title = title,
+        subtitle = subtitle,
+        icon = { Icon(painter = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        onClick = onClick
+    )
+}
+
+@Composable
+fun SettingsNavigationItem(
+    title: String,
+    subtitle: String? = null,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    SettingsNavigationItem(
+        title = title,
+        subtitle = subtitle,
+        icon = { Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        onClick = onClick
+    )
+}
+
+@Composable
+fun SettingsNavigationItem(
+    title: String,
+    subtitle: String? = null,
+    icon: @Composable (() -> Unit),
     onClick: () -> Unit
 ) {
     ListItem(
         leadingContent = {
-            Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            icon()
         },
         headlineContent = { Text(title) },
         supportingContent = subtitle?.let { { Text(it) } },
@@ -373,12 +432,15 @@ fun PreviewSettingsScreen() {
             onThemeChange = {},
             onHapticPressChange = {},
             onHapticResponseChange = {},
+            onAlwaysUseVisionModelChange = {},
             onShowCustomizationSheet = {},
             onShowDataControlsSheet = {},
             onShowMemoriesSheet = {},
             onOpenToS = {},
             onShowFeedbackSheet = {},
+            onShowVisionSettingsSheet = {},
             onNavigateToModelConfigure = {},
+            onSetDefaultModel = { _, _, _ -> },
             onShowLocalModelsSheet = {},
             onShowByokSheet = {},
             onNavigateToByokConfigure = {},

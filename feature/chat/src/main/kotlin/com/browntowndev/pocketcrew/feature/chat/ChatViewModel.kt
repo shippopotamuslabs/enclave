@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
@@ -34,10 +35,12 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -49,12 +52,13 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    settingsUseCases: SettingsUseCases,
+    private val settingsUseCases: SettingsUseCases,
     private val chatUseCases: ChatUseCases,
     private val stageImageAttachmentUseCase: StageImageAttachmentUseCase,
     private val savedStateHandle: SavedStateHandle,
     inferenceLockManager: InferenceLockManager,
     private val modelDisplayNamesUseCase: GetModelDisplayNameUseCase,
+    private val activeModelProvider: ActiveModelProviderPort,
     private val errorHandler: ViewModelErrorHandler,
 ) : ViewModel() {
 
@@ -87,6 +91,15 @@ class ChatViewModel @Inject constructor(
     // Holds dynamically loaded display names
     private val _modelDisplayNames = MutableStateFlow<Map<ModelType, String>>(emptyMap())
 
+    private val photoAttachmentPolicyFlow = combine(
+        settingsUseCases.getSettings(),
+        _selectedMode,
+    ) { settings, selectedMode ->
+        settings to selectedMode
+    }.mapLatest { (settings, selectedMode) ->
+        resolvePhotoAttachmentPolicy(settings, selectedMode)
+    }
+
     // Job for tracking inference flow collection (for cancellation in onCleared)
     private var inferenceJob: Job? = null
 
@@ -106,16 +119,25 @@ class ChatViewModel @Inject constructor(
      * Combines settings, messages from database, inference lock state, and in-flight messages.
      * Uses nested combine for 6 flows (Kotlin only supports up to 5-arg combine natively).
      */
+    private val uiInputsFlow = combine(
+        settingsUseCases.getSettings(),
+        _inputText,
+        _selectedMode,
+        _selectedImageUri,
+    ) { settings: SettingsData, inputText: String, selectedMode: ChatModeUi, selectedImageUri: String? ->
+        UiInputs(settings, inputText, selectedMode, selectedImageUri)
+    }
+
+    private val uiInputsWithPolicyFlow = combine(
+        uiInputsFlow,
+        photoAttachmentPolicyFlow,
+    ) { inputs, attachmentPolicy ->
+        UiInputsWithPolicy(inputs, attachmentPolicy)
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<ChatUiState> = combine(
-        combine(
-            settingsUseCases.getSettings(),
-            _inputText,
-            _selectedMode,
-            _selectedImageUri,
-        ) { settings: SettingsData, inputText: String, selectedMode: ChatModeUi, selectedImageUri: String? ->
-            UiInputs(settings, inputText, selectedMode, selectedImageUri)
-        },
+        uiInputsWithPolicyFlow,
         inferenceLockManager.isInferenceBlocked,
         _currentChatId.flatMapLatest { chatId: ChatId? ->
             val id: ChatId? = chatId ?: initialChatId
@@ -126,12 +148,14 @@ class ChatViewModel @Inject constructor(
             }
         },
         _inFlightMessages
-    ) { 
-        inputs: UiInputs,
+    ) {
+        inputsWithPolicy: UiInputsWithPolicy,
         isBlocked: Boolean,
         messages: List<Message>,
         inFlight: Map<MessageId, MessageSnapshot> ->
 
+        val inputs = inputsWithPolicy.inputs
+        val attachmentPolicy = inputsWithPolicy.attachmentPolicy
         val settings: SettingsData = inputs.settings
         val inputText: String = inputs.inputText
         val selectedMode: ChatModeUi = inputs.selectedMode
@@ -190,6 +214,8 @@ class ChatViewModel @Inject constructor(
             messages = chatMessages,
             inputText = inputText,
             selectedImageUri = inputs.selectedImageUri,
+            isPhotoAttachmentEnabled = attachmentPolicy.isEnabled,
+            photoAttachmentDisabledReason = attachmentPolicy.disabledReason,
             selectedMode = selectedMode,
             isGlobalInferenceBlocked = isBlocked,
             hapticPress = settings.hapticPress,
@@ -300,6 +326,18 @@ class ChatViewModel @Inject constructor(
 
     fun onModeChange(mode: ChatModeUi) {
         _selectedMode.value = mode
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to evaluate attachment policy",
+                "Could not update the selected mode.",
+            )
+        ) {
+            val settings = settingsUseCases.getSettings().first()
+            if (!resolvePhotoAttachmentPolicy(settings, mode).isEnabled) {
+                _selectedImageUri.value = null
+            }
+        }
     }
 
     fun onImageSelected(uri: String?) {
@@ -315,6 +353,12 @@ class ChatViewModel @Inject constructor(
                 "Could not attach the selected image. Please try again.",
             )
         ) {
+            val settings = settingsUseCases.getSettings().first()
+            val policy = resolvePhotoAttachmentPolicy(settings, _selectedMode.value)
+            if (!policy.isEnabled) {
+                _selectedImageUri.value = null
+                return@launch
+            }
             _selectedImageUri.value = stageImageAttachmentUseCase(uri)
         }
     }
@@ -335,20 +379,26 @@ class ChatViewModel @Inject constructor(
 
     fun onSendMessage() {
         val input = _inputText.value
-        val selectedImageUri = _selectedImageUri.value
-        if (input.isNotBlank() || selectedImageUri != null) {
-            // Determine the chat ID: prefer currentChatId, then initialChatId, otherwise empty
-            val chatIdForMessage = _currentChatId.value ?: initialChatId ?: ChatId("")
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to send message", "Could not send message. Please try again.")) {
+            val settings = settingsUseCases.getSettings().first()
+            val selectedImageUri = if (resolvePhotoAttachmentPolicy(settings, _selectedMode.value).isEnabled) {
+                _selectedImageUri.value
+            } else {
+                null
+            }
 
-            // Create domain message for persistence
-            val domainMessage = Message(
-                id = MessageId(UUID.randomUUID().toString()),
-                chatId = chatIdForMessage,
-                content = Content(text = input, imageUri = selectedImageUri),
-                role = Role.USER
-            )
+            if (input.isNotBlank() || selectedImageUri != null) {
+                // Determine the chat ID: prefer currentChatId, then initialChatId, otherwise empty
+                val chatIdForMessage = _currentChatId.value ?: initialChatId ?: ChatId("")
 
-            viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to send message", "Could not send message. Please try again.")) {
+                // Create domain message for persistence
+                val domainMessage = Message(
+                    id = MessageId(UUID.randomUUID().toString()),
+                    chatId = chatIdForMessage,
+                    content = Content(text = input, imageUri = selectedImageUri),
+                    role = Role.USER
+                )
+
                 // Step 1: Save user message (creates new chat if needed)
                 // Also creates placeholder assistant message, returns assistant message ID and chat ID
                 val promptResult = chatUseCases.processPrompt(domainMessage)
@@ -417,6 +467,58 @@ class ChatViewModel @Inject constructor(
         val selectedMode: ChatModeUi,
         val selectedImageUri: String?,
     )
+
+    private data class PhotoAttachmentPolicy(
+        val isEnabled: Boolean,
+        val disabledReason: String? = null,
+    )
+
+    private data class UiInputsWithPolicy(
+        val inputs: UiInputs,
+        val attachmentPolicy: PhotoAttachmentPolicy,
+    )
+
+    private suspend fun resolvePhotoAttachmentPolicy(
+        settings: SettingsData,
+        selectedMode: ChatModeUi,
+    ): PhotoAttachmentPolicy {
+        val apiVisionConfigured = activeModelProvider.getActiveConfiguration(ModelType.VISION)
+            ?.let { config -> config.isLocal == false && config.visionCapable }
+            ?: false
+        val activeVisionCapable = when (selectedMode) {
+            ChatModeUi.FAST -> activeModelProvider.getActiveConfiguration(ModelType.FAST)?.visionCapable == true
+            ChatModeUi.THINKING -> activeModelProvider.getActiveConfiguration(ModelType.THINKING)?.visionCapable == true
+            ChatModeUi.CREW -> false
+        }
+
+        return when (selectedMode) {
+            ChatModeUi.FAST, ChatModeUi.THINKING -> {
+                if (settings.alwaysUseVisionModel && !apiVisionConfigured) {
+                    PhotoAttachmentPolicy(
+                        isEnabled = false,
+                        disabledReason = "Always Use Vision Model requires a configured API vision model.",
+                    )
+                } else if (activeVisionCapable || apiVisionConfigured) {
+                    PhotoAttachmentPolicy(isEnabled = true)
+                } else {
+                    PhotoAttachmentPolicy(
+                        isEnabled = false,
+                        disabledReason = "Photo attachments require a vision-capable Fast/Thinking model or a configured API vision model.",
+                    )
+                }
+            }
+            ChatModeUi.CREW -> {
+                if (apiVisionConfigured) {
+                    PhotoAttachmentPolicy(isEnabled = true)
+                } else {
+                    PhotoAttachmentPolicy(
+                        isEnabled = false,
+                        disabledReason = "Crew mode requires a configured API vision model for photo attachments.",
+                    )
+                }
+            }
+        }
+    }
 
     override fun onCleared() {
         super.onCleared()

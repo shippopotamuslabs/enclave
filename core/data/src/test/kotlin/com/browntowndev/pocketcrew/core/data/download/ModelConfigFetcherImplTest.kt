@@ -194,7 +194,7 @@ class ModelConfigFetcherImplTest {
     }
 
     @Test
-    fun fetchRemoteConfig_failsIfVisionSlotModelNotVisionCapable() = runTest {
+    fun fetchRemoteConfig_ignoresVisionSlotEntry() = runTest {
         // Given
         val json = """
             {
@@ -233,8 +233,8 @@ class ModelConfigFetcherImplTest {
         val result = fetcher.fetchRemoteConfig()
 
         // Then
-        assertTrue(result.isFailure)
-        assertEquals("Model configured for 'vision' slot must have 'visionCapable' set to true", result.exceptionOrNull()?.message)
+        assertTrue(result.isSuccess)
+        assertTrue(result.getOrThrow().isEmpty())
     }
 
     @Test

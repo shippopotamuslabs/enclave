@@ -29,6 +29,7 @@ fun SettingsRoute(
         onThemeChange = viewModel::onThemeChange,
         onHapticPressChange = viewModel::onHapticPressChange,
         onHapticResponseChange = viewModel::onHapticResponseChange,
+        onAlwaysUseVisionModelChange = viewModel::onAlwaysUseVisionModelChange,
         onShowCustomizationSheet = viewModel::onShowCustomizationSheet,
         onShowDataControlsSheet = viewModel::onShowDataControlsSheet,
         onShowMemoriesSheet = viewModel::onShowMemoriesSheet,
@@ -37,7 +38,9 @@ fun SettingsRoute(
             context.startActivity(intent)
         },
         onShowFeedbackSheet = viewModel::onShowFeedbackSheet,
+        onShowVisionSettingsSheet = viewModel::onShowVisionSettingsSheet,
         onNavigateToModelConfigure = onNavigateToModelConfigure,
+        onSetDefaultModel = viewModel::onSetDefaultModel,
         onShowLocalModelsSheet = viewModel::onShowModelConfigSheet, // Reuse this state flag
         onShowByokSheet = viewModel::onShowByokSheet,
         onNavigateToByokConfigure = onNavigateToByokConfigure,

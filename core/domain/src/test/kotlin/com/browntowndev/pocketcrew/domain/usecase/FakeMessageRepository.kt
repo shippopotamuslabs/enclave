@@ -3,6 +3,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
+import com.browntowndev.pocketcrew.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
@@ -20,6 +21,8 @@ class FakeMessageRepository : MessageRepository {
     private var getMessagesForChatResult: List<Message> = emptyList()
     private val visionAnalyses = mutableListOf<MessageVisionAnalysis>()
     private var nextMessageId = 1
+
+    private var resolvedImageTarget: ResolvedImageTarget? = null
 
     // Methods to simulate errors
     var shouldThrowOnSaveMessage = false
@@ -64,6 +67,11 @@ class FakeMessageRepository : MessageRepository {
     ): Map<MessageId, List<MessageVisionAnalysis>> =
         visionAnalyses.filter { it.userMessageId in userMessageIds }.groupBy { it.userMessageId }
 
+    override suspend fun resolveLatestImageBearingUserMessage(
+        chatId: ChatId,
+        currentUserMessageId: MessageId,
+    ): ResolvedImageTarget? = resolvedImageTarget
+
     fun setMessagesForChat(messages: List<Message>) {
         getMessagesForChatResult = messages
     }
@@ -86,11 +94,16 @@ class FakeMessageRepository : MessageRepository {
         )
     }
 
+    fun setResolvedImageTarget(target: ResolvedImageTarget?) {
+        resolvedImageTarget = target
+    }
+
     fun reset() {
         savedMessages.clear()
         shouldThrowOnSaveMessage = false
         getMessageByIdResult = null
         getMessagesForChatResult = emptyList()
         visionAnalyses.clear()
+        resolvedImageTarget = null
     }
 }

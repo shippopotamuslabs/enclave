@@ -52,6 +52,8 @@ class XaiInferenceServiceImpl(
             return
         }
 
+        logImagePayloads(options)
+
         val multiAgentModel = XaiRequestMapper.isMultiAgentModel(modelId)
         val chatFallbackAllowed = XaiRequestMapper.shouldAllowChatCompletionsFallback(modelId)
         val chatReasoningContentModel = XaiRequestMapper.isChatReasoningContentModel(modelId)

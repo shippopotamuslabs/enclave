@@ -35,6 +35,7 @@ import java.io.File
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import javax.inject.Provider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -62,6 +63,7 @@ class InferenceFactoryImplTest {
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val inferenceLockManager = mockk<InferenceLockManager>()
     private val toolExecutor = mockk<ToolExecutorPort>()
+    private val toolExecutorProvider = providerOf(toolExecutor)
     private val openAiClient = mockk<OpenAIClient>(relaxed = true)
     private val anthropicClient = mockk<AnthropicClient>(relaxed = true)
     private val googleClient = mockk<Client>(relaxed = true)
@@ -99,7 +101,7 @@ class InferenceFactoryImplTest {
             googleGenAiClientProvider = googleGenAiClientProvider,
             loggingPort = loggingPort,
             inferenceLockManager = inferenceLockManager,
-            toolExecutor = toolExecutor,
+            toolExecutorProvider = toolExecutorProvider,
         )
     }
 
@@ -542,28 +544,28 @@ class InferenceFactoryImplTest {
     }
 
     @Test
-    fun `withInferenceService keeps vision-capable litertlm models on LiteRT service`() = runTest {
-        val assignment = DefaultModelAssignment(modelType = ModelType.VISION, localConfigId = LocalModelConfigurationId("vision-config"))
-        val asset = com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset(
-            metadata = com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata(
-                id = LocalModelId("vision-asset"),
-                huggingFaceModelName = "google/gemma-3n-E2B-it-litert-lm",
-                remoteFileName = "vision.litertlm",
-                localFileName = "vision.litertlm",
-                sha256 = "vision-sha",
-                sizeInBytes = 4096L,
-                modelFileFormat = com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.LITERTLM,
-                visionCapable = true,
-            ),
-            configurations = emptyList()
+    fun `withInferenceService routes vision slot through API services only`() = runTest {
+        val assignment = DefaultModelAssignment(modelType = ModelType.VISION, apiConfigId = ApiModelConfigurationId("vision-config"))
+        val config = ApiModelConfiguration(
+            id = ApiModelConfigurationId("vision-config"),
+            apiCredentialsId = ApiCredentialsId("vision-creds"),
+            displayName = "Vision preset",
         )
 
         coEvery { defaultModelRepository.getDefault(ModelType.VISION) } returns assignment
-        coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("vision-config")) } returns asset
+        coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("vision-config")) } returns config
+        coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("vision-creds")) } returns apiCredentials(
+            modelId = "gpt-4o",
+            provider = ApiProvider.OPENAI,
+            id = ApiCredentialsId("vision-creds"),
+        )
+        every { apiKeyProvider.getApiKey("alias") } returns "secret"
 
         val service = factory.withInferenceService(ModelType.VISION) { it }
 
-        assertTrue(service is LiteRtInferenceServiceImpl)
+        assertTrue(service is ApiInferenceServiceImpl)
+        verify { inferenceLockManager.acquireLock(com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType.BYOK) }
+        verify(exactly = 0) { inferenceLockManager.acquireLock(com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType.ON_DEVICE) }
     }
 
     private fun apiCredentials(

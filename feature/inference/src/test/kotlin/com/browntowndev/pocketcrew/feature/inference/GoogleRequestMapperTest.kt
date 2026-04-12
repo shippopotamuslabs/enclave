@@ -116,6 +116,27 @@ class GoogleRequestMapperTest {
         assertTrue(parts[1].inlineData().isPresent)
     }
 
+    @Test
+    fun `mapToGenerateContentRequest serializes attached image inspect with question parameter`() {
+        val request = GoogleRequestMapper.mapToGenerateContentRequest(
+            prompt = "Inspect the image",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
+            )
+        )
+
+        val functionDeclaration = request.config.tools().orElseThrow().single()
+            .functionDeclarations().orElseThrow().single()
+        val parameters = functionDeclaration.parameters().orElseThrow()
+
+        assertEquals("attached_image_inspect", functionDeclaration.name().orElseThrow())
+        assertTrue(parameters.properties().orElseThrow().containsKey("question"))
+        assertEquals(listOf("question"), parameters.required().orElseThrow())
+    }
+
     private fun createTempImageUri(): String {
         val file = File.createTempFile("google-image", ".jpg")
         file.writeBytes(byteArrayOf(1, 2, 3, 4))

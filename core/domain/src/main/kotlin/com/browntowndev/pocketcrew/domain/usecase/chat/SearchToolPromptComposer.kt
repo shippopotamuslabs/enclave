@@ -4,19 +4,36 @@ import javax.inject.Inject
 
 class SearchToolPromptComposer @Inject constructor() {
 
-    fun compose(baseSystemPrompt: String?): String =
+    fun compose(
+        baseSystemPrompt: String?,
+        includeImageInspectTool: Boolean = false,
+    ): String =
         listOfNotNull(
             baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
-            LOCAL_TOOL_CONTRACT,
+            localToolContract(includeImageInspectTool),
         ).joinToString(separator = "\n\n")
 
     companion object {
-        const val LOCAL_TOOL_CONTRACT: String = """
+        const val SEARCH_TOOL_CONTRACT: String = """
 When you need current or external information, respond with exactly one tool envelope and no surrounding prose:
 <tool_call>{"name":"tavily_web_search","arguments":{"query":"..."}}</tool_call>
 
 After you receive a <tool_result>...</tool_result> message, continue the answer for the user using that result.
 Do not expose tool JSON, tool envelopes, or tool results in the final answer.
 """
+
+        const val IMAGE_INSPECT_CONTRACT: String = """
+When you need to inspect a previously attached image to answer a question about it, respond with exactly one tool envelope and no surrounding prose:
+<tool_call>{"name":"attached_image_inspect","arguments":{"question":"..."}}</tool_call>
+"""
+
+        fun localToolContract(includeImageInspectTool: Boolean): String =
+            buildString {
+                append(SEARCH_TOOL_CONTRACT.trim())
+                if (includeImageInspectTool) {
+                    append("\n\n")
+                    append(IMAGE_INSPECT_CONTRACT.trim())
+                }
+            }
     }
 }

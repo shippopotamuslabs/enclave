@@ -91,6 +91,23 @@ class AnthropicRequestMapperTest {
     }
 
     @Test
+    fun `mapToMessageParams serializes attached image inspect with question parameter`() {
+        val params = AnthropicRequestMapper.mapToMessageParams(
+            modelId = "claude-sonnet-4-20250514",
+            prompt = "Inspect the image",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
+            )
+        )
+
+        assertTrue(params.toString().contains("attached_image_inspect"))
+        assertTrue(params.toString().contains("question"))
+    }
+
+    @Test
     fun `mapToMessageParams includes image blocks when image uris are present`() {
         val params = AnthropicRequestMapper.mapToMessageParams(
             modelId = "claude-sonnet-4-20250514",

@@ -31,6 +31,7 @@ class SettingsRepositoryImpl @Inject constructor(
         private val CUSTOM_PROMPT_TEXT_KEY = stringPreferencesKey("settings_custom_prompt_text")
         private val ALLOW_MEMORIES_KEY = booleanPreferencesKey("settings_allow_memories")
         private val SEARCH_ENABLED_KEY = booleanPreferencesKey("settings_search_enabled")
+        private val ALWAYS_USE_VISION_MODEL_KEY = booleanPreferencesKey("settings_always_use_vision_model")
         private val TAVILY_KEY_PRESENT_KEY = booleanPreferencesKey("settings_tavily_key_present")
     }
 
@@ -56,6 +57,7 @@ class SettingsRepositoryImpl @Inject constructor(
             customPromptText = preferences[CUSTOM_PROMPT_TEXT_KEY] ?: "",
             allowMemories = preferences[ALLOW_MEMORIES_KEY] ?: true,
             searchEnabled = preferences[SEARCH_ENABLED_KEY] ?: false,
+            alwaysUseVisionModel = preferences[ALWAYS_USE_VISION_MODEL_KEY] ?: false,
             tavilyKeyPresent = preferences[TAVILY_KEY_PRESENT_KEY]
                 ?: apiKeyManager.has(ApiKeyManager.TAVILY_SEARCH_ALIAS),
         )
@@ -106,6 +108,12 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun updateSearchEnabled(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[SEARCH_ENABLED_KEY] = enabled
+        }
+    }
+
+    override suspend fun updateAlwaysUseVisionModel(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[ALWAYS_USE_VISION_MODEL_KEY] = enabled
         }
     }
 

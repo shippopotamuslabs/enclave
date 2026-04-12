@@ -9,6 +9,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
+import com.browntowndev.pocketcrew.domain.model.chat.ResolvedImageTarget
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import java.util.UUID
@@ -98,5 +100,28 @@ class MessageRepositoryImpl @Inject constructor(
         return messageVisionAnalysisDao.getByUserMessageIds(userMessageIds)
             .map { it.toDomain() }
             .groupBy { it.userMessageId }
+    }
+
+    override suspend fun resolveLatestImageBearingUserMessage(
+        chatId: ChatId,
+        currentUserMessageId: MessageId,
+    ): ResolvedImageTarget? {
+        val currentUserMessage = messageDao.getMessageById(currentUserMessageId)?.toDomain()
+        if (currentUserMessage != null && currentUserMessage.content.imageUri != null) {
+            return ResolvedImageTarget(
+                userMessageId = currentUserMessage.id,
+                imageUri = currentUserMessage.content.imageUri!!,
+            )
+        }
+        val messages = messageDao.getMessagesByChatId(chatId).map { it.toDomain() }
+        val latestImageMessage = messages
+            .filter { it.role == Role.USER && it.content.imageUri != null && it.id != currentUserMessageId }
+            .maxByOrNull { it.createdAt }
+        return latestImageMessage?.let {
+            ResolvedImageTarget(
+                userMessageId = it.id,
+                imageUri = it.content.imageUri!!,
+            )
+        }
     }
 }
