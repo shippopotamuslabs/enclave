@@ -7,6 +7,8 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import kotlinx.coroutines.flow.first
+import org.json.JSONException
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,7 +21,6 @@ class SearchToolExecutorImpl @Inject constructor(
 
     companion object {
         private const val TAG = "SearchToolExecutor"
-        private val QUERY_REGEX = Regex(""""query"\s*:\s*"([^"]*)"""")
     }
 
     override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
@@ -57,10 +58,14 @@ class SearchToolExecutorImpl @Inject constructor(
     }
 
     private fun extractRequiredQuery(argumentsJson: String): String {
-        val query = QUERY_REGEX.find(argumentsJson)?.groupValues?.get(1)?.trim()
-        require(!query.isNullOrBlank()) {
-            "Tool argument 'query' is required"
+        try {
+            return JSONObject(argumentsJson)
+                .optString("query", "")
+                .trim()
+                .takeIf(String::isNotEmpty)
+                ?: throw IllegalArgumentException("Tool argument 'query' is required")
+        } catch (error: JSONException) {
+            throw IllegalArgumentException("Tool argument 'query' is required", error)
         }
-        return query
     }
 }
