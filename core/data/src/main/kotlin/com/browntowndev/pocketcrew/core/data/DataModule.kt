@@ -42,7 +42,7 @@ import com.browntowndev.pocketcrew.core.data.repository.ModelConfigProviderImpl
 import com.browntowndev.pocketcrew.core.data.repository.LocalModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.RoomTransactionProvider
-import com.browntowndev.pocketcrew.core.data.repository.SearchToolExecutorImpl
+import com.browntowndev.pocketcrew.core.data.repository.CompositeToolExecutor
 import com.browntowndev.pocketcrew.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
@@ -247,5 +247,5 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindToolExecutor(impl: SearchToolExecutorImpl): ToolExecutorPort
+    abstract fun bindToolExecutor(impl: CompositeToolExecutor): ToolExecutorPort
 }

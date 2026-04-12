@@ -40,6 +40,8 @@ class ApiInferenceServiceImpl(
             return
         }
 
+        logImagePayloads(options)
+
         val responseParams = OpenAiRequestMapper.mapToResponseParams(
             modelId = modelId,
             prompt = prompt,

@@ -43,11 +43,13 @@ data class SettingsHomeUiState(
     val theme: AppTheme = AppTheme.SYSTEM,
     val hapticPress: Boolean = true,
     val hapticResponse: Boolean = true,
+    val alwaysUseVisionModel: Boolean = false,
     val isLocalModelsSheetOpen: Boolean = false,
     val isApiProvidersSheetOpen: Boolean = false,
     val isDataControlsSheetOpen: Boolean = false,
     val isMemoriesSheetOpen: Boolean = false,
     val isFeedbackSheetOpen: Boolean = false,
+    val isVisionSettingsSheetOpen: Boolean = false,
 )
 
 @Immutable
@@ -266,6 +268,7 @@ data class DefaultModelAssignmentUi(
     val displayLabel: String,
     val providerName: String? = null,
     val presetName: String? = null,
+    val isVision: Boolean = false,
 )
 
 internal val ModelType.displayLabel: String
@@ -273,7 +276,7 @@ internal val ModelType.displayLabel: String
         ModelType.MAIN -> "Synthesis"
         ModelType.FAST -> "Fast"
         ModelType.THINKING -> "Thinking"
-        ModelType.VISION -> "Vision"
+        ModelType.VISION -> "Vision (API)"
         ModelType.DRAFT_ONE -> "Draft 1"
         ModelType.DRAFT_TWO -> "Draft 2"
         ModelType.FINAL_SYNTHESIS -> "Final Refinement"
@@ -284,7 +287,7 @@ internal val ModelType.description: String
         ModelType.MAIN -> "The primary model responsible for synthesizing the draft content into a cohesive response."
         ModelType.FAST -> "A lightweight, efficient model for quick, non-reasoning responses."
         ModelType.THINKING -> "A reasoning model with extended context for complex tasks."
-        ModelType.VISION -> "A specialized model for image understanding and visual analysis."
+        ModelType.VISION -> "A dedicated API vision model that acts as the chat's eyes for image inspection."
         ModelType.DRAFT_ONE -> "Generates the initial analytical draft for the Crew pipeline."
         ModelType.DRAFT_TWO -> "Produces a secondary creative draft for the Crew pipeline."
         ModelType.FINAL_SYNTHESIS -> "Polishes and refines the synthesized content for a professional final output."
@@ -307,7 +310,8 @@ object MockSettingsData {
                 LocalModelConfigUi(id = LocalModelConfigurationId("cfg-1"), localModelId = LocalModelId("1"), displayName = "Default", temperature = 0.7),
                 LocalModelConfigUi(id = LocalModelConfigurationId("cfg-2"), localModelId = LocalModelId("1"), displayName = "Creative", temperature = 1.2),
                 LocalModelConfigUi(id = LocalModelConfigurationId("cfg-3"), localModelId = LocalModelId("1"), displayName = "Precise", temperature = 0.1)
-            )
+            ),
+            visionCapable = true
         ),
         LocalModelAssetUi(
             metadataId = LocalModelId("2"),
@@ -370,9 +374,9 @@ object MockSettingsData {
     )
 
     val defaultAssignments = listOf(
-        DefaultModelAssignmentUi(ModelType.MAIN, ModelSource.API, "GPT-4o (Balanced)", "Main", "OpenAI"),
-        DefaultModelAssignmentUi(ModelType.FAST, ModelSource.ON_DEVICE, "Llama 3 8B (Default)", "Fast"),
-        DefaultModelAssignmentUi(ModelType.VISION, ModelSource.API, "Claude 3.5 Sonnet (Standard)", "Vision", "Anthropic"),
+        DefaultModelAssignmentUi(ModelType.MAIN, ModelSource.API, "GPT-4o (Balanced)", "Synthesis", "OpenAI", isVision = true),
+        DefaultModelAssignmentUi(ModelType.FAST, ModelSource.ON_DEVICE, "Llama 3 8B (Default)", "Fast", isVision = true),
+        DefaultModelAssignmentUi(ModelType.VISION, ModelSource.API, "Claude 3.5 Sonnet (Standard)", "Vision (API)", "Anthropic", isVision = true),
         DefaultModelAssignmentUi(ModelType.THINKING, ModelSource.ON_DEVICE, "Llama 3 8B (Precise)", "Thinking")
     )
 

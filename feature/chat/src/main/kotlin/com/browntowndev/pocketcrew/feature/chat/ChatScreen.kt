@@ -83,6 +83,8 @@ fun ChatScreen(
                 modifier = Modifier.fillMaxWidth(),
                 inputText = uiState.inputText,
                 selectedImageUri = uiState.selectedImageUri,
+                isPhotoAttachmentEnabled = uiState.isPhotoAttachmentEnabled,
+                photoAttachmentDisabledReason = uiState.photoAttachmentDisabledReason,
                 selectedMode = uiState.selectedMode,
                 isGenerating = uiState.isGenerating,
                 isGlobalInferenceBlocked = uiState.isGlobalInferenceBlocked,

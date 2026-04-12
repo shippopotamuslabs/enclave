@@ -16,6 +16,7 @@ data class SettingsData(
     val customPromptText: String = "",
     val allowMemories: Boolean = true,
     val searchEnabled: Boolean = false,
+    val alwaysUseVisionModel: Boolean = false,
     val tavilyKeyPresent: Boolean = false,
 )
 
@@ -37,6 +38,7 @@ interface SettingsRepository {
     suspend fun updateCustomPromptText(text: String)
     suspend fun updateAllowMemories(allowed: Boolean)
     suspend fun updateSearchEnabled(enabled: Boolean)
+    suspend fun updateAlwaysUseVisionModel(enabled: Boolean)
     suspend fun saveTavilyApiKey(apiKey: String)
     suspend fun clearTavilyApiKey()
 }

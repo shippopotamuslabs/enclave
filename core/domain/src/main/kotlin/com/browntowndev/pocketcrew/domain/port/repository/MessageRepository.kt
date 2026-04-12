@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
+import com.browntowndev.pocketcrew.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 /**
@@ -52,4 +53,22 @@ interface MessageRepository {
     suspend fun getVisionAnalysesForMessages(
         userMessageIds: List<MessageId>
     ): Map<MessageId, List<MessageVisionAnalysis>>
+
+    /**
+     * Resolves the latest image-bearing user message for a chat.
+     *
+     * Resolution rules:
+     * 1. If [currentUserMessageId] has an imageUri, return that message.
+     * 2. Otherwise, find the most recent prior user message in the same chat
+     *    with a non-null imageUri, ordered by createdAt DESC.
+     * 3. Returns null if no image-bearing user message exists.
+     *
+     * @param chatId The chat to search within.
+     * @param currentUserMessageId The current user message ID, preferred if it has an image.
+     * @return A [ResolvedImageTarget] or null if no image-bearing message exists.
+     */
+    suspend fun resolveLatestImageBearingUserMessage(
+        chatId: ChatId,
+        currentUserMessageId: MessageId,
+    ): ResolvedImageTarget?
 }

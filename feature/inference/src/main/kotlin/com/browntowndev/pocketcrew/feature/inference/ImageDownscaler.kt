@@ -12,18 +12,22 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 /**
  * Utility for downscaling and normalizing images before passing them to inference engines.
  * 
  * Large images (e.g. 12MP camera photos) can cause native segmentation faults (ANRs)
  * in inference engines like LiteRT if passed directly. This utility downscales them
- * to a safe resolution (e.g., 1024x1024) and handles EXIF rotation.
+ * to a safe maximum dimension while preserving aspect ratio and handles EXIF rotation.
  */
 object ImageDownscaler {
     private const val TAG = "ImageDownscaler"
-    private const val DEFAULT_REQ_WIDTH = 512
-    private const val DEFAULT_REQ_HEIGHT = 512
+    private const val DEFAULT_REQ_WIDTH = 2048
+    private const val DEFAULT_REQ_HEIGHT = 2048
 
     suspend fun downscale(
         context: Context,
@@ -42,19 +46,8 @@ object ImageDownscaler {
         val options = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
             openStream()?.use { BitmapFactory.decodeStream(it, null, this) }
-            
-            // Calculate inSampleSize
-            var inSampleSize = 1
-            val height = outHeight
-            val width = outWidth
-            if (height > reqHeight || width > reqWidth) {
-                val halfHeight = height / 2
-                val halfWidth = width / 2
-                while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
-                    inSampleSize *= 2
-                }
-            }
-            this.inSampleSize = inSampleSize
+
+            this.inSampleSize = calculateInSampleSize(outWidth, outHeight, reqWidth, reqHeight)
             inJustDecodeBounds = false
         }
 
@@ -62,7 +55,6 @@ object ImageDownscaler {
             "Unable to decode image URI: $imageUri"
         }
 
-        // Handle rotation from Exif
         var rotatedBitmap = bitmap
         try {
             val orientation = openStream()?.use { stream ->
@@ -98,11 +90,15 @@ object ImageDownscaler {
             Log.w(TAG, "Failed to read or apply Exif orientation for $imageUri", e)
         }
 
+        val resizedBitmap = resizeToFit(rotatedBitmap, reqWidth, reqHeight)
         if (rotatedBitmap != bitmap) {
             bitmap.recycle()
         }
+        if (resizedBitmap != rotatedBitmap) {
+            rotatedBitmap.recycle()
+        }
 
-        rotatedBitmap
+        resizedBitmap
     }
 
     suspend fun downscaleToPngBytes(
@@ -132,5 +128,55 @@ object ImageDownscaler {
         val tempFile = File.createTempFile("downscaled_", ".png", context.cacheDir)
         tempFile.writeBytes(bytes)
         tempFile.absolutePath
+    }
+
+    internal fun calculateInSampleSize(
+        outWidth: Int,
+        outHeight: Int,
+        reqWidth: Int,
+        reqHeight: Int,
+    ): Int {
+        if (outWidth <= reqWidth && outHeight <= reqHeight) {
+            return 1
+        }
+
+        val widthRatio = max(1, ceil(outWidth.toDouble() / reqWidth.toDouble()).toInt())
+        val heightRatio = max(1, ceil(outHeight.toDouble() / reqHeight.toDouble()).toInt())
+        return max(widthRatio, heightRatio)
+    }
+
+    internal fun resizeToFit(
+        bitmap: Bitmap,
+        reqWidth: Int,
+        reqHeight: Int,
+    ): Bitmap {
+        val (targetWidth, targetHeight) = calculateTargetDimensions(
+            width = bitmap.width,
+            height = bitmap.height,
+            reqWidth = reqWidth,
+            reqHeight = reqHeight,
+        )
+        if (targetWidth == bitmap.width && targetHeight == bitmap.height) {
+            return bitmap
+        }
+        return Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+    }
+
+    internal fun calculateTargetDimensions(
+        width: Int,
+        height: Int,
+        reqWidth: Int,
+        reqHeight: Int,
+    ): Pair<Int, Int> {
+        if (width <= reqWidth && height <= reqHeight) {
+            return width to height
+        }
+
+        val widthScale = reqWidth.toFloat() / width.toFloat()
+        val heightScale = reqHeight.toFloat() / height.toFloat()
+        val scale = min(widthScale, heightScale)
+        val targetWidth = max(1, (width * scale).roundToInt())
+        val targetHeight = max(1, (height * scale).roundToInt())
+        return targetWidth to targetHeight
     }
 }

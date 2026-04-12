@@ -1,15 +1,20 @@
 package com.browntowndev.pocketcrew.domain.usecase.byok
 
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.FakeDefaultModelRepository
+import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -23,13 +28,15 @@ class SetDefaultModelUseCaseTest {
 
     private lateinit var repository: FakeDefaultModelRepository
     private lateinit var localModelRepository: LocalModelRepositoryPort
+    private lateinit var apiModelRepository: ApiModelRepositoryPort
     private lateinit var useCase: SetDefaultModelUseCase
 
     @BeforeEach
     fun setUp() {
         repository = FakeDefaultModelRepository()
         localModelRepository = mockk(relaxed = true)
-        useCase = SetDefaultModelUseCaseImpl(repository, localModelRepository)
+        apiModelRepository = mockk(relaxed = true)
+        useCase = SetDefaultModelUseCaseImpl(repository, localModelRepository, apiModelRepository)
     }
 
     // ========================================================================
@@ -58,48 +65,60 @@ class SetDefaultModelUseCaseTest {
     fun `set default for every ModelType variant`() = runTest {
         for (modelType in ModelType.entries) {
             if (modelType == ModelType.VISION) {
-                coEvery { localModelRepository.getAssetByConfigId(LocalModelConfigurationId("1")) } returns LocalModelAsset(
-                    metadata = LocalModelMetadata(
-                        id = LocalModelId("asset-vision"),
-                        huggingFaceModelName = "vision-model",
-                        remoteFileName = "vision.litertlm",
-                        localFileName = "vision.litertlm",
-                        sha256 = "vision-sha",
-                        sizeInBytes = 1_024,
-                        modelFileFormat = ModelFileFormat.LITERTLM,
-                        source = DownloadSource.HUGGING_FACE,
-                        visionCapable = true,
-                    ),
-                    configurations = emptyList(),
+                val configId = ApiModelConfigurationId("vision-api-config")
+                val credentialsId = ApiCredentialsId("vision-api-creds")
+                coEvery { apiModelRepository.getConfigurationById(configId) } returns ApiModelConfiguration(
+                    id = configId,
+                    apiCredentialsId = credentialsId,
+                    displayName = "Vision API",
                 )
+                coEvery { apiModelRepository.getCredentialsById(credentialsId) } returns ApiCredentials(
+                    id = credentialsId,
+                    displayName = "Vision API",
+                    provider = ApiProvider.OPENAI,
+                    modelId = "gpt-4o",
+                    isVision = true,
+                    credentialAlias = "vision-api",
+                )
+                useCase(modelType, localConfigId = null, apiConfigId = configId)
+            } else {
+                useCase(modelType, localConfigId = LocalModelConfigurationId("1"), apiConfigId = null)
             }
-            useCase(modelType, localConfigId = LocalModelConfigurationId("1"), apiConfigId = null)
             assertEquals(modelType, repository.lastSetCall?.first)
         }
     }
 
     @Test
-    fun `set VISION slot rejects non vision capable local model`() = runTest {
-        val configId = LocalModelConfigurationId("vision-local")
-        coEvery { localModelRepository.getAssetByConfigId(configId) } returns LocalModelAsset(
-            metadata = LocalModelMetadata(
-                id = LocalModelId("asset-1"),
-                huggingFaceModelName = "text-only",
-                remoteFileName = "model.litertlm",
-                localFileName = "model.litertlm",
-                sha256 = "sha",
-                sizeInBytes = 1_024,
-                modelFileFormat = ModelFileFormat.LITERTLM,
-                source = DownloadSource.HUGGING_FACE,
-                visionCapable = false,
-            ),
-            configurations = emptyList(),
+    fun `set VISION slot rejects local model assignments`() = runTest {
+        val error = assertFailsWith<IllegalArgumentException> {
+            useCase(ModelType.VISION, localConfigId = LocalModelConfigurationId("vision-local"), apiConfigId = null)
+        }
+
+        assertEquals("Vision slot is API-only.", error.message)
+    }
+
+    @Test
+    fun `set VISION slot rejects non vision capable API model`() = runTest {
+        val configId = ApiModelConfigurationId("vision-api-config")
+        val credentialsId = ApiCredentialsId("vision-api-creds")
+        coEvery { apiModelRepository.getConfigurationById(configId) } returns ApiModelConfiguration(
+            id = configId,
+            apiCredentialsId = credentialsId,
+            displayName = "Vision API",
+        )
+        coEvery { apiModelRepository.getCredentialsById(credentialsId) } returns ApiCredentials(
+            id = credentialsId,
+            displayName = "Vision API",
+            provider = ApiProvider.OPENAI,
+            modelId = "gpt-4o",
+            isVision = false,
+            credentialAlias = "vision-api",
         )
 
         val error = assertFailsWith<IllegalArgumentException> {
-            useCase(ModelType.VISION, localConfigId = configId, apiConfigId = null)
+            useCase(ModelType.VISION, localConfigId = null, apiConfigId = configId)
         }
 
-        assertEquals("Vision slot requires a vision-capable local model.", error.message)
+        assertEquals("Vision slot requires a vision-capable API model.", error.message)
     }
 }

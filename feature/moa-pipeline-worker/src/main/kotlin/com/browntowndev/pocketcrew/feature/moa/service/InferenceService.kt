@@ -12,6 +12,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.inference.DraftOneModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.DraftTwoModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.FinalSynthesizerModelEngine
@@ -20,6 +21,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -275,7 +277,7 @@ class InferenceService : Service() {
             broadcastStepStarted(modelType)
 
             val maxTokensOverride = calculateMaxTokensForStep(currentStep)
-            val result = executeStepForPipeline(prompt, currentStep, maxTokensOverride)
+            val result = executeStepForPipeline(chatId, prompt, currentStep, maxTokensOverride)
 
             logger.info(TAG, "${currentStep.name} Response: ${result.output}")
 
@@ -316,6 +318,7 @@ class InferenceService : Service() {
      * Executes a single step for the pipeline (closes session after each step to free memory).
      */
     private suspend fun executeStepForPipeline(
+        chatId: String,
         prompt: String,
         step: PipelineStep,
         maxTokensOverride: Int? = null
@@ -334,10 +337,18 @@ class InferenceService : Service() {
                 currentMaxTokens
             }
 
+            val hasImageTool = prompt.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT.name)
             val options = GenerationOptions(
                 reasoningBudget = if (config?.thinkingEnabled == true) 1024 else 0,
                 modelType = modelType,
-                maxTokens = finalMaxTokens
+                maxTokens = finalMaxTokens,
+                toolingEnabled = hasImageTool,
+                availableTools = if (hasImageTool) {
+                    listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT)
+                } else {
+                    emptyList()
+                },
+                chatId = ChatId(chatId),
             )
 
             service.sendPrompt(prompt, options = options, closeConversation = true).collect { event ->

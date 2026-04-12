@@ -7,7 +7,9 @@ import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
@@ -40,6 +42,7 @@ class ChatViewModelNavigationTest {
     private lateinit var inferenceLockManager: InferenceLockManager
     private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
     private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
+    private lateinit var activeModelProvider: ActiveModelProviderPort
     private lateinit var errorHandler: ViewModelErrorHandler
 
     @BeforeEach
@@ -49,12 +52,13 @@ class ChatViewModelNavigationTest {
         inferenceLockManager = mockk(relaxed = true)
         modelDisplayNamesUseCase = mockk(relaxed = true)
         stageImageAttachmentUseCase = mockk(relaxed = true)
+        activeModelProvider = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
 
         every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
-        every { chatUseCases.mergeMessagesUseCase(any(), any()) } answers { firstArg() }
+        every { chatUseCases.mergeMessagesUseCase(any(), any()) } answers { args[0] as Message }
         coEvery { chatUseCases.getChat(any()) } returns flowOf(emptyList())
     }
 
@@ -66,6 +70,7 @@ class ChatViewModelNavigationTest {
             savedStateHandle = savedStateHandle,
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            activeModelProvider = activeModelProvider,
             errorHandler = errorHandler
         )
     }
@@ -106,7 +111,7 @@ class ChatViewModelNavigationTest {
         val viewModel = createViewModel(savedStateHandle)
         
         // Start collecting uiState to trigger the lazy StateFlow
-        val collectJob = backgroundScope.launch { viewModel.uiState.collect() }
+        val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
         
         runCurrent()
         advanceTimeBy(100)
@@ -125,7 +130,7 @@ class ChatViewModelNavigationTest {
         val savedStateHandle = SavedStateHandle()
         val viewModel = createViewModel(savedStateHandle)
         
-        val collectJob = backgroundScope.launch { viewModel.uiState.collect() }
+        val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
         
         runCurrent()
         advanceTimeBy(100)
@@ -144,7 +149,7 @@ class ChatViewModelNavigationTest {
         val savedStateHandle = SavedStateHandle(mapOf("chatId" to "invalid"))
         val viewModel = createViewModel(savedStateHandle)
         
-        val collectJob = backgroundScope.launch { viewModel.uiState.collect() }
+        val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
         
         runCurrent()
         advanceTimeBy(100)
@@ -165,7 +170,7 @@ class ChatViewModelNavigationTest {
         
         val viewModel = createViewModel(savedStateHandle)
         
-        val collectJob = backgroundScope.launch { viewModel.uiState.collect() }
+        val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
         
         runCurrent()
         advanceTimeBy(100)

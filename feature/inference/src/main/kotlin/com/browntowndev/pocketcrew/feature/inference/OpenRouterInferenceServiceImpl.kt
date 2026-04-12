@@ -134,6 +134,8 @@ class OpenRouterInferenceServiceImpl(
             return
         }
 
+        logImagePayloads(options)
+
         val responseParams = OpenRouterRequestMapper.mapToResponseParams(
             modelId = modelId,
             prompt = prompt,

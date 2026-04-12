@@ -34,6 +34,8 @@ class FakeSettingsRepository : SettingsRepository {
     private var lastAllowMemoriesValue: Boolean? = null
     private var updateSearchEnabledCallCount = 0
     private var lastSearchEnabledValue: Boolean? = null
+    private var updateAlwaysUseVisionModelCallCount = 0
+    private var lastAlwaysUseVisionModelValue: Boolean? = null
     private var saveTavilyApiKeyCallCount = 0
     private var lastSavedTavilyApiKey: String? = null
     private var clearTavilyApiKeyCallCount = 0
@@ -47,6 +49,7 @@ class FakeSettingsRepository : SettingsRepository {
     var shouldThrowOnUpdateCustomPromptText = false
     var shouldThrowOnUpdateAllowMemories = false
     var shouldThrowOnUpdateSearchEnabled = false
+    var shouldThrowOnUpdateAlwaysUseVisionModel = false
     var shouldThrowOnSaveTavilyApiKey = false
     var shouldThrowOnClearTavilyApiKey = false
 
@@ -104,6 +107,13 @@ class FakeSettingsRepository : SettingsRepository {
         updateSearchEnabledCallCount++
         lastSearchEnabledValue = enabled
         _settingsFlow.value = _settingsFlow.value.copy(searchEnabled = enabled)
+    }
+
+    override suspend fun updateAlwaysUseVisionModel(enabled: Boolean) {
+        if (shouldThrowOnUpdateAlwaysUseVisionModel) throw RuntimeException("Simulated error")
+        updateAlwaysUseVisionModelCallCount++
+        lastAlwaysUseVisionModelValue = enabled
+        _settingsFlow.value = _settingsFlow.value.copy(alwaysUseVisionModel = enabled)
     }
 
     override suspend fun saveTavilyApiKey(apiKey: String) {
@@ -177,6 +187,13 @@ class FakeSettingsRepository : SettingsRepository {
         }
     }
 
+    fun verifyUpdateAlwaysUseVisionModelCalled(times: Int, enabled: Boolean? = null) {
+        assertEquals(times, updateAlwaysUseVisionModelCallCount)
+        if (enabled != null) {
+            assertEquals(enabled, lastAlwaysUseVisionModelValue)
+        }
+    }
+
     fun verifySaveTavilyApiKeyCalled(times: Int, apiKey: String? = null) {
         assertEquals(times, saveTavilyApiKeyCallCount)
         if (apiKey != null) {
@@ -197,6 +214,7 @@ class FakeSettingsRepository : SettingsRepository {
         updateCustomPromptTextCallCount = 0
         updateAllowMemoriesCallCount = 0
         updateSearchEnabledCallCount = 0
+        updateAlwaysUseVisionModelCallCount = 0
         saveTavilyApiKeyCallCount = 0
         clearTavilyApiKeyCallCount = 0
     }

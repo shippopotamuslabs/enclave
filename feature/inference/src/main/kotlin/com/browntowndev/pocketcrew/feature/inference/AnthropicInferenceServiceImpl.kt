@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -113,6 +114,8 @@ class AnthropicInferenceServiceImpl(
             return
         }
 
+        logImagePayloads(options)
+
         val params = AnthropicRequestMapper.mapToMessageParams(
             modelId = modelId,
             prompt = prompt,
@@ -140,6 +143,9 @@ class AnthropicInferenceServiceImpl(
         val executor = requireNotNull(toolExecutor) {
             "Tool executor not configured for provider=$PROVIDER"
         }
+
+        logImagePayloads(options)
+
         val initialParams = AnthropicRequestMapper.mapToMessageParams(
             modelId = modelId,
             prompt = prompt,
@@ -169,12 +175,17 @@ class AnthropicInferenceServiceImpl(
             argumentsJson = toolUse.argumentsJson,
             provider = PROVIDER,
             modelType = modelType,
+            chatId = options.chatId,
+            userMessageId = options.userMessageId,
         )
-        SearchToolSupport.requireSupportedTool(toolRequest.toolName)
-        val query = SearchToolSupport.extractRequiredQuery(toolRequest.argumentsJson)
+        ToolEnvelopeParser.requireSupportedTool(toolRequest.toolName)
+        val toolArg = when (toolRequest.toolName) {
+            ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolRequest.argumentsJson)
+            else -> ToolEnvelopeParser.extractRequiredQuery(toolRequest.argumentsJson)
+        }
         loggingPort.info(
             TAG,
-            "Tool call detected provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} query=$query"
+            "Tool call detected provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} arg=$toolArg"
         )
         val toolResult = executor.execute(toolRequest)
         loggingPort.info(
@@ -261,6 +272,30 @@ class AnthropicInferenceServiceImpl(
             return value
         }
         return value.take(MAX_LOG_BODY_CHARS) + "...<truncated>"
+    }
+
+    private fun logImagePayloads(options: GenerationOptions) {
+        if (options.imageUris.isEmpty()) {
+            return
+        }
+        val payloads = runCatching {
+            ImagePayloads.fromUris(options.imageUris)
+        }.getOrElse { error ->
+            loggingPort.error(
+                TAG,
+                "Failed to load image payloads provider=$PROVIDER model=$modelId message=${error.message}",
+                error,
+            )
+            return
+        }
+
+        val details = payloads.joinToString(separator = "; ") { payload ->
+            "file=${payload.filename}, mime=${payload.mimeType}, bytes=${payload.byteCount}, sha256=${payload.sha256.take(8)}"
+        }
+        loggingPort.info(
+            TAG,
+            "Image payloads provider=$PROVIDER model=$modelId count=${payloads.size} $details"
+        )
     }
 
     private fun describeStreamEvent(event: RawMessageStreamEvent): String =

@@ -22,6 +22,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseC
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
 import com.browntowndev.pocketcrew.feature.inference.llama.GpuProfiler
+import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
@@ -94,7 +95,7 @@ class InferenceFactoryImpl @Inject constructor(
     private val googleGenAiClientProvider: GoogleGenAiClientProvider,
     private val loggingPort: LoggingPort,
     private val inferenceLockManager: InferenceLockManager,
-    private val toolExecutor: ToolExecutorPort,
+    private val toolExecutorProvider: Provider<ToolExecutorPort>,
 ) : InferenceFactoryPort {
 
     companion object {
@@ -139,13 +140,18 @@ class InferenceFactoryImpl @Inject constructor(
         modelType: ModelType,
         block: suspend (LlmInferencePort) -> T
     ): T {
-        if (!inferenceLockManager.acquireLock(InferenceType.ON_DEVICE)) {
+        val defaultAssignment = withContext(Dispatchers.IO) {
+            defaultModelRepository.getDefault(modelType)
+        }
+        val lockType = resolveLockType(modelType, defaultAssignment)
+
+        if (!inferenceLockManager.acquireLock(lockType)) {
             throw InferenceBusyException()
         }
 
         val service = try {
             withContext(Dispatchers.IO) {
-                resolveService(modelType)
+                resolveService(modelType, defaultAssignment)
             }
         } catch (e: Exception) {
             inferenceLockManager.releaseLock()
@@ -159,14 +165,134 @@ class InferenceFactoryImpl @Inject constructor(
         }
     }
 
-    private suspend fun resolveService(modelType: ModelType): LlmInferencePort {
-        val defaultAssignment = defaultModelRepository.getDefault(modelType)
-        if (defaultAssignment == null) {
+    private fun resolveLockType(
+        modelType: ModelType,
+        defaultAssignment: DefaultModelAssignment?,
+    ): InferenceType = when {
+        modelType == ModelType.VISION -> InferenceType.BYOK
+        defaultAssignment?.apiConfigId != null -> InferenceType.BYOK
+        else -> InferenceType.ON_DEVICE
+    }
+
+    private suspend fun resolveService(
+        modelType: ModelType,
+        defaultAssignment: DefaultModelAssignment? = null,
+    ): LlmInferencePort {
+        val assignment = defaultAssignment ?: defaultModelRepository.getDefault(modelType)
+        if (assignment == null) {
             loggingPort.warning(TAG, "No default assignment for $modelType, using NoOpInferenceService")
             return NoOpInferenceService(modelType)
         }
 
-        val apiConfigId = defaultAssignment.apiConfigId
+        if (modelType == ModelType.VISION) {
+            val apiConfigId = assignment.apiConfigId
+                ?: throw IllegalStateException("Vision slot is API-only and requires an API configuration.")
+            val apiConfig = apiModelRepository.getConfigurationById(apiConfigId)
+            val apiCreds = apiConfig?.let { apiModelRepository.getCredentialsById(it.apiCredentialsId) }
+            val apiKey = apiCreds?.let { apiKeyProvider.getApiKey(it.credentialAlias) }
+
+            if (apiConfig == null || apiCreds == null || apiKey == null) {
+                throw IllegalStateException("Vision slot requires a configured API vision model and credentials.")
+            }
+
+            val requestHeaders = buildRequestHeaders(apiCreds.provider, apiConfig.customHeaders)
+            val resolvedBaseUrl = apiCreds.baseUrl?.takeIf { it.isNotBlank() } ?: apiCreds.provider.defaultBaseUrl()
+            val requestedIdentity = createApiIdentity(
+                modelType = modelType,
+                apiConfig = apiConfig,
+                apiCreds = apiCreds,
+                apiKey = apiKey,
+                requestHeaders = requestHeaders,
+                resolvedBaseUrl = resolvedBaseUrl
+            )
+
+            return mutex.withLock {
+                if (activeIdentities[modelType] == requestedIdentity) {
+                    return@withLock activeServices[modelType]!!
+                }
+
+                removeServiceFor(modelType)
+
+                val newService = when (apiCreds.provider) {
+                    ApiProvider.ANTHROPIC -> AnthropicInferenceServiceImpl(
+                        client = anthropicClientProvider.getClient(
+                            apiKey = apiKey,
+                            baseUrl = resolvedBaseUrl,
+                            headers = requestHeaders
+                        ),
+                        modelId = apiCreds.modelId,
+                        modelType = modelType,
+                        baseUrl = resolvedBaseUrl,
+                        loggingPort = loggingPort,
+                        toolExecutor = toolExecutorProvider.get(),
+                    )
+                    ApiProvider.GOOGLE -> {
+                        val client = googleGenAiClientProvider.getClient(
+                            apiKey = apiKey,
+                            baseUrl = resolvedBaseUrl,
+                            headers = requestHeaders,
+                        )
+                        val sdkClient = GoogleGenAiSdkClientImpl(
+                            modelsApiProvider = { client.models },
+                            modelType = modelType,
+                            loggingPort = loggingPort,
+                        )
+                        GoogleInferenceServiceImpl(
+                            sdkClient = sdkClient,
+                            modelId = apiCreds.modelId,
+                            modelType = modelType,
+                            baseUrl = resolvedBaseUrl,
+                            loggingPort = loggingPort,
+                            toolExecutor = toolExecutorProvider.get(),
+                        )
+                    }
+                    ApiProvider.OPENROUTER -> OpenRouterInferenceServiceImpl(
+                        client = openAiClientProvider.getClient(
+                            apiKey = apiKey,
+                            baseUrl = resolvedBaseUrl,
+                            headers = requestHeaders
+                        ),
+                        modelId = apiCreds.modelId,
+                        modelType = modelType,
+                        routing = apiConfig.openRouterRouting,
+                        baseUrl = resolvedBaseUrl,
+                        loggingPort = loggingPort,
+                        toolExecutor = toolExecutorProvider.get(),
+                    )
+                    ApiProvider.XAI -> XaiInferenceServiceImpl(
+                        client = openAiClientProvider.getClient(
+                            apiKey = apiKey,
+                            baseUrl = resolvedBaseUrl,
+                            headers = requestHeaders
+                        ),
+                        modelId = apiCreds.modelId,
+                        modelType = modelType,
+                        baseUrl = resolvedBaseUrl,
+                        loggingPort = loggingPort,
+                        toolExecutor = toolExecutorProvider.get(),
+                    )
+                    else -> ApiInferenceServiceImpl(
+                        client = openAiClientProvider.getClient(
+                            apiKey = apiKey,
+                            baseUrl = resolvedBaseUrl,
+                            headers = requestHeaders
+                        ),
+                        modelId = apiCreds.modelId,
+                        provider = apiCreds.provider.name,
+                        modelType = modelType,
+                        baseUrl = resolvedBaseUrl,
+                        loggingPort = loggingPort,
+                        toolExecutor = toolExecutorProvider.get(),
+                    )
+                }
+
+                activeServices[modelType] = newService
+                activeIdentities[modelType] = requestedIdentity
+                return newService
+            }
+        }
+
+        val apiConfigId = assignment.apiConfigId
         if (apiConfigId != null) {
             val apiConfig = apiModelRepository.getConfigurationById(apiConfigId)
             val apiCreds = apiConfig?.let { apiModelRepository.getCredentialsById(it.apiCredentialsId) }
@@ -205,20 +331,28 @@ class InferenceFactoryImpl @Inject constructor(
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort,
-                            toolExecutor = toolExecutor,
+                            toolExecutor = toolExecutorProvider.get(),
                         )
-                        ApiProvider.GOOGLE -> GoogleInferenceServiceImpl(
-                            client = googleGenAiClientProvider.getClient(
-                                apiKey = apiKey,
-                                baseUrl = resolvedBaseUrl,
-                                headers = requestHeaders,
-                            ),
+                    ApiProvider.GOOGLE -> {
+                        val client = googleGenAiClientProvider.getClient(
+                            apiKey = apiKey,
+                            baseUrl = resolvedBaseUrl,
+                            headers = requestHeaders,
+                        )
+                        val sdkClient = GoogleGenAiSdkClientImpl(
+                            modelsApiProvider = { client.models },
+                            modelType = modelType,
+                            loggingPort = loggingPort,
+                        )
+                        GoogleInferenceServiceImpl(
+                            sdkClient = sdkClient,
                             modelId = apiCreds.modelId,
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort,
-                            toolExecutor = toolExecutor,
+                            toolExecutor = toolExecutorProvider.get(),
                         )
+                    }
                         ApiProvider.OPENROUTER -> OpenRouterInferenceServiceImpl(
                             client = openAiClientProvider.getClient(
                                 apiKey = apiKey,
@@ -230,7 +364,7 @@ class InferenceFactoryImpl @Inject constructor(
                             routing = apiConfig.openRouterRouting,
                             baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort,
-                            toolExecutor = toolExecutor,
+                            toolExecutor = toolExecutorProvider.get(),
                         )
                         ApiProvider.XAI -> XaiInferenceServiceImpl(
                             client = openAiClientProvider.getClient(
@@ -242,7 +376,7 @@ class InferenceFactoryImpl @Inject constructor(
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort,
-                            toolExecutor = toolExecutor,
+                            toolExecutor = toolExecutorProvider.get(),
                         )
                         else -> ApiInferenceServiceImpl(
                             client = openAiClientProvider.getClient(
@@ -255,7 +389,7 @@ class InferenceFactoryImpl @Inject constructor(
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort,
-                            toolExecutor = toolExecutor,
+                            toolExecutor = toolExecutorProvider.get(),
                         )
                     }
  
@@ -266,7 +400,7 @@ class InferenceFactoryImpl @Inject constructor(
             }
         }
 
-        val localConfigId = defaultAssignment.localConfigId
+        val localConfigId = assignment.localConfigId
         if (localConfigId == null) {
             loggingPort.warning(TAG, "No local or API config for $modelType, using NoOpInferenceService")
             return NoOpInferenceService(modelType)
@@ -327,12 +461,12 @@ class InferenceFactoryImpl @Inject constructor(
                         activeModelProvider = activeModelProvider,
                         context = context,
                         modelType = modelType,
-                        toolExecutor = toolExecutor,
+                        toolExecutor = toolExecutorProvider.get(),
                     )
                 }
                 "task" -> {
                     val modelPath = getModelPath(filename)
-                    mediaPipeFactory.create(modelPath, modelType, toolExecutor)
+                    mediaPipeFactory.create(modelPath, modelType, toolExecutorProvider.get())
                 }
                 "litertlm" -> {
                     LiteRtInferenceServiceImpl(

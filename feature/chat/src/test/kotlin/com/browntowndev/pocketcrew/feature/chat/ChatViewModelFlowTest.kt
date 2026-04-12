@@ -4,6 +4,8 @@ import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
@@ -14,6 +16,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -39,6 +42,7 @@ class ChatViewModelFlowTest {
     private lateinit var inferenceLockManager: InferenceLockManager
     private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
     private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
+    private lateinit var activeModelProvider: ActiveModelProviderPort
     private lateinit var errorHandler: ViewModelErrorHandler
 
     @BeforeEach
@@ -48,10 +52,13 @@ class ChatViewModelFlowTest {
         inferenceLockManager = mockk(relaxed = true)
         modelDisplayNamesUseCase = mockk(relaxed = true)
         stageImageAttachmentUseCase = mockk(relaxed = true)
+        activeModelProvider = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
 
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
+        every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
+        coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
 
         val savedStateHandle = SavedStateHandle()
 
@@ -62,6 +69,7 @@ class ChatViewModelFlowTest {
             savedStateHandle = savedStateHandle,
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            activeModelProvider = activeModelProvider,
             errorHandler = errorHandler
         )
     }

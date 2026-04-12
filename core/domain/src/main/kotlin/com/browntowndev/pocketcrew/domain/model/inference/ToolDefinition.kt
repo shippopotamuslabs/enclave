@@ -21,5 +21,21 @@ data class ToolDefinition(
                 }
             """.trimIndent(),
         )
+
+        val ATTACHED_IMAGE_INSPECT = ToolDefinition(
+            name = "attached_image_inspect",
+            description = "Inspect an attached image to answer a question about it.",
+            parametersJson = """
+                {
+                  "type": "object",
+                  "properties": {
+                    "question": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["question"]
+                }
+            """.trimIndent(),
+        )
     }
 }

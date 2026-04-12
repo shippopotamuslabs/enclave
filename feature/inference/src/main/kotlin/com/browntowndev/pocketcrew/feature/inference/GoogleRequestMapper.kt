@@ -131,21 +131,38 @@ object GoogleRequestMapper {
                         .parameters(
                             Schema.builder()
                                 .type(Type(Type.Known.OBJECT))
-                                .properties(
-                                    mapOf(
-                                        "query" to Schema.builder()
-                                            .type(Type(Type.Known.STRING))
-                                            .description("The search query to execute")
-                                            .build()
-                                    )
-                                )
-                                .required(listOf("query"))
+                                .properties(toolProperties())
+                                .required(requiredArguments())
                                 .build()
                         )
                         .build()
                 )
             )
             .build()
+
+    private fun ToolDefinition.toolProperties(): Map<String, Schema> =
+        when (this) {
+            ToolDefinition.TAVILY_WEB_SEARCH -> mapOf(
+                "query" to Schema.builder()
+                    .type(Type(Type.Known.STRING))
+                    .description("The search query to execute")
+                    .build()
+            )
+            ToolDefinition.ATTACHED_IMAGE_INSPECT -> mapOf(
+                "question" to Schema.builder()
+                    .type(Type(Type.Known.STRING))
+                    .description("The question to ask about the attached image")
+                    .build()
+            )
+            else -> error("Unsupported tool: $name")
+        }
+
+    private fun ToolDefinition.requiredArguments(): List<String> =
+        when (this) {
+            ToolDefinition.TAVILY_WEB_SEARCH -> listOf("query")
+            ToolDefinition.ATTACHED_IMAGE_INSPECT -> listOf("question")
+            else -> error("Unsupported tool: $name")
+        }
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
@@ -156,6 +173,7 @@ object GoogleRequestMapper {
     ): List<Part> = buildList {
         add(Part.fromText(prompt))
         ImagePayloads.fromUris(imageUris).forEach { payload ->
+            ImagePayloads.validate(payload)
             add(Part.fromBytes(payload.bytes, payload.mimeType))
         }
     }

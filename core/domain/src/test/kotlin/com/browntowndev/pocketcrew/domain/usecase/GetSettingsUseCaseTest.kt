@@ -34,6 +34,7 @@ class GetSettingsUseCaseTest {
         assertEquals(SystemPromptOption.CONCISE, settings.selectedPromptOption)
         assertEquals("", settings.customPromptText)
         assertTrue(settings.allowMemories)
+        assertFalse(settings.alwaysUseVisionModel)
     }
 
     @Test
@@ -42,6 +43,7 @@ class GetSettingsUseCaseTest {
         fakeRepository.updateTheme(AppTheme.DARK)
         fakeRepository.updateHapticPress(false)
         fakeRepository.updateCustomPromptText("Custom text")
+        fakeRepository.updateAlwaysUseVisionModel(true)
 
         // When
         val settings = getSettingsUseCase().first()
@@ -50,6 +52,7 @@ class GetSettingsUseCaseTest {
         assertEquals(AppTheme.DARK, settings.theme)
         assertFalse(settings.hapticPress)
         assertEquals("Custom text", settings.customPromptText)
+        assertTrue(settings.alwaysUseVisionModel)
     }
 
     @Test
@@ -69,4 +72,3 @@ class GetSettingsUseCaseTest {
         assertEquals(SystemPromptOption.RIGOROUS, updatedSettings.selectedPromptOption)
     }
 }
-

@@ -39,6 +39,7 @@ class SettingsRepositoryTest {
         assertTrue(settings.allowMemories)
         assertFalse(settings.searchEnabled)
         assertFalse(settings.tavilyKeyPresent)
+        assertFalse(settings.alwaysUseVisionModel)
     }
 
     // Test updateTheme
@@ -182,6 +183,14 @@ class SettingsRepositoryTest {
 
         val settings = repository.settingsFlow.first()
         assertTrue(settings.searchEnabled)
+    }
+
+    @Test
+    fun `updateAlwaysUseVisionModel updates value in settingsFlow`() = runTest {
+        repository.updateAlwaysUseVisionModel(true)
+
+        val settings = repository.settingsFlow.first()
+        assertTrue(settings.alwaysUseVisionModel)
     }
 
     @Test

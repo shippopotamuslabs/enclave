@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.usecase.byok
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import javax.inject.Inject
@@ -18,17 +19,24 @@ interface SetDefaultModelUseCase {
 class SetDefaultModelUseCaseImpl @Inject constructor(
     private val defaultModelRepository: DefaultModelRepositoryPort,
     private val localModelRepository: LocalModelRepositoryPort,
+    private val apiModelRepository: ApiModelRepositoryPort,
 ) : SetDefaultModelUseCase {
     override suspend fun invoke(
         modelType: ModelType,
         localConfigId: LocalModelConfigurationId?,
         apiConfigId: ApiModelConfigurationId?,
     ) {
-        if (modelType == ModelType.VISION && localConfigId != null) {
-            val asset = localModelRepository.getAssetByConfigId(localConfigId)
-                ?: throw IllegalArgumentException("Vision slot requires a valid local model assignment.")
-            require(asset.metadata.visionCapable) {
-                "Vision slot requires a vision-capable local model."
+        if (modelType == ModelType.VISION) {
+            require(localConfigId == null) {
+                "Vision slot is API-only."
+            }
+            val configId = apiConfigId ?: throw IllegalArgumentException("Vision slot requires an API model assignment.")
+            val config = apiModelRepository.getConfigurationById(configId)
+                ?: throw IllegalArgumentException("Vision slot requires a valid API model configuration.")
+            val credentials = apiModelRepository.getCredentialsById(config.apiCredentialsId)
+                ?: throw IllegalArgumentException("Vision slot requires a valid API model provider.")
+            require(credentials.isVision) {
+                "Vision slot requires a vision-capable API model."
             }
         }
         defaultModelRepository.setDefault(modelType, localConfigId, apiConfigId)

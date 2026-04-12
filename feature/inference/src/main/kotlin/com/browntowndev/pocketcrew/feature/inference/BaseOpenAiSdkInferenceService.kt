@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -145,6 +147,9 @@ abstract class BaseOpenAiSdkInferenceService(
         val executor = requireNotNull(toolExecutor) {
             "Tool executor not configured for provider=$provider"
         }
+
+        logImagePayloads(options)
+
         val initialParams = mapToolingResponseParams(
             prompt = prompt,
             options = options,
@@ -153,6 +158,8 @@ abstract class BaseOpenAiSdkInferenceService(
         val initialResponse = streamResponses(
             params = initialParams,
             allowToolCall = true,
+            chatId = options.chatId,
+            userMessageId = options.userMessageId,
             emitEvent = emitEvent,
         )
         val toolCall = initialResponse.functionCall
@@ -168,11 +175,14 @@ abstract class BaseOpenAiSdkInferenceService(
             return
         }
 
-        SearchToolSupport.requireSupportedTool(toolCall.toolName)
-        val query = SearchToolSupport.extractRequiredQuery(toolCall.argumentsJson)
+        ToolEnvelopeParser.requireSupportedTool(toolCall.toolName)
+        val toolArg = when (toolCall.toolName) {
+            ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolCall.argumentsJson)
+            else -> ToolEnvelopeParser.extractRequiredQuery(toolCall.argumentsJson)
+        }
         loggingPort.info(
             tag,
-            "Tool call detected provider=$provider model=$modelId tool=${toolCall.toolName} query=$query"
+            "Tool call detected provider=$provider model=$modelId tool=${toolCall.toolName} arg=$toolArg"
         )
         val toolResult = executor.execute(toolCall)
         loggingPort.info(
@@ -191,6 +201,8 @@ abstract class BaseOpenAiSdkInferenceService(
         val followUpResponse = streamResponses(
             params = followUpParams,
             allowToolCall = false,
+            chatId = options.chatId,
+            userMessageId = options.userMessageId,
             emitEvent = emitEvent,
         )
         if (followUpResponse.functionCall != null) {
@@ -223,6 +235,8 @@ abstract class BaseOpenAiSdkInferenceService(
     protected suspend fun streamResponses(
         params: ResponseCreateParams,
         allowToolCall: Boolean = false,
+        chatId: ChatId? = null,
+        userMessageId: MessageId? = null,
         emitEvent: suspend (InferenceEvent) -> Unit
     ): StreamedOpenAiResponse {
         logResponsesRequest(params)
@@ -400,6 +414,8 @@ abstract class BaseOpenAiSdkInferenceService(
                         argumentsJson = argumentsJson,
                         provider = provider,
                         modelType = modelType,
+                        chatId = chatId,
+                        userMessageId = userMessageId,
                     )
                     providerToolCallId = cachedFunctionCall?.callId ?: functionCallDone.itemId()
                     providerToolItemId = cachedFunctionCall?.itemId ?: functionCallDone.itemId()
@@ -720,7 +736,31 @@ abstract class BaseOpenAiSdkInferenceService(
 
     private fun serializeBody(body: Any): String = body.toString()
 
-    private fun truncateForLogs(value: String): String {
+    protected fun logImagePayloads(options: GenerationOptions) {
+        if (options.imageUris.isEmpty()) {
+            return
+        }
+        val payloads = runCatching {
+            ImagePayloads.fromUris(options.imageUris)
+        }.getOrElse { error ->
+            loggingPort.error(
+                tag,
+                "Failed to load image payloads provider=$provider model=$modelId message=${error.message}",
+                error,
+            )
+            return
+        }
+
+        val details = payloads.joinToString(separator = "; ") { payload ->
+            "file=${payload.filename}, mime=${payload.mimeType}, bytes=${payload.byteCount}, sha256=${payload.sha256.take(8)}"
+        }
+        loggingPort.info(
+            tag,
+            "Image payloads provider=$provider model=$modelId count=${payloads.size} $details"
+        )
+    }
+
+    protected fun truncateForLogs(value: String): String {
         if (value.length <= MAX_LOG_BODY_CHARS) {
             return value
         }

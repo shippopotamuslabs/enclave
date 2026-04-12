@@ -1,23 +1,4 @@
 {
-  "vision": {
-    "configId": "550e8400-e29b-41d4-a716-446655440001",
-    "huggingFaceModelName": "litert-community/gemma-4-E4B-it-litert-lm",
-    "fileName": "gemma-4-E4B-it.litertlm",
-    "displayName": "Gemma 4 E4B (Vision)",
-    "sha256": "f335f2bfd1b758dc6476db16c0f41854bd6237e2658d604cbe566bcefd00a7bc",
-    "source": "R2",
-    "systemPrompt": "You are a precise visual analyst. Examine the provided image or images carefully and report what is present. Describe important objects, text, scene details, and spatial relationships. Clearly separate direct observation from inference. Be direct, specific, and concise.",
-    "sizeInBytes": 3654467584,
-    "temperature": 0.2,
-    "topK": 1,
-    "topP": 1.0,
-    "minP": 0.05,
-    "repetitionPenalty": 1.0,
-    "contextWindow": 4096,
-    "maxTokens": 1024,
-    "thinkingEnabled": false,
-    "visionCapable": true
-  },
   "draft": {
     "configId": "550e8400-e29b-41d4-a716-446655440002",
     "huggingFaceModelName": "unsloth/LFM2.5-1.2B-Thinking-GGUF",
@@ -106,7 +87,8 @@
     "repetitionPenalty": 1.05,
     "contextWindow": 4096,
     "maxTokens": 2048,
-    "thinkingEnabled": false
+    "thinkingEnabled": false,
+    "visionCapable": true
   },
   "thinking": {
     "configId": "550e8400-e29b-41d4-a716-446655440007",
@@ -124,24 +106,7 @@
     "repetitionPenalty": 1.05,
     "contextWindow": 4096,
     "maxTokens": 2048,
-    "thinkingEnabled": true
-  },
-  "code": {
-    "configId": "550e8400-e29b-41d4-a716-446655440008",
-    "huggingFaceModelName": "unsloth/Qwen2.5-Coder-1.5B-Instruct-GGUF",
-    "fileName": "Qwen2.5-Coder-1.5B-Instruct-Q5_K_M.gguf",
-    "displayName": "Qwen 2.5 Coder 1.5B",
-    "sha256": "f3fadb5447dd0a78458488be16d598485c7d55cd9a863c1c0c46a818a0947b9f",
-    "source": "HF",
-    "systemPrompt": "You are a coding specialist. Write clean, efficient, production-grade code with strong structure and sensible comments. Prioritize correctness and reliability. Follow modern best practices and reason methodically.",
-    "sizeInBytes": 1125049888,
-    "temperature": 0.5,
-    "topK": 30,
-    "topP": 0.85,
-    "minP": 0.08,
-    "repetitionPenalty": 1.05,
-    "contextWindow": 4096,
-    "maxTokens": 2048,
-    "thinkingEnabled": false
+    "thinkingEnabled": true,
+    "visionCapable": true
   }
 }

@@ -69,23 +69,44 @@ object AnthropicRequestMapper {
             .inputSchema(
                 Tool.InputSchema.builder()
                     .type(JsonValue.from("object"))
-                    .properties(
-                        Tool.InputSchema.Properties.builder()
-                            .putAdditionalProperty(
-                                "query",
-                                JsonValue.from(
-                                    mapOf(
-                                        "type" to "string"
-                                    )
-                                )
-                            )
-                            .build()
-                    )
-                    .required(listOf("query"))
+                    .properties(toolProperties())
+                    .required(requiredArguments())
                     .build()
             )
             .strict(true)
             .build()
+
+    private fun ToolDefinition.toolProperties(): Tool.InputSchema.Properties =
+        when (this) {
+            ToolDefinition.TAVILY_WEB_SEARCH -> Tool.InputSchema.Properties.builder()
+                .putAdditionalProperty(
+                    "query",
+                    JsonValue.from(
+                        mapOf(
+                            "type" to "string"
+                        )
+                    )
+                )
+                .build()
+            ToolDefinition.ATTACHED_IMAGE_INSPECT -> Tool.InputSchema.Properties.builder()
+                .putAdditionalProperty(
+                    "question",
+                    JsonValue.from(
+                        mapOf(
+                            "type" to "string"
+                        )
+                    )
+                )
+                .build()
+            else -> error("Unsupported tool: $name")
+        }
+
+    private fun ToolDefinition.requiredArguments(): List<String> =
+        when (this) {
+            ToolDefinition.TAVILY_WEB_SEARCH -> listOf("query")
+            ToolDefinition.ATTACHED_IMAGE_INSPECT -> listOf("question")
+            else -> error("Unsupported tool: $name")
+        }
 
     private fun buildSystemPrompt(
         history: List<ChatMessage>,
@@ -135,6 +156,7 @@ object AnthropicRequestMapper {
         val blocks = buildList {
             add(ContentBlockParam.ofText(TextBlockParam.builder().text(prompt).build()))
             ImagePayloads.fromUris(imageUris).forEach { payload ->
+                ImagePayloads.validate(payload)
                 add(
                     ContentBlockParam.ofImage(
                         ImageBlockParam.builder()

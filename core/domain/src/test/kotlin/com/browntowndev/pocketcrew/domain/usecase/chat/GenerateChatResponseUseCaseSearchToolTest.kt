@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
+import com.browntowndev.pocketcrew.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
@@ -70,7 +71,6 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = true),
             searchToolPromptComposer = SearchToolPromptComposer(),
-            analyzeImageUseCase = AnalyzeImageUseCase(inferenceFactory, mockk(relaxed = true)),
         )
 
         useCase(
@@ -146,7 +146,6 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = true),
             searchToolPromptComposer = SearchToolPromptComposer(),
-            analyzeImageUseCase = AnalyzeImageUseCase(inferenceFactory, mockk(relaxed = true)),
         )
 
         val assistantMessageId = MessageId("2")
@@ -205,7 +204,6 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = true),
             searchToolPromptComposer = SearchToolPromptComposer(),
-            analyzeImageUseCase = AnalyzeImageUseCase(inferenceFactory, mockk(relaxed = true)),
         )
 
         useCase(
@@ -256,7 +254,6 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = false),
             searchToolPromptComposer = SearchToolPromptComposer(),
-            analyzeImageUseCase = AnalyzeImageUseCase(inferenceFactory, mockk(relaxed = true)),
         )
 
         useCase(
@@ -302,7 +299,6 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = false),
             searchToolPromptComposer = SearchToolPromptComposer(),
-            analyzeImageUseCase = AnalyzeImageUseCase(inferenceFactory, mockk(relaxed = true)),
         )
 
         useCase(
@@ -319,396 +315,208 @@ class GenerateChatResponseUseCaseSearchToolTest {
     }
 
     @Test
-    fun `FAST mode prepends analyzed image description before main inference`() = runTest {
+    fun `FAST mode exposes both search and image inspect tools when API vision is configured`() = runTest {
         val inferenceFactory = FakeInferenceFactory()
         val fastService = FakeInferenceService(ModelType.FAST).apply {
             setEmittedEvents(listOf(InferenceEvent.Finished(ModelType.FAST)))
         }
-        val visionService = FakeInferenceService(ModelType.VISION).apply {
-            setEmittedEvents(
-                listOf(
-                    InferenceEvent.PartialResponse("A red bicycle by a blue wall.", ModelType.VISION),
-                    InferenceEvent.Finished(ModelType.VISION),
-                )
-            )
-        }
-        inferenceFactory.serviceMap[ModelType.FAST] = fastService
-        inferenceFactory.serviceMap[ModelType.VISION] = visionService
-
-        val messageRepository = mockk<MessageRepository> {
-            coEvery { getMessagesForChat(any()) } returns emptyList()
-            coEvery { getVisionAnalysesForMessages(any()) } returns emptyMap()
-            coEvery { saveVisionAnalysis(any(), any(), any(), any(), any()) } returns Unit
-            coEvery { getMessageById(any()) } returns Message(
-                id = MessageId("1"),
-                chatId = ChatId("chat"),
-                content = Content(text = "What should I fix?", imageUri = "file:///tmp/image.jpg"),
-                role = Role.USER,
-            )
-        }
-
-        val useCase = GenerateChatResponseUseCase(
-            inferenceFactory = inferenceFactory,
-            pipelineExecutor = mockPipelineExecutor(),
-            chatRepository = mockk(relaxed = true),
-            messageRepository = messageRepository,
-            loggingPort = mockk(relaxed = true),
-            activeModelProvider = mockActiveModelProvider(
-                ActiveModelConfiguration(
-                    id = ApiModelConfigurationId("7"),
-                    isLocal = false,
-                    name = "OpenAI Fast",
-                    systemPrompt = "Be concise.",
-                    reasoningEffort = null,
-                    temperature = 0.7,
-                    topK = 40,
-                    topP = 0.95,
-                    maxTokens = 512,
-                    minP = 0.0,
-                    repetitionPenalty = 1.1,
-                    contextWindow = 4096,
-                    thinkingEnabled = false,
-                )
-            ),
-            settingsRepository = mockSettingsRepository(searchEnabled = false),
-            searchToolPromptComposer = SearchToolPromptComposer(),
-            analyzeImageUseCase = AnalyzeImageUseCase(inferenceFactory, mockk(relaxed = true)),
-        )
-
-        useCase(
-            prompt = "What should I fix?",
-            userMessageId = MessageId("1"),
-            assistantMessageId = MessageId("2"),
-            chatId = ChatId("chat"),
-            mode = Mode.FAST,
-        ).toList()
-
-        assertTrue(visionService.getSentOptions().single().imageUris.contains("file:///tmp/image.jpg"))
-        assertTrue(fastService.getSentPrompts().single().contains("Attached image description:"))
-        assertTrue(fastService.getSentPrompts().single().contains("A red bicycle by a blue wall."))
-    }
-
-    @Test
-    fun `FAST mode logs chunked full prompt for local inference with analyzed image description`() = runTest {
-        val inferenceFactory = FakeInferenceFactory()
-        val fastService = FakeInferenceService(ModelType.FAST).apply {
-            setEmittedEvents(listOf(InferenceEvent.Finished(ModelType.FAST)))
-        }
-        val visionService = FakeInferenceService(ModelType.VISION).apply {
-            setEmittedEvents(
-                listOf(
-                    InferenceEvent.PartialResponse("A red bicycle by a blue wall.", ModelType.VISION),
-                    InferenceEvent.Finished(ModelType.VISION),
-                )
-            )
-        }
-        inferenceFactory.serviceMap[ModelType.FAST] = fastService
-        inferenceFactory.serviceMap[ModelType.VISION] = visionService
-
-        val messageRepository = mockk<MessageRepository> {
-            coEvery { getMessagesForChat(any()) } returns emptyList()
-            coEvery { getVisionAnalysesForMessages(any()) } returns emptyMap()
-            coEvery { saveVisionAnalysis(any(), any(), any(), any(), any()) } returns Unit
-            coEvery { getMessageById(any()) } returns Message(
-                id = MessageId("1"),
-                chatId = ChatId("chat"),
-                content = Content(text = "What should I fix?", imageUri = "file:///tmp/image.jpg"),
-                role = Role.USER,
-            )
-        }
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-
-        val useCase = GenerateChatResponseUseCase(
-            inferenceFactory = inferenceFactory,
-            pipelineExecutor = mockPipelineExecutor(),
-            chatRepository = mockk(relaxed = true),
-            messageRepository = messageRepository,
-            loggingPort = loggingPort,
-            activeModelProvider = mockActiveModelProvider(
-                ActiveModelConfiguration(
-                    id = LocalModelConfigurationId("8"),
-                    isLocal = true,
-                    name = "LiteRT Fast",
-                    systemPrompt = "Be concise.",
-                    reasoningEffort = null,
-                    temperature = 0.7,
-                    topK = 40,
-                    topP = 0.95,
-                    maxTokens = 512,
-                    minP = 0.0,
-                    repetitionPenalty = 1.1,
-                    contextWindow = 4096,
-                    thinkingEnabled = false,
-                )
-            ),
-            settingsRepository = mockSettingsRepository(searchEnabled = false),
-            searchToolPromptComposer = SearchToolPromptComposer(),
-            analyzeImageUseCase = AnalyzeImageUseCase(inferenceFactory, loggingPort),
-        )
-
-        useCase(
-            prompt = "What should I fix?",
-            userMessageId = MessageId("1"),
-            assistantMessageId = MessageId("2"),
-            chatId = ChatId("chat"),
-            mode = Mode.FAST,
-        ).toList()
-
-        verify {
-            loggingPort.debug(
-                "GenerateChatResponse",
-                match { it.contains("Local prompt handoff modelType=FAST") && it.contains("containsImageDescription=true") }
-            )
-            loggingPort.debug(
-                "GenerateChatResponse",
-                match {
-                    it.contains("Local prompt handoff chunk 1/1 modelType=FAST") &&
-                        it.contains("Attached image description:") &&
-                        it.contains("A red bicycle by a blue wall.") &&
-                        it.contains("User request:") &&
-                        it.contains("What should I fix?")
-                }
-            )
-        }
-    }
-
-    @Test
-    fun `FAST mode persists analyzed image description`() = runTest {
-        val inferenceFactory = FakeInferenceFactory()
-        val fastService = FakeInferenceService(ModelType.FAST).apply {
-            setEmittedEvents(listOf(InferenceEvent.Finished(ModelType.FAST)))
-        }
-        val visionService = FakeInferenceService(ModelType.VISION).apply {
-            setEmittedEvents(
-                listOf(
-                    InferenceEvent.PartialResponse("A loose shelf mounted into drywall.", ModelType.VISION),
-                    InferenceEvent.Finished(ModelType.VISION),
-                )
-            )
-        }
-        inferenceFactory.serviceMap[ModelType.FAST] = fastService
-        inferenceFactory.serviceMap[ModelType.VISION] = visionService
-
-        val messageRepository = mockk<MessageRepository>(relaxed = true) {
-            coEvery { getMessagesForChat(any()) } returns emptyList()
-            coEvery { getVisionAnalysesForMessages(any()) } returns emptyMap()
-            coEvery { saveVisionAnalysis(any(), any(), any(), any(), any()) } returns Unit
-            coEvery { getMessageById(any()) } returns Message(
-                id = MessageId("1"),
-                chatId = ChatId("chat"),
-                content = Content(text = "How should I repair this?", imageUri = "file:///tmp/image.jpg"),
-                role = Role.USER,
-            )
-        }
-
-        val useCase = GenerateChatResponseUseCase(
-            inferenceFactory = inferenceFactory,
-            pipelineExecutor = mockPipelineExecutor(),
-            chatRepository = mockk(relaxed = true),
-            messageRepository = messageRepository,
-            loggingPort = mockk(relaxed = true),
-            activeModelProvider = mockActiveModelProvider(
-                ActiveModelConfiguration(
-                    id = ApiModelConfigurationId("7"),
-                    isLocal = false,
-                    name = "OpenAI Fast",
-                    systemPrompt = "Be concise.",
-                    reasoningEffort = null,
-                    temperature = 0.7,
-                    topK = 40,
-                    topP = 0.95,
-                    maxTokens = 512,
-                    minP = 0.0,
-                    repetitionPenalty = 1.1,
-                    contextWindow = 4096,
-                    thinkingEnabled = false,
-                )
-            ),
-            settingsRepository = mockSettingsRepository(searchEnabled = false),
-            searchToolPromptComposer = SearchToolPromptComposer(),
-            analyzeImageUseCase = AnalyzeImageUseCase(inferenceFactory, mockk(relaxed = true)),
-        )
-
-        useCase(
-            prompt = "How should I repair this?",
-            userMessageId = MessageId("1"),
-            assistantMessageId = MessageId("2"),
-            chatId = ChatId("chat"),
-            mode = Mode.FAST,
-        ).toList()
-
-        coVerify {
-            messageRepository.saveVisionAnalysis(
-                userMessageId = MessageId("1"),
-                imageUri = "file:///tmp/image.jpg",
-                promptText = "How should I repair this?",
-                analysisText = "A loose shelf mounted into drywall.",
-                modelType = ModelType.VISION,
-            )
-        }
-    }
-
-    @Test
-    fun `image analysis failure is surfaced through normal generation state`() = runTest {
-        val inferenceFactory = FakeInferenceFactory()
-        val visionService = FakeInferenceService(ModelType.VISION).apply {
-            setShouldThrowOnSendPrompt(true)
-        }
-        val fastService = FakeInferenceService(ModelType.FAST)
-        inferenceFactory.serviceMap[ModelType.VISION] = visionService
         inferenceFactory.serviceMap[ModelType.FAST] = fastService
 
         val useCase = GenerateChatResponseUseCase(
             inferenceFactory = inferenceFactory,
             pipelineExecutor = mockPipelineExecutor(),
             chatRepository = mockk(relaxed = true),
-            messageRepository = mockk(relaxed = true) {
-                coEvery { getMessagesForChat(any()) } returns emptyList()
-                coEvery { getVisionAnalysesForMessages(any()) } returns emptyMap()
-                coEvery { saveVisionAnalysis(any(), any(), any(), any(), any()) } returns Unit
-                coEvery { getMessageById(any()) } returns Message(
+            messageRepository = mockMessageRepository(
+                currentMessage = Message(
                     id = MessageId("1"),
                     chatId = ChatId("chat"),
-                    content = Content(text = "Describe this", imageUri = "file:///tmp/image.jpg"),
+                    content = Content(text = "What is this?", imageUri = "file:///photo.jpg"),
                     role = Role.USER,
-                )
-            },
+                ),
+                resolvedImageTarget = ResolvedImageTarget(
+                    userMessageId = MessageId("1"),
+                    imageUri = "file:///photo.jpg",
+                ),
+            ),
             loggingPort = mockk(relaxed = true),
             activeModelProvider = mockActiveModelProvider(
-                ActiveModelConfiguration(
-                    id = ApiModelConfigurationId("7"),
-                    isLocal = false,
-                    name = "OpenAI Fast",
-                    systemPrompt = "Be concise.",
-                    reasoningEffort = null,
-                    temperature = 0.7,
-                    topK = 40,
-                    topP = 0.95,
-                    maxTokens = 512,
-                    minP = 0.0,
-                    repetitionPenalty = 1.1,
-                    contextWindow = 4096,
-                    thinkingEnabled = false,
-                )
+                fastConfig = fastTextConfig(),
+                visionConfig = apiVisionConfig(),
             ),
-            settingsRepository = mockSettingsRepository(searchEnabled = false),
+            settingsRepository = mockSettingsRepository(searchEnabled = true),
             searchToolPromptComposer = SearchToolPromptComposer(),
-            analyzeImageUseCase = AnalyzeImageUseCase(inferenceFactory, mockk(relaxed = true)),
         )
 
-        val states = useCase(
-            prompt = "Describe this",
+        useCase(
+            prompt = "What is this?",
             userMessageId = MessageId("1"),
             assistantMessageId = MessageId("2"),
             chatId = ChatId("chat"),
             mode = Mode.FAST,
         ).toList()
 
-        val finalAssistant = states.last().messages[MessageId("2")]
-        assertTrue(finalAssistant?.content?.contains("Error: Simulated sendPrompt with options error") == true)
-        assertTrue(fastService.getSentPrompts().isEmpty())
+        val options = fastService.getSentOptions().single()
+        assertTrue(options.toolingEnabled)
+        assertTrue(options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+        assertTrue(options.availableTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
+        assertTrue(options.systemPrompt?.contains("attached_image_inspect") == true)
+        assertEquals(listOf(ModelType.FAST), inferenceFactory.resolvedTypes)
     }
 
     @Test
-    fun `rehydration uses persisted vision analysis instead of placeholder`() = runTest {
+    fun `FAST mode exposes only image inspect when search is disabled but API vision is configured`() = runTest {
         val inferenceFactory = FakeInferenceFactory()
         val fastService = FakeInferenceService(ModelType.FAST).apply {
             setEmittedEvents(listOf(InferenceEvent.Finished(ModelType.FAST)))
         }
         inferenceFactory.serviceMap[ModelType.FAST] = fastService
 
-        val priorUser = Message(
-            id = MessageId("prior-user"),
-            chatId = ChatId("chat"),
-            content = Content(text = "", imageUri = "file:///tmp/prior.jpg"),
-            role = Role.USER,
-            messageState = MessageState.COMPLETE,
-        )
-        val currentUser = Message(
-            id = MessageId("1"),
-            chatId = ChatId("chat"),
-            content = Content(text = "What changed?"),
-            role = Role.USER,
-        )
-        val analysis = MessageVisionAnalysis(
-            id = "analysis-1",
-            userMessageId = MessageId("prior-user"),
-            imageUri = "file:///tmp/prior.jpg",
-            promptText = "",
-            analysisText = "A cracked pipe joint under the sink.",
-            modelType = ModelType.VISION,
-            createdAt = 1L,
-            updatedAt = 1L,
-        )
-
-        val messageRepository = mockk<MessageRepository>(relaxed = true) {
-            coEvery { getMessageById(MessageId("1")) } returns currentUser
-            coEvery { getMessagesForChat(ChatId("chat")) } returns listOf(priorUser, currentUser)
-            coEvery { getVisionAnalysesForMessages(any()) } answers {
-                val ids = firstArg<List<MessageId>>()
-                ids.associateWith { id ->
-                    if (id == MessageId("prior-user")) listOf(analysis) else emptyList()
-                }.filterValues { it.isNotEmpty() }
-            }
-            coEvery { saveVisionAnalysis(any(), any(), any(), any(), any()) } returns Unit
-        }
-
         val useCase = GenerateChatResponseUseCase(
             inferenceFactory = inferenceFactory,
             pipelineExecutor = mockPipelineExecutor(),
             chatRepository = mockk(relaxed = true),
-            messageRepository = messageRepository,
+            messageRepository = mockMessageRepository(
+                currentMessage = Message(
+                    id = MessageId("1"),
+                    chatId = ChatId("chat"),
+                    content = Content(text = "Describe it", imageUri = "file:///photo.jpg"),
+                    role = Role.USER,
+                ),
+                resolvedImageTarget = ResolvedImageTarget(
+                    userMessageId = MessageId("1"),
+                    imageUri = "file:///photo.jpg",
+                ),
+            ),
             loggingPort = mockk(relaxed = true),
             activeModelProvider = mockActiveModelProvider(
-                ActiveModelConfiguration(
-                    id = ApiModelConfigurationId("7"),
-                    isLocal = false,
-                    name = "OpenAI Fast",
-                    systemPrompt = "Be concise.",
-                    reasoningEffort = null,
-                    temperature = 0.7,
-                    topK = 40,
-                    topP = 0.95,
-                    maxTokens = 512,
-                    minP = 0.0,
-                    repetitionPenalty = 1.1,
-                    contextWindow = 4096,
-                    thinkingEnabled = false,
-                )
+                fastConfig = fastTextConfig(),
+                visionConfig = apiVisionConfig(),
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = false),
             searchToolPromptComposer = SearchToolPromptComposer(),
-            analyzeImageUseCase = AnalyzeImageUseCase(inferenceFactory, mockk(relaxed = true)),
         )
 
         useCase(
-            prompt = "What changed?",
+            prompt = "Describe it",
             userMessageId = MessageId("1"),
             assistantMessageId = MessageId("2"),
             chatId = ChatId("chat"),
             mode = Mode.FAST,
         ).toList()
 
-        assertTrue(fastService.getHistory().single().content.contains("A cracked pipe joint under the sink."))
-        assertFalse(fastService.getHistory().single().content.contains("[User attached an image]"))
+        val options = fastService.getSentOptions().single()
+        assertTrue(options.toolingEnabled)
+        assertFalse(options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+        assertTrue(options.availableTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
+        assertTrue(options.systemPrompt?.contains("attached_image_inspect") == true)
+        assertEquals(listOf(ModelType.FAST), inferenceFactory.resolvedTypes)
+    }
+
+    @Test
+    fun `FAST mode does not expose image inspect when no resolved image exists`() = runTest {
+        val inferenceFactory = FakeInferenceFactory()
+        val fastService = FakeInferenceService(ModelType.FAST)
+        inferenceFactory.serviceMap[ModelType.FAST] = fastService
+
+        val useCase = GenerateChatResponseUseCase(
+            inferenceFactory = inferenceFactory,
+            pipelineExecutor = mockPipelineExecutor(),
+            chatRepository = mockk(relaxed = true),
+            messageRepository = mockMessageRepository(
+                currentMessage = Message(
+                    id = MessageId("1"),
+                    chatId = ChatId("chat"),
+                    content = Content(text = "Hello"),
+                    role = Role.USER,
+                ),
+                resolvedImageTarget = null,
+            ),
+            loggingPort = mockk(relaxed = true),
+            activeModelProvider = mockActiveModelProvider(
+                fastConfig = fastTextConfig(),
+                visionConfig = apiVisionConfig(),
+            ),
+            settingsRepository = mockSettingsRepository(searchEnabled = false),
+            searchToolPromptComposer = SearchToolPromptComposer(),
+        )
+
+        useCase(
+            prompt = "Hello",
+            userMessageId = MessageId("1"),
+            assistantMessageId = MessageId("2"),
+            chatId = ChatId("chat"),
+            mode = Mode.FAST,
+        ).toList()
+
+        val options = fastService.getSentOptions().single()
+        assertFalse(options.toolingEnabled)
+        assertTrue(options.availableTools.isEmpty())
+        assertFalse(options.systemPrompt?.contains("attached_image_inspect") == true)
+        assertEquals(listOf(ModelType.FAST), inferenceFactory.resolvedTypes)
     }
 
     private fun mockActiveModelProvider(
-        configuration: ActiveModelConfiguration,
+        fastConfig: ActiveModelConfiguration,
+        visionConfig: ActiveModelConfiguration? = null,
     ): ActiveModelProviderPort = mockk {
-        coEvery { getActiveConfiguration(ModelType.FAST) } returns configuration
+        coEvery { getActiveConfiguration(ModelType.FAST) } returns fastConfig
+        coEvery { getActiveConfiguration(ModelType.VISION) } returns visionConfig
     }
 
-    private fun mockMessageRepository(): MessageRepository = mockk {
-        coEvery { getMessagesForChat(any()) } returns emptyList()
-        coEvery { getVisionAnalysesForMessages(any()) } returns emptyMap()
-        coEvery { saveVisionAnalysis(any(), any(), any(), any(), any()) } returns Unit
-        coEvery { getMessageById(any()) } returns Message(
+    private fun fastTextConfig(): ActiveModelConfiguration = ActiveModelConfiguration(
+        id = LocalModelConfigurationId("fast-text"),
+        isLocal = true,
+        name = "Fast",
+        systemPrompt = "Be concise.",
+        reasoningEffort = null,
+        temperature = 0.7,
+        topK = 40,
+        topP = 0.95,
+        maxTokens = 512,
+        minP = 0.0,
+        repetitionPenalty = 1.1,
+        contextWindow = 4096,
+        thinkingEnabled = false,
+        visionCapable = false,
+    )
+
+    private fun fastVisionConfig(): ActiveModelConfiguration = fastTextConfig().copy(
+        id = LocalModelConfigurationId("fast-vision"),
+        name = "Fast Vision",
+        visionCapable = true,
+    )
+
+    private fun apiVisionConfig(): ActiveModelConfiguration = ActiveModelConfiguration(
+        id = ApiModelConfigurationId("vision-api"),
+        isLocal = false,
+        name = "Vision API",
+        systemPrompt = "Inspect the image carefully.",
+        reasoningEffort = null,
+        temperature = 0.2,
+        topK = 40,
+        topP = 0.95,
+        maxTokens = 1024,
+        minP = 0.0,
+        repetitionPenalty = 1.0,
+        contextWindow = 8192,
+        thinkingEnabled = false,
+        visionCapable = true,
+    )
+
+    private fun mockMessageRepository(
+        currentMessage: Message = Message(
             id = MessageId("1"),
             chatId = ChatId("1"),
             content = Content(""),
             role = Role.USER,
-        )
+        ),
+        resolvedImageTarget: ResolvedImageTarget? = null,
+    ): MessageRepository = mockk {
+        coEvery { getMessagesForChat(any()) } returns emptyList()
+        coEvery { getVisionAnalysesForMessages(any()) } returns emptyMap()
+        coEvery { saveVisionAnalysis(any(), any(), any(), any(), any()) } returns Unit
+        coEvery { resolveLatestImageBearingUserMessage(any(), any()) } returns resolvedImageTarget
+        coEvery { getMessageById(any()) } returns currentMessage
         coEvery { saveMessage(any()) } returns MessageId("1")
     }
 

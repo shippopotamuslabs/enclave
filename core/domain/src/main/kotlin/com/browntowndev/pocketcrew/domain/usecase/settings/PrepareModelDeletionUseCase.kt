@@ -47,8 +47,9 @@ class PrepareModelDeletionUseCase @Inject constructor(
         }
 
         val deletedAsset = localAssets.find { it.metadata.id == id }
+        val requiresApiVisionOnly = ModelType.VISION in needingReassignment
         val requiresVisionCompatibility =
-            ModelType.VISION in needingReassignment || deletedAsset?.metadata?.visionCapable == true
+            requiresApiVisionOnly || deletedAsset?.metadata?.visionCapable == true
         return PreparedModelDeletion.Ready(
             target = ModelDeletionTarget.LocalModelAsset(id),
             modelTypesNeedingReassignment = needingReassignment,
@@ -57,6 +58,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
                 apiAssets = apiAssets,
                 excludeLocalModelId = id,
                 requireVisionCompatibility = requiresVisionCompatibility,
+                requireApiVisionOnly = requiresApiVisionOnly,
             ),
         )
     }
@@ -71,8 +73,9 @@ class PrepareModelDeletionUseCase @Inject constructor(
         val localAssets = getLocalModelAssetsUseCase().first()
         val apiAssets = getApiModelAssetsUseCase().first()
         val deletedAsset = localAssets.find { asset -> asset.configurations.any { it.id == id } }
+        val requiresApiVisionOnly = ModelType.VISION in needingReassignment
         val requiresVisionCompatibility =
-            ModelType.VISION in needingReassignment || deletedAsset?.metadata?.visionCapable == true
+            requiresApiVisionOnly || deletedAsset?.metadata?.visionCapable == true
         return PreparedModelDeletion.Ready(
             target = ModelDeletionTarget.LocalModelPreset(id),
             modelTypesNeedingReassignment = needingReassignment,
@@ -81,6 +84,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
                 apiAssets = apiAssets,
                 excludeLocalConfigId = id,
                 requireVisionCompatibility = requiresVisionCompatibility,
+                requireApiVisionOnly = requiresApiVisionOnly,
             ),
         )
     }
@@ -103,6 +107,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
                 apiAssets = getApiModelAssetsUseCase().first(),
                 excludeApiCredentialsId = id,
                 requireVisionCompatibility = false,
+                requireApiVisionOnly = false,
             ),
         )
     }
@@ -121,6 +126,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
                 apiAssets = getApiModelAssetsUseCase().first(),
                 excludeApiConfigId = id,
                 requireVisionCompatibility = false,
+                requireApiVisionOnly = false,
             ),
         )
     }
@@ -133,24 +139,27 @@ class PrepareModelDeletionUseCase @Inject constructor(
         excludeApiCredentialsId: ApiCredentialsId? = null,
         excludeApiConfigId: ApiModelConfigurationId? = null,
         requireVisionCompatibility: Boolean,
+        requireApiVisionOnly: Boolean,
     ): List<ReassignmentCandidate> {
         val candidates = mutableListOf<ReassignmentCandidate>()
 
-        localAssets.forEach { asset ->
-            if (asset.metadata.id == excludeLocalModelId) return@forEach
-            if (requireVisionCompatibility && !asset.metadata.visionCapable) return@forEach
+        if (!requireApiVisionOnly) {
+            localAssets.forEach { asset ->
+                if (asset.metadata.id == excludeLocalModelId) return@forEach
+                if (requireVisionCompatibility && !asset.metadata.visionCapable) return@forEach
 
-            asset.configurations.forEach { config ->
-                if (config.id == excludeLocalConfigId) return@forEach
-                candidates.add(
-                    ReassignmentCandidate(
-                        configId = config.id,
-                        source = ModelSource.ON_DEVICE,
-                        assetDisplayName = asset.metadata.huggingFaceModelName,
-                        configDisplayName = config.displayName,
-                        localModelId = asset.metadata.id,
+                asset.configurations.forEach { config ->
+                    if (config.id == excludeLocalConfigId) return@forEach
+                    candidates.add(
+                        ReassignmentCandidate(
+                            configId = config.id,
+                            source = ModelSource.ON_DEVICE,
+                            assetDisplayName = asset.metadata.huggingFaceModelName,
+                            configDisplayName = config.displayName,
+                            localModelId = asset.metadata.id,
+                        )
                     )
-                )
+                }
             }
         }
 

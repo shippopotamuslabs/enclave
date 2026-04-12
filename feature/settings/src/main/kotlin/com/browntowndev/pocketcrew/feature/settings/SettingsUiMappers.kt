@@ -183,13 +183,14 @@ class ReassignmentOptionUiMapper @Inject constructor() {
         }
 }
 
-internal fun DefaultModelAssignment.toUi(): DefaultModelAssignmentUi = DefaultModelAssignmentUi(
+internal fun DefaultModelAssignment.toUi(isVision: Boolean = false): DefaultModelAssignmentUi = DefaultModelAssignmentUi(
     modelType = modelType,
     source = if (apiConfigId != null) ModelSource.API else ModelSource.ON_DEVICE,
     currentModelName = displayName ?: "Unknown",
     displayLabel = modelType.displayLabel,
     providerName = providerName,
     presetName = presetName,
+    isVision = isVision,
 )
 
 internal fun blankApiModelAssetDraft(): ApiModelAssetUi = ApiModelAssetUi(
