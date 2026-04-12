@@ -191,11 +191,14 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                 close()
                 return@callbackFlow
             }
-            
-            currentSession.addQueryChunk(prompt)
+
+            val retainedImages = mutableListOf<MPImage>()
             options.imageUris.forEach { imageUri ->
-                currentSession.addImage(loadMpImage(imageUri))
+                val mpImage = loadMpImage(imageUri)
+                retainedImages.add(mpImage)
+                currentSession.addImage(mpImage)
             }
+            currentSession.addQueryChunk(prompt)
 
             currentSession.generateResponseAsync { partialResult, done ->
                 val chunkText = partialResult ?: ""
@@ -238,7 +241,16 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
                 }
             }
 
-            awaitClose { }
+            awaitClose {
+                retainedImages.forEach { img ->
+                    try {
+                        img.close()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Error closing MPImage", e)
+                    }
+                }
+                retainedImages.clear()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error during inference", e)
             trySend(InferenceEvent.Error(e, targetModelType))
@@ -264,47 +276,65 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
             "Tool executor not configured for local search"
         }
 
-        session.addQueryChunk(prompt)
-        val firstPass = collectToolPreparationPass(session, targetModelType, emitEvent)
-        val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(firstPass.text)
-        if (envelope == null) {
-            Log.i(TAG, "Tool loop complete without tool call provider=MEDIAPIPE modelType=$targetModelType")
-            emitBufferedResponse(firstPass, targetModelType, emitEvent)
+        val retainedImages = mutableListOf<MPImage>()
+        try {
+            options.imageUris.forEach { imageUri ->
+                val mpImage = loadMpImage(imageUri)
+                retainedImages.add(mpImage)
+                session.addImage(mpImage)
+            }
+            session.addQueryChunk(prompt)
+            
+            val firstPass = collectToolPreparationPass(session, targetModelType, emitEvent)
+            val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(firstPass.text)
+            if (envelope == null) {
+                Log.i(TAG, "Tool loop complete without tool call provider=MEDIAPIPE modelType=$targetModelType")
+                emitBufferedResponse(firstPass, targetModelType, emitEvent)
+                emitEvent(InferenceEvent.Finished(targetModelType))
+                return
+            }
+
+            val toolRequest = ToolCallRequest(
+                toolName = envelope.toolName,
+                argumentsJson = envelope.argumentsJson,
+                provider = "MEDIAPIPE",
+                modelType = targetModelType,
+                chatId = options.chatId,
+                userMessageId = options.userMessageId,
+            )
+            ToolEnvelopeParser.requireSupportedTool(toolRequest.toolName)
+            val toolArg = when (toolRequest.toolName) {
+                ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolRequest.argumentsJson)
+                else -> ToolEnvelopeParser.extractRequiredQuery(toolRequest.argumentsJson)
+            }
+            Log.i(TAG, "Tool call detected provider=MEDIAPIPE tool=${toolRequest.toolName} arg=$toolArg")
+            val toolResult = executor.execute(toolRequest)
+            Log.i(
+                TAG,
+                "Tool call completed provider=MEDIAPIPE tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
+            )
+
+            session.addQueryChunk(ToolEnvelopeParser.buildLocalToolResultMessage(toolResult.resultJson))
+            streamSessionResponse(
+                session = session,
+                targetModelType = targetModelType,
+                emitVisible = true,
+                emitEvent = emitEvent,
+            )
+
+            emitVisibleText(envelope.visiblePrefix, targetModelType, emitEvent)
+            emitVisibleText(envelope.visibleSuffix, targetModelType, emitEvent)
             emitEvent(InferenceEvent.Finished(targetModelType))
-            return
+        } finally {
+            retainedImages.forEach { img ->
+                try {
+                    img.close()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error closing MPImage", e)
+                }
+            }
+            retainedImages.clear()
         }
-
-        val toolRequest = ToolCallRequest(
-            toolName = envelope.toolName,
-            argumentsJson = envelope.argumentsJson,
-            provider = "MEDIAPIPE",
-            modelType = targetModelType,
-            chatId = options.chatId,
-            userMessageId = options.userMessageId,
-        )
-        ToolEnvelopeParser.requireSupportedTool(toolRequest.toolName)
-        val toolArg = when (toolRequest.toolName) {
-            ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolRequest.argumentsJson)
-            else -> ToolEnvelopeParser.extractRequiredQuery(toolRequest.argumentsJson)
-        }
-        Log.i(TAG, "Tool call detected provider=MEDIAPIPE tool=${toolRequest.toolName} arg=$toolArg")
-        val toolResult = executor.execute(toolRequest)
-        Log.i(
-            TAG,
-            "Tool call completed provider=MEDIAPIPE tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
-        )
-
-        session.addQueryChunk(ToolEnvelopeParser.buildLocalToolResultMessage(toolResult.resultJson))
-        streamSessionResponse(
-            session = session,
-            targetModelType = targetModelType,
-            emitVisible = true,
-            emitEvent = emitEvent,
-        )
-
-        emitVisibleText(envelope.visiblePrefix, targetModelType, emitEvent)
-        emitVisibleText(envelope.visibleSuffix, targetModelType, emitEvent)
-        emitEvent(InferenceEvent.Finished(targetModelType))
     }
 
     private suspend fun collectToolPreparationPass(

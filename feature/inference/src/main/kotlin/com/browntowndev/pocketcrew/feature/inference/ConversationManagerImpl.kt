@@ -7,7 +7,6 @@ import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.tflite.gpu.support.TfLiteGpu
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -192,7 +191,7 @@ class ConversationManagerImpl @Inject constructor(
                 )
             }
 
-            ensureEngineInitializedLocked(modelPath, modelType, activeConfig.contextWindow ?: 2048)
+            ensureEngineInitializedLocked(modelPath, activeConfig.contextWindow ?: 2048, asset.metadata.visionCapable)
             val eng = engine ?: throw IllegalStateException("Engine not initialized")
 
             if (conversation == null || conversation?.isAlive != true) {
@@ -413,23 +412,25 @@ class ConversationManagerImpl @Inject constructor(
 
     private fun ensureEngineInitializedLocked(
         modelPath: String,
-        modelType: ModelType,
-        contextWindow: Int
+        contextWindow: Int,
+        visionCapable: Boolean
     ) {
         if (engine != null) return
 
         val cacheDir = cacheDirFor(modelPath)
-        initializeTextEngine(modelPath, contextWindow, cacheDir)
+        initializeEngine(modelPath, contextWindow, cacheDir, visionCapable)
     }
 
-    private fun initializeTextEngine(
+    private fun initializeEngine(
         modelPath: String,
         contextWindow: Int,
-        cacheDir: String?
+        cacheDir: String?,
+        visionCapable: Boolean
     ) {
         val useGpu = isGpuBackendAvailable()
         val backendName = if (useGpu) "GPU" else "CPU"
         val backend = if (useGpu) Backend.GPU() else Backend.CPU()
+        val visionBackend = if (visionCapable && useGpu) Backend.GPU() else if (visionCapable) Backend.CPU() else null
         var candidate: Engine? = null
 
         try {
@@ -442,7 +443,7 @@ class ConversationManagerImpl @Inject constructor(
             candidate = createEngine(
                 modelPath = modelPath,
                 backend = backend,
-                visionBackend = null,
+                visionBackend = visionBackend,
                 contextWindow = contextWindow,
                 cacheDir = cacheDir
             )
