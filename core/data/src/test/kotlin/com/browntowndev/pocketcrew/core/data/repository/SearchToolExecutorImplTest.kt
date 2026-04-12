@@ -8,10 +8,10 @@ import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
-import kotlin.test.assertFailsWith
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import kotlin.test.assertFailsWith
 
 class SearchToolExecutorImplTest {
 
@@ -100,5 +100,30 @@ class SearchToolExecutorImplTest {
                 )
             )
         }
+    }
+
+    @Test
+    fun `execute preserves escaped quotes in query arguments`() = runTest {
+        val settingsRepository = mockk<SettingsRepository>()
+        val tavilySearchRepository = mockk<TavilySearchRepository>()
+        every { settingsRepository.settingsFlow } returns flowOf(SettingsData(searchEnabled = true))
+        every { tavilySearchRepository.search("""android "agent" news""") } returns """{"query":"android \"agent\" news","results":[]}"""
+
+        val executor = SearchToolExecutorImpl(
+            loggingPort = mockk<LoggingPort>(relaxed = true),
+            settingsRepository = settingsRepository,
+            tavilySearchRepository = tavilySearchRepository,
+        )
+
+        val result = executor.execute(
+            ToolCallRequest(
+                toolName = "tavily_web_search",
+                argumentsJson = """{"query":"android \"agent\" news"}""",
+                provider = "OPENAI",
+                modelType = ModelType.FAST,
+            )
+        )
+
+        assertEquals("""{"query":"android \"agent\" news","results":[]}""", result.resultJson)
     }
 }

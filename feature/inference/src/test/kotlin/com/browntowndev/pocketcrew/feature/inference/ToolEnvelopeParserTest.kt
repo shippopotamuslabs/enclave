@@ -123,6 +123,29 @@ class ToolEnvelopeParserTest {
     }
 
     @Test
+    fun `extractLocalToolEnvelope preserves escaped quotes in search query`() {
+        val text = """Prefix,{"name":"tavily_web_search","arguments":{"query":"android \"agent\" news"}},Suffix"""
+
+        val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(text)
+
+        assertNotNull(envelope)
+        assertEquals("""{"query":"android \"agent\" news"}""", envelope!!.argumentsJson)
+    }
+
+    @Test
+    fun `extractLocalToolEnvelope preserves escaped quotes in image inspect question`() {
+        val text = """Prefix,{"name":"attached_image_inspect","arguments":{"question":"What does the sign say: \"STOP\"?"}},Suffix"""
+
+        val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(text)
+
+        assertNotNull(envelope)
+        assertEquals(
+            """{"question":"What does the sign say: \"STOP\"?"}""",
+            envelope!!.argumentsJson,
+        )
+    }
+
+    @Test
     fun `buildArgumentsJson supports image inspect argument maps`() {
         val json = ToolEnvelopeParser.buildArgumentsJson(
             mapOf("question" to "What is shown in this image?")

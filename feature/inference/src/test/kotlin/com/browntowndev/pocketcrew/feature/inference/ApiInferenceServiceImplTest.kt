@@ -199,6 +199,62 @@ class ApiInferenceServiceImplTest {
         assertEquals("Search skill recursion limit exceeded", error.cause.message)
     }
 
+    @Test
+    fun `search enabled prompt reapplies system instructions on follow up response request`() = runTest {
+        val client = mockk<OpenAIClient>()
+        val responseService = mockk<ResponseService>()
+        val initialStreamResponse = mockk<StreamResponse<ResponseStreamEvent>>()
+        val followUpStreamResponse = mockk<StreamResponse<ResponseStreamEvent>>()
+        val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
+        val capturedParams = mutableListOf<ResponseCreateParams>()
+
+        every { client.responses() } returns responseService
+        every { responseService.createStreaming(capture(capturedParams)) } returnsMany listOf(
+            initialStreamResponse,
+            followUpStreamResponse,
+        )
+        every { initialStreamResponse.stream() } returns Stream.of(
+            mockFunctionCallDoneEvent(),
+            mockCompletedEvent(responseId = "resp_call_1"),
+        )
+        every { initialStreamResponse.close() } returns Unit
+        every { followUpStreamResponse.stream() } returns Stream.of(
+            mockOutputTextEvent("Use the search result summary."),
+            mockCompletedEvent(responseId = "resp_followup"),
+        )
+        every { followUpStreamResponse.close() } returns Unit
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
+            toolName = "tavily_web_search",
+            resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
+        )
+
+        val service = ApiInferenceServiceImpl(
+            client = client,
+            modelId = "gpt-4o",
+            provider = "OPENAI",
+            modelType = ModelType.FAST,
+            loggingPort = mockk<LoggingPort>(relaxed = true),
+            toolExecutor = toolExecutor,
+        )
+        service.setHistory(listOf(ChatMessage(Role.SYSTEM, "Stay concise and cite sources.")))
+
+        service.sendPrompt(
+            prompt = "Find recent Android agent news",
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+            ),
+            closeConversation = false,
+        ).toList()
+
+        assertEquals(2, capturedParams.size)
+        assertTrue(capturedParams.first().instructions().isPresent)
+        assertEquals("Stay concise and cite sources.", capturedParams.first().instructions().get())
+        assertTrue(capturedParams[1].instructions().isPresent)
+        assertEquals("Stay concise and cite sources.", capturedParams[1].instructions().get())
+    }
+
     private fun mockTextResponse(text: String): Response {
         val outputText = mockk<ResponseOutputText>()
         every { outputText.text() } returns text

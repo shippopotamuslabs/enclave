@@ -122,8 +122,8 @@ abstract class BaseOpenAiSdkInferenceService(
         requestHistory: List<ChatMessage>,
         initialResponse: StreamedOpenAiResponse,
         toolResultJson: String,
-    ): ResponseCreateParams =
-        ResponseCreateParams.builder()
+    ): ResponseCreateParams {
+        val builder = ResponseCreateParams.builder()
             .model(modelId)
             .previousResponseId(initialResponse.responseId ?: throw IllegalStateException("Missing previous response id for tool call"))
             .inputOfResponse(
@@ -136,7 +136,13 @@ abstract class BaseOpenAiSdkInferenceService(
                     )
                 )
             )
-            .build()
+        requestHistory
+            .filter { it.role == Role.SYSTEM }
+            .joinToString(separator = "\n\n", transform = ChatMessage::content)
+            .takeIf(String::isNotBlank)
+            ?.let(builder::instructions)
+        return builder.build()
+    }
 
     protected suspend fun executeToolingPrompt(
         prompt: String,

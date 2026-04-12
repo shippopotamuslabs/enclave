@@ -8,8 +8,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
  */
 internal object ToolEnvelopeParser {
     private val TOOL_NAME_REGEX = Regex(""""name"\s*:\s*"([^"]+)"""")
-    private val QUERY_REGEX = Regex(""""query"\s*:\s*"([^"]*)"""")
-    private val QUESTION_REGEX = Regex(""""question"\s*:\s*"([^"]*)"""")
     private val WRAPPED_TOOL_CALL_REGEX = Regex("""(?s)<tool_call>\s*(\{.*?\})\s*</tool_call>""")
     private val RAW_TOOL_CALL_REGEX = Regex("""(?s)(.*?)(?:,\s*)?(\{"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{.*?\}\})(?:\s*,)?(.*)""")
 
@@ -27,7 +25,7 @@ internal object ToolEnvelopeParser {
     }
 
     fun buildArgumentsJson(query: String): String =
-        """{"query":"${escapeJson(query)}"}"""
+        buildSingleFieldArgumentsJson("query", query)
 
     fun buildArgumentsJson(arguments: Map<String, *>): String {
         val query = (arguments["query"] as? String)
@@ -48,22 +46,14 @@ internal object ToolEnvelopeParser {
     }
 
     fun buildImageInspectArgumentsJson(question: String): String =
-        """{"question":"${escapeJson(question)}"}"""
+        buildSingleFieldArgumentsJson("question", question)
 
     fun extractRequiredQuery(argumentsJson: String): String {
-        val query = QUERY_REGEX.find(argumentsJson)?.groupValues?.get(1)?.trim()
-        require(!query.isNullOrBlank()) {
-            "Tool argument 'query' is required"
-        }
-        return query
+        return extractRequiredString(argumentsJson, "query")
     }
 
     fun extractRequiredQuestion(argumentsJson: String): String {
-        val question = QUESTION_REGEX.find(argumentsJson)?.groupValues?.get(1)?.trim()
-        require(!question.isNullOrBlank()) {
-            "Tool argument 'question' is required"
-        }
-        return question
+        return extractRequiredString(argumentsJson, "question")
     }
 
     fun extractLocalToolEnvelope(text: String): LocalToolEnvelope? {
@@ -122,10 +112,74 @@ internal object ToolEnvelopeParser {
         "<tool_result>$resultJson</tool_result>"
 
     fun stubResultJson(query: String): String =
-        """{"query":"${escapeJson(query)}","results":[{"title":"Stub Tavily Result","url":"https://example.invalid/stub","content":"Pocket Crew stub result for query: ${escapeJson(query)}"}]}"""
+        """{"query":"${escapeJson(query)}","results":[{"title":"Stub Tavily Result","url":"https://example.invalid/stub","content":"${escapeJson("Pocket Crew stub result for query: $query")}"}]}"""
 
-    private fun escapeJson(value: String): String =
-        value
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
+    private fun extractRequiredString(argumentsJson: String, fieldName: String): String =
+        jsonStringFieldRegex(fieldName)
+            .find(argumentsJson)
+            ?.groupValues
+            ?.get(1)
+            ?.let(::unescapeJson)
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Tool argument '$fieldName' is required")
+
+    private fun buildSingleFieldArgumentsJson(fieldName: String, value: String): String =
+        """{"$fieldName":"${escapeJson(value)}"}"""
+
+    private fun jsonStringFieldRegex(fieldName: String): Regex =
+        Regex(""""$fieldName"\s*:\s*"((?:\\.|[^"\\])*)"""")
+
+    private fun escapeJson(value: String): String = buildString(value.length) {
+        value.forEach { char ->
+            when (char) {
+                '\\' -> append("\\\\")
+                '"' -> append("\\\"")
+                '\b' -> append("\\b")
+                '\u000C' -> append("\\f")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> append(char)
+            }
+        }
+    }
+
+    private fun unescapeJson(value: String): String {
+        val result = StringBuilder(value.length)
+        var index = 0
+        while (index < value.length) {
+            val char = value[index]
+            if (char != '\\' || index == value.lastIndex) {
+                result.append(char)
+                index += 1
+                continue
+            }
+
+            when (val escaped = value[index + 1]) {
+                '\\' -> result.append('\\')
+                '"' -> result.append('"')
+                '/' -> result.append('/')
+                'b' -> result.append('\b')
+                'f' -> result.append('\u000C')
+                'n' -> result.append('\n')
+                'r' -> result.append('\r')
+                't' -> result.append('\t')
+                'u' -> {
+                    val hexStart = index + 2
+                    val hexEnd = hexStart + 4
+                    require(hexEnd <= value.length) {
+                        "Invalid unicode escape sequence"
+                    }
+                    val codePoint = value.substring(hexStart, hexEnd).toInt(16)
+                    result.append(codePoint.toChar())
+                    index = hexEnd
+                    continue
+                }
+                else -> result.append(escaped)
+            }
+            index += 2
+        }
+        return result.toString()
+    }
 }
