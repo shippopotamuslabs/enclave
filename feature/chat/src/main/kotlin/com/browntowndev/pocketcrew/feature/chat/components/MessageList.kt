@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.component.markdown.SimpleMarkdownText
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.feature.chat.ContentUi
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
@@ -343,15 +345,15 @@ private fun PreviewMessageListThinking() {
             hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
-                    id = 1,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.User,
                     content = ContentUi(text = "Explain quantum computing"),
                     formattedTimestamp = "10:30 AM",
                 ),
                 ChatMessage(
-                    id = 2,
-                    chatId = 1L,
+                    id = MessageId("2"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(text = ""),
                     formattedTimestamp = "10:29 AM",
@@ -386,15 +388,15 @@ private fun PreviewMessageListProcessing() {
             hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
-                    id = 1,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.User,
                     content = ContentUi(text = "Hello?"),
                     formattedTimestamp = "10:30 AM",
                 ),
                 ChatMessage(
-                    id = 2,
-                    chatId = 1L,
+                    id = MessageId("2"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(text = ""),
                     formattedTimestamp = "10:29 AM",
@@ -415,15 +417,15 @@ private fun PreviewMessageListGenerating() {
             hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
-                    id = 1,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.User,
                     content = ContentUi(text = "What is Docker?"),
                     formattedTimestamp = "10:30 AM",
                 ),
                 ChatMessage(
-                    id = 2,
-                    chatId = 1L,
+                    id = MessageId("2"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(text = ""),
                     formattedTimestamp = "10:29 AM",
@@ -453,15 +455,15 @@ private fun PreviewPipelineDraftOneGeneratingWithThinking() {
             hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
-                    id = 1,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.User,
                     content = ContentUi(text = "Write me a function to sort a list"),
                     formattedTimestamp = "10:30 AM",
                 ),
                 ChatMessage(
-                    id = 2,
-                    chatId = 1L,
+                    id = MessageId("2"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
                     formattedTimestamp = "10:29 AM",
@@ -490,15 +492,15 @@ private fun PreviewPipelineDraftOneThinking() {
             hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
-                    id = 1,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.User,
                     content = ContentUi(text = "Write me a function to sort a list"),
                     formattedTimestamp = "10:30 AM",
                 ),
                 ChatMessage(
-                    id = 2,
-                    chatId = 1L,
+                    id = MessageId("2"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
                     formattedTimestamp = "10:29 AM",
@@ -529,15 +531,15 @@ private fun PreviewPipelineDraftOneProcessing() {
             hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
-                    id = 1,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.User,
                     content = ContentUi(text = "Write me a function to sort a list"),
                     formattedTimestamp = "10:30 AM",
                 ),
                 ChatMessage(
-                    id = 2,
-                    chatId = 1L,
+                    id = MessageId("2"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
                     formattedTimestamp = "10:29 AM",
@@ -559,16 +561,16 @@ private fun PreviewPipelineFullChainWithFinalThinking() {
             hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
-                    id = 1,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.User,
                     content = ContentUi(text = "Write me a function to sort a list"),
                     formattedTimestamp = "10:30 AM",
                 ),
                 // DRAFT_ONE - Complete with thinking
                 ChatMessage(
-                    id = 2,
-                    chatId = 1L,
+                    id = MessageId("2"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(
                         text = "Here's my first draft approach...",
@@ -585,8 +587,8 @@ private fun PreviewPipelineFullChainWithFinalThinking() {
                 ),
                 // DRAFT_TWO - Complete with thinking
                 ChatMessage(
-                    id = 3,
-                    chatId = 1L,
+                    id = MessageId("3"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(
                         text = "Refining the approach for efficiency...",
@@ -605,8 +607,8 @@ private fun PreviewPipelineFullChainWithFinalThinking() {
                 ),
                 // SYNTHESIS - Complete without thinking
                 ChatMessage(
-                    id = 4,
-                    chatId = 1L,
+                    id = MessageId("4"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(
                         text = "Combining the best ideas...",
@@ -618,8 +620,8 @@ private fun PreviewPipelineFullChainWithFinalThinking() {
                 ),
                 // FINAL - Complete WITH thinking data
                 ChatMessage(
-                    id = 5,
-                    chatId = 1L,
+                    id = MessageId("5"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(
                         text = "# Sorted List Function\n\n" +
@@ -659,16 +661,16 @@ private fun PreviewPipelineFullChainNoFinalThinking() {
             hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
-                    id = 1,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.User,
                     content = ContentUi(text = "Write me a function to sort a list"),
                     formattedTimestamp = "10:30 AM",
                 ),
                 // DRAFT_ONE - Complete WITHOUT thinking
                 ChatMessage(
-                    id = 2,
-                    chatId = 1L,
+                    id = MessageId("2"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(
                         text = "First draft approach ready.",
@@ -680,8 +682,8 @@ private fun PreviewPipelineFullChainNoFinalThinking() {
                 ),
                 // DRAFT_TWO - Complete with thinking
                 ChatMessage(
-                    id = 3,
-                    chatId = 1L,
+                    id = MessageId("3"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(
                         text = "Refined for efficiency.",
@@ -699,8 +701,8 @@ private fun PreviewPipelineFullChainNoFinalThinking() {
                 ),
                 // SYNTHESIS - Complete with thinking
                 ChatMessage(
-                    id = 4,
-                    chatId = 1L,
+                    id = MessageId("4"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(
                         text = "Combined all approaches.",
@@ -717,8 +719,8 @@ private fun PreviewPipelineFullChainNoFinalThinking() {
                 ),
                 // FINAL - Complete WITHOUT thinking data
                 ChatMessage(
-                    id = 5,
-                    chatId = 1L,
+                    id = MessageId("5"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(
                         text = "# Sorted List\n\n" +
@@ -748,16 +750,16 @@ private fun PreviewPipelineVariousStepsInProgress() {
             hasActiveIndicator = true,
             messages = listOf(
                 ChatMessage(
-                    id = 1,
-                    chatId = 1L,
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
                     role = MessageRole.User,
                     content = ContentUi(text = "Explain photosynthesis"),
                     formattedTimestamp = "10:30 AM",
                 ),
                 // DRAFT_ONE - Thinking
                 ChatMessage(
-                    id = 2,
-                    chatId = 1L,
+                    id = MessageId("2"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE),
                     formattedTimestamp = "10:29 AM",
@@ -770,8 +772,8 @@ private fun PreviewPipelineVariousStepsInProgress() {
                 ),
                 // DRAFT_TWO - Generating
                 ChatMessage(
-                    id = 3,
-                    chatId = 1L,
+                    id = MessageId("3"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_TWO),
                     formattedTimestamp = "10:28 AM",
@@ -785,8 +787,8 @@ private fun PreviewPipelineVariousStepsInProgress() {
                 ),
                 // SYNTHESIS - Complete
                 ChatMessage(
-                    id = 4,
-                    chatId = 1L,
+                    id = MessageId("4"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(
                         text = "Synthesis complete.",
@@ -798,8 +800,8 @@ private fun PreviewPipelineVariousStepsInProgress() {
                 ),
                 // FINAL - Processing
                 ChatMessage(
-                    id = 5,
-                    chatId = 1L,
+                    id = MessageId("5"),
+                    chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL),
                     formattedTimestamp = "10:26 AM",
@@ -820,16 +822,16 @@ private fun PreviewPipelineDraftOneAllStates() {
             isPreview =  true,
             hasActiveIndicator = true,
             messages = listOf(
-                ChatMessage(id = 1, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Task 1"), formattedTimestamp = "10:30 AM"),
-                ChatMessage(id = 2, chatId = 1L, role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:29 AM", indicatorState = IndicatorState.Thinking(thinkingRaw = "Thinking...", thinkingDurationSeconds = 5), modelDisplayName = "Model"),
-                ChatMessage(id = 3, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Task 2"), formattedTimestamp = "10:28 AM"),
-                ChatMessage(id = 4, chatId = 1L, role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:27 AM", indicatorState = IndicatorState.Processing, modelDisplayName = "Model"),
-                ChatMessage(id = 5, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Task 3"), formattedTimestamp = "10:26 AM"),
-                ChatMessage(id = 6, chatId = 1L, role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:25 AM", indicatorState = IndicatorState.Generating(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 3, thinkingRaw = "Generating...")), modelDisplayName = "Model"),
-                ChatMessage(id = 7, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Task 4"), formattedTimestamp = "10:24 AM"),
-                ChatMessage(id = 8, chatId = 1L, role = MessageRole.Assistant, content = ContentUi(text = "Draft with thinking.", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:23 AM", indicatorState = IndicatorState.Complete(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 4, thinkingRaw = "Thought...")), modelDisplayName = "Model"),
-                ChatMessage(id = 9, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Task 5"), formattedTimestamp = "10:22 AM"),
-                ChatMessage(id = 10, chatId = 1L, role = MessageRole.Assistant, content = ContentUi(text = "Draft no thinking.", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:21 AM", indicatorState = IndicatorState.Complete(thinkingData = null), modelDisplayName = "Model")
+                ChatMessage(id = MessageId("1"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Task 1"), formattedTimestamp = "10:30 AM"),
+                ChatMessage(id = MessageId("2"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:29 AM", indicatorState = IndicatorState.Thinking(thinkingRaw = "Thinking...", thinkingDurationSeconds = 5), modelDisplayName = "Model"),
+                ChatMessage(id = MessageId("3"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Task 2"), formattedTimestamp = "10:28 AM"),
+                ChatMessage(id = MessageId("4"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:27 AM", indicatorState = IndicatorState.Processing, modelDisplayName = "Model"),
+                ChatMessage(id = MessageId("5"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Task 3"), formattedTimestamp = "10:26 AM"),
+                ChatMessage(id = MessageId("6"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:25 AM", indicatorState = IndicatorState.Generating(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 3, thinkingRaw = "Generating...")), modelDisplayName = "Model"),
+                ChatMessage(id = MessageId("7"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Task 4"), formattedTimestamp = "10:24 AM"),
+                ChatMessage(id = MessageId("8"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "Draft with thinking.", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:23 AM", indicatorState = IndicatorState.Complete(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 4, thinkingRaw = "Thought...")), modelDisplayName = "Model"),
+                ChatMessage(id = MessageId("9"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Task 5"), formattedTimestamp = "10:22 AM"),
+                ChatMessage(id = MessageId("10"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "Draft no thinking.", pipelineStep = PipelineStep.DRAFT_ONE), formattedTimestamp = "10:21 AM", indicatorState = IndicatorState.Complete(thinkingData = null), modelDisplayName = "Model")
             )
         )
     }
@@ -844,16 +846,16 @@ private fun PreviewPipelineFinalAllStates() {
             isPreview =  true,
             hasActiveIndicator = true,
             messages = listOf(
-                ChatMessage(id = 1, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Q1"), formattedTimestamp = "10:30 AM"),
-                ChatMessage(id = 2, chatId = 1L, role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:29 AM", indicatorState = IndicatorState.Thinking(thinkingRaw = "Final thinking...", thinkingDurationSeconds = 10), modelDisplayName = "Model"),
-                ChatMessage(id = 3, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Q2"), formattedTimestamp = "10:28 AM"),
-                ChatMessage(id = 4, chatId = 1L, role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:27 AM", indicatorState = IndicatorState.Processing, modelDisplayName = "Model"),
-                ChatMessage(id = 5, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Q3"), formattedTimestamp = "10:26 AM"),
-                ChatMessage(id = 6, chatId = 1L, role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:25 AM", indicatorState = IndicatorState.Generating(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 5, thinkingRaw = "Final synthesis...")), modelDisplayName = "Model"),
-                ChatMessage(id = 7, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Q4"), formattedTimestamp = "10:24 AM"),
-                ChatMessage(id = 8, chatId = 1L, role = MessageRole.Assistant, content = ContentUi(text = "Final WITH thinking.", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:23 AM", indicatorState = IndicatorState.Complete(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 6, thinkingRaw = "Final review...")), modelDisplayName = "Model"),
-                ChatMessage(id = 9, chatId = 1L, role = MessageRole.User, content = ContentUi(text = "Q5"), formattedTimestamp = "10:22 AM"),
-                ChatMessage(id = 10, chatId = 1L, role = MessageRole.Assistant, content = ContentUi(text = "Final no thinking.", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:21 AM", indicatorState = IndicatorState.Complete(thinkingData = null), modelDisplayName = "Model")
+                ChatMessage(id = MessageId("1"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Q1"), formattedTimestamp = "10:30 AM"),
+                ChatMessage(id = MessageId("2"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:29 AM", indicatorState = IndicatorState.Thinking(thinkingRaw = "Final thinking...", thinkingDurationSeconds = 10), modelDisplayName = "Model"),
+                ChatMessage(id = MessageId("3"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Q2"), formattedTimestamp = "10:28 AM"),
+                ChatMessage(id = MessageId("4"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:27 AM", indicatorState = IndicatorState.Processing, modelDisplayName = "Model"),
+                ChatMessage(id = MessageId("5"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Q3"), formattedTimestamp = "10:26 AM"),
+                ChatMessage(id = MessageId("6"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:25 AM", indicatorState = IndicatorState.Generating(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 5, thinkingRaw = "Final synthesis...")), modelDisplayName = "Model"),
+                ChatMessage(id = MessageId("7"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Q4"), formattedTimestamp = "10:24 AM"),
+                ChatMessage(id = MessageId("8"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "Final WITH thinking.", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:23 AM", indicatorState = IndicatorState.Complete(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 6, thinkingRaw = "Final review...")), modelDisplayName = "Model"),
+                ChatMessage(id = MessageId("9"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Q5"), formattedTimestamp = "10:22 AM"),
+                ChatMessage(id = MessageId("10"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "Final no thinking.", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:21 AM", indicatorState = IndicatorState.Complete(thinkingData = null), modelDisplayName = "Model")
             )
         )
     }

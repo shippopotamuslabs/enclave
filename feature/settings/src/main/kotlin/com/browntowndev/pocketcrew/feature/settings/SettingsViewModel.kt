@@ -14,6 +14,11 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.ApiProviderDraft
 import com.browntowndev.pocketcrew.domain.usecase.settings.ModelDeletionTarget
 import com.browntowndev.pocketcrew.domain.usecase.settings.PreparedModelDeletion
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +45,7 @@ private data class TransientSettingsBundle(
     val feedbackText: String,
     val localModelsState: LocalModelsTransientState,
     val apiState: ApiProvidersTransientState,
+    val searchSkillState: SearchSkillTransientState,
     val assignmentState: AssignmentDialogTransientState,
     val deletionState: DeletionTransientState,
 )
@@ -49,6 +55,13 @@ private data class SheetTransientBundle(
     val memories: List<StoredMemory>,
     val feedbackText: String,
     val localModelsState: LocalModelsTransientState,
+)
+
+private data class DialogTransientBundle(
+    val searchSkillState: SearchSkillTransientState,
+    val apiState: ApiProvidersTransientState,
+    val assignmentState: AssignmentDialogTransientState,
+    val deletionState: DeletionTransientState,
 )
 
 @HiltViewModel
@@ -70,12 +83,15 @@ class SettingsViewModel @Inject constructor(
     private val _feedbackText = MutableStateFlow("")
     private val _localModelsState = MutableStateFlow(LocalModelsTransientState())
     private val _apiState = MutableStateFlow(ApiProvidersTransientState())
+    private val _searchSkillState = MutableStateFlow(SearchSkillTransientState())
     private val _assignmentState = MutableStateFlow(AssignmentDialogTransientState())
     private val _deletionState = MutableStateFlow(DeletionTransientState())
     private val _snackbarMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
     private val _currentApiKey = MutableStateFlow("")
+    private val _currentTavilyApiKey = MutableStateFlow("")
     val currentApiKey: StateFlow<String> = _currentApiKey
+    val currentTavilyApiKey: StateFlow<String> = _currentTavilyApiKey
     val snackbarMessages: SharedFlow<String> = _snackbarMessages.asSharedFlow()
 
     private val preferencesUseCases = settingsUseCases.preferences
@@ -113,11 +129,17 @@ class SettingsViewModel @Inject constructor(
         )
     }
     private val transientDialogBundle = combine(
+        _searchSkillState,
         _apiState,
         _assignmentState,
         _deletionState,
-    ) { apiState, assignmentState, deletionState ->
-        Triple(apiState, assignmentState, deletionState)
+    ) { searchSkillState, apiState, assignmentState, deletionState ->
+        DialogTransientBundle(
+            searchSkillState = searchSkillState,
+            apiState = apiState,
+            assignmentState = assignmentState,
+            deletionState = deletionState,
+        )
     }
     private val transientSettingsBundle = combine(
         transientSheetBundle,
@@ -128,9 +150,10 @@ class SettingsViewModel @Inject constructor(
             memories = sheetBundle.memories,
             feedbackText = sheetBundle.feedbackText,
             localModelsState = sheetBundle.localModelsState,
-            apiState = dialogBundle.first,
-            assignmentState = dialogBundle.second,
-            deletionState = dialogBundle.third,
+            apiState = dialogBundle.apiState,
+            searchSkillState = dialogBundle.searchSkillState,
+            assignmentState = dialogBundle.assignmentState,
+            deletionState = dialogBundle.deletionState,
         )
     }
 
@@ -148,6 +171,7 @@ class SettingsViewModel @Inject constructor(
             feedbackText = transient.feedbackText,
             localModelsState = transient.localModelsState,
             apiState = transient.apiState,
+            searchSkillState = transient.searchSkillState,
             assignmentsState = transient.assignmentState,
             deletionState = transient.deletionState,
         )
@@ -172,6 +196,12 @@ class SettingsViewModel @Inject constructor(
     fun onHapticResponseChange(enabled: Boolean) {
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update haptic response setting", "Failed to update setting")) {
             preferencesUseCases.updateHapticResponse(enabled)
+        }
+    }
+
+    fun onAlwaysUseVisionModelChange(enabled: Boolean) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update vision routing setting", "Failed to update setting")) {
+            preferencesUseCases.updateAlwaysUseVisionModel(enabled)
         }
     }
 
@@ -227,6 +257,10 @@ class SettingsViewModel @Inject constructor(
 
     fun onShowFeedbackSheet(show: Boolean) {
         _sheetVisibility.update { it.copy(feedback = show) }
+    }
+
+    fun onShowVisionSettingsSheet(show: Boolean) {
+        _sheetVisibility.update { it.copy(visionSettings = show) }
     }
 
     fun onFeedbackTextChange(text: String) {
@@ -315,7 +349,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onDeleteLocalModelConfig(id: Long, onSuccess: () -> Unit) {
+    fun onDeleteLocalModelConfig(id: LocalModelConfigurationId, onSuccess: () -> Unit) {
         prepareDeletion(
             target = ModelDeletionTarget.LocalModelPreset(id),
             failureMessage = "Failed to delete local model configuration",
@@ -324,7 +358,7 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    fun onDeleteLocalModelAsset(id: Long) {
+    fun onDeleteLocalModelAsset(id: LocalModelId) {
         prepareDeletion(
             target = ModelDeletionTarget.LocalModelAsset(id),
             failureMessage = "Failed to delete local model asset",
@@ -332,7 +366,7 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    fun onConfirmDeletionWithReassignment(replacementLocalConfigId: Long?, replacementApiConfigId: Long?) {
+    fun onConfirmDeletionWithReassignment(replacementLocalConfigId: LocalModelConfigurationId?, replacementApiConfigId: ApiModelConfigurationId?) {
         val deletionState = _deletionState.value
         val pendingTarget = deletionState.pendingTarget ?: return
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to complete deletion with reassignment", "Failed to delete")) {
@@ -372,10 +406,12 @@ class SettingsViewModel @Inject constructor(
                 modelSortOption = ModelSortOption.A_TO_Z,
             )
         }
+        _searchSkillState.value = SearchSkillTransientState()
     }
 
     fun onStartCreateApiModelAsset() {
         _currentApiKey.value = ""
+        _searchSkillState.value = SearchSkillTransientState()
         _apiState.update {
             it.copy(
                 selectedAsset = null,
@@ -393,7 +429,25 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onSelectApiModelAsset(id: Long?) {
+    fun onStartConfigureSearchSkill() {
+        val persistedState = uiState.value.searchSkillEditor
+        _currentTavilyApiKey.value = ""
+        _apiState.update {
+            it.copy(
+                selectedAsset = null,
+                assetDraft = null,
+                selectedReusableApiCredentialAlias = null,
+                selectedReusableApiCredentialName = null,
+                presetDraft = null,
+            )
+        }
+        _searchSkillState.value = SearchSkillTransientState(
+            isEditing = true,
+            enabled = persistedState.enabled,
+        )
+    }
+
+    fun onSelectApiModelAsset(id: ApiCredentialsId?) {
         val asset = uiState.value.apiProvidersSheet.assets.find { it.credentialsId == id }
         onSelectApiModelAsset(asset)
     }
@@ -403,13 +457,14 @@ class SettingsViewModel @Inject constructor(
             val keepDiscoveredModels =
                 state.selectedAsset.matchesDiscoveryScope(asset) || state.discoveredApiModelScope.matches(asset)
             val retainedModels = if (keepDiscoveredModels) state.discoveredApiModels else emptyList()
+            val normalizedAsset = state.normalizeVisionCapability(asset, retainedModels)
             state.copy(
                 selectedAsset = asset,
-                assetDraft = asset,
+                assetDraft = normalizedAsset,
                 selectedReusableApiCredentialAlias = null,
                 selectedReusableApiCredentialName = null,
                 presetDraft = null,
-                discoveredApiModels = retainedModels.mergeSelectedModel(asset),
+                discoveredApiModels = retainedModels.mergeSelectedModel(normalizedAsset),
                 discoveredApiModelScope = if (keepDiscoveredModels) state.discoveredApiModelScope else null,
                 isDiscoveringApiModels = false,
                 modelSearchQuery = "",
@@ -424,7 +479,7 @@ class SettingsViewModel @Inject constructor(
         _apiState.update { state ->
             val activeAsset = state.assetDraft ?: state.selectedAsset
             val normalizedConfig = config?.let { draft ->
-                if (draft.credentialsId == 0L && activeAsset != null) {
+                if (draft.credentialsId.value.isEmpty() && activeAsset != null) {
                     draft.copy(credentialsId = activeAsset.credentialsId)
                 } else {
                     draft
@@ -443,11 +498,12 @@ class SettingsViewModel @Inject constructor(
                     existingDraft.credentialsId != asset.credentialsId ||
                     existingDraft.baseUrl.normalizedBaseUrl() != asset.baseUrl.normalizedBaseUrl()
             val existingModels = if (discoveryScopeChanged) emptyList() else it.discoveredApiModels
+            val normalizedAsset = it.normalizeVisionCapability(asset, existingModels)
             it.copy(
-                assetDraft = asset,
+                assetDraft = normalizedAsset,
                 selectedReusableApiCredentialAlias = if (existingDraft?.provider != asset.provider) null else it.selectedReusableApiCredentialAlias,
                 selectedReusableApiCredentialName = if (existingDraft?.provider != asset.provider) null else it.selectedReusableApiCredentialName,
-                discoveredApiModels = existingModels.mergeSelectedModel(asset),
+                discoveredApiModels = existingModels.mergeSelectedModel(normalizedAsset),
                 discoveredApiModelScope = if (discoveryScopeChanged) null else it.discoveredApiModelScope,
             )
         }
@@ -460,7 +516,7 @@ class SettingsViewModel @Inject constructor(
 
     fun onApiKeyChange(key: String) {
         _currentApiKey.value = key
-        if (key.isNotBlank() && _apiState.value.assetDraft?.credentialsId == 0L) {
+        if (key.isNotBlank() && _apiState.value.assetDraft?.credentialsId?.value?.isEmpty() == true) {
             _apiState.update {
                 it.copy(
                     selectedReusableApiCredentialAlias = null,
@@ -470,7 +526,39 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onSelectReusableApiCredential(id: Long?) {
+    fun onSearchEnabledChange(enabled: Boolean) {
+        _searchSkillState.update { it.copy(enabled = enabled) }
+    }
+
+    fun onTavilyApiKeyChange(key: String) {
+        _currentTavilyApiKey.value = key
+    }
+
+    fun onClearTavilyApiKey() {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to clear Tavily API key", "Failed to clear search key")) {
+            preferencesUseCases.clearTavilyApiKey()
+            _currentTavilyApiKey.value = ""
+        }
+    }
+
+    fun onSaveSearchSkillSettings(onSuccess: () -> Unit) {
+        val enabled = _searchSkillState.value.enabled ?: uiState.value.searchSkillEditor.enabled
+        val pendingApiKey = _currentTavilyApiKey.value.trim()
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save search skill settings", "Failed to save search settings")) {
+            if (enabled && pendingApiKey.isBlank() && !uiState.value.searchSkillEditor.tavilyKeyPresent) {
+                throw IllegalStateException("A Tavily API key is required to enable web search")
+            }
+            preferencesUseCases.updateSearchEnabled(enabled)
+            if (pendingApiKey.isNotBlank()) {
+                preferencesUseCases.saveTavilyApiKey(pendingApiKey)
+            }
+            _currentTavilyApiKey.value = ""
+            _searchSkillState.value = SearchSkillTransientState()
+            onSuccess()
+        }
+    }
+
+    fun onSelectReusableApiCredential(id: ApiCredentialsId?) {
         val reusableCredential = uiState.value.apiProvidersSheet.assets
             .find { it.credentialsId == id }
             ?.let {
@@ -542,7 +630,7 @@ class SettingsViewModel @Inject constructor(
     fun onSaveApiModelConfig(onSuccess: () -> Unit) {
         val assetDraft = _apiState.value.assetDraft ?: _apiState.value.selectedAsset ?: return
         val presetDraft = uiState.value.apiProviderEditor.presetDraft ?: return
-        val parentCredentialsId = presetDraft.credentialsId.takeIf { it != 0L } ?: assetDraft.credentialsId
+        val parentCredentialsId = if (presetDraft.credentialsId.value.isNotEmpty()) presetDraft.credentialsId else assetDraft.credentialsId
 
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API configuration", "Failed to save configuration")) {
             apiProviderUseCases.saveApiPreset(
@@ -591,6 +679,7 @@ class SettingsViewModel @Inject constructor(
                     state.copy(
                         discoveredApiModels = result.models,
                         discoveredApiModelScope = result.scope,
+                        assetDraft = state.normalizeVisionCapability(state.assetDraft, result.models),
                     )
                 }
             } finally {
@@ -628,7 +717,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onDeleteApiModelConfig(id: Long, onSuccess: () -> Unit) {
+    fun onDeleteApiModelConfig(id: ApiModelConfigurationId, onSuccess: () -> Unit) {
         prepareDeletion(
             target = ModelDeletionTarget.ApiPreset(id),
             failureMessage = "Failed to delete API configuration",
@@ -637,7 +726,7 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    fun onDeleteApiModelAsset(id: Long) {
+    fun onDeleteApiModelAsset(id: ApiCredentialsId) {
         prepareDeletion(
             target = ModelDeletionTarget.ApiProvider(id),
             failureMessage = "Failed to delete API provider",
@@ -647,6 +736,8 @@ class SettingsViewModel @Inject constructor(
 
     fun onBackToByokList() {
         _currentApiKey.value = ""
+        _currentTavilyApiKey.value = ""
+        _searchSkillState.value = SearchSkillTransientState()
         _apiState.update {
             it.copy(
                 selectedAsset = null,
@@ -671,7 +762,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onSetDefaultModel(modelType: ModelType, localConfigId: Long?, apiConfigId: Long?) {
+    fun onSetDefaultModel(modelType: ModelType, localConfigId: LocalModelConfigurationId?, apiConfigId: ApiModelConfigurationId?) {
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to set default model", "Failed to update default model")) {
             assignmentUseCases.setDefaultModel(modelType, localConfigId, apiConfigId)
             onShowAssignmentDialog(false, null)
@@ -738,6 +829,7 @@ class SettingsViewModel @Inject constructor(
                 state.copy(
                     discoveredApiModels = result.models,
                     discoveredApiModelScope = result.scope,
+                    assetDraft = state.normalizeVisionCapability(state.assetDraft, result.models),
                 )
             }
         }
@@ -749,6 +841,17 @@ class SettingsViewModel @Inject constructor(
 
     private fun ApiProvidersTransientState.discoveredModelFor(asset: ApiModelAssetUi?): DiscoveredApiModel? =
         discoveredApiModels.find { it.id == asset?.modelId }
+
+    private fun ApiProvidersTransientState.normalizeVisionCapability(
+        asset: ApiModelAssetUi?,
+        models: List<DiscoveredApiModel> = discoveredApiModels,
+    ): ApiModelAssetUi? {
+        if (asset == null) return null
+        val discoveredVisionCapability = models
+            .find { it.id == asset.modelId }
+            ?.visionCapable
+        return discoveredVisionCapability?.let { asset.copy(isVision = it) } ?: asset
+    }
 
     private fun ApiModelAssetUi?.matchesDiscoveryScope(other: ApiModelAssetUi?): Boolean {
         if (this == null || other == null) return false

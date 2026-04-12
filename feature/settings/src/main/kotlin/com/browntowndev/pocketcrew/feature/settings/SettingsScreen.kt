@@ -22,11 +22,13 @@ import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -40,10 +42,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 
@@ -55,26 +62,30 @@ fun SettingsScreen(
     onThemeChange: (AppTheme) -> Unit,
     onHapticPressChange: (Boolean) -> Unit,
     onHapticResponseChange: (Boolean) -> Unit,
+    onAlwaysUseVisionModelChange: (Boolean) -> Unit,
     onShowCustomizationSheet: (Boolean) -> Unit,
     onShowDataControlsSheet: (Boolean) -> Unit,
     onShowMemoriesSheet: (Boolean) -> Unit,
     onOpenToS: () -> Unit,
     onShowFeedbackSheet: (Boolean) -> Unit,
+    onShowVisionSettingsSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
+    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onShowLocalModelsSheet: (Boolean) -> Unit,
     onShowByokSheet: (Boolean) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
     onStartCreateApiModelAsset: () -> Unit,
+    onStartConfigureSearchSkill: () -> Unit,
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
-    onDeleteApiModelAsset: (Long) -> Unit,
-    onDeleteApiModelConfig: (Long) -> Unit,
+    onDeleteApiModelAsset: (ApiCredentialsId) -> Unit,
+    onDeleteApiModelConfig: (ApiModelConfigurationId) -> Unit,
     onNavigateToLocalModelConfigure: () -> Unit,
     onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
-    onDeleteLocalModelAsset: (Long) -> Unit,
-    onDeleteLocalModelConfig: (Long) -> Unit,
-    onConfirmDeletionWithReassignment: (Long?, Long?) -> Unit,
+    onDeleteLocalModelAsset: (LocalModelId) -> Unit,
+    onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
+    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onDismissDeletionSafety: () -> Unit
 ) {
     Scaffold(
@@ -152,6 +163,30 @@ fun SettingsScreen(
             }
 
             item {
+                SectionHeader(text = "Tools")
+                SettingsNavigationItem(
+                    title = "Web Search",
+                    subtitle = buildString {
+                        append(if (uiState.searchSkillEditor.enabled) "Enabled" else "Disabled")
+                        append(" • ")
+                        append(if (uiState.searchSkillEditor.tavilyKeyPresent) "Tavily key Saved" else "No Tavily Key")
+                    },
+                    icon = Icons.Default.Public,
+                    onClick = {
+                        onStartConfigureSearchSkill()
+                        onNavigateToByokConfigure()
+                    }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsNavigationItem(
+                    title = "Vision",
+                    subtitle = ModelType.VISION.description,
+                    icon = Icons.Default.Visibility,
+                    onClick = { onShowVisionSettingsSheet(true) }
+                )
+            }
+
+            item {
                 SectionHeader(text = "Data & Privacy")
                 SettingsNavigationItem(
                     title = "Memories",
@@ -182,6 +217,15 @@ fun SettingsScreen(
             }
             
             item { Spacer(modifier = Modifier.height(24.dp)) }
+        }
+
+        if (uiState.home.isVisionSettingsSheetOpen) {
+            VisionSettingsBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowVisionSettingsSheet(false) },
+                onAlwaysUseVisionModelChange = onAlwaysUseVisionModelChange,
+                onSetDefaultModel = onSetDefaultModel
+            )
         }
 
         if (uiState.home.isApiProvidersSheetOpen) {
@@ -301,15 +345,19 @@ fun ThemeOption(
 @Composable
 fun SettingsToggle(
     title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    subtitle: String? = null
 ) {
     ListItem(
         leadingContent = {
-            Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            Box(contentAlignment = Alignment.Center) {
+                Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         },
         headlineContent = { Text(title) },
+        supportingContent = subtitle?.let { text -> { Text(text) } },
         trailingContent = {
             Switch(checked = checked, onCheckedChange = onCheckedChange)
         },
@@ -323,12 +371,27 @@ fun SettingsToggle(
 fun SettingsNavigationItem(
     title: String,
     subtitle: String? = null,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    SettingsNavigationItem(
+        title = title,
+        subtitle = subtitle,
+        icon = { Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+        onClick = onClick
+    )
+}
+
+@Composable
+fun SettingsNavigationItem(
+    title: String,
+    subtitle: String? = null,
+    icon: @Composable (() -> Unit),
     onClick: () -> Unit
 ) {
     ListItem(
         leadingContent = {
-            Icon(imageVector = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            icon()
         },
         headlineContent = { Text(title) },
         supportingContent = subtitle?.let { { Text(it) } },
@@ -353,16 +416,20 @@ fun PreviewSettingsScreen() {
             onThemeChange = {},
             onHapticPressChange = {},
             onHapticResponseChange = {},
+            onAlwaysUseVisionModelChange = {},
             onShowCustomizationSheet = {},
             onShowDataControlsSheet = {},
             onShowMemoriesSheet = {},
             onOpenToS = {},
             onShowFeedbackSheet = {},
+            onShowVisionSettingsSheet = {},
             onNavigateToModelConfigure = {},
+            onSetDefaultModel = { _, _, _ -> },
             onShowLocalModelsSheet = {},
             onShowByokSheet = {},
             onNavigateToByokConfigure = {},
             onStartCreateApiModelAsset = {},
+            onStartConfigureSearchSkill = {},
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
             onDeleteApiModelAsset = {},

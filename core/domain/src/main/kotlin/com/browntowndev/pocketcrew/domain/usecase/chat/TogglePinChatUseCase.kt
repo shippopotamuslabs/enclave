@@ -16,6 +16,7 @@
 
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import javax.inject.Inject
 
@@ -30,7 +31,7 @@ class TogglePinChatUseCase @Inject constructor(
      *
      * @param chatId The ID of the chat to toggle
      */
-    suspend operator fun invoke(chatId: Long) {
+    suspend operator fun invoke(chatId: ChatId) {
         chatRepository.togglePinStatus(chatId)
     }
 }

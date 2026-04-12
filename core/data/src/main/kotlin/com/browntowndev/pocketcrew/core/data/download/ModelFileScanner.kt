@@ -3,6 +3,9 @@ package com.browntowndev.pocketcrew.core.data.download
 import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
+import com.browntowndev.pocketcrew.domain.model.config.requiredArtifacts
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -55,68 +58,74 @@ class ModelFileScanner @Inject constructor(
 
         // Iterate over expected models (what we want to have)
         for ((_, expectedAsset) in expectedModels) {
-            val filename = expectedAsset.metadata.localFileName
+            var assetMissing = false
+            var assetInvalid = false
+            expectedAsset.metadata.requiredArtifacts().forEach { artifact ->
+                val filename = artifact.localFileName
+                val file = File(modelsDir, filename)
+                val tempFile = File(modelsDir, "${filename}${ModelConfig.TEMP_EXTENSION}")
+                val metaFile = File(modelsDir, "${filename}${ModelConfig.TEMP_META_EXTENSION}")
 
-            val file = File(modelsDir, filename)
-            val tempFile = File(modelsDir, "${filename}${ModelConfig.TEMP_EXTENSION}")
-            val metaFile = File(modelsDir, "${filename}${ModelConfig.TEMP_META_EXTENSION}")
+                val fileExists = file.exists()
+                val tempExists = tempFile.exists()
+                val tempLength = if (tempExists) tempFile.length() else 0L
 
-            val fileExists = file.exists()
-            val tempExists = tempFile.exists()
-            val tempLength = if (tempExists) tempFile.length() else 0L
-
-            when {
-                // A temp file means a previous download did not complete cleanly.
-                tempExists && tempLength > 0 -> {
-                    var isValidPartial = false
-                    if (metaFile.exists()) {
-                        try {
-                            val metaLines = metaFile.readLines()
-                            if (metaLines.size >= 2) {
-                                val expectedSize = metaLines[0].toLongOrNull()
-                                val expectedSha256 = metaLines[1]
-                                
-                                if (expectedSize == expectedAsset.metadata.sizeInBytes &&
-                                    expectedSha256 == expectedAsset.metadata.sha256 &&
-                                    tempLength < expectedSize) {
-                                    isValidPartial = true
+                when {
+                    tempExists && tempLength > 0 -> {
+                        var isValidPartial = false
+                        if (metaFile.exists()) {
+                            try {
+                                val metaLines = metaFile.readLines()
+                                if (metaLines.size >= 2) {
+                                    val expectedSize = metaLines[0].toLongOrNull()
+                                    val expectedSha256 = metaLines[1]
+                                    if (expectedSize == artifact.sizeInBytes &&
+                                        expectedSha256 == artifact.sha256 &&
+                                        tempLength < expectedSize) {
+                                        isValidPartial = true
+                                    }
                                 }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Failed to read meta file for $filename", e)
                             }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Failed to read meta file for $filename", e)
+                        }
+
+                        if (isValidPartial) {
+                            partialDownloads[filename] = tempLength
+                            Log.d(TAG, "Model artifact $filename has valid partial download")
+                        } else {
+                            Log.w(TAG, "Model artifact $filename has invalid/stale partial download. Deleting.")
+                            tempFile.delete()
+                            metaFile.delete()
+                            assetMissing = true
                         }
                     }
-
-                    if (isValidPartial) {
-                        partialDownloads[filename] = tempLength
-                        Log.d(TAG, "Model $filename has valid partial download")
-                    } else {
-                        Log.w(TAG, "Model $filename has invalid/stale partial download. Deleting.")
-                        tempFile.delete()
-                        metaFile.delete()
-                        missingModels.add(expectedAsset)
+                    fileExists && file.length() == artifact.sizeInBytes -> {
+                        Log.d(TAG, "Model artifact $filename is valid (size matches)")
+                    }
+                    fileExists -> {
+                        assetInvalid = true
+                        Log.w(
+                            TAG,
+                            "Model artifact $filename has size mismatch! Expected: ${artifact.sizeInBytes}, Actual: ${file.length()}. Will re-download."
+                        )
+                    }
+                    else -> {
+                        assetMissing = true
+                        Log.d(TAG, "Model artifact $filename is missing")
+                        if (tempExists) {
+                            tempFile.delete()
+                        }
+                        if (metaFile.exists()) {
+                            metaFile.delete()
+                        }
                     }
                 }
-                fileExists && file.length() == expectedAsset.metadata.sizeInBytes -> {
-                    Log.d(TAG, "Model $filename is valid (size matches)")
-                }
-                fileExists -> {
-                    invalidModels.add(expectedAsset)
-                    Log.w(
-                        TAG,
-                        "Model $filename has size mismatch! Expected: ${expectedAsset.metadata.sizeInBytes}, Actual: ${file.length()}. Will re-download."
-                    )
-                }
-                else -> {
-                    missingModels.add(expectedAsset)
-                    Log.d(TAG, "Model $filename is missing")
-                    if (tempExists) {
-                        tempFile.delete()
-                    }
-                    if (metaFile.exists()) {
-                        metaFile.delete()
-                    }
-                }
+            }
+            if (assetInvalid) {
+                invalidModels.add(expectedAsset)
+            } else if (assetMissing) {
+                missingModels.add(expectedAsset)
             }
         }
 
@@ -134,34 +143,35 @@ class ModelFileScanner @Inject constructor(
      * Deletes the physical model file from disk for the given local model ID.
      * Called during soft-delete of a local model.
      */
-    override suspend fun deleteModelFile(localModelId: Long) {
+    override suspend fun deleteModelFile(localModelId: LocalModelId) {
         withContext(Dispatchers.IO) {
             val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
 
             // Look up the model to get its filename
             val asset = localModelRepository.getAssetById(localModelId)
-            val filename = asset?.metadata?.localFileName
+            val artifacts = asset?.metadata?.requiredArtifacts().orEmpty()
 
-            if (filename != null && filename.isNotBlank()) {
-                val file = File(modelsDir, filename)
-                if (file.exists()) {
-                    val deleted = file.delete()
-                    if (!deleted) {
-                        Log.w(TAG, "Failed to delete model file: ${file.absolutePath}")
+            if (artifacts.isNotEmpty()) {
+                artifacts.forEach { artifact ->
+                    val file = File(modelsDir, artifact.localFileName)
+                    if (file.exists()) {
+                        val deleted = file.delete()
+                        if (!deleted) {
+                            Log.w(TAG, "Failed to delete model file: ${file.absolutePath}")
+                        }
                     }
-                }
 
-                // Also clean up any partial download temp file for this model
-                val tempFile = File(modelsDir, "$filename${ModelConfig.TEMP_EXTENSION}")
-                if (tempFile.exists()) {
-                    val tempDeleted = tempFile.delete()
-                    if (!tempDeleted) {
-                        Log.w(TAG, "Failed to delete temp file: ${tempFile.absolutePath}")
+                    val tempFile = File(modelsDir, "${artifact.localFileName}${ModelConfig.TEMP_EXTENSION}")
+                    if (tempFile.exists()) {
+                        val tempDeleted = tempFile.delete()
+                        if (!tempDeleted) {
+                            Log.w(TAG, "Failed to delete temp file: ${tempFile.absolutePath}")
+                        }
                     }
-                }
-                val metaFile = File(modelsDir, "$filename${ModelConfig.TEMP_META_EXTENSION}")
-                if (metaFile.exists()) {
-                    metaFile.delete()
+                    val metaFile = File(modelsDir, "${artifact.localFileName}${ModelConfig.TEMP_META_EXTENSION}")
+                    if (metaFile.exists()) {
+                        metaFile.delete()
+                    }
                 }
             } else {
                 Log.w(TAG, "Could not find model with ID $localModelId to delete file")
@@ -180,19 +190,15 @@ class ModelFileScanner @Inject constructor(
         val assetsByType = ModelType.entries.associateWith { modelType -> 
             val config = activeModelProvider.getActiveConfiguration(modelType)
             if (config != null && config.isLocal) {
-                localModelRepository.getAssetByConfigId(config.id)
+                localModelRepository.getAssetByConfigId(config.id as LocalModelConfigurationId)
             } else null
         }
 
         // Check for model files - use localFileName from config
-        val requiredFiles = listOfNotNull(
-            assetsByType[ModelType.VISION]?.metadata?.localFileName,
-            assetsByType[ModelType.DRAFT_ONE]?.metadata?.localFileName,
-            assetsByType[ModelType.DRAFT_TWO]?.metadata?.localFileName,
-            assetsByType[ModelType.MAIN]?.metadata?.localFileName,
-            assetsByType[ModelType.FAST]?.metadata?.localFileName,
-            assetsByType[ModelType.THINKING]?.metadata?.localFileName
-        )
+        val requiredFiles = assetsByType.values
+            .filterNotNull()
+            .flatMap { asset -> asset.metadata.requiredArtifacts().map { artifact -> artifact.localFileName } }
+            .distinct()
 
         if (requiredFiles.isEmpty()) {
             throw IllegalStateException("No models configured. This is a bug - models must be configured before quickCheckModelsReady is called.")

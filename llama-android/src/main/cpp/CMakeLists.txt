@@ -81,6 +81,8 @@ message(STATUS "  CMAKE_C_FLAGS: ${CMAKE_C_FLAGS}")
 # Source directory for llama.cpp - relative path from this CMakeLists.txt to root
 set(LLAMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/llama.cpp)
 
+find_package(Threads REQUIRED)
+
 # =============================================================================
 # DUAL LIBRARY BUILD STRATEGY
 # =============================================================================
@@ -130,19 +132,62 @@ add_library(llama-jni SHARED
     llama-jni.cpp
 )
 
+add_library(mtmd STATIC
+    ${LLAMA_DIR}/tools/mtmd/mtmd.cpp
+    ${LLAMA_DIR}/tools/mtmd/mtmd-audio.cpp
+    ${LLAMA_DIR}/tools/mtmd/mtmd-helper.cpp
+    ${LLAMA_DIR}/tools/mtmd/clip.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/cogvlm.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/conformer.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/glm4v.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/internvl.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/kimivl.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/kimik25.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/nemotron-v2-vl.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/llama4.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/llava.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/minicpmv.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/paddleocr.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/pixtral.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/qwen2vl.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/qwen3vl.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/siglip.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/whisper-enc.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/mobilenetv5.cpp
+    ${LLAMA_DIR}/tools/mtmd/models/youtuvl.cpp
+)
+
 # Include directories
+target_include_directories(mtmd PUBLIC
+    ${LLAMA_DIR}/tools/mtmd
+)
+target_include_directories(mtmd PRIVATE
+    ${LLAMA_DIR}
+    ${LLAMA_DIR}/vendor
+)
+
 target_include_directories(llama-jni PRIVATE
     ${LLAMA_DIR}/src
     ${LLAMA_DIR}/include
     ${LLAMA_DIR}/common
     ${LLAMA_DIR}/ggml/include
+    ${LLAMA_DIR}/tools/mtmd
 )
 
 # Link libraries - CPU only
+target_link_libraries(mtmd
+    PUBLIC
+    ggml
+    llama
+    PRIVATE
+    Threads::Threads
+)
+
 target_link_libraries(llama-jni
     llama
     ggml
     ggml-cpu
+    mtmd
     log
     android
     dl

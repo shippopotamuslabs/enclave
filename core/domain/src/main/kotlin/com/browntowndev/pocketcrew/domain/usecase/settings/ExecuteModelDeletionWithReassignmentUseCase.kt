@@ -6,6 +6,8 @@ import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiModelConfigurati
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.DeleteLocalModelConfigurationUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.DeleteLocalModelUseCase
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import javax.inject.Inject
 
 class ExecuteModelDeletionWithReassignmentUseCase @Inject constructor(
@@ -18,8 +20,8 @@ class ExecuteModelDeletionWithReassignmentUseCase @Inject constructor(
     suspend operator fun invoke(
         target: ModelDeletionTarget,
         modelTypesNeedingReassignment: List<ModelType>,
-        replacementLocalConfigId: Long?,
-        replacementApiConfigId: Long?,
+        replacementLocalConfigId: LocalModelConfigurationId?,
+        replacementApiConfigId: ApiModelConfigurationId?,
     ): Result<Unit> {
         if (
             modelTypesNeedingReassignment.isNotEmpty() &&

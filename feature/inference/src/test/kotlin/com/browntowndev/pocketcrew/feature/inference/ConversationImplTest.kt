@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationResponse
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Test
 
 class ConversationImplTest {
 
+    private lateinit var mockContext: Context
     private lateinit var mockLiteRtConversation: Conversation
     private lateinit var conversationImpl: ConversationImpl
 
@@ -31,8 +33,9 @@ class ConversationImplTest {
         MockKAnnotations.init(this)
         mockkStatic(Log::class)
         every { Log.d(any<String>(), any<String>()) } returns 0
+        mockContext = mockk(relaxed = true)
         mockLiteRtConversation = mockk(relaxed = true)
-        conversationImpl = ConversationImpl(mockLiteRtConversation)
+        conversationImpl = ConversationImpl(mockContext, mockLiteRtConversation)
     }
 
     @org.junit.jupiter.api.AfterEach
@@ -123,4 +126,5 @@ class ConversationImplTest {
         assertEquals("Response", results[0].text)
         assertEquals("", results[0].thought)
     }
+
 }

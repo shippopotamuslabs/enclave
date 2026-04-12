@@ -1,10 +1,19 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
+import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
+import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisEntity
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
+import com.browntowndev.pocketcrew.domain.model.chat.ResolvedImageTarget
+import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,7 +29,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class MessageRepositoryImpl @Inject constructor(
-    private val messageDao: MessageDao
+    private val messageDao: MessageDao,
+    private val messageVisionAnalysisDao: MessageVisionAnalysisDao,
 ) : MessageRepository {
 
     /**
@@ -35,9 +45,10 @@ class MessageRepositoryImpl @Inject constructor(
      * @param message The message to save
      * @return The ID of the saved message
      */
-    override suspend fun saveMessage(message: Message): Long {
+    override suspend fun saveMessage(message: Message): MessageId {
         val entity = message.toEntity()
-        return messageDao.insertMessageWithSearch(entity)
+        messageDao.insertMessageWithSearch(entity)
+        return entity.id
     }
 
     /**
@@ -46,7 +57,7 @@ class MessageRepositoryImpl @Inject constructor(
      * @param id The message ID
      * @return The message if found, null otherwise
      */
-    override suspend fun getMessageById(id: Long): Message? {
+    override suspend fun getMessageById(id: MessageId): Message? {
         return messageDao.getMessageById(id)?.toDomain()
     }
 
@@ -56,7 +67,61 @@ class MessageRepositoryImpl @Inject constructor(
      * @param chatId The chat ID
      * @return List of messages in chronological order
      */
-    override suspend fun getMessagesForChat(chatId: Long): List<Message> {
+    override suspend fun getMessagesForChat(chatId: ChatId): List<Message> {
         return messageDao.getMessagesByChatId(chatId).map { it.toDomain() }
+    }
+
+    override suspend fun saveVisionAnalysis(
+        userMessageId: MessageId,
+        imageUri: String,
+        promptText: String,
+        analysisText: String,
+        modelType: ModelType,
+    ) {
+        val now = System.currentTimeMillis()
+        messageVisionAnalysisDao.insert(
+            MessageVisionAnalysisEntity(
+                id = UUID.randomUUID().toString(),
+                userMessageId = userMessageId,
+                imageUri = imageUri,
+                promptText = promptText,
+                analysisText = analysisText,
+                modelType = modelType,
+                createdAt = now,
+                updatedAt = now,
+            )
+        )
+    }
+
+    override suspend fun getVisionAnalysesForMessages(
+        userMessageIds: List<MessageId>
+    ): Map<MessageId, List<MessageVisionAnalysis>> {
+        if (userMessageIds.isEmpty()) return emptyMap()
+        return messageVisionAnalysisDao.getByUserMessageIds(userMessageIds)
+            .map { it.toDomain() }
+            .groupBy { it.userMessageId }
+    }
+
+    override suspend fun resolveLatestImageBearingUserMessage(
+        chatId: ChatId,
+        currentUserMessageId: MessageId,
+    ): ResolvedImageTarget? {
+        val currentUserMessage = messageDao.getMessageById(currentUserMessageId)?.toDomain()
+        if (currentUserMessage != null && currentUserMessage.content.imageUri != null) {
+            return ResolvedImageTarget(
+                userMessageId = currentUserMessage.id,
+                imageUri = currentUserMessage.content.imageUri!!,
+            )
+        }
+        val messages = messageDao.getMessagesByChatId(chatId).map { it.toDomain() }
+        val latestImageMessage = messages
+            .filter { it.role == Role.USER && it.content.imageUri != null && it.id != currentUserMessageId }
+            .maxByOrNull { it.createdAt }
+        return latestImageMessage?.let {
+            ResolvedImageTarget(
+                userMessageId = it.id,
+                imageUri = it.content.imageUri!!,
+            )
+        }
     }
 }

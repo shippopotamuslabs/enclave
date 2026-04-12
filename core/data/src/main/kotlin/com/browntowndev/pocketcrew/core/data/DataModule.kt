@@ -23,7 +23,9 @@ import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
+import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
+import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelCatalogRepositoryImpl
@@ -37,14 +39,17 @@ import com.browntowndev.pocketcrew.core.data.repository.ModelConfigProviderImpl
 import com.browntowndev.pocketcrew.core.data.repository.LocalModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.RoomTransactionProvider
+import com.browntowndev.pocketcrew.core.data.repository.CompositeToolExecutor
 import com.browntowndev.pocketcrew.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
+import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyProviderImpl
@@ -86,7 +91,7 @@ object DataModule {
             PocketCrewDatabase::class.java,
             "pocket_crew_db"
         )
-        .fallbackToDestructiveMigration(false)
+        .fallbackToDestructiveMigration(dropAllTables = false)
         .build()
     }
 
@@ -95,6 +100,10 @@ object DataModule {
 
     @Provides
     fun provideMessageDao(database: PocketCrewDatabase): MessageDao = database.messageDao()
+
+    @Provides
+    fun provideMessageVisionAnalysisDao(database: PocketCrewDatabase): MessageVisionAnalysisDao =
+        database.messageVisionAnalysisDao()
 
     @Provides
     fun provideLocalModelsDao(database: PocketCrewDatabase): LocalModelsDao = database.localModelsDao()
@@ -176,6 +185,10 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindImageAttachmentStorage(impl: CachedImageAttachmentStorage): ImageAttachmentStoragePort
+
+    @Binds
+    @Singleton
     abstract fun bindModelRegistry(impl: LocalModelRepositoryImpl): LocalModelRepositoryPort
 
     @Binds
@@ -226,5 +239,7 @@ abstract class DataRepositoryModule {
     @Singleton
     abstract fun bindActiveModelProvider(impl: ActiveModelProviderImpl): ActiveModelProviderPort
 
-
+    @Binds
+    @Singleton
+    abstract fun bindToolExecutor(impl: CompositeToolExecutor): ToolExecutorPort
 }

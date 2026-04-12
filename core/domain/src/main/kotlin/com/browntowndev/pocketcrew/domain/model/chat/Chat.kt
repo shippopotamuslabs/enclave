@@ -13,7 +13,7 @@ import java.util.Date
  * @property pinned Whether the chat is pinned to the top
  */
 data class Chat(
-    val id: Long = 0,
+    val id: ChatId,
     val name: String,
     val created: Date,
     val lastModified: Date,

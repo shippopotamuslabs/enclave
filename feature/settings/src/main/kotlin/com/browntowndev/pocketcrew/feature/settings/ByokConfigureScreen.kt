@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.collect
 
@@ -44,6 +45,7 @@ fun ByokConfigureRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val apiKey by viewModel.currentApiKey.collectAsStateWithLifecycle()
+    val tavilyApiKey by viewModel.currentTavilyApiKey.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(viewModel) {
@@ -60,11 +62,15 @@ fun ByokConfigureRoute(
     ByokConfigureScreen(
         uiState = uiState,
         apiKey = apiKey,
+        searchApiKey = tavilyApiKey,
         onNavigateBack = handleBack,
         onNavigateToCustomHeaders = onNavigateToCustomHeaders,
         onApiModelAssetFieldChange = viewModel::onApiModelAssetFieldChange,
         onApiModelConfigFieldChange = viewModel::onApiModelConfigFieldChange,
         onApiKeyChange = viewModel::onApiKeyChange,
+        onSearchEnabledChange = viewModel::onSearchEnabledChange,
+        onSearchApiKeyChange = viewModel::onTavilyApiKeyChange,
+        onClearSearchApiKey = viewModel::onClearTavilyApiKey,
         onSelectReusableApiCredential = viewModel::onSelectReusableApiCredential,
         onFetchApiModels = viewModel::onFetchApiModels,
         onUpdateModelSearchQuery = viewModel::onUpdateModelSearchQuery,
@@ -84,6 +90,12 @@ fun ByokConfigureRoute(
                 onNavigateBack()
             })
         },
+        onSaveSearchSettings = {
+            viewModel.onSaveSearchSkillSettings(onSuccess = {
+                viewModel.onBackToByokList()
+                onNavigateBack()
+            })
+        },
         snackbarHostState = snackbarHostState,
     )
 }
@@ -93,25 +105,35 @@ fun ByokConfigureRoute(
 fun ByokConfigureScreen(
     uiState: SettingsUiState,
     apiKey: String,
+    searchApiKey: String,
     onNavigateBack: () -> Unit,
     onNavigateToCustomHeaders: () -> Unit,
     onApiModelAssetFieldChange: (ApiModelAssetUi) -> Unit,
     onApiModelConfigFieldChange: (ApiModelConfigUi) -> Unit,
     onApiKeyChange: (String) -> Unit,
-    onSelectReusableApiCredential: (Long?) -> Unit,
+    onSearchEnabledChange: (Boolean) -> Unit,
+    onSearchApiKeyChange: (String) -> Unit,
+    onClearSearchApiKey: () -> Unit,
+    onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
     onFetchApiModels: () -> Unit,
     onUpdateModelSearchQuery: (String) -> Unit,
     onUpdateModelProviderFilter: (String?) -> Unit,
     onUpdateModelSortOption: (ModelSortOption) -> Unit,
     onSaveApiCredentials: () -> Unit,
     onSaveApiModelConfig: () -> Unit,
+    onSaveSearchSettings: () -> Unit,
     snackbarHostState: SnackbarHostState = SnackbarHostState(),
 ) {
+    val isSearchMode = uiState.searchSkillEditor.isEditing
     val isPresetMode = uiState.apiProviderEditor.presetDraft != null
     val selectedConfig = uiState.apiProviderEditor.presetDraft
-    val title = if (isPresetMode) "Configure Preset" else "Provider Credentials"
+    val title = when {
+        isSearchMode -> "Web Search"
+        isPresetMode -> "Configure Preset"
+        else -> "Provider Credentials"
+    }
     val draftAsset = uiState.apiProviderEditor.assetDraft ?: ApiModelAssetUi(
-        credentialsId = 0,
+        credentialsId = ApiCredentialsId(""),
         displayName = "",
         provider = ApiProvider.ANTHROPIC,
         modelId = "",
@@ -121,7 +143,11 @@ fun ByokConfigureScreen(
         configurations = emptyList()
     )
 
-    val isSaveEnabled = if (selectedConfig != null) {
+    val isSaveEnabled = if (isSearchMode) {
+        !uiState.searchSkillEditor.enabled ||
+            uiState.searchSkillEditor.tavilyKeyPresent ||
+            searchApiKey.isNotBlank()
+    } else if (selectedConfig != null) {
         val parameterSupport = uiState.apiProviderEditor.parameterSupport
         val maxTokensValid = !parameterSupport.supportsMaxTokens || selectedConfig.maxTokens.isNotBlank()
         val topKValid = !parameterSupport.supportsTopK || selectedConfig.topK.isNotBlank()
@@ -130,7 +156,7 @@ fun ByokConfigureScreen(
                 selectedConfig.contextWindow.isNotBlank() &&
                 topKValid
     } else {
-        if (draftAsset.credentialsId == 0L) {
+        if (draftAsset.credentialsId.value.isEmpty()) {
             draftAsset.displayName.isNotBlank() &&
                     draftAsset.modelId.isNotBlank() &&
                     (apiKey.isNotBlank() || uiState.apiProviderEditor.selectedReusableCredential != null)
@@ -162,7 +188,11 @@ fun ByokConfigureScreen(
                 horizontalArrangement = Arrangement.Center
             ) {
                 Button(
-                    onClick = if (isPresetMode) onSaveApiModelConfig else onSaveApiCredentials,
+                    onClick = when {
+                        isSearchMode -> onSaveSearchSettings
+                        isPresetMode -> onSaveApiModelConfig
+                        else -> onSaveApiCredentials
+                    },
                     enabled = isSaveEnabled,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -170,7 +200,11 @@ fun ByokConfigureScreen(
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text(
-                        text = if (isPresetMode) "Save Preset" else "Save Credentials",
+                        text = when {
+                            isSearchMode -> "Save Search Settings"
+                            isPresetMode -> "Save Preset"
+                            else -> "Save Credentials"
+                        },
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -185,7 +219,15 @@ fun ByokConfigureScreen(
                 .imePadding()
                 .verticalScroll(rememberScrollState())
         ) {
-            if (selectedConfig != null) {
+            if (isSearchMode) {
+                SearchSkillConfigurationForm(
+                    state = uiState.searchSkillEditor,
+                    apiKey = searchApiKey,
+                    onEnabledChange = onSearchEnabledChange,
+                    onApiKeyChange = onSearchApiKeyChange,
+                    onClearSavedKey = onClearSearchApiKey,
+                )
+            } else if (selectedConfig != null) {
                 PresetConfigurationForm(
                     provider = draftAsset.provider,
                     parameterSupport = uiState.apiProviderEditor.parameterSupport,
@@ -216,6 +258,9 @@ fun ByokConfigureScreen(
                     apiKey = apiKey,
                     availableModels = uiState.apiProviderEditor.discovery.models,
                     filteredModels = uiState.apiProviderEditor.discovery.filteredModels,
+                    selectedModelMetadata = uiState.apiProviderEditor.discovery.models.find {
+                        it.modelId == draftAsset.modelId
+                    },
                     isFetchingModels = uiState.apiProviderEditor.discovery.isLoading,
                     searchQuery = uiState.apiProviderEditor.discovery.searchQuery,
                     providerFilter = uiState.apiProviderEditor.discovery.providerFilter,

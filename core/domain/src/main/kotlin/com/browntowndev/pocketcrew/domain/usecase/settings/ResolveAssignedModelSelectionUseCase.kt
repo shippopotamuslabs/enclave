@@ -3,6 +3,8 @@ package com.browntowndev.pocketcrew.domain.usecase.settings
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import javax.inject.Inject
 import kotlinx.coroutines.flow.first

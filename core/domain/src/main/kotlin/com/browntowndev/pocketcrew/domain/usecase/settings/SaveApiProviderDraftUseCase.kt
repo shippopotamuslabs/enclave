@@ -18,7 +18,7 @@ class SaveApiProviderDraftUseCase @Inject constructor(
     suspend operator fun invoke(draft: ApiProviderDraft): Result<ApiProviderDraftSaveResult> {
         return Result.runCatching {
             val existingAssets = getApiModelAssetsUseCase().first()
-            val isNewAsset = draft.id == 0L
+            val isNewAsset = draft.id.value.isEmpty()
             val linkedExistingAsset = if (isNewAsset) {
                 apiModelRepository.findMatchingCredentials(
                     provider = draft.provider,

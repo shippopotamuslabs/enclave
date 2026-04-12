@@ -1,7 +1,9 @@
 package com.browntowndev.pocketcrew.feature.history
 
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+
 data class HistoryChat(
-    val id: Long,
+    val id: ChatId,
     val name: String,
     val lastMessageDateTime: String,
     val isPinned: Boolean

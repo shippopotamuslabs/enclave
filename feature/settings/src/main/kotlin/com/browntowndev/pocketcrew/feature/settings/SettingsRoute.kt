@@ -6,6 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 
@@ -27,6 +29,7 @@ fun SettingsRoute(
         onThemeChange = viewModel::onThemeChange,
         onHapticPressChange = viewModel::onHapticPressChange,
         onHapticResponseChange = viewModel::onHapticResponseChange,
+        onAlwaysUseVisionModelChange = viewModel::onAlwaysUseVisionModelChange,
         onShowCustomizationSheet = viewModel::onShowCustomizationSheet,
         onShowDataControlsSheet = viewModel::onShowDataControlsSheet,
         onShowMemoriesSheet = viewModel::onShowMemoriesSheet,
@@ -35,11 +38,14 @@ fun SettingsRoute(
             context.startActivity(intent)
         },
         onShowFeedbackSheet = viewModel::onShowFeedbackSheet,
+        onShowVisionSettingsSheet = viewModel::onShowVisionSettingsSheet,
         onNavigateToModelConfigure = onNavigateToModelConfigure,
+        onSetDefaultModel = viewModel::onSetDefaultModel,
         onShowLocalModelsSheet = viewModel::onShowModelConfigSheet, // Reuse this state flag
         onShowByokSheet = viewModel::onShowByokSheet,
         onNavigateToByokConfigure = onNavigateToByokConfigure,
         onStartCreateApiModelAsset = viewModel::onStartCreateApiModelAsset,
+        onStartConfigureSearchSkill = viewModel::onStartConfigureSearchSkill,
         onSelectApiModelAsset = viewModel::onSelectApiModelAsset,
         onSelectApiModelConfig = viewModel::onSelectApiModelConfig,
         onDeleteApiModelAsset = viewModel::onDeleteApiModelAsset,

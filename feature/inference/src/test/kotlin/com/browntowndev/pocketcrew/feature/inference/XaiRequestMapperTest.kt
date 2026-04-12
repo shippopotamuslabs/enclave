@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -193,5 +194,65 @@ class XaiRequestMapperTest {
         assertTrue(XaiRequestMapper.isChatReasoningContentModel("grok-code-fast-1"))
         assertTrue(XaiRequestMapper.isChatReasoningContentModel("grok-code-fast-1-beta"))
         assertFalse(XaiRequestMapper.isChatReasoningContentModel("grok-4"))
+    }
+
+    @Test
+    fun `mapToResponseParams includes image uris in user message`() {
+        val tempFile = java.io.File.createTempFile("test", ".png").apply {
+            writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+            deleteOnExit()
+        }
+        val params = XaiRequestMapper.mapToResponseParams(
+            modelId = "grok-4-1-fast-non-reasoning",
+            prompt = "what is in this image?",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                imageUris = listOf(tempFile.toURI().toString())
+            )
+        )
+
+        val input = params.input().orElseThrow().toString()
+        assertTrue(input.contains("what is in this image?"))
+        assertTrue(input.contains("imageUrl"))
+        assertTrue(input.contains("data:image/png;base64,"))
+    }
+
+    @Test
+    fun `mapToChatCompletionParams includes image uris in user message`() {
+        val tempFile = java.io.File.createTempFile("test", ".png").apply {
+            writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+            deleteOnExit()
+        }
+        val params = XaiRequestMapper.mapToChatCompletionParams(
+            modelId = "grok-4-1-fast-non-reasoning",
+            prompt = "describe image",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                imageUris = listOf(tempFile.toURI().toString())
+            )
+        )
+
+        val chatBody = params.toString()
+        assertTrue(chatBody.contains("describe image"))
+        assertTrue(chatBody.contains("image_url"))
+        assertTrue(chatBody.contains("data:image/png;base64,"))
+    }
+
+    @Test
+    fun `mapToResponseParams serializes tavily_web_search when tooling is enabled`() {
+        val params = XaiRequestMapper.mapToResponseParams(
+            modelId = "grok-4-1-fast-non-reasoning",
+            prompt = "find recent android tool news",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+            )
+        )
+
+        assertTrue(params.toString().contains("tavily_web_search"))
     }
 }

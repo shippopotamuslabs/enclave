@@ -1,11 +1,14 @@
 package com.browntowndev.pocketcrew.feature.settings
 
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
@@ -180,17 +183,18 @@ class ReassignmentOptionUiMapper @Inject constructor() {
         }
 }
 
-internal fun DefaultModelAssignment.toUi(): DefaultModelAssignmentUi = DefaultModelAssignmentUi(
+internal fun DefaultModelAssignment.toUi(isVision: Boolean = false): DefaultModelAssignmentUi = DefaultModelAssignmentUi(
     modelType = modelType,
     source = if (apiConfigId != null) ModelSource.API else ModelSource.ON_DEVICE,
     currentModelName = displayName ?: "Unknown",
     displayLabel = modelType.displayLabel,
     providerName = providerName,
     presetName = presetName,
+    isVision = isVision,
 )
 
 internal fun blankApiModelAssetDraft(): ApiModelAssetUi = ApiModelAssetUi(
-    credentialsId = 0L,
+    credentialsId = ApiCredentialsId(""),
     displayName = "",
     provider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.ANTHROPIC,
     modelId = "",
@@ -215,5 +219,6 @@ internal fun DiscoveredApiModel.toUi(): DiscoveredApiModelUi {
         promptPrice = promptPrice,
         completionPrice = completionPrice,
         providerName = provider,
+        visionCapable = visionCapable,
     )
 }

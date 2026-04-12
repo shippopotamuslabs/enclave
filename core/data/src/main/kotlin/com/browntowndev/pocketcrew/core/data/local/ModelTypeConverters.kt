@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.TypeConverter
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
@@ -19,4 +21,16 @@ class ModelTypeConverters {
 
     @TypeConverter
     fun toModelFileFormat(value: String): ModelFileFormat = ModelFileFormat.valueOf(value)
+
+    @TypeConverter
+    fun fromLocalModelConfigurationId(id: LocalModelConfigurationId): String = id.value
+
+    @TypeConverter
+    fun toLocalModelConfigurationId(value: String): LocalModelConfigurationId = LocalModelConfigurationId(value)
+
+    @TypeConverter
+    fun fromApiModelConfigurationId(id: ApiModelConfigurationId): String = id.value
+
+    @TypeConverter
+    fun toApiModelConfigurationId(value: String): ApiModelConfigurationId = ApiModelConfigurationId(value)
 }

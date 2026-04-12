@@ -44,9 +44,10 @@ dependencies {
     implementation(project(":llama-android"))
 
     // LiteRT and MediaPipe
-    implementation(libs.litert)
     implementation(libs.litertlm.android)
+    implementation(libs.tflite.gpu)
     implementation(libs.tasks.genai)
+    implementation(libs.tasks.core)
     implementation(libs.firebase.crashlytics)
 
     // OpenAI

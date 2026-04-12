@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
 
@@ -14,14 +15,16 @@ class ApiInferenceServiceImpl(
     provider: String,
     modelType: ModelType,
     baseUrl: String? = null,
-    loggingPort: LoggingPort
+    loggingPort: LoggingPort,
+    toolExecutor: ToolExecutorPort? = null,
 ) : BaseOpenAiSdkInferenceService(
     client = client,
     modelId = modelId,
     provider = provider,
     modelType = modelType,
     baseUrl = baseUrl,
-    loggingPort = loggingPort
+    loggingPort = loggingPort,
+    toolExecutor = toolExecutor,
 ) {
 
     override val tag: String = "ApiInferenceService"
@@ -32,6 +35,13 @@ class ApiInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit
     ) {
+        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
+            executeToolingPrompt(prompt, options, requestHistory, emitEvent)
+            return
+        }
+
+        logImagePayloads(options)
+
         val responseParams = OpenAiRequestMapper.mapToResponseParams(
             modelId = modelId,
             prompt = prompt,
@@ -44,7 +54,10 @@ class ApiInferenceServiceImpl(
                 tag,
                 "Using Responses API for provider=$provider model=$modelId reasoningEffort=${options.reasoningEffort} reasoningBudget=${options.reasoningBudget}"
             )
-            streamResponses(responseParams, emitEvent)
+            streamResponses(
+                params = responseParams,
+                emitEvent = emitEvent,
+            )
         } catch (e: Exception) {
             if (e is BadRequestException || e.message?.contains("400") == true || e.message?.contains("Bad Request") == true) {
                 loggingPort.warning(

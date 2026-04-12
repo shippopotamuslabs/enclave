@@ -12,7 +12,11 @@ import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.config.requiredArtifacts
+import com.browntowndev.pocketcrew.domain.model.config.totalArtifactSizeInBytes
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
@@ -110,7 +114,7 @@ class ModelDownloadWorker @AssistedInject constructor(
         // Initialize progress tracker with model map
         progressTracker.initialize(modelsMap)
 
-        val totalSize = uniqueAssets.sumOf { it.metadata.sizeInBytes }
+        val totalSize = uniqueAssets.sumOf { it.metadata.totalArtifactSizeInBytes() }
         val totalFiles = uniqueAssets.size
 
         return try {
@@ -190,24 +194,21 @@ class ModelDownloadWorker @AssistedInject constructor(
         val targetDir = File(applicationContext.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
         if (!targetDir.exists()) targetDir.mkdirs()
 
-        // Get the download URL using the ModelUrlProviderPort
-        val downloadUrl = modelUrlProvider.getModelDownloadUrl(asset)
-
         // Use tracking key (SHA256) for state updates
         val trackingKey = asset.metadata.sha256
+        val artifacts = asset.metadata.requiredArtifacts()
+        val totalExpectedBytes = asset.metadata.totalArtifactSizeInBytes()
 
-        // Log the actual URL being used
-        logger.info(TAG, "[DOWNLOAD] Starting download: url=$downloadUrl, remoteFileName=${asset.metadata.remoteFileName}, localFileName=${asset.metadata.localFileName}")
-
-        // Check if target file already exists - will verify with MD5 later
-        // Skip size validation - rely 100% on MD5 verification for integrity
-        val targetFile = File(targetDir, asset.metadata.localFileName)
-        if (targetFile.exists()) {
+        val allArtifactsPresent = artifacts.all { artifact ->
+            val targetFile = File(targetDir, artifact.localFileName)
+            targetFile.exists() && targetFile.length() == artifact.sizeInBytes
+        }
+        if (allArtifactsPresent) {
             progressTracker.updateFileState(trackingKey) {
                 it.copy(
                     status = FileStatus.COMPLETE,
-                    bytesDownloaded = targetFile.length(),
-                    totalBytes = targetFile.length()
+                    bytesDownloaded = totalExpectedBytes,
+                    totalBytes = totalExpectedBytes
                 )
             }
             val sessionId = inputData.getString(DownloadWorkScheduler.KEY_SESSION_ID)
@@ -222,61 +223,77 @@ class ModelDownloadWorker @AssistedInject constructor(
         // Initial progress update
         setProgress(progressTracker.serializeToWorkData())
 
-        // Get existing bytes for resume support
-        val tempFile = File(targetDir, "${asset.metadata.localFileName}${ModelConfig.TEMP_EXTENSION}")
-        val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
-
         try {
-            // Create download config with just the fields needed for generic file downloading
-            val downloadConfig = FileDownloaderPort.FileDownloadConfig(
-                filename = asset.metadata.localFileName,
-                expectedSha256 = asset.metadata.sha256,
-                expectedSizeBytes = asset.metadata.sizeInBytes
-            )
+            var completedBytes = 0L
+            artifacts.forEach { artifact ->
+                val downloadUrl = modelUrlProvider.getModelDownloadUrl(
+                    asset.copy(
+                        metadata = asset.metadata.copy(
+                            remoteFileName = artifact.remoteFileName,
+                            localFileName = artifact.localFileName,
+                            sha256 = artifact.sha256,
+                            sizeInBytes = artifact.sizeInBytes,
+                        )
+                    )
+                )
+                logger.info(
+                    TAG,
+                    "[DOWNLOAD] Starting download: url=$downloadUrl, remoteFileName=${artifact.remoteFileName}, localFileName=${artifact.localFileName}"
+                )
 
-            // Delegate download to FileDownloaderPort with progress callback
-            // SHA-256 validation is done during streaming in HttpFileDownloader
-            val downloadResult = fileDownloader.downloadFile(
-                config = downloadConfig,
-                downloadUrl = downloadUrl,
-                targetDir = targetDir,
-                existingBytes = existingBytes,
-                progressCallback = object : FileDownloaderPort.ProgressCallback {
-                    override fun onProgress(bytesDownloaded: Long, totalBytes: Long) {
-                        // Update progress tracker - this runs on the download thread
-                        progressTracker.updateFileState(trackingKey) {
-                            it.copy(
-                                bytesDownloaded = bytesDownloaded,
-                                totalBytes = totalBytes.coerceAtLeast(asset.metadata.sizeInBytes),
-                                status = FileStatus.DOWNLOADING
-                            )
-                        }
+                val targetFile = File(targetDir, artifact.localFileName)
+                if (targetFile.exists() && targetFile.length() == artifact.sizeInBytes) {
+                    completedBytes += artifact.sizeInBytes
+                    return@forEach
+                }
 
-                        // Push progress to WorkManager and update notification (throttled by shouldUpdateProgress)
-                        // Use runBlocking with tracking because this callback is not a suspend function
-                        if (progressTracker.shouldUpdateProgress()) {
-                            pendingProgressUpdates.incrementAndGet()
-                            try {
-                                runBlocking {
-                                    setProgress(progressTracker.serializeToWorkData())
+                val tempFile = File(targetDir, "${artifact.localFileName}${ModelConfig.TEMP_EXTENSION}")
+                val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
+                val downloadConfig = FileDownloaderPort.FileDownloadConfig(
+                    filename = artifact.localFileName,
+                    expectedSha256 = artifact.sha256,
+                    expectedSizeBytes = artifact.sizeInBytes
+                )
 
-                                    // Update foreground notification during download
-                                    updateNotificationForeground()
+                val downloadResult = fileDownloader.downloadFile(
+                    config = downloadConfig,
+                    downloadUrl = downloadUrl,
+                    targetDir = targetDir,
+                    existingBytes = existingBytes,
+                    progressCallback = object : FileDownloaderPort.ProgressCallback {
+                        override fun onProgress(bytesDownloaded: Long, totalBytes: Long) {
+                            progressTracker.updateFileState(trackingKey) {
+                                it.copy(
+                                    bytesDownloaded = completedBytes + bytesDownloaded,
+                                    totalBytes = totalExpectedBytes.coerceAtLeast(completedBytes + totalBytes),
+                                    status = FileStatus.DOWNLOADING
+                                )
+                            }
+
+                            if (progressTracker.shouldUpdateProgress()) {
+                                pendingProgressUpdates.incrementAndGet()
+                                try {
+                                    runBlocking {
+                                        setProgress(progressTracker.serializeToWorkData())
+                                        updateNotificationForeground()
+                                    }
+                                    progressTracker.markProgressUpdated()
+                                } finally {
+                                    pendingProgressUpdates.decrementAndGet()
                                 }
-                                progressTracker.markProgressUpdated()
-                            } finally {
-                                pendingProgressUpdates.decrementAndGet()
                             }
                         }
                     }
-                }
-            )
+                )
+
+                completedBytes += downloadResult.totalBytes
+            }
 
             progressTracker.updateFileState(trackingKey) {
                 it.copy(
                     status = FileStatus.COMPLETE,
-                    bytesDownloaded = downloadResult.bytesDownloaded,
-                    totalBytes = downloadResult.totalBytes
+                    bytesDownloaded = totalExpectedBytes,
+                    totalBytes = totalExpectedBytes
                 )
             }
 
@@ -302,11 +319,16 @@ class ModelDownloadWorker @AssistedInject constructor(
             }
 
             val metadata = LocalModelMetadata(
+                id = LocalModelId(""),
                 huggingFaceModelName = json.optString("huggingFaceModelName", ""),
                 remoteFileName = json.getString("remoteFileName"),
                 localFileName = json.getString("localFileName"),
                 sha256 = json.getString("sha256"),
                 sizeInBytes = json.optLong("sizeInBytes", 0L),
+                mmprojRemoteFileName = json.optString("mmprojRemoteFileName").takeIf { it.isNotBlank() },
+                mmprojLocalFileName = json.optString("mmprojLocalFileName").takeIf { it.isNotBlank() },
+                mmprojSha256 = json.optString("mmprojSha256").takeIf { it.isNotBlank() },
+                mmprojSizeInBytes = json.optLong("mmprojSizeInBytes").takeIf { it > 0L },
                 modelFileFormat = try {
                     ModelFileFormat.valueOf(json.getString("modelFileFormat"))
                 } catch (e: Exception) {
@@ -316,11 +338,12 @@ class ModelDownloadWorker @AssistedInject constructor(
                     DownloadSource.valueOf(json.optString("source", "HUGGING_FACE"))
                 } catch (e: Exception) {
                     DownloadSource.HUGGING_FACE
-                }
+                },
             )
 
             val configuration = LocalModelConfiguration(
-                localModelId = 0, // Assigned later by repository
+                id = LocalModelConfigurationId(""),
+                localModelId = LocalModelId(""), // Assigned later by repository
                 displayName = json.getString("presetName"),
                 temperature = json.optDouble("temperature", 0.7),
                 topK = json.optInt("topK", 40),

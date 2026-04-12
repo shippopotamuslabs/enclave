@@ -2,16 +2,16 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "6e517e240085a481d606a313f1a5a50b",
+    "identityHash": "db63a675d103112b9ee95303c4b15ac3",
     "entities": [
       {
         "tableName": "chat",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `created` INTEGER NOT NULL, `last_modified` INTEGER NOT NULL, `pinned` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `created` INTEGER NOT NULL, `last_modified` INTEGER NOT NULL, `pinned` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -40,7 +40,7 @@
           }
         ],
         "primaryKey": {
-          "autoGenerate": true,
+          "autoGenerate": false,
           "columnNames": [
             "id"
           ]
@@ -48,18 +48,18 @@
       },
       {
         "tableName": "message",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `chat_id` INTEGER NOT NULL, `content` TEXT NOT NULL, `role` TEXT NOT NULL, `user_message_id` INTEGER, `thinking_duration_seconds` INTEGER, `thinking_raw` TEXT, `thinking_start_time` INTEGER, `thinking_end_time` INTEGER, `message_state` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `model_type` TEXT, `pipeline_step` TEXT, FOREIGN KEY(`user_message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`chat_id`) REFERENCES `chat`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `chat_id` TEXT NOT NULL, `content` TEXT NOT NULL, `image_uri` TEXT, `role` TEXT NOT NULL, `user_message_id` TEXT, `thinking_duration_seconds` INTEGER, `thinking_raw` TEXT, `thinking_start_time` INTEGER, `thinking_end_time` INTEGER, `message_state` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `model_type` TEXT, `pipeline_step` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`user_message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`chat_id`) REFERENCES `chat`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
             "fieldPath": "chatId",
             "columnName": "chat_id",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -67,6 +67,11 @@
             "columnName": "content",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "imageUri",
+            "columnName": "image_uri",
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "role",
@@ -77,7 +82,7 @@
           {
             "fieldPath": "userMessageId",
             "columnName": "user_message_id",
-            "affinity": "INTEGER"
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "thinkingDurationSeconds",
@@ -123,7 +128,7 @@
           }
         ],
         "primaryKey": {
-          "autoGenerate": true,
+          "autoGenerate": false,
           "columnNames": [
             "id"
           ]
@@ -174,13 +179,107 @@
         ]
       },
       {
-        "tableName": "message_search",
-        "createSql": "CREATE VIRTUAL TABLE IF NOT EXISTS `${TABLE_NAME}` USING FTS4(`id` INTEGER NOT NULL, `content` TEXT NOT NULL, content=`message`)",
+        "tableName": "message_vision_analysis",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `user_message_id` TEXT NOT NULL, `image_uri` TEXT NOT NULL, `prompt_text` TEXT NOT NULL, `analysis_text` TEXT NOT NULL, `model_type` TEXT NOT NULL, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`user_message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userMessageId",
+            "columnName": "user_message_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "imageUri",
+            "columnName": "image_uri",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "promptText",
+            "columnName": "prompt_text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "analysisText",
+            "columnName": "analysis_text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "modelType",
+            "columnName": "model_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
             "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updated_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_message_vision_analysis_user_message_id",
+            "unique": false,
+            "columnNames": [
+              "user_message_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_message_vision_analysis_user_message_id` ON `${TABLE_NAME}` (`user_message_id`)"
+          },
+          {
+            "name": "index_message_vision_analysis_user_message_id_image_uri",
+            "unique": true,
+            "columnNames": [
+              "user_message_id",
+              "image_uri"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_message_vision_analysis_user_message_id_image_uri` ON `${TABLE_NAME}` (`user_message_id`, `image_uri`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "message",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "user_message_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "message_search",
+        "createSql": "CREATE VIRTUAL TABLE IF NOT EXISTS `${TABLE_NAME}` USING FTS4(`id` TEXT NOT NULL, `content` TEXT NOT NULL, content=`message`)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -214,12 +313,12 @@
       },
       {
         "tableName": "local_models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `model_file_format` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `vision_capable` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `is_vision` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `vision_capable` INTEGER NOT NULL, `mmproj_remote_filename` TEXT, `mmproj_local_filename` TEXT, `mmproj_sha256` TEXT, `mmproj_size_in_bytes` INTEGER, `thinking_enabled` INTEGER NOT NULL, `is_vision` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -265,6 +364,26 @@
             "notNull": true
           },
           {
+            "fieldPath": "mmprojRemoteFilename",
+            "columnName": "mmproj_remote_filename",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mmprojLocalFilename",
+            "columnName": "mmproj_local_filename",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mmprojSha256",
+            "columnName": "mmproj_sha256",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mmprojSizeInBytes",
+            "columnName": "mmproj_size_in_bytes",
+            "affinity": "INTEGER"
+          },
+          {
             "fieldPath": "thinkingEnabled",
             "columnName": "thinking_enabled",
             "affinity": "INTEGER",
@@ -284,7 +403,7 @@
           }
         ],
         "primaryKey": {
-          "autoGenerate": true,
+          "autoGenerate": false,
           "columnNames": [
             "id"
           ]
@@ -303,18 +422,18 @@
       },
       {
         "tableName": "local_model_configurations",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `local_model_id` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `temperature` REAL NOT NULL, `top_k` INTEGER NOT NULL, `top_p` REAL NOT NULL, `min_p` REAL NOT NULL, `repetition_penalty` REAL NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `system_prompt` TEXT, `is_system_preset` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`local_model_id`) REFERENCES `local_models`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `local_model_id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `temperature` REAL NOT NULL, `top_k` INTEGER NOT NULL, `top_p` REAL NOT NULL, `min_p` REAL NOT NULL, `repetition_penalty` REAL NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `thinking_enabled` INTEGER NOT NULL, `system_prompt` TEXT, `is_system_preset` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`local_model_id`) REFERENCES `local_models`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
             "fieldPath": "localModelId",
             "columnName": "local_model_id",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -390,7 +509,7 @@
           }
         ],
         "primaryKey": {
-          "autoGenerate": true,
+          "autoGenerate": false,
           "columnNames": [
             "id"
           ]
@@ -423,12 +542,12 @@
       },
       {
         "tableName": "api_credentials",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `display_name` TEXT NOT NULL, `provider` TEXT NOT NULL, `base_url` TEXT, `model_id` TEXT NOT NULL, `is_vision` INTEGER NOT NULL, `credential_alias` TEXT NOT NULL, `api_key_signature` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `provider` TEXT NOT NULL, `base_url` TEXT, `model_id` TEXT NOT NULL, `is_vision` INTEGER NOT NULL, `credential_alias` TEXT NOT NULL, `api_key_signature` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -485,7 +604,7 @@
           }
         ],
         "primaryKey": {
-          "autoGenerate": true,
+          "autoGenerate": false,
           "columnNames": [
             "id"
           ]
@@ -513,18 +632,18 @@
       },
       {
         "tableName": "api_model_configurations",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `api_credentials_id` INTEGER NOT NULL, `display_name` TEXT NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `min_p` REAL NOT NULL, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `system_prompt` TEXT NOT NULL, `reasoning_effort` TEXT, `openrouter_provider_sort` TEXT, `openrouter_allow_fallbacks` INTEGER, `openrouter_require_parameters` INTEGER, `openrouter_data_collection` TEXT, `openrouter_zdr` INTEGER, `updated_at` INTEGER NOT NULL, FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `api_credentials_id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `custom_headers` TEXT NOT NULL, `max_tokens` INTEGER NOT NULL, `context_window` INTEGER NOT NULL, `temperature` REAL NOT NULL, `top_p` REAL NOT NULL, `top_k` INTEGER, `min_p` REAL NOT NULL, `frequency_penalty` REAL NOT NULL, `presence_penalty` REAL NOT NULL, `system_prompt` TEXT NOT NULL, `reasoning_effort` TEXT, `openrouter_provider_sort` TEXT, `openrouter_allow_fallbacks` INTEGER, `openrouter_require_parameters` INTEGER, `openrouter_data_collection` TEXT, `openrouter_zdr` INTEGER, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`api_credentials_id`) REFERENCES `api_credentials`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
             "fieldPath": "apiCredentialsId",
             "columnName": "api_credentials_id",
-            "affinity": "INTEGER",
+            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -630,7 +749,7 @@
           }
         ],
         "primaryKey": {
-          "autoGenerate": true,
+          "autoGenerate": false,
           "columnNames": [
             "id"
           ]
@@ -663,7 +782,7 @@
       },
       {
         "tableName": "default_models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`model_type` TEXT NOT NULL, `local_config_id` INTEGER, `api_config_id` INTEGER, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`model_type`), FOREIGN KEY(`local_config_id`) REFERENCES `local_model_configurations`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`api_config_id`) REFERENCES `api_model_configurations`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`model_type` TEXT NOT NULL, `local_config_id` TEXT, `api_config_id` TEXT, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`model_type`), FOREIGN KEY(`local_config_id`) REFERENCES `local_model_configurations`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT , FOREIGN KEY(`api_config_id`) REFERENCES `api_model_configurations`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
         "fields": [
           {
             "fieldPath": "modelType",
@@ -674,12 +793,12 @@
           {
             "fieldPath": "localConfigId",
             "columnName": "local_config_id",
-            "affinity": "INTEGER"
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "apiConfigId",
             "columnName": "api_config_id",
-            "affinity": "INTEGER"
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "updatedAt",
@@ -742,7 +861,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '6e517e240085a481d606a313f1a5a50b')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'db63a675d103112b9ee95303c4b15ac3')"
     ]
   }
 }

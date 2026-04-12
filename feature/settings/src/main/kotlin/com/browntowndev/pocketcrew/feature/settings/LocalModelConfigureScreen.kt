@@ -269,7 +269,7 @@ fun LocalModelConfigureScreen(
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        text = "Enable extended reasoning with higher token budget.",
+                        text = "Enable extended reasoning.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -3,12 +3,22 @@ package com.browntowndev.pocketcrew.feature.inference
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.openai.core.JsonValue
+import com.openai.models.FunctionDefinition
+import com.openai.models.FunctionParameters
 import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionContentPart
+import com.openai.models.chat.completions.ChatCompletionContentPartImage
+import com.openai.models.chat.completions.ChatCompletionContentPartText
+import com.openai.models.chat.completions.ChatCompletionFunctionTool
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
+import com.openai.models.responses.FunctionTool
 import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseInputImage
 import com.openai.models.responses.ResponseInputItem
 
 object OpenAiRequestMapper {
@@ -40,7 +50,11 @@ object OpenAiRequestMapper {
         }
 
         // Add the current prompt
-        messages.add(ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder().content(prompt).build()))
+        messages.add(
+            ChatCompletionMessageParam.ofUser(
+                buildChatCompletionUserMessage(prompt, options.imageUris)
+            )
+        )
 
         builder.messages(messages)
 
@@ -48,6 +62,10 @@ object OpenAiRequestMapper {
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
         options.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
+        if (options.toolingEnabled) {
+            options.availableTools.forEach { builder.addTool(it.toChatCompletionTool()) }
+            builder.parallelToolCalls(false)
+        }
         
         return builder.build()
     }
@@ -85,14 +103,7 @@ object OpenAiRequestMapper {
             )
         }
 
-        messages.add(
-            ResponseInputItem.ofMessage(
-                ResponseInputItem.Message.builder()
-                    .role(ResponseInputItem.Message.Role.of("user"))
-                    .addInputTextContent(prompt)
-                    .build()
-            )
-        )
+        messages.add(ResponseInputItem.ofMessage(buildResponseUserMessage(prompt, options.imageUris)))
 
         builder.inputOfResponse(messages)
         systemMessages
@@ -104,10 +115,129 @@ object OpenAiRequestMapper {
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
         options.maxTokens?.let { builder.maxOutputTokens(it.toLong()) }
+        if (options.toolingEnabled) {
+            options.availableTools.forEach { builder.addTool(it.toResponsesTool()) }
+            builder.parallelToolCalls(false)
+            builder.maxToolCalls(1)
+        }
         
         return builder.build()
     }
 
+    private fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool =
+        ChatCompletionFunctionTool.builder()
+            .function(
+                FunctionDefinition.builder()
+                    .name(name)
+                    .description(description)
+                    .parameters(
+                        FunctionParameters.builder()
+                            .putAdditionalProperty("type", JsonValue.from("object"))
+                            .putAdditionalProperty("properties", JsonValue.from(toolProperties()))
+                            .putAdditionalProperty("required", JsonValue.from(requiredArguments()))
+                            .build()
+                    )
+                    .strict(true)
+                    .build()
+            )
+            .build()
+
+    private fun ToolDefinition.toResponsesTool(): FunctionTool =
+        FunctionTool.builder()
+            .name(name)
+            .description(description)
+            .parameters(
+                FunctionTool.Parameters.builder()
+                    .putAdditionalProperty("type", JsonValue.from("object"))
+                    .putAdditionalProperty("properties", JsonValue.from(toolProperties()))
+                    .putAdditionalProperty("required", JsonValue.from(requiredArguments()))
+                    .build()
+            )
+            .strict(true)
+            .build()
+
+    private fun ToolDefinition.toolProperties(): Map<String, Any> =
+        when (this) {
+            ToolDefinition.TAVILY_WEB_SEARCH -> mapOf(
+                "query" to mapOf(
+                    "type" to "string"
+                )
+            )
+            ToolDefinition.ATTACHED_IMAGE_INSPECT -> mapOf(
+                "question" to mapOf(
+                    "type" to "string"
+                )
+            )
+            else -> error("Unsupported tool: $name")
+        }
+
+    private fun ToolDefinition.requiredArguments(): List<String> =
+        when (this) {
+            ToolDefinition.TAVILY_WEB_SEARCH -> listOf("query")
+            ToolDefinition.ATTACHED_IMAGE_INSPECT -> listOf("question")
+            else -> error("Unsupported tool: $name")
+        }
+
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
+
+    private fun buildChatCompletionUserMessage(
+        prompt: String,
+        imageUris: List<String>,
+    ): ChatCompletionUserMessageParam {
+        if (imageUris.isEmpty()) {
+            return ChatCompletionUserMessageParam.builder()
+                .content(prompt)
+                .build()
+        }
+
+        val parts = buildList {
+            add(
+                ChatCompletionContentPart.ofText(
+                    ChatCompletionContentPartText.builder()
+                        .text(prompt)
+                        .build()
+                )
+            )
+            ImagePayloads.fromUris(imageUris).forEach { payload ->
+                ImagePayloads.validate(payload)
+                add(
+                    ChatCompletionContentPart.ofImageUrl(
+                        ChatCompletionContentPartImage.builder()
+                            .imageUrl(
+                                ChatCompletionContentPartImage.ImageUrl.builder()
+                                    .url(payload.dataUrl)
+                                    .build()
+                            )
+                            .build()
+                    )
+                )
+            }
+        }
+
+        return ChatCompletionUserMessageParam.builder()
+            .contentOfArrayOfContentParts(parts)
+            .build()
+    }
+
+    private fun buildResponseUserMessage(
+        prompt: String,
+        imageUris: List<String>,
+    ): ResponseInputItem.Message {
+        val builder = ResponseInputItem.Message.builder()
+            .role(ResponseInputItem.Message.Role.of("user"))
+            .addInputTextContent(prompt)
+
+        ImagePayloads.fromUris(imageUris).forEach { payload ->
+            ImagePayloads.validate(payload)
+            builder.addContent(
+                ResponseInputImage.builder()
+                    .detail(ResponseInputImage.Detail.AUTO)
+                    .imageUrl(payload.dataUrl)
+                    .build()
+            )
+        }
+
+        return builder.build()
+    }
 }

@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.byok
 
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import io.mockk.coEvery
@@ -23,33 +24,37 @@ class SaveApiCredentialsUseCaseTest {
     @Test
     fun `invoke calls repository saveCredentials`() = runTest {
         val credentials = ApiCredentials(
+            id = ApiCredentialsId(""),
             displayName = "Test Provider",
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4",
             credentialAlias = "test_alias"
         )
         val apiKey = "test_key"
-        coEvery { repository.saveCredentials(credentials, apiKey, null) } returns 1L
+        val expectedId = ApiCredentialsId("1")
+        coEvery { repository.saveCredentials(credentials, apiKey, null) } returns expectedId
 
         val result = useCase(credentials, apiKey)
 
-        assertEquals(1L, result)
+        assertEquals(expectedId, result)
         coVerify(exactly = 1) { repository.saveCredentials(credentials, apiKey, null) }
     }
 
     @Test
     fun `invoke forwards source alias when reusing a stored key`() = runTest {
         val credentials = ApiCredentials(
+            id = ApiCredentialsId(""),
             displayName = "Test Provider",
             provider = ApiProvider.XAI,
             modelId = "grok-4.20",
             credentialAlias = "new_alias"
         )
-        coEvery { repository.saveCredentials(credentials, "", "existing_alias") } returns 7L
+        val expectedId = ApiCredentialsId("7")
+        coEvery { repository.saveCredentials(credentials, "", "existing_alias") } returns expectedId
 
         val result = useCase(credentials, apiKey = "", sourceCredentialAlias = "existing_alias")
 
-        assertEquals(7L, result)
+        assertEquals(expectedId, result)
         coVerify(exactly = 1) {
             repository.saveCredentials(credentials, "", "existing_alias")
         }

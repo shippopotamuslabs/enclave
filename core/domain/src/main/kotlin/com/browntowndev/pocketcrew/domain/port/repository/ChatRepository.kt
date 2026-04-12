@@ -1,7 +1,9 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
@@ -30,7 +32,7 @@ interface ChatRepository {
      *
      * @param chatId The ID of the chat to toggle
      */
-    suspend fun togglePinStatus(chatId: Long)
+    suspend fun togglePinStatus(chatId: ChatId)
 
     /**
      * Returns all messages for a chat as a Flow.
@@ -39,7 +41,7 @@ interface ChatRepository {
      * @param chatId The ID of the chat
      * @return Flow of messages for the chat
      */
-    fun getMessagesForChat(chatId: Long): Flow<List<Message>>
+    fun getMessagesForChat(chatId: ChatId): Flow<List<Message>>
 
     /**
      * Updates the state of a message during streaming.
@@ -47,7 +49,7 @@ interface ChatRepository {
      * @param messageId The ID of the message
      * @param messageState The new state of the message
      */
-    suspend fun updateMessageState(messageId: Long, messageState: MessageState)
+    suspend fun updateMessageState(messageId: MessageId, messageState: MessageState)
 
     /**
      * Updates the content of a message during streaming.
@@ -55,7 +57,7 @@ interface ChatRepository {
      * @param messageId The ID of the message
      * @param content The new content
      */
-    suspend fun updateMessageContent(messageId: Long, content: String)
+    suspend fun updateMessageContent(messageId: MessageId, content: String)
 
     /**
      * Appends content to an existing message during streaming.
@@ -63,7 +65,7 @@ interface ChatRepository {
      * @param messageId The ID of the message
      * @param content The content to append
      */
-    suspend fun appendMessageContent(messageId: Long, content: String)
+    suspend fun appendMessageContent(messageId: MessageId, content: String)
 
     /**
      * Sets the thinking start time for a message.
@@ -71,7 +73,7 @@ interface ChatRepository {
      *
      * @param messageId The ID of the message
      */
-    suspend fun setThinkingStartTime(messageId: Long)
+    suspend fun setThinkingStartTime(messageId: MessageId)
 
     /**
      * Sets the thinking end time for a message.
@@ -79,7 +81,7 @@ interface ChatRepository {
      *
      * @param messageId The ID of the message
      */
-    suspend fun setThinkingEndTime(messageId: Long)
+    suspend fun setThinkingEndTime(messageId: MessageId)
 
     /**
      * Appends raw thinking text to a message.
@@ -88,14 +90,14 @@ interface ChatRepository {
      * @param messageId The ID of the message
      * @param thinkingText The text to append
      */
-    suspend fun appendThinkingRaw(messageId: Long, thinkingText: String)
+    suspend fun appendThinkingRaw(messageId: MessageId, thinkingText: String)
 
     /**
      * Clears thinking data from a message (for blocked/failed states).
      *
      * @param messageId The ID of the message
      */
-    suspend fun clearThinking(messageId: Long)
+    suspend fun clearThinking(messageId: MessageId)
 
     /**
      * Updates the model type used for a message.
@@ -103,7 +105,7 @@ interface ChatRepository {
      * @param messageId The ID of the message
      * @param modelType The model type
      */
-    suspend fun updateMessageModelType(messageId: Long, modelType: ModelType)
+    suspend fun updateMessageModelType(messageId: MessageId, modelType: ModelType)
 
     /**
      * Creates a new chat in the database.
@@ -111,7 +113,7 @@ interface ChatRepository {
      * @param chat The chat to create
      * @return The ID of the newly created chat
      */
-    suspend fun createChat(chat: Chat): Long
+    suspend fun createChat(chat: Chat): ChatId
 
     /**
      * Saves an assistant message to the database.
@@ -121,7 +123,7 @@ interface ChatRepository {
      * @param thinkingData Optional thinking data for reasoning models
      */
     suspend fun saveAssistantMessage(
-        messageId: Long,
+        messageId: MessageId,
         content: String,
         thinkingData: ThinkingData? = null
     )
@@ -136,7 +138,7 @@ interface ChatRepository {
      * @param pipelineStep The pipeline step this message belongs to (for Crew mode)
      * @return The ID of the newly created message
      */
-    suspend fun createAssistantMessage(chatId: Long, userMessageId: Long, modelType: ModelType, pipelineStep: PipelineStep? = null): Long
+    suspend fun createAssistantMessage(chatId: ChatId, userMessageId: MessageId, modelType: ModelType, pipelineStep: PipelineStep? = null): MessageId
 
     /**
      * Persists all message data atomically in a single transaction.
@@ -155,7 +157,7 @@ interface ChatRepository {
      * @param pipelineStep The pipeline step (for CREW mode messages)
      */
     suspend fun persistAllMessageData(
-        messageId: Long,
+        messageId: MessageId,
         modelType: ModelType,
         thinkingStartTime: Long,
         thinkingEndTime: Long,
@@ -174,7 +176,7 @@ interface ChatRepository {
      * @param chatId The chat ID to get incomplete messages for
      * @return List of messages in incomplete states
      */
-    suspend fun getIncompleteCrewMessages(chatId: Long): List<Message>
+    suspend fun getIncompleteCrewMessages(chatId: ChatId): List<Message>
 
     /**
      * Deletes a chat by its ID.
@@ -182,7 +184,7 @@ interface ChatRepository {
      *
      * @param chatId The ID of the chat to delete
      */
-    suspend fun deleteChat(chatId: Long)
+    suspend fun deleteChat(chatId: ChatId)
 
     /**
      * Renames a chat.
@@ -190,7 +192,7 @@ interface ChatRepository {
      * @param chatId The ID of the chat to rename
      * @param newName The new name for the chat
      */
-    suspend fun renameChat(chatId: Long, newName: String)
+    suspend fun renameChat(chatId: ChatId, newName: String)
 
     /**
      * Searches chats by name or message content.

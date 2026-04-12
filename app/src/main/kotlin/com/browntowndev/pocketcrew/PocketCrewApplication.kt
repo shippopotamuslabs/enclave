@@ -13,15 +13,6 @@ class PocketCrewApplication :
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
-    @OptIn(ExperimentalApi::class)
-    override fun onCreate() {
-        super.onCreate()
-
-        // Required for LiteRT NPU support if available on the device
-        // This is a static initialization that only needs to happen once.
-        // Removed as of litertlm 0.10.0, NPU path handling has changed internally
-    }
-
     override val workManagerConfiguration: Configuration
         get() =
             Configuration

@@ -1,6 +1,9 @@
 package com.browntowndev.pocketcrew.core.data.download
+
 import android.content.Context
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.requiredArtifacts
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
@@ -221,7 +224,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         for (type in affectedModelTypes) {
             val activeConfig = activeModelProvider.getActiveConfiguration(type)
             if (activeConfig != null && activeConfig.isLocal) {
-                if (localModelRepository.getAssetByConfigId(activeConfig.id) != null) {
+                if (localModelRepository.getAssetByConfigId(activeConfig.id as LocalModelConfigurationId) != null) {
                     fallbackAvailable = true
                     break
                 }
@@ -243,7 +246,9 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         if (!modelsDir.exists()) return
 
         // Get filenames of current assets
-        val currentFilenamesSet = currentAssets.mapTo(mutableSetOf()) { it.metadata.localFileName }
+        val currentFilenamesSet = currentAssets.flatMapTo(mutableSetOf()) { asset ->
+            asset.metadata.requiredArtifacts().map { artifact -> artifact.localFileName }
+        }
 
         // Get all model files in the directory (excluding temp files)
         val existingFiles = modelsDir.listFiles { file ->

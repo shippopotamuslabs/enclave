@@ -4,29 +4,28 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.google.genai.Client
-import com.google.genai.ResponseStream
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.google.genai.types.Content
-import com.google.genai.types.GenerateContentResponse
+import com.google.genai.types.FunctionCall
 import com.google.genai.types.Part
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.runInterruptible
 
 class GoogleInferenceServiceImpl(
-    private val client: Client,
+    private val sdkClient: GoogleGenAiSdkClient,
     private val modelId: String,
     private val modelType: ModelType,
     private val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
+    internal val toolExecutor: ToolExecutorPort? = null,
 ) : LlmInferencePort {
 
     companion object {
@@ -62,6 +61,11 @@ class GoogleInferenceServiceImpl(
             loggingPort.debug(TAG, "sendPrompt cancelled provider=$PROVIDER model=$modelId")
             throw e
         } catch (e: Exception) {
+            if (e is IllegalArgumentException || e is IllegalStateException) {
+                loggingPort.error(TAG, "Tool request failed. exception=${e::class.java.simpleName} message=${e.message}", e)
+                emit(InferenceEvent.Error(e, modelType))
+                return@flow
+            }
             val errorMsg = e.message ?: "Unknown error"
             loggingPort.error(TAG, "API request failed. exception=${e::class.java.simpleName} message=$errorMsg", e)
             emit(InferenceEvent.Error(Exception("API Error ($PROVIDER): $errorMsg", e), modelType))
@@ -74,6 +78,13 @@ class GoogleInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit,
     ) {
+        if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
+            executeToolingPrompt(prompt, options, requestHistory, emitEvent)
+            return
+        }
+
+        logImagePayloads(options)
+
         val request = GoogleRequestMapper.mapToGenerateContentRequest(
             prompt = prompt,
             history = requestHistory,
@@ -89,56 +100,109 @@ class GoogleInferenceServiceImpl(
             "GenerateContent request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(request.config.toString())}"
         )
 
-        runInterruptible {
-            client.models.generateContentStream(modelId, request.contents, request.config)
-        }.use { responseStream ->
-            streamResponses(responseStream, emitEvent)
-        }
+        sdkClient.generateContentStream(modelId, request.contents, request.config, emitEvent)
     }
 
-    private suspend fun streamResponses(
-        responseStream: ResponseStream<GenerateContentResponse>,
+    private suspend fun executeToolingPrompt(
+        prompt: String,
+        options: GenerationOptions,
+        requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit,
     ) {
-        val iterator = responseStream.iterator()
-        while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
-            val response = runInterruptible { iterator.next() }
-            var emittedAny = false
-            response.candidates().orElse(emptyList()).forEach { candidate ->
-                val content = candidate.content().orElse(null)
-                if (content != null) {
-                    emittedAny = emitContentParts(content, emitEvent) || emittedAny
-                }
-            }
-
-            val responseText = response.text().orEmpty()
-            if (responseText.isNotBlank() && !emittedAny) {
-                emitEvent(InferenceEvent.PartialResponse(responseText, modelType))
-            }
+        val executor = requireNotNull(toolExecutor) {
+            "Tool executor not configured for provider=$PROVIDER"
         }
 
-        emitEvent(InferenceEvent.Finished(modelType))
+        try {
+            logImagePayloads(options)
+            val request = GoogleRequestMapper.mapToGenerateContentRequest(
+                prompt = prompt,
+                history = requestHistory,
+                options = options,
+            )
+            loggingPort.debug(
+                TAG,
+                "GenerateContent tool request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(request.config.toString())}"
+            )
+
+            val initialResponse = sdkClient.generateContentStream(modelId, request.contents, request.config, emitEvent)
+            val functionCall = initialResponse.functionCall
+            if (functionCall == null) {
+                loggingPort.info(
+                    TAG,
+                    "Tool loop complete without tool call provider=$PROVIDER model=$modelId modelType=$modelType"
+                )
+                return
+            }
+
+            val toolRequest = ToolCallRequest(
+                toolName = functionCall.name().orElseThrow {
+                    IllegalStateException("Google tool execution failed before final response")
+                },
+                argumentsJson = ToolEnvelopeParser.buildArgumentsJson(functionCall.args().orElse(emptyMap())),
+                provider = PROVIDER,
+                modelType = modelType,
+                chatId = options.chatId,
+                userMessageId = options.userMessageId,
+            )
+            ToolEnvelopeParser.requireSupportedTool(toolRequest.toolName)
+            val toolArg = when (toolRequest.toolName) {
+                ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolRequest.argumentsJson)
+                else -> ToolEnvelopeParser.extractRequiredQuery(toolRequest.argumentsJson)
+            }
+            loggingPort.info(
+                TAG,
+                "Tool call detected provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} arg=$toolArg"
+            )
+            val toolResult = executor.execute(toolRequest)
+            loggingPort.info(
+                TAG,
+                "Tool call completed provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
+            )
+
+            val followUpContents = request.contents + listOfNotNull(
+                initialResponse.assistantContent,
+                Content.builder()
+                    .role("user")
+                    .parts(
+                        listOf(
+                            buildFunctionResponsePart(functionCall, toolResult.resultJson)
+                        )
+                    )
+                    .build()
+            )
+
+            val followUpResponse = sdkClient.generateContentStream(modelId, followUpContents, request.config, emitEvent)
+            if (followUpResponse.functionCall != null) {
+                loggingPort.warning(
+                    TAG,
+                    "Recursive tool call detected provider=$PROVIDER model=$modelId"
+                )
+                throw IllegalStateException("Search skill recursion limit exceeded")
+            }
+
+            if (!followUpResponse.emittedAny) {
+                throw IllegalStateException("Google tool execution failed before final response")
+            }
+        } catch (e: IllegalArgumentException) {
+            throw e
+        } catch (e: IllegalStateException) {
+            throw e
+        } catch (e: Exception) {
+            throw IllegalStateException("Google tool execution failed before final response", e)
+        }
     }
 
-    private suspend fun emitContentParts(
-        content: Content,
-        emitEvent: suspend (InferenceEvent) -> Unit,
-    ): Boolean {
-        var emitted = false
-        content.parts().orElse(emptyList()).forEach { part ->
-            val text = part.text().orElse("")
-            if (text.isNotBlank()) {
-                val isThought = part.thought().orElse(false)
-                emitted = true
-                if (isThought) {
-                    emitEvent(InferenceEvent.Thinking(text, modelType))
-                } else {
-                    emitEvent(InferenceEvent.PartialResponse(text, modelType))
-                }
-            }
-        }
-        return emitted
-    }
+    private fun buildFunctionResponsePart(
+        functionCall: FunctionCall,
+        resultJson: String,
+    ): Part =
+        Part.fromFunctionResponse(
+            functionCall.name().orElseThrow {
+                IllegalStateException("Google tool execution failed before final response")
+            },
+            mapOf("output" to resultJson),
+        )
 
     override suspend fun setHistory(messages: List<ChatMessage>) {
         conversationHistory.clear()
@@ -174,5 +238,29 @@ class GoogleInferenceServiceImpl(
             return value
         }
         return value.take(MAX_LOG_BODY_CHARS) + "...<truncated>"
+    }
+
+    private fun logImagePayloads(options: GenerationOptions) {
+        if (options.imageUris.isEmpty()) {
+            return
+        }
+        val payloads = runCatching {
+            ImagePayloads.fromUris(options.imageUris)
+        }.getOrElse { error ->
+            loggingPort.error(
+                TAG,
+                "Failed to load image payloads provider=$PROVIDER model=$modelId message=${error.message}",
+                error,
+            )
+            return
+        }
+
+        val details = payloads.joinToString(separator = "; ") { payload ->
+            "file=${payload.filename}, mime=${payload.mimeType}, bytes=${payload.byteCount}, sha256=${payload.sha256.take(8)}"
+        }
+        loggingPort.info(
+            TAG,
+            "Image payloads provider=$PROVIDER model=$modelId count=${payloads.size} $details"
+        )
     }
 }

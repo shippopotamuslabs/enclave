@@ -1,11 +1,14 @@
 package com.browntowndev.pocketcrew.feature.inference.llama
 
+import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import io.mockk.*
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
@@ -49,9 +52,9 @@ class JniLlamaEngineGenerateWithOptionsTest {
             ))
             
             every { engine.startCompletion(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
             ) } answers {
-                val callback = arg<NativeTokenCallback>(11)
+                val callback = arg<NativeTokenCallback>(12)
                 callback.onComplete(10, 20)
             }
             
@@ -66,7 +69,7 @@ class JniLlamaEngineGenerateWithOptionsTest {
             } catch(e: Exception) {}
 
             verify { engine.startCompletion(
-                any(), any(), any(), any(), any(), any(), any(), any(), 
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 eq(0.05f), // penaltyFreq
                 eq(0.05f), // penaltyPresent
                 eq(0),     // reasoningBudget
@@ -82,7 +85,7 @@ class JniLlamaEngineGenerateWithOptionsTest {
             } catch(e: Exception) {}
 
             verify { engine.startCompletion(
-                any(), any(), any(), any(), any(), any(), any(), any(), 
+                any(), any(), any(), any(), any(), any(), any(), any(), any(),
                 eq(0.0f), // penaltyFreq
                 eq(0.0f), // penaltyPresent
                 eq(2048), // reasoningBudget
@@ -98,10 +101,74 @@ class JniLlamaEngineGenerateWithOptionsTest {
             } catch(e: Exception) {}
 
             verify { engine.startCompletion(
-                any(), any(), 
+                any(), any(), any(),
                 eq(0.5f), // temperature
                 any(), any(), any(), any(), any(), any(), any(), any(), any()
             ) }
+        }
+
+        @Test
+        fun `generateWithOptions passes overridden system prompt into native completion`() = runTest {
+            val engine = setupEngineWithMocks()
+            engine.startConversation("Base system prompt")
+            engine.appendMessage(DomainChatMessage(role = Role.USER, content = "User question"))
+
+            val slot = slot<Array<String>>()
+            try {
+                engine.generateWithOptions(
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        systemPrompt = "Use tools when needed.\n<tool_call>{\"name\":\"tavily_web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>"
+                    )
+                ).toList()
+            } catch(e: Exception) {}
+
+            verify {
+                engine.startCompletion(
+                    any(),
+                    capture(slot),
+                    any(),
+                    any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+                )
+            }
+
+            assertEquals(
+                "Use tools when needed.\n<tool_call>{\"name\":\"tavily_web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>",
+                slot.captured.first()
+            )
+            assertEquals("User question", slot.captured[1])
+        }
+
+        @Test
+        fun `generateWithOptions prepends media markers and forwards image paths`() = runTest {
+            val engine = setupEngineWithMocks()
+            engine.startConversation("Base system prompt")
+            engine.appendMessage(DomainChatMessage(role = Role.USER, content = "Describe this image"))
+
+            val contentsSlot = slot<Array<String>>()
+            val imagePathsSlot = slot<Array<String>>()
+
+            try {
+                engine.generateWithOptions(
+                    GenerationOptions(
+                        reasoningBudget = 0,
+                        imageUris = listOf("file:///tmp/cat.jpg", "file:///tmp/dog.jpg"),
+                    )
+                ).toList()
+            } catch (_: Exception) {
+            }
+
+            verify {
+                engine.startCompletion(
+                    any(),
+                    capture(contentsSlot),
+                    capture(imagePathsSlot),
+                    any(), any(), any(), any(), any(), any(), any(), any(), any(), any()
+                )
+            }
+
+            assertTrue(contentsSlot.captured.last().startsWith("<__media__><__media__>Describe this image"))
+            assertEquals(listOf("file:///tmp/cat.jpg", "file:///tmp/dog.jpg"), imagePathsSlot.captured.toList())
         }
     }
 }

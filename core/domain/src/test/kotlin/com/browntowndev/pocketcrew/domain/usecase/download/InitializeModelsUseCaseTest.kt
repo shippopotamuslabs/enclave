@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
@@ -93,6 +94,7 @@ class InitializeModelsUseCaseTest {
     ): LocalModelAsset {
         return LocalModelAsset(
             metadata = LocalModelMetadata(
+                id = LocalModelId("1"),
                 huggingFaceModelName = "user/repo",
                 remoteFileName = fileName,
                 localFileName = fileName,

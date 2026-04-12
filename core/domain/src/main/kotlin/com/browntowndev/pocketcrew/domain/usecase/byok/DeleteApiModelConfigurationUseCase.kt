@@ -3,18 +3,20 @@ package com.browntowndev.pocketcrew.domain.usecase.byok
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 interface DeleteApiModelConfigurationUseCase {
     suspend operator fun invoke(
-        configurationId: Long,
-        replacementLocalConfigId: Long? = null,
-        replacementApiConfigId: Long? = null
+        configurationId: ApiModelConfigurationId,
+        replacementLocalConfigId: LocalModelConfigurationId? = null,
+        replacementApiConfigId: ApiModelConfigurationId? = null
     ): Result<Unit>
 
-    suspend fun getModelTypesNeedingReassignment(configurationId: Long): List<ModelType>
+    suspend fun getModelTypesNeedingReassignment(configurationId: ApiModelConfigurationId): List<ModelType>
 }
 
 class DeleteApiModelConfigurationUseCaseImpl @Inject constructor(
@@ -23,9 +25,9 @@ class DeleteApiModelConfigurationUseCaseImpl @Inject constructor(
     private val transactionProvider: TransactionProvider,
 ) : DeleteApiModelConfigurationUseCase {
     override suspend fun invoke(
-        configurationId: Long,
-        replacementLocalConfigId: Long?,
-        replacementApiConfigId: Long?
+        configurationId: ApiModelConfigurationId,
+        replacementLocalConfigId: LocalModelConfigurationId?,
+        replacementApiConfigId: ApiModelConfigurationId?
     ): Result<Unit> {
         return Result.runCatching {
             val needingReassignment = getModelTypesNeedingReassignment(configurationId)
@@ -50,7 +52,7 @@ class DeleteApiModelConfigurationUseCaseImpl @Inject constructor(
         }
     }
 
-    override suspend fun getModelTypesNeedingReassignment(configurationId: Long): List<ModelType> {
+    override suspend fun getModelTypesNeedingReassignment(configurationId: ApiModelConfigurationId): List<ModelType> {
         return defaultModelRepository.observeDefaults()
             .first()
             .filter { it.apiConfigId == configurationId }

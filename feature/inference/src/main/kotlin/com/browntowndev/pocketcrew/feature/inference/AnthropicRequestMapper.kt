@@ -4,8 +4,16 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.anthropic.core.JsonValue
+import com.anthropic.models.messages.Base64ImageSource
 import com.anthropic.models.messages.MessageCreateParams
+import com.anthropic.models.messages.MessageParam
+import com.anthropic.models.messages.ContentBlockParam
+import com.anthropic.models.messages.ImageBlockParam
+import com.anthropic.models.messages.TextBlockParam
 import com.anthropic.models.messages.ThinkingConfigEnabled
+import com.anthropic.models.messages.Tool
 
 object AnthropicRequestMapper {
     private const val SYNTHETIC_API_ERROR_PREFIX = "Error: API Error"
@@ -46,10 +54,59 @@ object AnthropicRequestMapper {
                 }
             }
 
-        builder.addUserMessage(prompt)
+        builder.addMessage(buildUserMessage(prompt, options.imageUris))
+        if (options.toolingEnabled) {
+            options.availableTools.forEach { builder.addTool(it.toAnthropicTool()) }
+        }
 
         return builder.build()
     }
+
+    private fun ToolDefinition.toAnthropicTool(): Tool =
+        Tool.builder()
+            .name(name)
+            .description(description)
+            .inputSchema(
+                Tool.InputSchema.builder()
+                    .type(JsonValue.from("object"))
+                    .properties(toolProperties())
+                    .required(requiredArguments())
+                    .build()
+            )
+            .strict(true)
+            .build()
+
+    private fun ToolDefinition.toolProperties(): Tool.InputSchema.Properties =
+        when (this) {
+            ToolDefinition.TAVILY_WEB_SEARCH -> Tool.InputSchema.Properties.builder()
+                .putAdditionalProperty(
+                    "query",
+                    JsonValue.from(
+                        mapOf(
+                            "type" to "string"
+                        )
+                    )
+                )
+                .build()
+            ToolDefinition.ATTACHED_IMAGE_INSPECT -> Tool.InputSchema.Properties.builder()
+                .putAdditionalProperty(
+                    "question",
+                    JsonValue.from(
+                        mapOf(
+                            "type" to "string"
+                        )
+                    )
+                )
+                .build()
+            else -> error("Unsupported tool: $name")
+        }
+
+    private fun ToolDefinition.requiredArguments(): List<String> =
+        when (this) {
+            ToolDefinition.TAVILY_WEB_SEARCH -> listOf("query")
+            ToolDefinition.ATTACHED_IMAGE_INSPECT -> listOf("question")
+            else -> error("Unsupported tool: $name")
+        }
 
     private fun buildSystemPrompt(
         history: List<ChatMessage>,
@@ -84,4 +141,48 @@ object AnthropicRequestMapper {
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
+
+    private fun buildUserMessage(
+        prompt: String,
+        imageUris: List<String>,
+    ): MessageParam {
+        if (imageUris.isEmpty()) {
+            return MessageParam.builder()
+                .role(MessageParam.Role.USER)
+                .content(prompt)
+                .build()
+        }
+
+        val blocks = buildList {
+            add(ContentBlockParam.ofText(TextBlockParam.builder().text(prompt).build()))
+            ImagePayloads.fromUris(imageUris).forEach { payload ->
+                ImagePayloads.validate(payload)
+                add(
+                    ContentBlockParam.ofImage(
+                        ImageBlockParam.builder()
+                            .source(
+                                Base64ImageSource.builder()
+                                    .data(payload.base64)
+                                    .mediaType(payload.mimeType.toAnthropicMediaType())
+                                    .build()
+                            )
+                            .build()
+                    )
+                )
+            }
+        }
+
+        return MessageParam.builder()
+            .role(MessageParam.Role.USER)
+            .contentOfBlockParams(blocks)
+            .build()
+    }
+
+    private fun String.toAnthropicMediaType(): Base64ImageSource.MediaType =
+        when (lowercase()) {
+            "image/png" -> Base64ImageSource.MediaType.IMAGE_PNG
+            "image/gif" -> Base64ImageSource.MediaType.IMAGE_GIF
+            "image/webp" -> Base64ImageSource.MediaType.IMAGE_WEBP
+            else -> Base64ImageSource.MediaType.IMAGE_JPEG
+        }
 }

@@ -2,6 +2,8 @@ package com.browntowndev.pocketcrew.core.data.repository
 
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.AutoPager
+import com.anthropic.models.models.CapabilitySupport
+import com.anthropic.models.models.ModelCapabilities
 import com.anthropic.models.models.ModelInfo
 import com.anthropic.models.models.ModelListPage
 import com.anthropic.services.blocking.ModelService
@@ -35,6 +37,10 @@ class ApiModelCatalogRepositoryImplTest {
     private val autoPager = mockk<AutoPager<ModelInfo>>()
     private val modelInfoA = mockk<ModelInfo>()
     private val modelInfoB = mockk<ModelInfo>()
+    private val capabilitiesA = mockk<ModelCapabilities>()
+    private val capabilitiesB = mockk<ModelCapabilities>()
+    private val imageInputA = mockk<CapabilitySupport>()
+    private val imageInputB = mockk<CapabilitySupport>()
     private val googleModelA = mockk<Model>()
     private val googleModelB = mockk<Model>()
 
@@ -57,9 +63,15 @@ class ApiModelCatalogRepositoryImplTest {
         every { modelInfoA.id() } returns "claude-sonnet-4-20250514"
         every { modelInfoA.displayName() } returns "Claude Sonnet 4"
         every { modelInfoA.createdAt() } returns OffsetDateTime.of(2025, 5, 14, 0, 0, 0, 0, ZoneOffset.UTC)
+        every { modelInfoA.capabilities() } returns Optional.of(capabilitiesA)
+        every { capabilitiesA.imageInput() } returns imageInputA
+        every { imageInputA.supported() } returns true
         every { modelInfoB.id() } returns "claude-haiku-4-5-20251001"
         every { modelInfoB.displayName() } returns "Claude Haiku 4.5"
         every { modelInfoB.createdAt() } returns OffsetDateTime.of(2025, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC)
+        every { modelInfoB.capabilities() } returns Optional.of(capabilitiesB)
+        every { capabilitiesB.imageInput() } returns imageInputB
+        every { imageInputB.supported() } returns false
 
         every { googleGenAiClientProvider.listModels(any(), any(), any(), any()) } returns listOf(googleModelA, googleModelB)
         every { googleModelA.name() } returns Optional.of("models/gemini-2.5-flash")
@@ -79,12 +91,14 @@ class ApiModelCatalogRepositoryImplTest {
                 DiscoveredApiModel(
                     id = "claude-haiku-4-5-20251001",
                     name = "Claude Haiku 4.5",
-                    created = OffsetDateTime.of(2025, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond()
+                    created = OffsetDateTime.of(2025, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond(),
+                    visionCapable = false,
                 ),
                 DiscoveredApiModel(
                     id = "claude-sonnet-4-20250514",
                     name = "Claude Sonnet 4",
-                    created = OffsetDateTime.of(2025, 5, 14, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond()
+                    created = OffsetDateTime.of(2025, 5, 14, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond(),
+                    visionCapable = true,
                 ),
             ),
             models,
@@ -130,6 +144,9 @@ class ApiModelCatalogRepositoryImplTest {
                   "id": "openai/gpt-5.2",
                   "name": "GPT 5.2",
                   "created": 1715644800,
+                  "architecture": {
+                    "input_modalities": ["text", "image"]
+                  },
                   "pricing": {
                     "prompt": "0.000005",
                     "completion": "0.000015"
@@ -141,6 +158,9 @@ class ApiModelCatalogRepositoryImplTest {
                 },
                 {
                   "id": "anthropic/claude-sonnet-4",
+                  "architecture": {
+                    "input_modalities": ["text"]
+                  },
                   "context_length": 200000
                 }
               ]
@@ -153,6 +173,7 @@ class ApiModelCatalogRepositoryImplTest {
                 DiscoveredApiModel(
                     id = "anthropic/claude-sonnet-4",
                     contextWindowTokens = 200_000,
+                    visionCapable = false,
                 ),
                 DiscoveredApiModel(
                     id = "openai/gpt-5.2",
@@ -162,6 +183,7 @@ class ApiModelCatalogRepositoryImplTest {
                     completionPrice = 15.0,
                     contextWindowTokens = 400_000,
                     maxOutputTokens = 128_000,
+                    visionCapable = true,
                 ),
             ),
             models,
@@ -177,6 +199,7 @@ class ApiModelCatalogRepositoryImplTest {
                 {
                   "id": "grok-2",
                   "created": 1723507200,
+                  "input_modalities": ["text", "image"],
                   "prompt_token_price": 2000,
                   "completion_token_price": 4000
                 }
@@ -193,6 +216,7 @@ class ApiModelCatalogRepositoryImplTest {
                     created = 1723507200L,
                     promptPrice = 0.2,
                     completionPrice = 0.4,
+                    visionCapable = true,
                 )
             ),
             models,
@@ -208,6 +232,7 @@ class ApiModelCatalogRepositoryImplTest {
                 {
                   "id": "grok-4.1-fast-reasoning",
                   "created": 1743465600,
+                  "input_modalities": ["text"],
                   "prompt_text_token_price": 2000,
                   "completion_text_token_price": 5000,
                   "max_prompt_length": 131072
@@ -226,6 +251,7 @@ class ApiModelCatalogRepositoryImplTest {
                     promptPrice = 0.2,
                     completionPrice = 0.5,
                     contextWindowTokens = 131_072,
+                    visionCapable = false,
                 )
             ),
             models,
@@ -241,6 +267,7 @@ class ApiModelCatalogRepositoryImplTest {
               "name": "Grok 4 Fast",
               "aliases": ["grok-4-fast-reasoning"],
               "created": 1743465600,
+              "input_modalities": ["text", "image"],
               "prompt_text_token_price": 2000,
               "completion_text_token_price": 5000,
               "max_prompt_length": 256000
@@ -257,6 +284,7 @@ class ApiModelCatalogRepositoryImplTest {
                 promptPrice = 0.2,
                 completionPrice = 0.5,
                 contextWindowTokens = 256_000,
+                visionCapable = true,
             ),
             model,
         )

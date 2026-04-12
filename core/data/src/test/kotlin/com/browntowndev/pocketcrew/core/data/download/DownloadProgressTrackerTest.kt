@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.download
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
@@ -234,6 +235,7 @@ class DownloadProgressTrackerTest {
     private fun createModelFile(filename: String, sizeBytes: Long, sha256: String = "abc123"): LocalModelAsset {
         return LocalModelAsset(
             metadata = LocalModelMetadata(
+                id = LocalModelId("1"),
                 huggingFaceModelName = "model/name",
                 remoteFileName = filename,
                 localFileName = filename,
