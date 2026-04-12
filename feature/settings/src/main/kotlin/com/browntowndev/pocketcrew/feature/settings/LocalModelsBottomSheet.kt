@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -332,7 +333,7 @@ private fun LocalModelAssetCard(
                         if (asset.visionCapable) {
                             Spacer(modifier = Modifier.width(4.dp))
                             Icon(
-                                painter = painterResource(R.drawable.photo),
+                                imageVector = Icons.Default.Visibility,
                                 contentDescription = "Vision capable",
                                 modifier = Modifier.size(16.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -422,7 +423,7 @@ private fun LocalModelConfigListView(
                     if (asset.visionCapable) {
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
-                            painter = painterResource(R.drawable.photo),
+                            imageVector = Icons.Default.Visibility,
                             contentDescription = "Vision capable",
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant

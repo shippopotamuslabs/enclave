@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -192,7 +193,7 @@ fun DefaultAssignmentsCard(
                                 if (assignment.isVision) {
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Icon(
-                                        painter = painterResource(R.drawable.photo),
+                                        imageVector = Icons.Default.Visibility,
                                         contentDescription = "Vision capable",
                                         modifier = Modifier.size(16.dp),
                                         tint = MaterialTheme.colorScheme.primary
@@ -343,7 +344,7 @@ fun AssignmentSelectionContent(
                             if (state.asset.visionCapable) {
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(
-                                    painter = painterResource(R.drawable.photo),
+                                    imageVector = Icons.Default.Visibility,
                                     contentDescription = "Vision capable",
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -379,7 +380,7 @@ fun AssignmentSelectionContent(
                             if (state.asset.isVision) {
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(
-                                    painter = painterResource(R.drawable.photo),
+                                    imageVector = Icons.Default.Visibility,
                                     contentDescription = "Vision capable",
                                     modifier = Modifier.size(16.dp),
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -605,7 +606,7 @@ private fun AssignmentAssetCard(
                     if (isVision) {
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
-                            painter = painterResource(R.drawable.photo),
+                            imageVector = Icons.Default.Visibility,
                             contentDescription = "Vision capable",
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant

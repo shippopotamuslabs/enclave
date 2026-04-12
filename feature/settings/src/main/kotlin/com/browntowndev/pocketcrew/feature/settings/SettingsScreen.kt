@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Vibration
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -41,9 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -182,7 +181,7 @@ fun SettingsScreen(
                 SettingsNavigationItem(
                     title = "Vision",
                     subtitle = ModelType.VISION.description,
-                    icon = painterResource(R.drawable.photo),
+                    icon = Icons.Default.Visibility,
                     onClick = { onShowVisionSettingsSheet(true) }
                 )
             }
@@ -365,21 +364,6 @@ fun SettingsToggle(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
             .clickable { onCheckedChange(!checked) }
-    )
-}
-
-@Composable
-fun SettingsNavigationItem(
-    title: String,
-    subtitle: String? = null,
-    icon: Painter,
-    onClick: () -> Unit
-) {
-    SettingsNavigationItem(
-        title = title,
-        subtitle = subtitle,
-        icon = { Icon(painter = icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
-        onClick = onClick
     )
 }
 
