@@ -66,6 +66,51 @@ class PersistAccumulatedChatMessagesUseCaseTest {
     }
 
     @Test
+    fun `persist use case strips CDATA tool traces before storing content`() = runTest {
+        val chatRepository = mockk<ChatRepository>(relaxed = true)
+        val contentSlot = slot<String>()
+        coEvery {
+            chatRepository.persistAllMessageData(
+                messageId = any(),
+                modelType = any(),
+                thinkingStartTime = any(),
+                thinkingEndTime = any(),
+                thinkingDuration = any(),
+                thinkingRaw = any(),
+                content = capture(contentSlot),
+                messageState = any(),
+                pipelineStep = any(),
+            )
+        } returns Unit
+        val manager = ChatGenerationAccumulatorManager(
+            mode = Mode.FAST,
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            defaultAssistantMessageId = MessageId("assistant"),
+            chatRepository = chatRepository,
+        )
+        val persistUseCase = PersistAccumulatedChatMessagesUseCase(chatRepository)
+
+        manager.reduce(
+            MessageGenerationState.GeneratingText(
+                """<![CDATA[<tool>{"name":"tavily_web_search","arguments":{"query":"android"}}</tool>]]>""",
+                ModelType.FAST,
+            )
+        )
+        manager.reduce(
+            MessageGenerationState.GeneratingText(
+                """<tool_result>{"answer":"value"}</tool_result>Final answer""",
+                ModelType.FAST,
+            )
+        )
+        manager.reduce(MessageGenerationState.Finished(ModelType.FAST))
+        persistUseCase(manager)
+
+        assertEquals("Final answer", contentSlot.captured)
+        assertFalse(contentSlot.captured.contains("<![CDATA[<tool"))
+    }
+
+    @Test
     fun `persist use case keeps incomplete messages in processing state`() = runTest {
         val chatRepository = mockk<ChatRepository>(relaxed = true)
         val stateSlot = slot<MessageState>()
