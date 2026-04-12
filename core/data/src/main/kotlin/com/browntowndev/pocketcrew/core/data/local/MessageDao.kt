@@ -25,7 +25,7 @@ abstract class MessageDao {
 
     @Query("""
         SELECT message.* FROM message
-        JOIN message_search ON message.id = message_search.rowid
+        JOIN message_search ON message.rowid = message_search.rowid
         WHERE message_search MATCH :query
     """)
     abstract fun searchMessages(query: String): Flow<List<MessageEntity>>

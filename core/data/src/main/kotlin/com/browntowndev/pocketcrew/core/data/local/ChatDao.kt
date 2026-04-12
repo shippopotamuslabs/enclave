@@ -39,7 +39,7 @@ abstract class ChatDao {
         SELECT * FROM (
             SELECT chat.* FROM chat
             JOIN message ON chat.id = message.chat_id
-            JOIN message_search ON message.id = message_search.rowid
+            JOIN message_search ON message.rowid = message_search.rowid
             WHERE message_search MATCH :ftsQuery
             
             UNION
