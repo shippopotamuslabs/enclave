@@ -18,7 +18,7 @@ class SearchToolPromptComposerTest {
         assertTrue(composed.contains("Be concise."))
         assertTrue(
             composed.contains(
-                """<tool_call>{"name":"tavily_web_search","arguments":{"query":"..."}}</tool_call>"""
+                """<![CDATA[<tool>{"name":"tavily_web_search","arguments":{"query":"..."}}</tool>]]>"""
             )
         )
         assertFalse(composed.contains("attached_image_inspect"))

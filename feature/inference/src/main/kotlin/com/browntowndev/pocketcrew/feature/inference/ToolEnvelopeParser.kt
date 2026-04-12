@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
  */
 internal object ToolEnvelopeParser {
     private val TOOL_NAME_REGEX = Regex(""""name"\s*:\s*"([^"]+)"""")
+    private val CDATA_TOOL_CALL_REGEX = Regex("""(?s)<!\[CDATA\[<tool>\s*(\{.*?\})\s*</tool>\]\]>""")
     private val WRAPPED_TOOL_CALL_REGEX = Regex("""(?s)<tool_call>\s*(\{.*?\})\s*</tool_call>""")
     private val RAW_TOOL_CALL_REGEX = Regex("""(?s)(.*?)(?:,\s*)?(\{"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{.*?\}\})(?:\s*,)?(.*)""")
 
@@ -57,6 +58,13 @@ internal object ToolEnvelopeParser {
     }
 
     fun extractLocalToolEnvelope(text: String): LocalToolEnvelope? {
+        val cdataMatch = if (text.contains("<![CDATA[<tool")) {
+            CDATA_TOOL_CALL_REGEX.find(text)
+                ?: throw IllegalStateException("Malformed tool_call envelope")
+        } else {
+            null
+        }
+
         val wrappedMatch = if (text.contains("<tool_call")) {
             WRAPPED_TOOL_CALL_REGEX.find(text)
                 ?: throw IllegalStateException("Malformed tool_call envelope")
@@ -65,6 +73,7 @@ internal object ToolEnvelopeParser {
         }
 
         val payload = when {
+            cdataMatch != null -> cdataMatch.groupValues[1]
             wrappedMatch != null -> wrappedMatch.groupValues[1]
             else -> RAW_TOOL_CALL_REGEX.matchEntire(text)?.groupValues?.get(2)
         } ?: run {
@@ -79,6 +88,15 @@ internal object ToolEnvelopeParser {
             ToolDefinition.TAVILY_WEB_SEARCH.name -> buildArgumentsJson(extractRequiredQuery(payload))
             ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> buildImageInspectArgumentsJson(extractRequiredQuestion(payload))
             else -> throw IllegalArgumentException("Unsupported tool: $toolName")
+        }
+
+        if (cdataMatch != null) {
+            return LocalToolEnvelope(
+                toolName = toolName,
+                argumentsJson = argumentsJson,
+                visiblePrefix = text.substring(0, cdataMatch.range.first),
+                visibleSuffix = text.substring(cdataMatch.range.last + 1),
+            )
         }
 
         if (wrappedMatch != null) {
@@ -102,7 +120,7 @@ internal object ToolEnvelopeParser {
 
     fun hasLocalToolContract(systemPrompt: String?): Boolean =
         systemPrompt != null &&
-            (systemPrompt.contains("<tool_call>") || systemPrompt.contains("{\"name\"")) &&
+            (systemPrompt.contains("<tool_call>") || systemPrompt.contains("{\"name\"") || systemPrompt.contains("<![CDATA[<tool")) &&
             (
                 systemPrompt.contains(ToolDefinition.TAVILY_WEB_SEARCH.name) ||
                     systemPrompt.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT.name)

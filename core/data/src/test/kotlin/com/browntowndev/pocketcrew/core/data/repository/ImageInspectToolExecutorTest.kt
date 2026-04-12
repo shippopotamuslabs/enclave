@@ -250,4 +250,41 @@ class ImageInspectToolExecutorTest {
             )
         }
     }
+
+    @Test
+    fun `handles special characters in question and analysis`() = runTest {
+        val messageRepository = mockk<MessageRepository>()
+        coEvery {
+            messageRepository.resolveLatestImageBearingUserMessage(any(), any())
+        } returns ResolvedImageTarget(
+            userMessageId = MessageId("msg-1"),
+            imageUri = "file:///photo.jpg",
+        )
+
+        val analyzeImageUseCase = mockk<com.browntowndev.pocketcrew.domain.usecase.chat.AnalyzeImageUseCase>()
+        coEvery { analyzeImageUseCase(any(), any()) } returns "Analysis with \"quotes\" and\nnewlines."
+
+        val executor = ImageInspectToolExecutor(
+            loggingPort = mockk(relaxed = true),
+            messageRepository = messageRepository,
+            analyzeImageUseCase = analyzeImageUseCase,
+        )
+
+        val result = executor.execute(
+            ToolCallRequest(
+                toolName = ToolDefinition.ATTACHED_IMAGE_INSPECT.name,
+                argumentsJson = """{"question":"Question with \"quotes\" and\nnewlines."}""",
+                provider = "OPENAI",
+                modelType = ModelType.FAST,
+                chatId = ChatId("chat-1"),
+                userMessageId = MessageId("msg-1"),
+            )
+        )
+
+        val json = result.resultJson
+        // Verify it is valid JSON and contains the unescaped characters when read back
+        val jsonObject = org.json.JSONObject(json)
+        assertEquals("Question with \"quotes\" and\nnewlines.", jsonObject.getString("question"))
+        assertEquals("Analysis with \"quotes\" and\nnewlines.", jsonObject.getString("analysis"))
+    }
 }

@@ -18,7 +18,7 @@ class ToolPromptComposer {
     companion object {
         const val SEARCH_TOOL_CONTRACT: String = """
 When you need current or external information, respond with exactly one tool envelope and no surrounding prose:
-<tool_call>{"name":"tavily_web_search","arguments":{"query":"..."}}</tool_call>
+<![CDATA[<tool>{"name":"tavily_web_search","arguments":{"query":"..."}}</tool>]]>
 
 After you receive a <tool_result>...</tool_result> message, continue the answer for the user using that result.
 Do not expose tool JSON, tool envelopes, or tool results in the final answer.
@@ -26,7 +26,7 @@ Do not expose tool JSON, tool envelopes, or tool results in the final answer.
 
         const val IMAGE_INSPECT_CONTRACT: String = """
 When you need to inspect a previously attached image, respond with exactly one tool envelope and no surrounding prose:
-<tool_call>{"name":"attached_image_inspect","arguments":{"question":"..."}}</tool_call>
+<![CDATA[<tool>{"name":"attached_image_inspect","arguments":{"question":"..."}}</tool>]]>
 """
 
         fun localToolContract(includeImageInspectTool: Boolean): String =
