@@ -12,6 +12,7 @@ import androidx.work.WorkManager
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.download.DownloadWorkSchedulerPort
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
@@ -25,13 +26,13 @@ import javax.inject.Singleton
 class DownloadWorkScheduler @Inject constructor(
     @param:ApplicationContext private val context: Context,
     private val workManager: WorkManager
-) {
+) : DownloadWorkSchedulerPort {
     companion object {
         const val KEY_SESSION_ID = "work_session_id"
         private const val TAG = "DownloadWorkScheduler"
     }
 
-    fun enqueue(models: Map<ModelType, LocalModelAsset>, sessionId: String?, wifiOnly: Boolean = true) {
+    override fun enqueue(models: Map<ModelType, LocalModelAsset>, sessionId: String?, wifiOnly: Boolean) {
         // Use UNMETERED when wifiOnly is enabled (requires WiFi)
         // Use CONNECTED when wifiOnly is disabled (allows mobile data)
         val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
@@ -91,16 +92,22 @@ class DownloadWorkScheduler @Inject constructor(
         )
     }
 
-    fun cancel() {
+    override fun scheduleModelDownload(modelType: ModelType, modelAsset: LocalModelAsset) {
+        enqueue(mapOf(modelType to modelAsset), sessionId = null, wifiOnly = true)
+    }
+
+    override fun cancel() {
         workManager.cancelUniqueWork(ModelConfig.WORK_TAG)
     }
 
-    suspend fun cleanupTempFiles() = withContext(Dispatchers.IO) {
-        val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
-        modelsDir.listFiles()?.forEach { file ->
-            if (file.extension == "tmp") {
-                Log.d(TAG, "Deleting partial file: ${file.name}")
-                file.delete()
+    override suspend fun cleanupTempFiles() {
+        withContext(Dispatchers.IO) {
+            val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
+            modelsDir.listFiles()?.forEach { file ->
+                if (file.extension == "tmp") {
+                    Log.d(TAG, "Deleting partial file: ${file.name}")
+                    file.delete()
+                }
             }
         }
     }

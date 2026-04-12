@@ -29,6 +29,7 @@ import com.browntowndev.pocketcrew.domain.usecase.modelconfig.DeleteLocalModelCo
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.DeleteLocalModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SaveLocalModelConfigurationUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.DiscoverApiModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.ExecuteModelDeletionWithReassignmentUseCase
@@ -98,6 +99,7 @@ class SettingsViewModelTest {
     private val saveLocalModelConfigurationUseCase = mockk<SaveLocalModelConfigurationUseCase>(relaxed = true)
     private val deleteLocalModelConfigurationUseCase = mockk<DeleteLocalModelConfigurationUseCase>(relaxed = true)
     private val deleteLocalModelUseCase = mockk<DeleteLocalModelUseCase>(relaxed = true)
+    private val reDownloadModelUseCase = mockk<ReDownloadModelUseCase>(relaxed = true)
     private val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
     private val fetchApiProviderModelDetailUseCase = mockk<FetchApiProviderModelDetailUseCase>(relaxed = true)
     private val fetchApiProviderModelsUseCase = mockk<FetchApiProviderModelsUseCase>()
@@ -962,6 +964,7 @@ class SettingsViewModelTest {
                 getLocalModelAssets = getLocalModelAssetsUseCase,
                 getRestorableLocalModels = GetRestorableLocalModelsUseCase(getLocalModelAssetsUseCase),
                 saveLocalModelPreset = SaveLocalModelPresetUseCase(saveLocalModelConfigurationUseCase),
+                reDownloadModel = reDownloadModelUseCase,
             ),
             apiProviders = SettingsApiProviderUseCasesImpl(
                 getApiModelAssets = getApiModelAssetsUseCase,

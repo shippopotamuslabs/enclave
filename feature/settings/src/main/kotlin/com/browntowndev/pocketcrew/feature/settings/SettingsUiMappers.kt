@@ -83,6 +83,7 @@ class LocalModelAssetUiMapper @Inject constructor() {
             sizeInBytes = asset.metadata.sizeInBytes,
             configurations = asset.configurations.map(::mapConfig),
             visionCapable = asset.metadata.visionCapable,
+            isSoftDeleted = asset.configurations.isEmpty(),
         )
     }
 

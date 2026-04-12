@@ -37,7 +37,12 @@ enum class ModelType(val apiValue: String) {
     /**
      * Final synthesis model for producing polished final output.
      */
-    FINAL_SYNTHESIS("final_synthesis");
+    FINAL_SYNTHESIS("final_synthesis"),
+
+    /**
+     * Used for models that are being re-downloaded but are not yet assigned to a role.
+     */
+    UNASSIGNED("unassigned");
 
     /**
      * Returns the human-readable display name for this model role.
@@ -50,6 +55,7 @@ enum class ModelType(val apiValue: String) {
         FAST -> "Fast"
         THINKING -> "Thinking"
         FINAL_SYNTHESIS -> "Final Review"
+        UNASSIGNED -> "Unassigned"
     }
 
     companion object {
