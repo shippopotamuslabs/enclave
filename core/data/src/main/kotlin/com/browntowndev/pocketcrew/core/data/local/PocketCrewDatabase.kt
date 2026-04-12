@@ -16,7 +16,7 @@ import androidx.room.TypeConverters
         ApiModelConfigurationEntity::class,
         DefaultModelEntity::class
     ],
-    version = 5,
+    version = 1,
     exportSchema = true
 )
 @TypeConverters(DateConverters::class, RoleConverters::class, ModelTypeConverters::class, MessageStateConverters::class, PipelineStepConverters::class, ApiProviderConverters::class, IdTypeConverters::class)
