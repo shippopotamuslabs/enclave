@@ -20,9 +20,6 @@ import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
-import com.browntowndev.pocketcrew.core.data.local.MIGRATION_2_3
-import com.browntowndev.pocketcrew.core.data.local.MIGRATION_3_4
-import com.browntowndev.pocketcrew.core.data.local.MIGRATION_4_5
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
@@ -94,9 +91,6 @@ object DataModule {
             PocketCrewDatabase::class.java,
             "pocket_crew_db"
         )
-        .addMigrations(MIGRATION_2_3)
-        .addMigrations(MIGRATION_3_4)
-        .addMigrations(MIGRATION_4_5)
         .fallbackToDestructiveMigration(dropAllTables = false)
         .build()
     }
