@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -49,6 +50,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -58,6 +60,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 @Composable
@@ -81,7 +85,7 @@ fun ModelConfigurationRoute(
 fun ModelConfigurationScreen(
     uiState: SettingsUiState,
     onNavigateBack: () -> Unit,
-    onSetDefaultModel: (ModelType, Long?, Long?) -> Unit,
+    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onShowAssignmentDialog: (Boolean, ModelType?) -> Unit
 ) {
     Scaffold(
@@ -103,7 +107,7 @@ fun ModelConfigurationScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            val generalChatTypes = listOf(ModelType.FAST, ModelType.THINKING, ModelType.VISION)
+            val generalChatTypes = listOf(ModelType.FAST, ModelType.THINKING)
             val crewModeTypes = listOf(ModelType.DRAFT_ONE, ModelType.DRAFT_TWO, ModelType.MAIN, ModelType.FINAL_SYNTHESIS)
 
             item {
@@ -130,11 +134,7 @@ fun ModelConfigurationScreen(
                 ?.displayLabel ?: assignmentSlot.name
             
             val isVisionSlot = assignmentSlot == ModelType.VISION
-            val localAssets = if (isVisionSlot) {
-                uiState.localModelsSheet.models.filter { it.visionCapable }
-            } else {
-                uiState.localModelsSheet.models
-            }
+            val localAssets = if (isVisionSlot) emptyList() else uiState.localModelsSheet.models
             val apiAssets = if (isVisionSlot) {
                 uiState.apiProvidersSheet.assets.filter { it.isVision }
             } else {
@@ -190,6 +190,15 @@ fun DefaultAssignmentsCard(
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
                                 )
+                                if (assignment.isVision) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Icon(
+                                        imageVector = Icons.Default.Visibility,
+                                        contentDescription = "Vision capable",
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
                                 Spacer(modifier = Modifier.width(4.dp))
                                 
                                 PersistentTooltip(description = assignment.modelType.description)
@@ -239,7 +248,7 @@ fun AssignmentSelectionBottomSheet(
     localAssets: List<LocalModelAssetUi>,
     apiAssets: List<ApiModelAssetUi>,
     onDismiss: () -> Unit,
-    onSelect: (localId: Long?, apiId: Long?) -> Unit
+    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -274,12 +283,18 @@ fun AssignmentSelectionContent(
     localAssets: List<LocalModelAssetUi>,
     apiAssets: List<ApiModelAssetUi>,
     onDismiss: () -> Unit,
-    onSelect: (localId: Long?, apiId: Long?) -> Unit
+    onBack: (() -> Unit)? = null,
+    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?) -> Unit
 ) {
-    var selectedLocalId by remember { mutableStateOf<Long?>(null) }
-    var selectedApiId by remember { mutableStateOf<Long?>(null) }
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Local Models", "API Models")
+    var selectedLocalId by remember { mutableStateOf<LocalModelConfigurationId?>(null) }
+    var selectedApiId by remember { mutableStateOf<ApiModelConfigurationId?>(null) }
+    val hasLocalTab = localAssets.isNotEmpty()
+    val hasApiTab = apiAssets.isNotEmpty()
+    var selectedTabIndex by remember(hasLocalTab, hasApiTab) { mutableIntStateOf(0) }
+    val tabs = buildList {
+        if (hasLocalTab) add("Local Models")
+        if (hasApiTab) add("API Models")
+    }
     var viewState by remember { mutableStateOf<AssignmentSelectionView>(AssignmentSelectionView.AssetList) }
 
     Column(
@@ -288,15 +303,25 @@ fun AssignmentSelectionContent(
     ) {
         when (val state = viewState) {
             is AssignmentSelectionView.AssetList -> {
-                Text(
-                    text = "Assign Model to $slotLabel",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 16.dp)
-                )
+                        .padding(horizontal = if (onBack != null) 20.dp else 0.dp, vertical = 16.dp)
+                ) {
+                    if (onBack != null) {
+                        IconButton(onClick = onBack, modifier = Modifier.size(40.dp).padding(end = 8.dp)) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    }
+                    Text(
+                        text = "Assign Model to $slotLabel",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = if (onBack != null) TextAlign.Start else TextAlign.Center,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
             }
             is AssignmentSelectionView.LocalConfigList -> {
                 Row(
@@ -309,12 +334,23 @@ fun AssignmentSelectionContent(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to models")
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = state.asset.friendlyName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = state.asset.friendlyName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (state.asset.visionCapable) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Visibility,
+                                    contentDescription = "Vision capable",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                         Text(
                             text = "Presets",
                             style = MaterialTheme.typography.bodySmall,
@@ -334,12 +370,23 @@ fun AssignmentSelectionContent(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to providers")
                     }
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = state.asset.displayName,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = state.asset.displayName,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (state.asset.isVision) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Icon(
+                                    imageVector = Icons.Default.Visibility,
+                                    contentDescription = "Vision capable",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                         Text(
                             text = "Presets",
                             style = MaterialTheme.typography.bodySmall,
@@ -360,32 +407,38 @@ fun AssignmentSelectionContent(
             when (state) {
                 is AssignmentSelectionView.AssetList -> {
                     Column {
-                        SecondaryTabRow(
-                            selectedTabIndex = selectedTabIndex,
-                            containerColor = BottomSheetDefaults.ContainerColor,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            tabs.forEachIndexed { index, title ->
-                                Tab(
-                                    selected = selectedTabIndex == index,
-                                    onClick = { selectedTabIndex = index },
-                                    text = {
-                                        Text(
-                                            text = title,
-                                            color = if (selectedTabIndex == index) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                contentColorFor(BottomSheetDefaults.ContainerColor)
-                                            },
-                                            fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal
-                                        )
-                                    }
-                                )
+                        if (tabs.size > 1) {
+                            SecondaryTabRow(
+                                selectedTabIndex = selectedTabIndex,
+                                containerColor = BottomSheetDefaults.ContainerColor,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                tabs.forEachIndexed { index, title ->
+                                    Tab(
+                                        selected = selectedTabIndex == index,
+                                        onClick = { selectedTabIndex = index },
+                                        text = {
+                                            Text(
+                                                text = title,
+                                                color = if (selectedTabIndex == index) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    contentColorFor(BottomSheetDefaults.ContainerColor)
+                                                },
+                                                fontWeight = if (selectedTabIndex == index) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                        }
+                                    )
+                                }
                             }
                         }
 
                         AnimatedContent(
-                            targetState = selectedTabIndex,
+                            targetState = when {
+                                hasLocalTab && hasApiTab -> selectedTabIndex
+                                hasLocalTab -> 0
+                                else -> 1
+                            },
                             label = "AssignmentSelectionTabTransition",
                             modifier = Modifier.fillMaxWidth()
                         ) { tabIndex ->
@@ -396,53 +449,47 @@ fun AssignmentSelectionContent(
                                     .padding(top = 16.dp, bottom = 16.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                if (tabIndex == 0) {
-                                    if (localAssets.isNotEmpty()) {
-                                        items(localAssets, key = { "local_${it.metadataId}" }) { asset ->
-                                            AssignmentAssetCard(
-                                                title = asset.friendlyName,
-                                                subtitle = "${asset.providerName} • ${asset.format}",
-                                                presetCount = asset.configurations.size,
-                                                isSelected = asset.configurations.any { it.id == selectedLocalId },
-                                                onClick = { viewState = AssignmentSelectionView.LocalConfigList(asset) }
-                                            )
-                                        }
-                                    } else {
-                                        item {
-                                            Text(
-                                                text = "No local models available.",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(vertical = 16.dp)
-                                            )
-                                        }
+                                if (tabIndex == 0 && hasLocalTab) {
+                                    items(localAssets, key = { "local_${it.metadataId.value}" }) { asset ->
+                                        AssignmentAssetCard(
+                                            title = asset.friendlyName,
+                                            subtitle = "${asset.providerName} • ${asset.format}",
+                                            presetCount = asset.configurations.size,
+                                            isVision = asset.visionCapable,
+                                            isSelected = asset.configurations.any { it.id == selectedLocalId },
+                                            onClick = { viewState = AssignmentSelectionView.LocalConfigList(asset) }
+                                        )
+                                    }
+                                } else if ((tabIndex == 1 && hasApiTab) || (!hasLocalTab && hasApiTab)) {
+                                    items(apiAssets, key = { "api_${it.credentialsId.value}" }) { asset ->
+                                        AssignmentAssetCard(
+                                            title = asset.displayName,
+                                            subtitle = "${asset.provider.displayName} • ${asset.modelId}",
+                                            presetCount = asset.configurations.size,
+                                            isVision = asset.isVision,
+                                            isSelected = asset.configurations.any { it.id == selectedApiId },
+                                            onClick = { viewState = AssignmentSelectionView.ApiConfigList(asset) }
+                                        )
                                     }
                                 } else {
-                                    if (apiAssets.isNotEmpty()) {
-                                        items(apiAssets, key = { "api_${it.credentialsId}" }) { asset ->
-                                            AssignmentAssetCard(
-                                                title = asset.displayName,
-                                                subtitle = "${asset.provider.displayName} • ${asset.modelId}",
-                                                presetCount = asset.configurations.size,
-                                                isSelected = asset.configurations.any { it.id == selectedApiId },
-                                                onClick = { viewState = AssignmentSelectionView.ApiConfigList(asset) }
-                                            )
-                                        }
-                                    } else {
-                                        item {
-                                            Text(
-                                                text = "No API providers configured.",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(vertical = 16.dp)
-                                            )
-                                        }
+                                    item {
+                                        Text(
+                                            text = if (hasLocalTab) {
+                                                "No local models available."
+                                            } else {
+                                                "No API providers configured."
+                                            },
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(vertical = 16.dp)
+                                        )
                                     }
                                 }
                             }
                         }
                     }
                 }
+
                 is AssignmentSelectionView.LocalConfigList -> {
                     LazyColumn(
                         modifier = Modifier
@@ -451,7 +498,7 @@ fun AssignmentSelectionContent(
                             .padding(top = 16.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(state.asset.configurations, key = { it.id }) { config ->
+                        items(state.asset.configurations, key = { it.id.value }) { config ->
                             ConfigSelectionCard(
                                 label = config.displayName,
                                 isSelected = selectedLocalId == config.id,
@@ -463,6 +510,7 @@ fun AssignmentSelectionContent(
                         }
                     }
                 }
+
                 is AssignmentSelectionView.ApiConfigList -> {
                     LazyColumn(
                         modifier = Modifier
@@ -471,7 +519,7 @@ fun AssignmentSelectionContent(
                             .padding(top = 16.dp, bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(state.asset.configurations, key = { it.id }) { config ->
+                        items(state.asset.configurations, key = { it.id.value }) { config ->
                             ConfigSelectionCard(
                                 label = config.displayName,
                                 isSelected = selectedApiId == config.id,
@@ -516,6 +564,7 @@ private fun AssignmentAssetCard(
     title: String,
     subtitle: String,
     presetCount: Int,
+    isVision: Boolean = false,
     isSelected: Boolean = false,
     onClick: () -> Unit
 ) {
@@ -547,12 +596,23 @@ private fun AssignmentAssetCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (isVision) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "Vision capable",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
@@ -696,11 +756,12 @@ fun PreviewAssignmentSelectionContent() {
 @Composable
 fun PreviewAssignmentAssetCard() {
     PocketCrewTheme {
-        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             AssignmentAssetCard(
-                title = "Meta Llama 3 8B",
+                title = "Meta Llama 3 8B (Vision)",
                 subtitle = "meta-llama • GGUF",
                 presetCount = 3,
+                isVision = true,
                 isSelected = false,
                 onClick = {}
             )

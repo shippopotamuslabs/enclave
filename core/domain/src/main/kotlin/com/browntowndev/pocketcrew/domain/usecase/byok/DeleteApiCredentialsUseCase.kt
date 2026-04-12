@@ -4,20 +4,23 @@ import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
 interface DeleteApiCredentialsUseCase {
     suspend operator fun invoke(
-        id: Long,
-        replacementLocalConfigId: Long? = null,
-        replacementApiConfigId: Long? = null
+        id: ApiCredentialsId,
+        replacementLocalConfigId: LocalModelConfigurationId? = null,
+        replacementApiConfigId: ApiModelConfigurationId? = null
     ): Result<Unit>
     
-    suspend fun getModelTypesNeedingReassignment(id: Long): List<ModelType>
+    suspend fun getModelTypesNeedingReassignment(id: ApiCredentialsId): List<ModelType>
     
-    suspend fun isLastModel(id: Long): Boolean
+    suspend fun isLastModel(id: ApiCredentialsId): Boolean
 }
 
 class DeleteApiCredentialsUseCaseImpl @Inject constructor(
@@ -27,9 +30,9 @@ class DeleteApiCredentialsUseCaseImpl @Inject constructor(
     private val transactionProvider: TransactionProvider,
 ) : DeleteApiCredentialsUseCase {
     override suspend fun invoke(
-        id: Long,
-        replacementLocalConfigId: Long?,
-        replacementApiConfigId: Long?
+        id: ApiCredentialsId,
+        replacementLocalConfigId: LocalModelConfigurationId?,
+        replacementApiConfigId: ApiModelConfigurationId?
     ): Result<Unit> {
         return Result.runCatching {
             if (isLastModel(id)) {
@@ -58,7 +61,7 @@ class DeleteApiCredentialsUseCaseImpl @Inject constructor(
         }
     }
 
-    override suspend fun getModelTypesNeedingReassignment(id: Long): List<ModelType> {
+    override suspend fun getModelTypesNeedingReassignment(id: ApiCredentialsId): List<ModelType> {
         val modelConfigs = apiModelRepository.getConfigurationsForCredentials(id)
         val modelConfigIds = modelConfigs.map { it.id }.toSet()
 
@@ -70,10 +73,10 @@ class DeleteApiCredentialsUseCaseImpl @Inject constructor(
             .map { it.modelType }
     }
 
-    override suspend fun isLastModel(id: Long): Boolean {
+    override suspend fun isLastModel(id: ApiCredentialsId): Boolean {
         val registeredModels = localModelRepository.getAllLocalAssets()
         val allApiCredentials = apiModelRepository.getAllCredentials()
-        
+
         val hasLocalModels = registeredModels.isNotEmpty()
         val hasOnlyOneApiModel = allApiCredentials.size == 1
         val thisIsTheOnlyApiModel = allApiCredentials.any { it.id == id }

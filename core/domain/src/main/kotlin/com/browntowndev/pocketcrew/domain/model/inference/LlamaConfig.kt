@@ -37,6 +37,7 @@ data class LlamaSamplingConfig(
  */
 data class LlamaModelConfig(
     val modelPath: String,
+    val mmprojPath: String? = null,
     val systemPrompt: String = "You are a helpful assistant.",
     val sampling: LlamaSamplingConfig = LlamaSamplingConfig(minP = 0.0f)
 )

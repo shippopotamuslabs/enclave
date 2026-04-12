@@ -14,7 +14,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextDecoration
 import com.hrm.markdown.renderer.AdmonitionStyle
 import com.hrm.markdown.renderer.MarkdownTheme
-import com.hrm.markdown.renderer.highlight.SyntaxColorScheme
 
 private val DarkColorScheme = darkColorScheme(
     primary = PeachAccent,
@@ -145,8 +144,5 @@ fun darkMarkdownTheme(): MarkdownTheme = MarkdownTheme(
     mathColor = DarkOnBackground,
     admonitionStyles = darkAdmonitionStyles(),
     kbdBackground = DarkSurfaceVariant,
-    syntaxColorScheme = SyntaxColorScheme.GitHubDark,
     codeBlockTitleBackground = Color(0xFF21262D),
-    codeBlockLineNumberColor = Color(0xFF484F58),
-    codeBlockHighlightLineColor = Color(0xFF3B2E00),
 )

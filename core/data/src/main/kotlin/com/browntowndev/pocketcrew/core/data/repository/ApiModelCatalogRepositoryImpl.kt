@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
 import com.google.genai.types.Model
+import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,7 +18,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.json.JSONObject
 
 @Singleton
-class ApiModelCatalogRepositoryImpl(
+class ApiModelCatalogRepositoryImpl @Inject constructor(
     private val openAiClientProvider: OpenAiClientProvider,
     private val anthropicClientProvider: AnthropicClientProvider,
     private val googleGenAiClientProvider: GoogleGenAiClientProvider,
@@ -54,7 +55,10 @@ class ApiModelCatalogRepositoryImpl(
                     DiscoveredApiModel(
                         id = it.id(),
                         name = it.displayName(),
-                        created = it.createdAt()?.toEpochSecond()
+                        created = it.createdAt().toEpochSecond(),
+                        visionCapable = it.capabilities()
+                            .map { capabilities -> capabilities.imageInput().supported() }
+                            .orElse(null),
                     )
                 }
                 .distinctBy(DiscoveredApiModel::id)
@@ -184,6 +188,10 @@ class ApiModelCatalogRepositoryImpl(
                         maxOutputTokens = model
                             .optJSONObject("top_provider")
                             ?.optIntOrNull("max_completion_tokens"),
+                        visionCapable = model
+                            .optJSONObject("architecture")
+                            ?.optJSONArray("input_modalities")
+                            ?.supportsImageInput(),
                     )
                 )
             }
@@ -317,7 +325,8 @@ class ApiModelCatalogRepositoryImpl(
                         created = model.optLongOrNull("created"),
                         promptPrice = promptPrice?.asUsdPerMillionFromXai(),
                         completionPrice = completionPrice?.asUsdPerMillionFromXai(),
-                        contextWindowTokens = null,
+                        contextWindowTokens = model.optIntOrNull("max_prompt_length"),
+                        visionCapable = model.optJSONArray("input_modalities")?.supportsImageInput(),
                     )
                 )
             }
@@ -359,6 +368,7 @@ class ApiModelCatalogRepositoryImpl(
             completionPrice = completionPrice?.asUsdPerMillionFromXai(),
             contextWindowTokens = model.optIntOrNull("max_prompt_length")
                 ?: model.optIntOrNull("context_length"),
+            visionCapable = model.optJSONArray("input_modalities")?.supportsImageInput(),
         )
     }
 
@@ -390,4 +400,13 @@ class ApiModelCatalogRepositoryImpl(
         } else {
             null
         }
+
+    private fun org.json.JSONArray.supportsImageInput(): Boolean {
+        for (index in 0 until length()) {
+            if (optString(index).equals("image", ignoreCase = true)) {
+                return true
+            }
+        }
+        return false
+    }
 }

@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.download
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
@@ -59,6 +60,7 @@ class ModelConfigFetcherImplTest {
         // Given
         val remoteConfigs = listOf(
             RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-main-1"),
                 modelType = ModelType.MAIN,
                 fileName = "model.gguf",
                 huggingFaceModelName = "test/model",
@@ -97,6 +99,7 @@ class ModelConfigFetcherImplTest {
         // Given
         val remoteConfigs = listOf(
             RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-vision-1"),
                 modelType = ModelType.VISION,
                 fileName = "vision.gguf",
                 huggingFaceModelName = "test/vision",
@@ -124,10 +127,46 @@ class ModelConfigFetcherImplTest {
     }
 
     @Test
+    fun toLocalModelAssets_preservesOptionalMmprojMetadata() = runTest {
+        val remoteConfigs = listOf(
+            RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-vision-1"),
+                modelType = ModelType.VISION,
+                fileName = "vision.gguf",
+                huggingFaceModelName = "test/vision",
+                displayName = "Vision Model",
+                sha256 = "def456",
+                sizeInBytes = 2000000L,
+                modelFileFormat = ModelFileFormat.GGUF,
+                temperature = 0.7,
+                topK = 40,
+                topP = 0.95,
+                repetitionPenalty = 1.1,
+                maxTokens = 2048,
+                contextWindow = 4096,
+                systemPrompt = "You are a vision assistant.",
+                visionCapable = true,
+                mmprojFileName = "mmproj.gguf",
+                mmprojSha256 = "proj123",
+                mmprojSizeInBytes = 123456L,
+            )
+        )
+
+        val modelAssets = fetcher.toLocalModelAssets(remoteConfigs)
+
+        val metadata = modelAssets[ModelType.VISION]!!.metadata
+        assertEquals("mmproj.gguf", metadata.mmprojRemoteFileName)
+        assertEquals("mmproj.gguf", metadata.mmprojLocalFileName)
+        assertEquals("proj123", metadata.mmprojSha256)
+        assertEquals(123456L, metadata.mmprojSizeInBytes)
+    }
+
+    @Test
     fun toLocalModelAssets_setsIsSystemPresetToTrue() = runTest {
         // Given
         val remoteConfigs = listOf(
             RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-main-1"),
                 modelType = ModelType.MAIN,
                 fileName = "model.gguf",
                 huggingFaceModelName = "test/model",
@@ -155,11 +194,12 @@ class ModelConfigFetcherImplTest {
     }
 
     @Test
-    fun fetchRemoteConfig_failsIfVisionSlotModelNotVisionCapable() = runTest {
+    fun fetchRemoteConfig_ignoresVisionSlotEntry() = runTest {
         // Given
         val json = """
             {
                 "vision": {
+                    "configId": "config-vision-1",
                     "fileName": "not_vision.gguf",
                     "displayName": "Not Vision Model",
                     "sha256": "abc123",
@@ -193,8 +233,8 @@ class ModelConfigFetcherImplTest {
         val result = fetcher.fetchRemoteConfig()
 
         // Then
-        assertTrue(result.isFailure)
-        assertEquals("Model configured for 'vision' slot must have 'visionCapable' set to true", result.exceptionOrNull()?.message)
+        assertTrue(result.isSuccess)
+        assertTrue(result.getOrThrow().isEmpty())
     }
 
     @Test
@@ -202,6 +242,7 @@ class ModelConfigFetcherImplTest {
         // Given
         val remoteConfigs = listOf(
             RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-main-1"),
                 modelType = ModelType.MAIN,
                 fileName = "main.gguf",
                 huggingFaceModelName = "test/main",
@@ -218,6 +259,7 @@ class ModelConfigFetcherImplTest {
                 systemPrompt = "You are helpful."
             ),
             RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-vision-1"),
                 modelType = ModelType.VISION,
                 fileName = "vision.gguf",
                 huggingFaceModelName = "test/vision",
@@ -234,6 +276,7 @@ class ModelConfigFetcherImplTest {
                 systemPrompt = "You are a vision assistant."
             ),
             RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-draft1-1"),
                 modelType = ModelType.DRAFT_ONE,
                 fileName = "draft.gguf",
                 huggingFaceModelName = "test/draft",
@@ -250,6 +293,7 @@ class ModelConfigFetcherImplTest {
                 systemPrompt = "You are a draft assistant."
             ),
             RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-draft2-1"),
                 modelType = ModelType.DRAFT_TWO,
                 fileName = "draft2.gguf",
                 huggingFaceModelName = "test/draft2",
@@ -266,6 +310,7 @@ class ModelConfigFetcherImplTest {
                 systemPrompt = "You are draft 2."
             ),
             RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-fast-1"),
                 modelType = ModelType.FAST,
                 fileName = "fast.gguf",
                 huggingFaceModelName = "test/fast",
@@ -282,6 +327,7 @@ class ModelConfigFetcherImplTest {
                 systemPrompt = "Be quick."
             ),
             RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-final-1"),
                 modelType = ModelType.FINAL_SYNTHESIS,
                 fileName = "final_synthesis.gguf",
                 huggingFaceModelName = "test/final",
@@ -326,6 +372,7 @@ class ModelConfigFetcherImplTest {
         // Given
         val remoteConfigs = listOf(
             RemoteModelConfig(
+                configId = LocalModelConfigurationId("config-main-1"),
                 modelType = ModelType.MAIN,
                 fileName = "model.gguf",
                 huggingFaceModelName = "test/model",
@@ -358,6 +405,7 @@ class ModelConfigFetcherImplTest {
         val json = """
             {
                 "main": {
+                    "configId": "config-main-1",
                     "fileName": "main.gguf",
                     "displayName": "Main Model",
                     "sha256": "abc123",
@@ -402,6 +450,7 @@ class ModelConfigFetcherImplTest {
         val json = """
             {
                 "main": {
+                    "configId": "config-main-1",
                     "fileName": "main.gguf",
                     "displayName": "Main Model",
                     "sha256": "abc123",

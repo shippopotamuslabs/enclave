@@ -3,8 +3,8 @@ package com.browntowndev.pocketcrew.domain.model.config
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 
 data class ApiModelConfiguration(
-    override val id: Long = 0,
-    val apiCredentialsId: Long,
+    val id: ApiModelConfigurationId = ApiModelConfigurationId(""),
+    val apiCredentialsId: ApiCredentialsId,
     override val displayName: String,
     override val maxTokens: Int = 4096,
     override val contextWindow: Int = 4096,

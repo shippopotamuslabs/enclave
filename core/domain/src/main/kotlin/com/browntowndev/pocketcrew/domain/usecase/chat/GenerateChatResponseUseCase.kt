@@ -1,43 +1,38 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
-import com.browntowndev.pocketcrew.domain.model.inference.FastModelEngine
-import com.browntowndev.pocketcrew.domain.model.inference.ThinkingModelEngine
-import com.browntowndev.pocketcrew.domain.model.MessageState
-import com.browntowndev.pocketcrew.domain.model.chat.Mode
-import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
-import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
-import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.Mode
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
+import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
-import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
+import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.withContext
 import java.util.concurrent.CancellationException
-
-import javax.inject.Inject
 
 /**
  * Use case for generating chat responses.
- * 
+ *
  * ARCHITECTURE (Real-Time Flow Refactor):
- * 1. Accumulates state internally using MessageAccumulatorManager (not DB on every token)
- * 2. Emits AccumulatedMessages on every state change for real-time UI updates
- * 3. Persists all accumulated state to DB in single transaction on completion
- * 4. Uses buffer(64) for backpressure handling
+ * 1. Accumulates state internally using ChatGenerationAccumulatorManager.
+ * 2. Emits AccumulatedMessages on every state change for real-time UI updates.
+ * 3. Persists all accumulated state to DB in a single transaction on completion.
+ * 4. Uses buffer(64) for backpressure handling.
  */
 class GenerateChatResponseUseCase @Inject constructor(
     private val inferenceFactory: InferenceFactoryPort,
@@ -46,448 +41,248 @@ class GenerateChatResponseUseCase @Inject constructor(
     private val messageRepository: MessageRepository,
     private val loggingPort: LoggingPort,
     private val activeModelProvider: ActiveModelProviderPort,
+    private val settingsRepository: SettingsRepository,
+    private val searchToolPromptComposer: SearchToolPromptComposer,
 ) {
-    companion object {
-        private const val TAG = "GenerateChatResponse"
-        private const val FLOW_BUFFER_SIZE = 64
-    }
+    private val historyRehydrator = ChatHistoryRehydrator(
+        messageRepository = messageRepository,
+        loggingPort = loggingPort,
+    )
+    private val inferenceRequestPreparer = ChatInferenceRequestPreparer(
+        activeModelProvider = activeModelProvider,
+        settingsRepository = settingsRepository,
+        messageRepository = messageRepository,
+        searchToolPromptComposer = searchToolPromptComposer,
+        loggingPort = loggingPort,
+    )
+    private val persistAccumulatedMessages = PersistAccumulatedChatMessagesUseCase(chatRepository)
 
     operator fun invoke(
         prompt: String,
-        userMessageId: Long,
-        assistantMessageId: Long,
-        chatId: Long,
-        mode: Mode
+        userMessageId: MessageId,
+        assistantMessageId: MessageId,
+        chatId: ChatId,
+        mode: Mode,
     ): Flow<AccumulatedMessages> {
         return flow {
-            val baseFlow: Flow<MessageGenerationState> = when (mode) {
-                Mode.FAST -> flow {
-                    try {
-                        inferenceFactory.withInferenceService(ModelType.FAST) { service ->
-                            emitAll(
-                                generateWithService(
-                                    prompt, userMessageId, assistantMessageId, chatId, service, ModelType.FAST
-                                )
-                            )
-                        }
-                    } catch (e: InferenceBusyException) {
-                        emitBusyState(ModelType.FAST)
-                    } catch (e: IllegalStateException) {
-                        emit(MessageGenerationState.Failed(e, ModelType.FAST))
-                    } catch (e: java.io.IOException) {
-                        emit(MessageGenerationState.Failed(e, ModelType.FAST))
-                    } catch (e: Exception) {
-                        if (e is CancellationException) throw e
-                        loggingPort.error(TAG, "Unexpected error in FAST mode", e)
-                        emit(
-                            MessageGenerationState.Failed(
-                                error = e,
-                                modelType = ModelType.FAST
-                            )
-                        )
-                    }
-                }
+            val userMessage = messageRepository.getMessageById(userMessageId)
+                ?: throw IllegalStateException("User message $userMessageId was not found")
 
-                Mode.THINKING -> flow {
-                    try {
-                        inferenceFactory.withInferenceService(ModelType.THINKING) { service ->
-                            emitAll(
-                                generateWithService(
-                                    prompt, userMessageId, assistantMessageId, chatId, service, ModelType.THINKING
-                                )
-                            )
-                        }
-                    } catch (e: InferenceBusyException) {
-                        emitBusyState(ModelType.THINKING)
-                    } catch (e: IllegalStateException) {
-                        emit(MessageGenerationState.Failed(e, ModelType.THINKING))
-                    } catch (e: java.io.IOException) {
-                        emit(MessageGenerationState.Failed(e, ModelType.THINKING))
-                    } catch (e: Exception) {
-                        if (e is CancellationException) throw e
-                        loggingPort.error(TAG, "Unexpected error in THINKING mode", e)
-                        emit(
-                            MessageGenerationState.Failed(
-                                error = e,
-                                modelType = ModelType.THINKING
-                            )
-                        )
-                    }
-                }
-
-                Mode.CREW -> pipelineExecutor.executePipeline(
-                    chatId = chatId.toString(),
-                    userMessage = prompt,
-                )
-            }
-
-            val assistantMessageIds = mutableMapOf(ModelType.DRAFT_ONE to assistantMessageId)
-
-            // Create accumulator manager for this invocation
-            val accumulatorManager = MessageAccumulatorManager(
+            val baseFlow = executeMode(
+                mode = mode,
+                prompt = prompt,
+                userMessageId = userMessageId,
+                assistantMessageId = assistantMessageId,
+                chatId = chatId,
+                userHasImage = userMessage.content.imageUri != null,
+            )
+            val accumulatorManager = ChatGenerationAccumulatorManager(
                 mode = mode,
                 chatId = chatId,
                 userMessageId = userMessageId,
                 defaultAssistantMessageId = assistantMessageId,
-                assistantMessageIds = assistantMessageIds
-            )
-            val loggedThinkingFor = mutableMapOf(
-                ModelType.DRAFT_ONE to false,
-                ModelType.DRAFT_TWO to false,
-                ModelType.MAIN to false,
-                ModelType.FINAL_SYNTHESIS to false
-            )
-            val loggedProcessingFor = mutableMapOf(
-                ModelType.DRAFT_ONE to false,
-                ModelType.DRAFT_TWO to false,
-                ModelType.MAIN to false,
-                ModelType.FINAL_SYNTHESIS to false
-            )
-            val loggedGenerationFor = mutableMapOf(
-                ModelType.DRAFT_ONE to false,
-                ModelType.DRAFT_TWO to false,
-                ModelType.MAIN to false,
-                ModelType.FINAL_SYNTHESIS to false
-            )
-            val loggedStepCompletionFor = mutableMapOf(
-                ModelType.DRAFT_ONE to false,
-                ModelType.DRAFT_TWO to false,
-                ModelType.MAIN to false,
-                ModelType.FINAL_SYNTHESIS to false
+                chatRepository = chatRepository,
             )
 
             try {
                 baseFlow.collect { state ->
-                    when (state) {
-                        is MessageGenerationState.Processing -> {
-                            if (loggedProcessingFor[state.modelType] == false) {
-                                loggedProcessingFor[state.modelType] = true
-                            }
-
-                            val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
-                            accumulator.currentState = MessageState.PROCESSING
-                            emit(accumulatorManager.toMessagesState())
-                        }
-
-                        is MessageGenerationState.ThinkingLive -> {
-                            if (loggedThinkingFor[state.modelType] == false) {
-                                loggedThinkingFor[state.modelType] = true
-                            }
-
-                            val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
-                            accumulator.appendThinking(state.thinkingChunk)
-                            accumulator.currentState = MessageState.THINKING
-                            emit(accumulatorManager.toMessagesState())
-                        }
-
-                        is MessageGenerationState.GeneratingText -> {
-                            if (loggedGenerationFor[state.modelType] == false) {
-                                loggedGenerationFor[state.modelType] = true
-                            }
-
-                            val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
-                            accumulator.appendContent(state.textDelta)
-                            accumulator.currentState = MessageState.GENERATING
-                            emit(accumulatorManager.toMessagesState())
-                        }
-
-                        is MessageGenerationState.StepCompleted -> {
-                            if (loggedStepCompletionFor[state.modelType] == false) {
-                                loggedStepCompletionFor[state.modelType] = true
-                            }
-
-                            val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
-                            accumulator.isComplete = true
-                            accumulator.currentState = MessageState.COMPLETE
-                            emit(accumulatorManager.toMessagesState())
-                        }
-
-                        is MessageGenerationState.Finished -> {
-                            val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
-                            accumulator.isComplete = true
-                            accumulator.currentState = MessageState.COMPLETE
-                            emit(accumulatorManager.toMessagesState())
-                        }
-
-                        is MessageGenerationState.Blocked -> {
-                            val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
-                            accumulator.content.clear()
-                            accumulator.content.append("[Blocked: ${state.reason}]")
-                            accumulator.isComplete = true
-                            accumulator.currentState = MessageState.COMPLETE
-                            emit(accumulatorManager.toMessagesState())
-                        }
-
-                        is MessageGenerationState.Failed -> {
-                            val accumulator = accumulatorManager.getOrCreateAccumulator(state.modelType)
-                            accumulator.content.clear()
-                            if (state.error is InferenceBusyException) {
-                                accumulator.content.append(state.error.message ?: "Another message is in progress. Please wait until it completes.")
-                            } else {
-                                accumulator.content.append("Error: ${state.error.message ?: "Unknown error"}")
-                            }
-                            accumulator.isComplete = true
-                            accumulator.currentState = MessageState.COMPLETE
-                            emit(accumulatorManager.toMessagesState())
-                        }
-                    }
+                    emit(accumulatorManager.reduce(state))
                 }
             } finally {
                 try {
-                    persistAccumulatedMessages(accumulatorManager)
+                    withContext(Dispatchers.IO) {
+                        persistAccumulatedMessages(accumulatorManager)
+                    }
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to persist messages", e)
                 }
             }
-        }.buffer(FLOW_BUFFER_SIZE)
+        }.buffer(FLOW_BUFFER_SIZE).flowOn(Dispatchers.Default)
+    }
+
+    private fun executeMode(
+        mode: Mode,
+        prompt: String,
+        userMessageId: MessageId,
+        assistantMessageId: MessageId,
+        chatId: ChatId,
+        userHasImage: Boolean,
+    ): Flow<MessageGenerationState> = when (mode) {
+        Mode.FAST -> executeSingleModelMode(
+            prompt = prompt,
+            userMessageId = userMessageId,
+            assistantMessageId = assistantMessageId,
+            chatId = chatId,
+            userHasImage = userHasImage,
+            modelType = ModelType.FAST,
+        )
+
+        Mode.THINKING -> executeSingleModelMode(
+            prompt = prompt,
+            userMessageId = userMessageId,
+            assistantMessageId = assistantMessageId,
+            chatId = chatId,
+            userHasImage = userHasImage,
+            modelType = ModelType.THINKING,
+        )
+
+        Mode.CREW -> executeCrewMode(
+            prompt = prompt,
+            chatId = chatId,
+            userHasImage = userHasImage,
+        )
+    }
+
+    private fun executeSingleModelMode(
+        prompt: String,
+        userMessageId: MessageId,
+        assistantMessageId: MessageId,
+        chatId: ChatId,
+        userHasImage: Boolean,
+        modelType: ModelType,
+    ): Flow<MessageGenerationState> = flow {
+        try {
+            if (userHasImage) {
+                emit(MessageGenerationState.Processing(modelType))
+            }
+            inferenceFactory.withInferenceService(modelType) { service ->
+                emitAll(
+                    generateWithService(
+                        prompt = prompt,
+                        userMessageId = userMessageId,
+                        assistantMessageId = assistantMessageId,
+                        chatId = chatId,
+                        service = service,
+                        modelType = modelType,
+                    )
+                )
+            }
+        } catch (e: InferenceBusyException) {
+            emitBusyState(modelType)
+        } catch (e: IllegalStateException) {
+            emit(MessageGenerationState.Failed(e, modelType))
+        } catch (e: java.io.IOException) {
+            emit(MessageGenerationState.Failed(e, modelType))
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            loggingPort.error(TAG, "Unexpected error in $modelType mode", e)
+            emit(MessageGenerationState.Failed(error = e, modelType = modelType))
+        }
+    }
+
+    private fun executeCrewMode(
+        prompt: String,
+        chatId: ChatId,
+        userHasImage: Boolean,
+    ): Flow<MessageGenerationState> = flow {
+        try {
+            if (userHasImage) {
+                emit(MessageGenerationState.Processing(ModelType.MAIN))
+            }
+            val apiVisionConfigured = activeModelProvider.getActiveConfiguration(ModelType.VISION)
+                ?.let { config -> config.isLocal == false && config.visionCapable }
+                ?: false
+            val crewPrompt = if (userHasImage && apiVisionConfigured) {
+                prepareChatPrompt(
+                    prompt = prompt,
+                    hasImageContext = true,
+                    imageHandling = ChatImageHandling.TOOL,
+                )
+            } else {
+                prompt
+            }
+
+            emitAll(
+                pipelineExecutor.executePipeline(
+                    chatId = chatId.value,
+                    userMessage = crewPrompt,
+                )
+            )
+        } catch (e: InferenceBusyException) {
+            emitBusyState(ModelType.MAIN)
+        } catch (e: IllegalStateException) {
+            emit(MessageGenerationState.Failed(e, ModelType.MAIN))
+        } catch (e: java.io.IOException) {
+            emit(MessageGenerationState.Failed(e, ModelType.MAIN))
+        } catch (e: Exception) {
+            if (e is CancellationException) throw e
+            loggingPort.error(TAG, "Unexpected error in CREW mode", e)
+            emit(MessageGenerationState.Failed(e, ModelType.MAIN))
+        }
     }
 
     private suspend fun kotlinx.coroutines.flow.FlowCollector<MessageGenerationState>.emitBusyState(
-        modelType: ModelType
+        modelType: ModelType,
     ) {
         emit(
             MessageGenerationState.Failed(
                 error = InferenceBusyException(),
-                modelType = modelType
+                modelType = modelType,
             )
         )
-    }
-
-    /**
-     * Persists all accumulated messages to the database using single transaction.
-     * Called once on flow completion.
-     */
-    private suspend fun persistAccumulatedMessages(
-        accumulatorManager: MessageAccumulatorManager
-    ) {
-        accumulatorManager.messages.values.forEach { accumulator ->
-            val finalState = if (accumulator.isComplete) {
-                MessageState.COMPLETE
-            } else {
-                MessageState.PROCESSING
-            }
-
-            // Compute pipelineStep from modelType using the existing helper
-            val pipelineStep = getPipelineStepForModelType(accumulator.modelType)
-
-            chatRepository.persistAllMessageData(
-                messageId = accumulator.messageId,
-                modelType = accumulator.modelType,
-                thinkingStartTime = accumulator.thinkingStartTime ?: 0L,
-                thinkingEndTime = accumulator.thinkingEndTime ?: 0L,
-                thinkingDuration = accumulator.thinkingDurationSeconds.toInt(),
-                thinkingRaw = accumulator.thinkingRaw.toString().ifBlank { null },
-                content = accumulator.content.toString(),
-                messageState = finalState,
-                pipelineStep = pipelineStep
-            )
-        }
-    }
-
-    /**
-     * Manager for accumulating message state across multiple events.
-     * Uses StringBuilder for in-place updates (not data class).
-     */
-    private inner class MessageAccumulatorManager(
-        private val mode: Mode,
-        private val chatId: Long,
-        private val userMessageId: Long,
-        private val defaultAssistantMessageId: Long,
-        private val assistantMessageIds: MutableMap<ModelType, Long> = mutableMapOf()
-    ) {
-        private val _messages = mutableMapOf<Long, MessageAccumulator>()
-        val messages: Map<Long, MessageAccumulator> = _messages
-
-        suspend fun getOrCreateAccumulator(modelType: ModelType): MessageAccumulator {
-            val messageId = if (mode != Mode.CREW) {
-                defaultAssistantMessageId
-            } else {
-                assistantMessageIds[modelType]
-                    ?: chatRepository.createAssistantMessage(
-                        chatId = chatId,
-                        userMessageId = userMessageId,
-                        modelType = modelType,
-                        pipelineStep = getPipelineStepForModelType(modelType)
-                    ).also { newId ->
-                        assistantMessageIds[modelType] = newId
-                    }
-            }
-
-            return _messages.getOrPut(messageId) {
-                MessageAccumulator(
-                    messageId = messageId,
-                    modelType = modelType,
-                    pipelineStep = getPipelineStepForModelType(modelType)
-                )
-            }
-        }
-
-        fun toMessagesState(): AccumulatedMessages {
-            return AccumulatedMessages(
-                messages = _messages.mapValues { (_, accumulator) ->
-                    accumulator.toSnapshot()
-                }
-            )
-        }
-    }
-
-    /**
-     * Accumulated state of all messages for real-time UI updates.
-     * This is the primary emission type after the flow transformation.
-     */
-    data class AccumulatedMessages(
-        val messages: Map<Long, MessageSnapshot>
-    )
-
-    /**
-     * Accumulates state for a single message using StringBuilder (in-place updates).
-     * NOT a data class - allows efficient StringBuilder mutation.
-     */
-    private class MessageAccumulator(
-        val messageId: Long,
-        val modelType: ModelType,
-        val content: StringBuilder = StringBuilder(),
-        val thinkingRaw: StringBuilder = StringBuilder(),
-        var thinkingStartTime: Long? = null,
-        var thinkingEndTime: Long? = null,
-        var isComplete: Boolean = false,
-        var currentState: MessageState = MessageState.GENERATING,
-        var pipelineStep: PipelineStep? = null
-    ) {
-        val thinkingDurationSeconds: Long
-            get() = if (thinkingStartTime != null && thinkingEndTime != null) {
-                (thinkingEndTime!! - thinkingStartTime!!) / 1000
-            } else 0
-
-        fun appendThinking(chunk: String) {
-            thinkingRaw.append(chunk)
-            if (thinkingStartTime == null) {
-                thinkingStartTime = System.currentTimeMillis()
-            }
-        }
-
-        fun appendContent(chunk: String) {
-            content.append(chunk)
-            if (thinkingStartTime != null && thinkingEndTime == null) {
-                thinkingEndTime = System.currentTimeMillis()
-            }
-        }
-
-        fun toSnapshot(): MessageSnapshot = MessageSnapshot(
-            messageId = messageId,
-            modelType = modelType,
-            content = content.toString(),
-            thinkingRaw = thinkingRaw.toString(),
-            thinkingDurationSeconds = thinkingDurationSeconds,
-            thinkingStartTime = thinkingStartTime ?: 0L,
-            thinkingEndTime = thinkingEndTime ?: 0L,
-            isComplete = isComplete,
-            messageState = currentState,
-            pipelineStep = pipelineStep,
-        )
-    }
-
-    private fun getPipelineStepForModelType(modelType: ModelType): PipelineStep {
-        return when (modelType) {
-            ModelType.DRAFT_ONE -> PipelineStep.DRAFT_ONE
-            ModelType.DRAFT_TWO -> PipelineStep.DRAFT_TWO
-            ModelType.MAIN -> PipelineStep.SYNTHESIS
-            ModelType.FINAL_SYNTHESIS -> PipelineStep.FINAL
-            else -> PipelineStep.FINAL
-        }
-    }
-
-    private suspend fun rehydrateHistory(
-        chatId: Long,
-        userMessageId: Long,
-        assistantMessageId: Long,
-        service: LlmInferencePort
-    ) {
-        val messages = messageRepository.getMessagesForChat(chatId)
-            .filter { it.content.text.isNotBlank() }
-            .filter { it.id != userMessageId }
-            .filter { it.id != assistantMessageId }
-        
-        val chatMessages = messages.map { message ->
-            ChatMessage(role = message.role, content = message.content.text)
-        }
-        
-        service.setHistory(chatMessages)
-        loggingPort.debug(TAG, "Rehydrated ${chatMessages.size} messages")
     }
 
     private fun generateWithService(
         prompt: String,
-        userMessageId: Long,
-        assistantMessageId: Long,
-        chatId: Long,
+        userMessageId: MessageId,
+        assistantMessageId: MessageId,
+        chatId: ChatId,
         service: LlmInferencePort,
         modelType: ModelType,
     ): Flow<MessageGenerationState> = flow {
         try {
-            rehydrateHistory(chatId, userMessageId, assistantMessageId, service)
+            historyRehydrator(chatId, userMessageId, assistantMessageId, service)
         } catch (e: Exception) {
-            // Rehydration failures are not fatal to generation
             loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
         }
 
-        val config = activeModelProvider.getActiveConfiguration(modelType)
-        val reasoningBudget = if (config?.isLocal == true && config.thinkingEnabled) 2048 else 0
-        loggingPort.debug(
-            TAG,
-            "generateWithService config modelType=$modelType configName=${config?.name} isLocal=${config?.isLocal} thinkingEnabled=${config?.thinkingEnabled} reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget"
-        )
-        
-        // ARCHITECTURE: Explicitly provide modelType to options for event tagging
-        val options = GenerationOptions(
-            reasoningBudget = reasoningBudget,
+        val preparedRequest = inferenceRequestPreparer(
+            prompt = prompt,
+            chatId = chatId,
+            userMessageId = userMessageId,
             modelType = modelType,
-            systemPrompt = config?.systemPrompt,
-            reasoningEffort = config?.reasoningEffort,
-            temperature = config?.temperature?.toFloat(),
-            topK = config?.topK,
-            topP = config?.topP?.toFloat(),
-            maxTokens = config?.maxTokens,
-            contextWindow = config?.contextWindow,
         )
 
-        service.sendPrompt(prompt, options, closeConversation = false).collect { event ->
+        service.sendPrompt(
+            preparedRequest.prompt,
+            preparedRequest.options,
+            closeConversation = false,
+        ).collect { event ->
             when (event) {
                 is InferenceEvent.Thinking -> {
                     emit(MessageGenerationState.ThinkingLive(event.chunk, modelType))
                 }
+
                 is InferenceEvent.PartialResponse -> {
                     emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
                 }
+
                 is InferenceEvent.Finished -> {
                     emit(MessageGenerationState.Finished(event.modelType))
                 }
+
                 is InferenceEvent.SafetyBlocked -> {
-                    loggingPort.warning(TAG, "InferenceEvent.SafetyBlocked modelType=${event.modelType} reason=${event.reason}")
+                    loggingPort.warning(
+                        TAG,
+                        "InferenceEvent.SafetyBlocked modelType=${event.modelType} reason=${event.reason}",
+                    )
                     emit(MessageGenerationState.Blocked(event.reason, event.modelType))
                 }
+
                 is InferenceEvent.Error -> {
-                    loggingPort.error(TAG, "InferenceEvent.Error modelType=${event.modelType} message=${event.cause.message}", event.cause)
+                    loggingPort.error(
+                        TAG,
+                        "InferenceEvent.Error modelType=${event.modelType} message=${event.cause.message}",
+                        event.cause,
+                    )
                     emit(MessageGenerationState.Failed(event.cause, event.modelType))
                 }
             }
         }
     }.flowOn(Dispatchers.Default)
-}
 
-/**
- * Immutable snapshot of a message's accumulated state.
- * Used by AccumulatedMessages for UI consumption.
- */
-data class MessageSnapshot(
-    val messageId: Long,
-    val modelType: ModelType,
-    val content: String,
-    val thinkingRaw: String,
-    val thinkingDurationSeconds: Long = 0,
-    val thinkingStartTime: Long = 0,
-    val thinkingEndTime: Long = 0,
-    val isComplete: Boolean = false,
-    val messageState: MessageState = if (isComplete) MessageState.COMPLETE else MessageState.GENERATING,
-    val pipelineStep: PipelineStep? = null
-)
+    private companion object {
+        private const val TAG = "GenerateChatResponse"
+        private const val FLOW_BUFFER_SIZE = 64
+    }
+}

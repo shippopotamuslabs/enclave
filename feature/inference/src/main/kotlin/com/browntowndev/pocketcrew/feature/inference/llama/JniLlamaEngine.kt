@@ -183,14 +183,15 @@ class JniLlamaEngine @Inject constructor(
             Log.i(TAG, "=== GPU acceleration ENABLED ===")
         }
 
-        val future = llamaExecutor.submit<Boolean> {
-            nativeLoadModel(
-                modelPath = config.modelPath,
-                contextSize = config.sampling.contextWindow,
-                batchSize = config.sampling.batchSize,
-                gpuLayers = config.sampling.gpuLayers,
-                backendType = detectedBackend.value
-            )
+            val future = llamaExecutor.submit<Boolean> {
+                nativeLoadModel(
+                    modelPath = config.modelPath,
+                    mmprojPath = config.mmprojPath,
+                    contextSize = config.sampling.contextWindow,
+                    batchSize = config.sampling.batchSize,
+                    gpuLayers = config.sampling.gpuLayers,
+                    backendType = detectedBackend.value
+                )
         }
         val ok: Boolean = future.get()
         val loadTime = System.currentTimeMillis() - startTime
@@ -243,9 +244,7 @@ class JniLlamaEngine @Inject constructor(
         check(generating.compareAndSet(false, true)) { "Generation already in progress" }
 
         val cfg = requireNotNull(currentConfig) { "Missing config" }
-        // Pass chat messages to native - let llama.cpp handle chat template formatting
-        val roles = history.map { it.toNativeMessage().first }.toTypedArray()
-        val contents = history.map { it.toNativeMessage().second }.toTypedArray()
+        val (roles, contents) = buildNativeMessages()
         Log.i(
             TAG,
             "Generation config: temp=${cfg.sampling.temperature}, topK=${cfg.sampling.topK}, topP=${cfg.sampling.topP}, maxTokens=${cfg.sampling.maxTokens}"
@@ -321,6 +320,7 @@ class JniLlamaEngine @Inject constructor(
                 startCompletion(
                     roles = roles,
                     contents = contents,
+                    imagePaths = emptyArray(),
                     temperature = cfg.sampling.temperature,
                     topK = cfg.sampling.topK,
                     topP = cfg.sampling.topP,
@@ -359,8 +359,7 @@ class JniLlamaEngine @Inject constructor(
         check(generating.compareAndSet(false, true)) { "Generation already in progress" }
 
         val cfg = requireNotNull(currentConfig) { "Missing config" }
-        val roles = history.map { it.toNativeMessage().first }.toTypedArray()
-        val contents = history.map { it.toNativeMessage().second }.toTypedArray()
+        val (roles, contents) = buildNativeMessages(options.systemPrompt, options.imageUris.size)
 
         // Derive parameters from options instead of config defaults
         val reasoningBudget = options.reasoningBudget
@@ -414,6 +413,7 @@ class JniLlamaEngine @Inject constructor(
                 startCompletion(
                     roles = roles,
                     contents = contents,
+                    imagePaths = options.imageUris.toTypedArray(),
                     temperature = temperature,
                     topK = options.topK ?: cfg.sampling.topK,
                     topP = options.topP ?: cfg.sampling.topP,
@@ -624,6 +624,7 @@ class JniLlamaEngine @Inject constructor(
     // Native method declarations
     private external fun nativeLoadModel(
         modelPath: String,
+        mmprojPath: String?,
         contextSize: Int,
         batchSize: Int,
         gpuLayers: Int,
@@ -637,6 +638,7 @@ class JniLlamaEngine @Inject constructor(
     internal fun startCompletion(
         roles: Array<String>,
         contents: Array<String>,
+        imagePaths: Array<String>,
         temperature: Float,
         topK: Int,
         topP: Float,
@@ -648,12 +650,27 @@ class JniLlamaEngine @Inject constructor(
         reasoningBudget: Int,
         callback: NativeTokenCallback
     ) {
-        nativeStartCompletion(roles, contents, temperature, topK, topP, minP, maxTokens, repeatPenalty, penaltyFreq, penaltyPresent, reasoningBudget, callback)
+        nativeStartCompletion(
+            roles,
+            contents,
+            imagePaths,
+            temperature,
+            topK,
+            topP,
+            minP,
+            maxTokens,
+            repeatPenalty,
+            penaltyFreq,
+            penaltyPresent,
+            reasoningBudget,
+            callback
+        )
     }
 
     private external fun nativeStartCompletion(
         roles: Array<String>,
         contents: Array<String>,
+        imagePaths: Array<String>,
         temperature: Float,
         topK: Int,
         topP: Float,
@@ -665,6 +682,40 @@ class JniLlamaEngine @Inject constructor(
         reasoningBudget: Int,  // -1 = unlimited, 0 = disabled, >0 = enabled with budget
         callback: NativeTokenCallback
     )
+
+    private fun buildNativeMessages(
+        systemPromptOverride: String? = null,
+        mediaMarkerCount: Int = 0,
+    ): Pair<Array<String>, Array<String>> {
+        val effectiveMessages = history.toMutableList()
+        val effectiveSystemPrompt = systemPromptOverride?.takeIf(String::isNotBlank)
+
+        if (effectiveSystemPrompt != null) {
+            val systemIndex = effectiveMessages.indexOfFirst { it.role == ChatRole.SYSTEM }
+            if (systemIndex >= 0) {
+                effectiveMessages[systemIndex] = ChatMessage(ChatRole.SYSTEM, effectiveSystemPrompt)
+            } else {
+                effectiveMessages.add(0, ChatMessage(ChatRole.SYSTEM, effectiveSystemPrompt))
+            }
+        }
+
+        if (mediaMarkerCount > 0) {
+            val lastUserIndex = effectiveMessages.indexOfLast { it.role == ChatRole.USER }
+            require(lastUserIndex >= 0) { "Cannot attach image input without a user message in history" }
+            val mediaPrefix = buildString {
+                repeat(mediaMarkerCount) {
+                    append("<__media__>")
+                }
+            }
+            val userMessage = effectiveMessages[lastUserIndex]
+            if (!userMessage.content.contains("<__media__>")) {
+                effectiveMessages[lastUserIndex] = userMessage.copy(content = mediaPrefix + userMessage.content)
+            }
+        }
+
+        val nativeMessages = effectiveMessages.map { it.toNativeMessage() }
+        return nativeMessages.map { it.first }.toTypedArray() to nativeMessages.map { it.second }.toTypedArray()
+    }
 
     private fun ChatMessage.toNativeMessage(): Pair<String, String> {
         val roleStr = when (role) {

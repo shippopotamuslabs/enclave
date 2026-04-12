@@ -1,8 +1,10 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.Content
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.FakeChatRepository
@@ -40,11 +42,11 @@ class ChatRepositoryNewBehaviorTest {
     @Test
     fun `getIncompleteCrewMessages returns GENERATING messages`() = runTest {
         // Given - create chat with messages
-        val chatId = 1L
+        val chatId = ChatId("1")
         
         // Create messages - one complete, one generating
         val completeMessage = Message(
-            id = 1L,
+            id = MessageId("1"),
             chatId = chatId,
             content = Content("Completed response"),
             role = Role.ASSISTANT,
@@ -52,7 +54,7 @@ class ChatRepositoryNewBehaviorTest {
         )
         
         val generatingMessage = Message(
-            id = 2L,
+            id = MessageId("2"),
             chatId = chatId,
             content = Content("Partial response..."),
             role = Role.ASSISTANT,
@@ -68,7 +70,7 @@ class ChatRepositoryNewBehaviorTest {
         // Note: This test will fail until getIncompleteCrewMessages is implemented
         assertTrue(incompleteMessages.isNotEmpty())
         assertEquals(1, incompleteMessages.size)
-        assertEquals(2L, incompleteMessages.first().id)
+        assertEquals(MessageId("2"), incompleteMessages.first().id)
     }
 
     // ========================================================================
@@ -79,10 +81,10 @@ class ChatRepositoryNewBehaviorTest {
     @Test
     fun `getIncompleteCrewMessages excludes COMPLETE messages`() = runTest {
         // Given - create chat with only COMPLETE messages
-        val chatId = 1L
+        val chatId = ChatId("1")
         
         val completeMessage = Message(
-            id = 1L,
+            id = MessageId("1"),
             chatId = chatId,
             content = Content("Completed response"),
             role = Role.ASSISTANT,
@@ -107,10 +109,10 @@ class ChatRepositoryNewBehaviorTest {
     @Test
     fun `getIncompleteCrewMessages includes thinking data for resume`() = runTest {
         // Given - create chat with GENERATING message that has thinking
-        val chatId = 1L
+        val chatId = ChatId("1")
         
         val generatingMessage = Message(
-            id = 2L,
+            id = MessageId("2"),
             chatId = chatId,
             content = Content("Partial response..."),
             role = Role.ASSISTANT,
@@ -140,10 +142,10 @@ class ChatRepositoryNewBehaviorTest {
     @Test
     fun `getIncompleteCrewMessages includes modelType for resume`() = runTest {
         // Given - create chat with GENERATING message that has modelType
-        val chatId = 1L
+        val chatId = ChatId("1")
         
         val generatingMessage = Message(
-            id = 2L,
+            id = MessageId("2"),
             chatId = chatId,
             content = Content("Agent response..."),
             role = Role.ASSISTANT,
@@ -172,7 +174,7 @@ class ChatRepositoryNewBehaviorTest {
     @Test
     fun `getIncompleteCrewMessages returns empty for non-existent chat`() = runTest {
         // Given - chat doesn't exist
-        val nonExistentChatId = 999L
+        val nonExistentChatId = ChatId("999")
         
         // When
         val incompleteMessages = chatRepository.getIncompleteCrewMessages(nonExistentChatId)

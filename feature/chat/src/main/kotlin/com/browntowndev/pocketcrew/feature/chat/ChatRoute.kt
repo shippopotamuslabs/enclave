@@ -25,7 +25,8 @@ fun ChatRoute(
         onModeChange = viewModel::onModeChange,
         onInputChange = viewModel::onInputChange,
         onEditMessage = viewModel::onEditMessage,
-        onAttach = viewModel::onAttach,
+        onImageSelected = viewModel::onImageSelected,
+        onClearImage = viewModel::clearSelectedImage,
         onShieldTap = {
             val reason = viewModel.getShieldReason()
             if (reason != null) {

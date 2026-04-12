@@ -5,6 +5,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role as DomainRole
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import java.io.File
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -69,5 +71,62 @@ class AnthropicRequestMapperTest {
         assertEquals(4096L, params.thinking().get().asEnabled().budgetTokens())
         assertEquals(1, params.messages().size)
         assertEquals(MessageParam.Role.USER, params.messages().first().role())
+    }
+
+    @Test
+    fun `mapToMessageParams serializes tavily_web_search when tooling is enabled`() {
+        val params = AnthropicRequestMapper.mapToMessageParams(
+            modelId = "claude-sonnet-4-20250514",
+            prompt = "Find recent Android agent news",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+            )
+        )
+
+        assertTrue(params.toString().contains("tavily_web_search"))
+        assertTrue(params.toString().contains("query"))
+    }
+
+    @Test
+    fun `mapToMessageParams serializes attached image inspect with question parameter`() {
+        val params = AnthropicRequestMapper.mapToMessageParams(
+            modelId = "claude-sonnet-4-20250514",
+            prompt = "Inspect the image",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
+            )
+        )
+
+        assertTrue(params.toString().contains("attached_image_inspect"))
+        assertTrue(params.toString().contains("question"))
+    }
+
+    @Test
+    fun `mapToMessageParams includes image blocks when image uris are present`() {
+        val params = AnthropicRequestMapper.mapToMessageParams(
+            modelId = "claude-sonnet-4-20250514",
+            prompt = "Describe this",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                imageUris = listOf(createTempImageUri()),
+            )
+        )
+
+        assertEquals(1, params.messages().size)
+        assertTrue(params.messages().single().toString().contains("image"))
+        assertTrue(params.messages().single().toString().contains("base64"))
+    }
+
+    private fun createTempImageUri(): String {
+        val file = File.createTempFile("anthropic-image", ".jpg")
+        file.writeBytes(byteArrayOf(1, 2, 3, 4))
+        return file.toURI().toString()
     }
 }

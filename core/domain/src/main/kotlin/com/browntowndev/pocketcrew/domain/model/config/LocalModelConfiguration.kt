@@ -10,8 +10,8 @@ package com.browntowndev.pocketcrew.domain.model.config
  *   'isSystemPreset' means "is a factory-provided preset from R2", NOT "is the currently active default".
  */
 data class LocalModelConfiguration(
-    override val id: Long = 0,
-    val localModelId: Long,
+    val id: LocalModelConfigurationId = LocalModelConfigurationId(""),
+    val localModelId: LocalModelId,
     override val displayName: String,
     override val maxTokens: Int,
     override val contextWindow: Int,

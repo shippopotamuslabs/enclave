@@ -27,7 +27,8 @@ fun MessageEntity.toDomain(): Message {
         id = id,
         content = Content(
             text = content,
-            pipelineStep = pipelineStep
+            pipelineStep = pipelineStep,
+            imageUri = imageUri,
         ),
         role = role,
         chatId = chatId,
@@ -44,6 +45,7 @@ fun MessageEntity.toDomain(): Message {
 fun Message.toEntity(): MessageEntity = MessageEntity(
     id = id,
     content = content.text,
+    imageUri = content.imageUri,
     role = role,
     chatId = chatId,
     messageState = messageState,

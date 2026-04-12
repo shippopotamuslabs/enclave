@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.modelconfig
 
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import io.mockk.coEvery
@@ -23,12 +24,13 @@ class SaveLocalModelMetadataUseCaseTest {
     @Test
     fun `invoke calls repository saveLocalModelMetadata`() = runTest {
         val metadata = mockk<LocalModelMetadata>()
-        coEvery { repository.saveLocalModelMetadata(metadata) } returns 1L
+        val expectedId = LocalModelId("1")
+        coEvery { repository.saveLocalModelMetadata(metadata) } returns expectedId
 
         val result = useCase(metadata)
 
         assertTrue(result.isSuccess)
-        assertEquals(1L, result.getOrNull())
+        assertEquals(expectedId, result.getOrNull())
         coVerify(exactly = 1) { repository.saveLocalModelMetadata(metadata) }
     }
 }

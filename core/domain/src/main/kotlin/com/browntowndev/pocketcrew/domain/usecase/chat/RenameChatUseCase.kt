@@ -16,6 +16,7 @@
 
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import javax.inject.Inject
 
@@ -31,7 +32,7 @@ class RenameChatUseCase @Inject constructor(
      * @param chatId The ID of the chat to rename
      * @param newName The new name for the chat
      */
-    suspend operator fun invoke(chatId: Long, newName: String) {
+    suspend operator fun invoke(chatId: ChatId, newName: String) {
         chatRepository.renameChat(chatId, newName)
     }
 }

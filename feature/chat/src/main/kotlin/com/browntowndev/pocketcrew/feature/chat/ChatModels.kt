@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.feature.chat
 
 import android.content.Context
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.R
 
 import androidx.annotation.DrawableRes
@@ -26,8 +28,8 @@ enum class MessageRole {
 }
 
 data class ChatMessage(
-    val id: Long,
-    val chatId: Long,
+    val id: MessageId,
+    val chatId: ChatId,
     val role: MessageRole,
     val content: ContentUi,
     val formattedTimestamp: String,
@@ -38,12 +40,15 @@ data class ChatMessage(
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val inputText: String = "",
+    val selectedImageUri: String? = null,
+    val isPhotoAttachmentEnabled: Boolean = false,
+    val photoAttachmentDisabledReason: String? = null,
     val selectedMode: ChatModeUi = ChatModeUi.FAST,
     val isGlobalInferenceBlocked: Boolean = false,
     val shieldReason: String? = null,
     val hapticPress: Boolean = false,
     val hapticResponse: Boolean = false,
-    val chatId: Long? = null,
+    val chatId: ChatId? = null,
     val isGenerating: Boolean = false,
     val hasActiveIndicator: Boolean = false,
 )
@@ -54,8 +59,8 @@ data class ChatUiState(
 val fakeLongMessages = listOf(
     // Message with Processing indicator
     ChatMessage(
-        id = 1,
-        chatId = 1L,
+        id = MessageId("1"),
+        chatId = ChatId("1"),
         role = MessageRole.Assistant,
         content = ContentUi(text = ""),
         formattedTimestamp = "10:30 AM",
@@ -64,8 +69,8 @@ val fakeLongMessages = listOf(
     ),
     // Message with Thinking indicator (streaming)
     ChatMessage(
-        id = 2,
-        chatId = 1L,
+        id = MessageId("2"),
+        chatId = ChatId("1"),
         role = MessageRole.Assistant,
         content = ContentUi(text = ""),
         formattedTimestamp = "10:29 AM",
@@ -88,16 +93,16 @@ val fakeLongMessages = listOf(
     ),
     // User message
     ChatMessage(
-        id = 3,
-        chatId = 1L,
+        id = MessageId("3"),
+        chatId = ChatId("1"),
         role = MessageRole.User,
         content = ContentUi(text = "Can you explain how coroutines work in Kotlin?"),
         formattedTimestamp = "10:28 AM",
     ),
     // Message with Generating indicator (with thinking data)
     ChatMessage(
-        id = 4,
-        chatId = 1L,
+        id = MessageId("4"),
+        chatId = ChatId("1"),
         role = MessageRole.Assistant,
         content = ContentUi(text = "Message with Generating indicator (with thinking data)"),
         formattedTimestamp = "10:27 AM",
@@ -111,8 +116,8 @@ val fakeLongMessages = listOf(
     ),
     // Message with Complete indicator (with thinking data)
     ChatMessage(
-        id = 5,
-        chatId = 1L,
+        id = MessageId("5"),
+        chatId = ChatId("1"),
         role = MessageRole.Assistant,
         content = ContentUi(text = "Message with Complete indicator (with thinking data)"),
         formattedTimestamp = "10:26 AM",
@@ -130,8 +135,8 @@ val fakeLongMessages = listOf(
     ),
     // Completed message with response
     ChatMessage(
-        id = 6,
-        chatId = 1L,
+        id = MessageId("6"),
+        chatId = ChatId("1"),
         role = MessageRole.Assistant,
         content = ContentUi(
             text = "Jetpack Compose is Android's modern UI toolkit. It replaces XML layouts with declarative Kotlin code.\n\n" +
@@ -152,16 +157,16 @@ val fakeLongMessages = listOf(
     ),
     // User message
     ChatMessage(
-        id = 7,
-        chatId = 1L,
+        id = MessageId("7"),
+        chatId = ChatId("1"),
         role = MessageRole.User,
         content = ContentUi(text = "Show me a code example"),
         formattedTimestamp = "10:24 AM",
     ),
     // Simple completed message
     ChatMessage(
-        id = 8,
-        chatId = 1L,
+        id = MessageId("8"),
+        chatId = ChatId("1"),
         role = MessageRole.Assistant,
         content = ContentUi(
             text = "Here's a complete example in Kotlin:\n\n```kotlin\nfun main() {\n    println(\"Hello, World!\")\n}\n```"

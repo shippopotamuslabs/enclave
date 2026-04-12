@@ -8,13 +8,16 @@ import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.mapper.ApiModelMapper
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionPolicy
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
+import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -40,19 +43,18 @@ class ApiModelRepositoryImpl @Inject constructor(
     override suspend fun getAllCredentials(): List<ApiCredentials> =
         apiCredentialsDao.getAll().map { it.toDomain() }
 
-    override suspend fun getCredentialsById(id: Long): ApiCredentials? =
+    override suspend fun getCredentialsById(id: ApiCredentialsId): ApiCredentials? =
         apiCredentialsDao.getById(id)?.toDomain()
 
     override suspend fun saveCredentials(
         credentials: ApiCredentials,
         apiKey: String,
         sourceCredentialAlias: String?
-    ): Long {
-        val existingEntity = credentials.id.takeIf { it != 0L }?.let { id ->
-            requireNotNull(apiCredentialsDao.getById(id)) {
-                "API credentials not found: $id"
-            }
-        }
+    ): ApiCredentialsId {
+        val existingEntity = if (credentials.id.value.isNotEmpty()) {
+            apiCredentialsDao.getById(credentials.id) ?: throw IllegalArgumentException("API credentials not found: ${credentials.id}")
+        } else null
+        
         val storedBaseUrl = credentials.baseUrl?.trim()?.takeIf { it.isNotBlank() }
             ?: credentials.provider.defaultBaseUrl()
         val sourceApiKey = resolveApiKey(
@@ -69,8 +71,9 @@ class ApiModelRepositoryImpl @Inject constructor(
             )
         } ?: existingEntity?.apiKeySignature
         val now = System.currentTimeMillis()
-        val persistedId = if (credentials.id == 0L) {
+        val persistedId = if (credentials.id.value.isEmpty()) {
             val entity = ApiCredentialsEntity(
+                id = ApiCredentialsId(UUID.randomUUID().toString()),
                 displayName = credentials.displayName,
                 provider = credentials.provider,
                 modelId = credentials.modelId,
@@ -82,6 +85,7 @@ class ApiModelRepositoryImpl @Inject constructor(
                 updatedAt = now
             )
             apiCredentialsDao.insert(entity)
+            entity.id
         } else {
             val entity = ApiCredentialsEntity(
                 id = credentials.id,
@@ -136,22 +140,24 @@ class ApiModelRepositoryImpl @Inject constructor(
         return apiCredentialsDao.getByApiKeySignature(signature)?.toDomain()
     }
 
-    override suspend fun deleteCredentials(id: Long) {
+    override suspend fun deleteCredentials(id: ApiCredentialsId) {
         apiCredentialsDao.getById(id)?.let { entity ->
             apiCredentialsDao.deleteById(id)
             apiKeyManager.delete(entity.credentialAlias)
         }
     }
 
-    override suspend fun getConfigurationsForCredentials(credentialsId: Long): List<ApiModelConfiguration> =
+    override suspend fun getConfigurationsForCredentials(credentialsId: ApiCredentialsId): List<ApiModelConfiguration> =
         apiModelConfigurationsDao.getAllForCredentials(credentialsId).map { it.toDomain() }
 
-    override suspend fun getConfigurationById(id: Long): ApiModelConfiguration? =
+    override suspend fun getConfigurationById(id: ApiModelConfigurationId): ApiModelConfiguration? =
         apiModelConfigurationsDao.getById(id)?.toDomain()
 
-    override suspend fun saveConfiguration(config: ApiModelConfiguration): Long {
+    @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
+    override suspend fun saveConfiguration(config: ApiModelConfiguration): ApiModelConfigurationId {
+        val entityId = if (config.id.value.isNotEmpty()) config.id else ApiModelConfigurationId(kotlin.uuid.Uuid.random().toString())
         val entity = ApiModelConfigurationEntity(
-            id = config.id,
+            id = entityId,
             apiCredentialsId = config.apiCredentialsId,
             displayName = config.displayName,
             maxTokens = config.maxTokens,
@@ -171,14 +177,15 @@ class ApiModelRepositoryImpl @Inject constructor(
             openRouterDataCollectionPolicy = config.openRouterRouting.dataCollectionPolicy.wireValue,
             openRouterZeroDataRetention = config.openRouterRouting.zeroDataRetention,
         )
-        return apiModelConfigurationsDao.upsert(entity)
+        apiModelConfigurationsDao.upsert(entity)
+        return entityId
     }
 
-    override suspend fun deleteConfiguration(id: Long) {
+    override suspend fun deleteConfiguration(id: ApiModelConfigurationId) {
         apiModelConfigurationsDao.deleteById(id)
     }
 
-    override suspend fun deleteConfigurationsForCredentials(credentialsId: Long) {
+    override suspend fun deleteConfigurationsForCredentials(credentialsId: ApiCredentialsId) {
         apiModelConfigurationsDao.deleteAllForCredentials(credentialsId)
     }
     

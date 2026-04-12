@@ -7,12 +7,15 @@ import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -31,31 +34,31 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun togglePinStatus(chatId: Long) {
+    override suspend fun togglePinStatus(chatId: ChatId) {
         val rowsAffected = chatDao.updatePinStatus(chatId)
         if (rowsAffected == 0) {
             throw IllegalArgumentException("Chat not found with id: $chatId")
         }
     }
 
-    override fun getMessagesForChat(chatId: Long): Flow<List<Message>> {
+    override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> {
         return messageDao.getMessagesByChatIdFlow(chatId).map { entities ->
             entities.map { it.toDomain() }
         }
     }
 
-    override suspend fun updateMessageState(messageId: Long, messageState: MessageState) {
+    override suspend fun updateMessageState(messageId: MessageId, messageState: MessageState) {
         messageDao.updateMessageState(messageId, messageState)
         if (messageState == MessageState.COMPLETE) {
             messageDao.updateMessageCreatedAt(messageId, System.currentTimeMillis())
         }
     }
 
-    override suspend fun updateMessageContent(messageId: Long, content: String) {
+    override suspend fun updateMessageContent(messageId: MessageId, content: String) {
         messageDao.updateMessageContentText(messageId, content)
     }
 
-    override suspend fun appendMessageContent(messageId: Long, content: String) {
+    override suspend fun appendMessageContent(messageId: MessageId, content: String) {
         val existing = messageDao.getMessageById(messageId)
         if (existing != null) {
             val newContent = existing.content + content
@@ -63,22 +66,22 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun setThinkingStartTime(messageId: Long) {
+    override suspend fun setThinkingStartTime(messageId: MessageId) {
         messageDao.updateThinkingStartTime(messageId, System.currentTimeMillis())
         messageDao.updateMessageState(messageId, MessageState.THINKING)
     }
 
-    override suspend fun setThinkingEndTime(messageId: Long) {
+    override suspend fun setThinkingEndTime(messageId: MessageId) {
         messageDao.updateThinkingEndTime(messageId, System.currentTimeMillis())
     }
 
-    override suspend fun appendThinkingRaw(messageId: Long, thinkingText: String) {
+    override suspend fun appendThinkingRaw(messageId: MessageId, thinkingText: String) {
         val existing = messageDao.getMessageById(messageId)
         val currentRaw = existing?.thinkingRaw ?: ""
         messageDao.updateThinkingRaw(messageId, currentRaw + thinkingText)
     }
 
-    override suspend fun clearThinking(messageId: Long) {
+    override suspend fun clearThinking(messageId: MessageId) {
         messageDao.updateThinkingRaw(messageId, null)
         messageDao.updateThinkingStartTime(messageId, 0)
         messageDao.updateThinkingEndTime(messageId, 0)
@@ -86,17 +89,18 @@ class ChatRepositoryImpl @Inject constructor(
         messageDao.updateMessageCreatedAt(messageId, System.currentTimeMillis())
     }
 
-    override suspend fun updateMessageModelType(messageId: Long, modelType: ModelType) {
+    override suspend fun updateMessageModelType(messageId: MessageId, modelType: ModelType) {
         messageDao.updateMessageModelType(messageId, modelType)
     }
 
     override suspend fun createAssistantMessage(
-        chatId: Long,
-        userMessageId: Long,
+        chatId: ChatId,
+        userMessageId: MessageId,
         modelType: ModelType,
         pipelineStep: PipelineStep?
-    ): Long {
+    ): MessageId {
         val entity = MessageEntity(
+            id = MessageId(UUID.randomUUID().toString()),
             chatId = chatId,
             content = "",
             role = Role.ASSISTANT,
@@ -105,16 +109,18 @@ class ChatRepositoryImpl @Inject constructor(
             modelType = modelType,
             pipelineStep = pipelineStep
         )
-        return messageDao.insert(entity)
+        messageDao.insert(entity)
+        return entity.id
     }
 
-    override suspend fun createChat(chat: Chat): Long {
+    override suspend fun createChat(chat: Chat): ChatId {
         val entity = chat.toEntity()
-        return chatDao.insert(entity)
+        chatDao.insert(entity)
+        return entity.id
     }
 
     override suspend fun saveAssistantMessage(
-        messageId: Long,
+        messageId: MessageId,
         content: String,
         thinkingData: ThinkingData?
     ) {
@@ -123,7 +129,7 @@ class ChatRepositoryImpl @Inject constructor(
         messageDao.updateMessageContent(
             id = messageId,
             content = content,
-            thinkingDuration = duration,
+            thinkingDuration = duration?.toInt(),
             thinkingRaw = thinkingData?.rawFullThought
         )
     }
@@ -133,7 +139,7 @@ class ChatRepositoryImpl @Inject constructor(
      * Updates model type, thinking timestamps, thinking content, content, pipeline step, and state.
      */
     override suspend fun persistAllMessageData(
-        messageId: Long,
+        messageId: MessageId,
         modelType: ModelType,
         thinkingStartTime: Long,
         thinkingEndTime: Long,
@@ -160,7 +166,7 @@ class ChatRepositoryImpl @Inject constructor(
      * Returns messages that have incomplete state for CREW pipeline resume.
      * Filters for PROCESSING, THINKING, or GENERATING state messages.
      */
-    override suspend fun getIncompleteCrewMessages(chatId: Long): List<Message> {
+    override suspend fun getIncompleteCrewMessages(chatId: ChatId): List<Message> {
         val incompleteStates = listOf(
             MessageState.PROCESSING,
             MessageState.THINKING,
@@ -170,14 +176,14 @@ class ChatRepositoryImpl @Inject constructor(
         return entities.map { it.toDomain() }
     }
 
-    override suspend fun deleteChat(chatId: Long) {
+    override suspend fun deleteChat(chatId: ChatId) {
         val rowsAffected = chatDao.deleteById(chatId)
         if (rowsAffected == 0) {
             throw IllegalArgumentException("Chat not found with id: $chatId")
         }
     }
 
-    override suspend fun renameChat(chatId: Long, newName: String) {
+    override suspend fun renameChat(chatId: ChatId, newName: String) {
         val rowsAffected = chatDao.updateName(chatId, newName)
         if (rowsAffected == 0) {
             throw IllegalArgumentException("Chat not found with id: $chatId")

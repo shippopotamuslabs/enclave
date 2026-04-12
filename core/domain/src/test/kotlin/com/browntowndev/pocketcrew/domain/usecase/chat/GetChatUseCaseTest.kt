@@ -1,7 +1,9 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import io.mockk.every
@@ -30,10 +32,10 @@ class GetChatUseCaseTest {
     @Test
     fun getChatUseCase_returnsFlowOfMessagesForChatId() = runTest {
         // Given
-        val chatId = 1L
+        val chatId = ChatId("1")
         val messages = listOf(
-            Message(id = 1, chatId = chatId, content = Content(text = "Hello"), role = Role.USER),
-            Message(id = 2, chatId = chatId, content = Content(text = "Hi there!"), role = Role.ASSISTANT)
+            Message(id = MessageId("1"), chatId = chatId, content = Content(text = "Hello"), role = Role.USER),
+            Message(id = MessageId("2"), chatId = chatId, content = Content(text = "Hi there!"), role = Role.ASSISTANT)
         )
         val flow: Flow<List<Message>> = flowOf(messages)
 
@@ -53,7 +55,7 @@ class GetChatUseCaseTest {
     @Test
     fun getChatUseCase_returnsEmptyListWhenNoMessages() = runTest {
         // Given
-        val chatId = 1L
+        val chatId = ChatId("1")
         val flow: Flow<List<Message>> = flowOf(emptyList())
 
         every { chatRepository.getMessagesForChat(chatId) } returns flow

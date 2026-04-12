@@ -7,10 +7,15 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.toList
 import javax.inject.Inject
 
 class LiteRtInferenceServiceImpl @Inject constructor(
@@ -42,53 +47,74 @@ class LiteRtInferenceServiceImpl @Inject constructor(
         val accumulatedText = StringBuilder()
         var buffer = ""
 
-        try {
-            val conversation = conversationManager.getConversation(targetModelType, options)
-            Log.d(TAG, "Sending prompt with options: $prompt")
+        suspend fun attemptInference(retryOnFail: Boolean) {
+            try {
+                val conversation = conversationManager.getConversation(targetModelType, options)
+                Log.d(TAG, "Sending prompt with options: $prompt")
 
-            conversation.sendMessageAsync(prompt, options).collect { response ->
-                if (response.thought.isNotEmpty()) {
-                    emit(InferenceEvent.Thinking(response.thought, targetModelType))
-                }
-                
-                if (response.text.isNotEmpty()) {
-                    val state = processThinkingTokens(buffer, response.text, isThinking)
-                    buffer = state.buffer
-                    isThinking = state.isThinking
+                conversation.sendMessageAsync(prompt, options).collect { response ->
+                    if (response.thought.isNotEmpty()) {
+                        emit(InferenceEvent.Thinking(response.thought, targetModelType))
+                    }
+                    
+                    if (response.text.isNotEmpty()) {
+                        val state = processThinkingTokens(buffer, response.text, isThinking)
+                        buffer = state.buffer
+                        isThinking = state.isThinking
 
-                    state.emittedSegments.forEach { segment ->
-                        when (segment.kind) {
-                            SegmentKind.THINKING -> {
-                                accumulatedThought.append(segment.text)
-                                emit(InferenceEvent.Thinking(segment.text, targetModelType))
-                            }
-                            SegmentKind.VISIBLE -> {
-                                accumulatedText.append(segment.text)
-                                emit(InferenceEvent.PartialResponse(segment.text, targetModelType))
+                        state.emittedSegments.forEach { segment ->
+                            when (segment.kind) {
+                                SegmentKind.THINKING -> {
+                                    accumulatedThought.append(segment.text)
+                                    emit(InferenceEvent.Thinking(segment.text, targetModelType))
+                                }
+                                SegmentKind.VISIBLE -> {
+                                    accumulatedText.append(segment.text)
+                                    emit(InferenceEvent.PartialResponse(segment.text, targetModelType))
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            if (buffer.isNotEmpty()) {
-                if (isThinking) {
-                    accumulatedThought.append(buffer)
-                    emit(InferenceEvent.Thinking(buffer, targetModelType))
+                if (buffer.isNotEmpty()) {
+                    if (isThinking) {
+                        accumulatedThought.append(buffer)
+                        emit(InferenceEvent.Thinking(buffer, targetModelType))
+                    } else {
+                        accumulatedText.append(buffer)
+                        emit(InferenceEvent.PartialResponse(buffer, targetModelType))
+                    }
+                }
+
+                emit(InferenceEvent.Finished(targetModelType))
+            } catch (e: Exception) {
+                if (retryOnFail) {
+                    Log.w(TAG, "LiteRT inference failed; resetting engine and retrying once", e)
+                    try {
+                        conversationManager.closeEngine()
+                    } catch (_: Throwable) {}
+                    
+                    // Reset accumulators before retry
+                    isThinking = false
+                    accumulatedThought.clear()
+                    accumulatedText.clear()
+                    buffer = ""
+                    
+                    attemptInference(retryOnFail = false)
                 } else {
-                    accumulatedText.append(buffer)
-                    emit(InferenceEvent.PartialResponse(buffer, targetModelType))
+                    Log.e(TAG, "Error sending prompt (retry failed)", e)
+                    emit(InferenceEvent.Error(e, targetModelType))
                 }
             }
+        }
 
-            emit(InferenceEvent.Finished(targetModelType))
-        } catch (e: Exception) {
-            Log.e(TAG, "Error sending prompt", e)
-            emit(InferenceEvent.Error(e, targetModelType))
+        try {
+            attemptInference(retryOnFail = true)
         } finally {
             if (closeConversation) {
                 conversationManager.closeConversation()
             }
         }
-    }
+    }.flowOn(Dispatchers.Default)
 }

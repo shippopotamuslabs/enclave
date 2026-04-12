@@ -39,6 +39,7 @@ jobs:
       with:
         languages: 'java-kotlin'
         build-mode: manual
+        tools: linked
         config-file: .github/codeql-config.yml
 
     - name: Setup Gradle

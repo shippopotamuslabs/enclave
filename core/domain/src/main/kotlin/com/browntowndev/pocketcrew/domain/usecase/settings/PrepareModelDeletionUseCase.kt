@@ -1,7 +1,11 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiCredentialsUseCase
@@ -30,7 +34,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
         }
     }
 
-    private suspend fun prepareLocalModelAsset(id: Long): PreparedModelDeletion {
+    private suspend fun prepareLocalModelAsset(id: LocalModelId): PreparedModelDeletion {
         if (deleteLocalModelUseCase.isLastModel(id)) {
             return PreparedModelDeletion.BlockedLastModel
         }
@@ -43,8 +47,9 @@ class PrepareModelDeletionUseCase @Inject constructor(
         }
 
         val deletedAsset = localAssets.find { it.metadata.id == id }
+        val requiresApiVisionOnly = ModelType.VISION in needingReassignment
         val requiresVisionCompatibility =
-            ModelType.VISION in needingReassignment || deletedAsset?.metadata?.visionCapable == true
+            requiresApiVisionOnly || deletedAsset?.metadata?.visionCapable == true
         return PreparedModelDeletion.Ready(
             target = ModelDeletionTarget.LocalModelAsset(id),
             modelTypesNeedingReassignment = needingReassignment,
@@ -53,11 +58,12 @@ class PrepareModelDeletionUseCase @Inject constructor(
                 apiAssets = apiAssets,
                 excludeLocalModelId = id,
                 requireVisionCompatibility = requiresVisionCompatibility,
+                requireApiVisionOnly = requiresApiVisionOnly,
             ),
         )
     }
 
-    private suspend fun prepareLocalModelPreset(id: Long): PreparedModelDeletion {
+    private suspend fun prepareLocalModelPreset(id: LocalModelConfigurationId): PreparedModelDeletion {
         val defaults = getDefaultModelsUseCase().first()
         val needingReassignment = defaults.filter { it.localConfigId == id }.map { it.modelType }
         if (needingReassignment.isEmpty()) {
@@ -67,8 +73,9 @@ class PrepareModelDeletionUseCase @Inject constructor(
         val localAssets = getLocalModelAssetsUseCase().first()
         val apiAssets = getApiModelAssetsUseCase().first()
         val deletedAsset = localAssets.find { asset -> asset.configurations.any { it.id == id } }
+        val requiresApiVisionOnly = ModelType.VISION in needingReassignment
         val requiresVisionCompatibility =
-            ModelType.VISION in needingReassignment || deletedAsset?.metadata?.visionCapable == true
+            requiresApiVisionOnly || deletedAsset?.metadata?.visionCapable == true
         return PreparedModelDeletion.Ready(
             target = ModelDeletionTarget.LocalModelPreset(id),
             modelTypesNeedingReassignment = needingReassignment,
@@ -77,11 +84,12 @@ class PrepareModelDeletionUseCase @Inject constructor(
                 apiAssets = apiAssets,
                 excludeLocalConfigId = id,
                 requireVisionCompatibility = requiresVisionCompatibility,
+                requireApiVisionOnly = requiresApiVisionOnly,
             ),
         )
     }
 
-    private suspend fun prepareApiProvider(id: Long): PreparedModelDeletion {
+    private suspend fun prepareApiProvider(id: ApiCredentialsId): PreparedModelDeletion {
         if (deleteApiCredentialsUseCase.isLastModel(id)) {
             return PreparedModelDeletion.BlockedLastModel
         }
@@ -99,11 +107,12 @@ class PrepareModelDeletionUseCase @Inject constructor(
                 apiAssets = getApiModelAssetsUseCase().first(),
                 excludeApiCredentialsId = id,
                 requireVisionCompatibility = false,
+                requireApiVisionOnly = false,
             ),
         )
     }
 
-    private suspend fun prepareApiPreset(id: Long): PreparedModelDeletion {
+    private suspend fun prepareApiPreset(id: ApiModelConfigurationId): PreparedModelDeletion {
         val needingReassignment = deleteApiModelConfigurationUseCase.getModelTypesNeedingReassignment(id)
         if (needingReassignment.isEmpty()) {
             return PreparedModelDeletion.Ready(target = ModelDeletionTarget.ApiPreset(id))
@@ -117,6 +126,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
                 apiAssets = getApiModelAssetsUseCase().first(),
                 excludeApiConfigId = id,
                 requireVisionCompatibility = false,
+                requireApiVisionOnly = false,
             ),
         )
     }
@@ -124,29 +134,32 @@ class PrepareModelDeletionUseCase @Inject constructor(
     private fun buildReassignmentCandidates(
         localAssets: List<LocalModelAsset>,
         apiAssets: List<ApiModelAsset>,
-        excludeLocalModelId: Long? = null,
-        excludeLocalConfigId: Long? = null,
-        excludeApiCredentialsId: Long? = null,
-        excludeApiConfigId: Long? = null,
+        excludeLocalModelId: LocalModelId? = null,
+        excludeLocalConfigId: LocalModelConfigurationId? = null,
+        excludeApiCredentialsId: ApiCredentialsId? = null,
+        excludeApiConfigId: ApiModelConfigurationId? = null,
         requireVisionCompatibility: Boolean,
+        requireApiVisionOnly: Boolean,
     ): List<ReassignmentCandidate> {
         val candidates = mutableListOf<ReassignmentCandidate>()
 
-        localAssets.forEach { asset ->
-            if (asset.metadata.id == excludeLocalModelId) return@forEach
-            if (requireVisionCompatibility && !asset.metadata.visionCapable) return@forEach
+        if (!requireApiVisionOnly) {
+            localAssets.forEach { asset ->
+                if (asset.metadata.id == excludeLocalModelId) return@forEach
+                if (requireVisionCompatibility && !asset.metadata.visionCapable) return@forEach
 
-            asset.configurations.forEach { config ->
-                if (config.id == excludeLocalConfigId) return@forEach
-                candidates.add(
-                    ReassignmentCandidate(
-                        configId = config.id,
-                        source = ModelSource.ON_DEVICE,
-                        assetDisplayName = asset.metadata.huggingFaceModelName,
-                        configDisplayName = config.displayName,
-                        localModelId = asset.metadata.id,
+                asset.configurations.forEach { config ->
+                    if (config.id == excludeLocalConfigId) return@forEach
+                    candidates.add(
+                        ReassignmentCandidate(
+                            configId = config.id,
+                            source = ModelSource.ON_DEVICE,
+                            assetDisplayName = asset.metadata.huggingFaceModelName,
+                            configDisplayName = config.displayName,
+                            localModelId = asset.metadata.id,
+                        )
                     )
-                )
+                }
             }
         }
 

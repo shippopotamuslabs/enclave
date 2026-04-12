@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.usecase.download
 import com.browntowndev.pocketcrew.domain.exception.ModelsDirectoryException
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -29,6 +30,7 @@ class CheckModelsUseCaseTest {
 
     private val testAsset = LocalModelAsset(
         metadata = LocalModelMetadata(
+            id = LocalModelId("1"),
             huggingFaceModelName = "TheBloke/Mistral-7B-v0.1-GGUF",
             remoteFileName = "mistral-7b-v0.1.Q4_K_M.gguf",
             localFileName = "mistral-7b-v0.1.Q4_K_M.gguf",
@@ -38,7 +40,7 @@ class CheckModelsUseCaseTest {
         ),
         configurations = listOf(
             LocalModelConfiguration(
-                localModelId = 1L,
+                localModelId = LocalModelId("1"),
                 displayName = "Test Config",
                 maxTokens = 2048,
                 contextWindow = 4096,

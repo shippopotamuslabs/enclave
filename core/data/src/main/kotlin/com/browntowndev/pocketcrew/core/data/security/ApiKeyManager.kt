@@ -11,6 +11,10 @@ import androidx.annotation.VisibleForTesting
 class ApiKeyManager @VisibleForTesting internal constructor(
     private val prefsProvider: () -> SharedPreferences
 ) {
+    companion object {
+        const val TAVILY_SEARCH_ALIAS = "tavily_web_search"
+    }
+
     @Inject constructor(
         @ApplicationContext context: Context
     ) : this({
@@ -28,12 +32,19 @@ class ApiKeyManager @VisibleForTesting internal constructor(
     private val prefs: SharedPreferences by lazy { prefsProvider() }
 
     fun save(credentialAlias: String, apiKey: String) {
-        prefs.edit().putString(credentialAlias, apiKey).commit()
+        val normalizedKey = apiKey.trim()
+        if (normalizedKey.isEmpty()) {
+            delete(credentialAlias)
+            return
+        }
+        prefs.edit().putString(credentialAlias, normalizedKey).commit()
     }
 
     fun get(credentialAlias: String): String? {
         return prefs.getString(credentialAlias, null)
     }
+
+    fun has(credentialAlias: String): Boolean = !get(credentialAlias).isNullOrBlank()
 
     fun delete(credentialAlias: String) {
         prefs.edit().remove(credentialAlias).commit()

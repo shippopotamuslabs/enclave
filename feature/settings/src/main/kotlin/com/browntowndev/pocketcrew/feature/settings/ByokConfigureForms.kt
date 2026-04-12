@@ -32,6 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -54,9 +55,91 @@ import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningControlStyle
 import com.browntowndev.pocketcrew.domain.model.inference.SystemPromptTemplates
+
+@Composable
+fun SearchSkillConfigurationForm(
+    state: SearchSkillEditorUiState,
+    apiKey: String,
+    onEnabledChange: (Boolean) -> Unit,
+    onApiKeyChange: (String) -> Unit,
+    onClearSavedKey: () -> Unit,
+) {
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Enable Web Search",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "Supported models can call the Tavily-backed search skill when this is on.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+                checked = state.enabled,
+                onCheckedChange = onEnabledChange,
+            )
+        }
+
+        OutlinedTextField(
+            value = apiKey,
+            onValueChange = onApiKeyChange,
+            label = { Text("Tavily API Key") },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            placeholder = {
+                if (state.tavilyKeyPresent) {
+                    Text("A saved Tavily key is already stored")
+                }
+            },
+            supportingText = {
+                Text(
+                    if (state.tavilyKeyPresent) {
+                        "A Tavily key is stored securely. Entering a new key replaces it."
+                    } else {
+                        "Save a Tavily key before enabling live web search."
+                    }
+                )
+            },
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                        contentDescription = if (passwordVisible) "Hide Tavily API key" else "Show Tavily API key",
+                    )
+                }
+            }
+        )
+
+        if (state.tavilyKeyPresent) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(onClick = onClearSavedKey) {
+                    Text("Clear Saved Key")
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,13 +150,14 @@ fun CredentialsConfigurationForm(
     apiKey: String,
     availableModels: List<DiscoveredApiModelUi>,
     filteredModels: List<DiscoveredApiModelUi>,
+    selectedModelMetadata: DiscoveredApiModelUi?,
     isFetchingModels: Boolean,
     searchQuery: String,
     providerFilter: String?,
     sortOption: ModelSortOption,
     onAssetChange: (ApiModelAssetUi) -> Unit,
     onApiKeyChange: (String) -> Unit,
-    onSelectReusableCredential: (Long?) -> Unit,
+    onSelectReusableCredential: (ApiCredentialsId?) -> Unit,
     onFetchModels: () -> Unit,
     onUpdateSearchQuery: (String) -> Unit,
     onUpdateProviderFilter: (String?) -> Unit,
@@ -83,6 +167,7 @@ fun CredentialsConfigurationForm(
     var reusableCredentialDropdownExpanded by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
     var showModelSelectionSheet by remember { mutableStateOf(false) }
+    val discoveredVisionCapability = selectedModelMetadata?.visionCapable
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Provider Selection
@@ -138,9 +223,9 @@ fun CredentialsConfigurationForm(
             shape = RoundedCornerShape(12.dp)
         )
 
-        val canUseStoredCredential = asset.credentialsId == 0L && reusableCredentials.isNotEmpty()
+        val canUseStoredCredential = asset.credentialsId.value.isEmpty() && reusableCredentials.isNotEmpty()
 
-        val canFetchModels = !isFetchingModels && (apiKey.isNotBlank() || asset.credentialsId != 0L || selectedReusableCredential != null)
+        val canFetchModels = !isFetchingModels && (apiKey.isNotBlank() || asset.credentialsId.value.isNotEmpty() || selectedReusableCredential != null)
 
         Box(modifier = Modifier.fillMaxWidth().clickable { showModelSelectionSheet = true }) {
             OutlinedTextField(
@@ -232,6 +317,35 @@ fun CredentialsConfigurationForm(
                     onAssetChange(asset.copy(modelId = selectedModelId))
                 },
                 onDismissRequest = { showModelSelectionSheet = false }
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Vision Enabled",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = when (discoveredVisionCapability) {
+                        true -> "This model reports image input support, so vision is enabled automatically."
+                        false -> "This model reports text-only input, so vision is disabled automatically."
+                        null -> "Turn this on when the selected model can accept image input."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Switch(
+                checked = discoveredVisionCapability ?: asset.isVision,
+                onCheckedChange = { onAssetChange(asset.copy(isVision = it)) },
+                enabled = discoveredVisionCapability == null,
             )
         }
 
@@ -638,17 +752,22 @@ fun PreviewByokConfigureCredentials() {
             ),
             onNavigateToCustomHeaders = {},
             apiKey = "sk-....",
+            searchApiKey = "",
             onNavigateBack = {},
             onApiModelAssetFieldChange = {},
             onApiModelConfigFieldChange = {},
             onApiKeyChange = {},
+            onSearchEnabledChange = {},
+            onSearchApiKeyChange = {},
+            onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
             onUpdateModelSearchQuery = {},
             onUpdateModelProviderFilter = {},
             onUpdateModelSortOption = {},
             onSaveApiCredentials = {},
-            onSaveApiModelConfig = {}
+            onSaveApiModelConfig = {},
+            onSaveSearchSettings = {},
         )
     }
 }
@@ -665,18 +784,23 @@ fun PreviewByokConfigurePreset() {
                 )
             ),
             apiKey = "",
+            searchApiKey = "",
             onNavigateBack = {},
             onNavigateToCustomHeaders = {},
             onApiModelAssetFieldChange = {},
             onApiModelConfigFieldChange = {},
             onApiKeyChange = {},
+            onSearchEnabledChange = {},
+            onSearchApiKeyChange = {},
+            onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
             onUpdateModelSearchQuery = {},
             onUpdateModelProviderFilter = {},
             onUpdateModelSortOption = {},
             onSaveApiCredentials = {},
-            onSaveApiModelConfig = {}
+            onSaveApiModelConfig = {},
+            onSaveSearchSettings = {},
         )
     }
 }
@@ -703,18 +827,23 @@ fun PreviewByokConfigurePresetWithHeaders() {
                 )
             ),
             apiKey = "",
+            searchApiKey = "",
             onNavigateBack = {},
             onNavigateToCustomHeaders = {},
             onApiModelAssetFieldChange = {},
             onApiModelConfigFieldChange = {},
             onApiKeyChange = {},
+            onSearchEnabledChange = {},
+            onSearchApiKeyChange = {},
+            onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
             onUpdateModelSearchQuery = {},
             onUpdateModelProviderFilter = {},
             onUpdateModelSortOption = {},
             onSaveApiCredentials = {},
-            onSaveApiModelConfig = {}
+            onSaveApiModelConfig = {},
+            onSaveSearchSettings = {},
         )
     }
 }
@@ -731,18 +860,23 @@ fun PreviewByokConfigureOpenRouterPreset() {
                 )
             ),
             apiKey = "sk-or-....",
+            searchApiKey = "",
             onNavigateBack = {},
             onNavigateToCustomHeaders = {},
             onApiModelAssetFieldChange = {},
             onApiModelConfigFieldChange = {},
             onApiKeyChange = {},
+            onSearchEnabledChange = {},
+            onSearchApiKeyChange = {},
+            onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
             onUpdateModelSearchQuery = {},
             onUpdateModelProviderFilter = {},
             onUpdateModelSortOption = {},
             onSaveApiCredentials = {},
-            onSaveApiModelConfig = {}
+            onSaveApiModelConfig = {},
+            onSaveSearchSettings = {},
         )
     }
 }

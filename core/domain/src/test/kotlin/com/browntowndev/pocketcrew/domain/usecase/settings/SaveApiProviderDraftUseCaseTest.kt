@@ -1,8 +1,10 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
@@ -26,11 +28,13 @@ class SaveApiProviderDraftUseCaseTest {
 
     @Test
     fun `creates unique alias and initial preset for new provider draft`() = runTest {
+        val credId1 = ApiCredentialsId("1")
+        val credId99 = ApiCredentialsId("99")
         val persistedAssets = MutableStateFlow(
             listOf(
                 ApiModelAsset(
                     credentials = ApiCredentials(
-                        id = 1L,
+                        id = credId1,
                         displayName = "Existing xAI",
                         provider = ApiProvider.XAI,
                         modelId = "grok-4-fast-reasoning",
@@ -46,21 +50,22 @@ class SaveApiProviderDraftUseCaseTest {
             val credentials = invocation.args[0] as ApiCredentials
             persistedAssets.value = listOf(
                 ApiModelAsset(
-                    credentials = credentials.copy(id = 99L),
+                    credentials = credentials.copy(id = credId99),
                     configurations = emptyList(),
                 )
             )
-            99L
+            credId99
         }
         coEvery { saveApiModelConfigurationUseCase(any()) } coAnswers {
             val configuration = invocation.args[0] as ApiModelConfiguration
+            val expectedId = ApiModelConfigurationId("123")
             persistedAssets.value = listOf(
                 ApiModelAsset(
                     credentials = persistedAssets.value.single().credentials,
-                    configurations = listOf(configuration.copy(id = 123L)),
+                    configurations = listOf(configuration.copy(id = expectedId)),
                 )
             )
-            Result.success(123L)
+            Result.success(expectedId)
         }
         coEvery {
             apiModelRepository.findMatchingCredentials(
@@ -91,14 +96,15 @@ class SaveApiProviderDraftUseCaseTest {
 
         assertEquals("xai-grok-4-fast-reasoning-2", result.persistedAsset.credentials.credentialAlias)
         assertEquals("Default Preset", result.createdPreset?.displayName)
-        assertEquals(99L, result.createdPreset?.apiCredentialsId)
+        assertEquals(credId99, result.createdPreset?.apiCredentialsId)
     }
 
     @Test
     fun `links to existing asset when api identity already exists`() = runTest {
+        val credId42 = ApiCredentialsId("42")
         val existingAsset = ApiModelAsset(
             credentials = ApiCredentials(
-                id = 42L,
+                id = credId42,
                 displayName = "Existing xAI",
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
@@ -107,8 +113,8 @@ class SaveApiProviderDraftUseCaseTest {
             ),
             configurations = listOf(
                 ApiModelConfiguration(
-                    id = 8L,
-                    apiCredentialsId = 42L,
+                    id = ApiModelConfigurationId("8"),
+                    apiCredentialsId = credId42,
                     displayName = "Default Preset",
                 )
             )
@@ -124,17 +130,18 @@ class SaveApiProviderDraftUseCaseTest {
                 sourceCredentialAlias = null,
             )
         } returns existingAsset.credentials
-        coEvery { saveApiCredentialsUseCase(any(), any(), any()) } returns 0L
+        coEvery { saveApiCredentialsUseCase(any(), any(), any()) } returns ApiCredentialsId("0")
         coEvery { saveApiModelConfigurationUseCase(any()) } coAnswers {
             val configuration = invocation.args[0] as ApiModelConfiguration
+            val expectedId = ApiModelConfigurationId("99")
             persistedAssets.value = listOf(
                 existingAsset.copy(
                     configurations = listOf(
-                        configuration.copy(id = 99L, apiCredentialsId = existingAsset.credentials.id)
+                        configuration.copy(id = expectedId, apiCredentialsId = existingAsset.credentials.id)
                     )
                 )
             )
-            Result.success(99L)
+            Result.success(expectedId)
         }
 
         val result = SaveApiProviderDraftUseCase(
@@ -154,10 +161,10 @@ class SaveApiProviderDraftUseCaseTest {
             )
         ).getOrThrow()
 
-        assertEquals(42L, result.persistedAsset.credentials.id)
+        assertEquals(credId42, result.persistedAsset.credentials.id)
         assertEquals("Existing xAI", result.linkedExistingAssetDisplayName)
         assertEquals("Default Preset 2", result.createdPreset?.displayName)
-        assertEquals(42L, result.createdPreset?.apiCredentialsId)
+        assertEquals(credId42, result.createdPreset?.apiCredentialsId)
         coVerify(exactly = 0) { saveApiCredentialsUseCase(any(), any(), any()) }
     }
 }

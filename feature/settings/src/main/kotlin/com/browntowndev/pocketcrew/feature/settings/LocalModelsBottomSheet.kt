@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -46,11 +47,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.launch
 
@@ -71,9 +77,9 @@ fun LocalModelsBottomSheet(
     onNavigateToLocalModelConfigure: () -> Unit,
     onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
-    onDeleteLocalModelAsset: (Long) -> Unit,
-    onDeleteLocalModelConfig: (Long) -> Unit,
-    onConfirmDeletionWithReassignment: (Long?, Long?) -> Unit,
+    onDeleteLocalModelAsset: (LocalModelId) -> Unit,
+    onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
+    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
     onDismissDeletionSafety: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -244,7 +250,7 @@ private fun LocalModelAssetListView(
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
-                items(localModels, key = { it.metadataId }) { asset ->
+                items(localModels, key = { it.metadataId.value }) { asset ->
                     LocalModelAssetCard(
                         asset = asset,
                         onSelectAsset = onSelectAsset,
@@ -263,7 +269,7 @@ private fun LocalModelAssetListView(
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
-                items(availableToDownloadModels, key = { "dl_${it.metadataId}" }) { asset ->
+                items(availableToDownloadModels, key = { "dl_${it.metadataId.value}" }) { asset ->
                     LocalModelAssetCard(
                         asset = asset,
                         onSelectAsset = { /* Re-download logic */ },
@@ -317,12 +323,23 @@ private fun LocalModelAssetCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = asset.friendlyName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = asset.friendlyName,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        if (asset.visionCapable) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = "Vision capable",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
                     Text(
                         text = "${asset.providerName} • ${asset.format}",
                         style = MaterialTheme.typography.bodySmall,
@@ -396,12 +413,23 @@ private fun LocalModelConfigListView(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to local models")
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = asset.friendlyName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = asset.friendlyName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    if (asset.visionCapable) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "Vision capable",
+                            modifier = Modifier.size(16.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
                 Text(
                     text = "Presets",
                     style = MaterialTheme.typography.bodySmall,
@@ -421,7 +449,7 @@ private fun LocalModelConfigListView(
             modifier = Modifier.weight(1f, fill = false),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(asset.configurations, key = { it.id }) { config ->
+            items(asset.configurations, key = { it.id.value }) { config ->
                 var menuExpanded by remember { mutableStateOf(false) }
                 val isDeleteEnabled = asset.configurations.size > 1
 
@@ -519,16 +547,15 @@ private fun LocalModelConfigListView(
 }
 
 private sealed interface LocalDeleteTarget {
-    val id: Long
     val displayName: String
 
     data class Asset(
-        override val id: Long,
+        val id: LocalModelId,
         override val displayName: String
     ) : LocalDeleteTarget
 
     data class Config(
-        override val id: Long,
+        val id: LocalModelConfigurationId,
         override val displayName: String
     ) : LocalDeleteTarget
 }

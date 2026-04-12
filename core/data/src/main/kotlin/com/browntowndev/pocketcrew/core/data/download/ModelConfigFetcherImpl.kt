@@ -3,6 +3,8 @@ package com.browntowndev.pocketcrew.core.data.download
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
@@ -51,17 +53,6 @@ class ModelConfigFetcherImpl @Inject constructor(
 
                 val configs = mutableListOf<RemoteModelConfig>()
 
-                // Parse vision model
-                json.optJSONObject("vision")?.let { vision ->
-                    val config = parseModelConfig(vision, ModelType.VISION)
-                    if (!config.visionCapable) {
-                        return@withContext Result.failure(
-                            Exception("Model configured for 'vision' slot must have 'visionCapable' set to true")
-                        )
-                    }
-                    configs.add(config)
-                }
-
                 // Parse draft_one model
                 json.optJSONObject("draft")?.let { draftOne ->
                     configs.add(parseModelConfig(draftOne, ModelType.DRAFT_ONE))
@@ -105,6 +96,7 @@ class ModelConfigFetcherImpl @Inject constructor(
     }
 
     private fun parseModelConfig(json: JSONObject, modelType: ModelType): RemoteModelConfig {
+        val configId = json.getString("configId")
         val fileName = json.getString("fileName")
         // Extract format from fileName extension if not explicitly provided in JSON
         val modelFileFormat = if (json.has("modelFileFormat")) {
@@ -121,6 +113,7 @@ class ModelConfigFetcherImpl @Inject constructor(
 
         return RemoteModelConfig(
             modelType = modelType,
+            configId = LocalModelConfigurationId(configId),
             fileName = fileName,
             huggingFaceModelName = huggingFaceModelName,
             displayName = json.getString("displayName"),
@@ -137,7 +130,10 @@ class ModelConfigFetcherImpl @Inject constructor(
             contextWindow = json.getInt("contextWindow"),
             systemPrompt = json.getString("systemPrompt"),
             thinkingEnabled = json.optBoolean("thinkingEnabled", false),
-            visionCapable = json.optBoolean("visionCapable", false)
+            visionCapable = json.optBoolean("visionCapable", false),
+            mmprojFileName = json.optString("mmprojFileName").takeIf { it.isNotBlank() },
+            mmprojSha256 = json.optString("mmprojSha256").takeIf { it.isNotBlank() },
+            mmprojSizeInBytes = json.optLong("mmprojSizeInBytes").takeIf { it > 0L },
         )
     }
 
@@ -173,6 +169,7 @@ class ModelConfigFetcherImpl @Inject constructor(
             Log.d(TAG, "Model Config File: ${config.fileName}, modelType: ${config.modelType}")
 
             val metadata = LocalModelMetadata(
+                id = LocalModelId(""),
                 huggingFaceModelName = config.huggingFaceModelName,
                 remoteFileName = config.fileName,
                 localFileName = config.fileName,
@@ -180,11 +177,16 @@ class ModelConfigFetcherImpl @Inject constructor(
                 sizeInBytes = config.sizeInBytes,
                 modelFileFormat = config.modelFileFormat,
                 source = config.source,
-                visionCapable = config.visionCapable
+                visionCapable = config.visionCapable,
+                mmprojRemoteFileName = config.mmprojFileName,
+                mmprojLocalFileName = config.mmprojFileName,
+                mmprojSha256 = config.mmprojSha256,
+                mmprojSizeInBytes = config.mmprojSizeInBytes,
             )
 
             val configuration = LocalModelConfiguration(
-                localModelId = 0, // Will be set by Room
+                id = config.configId,
+                localModelId = LocalModelId(""),
                 displayName = config.displayName,
                 maxTokens = config.maxTokens,
                 contextWindow = config.contextWindow,

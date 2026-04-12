@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -53,5 +55,21 @@ class ApiKeyManagerTest {
         apiKeyManager.save("my_key", "sk-secret")
         assertEquals("sk-secret", apiKeyManager.get("my_key"))
         assertNull(apiKeyManager.get("42"))
+    }
+
+    @Test
+    fun `has returns true only when alias is stored`() {
+        assertFalse(apiKeyManager.has(ApiKeyManager.TAVILY_SEARCH_ALIAS))
+        apiKeyManager.save(ApiKeyManager.TAVILY_SEARCH_ALIAS, "tavily-secret")
+        assertTrue(apiKeyManager.has(ApiKeyManager.TAVILY_SEARCH_ALIAS))
+    }
+
+    @Test
+    fun `save blank key clears stored alias`() {
+        apiKeyManager.save(ApiKeyManager.TAVILY_SEARCH_ALIAS, "tavily-secret")
+        apiKeyManager.save(ApiKeyManager.TAVILY_SEARCH_ALIAS, "   ")
+
+        assertFalse(apiKeyManager.has(ApiKeyManager.TAVILY_SEARCH_ALIAS))
+        assertNull(apiKeyManager.get(ApiKeyManager.TAVILY_SEARCH_ALIAS))
     }
 }

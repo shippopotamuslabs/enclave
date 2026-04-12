@@ -47,7 +47,8 @@ class MergeMessagesUseCase @Inject constructor() {
             dbMessage
         } else {
             // DB is still processing (placeholder), use in-flight which has real content
-            inFlightMessage
+            // We must copy createdAt from the dbMessage to preserve chronological sorting order
+            inFlightMessage.copy(createdAt = dbMessage.createdAt)
         }
     }
 }

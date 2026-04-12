@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.download.remote
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
@@ -79,6 +80,7 @@ class DynamicModelUrlProviderTest {
     ): LocalModelAsset {
         return LocalModelAsset(
             metadata = LocalModelMetadata(
+                id = LocalModelId("0"),
                 huggingFaceModelName = huggingFaceModelName,
                 remoteFileName = fileName,
                 localFileName = fileName,

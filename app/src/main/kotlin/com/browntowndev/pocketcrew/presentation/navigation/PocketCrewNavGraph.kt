@@ -130,8 +130,8 @@ fun PocketCrewNavGraph(
             HistoryRoute(
                 onNavigateBack = { navController.popBackStack() },
                 onNavigateToChat = { id ->
-                    if (id != null && id != -1L) {
-                        navController.navigate(Routes.CHAT_WITH_ID.replace("{chatId}", id.toString()))
+                    if (id != null) {
+                        navController.navigate(Routes.CHAT_WITH_ID.replace("{chatId}", id.value))
                     } else {
                         navController.navigate(Routes.CHAT)
                     }
