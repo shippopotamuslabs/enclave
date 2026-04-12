@@ -55,6 +55,7 @@ internal class ChatInferenceRequestPreparer(
         val systemPrompt = when {
             config?.isLocal == true && toolingEnabled -> searchToolPromptComposer.compose(
                 baseSystemPrompt = config.systemPrompt,
+                includeSearchTool = searchEnabled,
                 includeImageInspectTool = imageHandling == ChatImageHandling.TOOL,
             )
             else -> config?.systemPrompt
