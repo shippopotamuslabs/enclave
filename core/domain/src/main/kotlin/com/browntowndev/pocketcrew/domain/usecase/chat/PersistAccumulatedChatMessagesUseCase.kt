@@ -33,7 +33,7 @@ internal class PersistAccumulatedChatMessagesUseCase(
 
     private companion object {
         private val TOOL_CALL_TRACE_REGEX = Regex(
-            """(?s)<tool_call>\s*\{.*?\}\s*</tool_call>|,?\{"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}\s*\}\s*,?"""
+            """(?s)<!\[CDATA\[<tool>\s*\{.*?\}\s*</tool>\]\]>|<tool_call>\s*\{.*?\}\s*</tool_call>|,?\{"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}\s*\}\s*,?"""
         )
         private val TOOL_RESULT_TRACE_REGEX = Regex("(?s)<tool_result>.*?</tool_result>")
     }

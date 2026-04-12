@@ -219,7 +219,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
         assertTrue(options.systemPrompt?.contains("Be concise.") == true)
         assertTrue(
             options.systemPrompt?.contains(
-                """<tool_call>{"name":"tavily_web_search","arguments":{"query":"..."}}</tool_call>"""
+                """<![CDATA[<tool>{"name":"tavily_web_search","arguments":{"query":"..."}}</tool>]]>"""
             ) == true
         )
     }
