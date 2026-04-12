@@ -8,11 +8,12 @@ class ToolPromptComposer {
 
     fun compose(
         baseSystemPrompt: String?,
+        includeSearchTool: Boolean = true,
         includeImageInspectTool: Boolean = false,
     ): String =
         listOfNotNull(
             baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
-            localToolContract(includeImageInspectTool),
+            localToolContract(includeSearchTool, includeImageInspectTool).takeIf(String::isNotEmpty),
         ).joinToString(separator = "\n\n")
 
     companion object {
@@ -29,11 +30,18 @@ When you need to inspect a previously attached image, respond with exactly one t
 <![CDATA[<tool>{"name":"attached_image_inspect","arguments":{"question":"..."}}</tool>]]>
 """
 
-        fun localToolContract(includeImageInspectTool: Boolean): String =
+        fun localToolContract(
+            includeSearchTool: Boolean = true,
+            includeImageInspectTool: Boolean = false,
+        ): String =
             buildString {
-                append(SEARCH_TOOL_CONTRACT.trim())
+                if (includeSearchTool) {
+                    append(SEARCH_TOOL_CONTRACT.trim())
+                }
                 if (includeImageInspectTool) {
-                    append("\n\n")
+                    if (isNotEmpty()) {
+                        append("\n\n")
+                    }
                     append(IMAGE_INSPECT_CONTRACT.trim())
                 }
             }

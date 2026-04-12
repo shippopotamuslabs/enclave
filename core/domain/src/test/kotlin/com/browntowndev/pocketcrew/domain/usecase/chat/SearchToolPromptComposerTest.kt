@@ -32,4 +32,17 @@ class SearchToolPromptComposerTest {
         assertTrue(composed.contains("tavily_web_search"))
         assertTrue(composed.contains("attached_image_inspect"))
     }
+
+    @Test
+    fun `compose only includes image inspect when search is disabled but image tool is requested`() {
+        val composed = composer.compose(
+            baseSystemPrompt = "Be concise.",
+            includeSearchTool = false,
+            includeImageInspectTool = true
+        )
+
+        assertFalse(composed.contains("tavily_web_search"), "Should not contain search contract")
+        assertTrue(composed.contains("attached_image_inspect"), "Should contain image inspect contract")
+        assertTrue(composed.contains("Be concise."), "Should contain base prompt")
+    }
 }
