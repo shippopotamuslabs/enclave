@@ -26,8 +26,8 @@ import kotlin.math.roundToInt
  */
 object ImageDownscaler {
     private const val TAG = "ImageDownscaler"
-    private const val DEFAULT_REQ_WIDTH = 2048
-    private const val DEFAULT_REQ_HEIGHT = 2048
+    private const val DEFAULT_REQ_WIDTH = 1024
+    private const val DEFAULT_REQ_HEIGHT = 1024
 
     suspend fun downscale(
         context: Context,
@@ -44,6 +44,8 @@ object ImageDownscaler {
         }
 
         val options = BitmapFactory.Options().apply {
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+            inMutable = true
             inJustDecodeBounds = true
             openStream()?.use { BitmapFactory.decodeStream(it, null, this) }
 
@@ -156,10 +158,21 @@ object ImageDownscaler {
             reqWidth = reqWidth,
             reqHeight = reqHeight,
         )
-        if (targetWidth == bitmap.width && targetHeight == bitmap.height) {
-            return bitmap
+        val scaled = if (targetWidth == bitmap.width && targetHeight == bitmap.height) {
+            bitmap
+        } else {
+            Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
         }
-        return Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+        
+        if (scaled.config != Bitmap.Config.ARGB_8888) {
+            val converted = scaled.copy(Bitmap.Config.ARGB_8888, true)
+            if (scaled != bitmap) {
+                scaled.recycle()
+            }
+            return converted ?: scaled // Fallback to original if copy fails
+        }
+        
+        return scaled
     }
 
     internal fun calculateTargetDimensions(
