@@ -146,6 +146,28 @@ class ToolEnvelopeParserTest {
     }
 
     @Test
+    fun `extractLocalToolEnvelope parses CDATA tool envelope`() {
+        val text = """Some prefix,<![CDATA[<tool>{"name":"tavily_web_search","arguments":{"query":"android news"}}</tool>]]>,Some suffix"""
+        val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(text)
+        assertNotNull(envelope)
+        assertEquals("tavily_web_search", envelope!!.toolName)
+        assertEquals("""{"query":"android news"}""", envelope.argumentsJson)
+        assertEquals("Some prefix,", envelope.visiblePrefix)
+        assertEquals(",Some suffix", envelope.visibleSuffix)
+    }
+
+    @Test
+    fun `extractLocalToolEnvelope parses original wrapped tool envelope`() {
+        val text = """Some prefix,<tool_call>{"name":"tavily_web_search","arguments":{"query":"android news"}}</tool_call>,Some suffix"""
+        val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(text)
+        assertNotNull(envelope)
+        assertEquals("tavily_web_search", envelope!!.toolName)
+        assertEquals("""{"query":"android news"}""", envelope.argumentsJson)
+        assertEquals("Some prefix,", envelope.visiblePrefix)
+        assertEquals(",Some suffix", envelope.visibleSuffix)
+    }
+
+    @Test
     fun `buildArgumentsJson supports image inspect argument maps`() {
         val json = ToolEnvelopeParser.buildArgumentsJson(
             mapOf("question" to "What is shown in this image?")

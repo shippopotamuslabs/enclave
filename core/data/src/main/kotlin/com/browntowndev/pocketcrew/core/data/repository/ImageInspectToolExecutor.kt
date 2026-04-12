@@ -8,6 +8,8 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.usecase.chat.AnalyzeImageUseCase
+import org.json.JSONException
+import org.json.JSONObject
 import java.lang.reflect.InvocationTargetException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,7 +23,6 @@ class ImageInspectToolExecutor @Inject constructor(
 
     companion object {
         private const val TAG = "ImageInspectTool"
-        private val QUESTION_REGEX = Regex(""""question"\s*:\s*"([^"]*)"""")
     }
 
     override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
@@ -38,7 +39,10 @@ class ImageInspectToolExecutor @Inject constructor(
             loggingPort.warning(TAG, "Image inspect tool invoked without chat context (chatId=$chatId, userMessageId=${request.userMessageId})")
             return ToolExecutionResult(
                 toolName = request.toolName,
-                resultJson = """{"error":"no context","message":"Image inspection requires chat context that is not available in this execution path."}""",
+                resultJson = JSONObject()
+                    .put("error", "no context")
+                    .put("message", "Image inspection requires chat context that is not available in this execution path.")
+                    .toString(),
             )
         }
 
@@ -51,7 +55,10 @@ class ImageInspectToolExecutor @Inject constructor(
             loggingPort.warning(TAG, "Image inspect tool invoked but no resolvable image exists")
             return ToolExecutionResult(
                 toolName = request.toolName,
-                resultJson = """{"error":"no image","message":"No previously attached image is available in this chat."}""",
+                resultJson = JSONObject()
+                    .put("error", "no image")
+                    .put("message", "No previously attached image is available in this chat.")
+                    .toString(),
             )
         }
 
@@ -121,24 +128,40 @@ class ImageInspectToolExecutor @Inject constructor(
     }
 
     private fun extractRequiredQuestion(argumentsJson: String): String {
-        val question = QUESTION_REGEX.find(argumentsJson)?.groupValues?.get(1)?.trim()
-        require(!question.isNullOrBlank()) {
-            "Tool argument 'question' is required"
+        try {
+            return JSONObject(argumentsJson)
+                .optString("question", "")
+                .trim()
+                .takeIf(String::isNotEmpty)
+                ?: throw IllegalArgumentException("Tool argument 'question' is required")
+        } catch (error: JSONException) {
+            throw IllegalArgumentException("Tool argument 'question' is required", error)
         }
-        return question
     }
 
     private fun buildResultJson(
         target: ResolvedImageTarget,
         question: String,
         analysis: String,
-    ): String = """{"resolved_message_id":"${target.userMessageId.value}","image_uri":"${escapeJson(target.imageUri)}","question":"${escapeJson(question)}","analysis":"${escapeJson(analysis)}"}"""
+    ): String = JSONObject()
+        .put("resolved_message_id", target.userMessageId.value)
+        .put("image_uri", target.imageUri)
+        .put("question", question)
+        .put("analysis", analysis)
+        .toString()
 
     private fun buildErrorJson(
         target: ResolvedImageTarget,
         question: String,
         throwable: Throwable,
-    ): String = """{"error":"vision_tool_failed","resolved_message_id":"${target.userMessageId.value}","image_uri":"${escapeJson(target.imageUri)}","question":"${escapeJson(question)}","exception":"${escapeJson(throwable::class.java.simpleName)}","message":"${escapeJson(throwable.message ?: "Unknown error")}"}"""
+    ): String = JSONObject()
+        .put("error", "vision_tool_failed")
+        .put("resolved_message_id", target.userMessageId.value)
+        .put("image_uri", target.imageUri)
+        .put("question", question)
+        .put("exception", throwable::class.java.simpleName)
+        .put("message", throwable.message ?: "Unknown error")
+        .toString()
 
     private fun Throwable.rootCause(): Throwable {
         val cause = when (this) {
@@ -147,9 +170,4 @@ class ImageInspectToolExecutor @Inject constructor(
         }
         return if (cause == null || cause === this) this else cause.rootCause()
     }
-
-    private fun escapeJson(value: String): String =
-        value
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
 }
