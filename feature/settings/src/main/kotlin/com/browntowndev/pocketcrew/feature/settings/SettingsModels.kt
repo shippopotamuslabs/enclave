@@ -240,7 +240,8 @@ data class LocalModelAssetUi(
     val sizeInBytes: Long,
     val configurations: List<LocalModelConfigUi>,
     val isExpanded: Boolean = false,
-    val visionCapable: Boolean = false
+    val visionCapable: Boolean = false,
+    val isSoftDeleted: Boolean = false
 )
 
 @Immutable
@@ -280,6 +281,7 @@ internal val ModelType.displayLabel: String
         ModelType.DRAFT_ONE -> "Draft 1"
         ModelType.DRAFT_TWO -> "Draft 2"
         ModelType.FINAL_SYNTHESIS -> "Final Refinement"
+        ModelType.UNASSIGNED -> "Unassigned"
     }
 
 internal val ModelType.description: String
@@ -291,6 +293,7 @@ internal val ModelType.description: String
         ModelType.DRAFT_ONE -> "Generates the initial analytical draft for the Crew pipeline."
         ModelType.DRAFT_TWO -> "Produces a secondary creative draft for the Crew pipeline."
         ModelType.FINAL_SYNTHESIS -> "Polishes and refines the synthesized content for a professional final output."
+        ModelType.UNASSIGNED -> "A model that is downloaded but not currently assigned to a specific engine role."
     }
 
 /**

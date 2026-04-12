@@ -208,4 +208,17 @@ class LocalModelRepositoryImpl @Inject constructor(
             isSystemPreset = entity.isSystemPreset
         )
     }
+
+    override suspend fun restoreSoftDeletedModel(
+        id: LocalModelId,
+        configurations: List<LocalModelConfiguration>
+    ): LocalModelAsset {
+        transactionProvider.runInTransaction {
+            configurations.forEach { config ->
+                upsertLocalConfiguration(config)
+            }
+        }
+        return loadAsset(id) ?: throw IllegalStateException("Model not found after restoration")
+    }
+
 }

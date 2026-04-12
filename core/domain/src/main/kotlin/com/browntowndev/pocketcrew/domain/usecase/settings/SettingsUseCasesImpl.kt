@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCase
 import javax.inject.Inject
 
 class SettingsPreferencesUseCasesImpl @Inject constructor(
@@ -25,6 +26,7 @@ class SettingsLocalModelUseCasesImpl @Inject constructor(
     override val getLocalModelAssets: GetLocalModelAssetsUseCase,
     override val getRestorableLocalModels: GetRestorableLocalModelsUseCase,
     override val saveLocalModelPreset: SaveLocalModelPresetUseCase,
+    override val reDownloadModel: ReDownloadModelUseCase,
 ) : SettingsLocalModelUseCases
 
 class SettingsApiProviderUseCasesImpl @Inject constructor(

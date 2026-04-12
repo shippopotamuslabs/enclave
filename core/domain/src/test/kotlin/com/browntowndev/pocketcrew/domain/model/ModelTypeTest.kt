@@ -17,11 +17,12 @@ class ModelTypeTest {
         assertEquals("FAST", ModelType.FAST.name)
         assertEquals("THINKING", ModelType.THINKING.name)
         assertEquals("FINAL_SYNTHESIS", ModelType.FINAL_SYNTHESIS.name)
+        assertEquals("UNASSIGNED", ModelType.UNASSIGNED.name)
     }
 
     @Test
-    fun `ModelType has exactly 7 values`() {
-        assertEquals(7, ModelType.entries.size)
+    fun `ModelType has exactly 8 values`() {
+        assertEquals(8, ModelType.entries.size)
     }
 
     @Test
@@ -33,6 +34,7 @@ class ModelTypeTest {
         assertEquals(ModelType.FAST, ModelType.fromApiValue("fast"))
         assertEquals(ModelType.THINKING, ModelType.fromApiValue("thinking"))
         assertEquals(ModelType.FINAL_SYNTHESIS, ModelType.fromApiValue("final_synthesis"))
+        assertEquals(ModelType.UNASSIGNED, ModelType.fromApiValue("unassigned"))
     }
 }
 
