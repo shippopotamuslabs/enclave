@@ -1,8 +1,7 @@
 name: CodeQL Configuration
 
-# Skip Kotlin analysis due to Kotlin 2.3.20 incompatibility
-# CodeQL supports Kotlin < 2.3.20
-# Reference: https://github.com/github/codeql-action
+# Attempting to use 'tools: linked' in workflow to support Kotlin 2.3.20
+# If this fails, consider downgrading Kotlin to 2.3.10 or using java-only analysis.
 
 disable-default-queries: false
 
@@ -12,4 +11,4 @@ paths-ignore:
   - edge-gallery
 
 kotlin:
-  enabled: false
+  enabled: true
