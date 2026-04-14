@@ -1,6 +1,9 @@
 package com.browntowndev.pocketcrew.app
+
+import com.browntowndev.pocketcrew.core.data.download.DownloadWorkScheduler
 import com.browntowndev.pocketcrew.core.data.repository.ModelConfigProviderImpl
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
+import com.browntowndev.pocketcrew.domain.port.download.DownloadWorkSchedulerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
 import dagger.Binds
 import dagger.Module
@@ -23,4 +26,8 @@ abstract class DownloadPortModule {
     @Binds
     @Singleton
     abstract fun bindModelConfigProvider(modelConfigProviderImpl: ModelConfigProviderImpl): ModelConfigProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindDownloadWorkSchedulerPort(impl: DownloadWorkScheduler): DownloadWorkSchedulerPort
 }

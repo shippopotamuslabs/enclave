@@ -1,10 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.download.remote
 
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
-import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
-import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.domain.model.download.DownloadFileSpec
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -23,10 +19,10 @@ class DynamicModelUrlProviderTest {
     @Test
     fun getModelDownloadUrl_returnsR2Url_whenSourceIsR2() {
         // Given
-        val asset = createMockAsset(source = DownloadSource.CLOUDFLARE_R2, fileName = "test-model.gguf")
+        val spec = createFileSpec(source = "CLOUDFLARE_R2", fileName = "test-model.gguf")
 
         // When
-        val url = urlProvider.getModelDownloadUrl(asset)
+        val url = urlProvider.getModelDownloadUrl(spec)
 
         // Then
         assertEquals("https://config.pocketcrew.app/test-model.gguf", url)
@@ -35,14 +31,14 @@ class DynamicModelUrlProviderTest {
     @Test
     fun getModelDownloadUrl_returnsHFUrl_whenSourceIsHF() {
         // Given
-        val asset = createMockAsset(
-            source = DownloadSource.HUGGING_FACE,
+        val spec = createFileSpec(
+            source = "HUGGING_FACE",
             huggingFaceModelName = "user/repo",
             fileName = "model.gguf"
         )
 
         // When
-        val url = urlProvider.getModelDownloadUrl(asset)
+        val url = urlProvider.getModelDownloadUrl(spec)
 
         // Then
         assertTrue(url.startsWith("https://huggingface.co/user/repo/resolve/main/model.gguf"))
@@ -50,46 +46,42 @@ class DynamicModelUrlProviderTest {
 
     @Test
     fun getModelDownloadUrl_rejectsTraversalInRemoteFileName() {
-        val asset = createMockAsset(
-            source = DownloadSource.CLOUDFLARE_R2,
+        val spec = createFileSpec(
+            source = "CLOUDFLARE_R2",
             fileName = "../secrets.db"
         )
 
         assertThrows(SecurityException::class.java) {
-            urlProvider.getModelDownloadUrl(asset)
+            urlProvider.getModelDownloadUrl(spec)
         }
     }
 
     @Test
     fun getModelDownloadUrl_rejectsInvalidHuggingFaceRepoId() {
-        val asset = createMockAsset(
-            source = DownloadSource.HUGGING_FACE,
+        val spec = createFileSpec(
+            source = "HUGGING_FACE",
             huggingFaceModelName = "user/repo/extra",
             fileName = "model.gguf"
         )
 
         assertThrows(IllegalArgumentException::class.java) {
-            urlProvider.getModelDownloadUrl(asset)
+            urlProvider.getModelDownloadUrl(spec)
         }
     }
 
-    private fun createMockAsset(
-        source: DownloadSource,
+    private fun createFileSpec(
+        source: String,
         fileName: String = "model.gguf",
         huggingFaceModelName: String = ""
-    ): LocalModelAsset {
-        return LocalModelAsset(
-            metadata = LocalModelMetadata(
-                id = LocalModelId("0"),
-                huggingFaceModelName = huggingFaceModelName,
-                remoteFileName = fileName,
-                localFileName = fileName,
-                sha256 = "abc123",
-                sizeInBytes = 1000L,
-                modelFileFormat = ModelFileFormat.GGUF,
-                source = source
-            ),
-            configurations = emptyList()
+    ): DownloadFileSpec {
+        return DownloadFileSpec(
+            remoteFileName = fileName,
+            localFileName = fileName,
+            sha256 = "abc123",
+            sizeInBytes = 1000L,
+            huggingFaceModelName = huggingFaceModelName,
+            source = source,
+            modelFileFormat = "GGUF"
         )
     }
 }

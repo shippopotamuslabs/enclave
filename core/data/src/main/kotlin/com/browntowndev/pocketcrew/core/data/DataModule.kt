@@ -40,6 +40,7 @@ import com.browntowndev.pocketcrew.core.data.repository.LocalModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.RoomTransactionProvider
 import com.browntowndev.pocketcrew.core.data.repository.CompositeToolExecutor
+import com.browntowndev.pocketcrew.core.data.repository.ToolExecutionEventBus
 import com.browntowndev.pocketcrew.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
@@ -49,6 +50,7 @@ import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
@@ -197,6 +199,10 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindActiveModelProvider(impl: ActiveModelProviderImpl): ActiveModelProviderPort
+
+    @Binds
+    @Singleton
     abstract fun bindSettingsRepository(impl: SettingsRepositoryImpl): SettingsRepository
 
     @Binds
@@ -237,9 +243,9 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindActiveModelProvider(impl: ActiveModelProviderImpl): ActiveModelProviderPort
+    abstract fun bindToolExecutor(impl: CompositeToolExecutor): ToolExecutorPort
 
     @Binds
     @Singleton
-    abstract fun bindToolExecutor(impl: CompositeToolExecutor): ToolExecutorPort
+    abstract fun bindToolExecutionEventPort(impl: ToolExecutionEventBus): ToolExecutionEventPort
 }
