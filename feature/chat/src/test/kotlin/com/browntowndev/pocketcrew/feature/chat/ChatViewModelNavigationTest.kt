@@ -16,10 +16,13 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCa
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
@@ -44,6 +47,8 @@ class ChatViewModelNavigationTest {
     private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
     private lateinit var activeModelProvider: ActiveModelProviderPort
     private lateinit var errorHandler: ViewModelErrorHandler
+    private lateinit var toolExecutionEventPort: ToolExecutionEventPort
+    private lateinit var loggingPort: LoggingPort
 
     @BeforeEach
     fun setup() {
@@ -54,12 +59,15 @@ class ChatViewModelNavigationTest {
         stageImageAttachmentUseCase = mockk(relaxed = true)
         activeModelProvider = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
+        toolExecutionEventPort = mockk(relaxed = true)
+        loggingPort = mockk(relaxed = true)
 
-        every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
+        coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
+        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
+        every { toolExecutionEventPort.events } returns MutableSharedFlow()
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
-        every { chatUseCases.mergeMessagesUseCase(any(), any()) } answers { args[0] as Message }
-        coEvery { chatUseCases.getChat(any()) } returns flowOf(emptyList())
+        every { chatUseCases.mergeMessagesUseCase(any(), any()) } answers { firstArg() }
     }
 
     private fun createViewModel(savedStateHandle: SavedStateHandle): ChatViewModel {
@@ -71,7 +79,9 @@ class ChatViewModelNavigationTest {
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
             activeModelProvider = activeModelProvider,
-            errorHandler = errorHandler
+            errorHandler = errorHandler,
+            toolExecutionEventPort = toolExecutionEventPort,
+            loggingPort = loggingPort
         )
     }
 

@@ -1,4 +1,5 @@
 package com.browntowndev.pocketcrew.feature.chat
+import androidx.compose.ui.text.toLowerCase
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,11 +12,16 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.ATTACHED_IMAGE_INSPECT
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.TAVILY_WEB_SEARCH
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
@@ -28,6 +34,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -59,7 +66,9 @@ class ChatViewModel @Inject constructor(
     inferenceLockManager: InferenceLockManager,
     private val modelDisplayNamesUseCase: GetModelDisplayNameUseCase,
     private val activeModelProvider: ActiveModelProviderPort,
+    private val toolExecutionEventPort: ToolExecutionEventPort,
     private val errorHandler: ViewModelErrorHandler,
+    private val loggingPort: LoggingPort,
 ) : ViewModel() {
 
     companion object {
@@ -91,6 +100,14 @@ class ChatViewModel @Inject constructor(
     // Holds dynamically loaded display names
     private val _modelDisplayNames = MutableStateFlow<Map<ModelType, String>>(emptyMap())
 
+    // Tracks the current active tool call banner (transient, non-persisted)
+    private val _activeToolCallBanner = MutableStateFlow<ToolCallBannerUi?>(null)
+
+    // Tracks IDs of active tool events to enforce min 1s display rule
+    private val activeToolIds = mutableSetOf<String>()
+    private val activeToolJobs = mutableMapOf<String, Job>()
+    private val toolStartTimes = mutableMapOf<String, Long>()
+
     private val photoAttachmentPolicyFlow = combine(
         settingsUseCases.getSettings(),
         _selectedMode,
@@ -112,6 +129,63 @@ class ChatViewModel @Inject constructor(
             }
             _modelDisplayNames.value = names
         }
+
+        // Observe tool execution events to show transient UI banners
+        observeToolEvents()
+    }
+
+    /**
+     * Observes tool lifecycle events and manages banner visibility with a 1s minimum gate.
+     */
+    private fun observeToolEvents() {
+        toolExecutionEventPort.events.onEach { event ->
+            val currentChatIdVal = _currentChatId.value ?: initialChatId
+            val turnChatId = event.chatId
+
+            loggingPort.debug("ChatViewModel", "Received tool execution event: type=${event::class.java.simpleName} eventId=${event.eventId} turnChatId=${turnChatId?.value} currentChatId=${currentChatIdVal?.value}")
+
+            // Only show if it matches the current conversation context
+            if (turnChatId != currentChatIdVal) return@onEach
+
+            when (event) {
+                is ToolExecutionEvent.Started -> {
+                    // Cancel any pending cleanup for this tool if it matches a previous ID
+                    activeToolJobs[event.eventId]?.cancel()
+                    activeToolIds.add(event.eventId)
+                    toolStartTimes[event.eventId] = System.currentTimeMillis()
+
+                    val toolName = event.toolName.lowercase()
+                    _activeToolCallBanner.value = ToolCallBannerUi(
+                        kind = when (toolName) {
+                            TAVILY_WEB_SEARCH.name -> ToolCallBannerKind.SEARCH
+                            ATTACHED_IMAGE_INSPECT.name -> ToolCallBannerKind.IMAGE
+                            else -> ToolCallBannerKind.SEARCH
+                        },
+                        label = when (toolName) {
+                            TAVILY_WEB_SEARCH.name -> "Searching with Tavily"
+                            ATTACHED_IMAGE_INSPECT.name -> "Inspecting image"
+                            else -> "Executing tool"
+                        }
+                    )
+                }
+                is ToolExecutionEvent.Finished -> {
+                    val startTime = toolStartTimes[event.eventId] ?: return@onEach
+                    val elapsed = System.currentTimeMillis() - startTime
+                    val remaining = (1000 - elapsed).coerceAtLeast(0)
+
+                    activeToolJobs[event.eventId] = viewModelScope.launch {
+                        delay(remaining)
+                        activeToolIds.remove(event.eventId)
+                        // Only clear if no other tools are active to prevent UI flickering
+                        if (activeToolIds.isEmpty()) {
+                            _activeToolCallBanner.value = null
+                        }
+                        toolStartTimes.remove(event.eventId)
+                        activeToolJobs.remove(event.eventId)
+                    }
+                }
+            }
+        }.launchIn(viewModelScope)
     }
 
     /**
@@ -147,12 +221,14 @@ class ChatViewModel @Inject constructor(
                 chatUseCases.getChat(id).debounce(50)
             }
         },
-        _inFlightMessages
+        _inFlightMessages,
+        _activeToolCallBanner
     ) {
         inputsWithPolicy: UiInputsWithPolicy,
         isBlocked: Boolean,
         messages: List<Message>,
-        inFlight: Map<MessageId, MessageSnapshot> ->
+        inFlight: Map<MessageId, MessageSnapshot>,
+        activeBanner: ToolCallBannerUi? ->
 
         val inputs = inputsWithPolicy.inputs
         val attachmentPolicy = inputsWithPolicy.attachmentPolicy
@@ -193,6 +269,7 @@ class ChatViewModel @Inject constructor(
         // Sort chronologically and map domain messages to UI messages
         var isGenerating = false
         var hasActiveIndicator = false
+        var activeIndicatorMessageId: MessageId? = null
         val chatMessages: List<ChatMessage> = allMergedMessages.values
             .sortedBy { it.createdAt }
             .map { message: Message ->
@@ -200,6 +277,7 @@ class ChatViewModel @Inject constructor(
                 val state = chatMessage.indicatorState
                 if (state != null && state !is IndicatorState.None) {
                     hasActiveIndicator = true
+                    activeIndicatorMessageId = chatMessage.id
                     if (!isGenerating && (state is IndicatorState.Generating ||
                         state is IndicatorState.Thinking ||
                         state is IndicatorState.Processing)
@@ -222,7 +300,9 @@ class ChatViewModel @Inject constructor(
             hapticResponse = settings.hapticResponse,
             chatId = _currentChatId.value ?: initialChatId,
             isGenerating = isGenerating,
-            hasActiveIndicator = hasActiveIndicator
+            hasActiveIndicator = hasActiveIndicator,
+            activeIndicatorMessageId = activeIndicatorMessageId,
+            activeToolCallBanner = activeBanner
         )
     }.stateIn(
         scope = viewModelScope,

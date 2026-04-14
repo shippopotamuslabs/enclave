@@ -18,7 +18,7 @@ object TestFixtures {
         estimatedTimeRemaining: String? = null,
         currentSpeedMBs: Double? = null,
         errorMessage: String? = null,
-        wifiBlocked: Boolean = false,
+        waitingForUnmeteredNetwork: Boolean = false,
     ): DownloadState =
         DownloadState(
             status = status,
@@ -29,7 +29,7 @@ object TestFixtures {
             estimatedTimeRemaining = estimatedTimeRemaining,
             currentSpeedMBs = currentSpeedMBs,
             errorMessage = errorMessage,
-            wifiBlocked = wifiBlocked,
+            waitingForUnmeteredNetwork = waitingForUnmeteredNetwork,
         )
 
     fun fileProgress(

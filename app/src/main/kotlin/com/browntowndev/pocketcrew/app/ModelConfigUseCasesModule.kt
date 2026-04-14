@@ -8,8 +8,6 @@ import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAsset
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCaseImpl
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SaveLocalModelConfigurationUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SaveLocalModelConfigurationUseCaseImpl
-import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCase
-import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCaseImpl
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SaveLocalModelMetadataUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SaveLocalModelMetadataUseCaseImpl
 import dagger.Binds
@@ -42,8 +40,4 @@ abstract class ModelConfigUseCasesModule {
     abstract fun bindDeleteLocalModelConfigurationUseCase(
         impl: DeleteLocalModelConfigurationUseCaseImpl,
     ): DeleteLocalModelConfigurationUseCase
-
-    @Binds
-    @Singleton
-    abstract fun bindReDownloadModelUseCase(impl: ReDownloadModelUseCaseImpl): ReDownloadModelUseCase
 }

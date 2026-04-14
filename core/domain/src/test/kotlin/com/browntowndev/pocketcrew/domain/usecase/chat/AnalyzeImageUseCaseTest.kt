@@ -25,7 +25,7 @@ class AnalyzeImageUseCaseTest {
         }
         factory.serviceMap[ModelType.VISION] = visionService
 
-        val result = AnalyzeImageUseCase(factory, mockk(relaxed = true))(
+        val result = AnalyzeImageUseCase(javax.inject.Provider { factory }, mockk(relaxed = true))(
             imageUri = "file:///tmp/test-image.jpg",
             prompt = "What is happening here?",
         )

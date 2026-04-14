@@ -33,6 +33,7 @@ tasks.withType<Test>().configureEach {
 }
 
 ksp {
+    arg("room.generateKotlin", "true")
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
@@ -82,6 +83,7 @@ dependencies {
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
     testImplementation(libs.junit)
     testRuntimeOnly(libs.junit.vintage.engine)

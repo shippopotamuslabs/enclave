@@ -1,3 +1,5 @@
+@file:Suppress("ktlint:standard:function-naming")
+
 package com.browntowndev.pocketcrew.presentation.navigation
 
 import androidx.compose.animation.core.tween
@@ -17,7 +19,6 @@ import com.browntowndev.pocketcrew.feature.settings.navigation.settingsGraph
 
 private const val ANIMATION_DURATION = 300
 
-@Suppress("FunctionNaming")
 @Composable
 fun PocketCrewNavGraph(
     navController: NavHostController,
