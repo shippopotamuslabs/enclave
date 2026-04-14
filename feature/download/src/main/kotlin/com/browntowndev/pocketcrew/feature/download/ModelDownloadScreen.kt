@@ -218,7 +218,8 @@ fun ModelDownloadScreen(
                 onResume = { viewModel.resumeDownloads() },
                 onCancel = { viewModel.cancelDownloads() },
                 onRetry = { viewModel.retryFailed() },
-                onWifiOnlyChange = { viewModel.setWifiOnly(it) }
+                onWifiOnlyChange = { viewModel.setWifiOnly(it) },
+                onDownloadOnMobileData = { viewModel.downloadOnMobileData() }
             )
         }
     ) { innerPadding ->
@@ -304,6 +305,7 @@ private fun DownloadHeader(
         Text(
             text = when (status) {
                 DownloadStatus.CHECKING -> "Checking on the crew..."
+                DownloadStatus.WIFI_BLOCKED -> "Waiting for Wi-Fi..."
                 DownloadStatus.DOWNLOADING -> "Downloading Crew"
                 DownloadStatus.PAUSED -> "Downloads Paused"
                 DownloadStatus.ERROR -> "Download Error"
@@ -316,7 +318,7 @@ private fun DownloadHeader(
         Spacer(modifier = Modifier.height(8.dp))
 
         // Progress
-        if (status == DownloadStatus.CHECKING) {
+        if (status == DownloadStatus.CHECKING || status == DownloadStatus.WIFI_BLOCKED) {
             LinearProgressIndicator(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -551,7 +553,8 @@ private fun DownloadControls(
     onResume: () -> Unit,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
-    onWifiOnlyChange: (Boolean) -> Unit
+    onWifiOnlyChange: (Boolean) -> Unit,
+    onDownloadOnMobileData: () -> Unit = {}
 ) {
     val allowCancel = FeatureFlags.ALLOW_CANCEL_DOWNLOAD
 
@@ -642,6 +645,32 @@ private fun DownloadControls(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Resume")
+                    }
+                }
+                DownloadStatus.WIFI_BLOCKED -> {
+                    if (allowCancel) {
+                        OutlinedButton(
+                            onClick = onCancel,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                Icons.Default.Cancel,
+                                contentDescription = "Cancel download"
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Cancel")
+                        }
+                    }
+                    Button(
+                        onClick = onDownloadOnMobileData,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            Icons.Default.SignalWifiOff,
+                            contentDescription = "Download on mobile data"
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Use Mobile Data")
                     }
                 }
                 DownloadStatus.ERROR -> {

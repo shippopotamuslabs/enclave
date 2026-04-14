@@ -21,14 +21,20 @@ interface LocalModelsDao {
      * Returns all active local models that have at least one configuration.
      * Excludes soft-deleted models, which have no configurations.
      */
-    @Query("SELECT * FROM local_models")
+    @Query("""
+        SELECT m.* FROM local_models m
+        WHERE EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id)
+    """)
     suspend fun getAllActive(): List<LocalModelEntity>
 
     /**
      * Flow version of getAllActive(). Returns active models with configs.
      * Excludes soft-deleted models via EXISTS subquery.
      */
-    @Query("SELECT * FROM local_models")
+    @Query("""
+        SELECT m.* FROM local_models m
+        WHERE EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id)
+    """)
     fun observeAllActive(): Flow<List<LocalModelEntity>>
 
     /**

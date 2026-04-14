@@ -25,17 +25,88 @@ class WorkProgressParser @Inject constructor(
         workInfo: WorkInfo,
         currentDownloads: List<FileProgress>
     ): DownloadProgressUpdate? {
+        // Extract worker stage from output data (available on terminal states)
+        // or from progress data (available during running state).
+        // Safe to null: legacy single-worker chains don't set worker_stage.
+        val workerStage = runCatching {
+            workInfo.outputData.getString(DownloadWorkKeys.KEY_WORKER_STAGE)
+        }.getOrNull()
+            ?: runCatching {
+                workInfo.progress.getString(DownloadWorkKeys.KEY_WORKER_STAGE)
+            }.getOrNull()
+
+        when (workInfo.state) {
+            WorkInfo.State.SUCCEEDED -> {
+                // In a two-worker chain, only FINALIZE success is terminal
+                if (workerStage == DownloadWorkKeys.STAGE_DOWNLOAD) {
+                    return parseSucceededDownload(workInfo, currentDownloads)
+                }
+                // FINALIZE success (or legacy single-worker) is terminal
+                return parseSucceeded(workInfo, currentDownloads)
+            }
+            WorkInfo.State.FAILED -> {
+                // Both download and finalize failures are terminal
+                return parseFailed(workInfo, currentDownloads)
+            }
+            else -> { /* handled below */ }
+        }
+
         return when (workInfo.state) {
-            WorkInfo.State.RUNNING -> parseRunning(workInfo, currentDownloads)
-            WorkInfo.State.SUCCEEDED -> parseSucceeded(workInfo, currentDownloads)
-            WorkInfo.State.FAILED -> parseFailed(workInfo, currentDownloads)
-            WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> {
+            WorkInfo.State.RUNNING -> {
+                // Finalizer running means bytes are done, just finalizing registry
+                if (workerStage == DownloadWorkKeys.STAGE_FINALIZE) {
+                    DownloadProgressUpdate(
+                        status = DownloadStatus.DOWNLOADING,
+                        overallProgress = 1.0f,
+                        modelsComplete = currentDownloads.size,
+                        modelsTotal = currentDownloads.size,
+                        currentDownloads = currentDownloads,
+                        clearSession = false
+                    )
+                } else {
+                    parseRunning(workInfo, currentDownloads)
+                }
+            }
+            WorkInfo.State.ENQUEUED -> {
                 DownloadProgressUpdate(status = DownloadStatus.CHECKING)
+            }
+            WorkInfo.State.BLOCKED -> {
+                DownloadProgressUpdate(
+                    status = DownloadStatus.WIFI_BLOCKED,
+                    waitingForUnmeteredNetwork = true
+                )
             }
             WorkInfo.State.CANCELLED -> {
                 DownloadProgressUpdate(status = DownloadStatus.PAUSED)
             }
+            else -> null
         }
+    }
+
+    /**
+     * SUCCEEDED download worker is intermediate - not terminal in a two-worker chain.
+     * Return null so the UI waits for the finalizer to complete.
+     */
+    private fun parseSucceededDownload(
+        workInfo: WorkInfo,
+        currentDownloads: List<FileProgress>
+    ): DownloadProgressUpdate? {
+        val workSessionId = workInfo.outputData.getString(DownloadWorkKeys.KEY_SESSION_ID)
+        if (sessionManager.isSessionStale(workSessionId)) {
+            Log.w(TAG, "Ignoring stale SUCCEEDED download worker: sessionId=$workSessionId")
+            return null
+        }
+        // Download worker succeeded but finalizer hasn't run yet.
+        // Preserve current progress but don't emit READY.
+        Log.d(TAG, "Download worker SUCCEEDED (intermediate) – waiting for finalizer, sessionId=$workSessionId")
+        return DownloadProgressUpdate(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 1.0f,
+            modelsComplete = currentDownloads.size,
+            modelsTotal = currentDownloads.size,
+            currentDownloads = currentDownloads,
+            clearSession = false
+        )
     }
 
     private fun parseRunning(workInfo: WorkInfo, currentDownloads: List<FileProgress>): DownloadProgressUpdate {
@@ -114,13 +185,13 @@ class WorkProgressParser @Inject constructor(
             currentDownloads = fileProgressList,
             estimatedTimeRemaining = etaString,
             currentSpeedMBs = speedMBs.takeIf { it > 0 },
-            wifiBlocked = false,
+            waitingForUnmeteredNetwork = false,
             errorMessage = null
         )
     }
 
     private fun parseSucceeded(workInfo: WorkInfo, currentDownloads: List<FileProgress>): DownloadProgressUpdate? {
-        val workSessionId = workInfo.outputData.getString(DownloadWorkScheduler.KEY_SESSION_ID)
+        val workSessionId = workInfo.outputData.getString(DownloadWorkKeys.KEY_SESSION_ID)
 
         if (sessionManager.isSessionStale(workSessionId)) {
             Log.w(TAG, "Ignoring stale SUCCEEDED: workSessionId=$workSessionId")
@@ -145,7 +216,7 @@ class WorkProgressParser @Inject constructor(
         workInfo: WorkInfo,
         currentDownloads: List<FileProgress>
     ): DownloadProgressUpdate? {
-        val workSessionId = workInfo.outputData.getString(DownloadWorkScheduler.KEY_SESSION_ID)
+        val workSessionId = workInfo.outputData.getString(DownloadWorkKeys.KEY_SESSION_ID)
 
         // Ignore failures from old/stale sessions - these are from previous app runs
         if (sessionManager.isSessionStale(workSessionId)) {
@@ -153,11 +224,12 @@ class WorkProgressParser @Inject constructor(
             return null
         }
 
-        val errorMessage = workInfo.outputData.getString("error_message") ?: "Download failed"
+        val errorMessage = workInfo.outputData.getString(DownloadWorkKeys.KEY_ERROR_MESSAGE) ?: "Download failed"
         return DownloadProgressUpdate(
             status = DownloadStatus.ERROR,
             errorMessage = errorMessage,
-            currentDownloads = currentDownloads
+            currentDownloads = currentDownloads,
+            clearSession = true
         )
     }
 

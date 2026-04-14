@@ -47,7 +47,7 @@ class DownloadStateManager(
                 },
                 estimatedTimeRemaining = update.estimatedTimeRemaining ?: it.estimatedTimeRemaining,
                 currentSpeedMBs = update.currentSpeedMBs ?: it.currentSpeedMBs,
-                wifiBlocked = update.wifiBlocked ?: it.wifiBlocked,
+                waitingForUnmeteredNetwork = update.waitingForUnmeteredNetwork ?: it.waitingForUnmeteredNetwork,
                 errorMessage = update.errorMessage
             )
         }

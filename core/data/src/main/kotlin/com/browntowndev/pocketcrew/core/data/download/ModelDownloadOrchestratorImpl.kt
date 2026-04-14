@@ -2,22 +2,20 @@ package com.browntowndev.pocketcrew.core.data.download
 
 import android.content.Context
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
-import com.browntowndev.pocketcrew.domain.model.config.requiredArtifacts
+import com.browntowndev.pocketcrew.domain.model.download.DownloadFileSpec
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
+import com.browntowndev.pocketcrew.domain.model.download.DownloadRequestKind
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.download.DownloadWorkRequest
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
-import com.browntowndev.pocketcrew.domain.usecase.download.CheckModelEligibilityUseCase
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeFileProgressUseCase
 import com.browntowndev.pocketcrew.domain.usecase.download.ValidateDownloadConditionsUseCase
 import dagger.hilt.android.qualifiers.ApplicationContext
-import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,9 +33,6 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
     private val initializeFileProgress: InitializeFileProgressUseCase,
     private val workScheduler: DownloadWorkScheduler,
     private val progressParser: WorkProgressParser,
-    private val localModelRepository: com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort,
-    private val activeModelProvider: com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort,
-    private val syncLocalModelRegistryUseCase: SyncLocalModelRegistryUseCase,
     private val logger: LoggingPort,
     override val speedTracker: DownloadSpeedTrackerPort,
 ) : ModelDownloadOrchestratorPort {
@@ -120,7 +115,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
             val initResult = initializeFileProgress(scan, modelsResult.allModels, _downloadState.value.currentDownloads)
             stateManager.applyProgressInit(initResult)
             if (check.errorMessage?.contains("WiFi") == true) {
-                stateManager.updateState { copy(wifiBlocked = true) }
+                stateManager.updateState { copy(waitingForUnmeteredNetwork = true) }
             } else {
                 stateManager.updateState { copy(status = DownloadStatus.ERROR, errorMessage = check.errorMessage) }
             }
@@ -136,15 +131,41 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         val modelsToEnqueue = modelsResult.allModels.filter { (_, asset) ->
             modelsToDownload.any { candidate -> candidate.matchesPhysicalAsset(asset) }
         }
+        val fileSpecs = modelsToEnqueue.values
+            .distinctBy { it.metadata.sha256 }
+            .map { asset ->
+                DownloadFileSpec(
+                    remoteFileName = asset.metadata.remoteFileName,
+                    localFileName = asset.metadata.localFileName,
+                    sha256 = asset.metadata.sha256,
+                    sizeInBytes = asset.metadata.sizeInBytes,
+                    huggingFaceModelName = asset.metadata.huggingFaceModelName,
+                    source = asset.metadata.source.name,
+                    modelFileFormat = asset.metadata.modelFileFormat.name,
+                    mmprojRemoteFileName = asset.metadata.mmprojRemoteFileName,
+                    mmprojLocalFileName = asset.metadata.mmprojLocalFileName,
+                    mmprojSha256 = asset.metadata.mmprojSha256,
+                    mmprojSizeInBytes = asset.metadata.mmprojSizeInBytes,
+                )
+            }
+
+        val request = DownloadWorkRequest(
+            files = fileSpecs,
+            sessionId = sessionId,
+            requestKind = DownloadRequestKind.INITIALIZE_MODELS,
+            targetModelId = null,
+            wifiOnly = wifiOnly,
+        )
+
         logger.info(
             TAG,
-            "Enqueuing ${modelsToEnqueue.size} model slots for ${modelsToDownload.map { it.metadata.sha256 }.distinct().size} physical downloads: ${
+            "Enqueuing ${modelsToEnqueue.size} model slots for ${fileSpecs.size} physical downloads: ${
                 modelsToEnqueue.entries.joinToString { (modelType, asset) ->
                     "$modelType -> ${asset.configurations.firstOrNull()?.displayName ?: asset.metadata.localFileName}"
                 }
             }"
         )
-        workScheduler.enqueue(modelsToEnqueue, sessionId, wifiOnly)
+        workScheduler.enqueue(request)
         stateManager.updateStatus(DownloadStatus.DOWNLOADING)
         return true
     }
@@ -163,116 +184,11 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
 
         if (update.clearSession) {
             sessionManager.clearSession()
-            // Handle post-download state transitions
-            when (update.status) {
-                DownloadStatus.READY -> updateModelRegistry()
-                DownloadStatus.ERROR -> handleDownloadFailure()
-                else -> {}
-            }
         }
         stateManager.applyProgressUpdate(update)
     }
 
-    private suspend fun updateModelRegistry() {
-        // Deferred Activation: Commit the models that were just downloaded
-        // (and any other remote configs that were deferred).
-        val downloadedShas = startupModelsResult?.modelsToDownload?.map { it.metadata.sha256 }?.toSet() ?: emptySet()
-        logger.info(TAG, "Finalizing registry for downloaded SHAs: $downloadedShas")
 
-        startupModelsResult?.allModels?.entries?.forEach { (modelType, asset) ->
-            if (downloadedShas.contains(asset.metadata.sha256)) {
-                try {
-                    val primaryConfig = asset.configurations.firstOrNull()
-                    logger.info(
-                        TAG,
-                        "Activating $modelType for shared asset ${asset.metadata.localFileName} " +
-                            "(sha=${asset.metadata.sha256}, preset=${primaryConfig?.displayName}, " +
-                            "thinking=${primaryConfig?.thinkingEnabled}, vision=${asset.metadata.visionCapable})"
-                    )
-                    syncLocalModelRegistryUseCase(modelType, asset)
-                    logger.debug(TAG, "Successfully activated model $modelType post-download")
-                } catch (e: Exception) {
-                    logger.error(
-                        TAG,
-                        "Failed to activate model $modelType for ${asset.metadata.localFileName} " +
-                            "(sha=${asset.metadata.sha256}, preset=${asset.configurations.firstOrNull()?.displayName}): ${e.message}"
-                    )
-                }
-            }
-        }
-
-        // Clean up old files on filesystem - use ALL registered assets, not just downloaded ones
-        // This is critical: if we only pass modelsToDownload, valid files will be incorrectly deleted
-        try {
-            val allRegisteredAssets = localModelRepository.getAllLocalAssets()
-            cleanupOrphanedModelFiles(allRegisteredAssets)
-        } catch (e: Exception) {
-            logger.error(TAG, "Failed during filesystem cleanup: ${e.message}")
-        }
-    }
-
-    private suspend fun handleDownloadFailure() {
-        // Check if we have any fallback models to use
-        val modelsToDownload = startupModelsResult?.modelsToDownload ?: emptyList()
-        val allModels = startupModelsResult?.allModels ?: emptyMap()
-        
-        val affectedModelTypes = modelsToDownload.mapNotNull { asset -> 
-            allModels.entries.find { it.value.metadata.sha256 == asset.metadata.sha256 }?.key
-        }
-
-        var fallbackAvailable = false
-        for (type in affectedModelTypes) {
-            val activeConfig = activeModelProvider.getActiveConfiguration(type)
-            if (activeConfig != null && activeConfig.isLocal) {
-                if (localModelRepository.getAssetByConfigId(activeConfig.id as LocalModelConfigurationId) != null) {
-                    fallbackAvailable = true
-                    break
-                }
-            }
-        }
-
-        if (fallbackAvailable) {
-            _snackbarMessages.send("Download failed. Using existing model versions.")
-            logger.info(TAG, "Emitted fallback snackbar message after download failure")
-        }
-    }
-
-    /**
-     * Delete any model files on the filesystem that are not in the current model configurations.
-     * This handles cases where a model was removed from the remote config.
-     */
-    private fun cleanupOrphanedModelFiles(currentAssets: List<LocalModelAsset>) {
-        val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
-        if (!modelsDir.exists()) return
-
-        // Get filenames of current assets
-        val currentFilenamesSet = currentAssets.flatMapTo(mutableSetOf()) { asset ->
-            asset.metadata.requiredArtifacts().map { artifact -> artifact.localFileName }
-        }
-
-        // Get all model files in the directory (excluding temp files)
-        val existingFiles = modelsDir.listFiles { file ->
-            file.isFile && !file.name.endsWith(ModelConfig.TEMP_EXTENSION)
-        } ?: return
-
-        // Delete any file that is not in the current configuration
-        var deletedCount = 0
-        for (file in existingFiles) {
-            if (file.name !in currentFilenamesSet) {
-                val deleted = file.delete()
-                if (deleted) {
-                    deletedCount++
-                    logger.info(TAG, "Deleted orphaned model file: ${file.name}")
-                } else {
-                    logger.warning(TAG, "Failed to delete orphaned model file: ${file.name}")
-                }
-            }
-        }
-
-        if (deletedCount > 0) {
-            logger.info(TAG, "Cleaned up $deletedCount orphaned model file(s)")
-        }
-    }
 
     override fun pauseDownloads() {
         logger.info(TAG, "Pausing downloads")
@@ -281,9 +197,9 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
     }
 
     override suspend fun resumeDownloads() {
-        val wifiOnly = _downloadState.value.wifiBlocked
+        val wifiOnly = _downloadState.value.waitingForUnmeteredNetwork
         logger.info(TAG, "Resuming downloads (wifiOnly=$wifiOnly)")
-        startDownloads(!wifiOnly)
+        startDownloads(wifiOnly)
     }
 
     override suspend fun cancelDownloads() {
@@ -298,7 +214,6 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
     }
 
     override suspend fun retryFailed() {
-        cancelDownloads()
         // If startupModelsResult is null (edge case), set error and return
         // This can happen if the download screen was opened without proper initialization
         if (startupModelsResult == null) {
@@ -312,7 +227,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
     }
 
     override suspend fun downloadOnMobileData() {
-        stateManager.updateState { copy(wifiBlocked = false) }
+        stateManager.updateState { copy(waitingForUnmeteredNetwork = false) }
         // If startupModelsResult is null (edge case), set error and return
         if (startupModelsResult == null) {
             logger.warning(TAG, "downloadOnMobileData called but startupModelsResult is null - setting error state")

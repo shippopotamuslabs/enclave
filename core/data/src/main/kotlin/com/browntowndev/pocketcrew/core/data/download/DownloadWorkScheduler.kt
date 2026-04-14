@@ -4,16 +4,16 @@ import android.content.Context
 import android.util.Log
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
-import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
+import com.browntowndev.pocketcrew.domain.model.download.DownloadWorkRequest
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadWorkSchedulerPort
 import dagger.hilt.android.qualifiers.ApplicationContext
+import org.json.JSONArray
 import org.json.JSONObject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,72 +28,72 @@ class DownloadWorkScheduler @Inject constructor(
     private val workManager: WorkManager
 ) : DownloadWorkSchedulerPort {
     companion object {
-        const val KEY_SESSION_ID = "work_session_id"
         private const val TAG = "DownloadWorkScheduler"
     }
 
-    override fun enqueue(models: Map<ModelType, LocalModelAsset>, sessionId: String?, wifiOnly: Boolean) {
-        // Use UNMETERED when wifiOnly is enabled (requires WiFi)
-        // Use CONNECTED when wifiOnly is disabled (allows mobile data)
-        val networkType = if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
-
+    override fun enqueue(request: DownloadWorkRequest) {
+        // Build network constraints
+        val networkType = if (request.wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(networkType)
             .setRequiresStorageNotLow(true)
             .build()
 
-        // Serialize LocalModelAsset as JSON so prompts and display names can contain arbitrary characters.
-        val inputData = Array<String?>(models.size) { index ->
-            val (modelType, asset) = models.entries.elementAt(index)
-            val config = asset.configurations.firstOrNull()
-            JSONObject().apply {
-                put("modelType", modelType.name)
-                put("remoteFileName", asset.metadata.remoteFileName)
-                put("localFileName", asset.metadata.localFileName)
-                put("presetName", config?.displayName ?: asset.metadata.huggingFaceModelName)
-                put("huggingFaceModelName", asset.metadata.huggingFaceModelName)
-                put("sizeInBytes", asset.metadata.sizeInBytes)
-                put("sha256", asset.metadata.sha256)
-                put("mmprojRemoteFileName", asset.metadata.mmprojRemoteFileName)
-                put("mmprojLocalFileName", asset.metadata.mmprojLocalFileName)
-                put("mmprojSha256", asset.metadata.mmprojSha256)
-                put("mmprojSizeInBytes", asset.metadata.mmprojSizeInBytes)
-                put("source", asset.metadata.source.name)
-                put("modelFileFormat", asset.metadata.modelFileFormat.name)
-                put("temperature", config?.temperature ?: 0.7)
-                put("topK", config?.topK ?: 40)
-                put("topP", config?.topP ?: 0.95)
-                put("minP", config?.minP ?: 0.0)
-                put("repetitionPenalty", config?.repetitionPenalty ?: 1.1)
-                put("maxTokens", config?.maxTokens ?: 4096)
-                put("contextWindow", config?.contextWindow ?: 4096)
-                put("systemPrompt", config?.systemPrompt ?: "")
-                put("isSystemPreset", config?.isSystemPreset ?: true)
-                put("thinkingEnabled", config?.thinkingEnabled ?: false)
-            }.toString()
+        // Serialize DownloadFileSpec list to JSON
+        val filesJson = JSONArray()
+        request.files.forEach { spec ->
+            filesJson.put(JSONObject().apply {
+                put("remoteFileName", spec.remoteFileName)
+                put("localFileName", spec.localFileName)
+                put("sha256", spec.sha256)
+                put("sizeInBytes", spec.sizeInBytes)
+                put("huggingFaceModelName", spec.huggingFaceModelName)
+                put("source", spec.source)
+                put("modelFileFormat", spec.modelFileFormat)
+                put("mmprojRemoteFileName", spec.mmprojRemoteFileName)
+                put("mmprojLocalFileName", spec.mmprojLocalFileName)
+                put("mmprojSha256", spec.mmprojSha256)
+                put("mmprojSizeInBytes", spec.mmprojSizeInBytes)
+            })
         }
 
-        val workRequest = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
+        // Build download worker input
+        val downloadInput = workDataOf(
+            DownloadWorkKeys.KEY_SESSION_ID to request.sessionId,
+            DownloadWorkKeys.KEY_REQUEST_KIND to request.requestKind.name,
+            DownloadWorkKeys.KEY_DOWNLOAD_FILES to filesJson.toString(),
+            DownloadWorkKeys.KEY_TARGET_MODEL_ID to request.targetModelId?.value,
+        )
+
+        // Build download worker request
+        val downloadRequest = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
             .setConstraints(constraints)
-            .setInputData(
-                Data.Builder()
-                    .putStringArray("model_files", inputData)
-                    .putString(KEY_SESSION_ID, sessionId)
-                    .build()
-            )
+            .setInputData(downloadInput)
             .addTag(ModelConfig.WORK_TAG)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
 
-        workManager.enqueueUniqueWork(
-            ModelConfig.WORK_TAG,
-            ExistingWorkPolicy.REPLACE,
-            workRequest
+        // Build finalize worker request with static request metadata.
+        // Even though WorkManager merges parent output into child input via
+        // OverwritingInputMerger, explicit static metadata ensures the finalizer
+        // is self-sufficient and does not rely solely on parent output.
+        val finalizeInput = workDataOf(
+            DownloadWorkKeys.KEY_SESSION_ID to request.sessionId,
+            DownloadWorkKeys.KEY_REQUEST_KIND to request.requestKind.name,
+            DownloadWorkKeys.KEY_TARGET_MODEL_ID to (request.targetModelId?.value ?: ""),
         )
-    }
+        val finalizeRequest = OneTimeWorkRequestBuilder<DownloadFinalizeWorker>()
+            .setConstraints(constraints)
+            .setInputData(finalizeInput)
+            .addTag(ModelConfig.WORK_TAG)
+            .build()
 
-    override fun scheduleModelDownload(modelType: ModelType, modelAsset: LocalModelAsset) {
-        enqueue(mapOf(modelType to modelAsset), sessionId = null, wifiOnly = true)
+        // Enqueue as a chained work sequence
+        // The chain automatically passes output data from each worker to the next
+        workManager
+            .beginUniqueWork(ModelConfig.WORK_TAG, ExistingWorkPolicy.REPLACE, downloadRequest)
+            .then(finalizeRequest)
+            .enqueue()
     }
 
     override fun cancel() {

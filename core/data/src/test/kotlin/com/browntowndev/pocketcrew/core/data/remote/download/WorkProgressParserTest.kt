@@ -531,8 +531,8 @@ class WorkProgressParserTest {
     }
 
     @Test
-    fun `parse returns checking status when blocked`() {
-        // Given: WorkInfo with BLOCKED state
+    fun `parse returns wifi_blocked status when blocked`() {
+        // Given: WorkInfo with BLOCKED state (WiFi-only constraint not met)
         val workInfo = mockk<WorkInfo> {
             every { state } returns WorkInfo.State.BLOCKED
         }
@@ -540,9 +540,10 @@ class WorkProgressParserTest {
         // When: Parse
         val result = parser.parse(workInfo, emptyList())
 
-        // Then: Return CHECKING status
+        // Then: Return WIFI_BLOCKED status with waitingForUnmeteredNetwork=true
         assertNotNull(result)
-        assertEquals(DownloadStatus.CHECKING, result!!.status)
+        assertEquals(DownloadStatus.WIFI_BLOCKED, result!!.status)
+        assertEquals(true, result.waitingForUnmeteredNetwork)
     }
 
     // ===== Edge case tests for stale session handling =====
