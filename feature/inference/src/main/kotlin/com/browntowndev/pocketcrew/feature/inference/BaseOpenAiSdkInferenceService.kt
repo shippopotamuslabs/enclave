@@ -41,7 +41,6 @@ abstract class BaseOpenAiSdkInferenceService(
 
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
-        private const val STREAM_PREVIEW_CHARS = 120
     }
 
     protected abstract val tag: String
@@ -154,7 +153,6 @@ abstract class BaseOpenAiSdkInferenceService(
         orchestrator.execute(
             providerName = provider,
             initialParams = initialParams,
-            options = options,
             tag = tag,
             onInferencePass = { params, allowToolCall ->
                 streamResponses(

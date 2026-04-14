@@ -346,7 +346,6 @@ class LlamaInferenceServiceImpl @Inject constructor(
         orchestrator.execute(
             providerName = "LLAMA",
             initialParams = options,
-            options = options,
             tag = TAG,
             onInferencePass = { params, allowToolCall ->
                 collectToolPreparationPass(

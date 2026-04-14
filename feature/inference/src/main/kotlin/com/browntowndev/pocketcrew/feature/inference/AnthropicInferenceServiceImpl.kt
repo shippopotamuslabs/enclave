@@ -151,7 +151,6 @@ class AnthropicInferenceServiceImpl(
         orchestrator.execute(
             providerName = PROVIDER,
             initialParams = initialParams,
-            options = options,
             tag = TAG,
             onInferencePass = { params, allowToolUse ->
                 streamMessages(
