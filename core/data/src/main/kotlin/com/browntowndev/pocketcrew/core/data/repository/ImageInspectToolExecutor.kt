@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.usecase.chat.AnalyzeImageUseCase
+import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import org.json.JSONException
 import org.json.JSONObject
 import java.lang.reflect.InvocationTargetException
@@ -128,15 +129,7 @@ class ImageInspectToolExecutor @Inject constructor(
     }
 
     private fun extractRequiredQuestion(argumentsJson: String): String {
-        try {
-            return JSONObject(argumentsJson)
-                .optString("question", "")
-                .trim()
-                .takeIf(String::isNotEmpty)
-                ?: throw IllegalArgumentException("Tool argument 'question' is required")
-        } catch (error: JSONException) {
-            throw IllegalArgumentException("Tool argument 'question' is required", error)
-        }
+        return ToolEnvelopeParser.extractRequiredQuestion(argumentsJson)
     }
 
     private fun buildResultJson(

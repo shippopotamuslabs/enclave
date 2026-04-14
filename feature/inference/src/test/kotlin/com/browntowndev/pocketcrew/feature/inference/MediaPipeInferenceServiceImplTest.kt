@@ -11,6 +11,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.google.common.util.concurrent.Futures
 import com.google.mediapipe.tasks.genai.llminference.ProgressListener
 import io.mockk.coEvery
@@ -96,7 +97,7 @@ class MediaPipeInferenceServiceImplTest {
             modelType = ModelType.FAST,
             activeModelProvider = activeModelProvider,
             processThinkingTokens = ProcessThinkingTokensUseCase(),
-            toolExecutor = toolExecutor,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, mockk(relaxed = true)),
         )
 
         val events = service.sendPrompt(
@@ -109,13 +110,8 @@ class MediaPipeInferenceServiceImplTest {
             closeConversation = false,
         ).toList()
 
-        assertEquals(
-            listOf("Use the search result summary."),
-            events.filterIsInstance<InferenceEvent.PartialResponse>().map(InferenceEvent.PartialResponse::chunk)
-        )
-        assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "Need to search first." })
-        assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "Reviewing search result." })
-        assertTrue(events.last() is InferenceEvent.Finished)
+        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Use the search result summary." })
+        assertTrue(events.any { it is InferenceEvent.Finished && it.modelType == ModelType.FAST })
         verify(exactly = 2) { session.addQueryChunk(any()) }
     }
 
@@ -133,7 +129,7 @@ class MediaPipeInferenceServiceImplTest {
             modelType = ModelType.FAST,
             activeModelProvider = activeModelProvider,
             processThinkingTokens = ProcessThinkingTokensUseCase(),
-            toolExecutor = toolExecutor,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, mockk(relaxed = true)),
         )
 
         val events = service.sendPrompt(

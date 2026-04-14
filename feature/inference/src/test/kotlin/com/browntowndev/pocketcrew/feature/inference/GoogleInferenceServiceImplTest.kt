@@ -5,7 +5,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCall
 import com.google.genai.types.Part
@@ -34,7 +36,7 @@ class GoogleInferenceServiceImplTest {
                         .name("tavily_web_search")
                         .args(mapOf("query" to "latest android tool calling"))
                         .build(),
-                    assistantContent = Content.builder().build()
+                    assistantContent = Content.builder().build(),
                 )
             },
             { emit ->
@@ -43,13 +45,13 @@ class GoogleInferenceServiceImplTest {
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = null,
-                    assistantContent = Content.builder().build()
+                    assistantContent = Content.builder().build(),
                 )
             }
         )
 
-        coEvery { sdkClient.generateContentStream(any(), any(), any(), any()) } coAnswers {
-            val emitEvent = it.invocation.args[3] as suspend (InferenceEvent) -> Unit
+        coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } coAnswers {
+            val emitEvent = it.invocation.args[4] as suspend (InferenceEvent) -> Unit
             responses.removeAt(0).invoke(emitEvent)
         }
 
@@ -58,12 +60,13 @@ class GoogleInferenceServiceImplTest {
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
 
+        val loggingPort = mockk<LoggingPort>(relaxed = true)
         val service = GoogleInferenceServiceImpl(
             sdkClient = sdkClient,
             modelId = "gemini-2.5-flash",
             modelType = ModelType.FAST,
-            loggingPort = mockk(relaxed = true),
-            toolExecutor = toolExecutor,
+            loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
         val events = service.sendPrompt(
@@ -85,14 +88,15 @@ class GoogleInferenceServiceImplTest {
     @Test
     fun `search enabled Google prompt does not silently fall back when tool path fails before final text`() = runTest {
         val sdkClient = mockk<GoogleGenAiSdkClient>()
-        coEvery { sdkClient.generateContentStream(any(), any(), any(), any()) } throws RuntimeException("boom")
+        coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } throws RuntimeException("boom")
 
+        val loggingPort = mockk<LoggingPort>(relaxed = true)
         val service = GoogleInferenceServiceImpl(
             sdkClient = sdkClient,
             modelId = "gemini-2.5-flash",
             modelType = ModelType.FAST,
-            loggingPort = mockk(relaxed = true),
-            toolExecutor = mockk(relaxed = true),
+            loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(mockk(relaxed = true), loggingPort),
         )
 
         val events = service.sendPrompt(
@@ -117,14 +121,14 @@ class GoogleInferenceServiceImplTest {
         val sdkClient = mockk<GoogleGenAiSdkClient>()
         val toolExecutor = mockk<ToolExecutorPort>()
         
-        coEvery { sdkClient.generateContentStream(any(), any(), any(), any()) } coAnswers {
+        coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } coAnswers {
             GoogleSdkResult(
                 emittedAny = true,
                 functionCall = FunctionCall.builder()
                     .name("tavily_web_search")
                     .args(mapOf("query" to "latest android tool calling"))
                     .build(),
-                assistantContent = Content.builder().build()
+                assistantContent = Content.builder().build(),
             )
         }
 
@@ -133,12 +137,13 @@ class GoogleInferenceServiceImplTest {
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
 
+        val loggingPort = mockk<LoggingPort>(relaxed = true)
         val service = GoogleInferenceServiceImpl(
             sdkClient = sdkClient,
             modelId = "gemini-2.5-flash",
             modelType = ModelType.FAST,
-            loggingPort = mockk(relaxed = true),
-            toolExecutor = toolExecutor,
+            loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
         val events = service.sendPrompt(

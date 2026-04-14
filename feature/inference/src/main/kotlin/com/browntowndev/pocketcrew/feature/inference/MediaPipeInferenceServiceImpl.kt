@@ -12,7 +12,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
+import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
+import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser.LocalToolEnvelope
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.google.mediapipe.framework.image.BitmapImageBuilder
@@ -46,7 +48,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
     private val modelType: ModelType,
     private val activeModelProvider: ActiveModelProviderPort,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
-    private val toolExecutor: ToolExecutorPort? = null,
+    val orchestrator: LlmToolingOrchestrator,
 ) : LlmInferencePort {
 
     companion object {
@@ -180,25 +182,25 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         val accumulatedThought = StringBuilder()
         val accumulatedText = StringBuilder()
         var buffer = ""
+        val retainedImages = mutableListOf<MPImage>()
 
         try {
             val currentSession = mutex.withLock {
                 getOrCreateAndSeedSessionLocked(options)
             }
 
-            if (ToolEnvelopeParser.hasLocalToolContract(options.systemPrompt)) {
-                executeToolingPrompt(currentSession, prompt, options, targetModelType) { trySend(it) }
-                close()
-                return@callbackFlow
-            }
-
-            val retainedImages = mutableListOf<MPImage>()
             options.imageUris.forEach { imageUri ->
                 val mpImage = loadMpImage(imageUri)
                 retainedImages.add(mpImage)
                 currentSession.addImage(mpImage)
             }
             currentSession.addQueryChunk(prompt)
+
+            if (ToolEnvelopeParser.hasLocalToolContract(options.systemPrompt)) {
+                executeToolingPrompt(currentSession, prompt, options, targetModelType) { trySend(it) }
+                close()
+                return@callbackFlow
+            }
 
             currentSession.generateResponseAsync { partialResult, done ->
                 val chunkText = partialResult ?: ""
@@ -242,24 +244,30 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
             }
 
             awaitClose {
-                retainedImages.forEach { img ->
-                    try {
-                        img.close()
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Error closing MPImage", e)
-                    }
-                }
-                retainedImages.clear()
+                // keep channel open
             }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error during inference", e)
             trySend(InferenceEvent.Error(e, targetModelType))
             close()
         } finally {
+            retainedImages.forEach { img ->
+                try {
+                    img.close()
+                } catch (e: Exception) {
+                    Log.w(TAG, "Error closing MPImage", e)
+                }
+            }
+            retainedImages.clear()
+            
             if (closeConversation) {
-                mutex.withLock {
-                    session?.close()
-                    session = null
+                kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                    mutex.withLock {
+                        session?.close()
+                        session = null
+                    }
                 }
             }
         }
@@ -272,69 +280,48 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         targetModelType: ModelType,
         emitEvent: (InferenceEvent) -> Unit,
     ) {
-        val executor = requireNotNull(toolExecutor) {
-            "Tool executor not configured for local search"
-        }
-
-        val retainedImages = mutableListOf<MPImage>()
-        try {
-            options.imageUris.forEach { imageUri ->
-                val mpImage = loadMpImage(imageUri)
-                retainedImages.add(mpImage)
-                session.addImage(mpImage)
-            }
-            session.addQueryChunk(prompt)
-            
-            val firstPass = collectToolPreparationPass(session, targetModelType, emitEvent)
-            val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(firstPass.text)
-            if (envelope == null) {
-                Log.i(TAG, "Tool loop complete without tool call provider=MEDIAPIPE modelType=$targetModelType")
-                emitBufferedResponse(firstPass, targetModelType, emitEvent)
-                emitEvent(InferenceEvent.Finished(targetModelType))
-                return
-            }
-
-            val toolRequest = ToolCallRequest(
-                toolName = envelope.toolName,
-                argumentsJson = envelope.argumentsJson,
-                provider = "MEDIAPIPE",
-                modelType = targetModelType,
-                chatId = options.chatId,
-                userMessageId = options.userMessageId,
-            )
-            ToolEnvelopeParser.requireSupportedTool(toolRequest.toolName)
-            val toolArg = when (toolRequest.toolName) {
-                ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolRequest.argumentsJson)
-                else -> ToolEnvelopeParser.extractRequiredQuery(toolRequest.argumentsJson)
-            }
-            Log.i(TAG, "Tool call detected provider=MEDIAPIPE tool=${toolRequest.toolName} arg=$toolArg")
-            val toolResult = executor.execute(toolRequest)
-            Log.i(
-                TAG,
-                "Tool call completed provider=MEDIAPIPE tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
-            )
-
-            session.addQueryChunk(ToolEnvelopeParser.buildLocalToolResultMessage(toolResult.resultJson))
-            streamSessionResponse(
-                session = session,
-                targetModelType = targetModelType,
-                emitVisible = true,
-                emitEvent = emitEvent,
-            )
-
-            emitVisibleText(envelope.visiblePrefix, targetModelType, emitEvent)
-            emitVisibleText(envelope.visibleSuffix, targetModelType, emitEvent)
-            emitEvent(InferenceEvent.Finished(targetModelType))
-        } finally {
-            retainedImages.forEach { img ->
-                try {
-                    img.close()
-                } catch (e: Exception) {
-                    Log.w(TAG, "Error closing MPImage", e)
+        orchestrator.execute(
+            providerName = "MEDIAPIPE",
+            initialParams = options,
+            options = options,
+            tag = TAG,
+            onInferencePass = { params, allowToolCall ->
+                collectToolPreparationPass(session, targetModelType, emitEvent)
+            },
+            onToolCallDetected = { pass ->
+                ToolEnvelopeParser.extractLocalToolEnvelope(pass.text)?.let { envelope ->
+                    ToolCallRequest(
+                        toolName = envelope.toolName,
+                        argumentsJson = envelope.argumentsJson,
+                        provider = "MEDIAPIPE",
+                        modelType = targetModelType,
+                        chatId = options.chatId,
+                        userMessageId = options.userMessageId,
+                    )
                 }
+            },
+            onToolResultMapped = { params, _, resultJson ->
+                session.addQueryChunk(ToolEnvelopeParser.buildLocalToolResultMessage(resultJson))
+                params
+            },
+            onNoToolCallOnFirstPass = { pass ->
+                emitBufferedResponse(pass, targetModelType, emitEvent)
+            },
+            onFinished = { _, toolCallCount, lastResponse ->
+                if (toolCallCount > 0 && lastResponse != null) {
+                    emitBufferedResponse(
+                        BufferedToolPass(
+                            thought = lastResponse.thought,
+                            text = lastResponse.text,
+                            thoughtAlreadyEmitted = false
+                        ),
+                        targetModelType,
+                        emitEvent
+                    )
+                }
+                emitEvent(InferenceEvent.Finished(targetModelType))
             }
-            retainedImages.clear()
-        }
+        )
     }
 
     private suspend fun collectToolPreparationPass(

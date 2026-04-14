@@ -5,14 +5,13 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
+import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.JsonValue
-import com.anthropic.models.messages.ContentBlock
 import com.anthropic.models.messages.ContentBlockParam
 import com.anthropic.models.messages.MessageCreateParams
 import com.anthropic.models.messages.MessageParam
@@ -36,7 +35,7 @@ class AnthropicInferenceServiceImpl(
     private val modelType: ModelType,
     private val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
-    internal val toolExecutor: ToolExecutorPort? = null,
+    val orchestrator: LlmToolingOrchestrator,
 ) : LlmInferencePort {
 
     private data class StreamedAnthropicResponse(
@@ -59,7 +58,6 @@ class AnthropicInferenceServiceImpl(
 
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
-        private const val STREAM_PREVIEW_CHARS = 120
         private const val TAG = "AnthropicInferenceService"
         private const val PROVIDER = "ANTHROPIC"
         private val TOOL_INPUT_JSON_MAPPER = ObjectMapper()
@@ -132,6 +130,7 @@ class AnthropicInferenceServiceImpl(
             params = params,
             emitEvent = emitEvent,
         )
+        emitEvent(InferenceEvent.Finished(modelType))
     }
 
     private suspend fun executeToolingPrompt(
@@ -140,10 +139,6 @@ class AnthropicInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit
     ) {
-        val executor = requireNotNull(toolExecutor) {
-            "Tool executor not configured for provider=$PROVIDER"
-        }
-
         logImagePayloads(options)
 
         val initialParams = AnthropicRequestMapper.mapToMessageParams(
@@ -152,72 +147,58 @@ class AnthropicInferenceServiceImpl(
             history = requestHistory,
             options = options,
         )
-        val initialResponse = streamMessages(
-            params = initialParams,
-            allowToolUse = true,
-            emitEvent = emitEvent,
-        )
-        val toolUse = initialResponse.toolUse
 
-        if (toolUse == null) {
-            loggingPort.info(
-                TAG,
-                "Tool loop complete without tool call provider=$PROVIDER model=$modelId modelType=$modelType"
-            )
-            if (!initialResponse.emittedAny) {
+        orchestrator.execute(
+            providerName = PROVIDER,
+            initialParams = initialParams,
+            options = options,
+            tag = TAG,
+            onInferencePass = { params, allowToolUse ->
+                streamMessages(
+                    params = params,
+                    allowToolUse = allowToolUse,
+                    emitEvent = emitEvent,
+                )
+            },
+            onToolCallDetected = { response ->
+                response.toolUse?.let { toolUse ->
+                    ToolCallRequest(
+                        toolName = toolUse.toolName,
+                        argumentsJson = toolUse.argumentsJson,
+                        provider = PROVIDER,
+                        modelType = modelType,
+                        chatId = options.chatId,
+                        userMessageId = options.userMessageId,
+                    )
+                }
+            },
+            onToolResultMapped = { params, response, resultJson ->
+                val toolUse =
+                    response.toolUse ?: throw IllegalStateException("Missing tool use in response")
+                params.toBuilder()
+                    .messages(
+                        params.messages() + listOf(
+                            assistantToolUseMessage(toolUse),
+                            MessageParam.builder()
+                                .role(MessageParam.Role.USER)
+                                .contentOfBlockParams(
+                                    listOf(
+                                        ContentBlockParam.ofToolResult(
+                                            ToolResultBlockParam.builder()
+                                                .toolUseId(toolUse.id)
+                                                .content(resultJson)
+                                                .build()
+                                        )
+                                    )
+                                )
+                                .build()
+                        )
+                    )
+                    .build()
+            },
+            onFinished = { _, _, _ ->
                 emitEvent(InferenceEvent.Finished(modelType))
             }
-            return
-        }
-
-        val toolRequest = ToolCallRequest(
-            toolName = toolUse.toolName,
-            argumentsJson = toolUse.argumentsJson,
-            provider = PROVIDER,
-            modelType = modelType,
-            chatId = options.chatId,
-            userMessageId = options.userMessageId,
-        )
-        ToolEnvelopeParser.requireSupportedTool(toolRequest.toolName)
-        val toolArg = when (toolRequest.toolName) {
-            ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolRequest.argumentsJson)
-            else -> ToolEnvelopeParser.extractRequiredQuery(toolRequest.argumentsJson)
-        }
-        loggingPort.info(
-            TAG,
-            "Tool call detected provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} arg=$toolArg"
-        )
-        val toolResult = executor.execute(toolRequest)
-        loggingPort.info(
-            TAG,
-            "Tool call completed provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
-        )
-
-        val followUpParams = initialParams.toBuilder()
-            .messages(
-                initialParams.messages() + listOf(
-                    assistantToolUseMessage(toolUse),
-                    MessageParam.builder()
-                        .role(MessageParam.Role.USER)
-                        .contentOfBlockParams(
-                            listOf(
-                                ContentBlockParam.ofToolResult(
-                                    ToolResultBlockParam.builder()
-                                        .toolUseId(toolUse.id)
-                                        .content(toolResult.resultJson)
-                                        .build()
-                                )
-                            )
-                        )
-                        .build()
-                )
-            )
-            .build()
-
-        streamMessages(
-            params = followUpParams,
-            allowToolUse = false,
-            emitEvent = emitEvent,
         )
     }
 
@@ -263,7 +244,11 @@ class AnthropicInferenceServiceImpl(
     private fun logRequest(params: com.anthropic.models.messages.MessageCreateParams) {
         loggingPort.debug(
             TAG,
-            "Messages API request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(params.toString())}"
+            "Messages API request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${
+                truncateForLogs(
+                    params.toString()
+                )
+            }"
         )
     }
 
@@ -290,7 +275,11 @@ class AnthropicInferenceServiceImpl(
         }
 
         val details = payloads.joinToString(separator = "; ") { payload ->
-            "file=${payload.filename}, mime=${payload.mimeType}, bytes=${payload.byteCount}, sha256=${payload.sha256.take(8)}"
+            "file=${payload.filename}, mime=${payload.mimeType}, bytes=${payload.byteCount}, sha256=${
+                payload.sha256.take(
+                    8
+                )
+            }"
         }
         loggingPort.info(
             TAG,
@@ -317,7 +306,6 @@ class AnthropicInferenceServiceImpl(
         logRequest(params)
         client.messages().createStreaming(params).use { streamResponse ->
             val iterator = streamResponse.stream().iterator()
-            var finishedEmitted = false
             var emittedAny = false
             var outputTextDeltaCount = 0
             var thinkingTextDeltaCount = 0
@@ -391,16 +379,17 @@ class AnthropicInferenceServiceImpl(
                         TAG,
                         "Anthropic stream completed model=$modelId outputTextDeltas=$outputTextDeltaCount thinkingTextDeltas=$thinkingTextDeltaCount"
                     )
-                    if (!(allowToolUse && toolUseIndex != null)) {
-                        emitEvent(InferenceEvent.Finished(modelType))
-                    }
-                    finishedEmitted = true
                 }
                 if (event.messageDelta().isPresent) {
                     loggingPort.debug(TAG, "Anthropic stream message delta model=$modelId")
                 }
                 if (event.contentBlockStart().isPresent) {
-                    loggingPort.debug(TAG, "Anthropic stream content block start model=$modelId type=${describeStreamEvent(event)}")
+                    loggingPort.debug(
+                        TAG,
+                        "Anthropic stream content block start model=$modelId type=${
+                            describeStreamEvent(event)
+                        }"
+                    )
                 }
                 if (event.contentBlockStop().isPresent) {
                     loggingPort.debug(TAG, "Anthropic stream content block stop model=$modelId")
@@ -410,15 +399,6 @@ class AnthropicInferenceServiceImpl(
                 }
             }
 
-            if (!finishedEmitted) {
-                loggingPort.debug(
-                    TAG,
-                    "Anthropic stream ended without message_stop model=$modelId outputTextDeltas=$outputTextDeltaCount thinkingTextDeltas=$thinkingTextDeltaCount"
-                )
-                if (!(allowToolUse && toolUseIndex != null)) {
-                    emitEvent(InferenceEvent.Finished(modelType))
-                }
-            }
             val capturedToolUse = toolUseIndex
                 ?.let { pendingToolUses[it] }
                 ?.toCapturedToolUse()
@@ -427,17 +407,6 @@ class AnthropicInferenceServiceImpl(
                 toolUse = capturedToolUse,
             )
         }
-    }
-
-    private suspend fun emitTextBlocks(
-        contentBlocks: List<ContentBlock>,
-        emitEvent: suspend (InferenceEvent) -> Unit
-    ) {
-        contentBlocks
-            .filter(ContentBlock::isText)
-            .map { it.asText().text() }
-            .filter(String::isNotBlank)
-            .forEach { emitEvent(InferenceEvent.PartialResponse(it, modelType)) }
     }
 
     private fun assistantToolUseMessage(toolUse: CapturedToolUse): MessageParam =
@@ -480,12 +449,8 @@ class AnthropicInferenceServiceImpl(
         canonicalToolArgumentsJson(parseToolInputJson(inputJson))
 
     private fun canonicalToolArgumentsJson(properties: Map<*, *>): String {
-        val query = (properties["query"] as? String)
-            ?.trim()
-            ?.takeIf(String::isNotEmpty)
-            ?: throw IllegalArgumentException("Tool argument 'query' is required")
-
-        return """{"query":"${escapeJson(query)}"}"""
+        @Suppress("UNCHECKED_CAST")
+        return ToolEnvelopeParser.buildArgumentsJson(properties as Map<String, *>)
     }
 
     private fun toolUseInputProperties(argumentsJson: String): Map<String, JsonValue> =
@@ -499,22 +464,7 @@ class AnthropicInferenceServiceImpl(
                 inputJson,
                 object : TypeReference<Map<String, Any?>>() {}
             )
-        }
-            .getOrElse { error ->
-                throw IllegalArgumentException("Tool input JSON is invalid", error)
-            }
-
-    private fun escapeJson(value: String): String =
-        buildString(value.length) {
-            value.forEach { char ->
-                when (char) {
-                    '\\' -> append("\\\\")
-                    '"' -> append("\\\"")
-                    '\n' -> append("\\n")
-                    '\r' -> append("\\r")
-                    '\t' -> append("\\t")
-                    else -> append(char)
-                }
-            }
+        }.getOrElse { error ->
+            throw IllegalArgumentException("Tool input JSON is invalid", error)
         }
 }

@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -11,6 +12,21 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertFailsWith
 
 class ToolEnvelopeParserTest {
+
+    @Test
+    fun `extractRequiredQuestion handles escaped JSON and robust parsing`() {
+        val argumentsJson = """{"question":"What's the status? \"Ready\"."}"""
+        val question = ToolEnvelopeParser.extractRequiredQuestion(argumentsJson)
+        assertEquals("What's the status? \"Ready\".", question)
+    }
+
+    @Test
+    fun `extractRequiredQuestion falls back to regex for malformed JSON`() {
+        val argumentsJson = """{"question":"Partial JSON..."""
+        // Regex should still pick it up if it matches the pattern
+        val question = ToolEnvelopeParser.extractRequiredQuestion(argumentsJson)
+        assertEquals("Partial JSON...", question)
+    }
 
     // --- Generic local parser accepts valid search envelope ---
 

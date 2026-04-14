@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.feature.inference.MediaPipeInferenceServiceFactory
 import io.mockk.every
 import io.mockk.mockk
@@ -131,7 +132,8 @@ class MediaPipeInferenceServiceFactoryTest {
         context = context,
         activeModelProvider = activeModelProvider,
         processThinkingTokens = processThinkingTokens,
-        gpuProfiler = gpuProfiler
+        gpuProfiler = gpuProfiler,
+        orchestrator = LlmToolingOrchestrator(mockk(), mockk(relaxed = true)),
     )
 
     @Test
