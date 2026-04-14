@@ -5,7 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
 import com.openai.models.responses.ResponseCreateParams
@@ -16,7 +16,7 @@ class XaiInferenceServiceImpl(
     modelType: ModelType,
     baseUrl: String? = null,
     loggingPort: LoggingPort,
-    toolExecutor: ToolExecutorPort? = null,
+    orchestrator: LlmToolingOrchestrator,
 ) : BaseOpenAiSdkInferenceService(
     client = client,
     modelId = modelId,
@@ -24,7 +24,7 @@ class XaiInferenceServiceImpl(
     modelType = modelType,
     baseUrl = baseUrl,
     loggingPort = loggingPort,
-    toolExecutor = toolExecutor,
+    orchestrator = orchestrator,
 ) {
 
     override val tag: String = "XaiInferenceService"
@@ -73,6 +73,7 @@ class XaiInferenceServiceImpl(
                 params = responseParams,
                 emitEvent = emitEvent,
             )
+            emitEvent(InferenceEvent.Finished(modelType))
         } catch (e: Exception) {
             val badRequest = e is BadRequestException || e.message?.contains("400") == true || e.message?.contains("Bad Request") == true
             if (!badRequest || !chatFallbackAllowed) {
@@ -98,6 +99,7 @@ class XaiInferenceServiceImpl(
                 options = options
             )
             streamChatCompletions(chatParams, emitEvent)
+            emitEvent(InferenceEvent.Finished(modelType))
         }
     }
 }

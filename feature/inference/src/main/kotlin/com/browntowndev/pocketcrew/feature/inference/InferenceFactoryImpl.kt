@@ -21,6 +21,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.feature.inference.llama.GpuProfiler
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
@@ -46,6 +47,7 @@ class MediaPipeInferenceServiceFactory @Inject constructor(
     private val activeModelProvider: ActiveModelProviderPort,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
     private val gpuProfiler: GpuProfiler,
+    private val orchestrator: LlmToolingOrchestrator,
 ) {
     suspend fun create(modelPath: String, modelType: ModelType, toolExecutor: ToolExecutorPort): LlmInferencePort = withContext(Dispatchers.IO) {
         val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
@@ -64,12 +66,12 @@ class MediaPipeInferenceServiceFactory @Inject constructor(
             .setPreferredBackend(preferredBackend)
             .build()
         return@withContext MediaPipeInferenceServiceImpl(
-            LlmInferenceWrapper(LlmInference.createFromOptions(context, options)),
-            context,
-            modelType,
-            activeModelProvider,
-            processThinkingTokens,
-            toolExecutor,
+            llmInference = LlmInferenceWrapper(LlmInference.createFromOptions(context, options)),
+            context = context,
+            modelType = modelType,
+            activeModelProvider = activeModelProvider,
+            processThinkingTokens = processThinkingTokens,
+            orchestrator = orchestrator,
         )
     }
 }
@@ -94,6 +96,7 @@ class InferenceFactoryImpl @Inject constructor(
     private val anthropicClientProvider: AnthropicClientProvider,
     private val googleGenAiClientProvider: GoogleGenAiClientProvider,
     private val loggingPort: LoggingPort,
+    private val orchestrator: LlmToolingOrchestrator,
     private val inferenceLockManager: InferenceLockManager,
     private val toolExecutorProvider: Provider<ToolExecutorPort>,
 ) : InferenceFactoryPort {
@@ -224,7 +227,7 @@ class InferenceFactoryImpl @Inject constructor(
                         modelType = modelType,
                         baseUrl = resolvedBaseUrl,
                         loggingPort = loggingPort,
-                        toolExecutor = toolExecutorProvider.get(),
+                        orchestrator = orchestrator,
                     )
                     ApiProvider.GOOGLE -> {
                         val client = googleGenAiClientProvider.getClient(
@@ -243,7 +246,7 @@ class InferenceFactoryImpl @Inject constructor(
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort,
-                            toolExecutor = toolExecutorProvider.get(),
+                            orchestrator = orchestrator,
                         )
                     }
                     ApiProvider.OPENROUTER -> OpenRouterInferenceServiceImpl(
@@ -257,7 +260,7 @@ class InferenceFactoryImpl @Inject constructor(
                         routing = apiConfig.openRouterRouting,
                         baseUrl = resolvedBaseUrl,
                         loggingPort = loggingPort,
-                        toolExecutor = toolExecutorProvider.get(),
+                        orchestrator = orchestrator,
                     )
                     ApiProvider.XAI -> XaiInferenceServiceImpl(
                         client = openAiClientProvider.getClient(
@@ -269,7 +272,7 @@ class InferenceFactoryImpl @Inject constructor(
                         modelType = modelType,
                         baseUrl = resolvedBaseUrl,
                         loggingPort = loggingPort,
-                        toolExecutor = toolExecutorProvider.get(),
+                        orchestrator = orchestrator,
                     )
                     else -> ApiInferenceServiceImpl(
                         client = openAiClientProvider.getClient(
@@ -282,7 +285,7 @@ class InferenceFactoryImpl @Inject constructor(
                         modelType = modelType,
                         baseUrl = resolvedBaseUrl,
                         loggingPort = loggingPort,
-                        toolExecutor = toolExecutorProvider.get(),
+                        orchestrator = orchestrator,
                     )
                 }
 
@@ -331,7 +334,7 @@ class InferenceFactoryImpl @Inject constructor(
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort,
-                            toolExecutor = toolExecutorProvider.get(),
+                            orchestrator = orchestrator,
                         )
                     ApiProvider.GOOGLE -> {
                         val client = googleGenAiClientProvider.getClient(
@@ -350,7 +353,7 @@ class InferenceFactoryImpl @Inject constructor(
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort,
-                            toolExecutor = toolExecutorProvider.get(),
+                            orchestrator = orchestrator,
                         )
                     }
                         ApiProvider.OPENROUTER -> OpenRouterInferenceServiceImpl(
@@ -364,7 +367,7 @@ class InferenceFactoryImpl @Inject constructor(
                             routing = apiConfig.openRouterRouting,
                             baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort,
-                            toolExecutor = toolExecutorProvider.get(),
+                            orchestrator = orchestrator,
                         )
                         ApiProvider.XAI -> XaiInferenceServiceImpl(
                             client = openAiClientProvider.getClient(
@@ -376,7 +379,7 @@ class InferenceFactoryImpl @Inject constructor(
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort,
-                            toolExecutor = toolExecutorProvider.get(),
+                            orchestrator = orchestrator,
                         )
                         else -> ApiInferenceServiceImpl(
                             client = openAiClientProvider.getClient(
@@ -389,7 +392,7 @@ class InferenceFactoryImpl @Inject constructor(
                             modelType = modelType,
                             baseUrl = resolvedBaseUrl,
                             loggingPort = loggingPort,
-                            toolExecutor = toolExecutorProvider.get(),
+                            orchestrator = orchestrator,
                         )
                     }
  
@@ -461,7 +464,7 @@ class InferenceFactoryImpl @Inject constructor(
                         activeModelProvider = activeModelProvider,
                         context = context,
                         modelType = modelType,
-                        toolExecutor = toolExecutorProvider.get(),
+                        orchestrator = orchestrator,
                     )
                 }
                 "task" -> {

@@ -7,7 +7,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
+import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
 import com.openai.models.responses.ResponseFunctionToolCall
@@ -21,7 +22,7 @@ class OpenRouterInferenceServiceImpl(
     private val routing: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
     baseUrl: String? = null,
     loggingPort: LoggingPort,
-    toolExecutor: ToolExecutorPort? = null,
+    orchestrator: LlmToolingOrchestrator,
 ) : BaseOpenAiSdkInferenceService(
     client = client,
     modelId = modelId,
@@ -29,7 +30,7 @@ class OpenRouterInferenceServiceImpl(
     modelType = modelType,
     baseUrl = baseUrl,
     loggingPort = loggingPort,
-    toolExecutor = toolExecutor,
+    orchestrator = orchestrator,
 ) {
 
     override val tag: String = "OpenRouterInferenceService"
@@ -153,6 +154,7 @@ class OpenRouterInferenceServiceImpl(
                 params = responseParams,
                 emitEvent = emitEvent,
             )
+            emitEvent(InferenceEvent.Finished(modelType))
         } catch (e: Exception) {
             if (e !is BadRequestException && e.message?.contains("400") != true && e.message?.contains("Bad Request") != true) {
                 throw e
@@ -171,6 +173,7 @@ class OpenRouterInferenceServiceImpl(
                 routing = routing
             )
             streamChatCompletions(chatParams, emitEvent)
+            emitEvent(InferenceEvent.Finished(modelType))
         }
     }
 

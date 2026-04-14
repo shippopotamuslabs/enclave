@@ -43,7 +43,9 @@ class ActiveModelProviderImpl @Inject constructor(
                 minP = config.minP,
                 repetitionPenalty = config.repetitionPenalty,
                 contextWindow = config.contextWindow,
-                thinkingEnabled = config.thinkingEnabled
+                thinkingEnabled = config.thinkingEnabled,
+                localModelFormat = model.modelFileFormat,
+                apiProvider = null
             )
         }
         
@@ -67,7 +69,9 @@ class ActiveModelProviderImpl @Inject constructor(
                 minP = null, // API models might not have minP
                 repetitionPenalty = null, // API models might not have repetitionPenalty
                 contextWindow = config.contextWindow,
-                thinkingEnabled = config.reasoningEffort != null
+                thinkingEnabled = config.reasoningEffort != null,
+                localModelFormat = null,
+                apiProvider = credentials.provider
             )
         }
 

@@ -27,6 +27,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -85,6 +86,7 @@ class AnthropicInferenceServiceImplTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(mockk(), loggingPort),
         )
 
         val events = service.sendPrompt("Hello", closeConversation = false).toList()
@@ -134,6 +136,7 @@ class AnthropicInferenceServiceImplTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(mockk(), loggingPort),
         )
 
         val events = service.sendPrompt("Hello", closeConversation = false).toList()
@@ -168,6 +171,7 @@ class AnthropicInferenceServiceImplTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.MAIN,
             loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(mockk(), loggingPort),
         )
 
         val events = service.sendPrompt("Hello", closeConversation = true).toList()
@@ -230,7 +234,7 @@ class AnthropicInferenceServiceImplTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.FAST,
             loggingPort = loggingPort,
-            toolExecutor = toolExecutor,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
         val events = service.sendPrompt(
@@ -260,22 +264,40 @@ class AnthropicInferenceServiceImplTest {
     fun `sendPrompt rejects recursive second anthropic tool request`() = runTest {
         val toolExecutor = mockk<ToolExecutorPort>()
         val initialStreamResponse = mockk<StreamResponse<RawMessageStreamEvent>>()
-        val followUpStreamResponse = mockk<StreamResponse<RawMessageStreamEvent>>()
+        val followUpStreamResponse1 = mockk<StreamResponse<RawMessageStreamEvent>>()
+        val followUpStreamResponse2 = mockk<StreamResponse<RawMessageStreamEvent>>()
+        val followUpStreamResponse3 = mockk<StreamResponse<RawMessageStreamEvent>>()
 
         every { client.messages() } returns messageService
         every { messageService.createStreaming(any<MessageCreateParams>()) } returnsMany listOf(
             initialStreamResponse,
-            followUpStreamResponse,
+            followUpStreamResponse1,
+            followUpStreamResponse2,
+            followUpStreamResponse3,
         )
         every { initialStreamResponse.stream() } returns Stream.of(
             mockToolUseStartEvent(),
             mockStreamEvent(messageStop = Optional.of(mockk())),
         )
         every { initialStreamResponse.close() } returns Unit
-        every { followUpStreamResponse.stream() } returns Stream.of(
+
+        every { followUpStreamResponse1.stream() } returns Stream.of(
             mockToolUseStartEvent(),
+            mockStreamEvent(messageStop = Optional.of(mockk())),
         )
-        every { followUpStreamResponse.close() } returns Unit
+        every { followUpStreamResponse1.close() } returns Unit
+
+        every { followUpStreamResponse2.stream() } returns Stream.of(
+            mockToolUseStartEvent(),
+            mockStreamEvent(messageStop = Optional.of(mockk())),
+        )
+        every { followUpStreamResponse2.close() } returns Unit
+
+        every { followUpStreamResponse3.stream() } returns Stream.of(
+            mockToolUseStartEvent(),
+            mockStreamEvent(messageStop = Optional.of(mockk())),
+        )
+        every { followUpStreamResponse3.close() } returns Unit
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
             toolName = "tavily_web_search",
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
@@ -286,7 +308,7 @@ class AnthropicInferenceServiceImplTest {
             modelId = "claude-sonnet-4-20250514",
             modelType = ModelType.FAST,
             loggingPort = loggingPort,
-            toolExecutor = toolExecutor,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
         val events = service.sendPrompt(

@@ -18,6 +18,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.google.ai.edge.litertlm.Backend
@@ -143,7 +144,7 @@ class ConversationManagerImpl @Inject constructor(
 
             val modelPath = getModelPath(asset.metadata.localFileName)
             val resolvedThinkingEnabled = false // LiteRT currently doesn't support reasoning budget
-            val resolvedSystemPrompt = activeConfig.systemPrompt ?: defaultSystemPrompt
+            val resolvedSystemPrompt = options?.systemPrompt ?: activeConfig.systemPrompt ?: defaultSystemPrompt
             val chatId = options?.chatId
             val userMessageId = options?.userMessageId
             val targetSamplerConfig = SamplerConfig(
@@ -212,7 +213,16 @@ class ConversationManagerImpl @Inject constructor(
                     automaticToolCalling = true,
                     tools = buildList {
                         if (executor != null && hasSearchTool) {
-                            add(tool(LocalSearchToolset(executor, modelType)))
+                            add(
+                                tool(
+                                    LocalSearchToolset(
+                                        toolExecutor = executor,
+                                        modelType = modelType,
+                                        chatId = chatId,
+                                        userMessageId = userMessageId,
+                                    )
+                                )
+                            )
                         }
                         if (executor != null && hasImageTool) {
                             add(
@@ -270,6 +280,8 @@ class ConversationManagerImpl @Inject constructor(
     private inner class LocalSearchToolset(
         private val toolExecutor: ToolExecutorPort,
         private val modelType: ModelType,
+        private val chatId: ChatId?,
+        private val userMessageId: MessageId?,
     ) : ToolSet {
         @Tool(description = "Search the web for information.")
         fun tavily_web_search(
@@ -290,7 +302,9 @@ class ConversationManagerImpl @Inject constructor(
                         toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
                         argumentsJson = ToolEnvelopeParser.buildArgumentsJson(query),
                         provider = "LITERT",
-                        modelType = modelType
+                        modelType = modelType,
+                        chatId = chatId,
+                        userMessageId = userMessageId,
                     )
                     loggingPort.info(
                         TAG,

@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.errors.BadRequestException
@@ -12,7 +13,6 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
 class BaseOpenAiSdkInferenceServiceTest {
@@ -27,6 +27,7 @@ class BaseOpenAiSdkInferenceServiceTest {
         modelType = ModelType.THINKING,
         baseUrl = "https://openrouter.ai/api/v1",
         loggingPort = loggingPort,
+        orchestrator = LlmToolingOrchestrator(mockk(), loggingPort),
     ) {
         override val tag: String = "BaseOpenAiSdkInferenceServiceTest"
 
@@ -38,9 +39,6 @@ class BaseOpenAiSdkInferenceServiceTest {
         ) = Unit
 
         fun describe(throwable: Throwable): String = describeException(throwable)
-
-        fun novelSuffix(streamedText: String, finalizedText: String): String =
-            novelStreamSuffix(streamedText, finalizedText)
     }
 
     @Test
@@ -63,20 +61,5 @@ class BaseOpenAiSdkInferenceServiceTest {
                 match { it.contains("Skipping malformed API error field") }
             )
         }
-    }
-
-    @Test
-    fun `novelStreamSuffix returns full text when no incremental chunks were emitted`() {
-        assertEquals("full response", service.novelSuffix(streamedText = "", finalizedText = "full response"))
-    }
-
-    @Test
-    fun `novelStreamSuffix returns only missing suffix when done event follows deltas`() {
-        assertEquals(" world", service.novelSuffix(streamedText = "Hello", finalizedText = "Hello world"))
-    }
-
-    @Test
-    fun `novelStreamSuffix avoids duplicate emission when done text matches streamed text`() {
-        assertEquals("", service.novelSuffix(streamedText = "Hello world", finalizedText = "Hello world"))
     }
 }

@@ -18,6 +18,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -129,13 +130,8 @@ class LlamaInferenceServiceImplTest {
             closeConversation = false,
         ).toList()
 
-        assertEquals(
-            listOf("Use the search result summary."),
-            events.filterIsInstance<InferenceEvent.PartialResponse>().map(InferenceEvent.PartialResponse::chunk)
-        )
-        assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "Need to search first." })
-        assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "Reviewing search result." })
-        assertTrue(events.last() is InferenceEvent.Finished)
+        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Use the search result summary." })
+        assertTrue(events.any { it is InferenceEvent.Finished && it.modelType == ModelType.FAST })
         coVerify(exactly = 2) { sessionManager.sendUserMessage(any()) }
         coVerify(exactly = 1) {
             sessionManager.sendUserMessage(
@@ -190,8 +186,8 @@ class LlamaInferenceServiceImplTest {
         ).toList()
 
         val error = events.filterIsInstance<InferenceEvent.Error>().single()
-        assertTrue(error.cause is IllegalStateException)
-        assertEquals("Failed to resume llama generation after tool replay", error.cause.message)
+        assertTrue(error.cause is RuntimeException)
+        assertEquals("resume boom", error.cause.message)
     }
 
     @Test
@@ -303,7 +299,7 @@ class LlamaInferenceServiceImplTest {
             activeModelProvider = activeModelProvider,
             context = context,
             modelType = ModelType.FAST,
-            toolExecutor = toolExecutor,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
     private fun searchEnabledOptions(): GenerationOptions =

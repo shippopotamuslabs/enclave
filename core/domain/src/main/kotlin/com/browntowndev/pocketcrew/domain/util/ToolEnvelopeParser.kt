@@ -1,4 +1,4 @@
-package com.browntowndev.pocketcrew.feature.inference
+package com.browntowndev.pocketcrew.domain.util
 
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 
@@ -6,7 +6,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
  * Generic tool envelope parser that supports both search and image-inspect tools.
  * Refactored from SearchToolSupport to handle multiple tool types.
  */
-internal object ToolEnvelopeParser {
+object ToolEnvelopeParser {
     private val TOOL_NAME_REGEX = Regex(""""name"\s*:\s*"([^"]+)"""")
     private val CDATA_TOOL_CALL_REGEX = Regex("""(?s)<!\[CDATA\[<tool>\s*(\{.*?\})\s*</tool>\]\]>""")
     private val WRAPPED_TOOL_CALL_REGEX = Regex("""(?s)<tool_call>\s*(\{.*?\})\s*</tool_call>""")
@@ -132,8 +132,18 @@ internal object ToolEnvelopeParser {
     fun stubResultJson(query: String): String =
         """{"query":"${escapeJson(query)}","results":[{"title":"Stub Tavily Result","url":"https://example.invalid/stub","content":"${escapeJson("Pocket Crew stub result for query: $query")}"}]}"""
 
-    private fun extractRequiredString(argumentsJson: String, fieldName: String): String =
-        jsonStringFieldRegex(fieldName)
+    private fun extractRequiredString(argumentsJson: String, fieldName: String): String {
+        try {
+            val json = org.json.JSONObject(argumentsJson)
+            val value = json.optString(fieldName, "")
+            if (value.isNotBlank()) {
+                return value.trim()
+            }
+        } catch (e: Exception) {
+            // Fallback to regex if JSON parsing fails (common in partial local model streams)
+        }
+
+        return jsonStringFieldRegex(fieldName)
             .find(argumentsJson)
             ?.groupValues
             ?.get(1)
@@ -141,12 +151,14 @@ internal object ToolEnvelopeParser {
             ?.trim()
             ?.takeIf(String::isNotEmpty)
             ?: throw IllegalArgumentException("Tool argument '$fieldName' is required")
+    }
 
     private fun buildSingleFieldArgumentsJson(fieldName: String, value: String): String =
         """{"$fieldName":"${escapeJson(value)}"}"""
 
     private fun jsonStringFieldRegex(fieldName: String): Regex =
-        Regex(""""$fieldName"\s*:\s*"((?:\\.|[^"\\])*)"""")
+        // Final quote is optional to support partial streams
+        Regex(""""$fieldName"\s*:\s*"((?:\\.|[^"\\])*)"?""")
 
     private fun escapeJson(value: String): String = buildString(value.length) {
         value.forEach { char ->

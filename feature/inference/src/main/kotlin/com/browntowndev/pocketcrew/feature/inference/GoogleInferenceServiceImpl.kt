@@ -9,10 +9,12 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
+import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCall
 import com.google.genai.types.Part
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -25,7 +27,7 @@ class GoogleInferenceServiceImpl(
     private val modelType: ModelType,
     private val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
-    internal val toolExecutor: ToolExecutorPort? = null,
+    val orchestrator: LlmToolingOrchestrator,
 ) : LlmInferencePort {
 
     companion object {
@@ -34,7 +36,7 @@ class GoogleInferenceServiceImpl(
         private const val PROVIDER = "GOOGLE"
     }
 
-    private val conversationHistory = mutableListOf<ChatMessage>()
+    private val conversationHistory = CopyOnWriteArrayList<ChatMessage>()
 
     override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
         return sendPrompt(prompt, GenerationOptions(reasoningBudget = 0), closeConversation)
@@ -100,7 +102,13 @@ class GoogleInferenceServiceImpl(
             "GenerateContent request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(request.config.toString())}"
         )
 
-        sdkClient.generateContentStream(modelId, request.contents, request.config, emitEvent)
+        sdkClient.generateContentStream(
+            modelId = modelId,
+            contents = request.contents,
+            config = request.config,
+            emitEvent = emitEvent
+        )
+        emitEvent(InferenceEvent.Finished(modelType))
     }
 
     private suspend fun executeToolingPrompt(
@@ -109,81 +117,60 @@ class GoogleInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit,
     ) {
-        val executor = requireNotNull(toolExecutor) {
-            "Tool executor not configured for provider=$PROVIDER"
-        }
+        logImagePayloads(options)
+        val request = GoogleRequestMapper.mapToGenerateContentRequest(
+            prompt = prompt,
+            history = requestHistory,
+            options = options,
+        )
 
         try {
-            logImagePayloads(options)
-            val request = GoogleRequestMapper.mapToGenerateContentRequest(
-                prompt = prompt,
-                history = requestHistory,
+            orchestrator.execute(
+                providerName = PROVIDER,
+                initialParams = request.contents,
                 options = options,
-            )
-            loggingPort.debug(
-                TAG,
-                "GenerateContent tool request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(request.config.toString())}"
-            )
-
-            val initialResponse = sdkClient.generateContentStream(modelId, request.contents, request.config, emitEvent)
-            val functionCall = initialResponse.functionCall
-            if (functionCall == null) {
-                loggingPort.info(
-                    TAG,
-                    "Tool loop complete without tool call provider=$PROVIDER model=$modelId modelType=$modelType"
-                )
-                return
-            }
-
-            val toolRequest = ToolCallRequest(
-                toolName = functionCall.name().orElseThrow {
-                    IllegalStateException("Google tool execution failed before final response")
-                },
-                argumentsJson = ToolEnvelopeParser.buildArgumentsJson(functionCall.args().orElse(emptyMap())),
-                provider = PROVIDER,
-                modelType = modelType,
-                chatId = options.chatId,
-                userMessageId = options.userMessageId,
-            )
-            ToolEnvelopeParser.requireSupportedTool(toolRequest.toolName)
-            val toolArg = when (toolRequest.toolName) {
-                ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolRequest.argumentsJson)
-                else -> ToolEnvelopeParser.extractRequiredQuery(toolRequest.argumentsJson)
-            }
-            loggingPort.info(
-                TAG,
-                "Tool call detected provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} arg=$toolArg"
-            )
-            val toolResult = executor.execute(toolRequest)
-            loggingPort.info(
-                TAG,
-                "Tool call completed provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
-            )
-
-            val followUpContents = request.contents + listOfNotNull(
-                initialResponse.assistantContent,
-                Content.builder()
-                    .role("user")
-                    .parts(
-                        listOf(
-                            buildFunctionResponsePart(functionCall, toolResult.resultJson)
-                        )
+                tag = TAG,
+                onInferencePass = { params, allowToolCall ->
+                    sdkClient.generateContentStream(
+                        modelId = modelId,
+                        contents = params,
+                        config = request.config,
+                        allowToolCall = allowToolCall,
+                        emitEvent = emitEvent
                     )
-                    .build()
+                },
+                onToolCallDetected = { response ->
+                    response.functionCall?.let { functionCall ->
+                        ToolCallRequest(
+                            toolName = functionCall.name().orElseThrow {
+                                IllegalStateException("Google tool execution failed before final response")
+                            },
+                            argumentsJson = ToolEnvelopeParser.buildArgumentsJson(functionCall.args().orElse(emptyMap())),
+                            provider = PROVIDER,
+                            modelType = modelType,
+                            chatId = options.chatId,
+                            userMessageId = options.userMessageId,
+                        )
+                    }
+                },
+                onToolResultMapped = { params, response, resultJson ->
+                    val functionCall = response.functionCall ?: throw IllegalStateException("Missing function call in response")
+                    params + listOfNotNull(
+                        response.assistantContent,
+                        Content.builder()
+                            .role("user")
+                            .parts(
+                                listOf(
+                                    buildFunctionResponsePart(functionCall, resultJson)
+                                )
+                            )
+                            .build()
+                    )
+                },
+                onFinished = { _, _, _ ->
+                    emitEvent(InferenceEvent.Finished(modelType))
+                }
             )
-
-            val followUpResponse = sdkClient.generateContentStream(modelId, followUpContents, request.config, emitEvent)
-            if (followUpResponse.functionCall != null) {
-                loggingPort.warning(
-                    TAG,
-                    "Recursive tool call detected provider=$PROVIDER model=$modelId"
-                )
-                throw IllegalStateException("Search skill recursion limit exceeded")
-            }
-
-            if (!followUpResponse.emittedAny) {
-                throw IllegalStateException("Google tool execution failed before final response")
-            }
         } catch (e: IllegalArgumentException) {
             throw e
         } catch (e: IllegalStateException) {
