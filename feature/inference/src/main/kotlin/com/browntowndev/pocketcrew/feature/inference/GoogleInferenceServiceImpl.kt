@@ -128,7 +128,6 @@ class GoogleInferenceServiceImpl(
             orchestrator.execute(
                 providerName = PROVIDER,
                 initialParams = request.contents,
-                options = options,
                 tag = TAG,
                 onInferencePass = { params, allowToolCall ->
                     sdkClient.generateContentStream(

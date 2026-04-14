@@ -25,7 +25,6 @@ class LlmToolingOrchestrator @Inject constructor(
      * @param TResponse The type of response returned from the provider.
      * @param providerName The name of the provider (e.g., OPENAI, ANTHROPIC).
      * @param initialParams The initial request parameters.
-     * @param options The generation options.
      * @param tag The logging tag for the service.
      * @param maxToolCalls The maximum number of tool calls allowed (recursion limit).
      * @param onInferencePass A lambda that performs the actual API or Local call.
@@ -37,9 +36,8 @@ class LlmToolingOrchestrator @Inject constructor(
     suspend fun <TParams, TResponse> execute(
         providerName: String,
         initialParams: TParams,
-        options: GenerationOptions,
         tag: String,
-        maxToolCalls: Int = 3,
+        maxToolCalls: Int = 30,
         onInferencePass: suspend (params: TParams, allowToolCall: Boolean) -> TResponse,
         onToolCallDetected: (TResponse) -> ToolCallRequest?,
         onToolResultMapped: suspend (params: TParams, response: TResponse, resultJson: String) -> TParams,

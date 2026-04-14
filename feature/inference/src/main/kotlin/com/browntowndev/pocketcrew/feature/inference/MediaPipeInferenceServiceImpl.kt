@@ -283,7 +283,6 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
         orchestrator.execute(
             providerName = "MEDIAPIPE",
             initialParams = options,
-            options = options,
             tag = TAG,
             onInferencePass = { params, allowToolCall ->
                 collectToolPreparationPass(session, targetModelType, emitEvent)
