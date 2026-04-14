@@ -51,14 +51,27 @@ internal class ChatInferenceRequestPreparer(
             logLocalPrompt(prompt, modelType)
         }
 
+        val strategy = when {
+            config?.isLocal == true -> when (config.localModelFormat) {
+                com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.LITERTLM -> ToolCallStrategy.LITE_RT_NATIVE
+                com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.GGUF -> ToolCallStrategy.JSON_XML_ENVELOPE
+                com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.TASK -> ToolCallStrategy.JSON_XML_ENVELOPE
+                null -> ToolCallStrategy.JSON_XML_ENVELOPE
+            }
+            config?.isLocal == false -> ToolCallStrategy.SDK_NATIVE
+            else -> ToolCallStrategy.JSON_XML_ENVELOPE
+        }
+
         val toolingEnabled = searchEnabled || imageHandling == ChatImageHandling.TOOL
-        val systemPrompt = when {
-            config?.isLocal == true && toolingEnabled -> searchToolPromptComposer.compose(
-                baseSystemPrompt = config.systemPrompt,
+        val systemPrompt = if (toolingEnabled) {
+            searchToolPromptComposer.compose(
+                baseSystemPrompt = config?.systemPrompt,
                 includeSearchTool = searchEnabled,
                 includeImageInspectTool = imageHandling == ChatImageHandling.TOOL,
+                strategy = strategy,
             )
-            else -> config?.systemPrompt
+        } else {
+            config?.systemPrompt
         }
         val availableTools = buildList {
             if (searchEnabled) add(ToolDefinition.TAVILY_WEB_SEARCH)

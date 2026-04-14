@@ -27,6 +27,16 @@ enum class MessageRole {
     Assistant,
 }
 
+enum class ToolCallBannerKind {
+    SEARCH,
+    IMAGE,
+}
+
+data class ToolCallBannerUi(
+    val kind: ToolCallBannerKind,
+    val label: String,
+)
+
 data class ChatMessage(
     val id: MessageId,
     val chatId: ChatId,
@@ -51,6 +61,8 @@ data class ChatUiState(
     val chatId: ChatId? = null,
     val isGenerating: Boolean = false,
     val hasActiveIndicator: Boolean = false,
+    val activeToolCallBanner: ToolCallBannerUi? = null,
+    val activeIndicatorMessageId: MessageId? = null,
 )
 
 /**

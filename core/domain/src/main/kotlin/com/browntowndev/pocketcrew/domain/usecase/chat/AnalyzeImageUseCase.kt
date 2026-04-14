@@ -7,12 +7,23 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import javax.inject.Inject
+import javax.inject.Provider
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.withContext
 
+/**
+ * Uses [Provider] to break a Dagger/Hilt constructor-injection cycle:
+ *
+ * InferenceFactoryImpl → LlmToolingOrchestrator → ToolExecutorPort
+ *   → CompositeToolExecutor → ImageInspectToolExecutor → AnalyzeImageUseCase
+ *   → InferenceFactoryPort → InferenceFactoryImpl (cycle).
+ *
+ * The factory is only needed at invoke-time, not at construction-time,
+ * so [Provider] yields the correct semantics: lazy resolution after the
+ * full singleton graph is initialized.
+ */
 class AnalyzeImageUseCase @Inject constructor(
-    private val inferenceFactory: InferenceFactoryPort,
+    private val inferenceFactoryProvider: Provider<InferenceFactoryPort>,
     private val loggingPort: LoggingPort,
 ) {
     companion object {
@@ -29,7 +40,7 @@ class AnalyzeImageUseCase @Inject constructor(
                 "Starting vision analysis imageUri=$imageUri promptChars=${effectivePrompt.length}"
             )
             try {
-                inferenceFactory.withInferenceService(ModelType.VISION) { service ->
+                inferenceFactoryProvider.get().withInferenceService(ModelType.VISION) { service ->
                     loggingPort.info(TAG, "Resolved vision inference service for imageUri=$imageUri")
                     service.setHistory(emptyList())
 

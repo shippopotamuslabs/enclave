@@ -10,10 +10,12 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiCredentialsUseCase
@@ -901,14 +903,90 @@ class SettingsViewModelTest {
         coVerify(exactly = 0) { saveTavilyApiKeyUseCase(any()) }
     }
 
+    /**
+     * Scenario 7: When a re-download finishes and restores a soft-deleted model,
+     * the model should be removed from availableToDownloadModels in the bottom sheet
+     * so it doesn't appear in both "Downloaded" and "Available for Download" sections.
+     */
+    @Test
+    fun `availableToDownloadModels removes restored model when local assets update`() = runTest {
+        // A model that was soft-deleted (available for re-download)
+        val softDeletedAsset = LocalModelAsset(
+            metadata = LocalModelMetadata(
+                id = LocalModelId("model-1"),
+                huggingFaceModelName = "test/soft-deleted-model",
+                remoteFileName = "model.litertlm",
+                localFileName = "model.litertlm",
+                sha256 = "abc123def456",
+                sizeInBytes = 1_000_000_000L,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            configurations = emptyList() // soft-deleted = 0 configurations
+        )
+
+        // The same model after being restored (now has configurations)
+        val restoredAsset = LocalModelAsset(
+            metadata = LocalModelMetadata(
+                id = LocalModelId("model-1"),
+                huggingFaceModelName = "test/soft-deleted-model",
+                remoteFileName = "model.litertlm",
+                localFileName = "model.litertlm",
+                sha256 = "abc123def456",
+                sizeInBytes = 1_000_000_000L,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            configurations = listOf(
+                LocalModelConfiguration(
+                    id = LocalModelConfigurationId("config-1"),
+                    localModelId = LocalModelId("model-1"),
+                    displayName = "Restored Model",
+                    maxTokens = 2048,
+                    contextWindow = 2048,
+                    temperature = 0.7,
+                    topP = 0.95,
+                    topK = 40,
+                    repetitionPenalty = 1.0,
+                    systemPrompt = "You are helpful.",
+                    isSystemPreset = true
+                )
+            )
+        )
+
+        // Initially: no active assets, soft-deleted model available
+        val localAssetsFlow = MutableStateFlow<List<LocalModelAsset>>(emptyList())
+
+        val viewModel = createViewModel(
+            settingsFlow = flowOf(SettingsData()),
+            localAssetsFlow = localAssetsFlow,
+            softDeletedModels = listOf(softDeletedAsset),
+        )
+
+        // Open the sheet - this loads soft-deleted models into availableToDownloadModels
+        viewModel.onShowModelConfigSheet(true)
+        runCurrent()
+
+        // Verify the soft-deleted model appears in available downloads
+        assertEquals(1, viewModel.uiState.value.localModelsSheet.availableDownloads.size)
+        assertEquals(LocalModelId("model-1"), viewModel.uiState.value.localModelsSheet.availableDownloads.first().metadataId)
+
+        // Simulate re-download completing: the model is restored to active assets
+        localAssetsFlow.value = listOf(restoredAsset)
+        runCurrent()
+
+        // The restored model should be removed from availableToDownloadModels
+        assertEquals(0, viewModel.uiState.value.localModelsSheet.availableDownloads.size)
+    }
+
     private fun createViewModel(
         apiAssets: List<ApiModelAsset> = emptyList(),
         apiAssetsFlow: Flow<List<ApiModelAsset>> = flowOf(apiAssets),
         settingsFlow: Flow<SettingsData> = flowOf(SettingsData()),
+        localAssetsFlow: Flow<List<LocalModelAsset>> = flowOf(emptyList()),
+        softDeletedModels: List<LocalModelAsset> = emptyList(),
     ): SettingsViewModel {
         every { getSettingsUseCase() } returns settingsFlow
-        every { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
-        coEvery { getLocalModelAssetsUseCase.getSoftDeletedModels() } returns emptyList()
+        every { getLocalModelAssetsUseCase() } returns localAssetsFlow
+        coEvery { getLocalModelAssetsUseCase.getSoftDeletedModels() } returns softDeletedModels
         every { getApiModelAssetsUseCase() } returns apiAssetsFlow
         every { getDefaultModelsUseCase() } returns flowOf(emptyList())
 

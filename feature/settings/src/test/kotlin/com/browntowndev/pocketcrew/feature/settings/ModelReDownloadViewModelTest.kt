@@ -6,6 +6,8 @@ import com.browntowndev.pocketcrew.core.data.repository.DownloadWorkRepository
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
+import com.browntowndev.pocketcrew.domain.model.download.DownloadRequestKind
+import com.browntowndev.pocketcrew.domain.model.download.ScheduledDownload
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCase
 import io.mockk.coEvery
 import io.mockk.every
@@ -38,15 +40,21 @@ class ModelReDownloadViewModelTest {
     fun `reDownloadModel transitions to Preparing then Downloading and Complete`() = runTest {
         val modelId = LocalModelId("test")
         val workId = UUID.randomUUID()
-        
-        coEvery { reDownloadModelUseCase(modelId) } returns Result.success(Unit)
+
+        coEvery { reDownloadModelUseCase(modelId) } returns Result.success(
+            ScheduledDownload(
+                sessionId = "test-session",
+                requestKind = DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL,
+                targetModelId = modelId,
+            )
+        )
         coEvery { downloadWorkRepository.getWorkId() } returns workId
-        
+
         // Match the "unassigned|downloaded|total" format expected by ViewModel
         val progressData = Data.Builder()
             .putStringArray(DownloadKey.FILES_PROGRESS.key, arrayOf("unassigned|50|100"))
             .build()
-            
+
         val workInfoRunning = mockk<WorkInfo>()
         every { workInfoRunning.state } returns WorkInfo.State.RUNNING
         every { workInfoRunning.progress } returns progressData
@@ -57,14 +65,14 @@ class ModelReDownloadViewModelTest {
         every { workInfoSucceeded.state } returns WorkInfo.State.SUCCEEDED
         every { workInfoSucceeded.progress } returns Data.EMPTY
         every { workInfoSucceeded.id } returns workId
-            
+
         val workInfoFlow = flowOf(workInfoRunning, workInfoSucceeded)
-        
+
         every { downloadWorkRepository.observeDownloadProgress(workId) } returns workInfoFlow
 
         viewModel.reDownloadModel(modelId)
 
-        // Capture states during execution would be better with Turbine, 
+        // Capture states during execution would be better with Turbine,
         // but here we check final or use advanceTimeBy if needed.
         advanceUntilIdle()
 
@@ -93,7 +101,13 @@ class ModelReDownloadViewModelTest {
     @Test
     fun `reDownloadModel when workId not found transitions to Failed`() = runTest {
         val modelId = LocalModelId("test")
-        coEvery { reDownloadModelUseCase(modelId) } returns Result.success(Unit)
+        coEvery { reDownloadModelUseCase(modelId) } returns Result.success(
+            ScheduledDownload(
+                sessionId = "test-session",
+                requestKind = DownloadRequestKind.RESTORE_SOFT_DELETED_MODEL,
+                targetModelId = modelId,
+            )
+        )
         coEvery { downloadWorkRepository.getWorkId() } returns null
 
         viewModel.reDownloadModel(modelId)

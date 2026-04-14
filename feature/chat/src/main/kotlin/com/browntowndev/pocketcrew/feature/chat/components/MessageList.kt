@@ -43,6 +43,8 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
+import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerKind
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.feature.chat.ContentUi
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
@@ -56,6 +58,8 @@ import com.browntowndev.pocketcrew.feature.chat.fakeLongMessages
 fun MessageList(
     messages: List<ChatMessage>,
     hasActiveIndicator: Boolean,
+    activeToolCallBanner: ToolCallBannerUi? = null,
+    activeIndicatorMessageId: MessageId? = null,
     modifier: Modifier = Modifier,
     isPreview: Boolean = false,
     onEditMessage: (String) -> Unit = {},
@@ -91,6 +95,7 @@ fun MessageList(
                         .fillMaxWidth()
                         .padding(horizontal = 10.dp)
                 ) {
+
                     // ============================================================
                     // Indicator rendering - shows at TOP for Assistant messages
                     // (below content for User messages since they have no indicators)
@@ -99,6 +104,13 @@ fun MessageList(
                         modelDisplayName = message.modelDisplayName,
                         indicatorState = message.indicatorState
                     )
+
+                    if (message.id == activeIndicatorMessageId) {
+                        ToolCallBanner(
+                            banner = activeToolCallBanner,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
 
                     // ============================================================
                     // Content rendering based on message role
@@ -856,6 +868,41 @@ private fun PreviewPipelineFinalAllStates() {
                 ChatMessage(id = MessageId("8"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "Final WITH thinking.", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:23 AM", indicatorState = IndicatorState.Complete(thinkingData = ThinkingDataUi(thinkingDurationSeconds = 6, thinkingRaw = "Final review...")), modelDisplayName = "Model"),
                 ChatMessage(id = MessageId("9"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Q5"), formattedTimestamp = "10:22 AM"),
                 ChatMessage(id = MessageId("10"), chatId = ChatId("1"), role = MessageRole.Assistant, content = ContentUi(text = "Final no thinking.", pipelineStep = PipelineStep.FINAL), formattedTimestamp = "10:21 AM", indicatorState = IndicatorState.Complete(thinkingData = null), modelDisplayName = "Model")
+            )
+        )
+    }
+}
+
+@Preview(name = "Message List with Tool Call Banner")
+@Composable
+private fun PreviewMessageListWithToolCall() {
+    PocketCrewTheme(darkTheme = true) {
+        val messageId = MessageId("active_msg")
+        MessageList(
+            isPreview = true,
+            hasActiveIndicator = true,
+            activeIndicatorMessageId = messageId,
+            activeToolCallBanner = ToolCallBannerUi(
+                kind = ToolCallBannerKind.SEARCH,
+                label = "Searching for quantum computing basics..."
+            ),
+            messages = listOf(
+                ChatMessage(
+                    id = MessageId("1"),
+                    chatId = ChatId("1"),
+                    role = MessageRole.User,
+                    content = ContentUi(text = "What is quantum computing?"),
+                    formattedTimestamp = "10:30 AM",
+                ),
+                ChatMessage(
+                    id = messageId,
+                    chatId = ChatId("1"),
+                    role = MessageRole.Assistant,
+                    content = ContentUi(text = ""),
+                    formattedTimestamp = "10:31 AM",
+                    indicatorState = IndicatorState.Processing,
+                    modelDisplayName = "Qwen 3 8B",
+                )
             )
         )
     }

@@ -114,7 +114,7 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
                         partialDownloads = emptyMap(),
                         allValid = true,
                     ),
-                availableToRedownload = emptyList()
+                availableToRedownload = emptyList(),
             )
         return startDownloads(modelsResult, wifiOnly)
     }
@@ -190,6 +190,16 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
      * @return The LocalModelAsset if found, null otherwise
      */
     override suspend fun getAssetById(id: LocalModelId): LocalModelAsset? = assetsFlow.value.values.find { it.metadata.id == id }
+
+    override suspend fun restoreSoftDeletedModel(
+        id: LocalModelId,
+        configurations: List<LocalModelConfiguration>
+    ): LocalModelAsset {
+        val asset = getAssetById(id) ?: throw IllegalArgumentException("Asset with id $id not found")
+        val restoredAsset = asset.copy(configurations = configurations)
+        assetsFlow.value = assetsFlow.value + (id to restoredAsset)
+        return restoredAsset
+    }
 }
 
 class FakeLoggingPort : LoggingPort {

@@ -219,13 +219,13 @@ class GenerateChatResponseUseCaseSearchToolTest {
         assertTrue(options.systemPrompt?.contains("Be concise.") == true)
         assertTrue(
             options.systemPrompt?.contains(
-                """<![CDATA[<tool>{"name":"tavily_web_search","arguments":{"query":"..."}}</tool>]]>"""
+                """<tool_call>{"name":"tavily_web_search","arguments":{"query":"..."}}</tool_call>"""
             ) == true
         )
-    }
+        }
 
-    @Test
-    fun `FAST mode does not expose tools when search is disabled`() = runTest {
+        @Test
+        fun `FAST mode handles missing configurations gracefully`() = runTest {
         val inferenceFactory = FakeInferenceFactory()
         val inferenceService = FakeInferenceService(ModelType.FAST)
         inferenceFactory.serviceMap[ModelType.FAST] = inferenceService
