@@ -105,12 +105,10 @@ fun MessageList(
                         indicatorState = message.indicatorState
                     )
 
-                    if (message.id == activeIndicatorMessageId) {
-                        ToolCallBanner(
-                            banner = activeToolCallBanner,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
+                    ToolCallBanner(
+                        banner = if (message.id == activeIndicatorMessageId) activeToolCallBanner else null,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
 
                     // ============================================================
                     // Content rendering based on message role
@@ -172,6 +170,7 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
             else -> 0L
         }
         val isThinkingActive = indicatorState is IndicatorState.Thinking ||
+                indicatorState is IndicatorState.EngineLoading ||
                 (indicatorState is IndicatorState.Generating && indicatorState.thinkingData?.thinkingDurationSeconds == 0L)
 
         if (startTime > 0 && isThinkingActive) {
@@ -185,6 +184,7 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
             // For completed states, use the final duration
             elapsedSeconds = when (indicatorState) {
                 is IndicatorState.Thinking -> indicatorState.thinkingDurationSeconds.toInt()
+                is IndicatorState.EngineLoading -> 0
                 is IndicatorState.Generating -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
                 is IndicatorState.Complete -> indicatorState.thinkingData?.thinkingDurationSeconds?.toInt() ?: 0
                 else -> 0
@@ -192,6 +192,9 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
         }
 
         when (indicatorState) {
+            is IndicatorState.EngineLoading -> {
+                EngineLoadingIndicator(modelDisplayName = modelDisplayName)
+            }
             is IndicatorState.Thinking -> {
                 ThinkingIndicator(
                     thinkingRaw = indicatorState.thinkingRaw,
@@ -242,6 +245,9 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
         }
 
         if (isThinkingSheetVisible) {
+            val isStreaming = indicatorState !is IndicatorState.Complete &&
+                             indicatorState !is IndicatorState.None
+            
             ThinkingDetailsBottomSheet(
                 isVisible = isThinkingSheetVisible,
                 thinkingRaw = indicatorState.let {
@@ -261,6 +267,7 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
                     }
                 },
                 elapsedSeconds = elapsedSeconds,
+                isStreaming = isStreaming,
                 onDismiss = { isThinkingSheetVisible = false }
             )
         }

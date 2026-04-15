@@ -173,7 +173,15 @@ class ChatViewModel @Inject constructor(
                     val elapsed = System.currentTimeMillis() - startTime
                     val remaining = (1000 - elapsed).coerceAtLeast(0)
 
+                    // Collect sources for the banner if available
+                    val sources = event.resultJson?.let { 
+                        com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(MessageId("temp"), it)
+                    } ?: emptyList()
+
                     activeToolJobs[event.eventId] = viewModelScope.launch {
+                        if (sources.isNotEmpty()) {
+                            _activeToolCallBanner.value = _activeToolCallBanner.value?.copy(tavilySources = sources)
+                        }
                         delay(remaining)
                         activeToolIds.remove(event.eventId)
                         // Only clear if no other tools are active to prevent UI flickering
@@ -253,7 +261,8 @@ class ChatViewModel @Inject constructor(
                 thinkingEndTime = snapshot.thinkingEndTime.takeIf { et: Long -> et != 0L },
                 createdAt = 0L,
                 messageState = snapshot.messageState,
-                modelType = snapshot.modelType
+                modelType = snapshot.modelType,
+                tavilySources = snapshot.tavilySources,
             )
         }
         
@@ -280,7 +289,8 @@ class ChatViewModel @Inject constructor(
                     activeIndicatorMessageId = chatMessage.id
                     if (!isGenerating && (state is IndicatorState.Generating ||
                         state is IndicatorState.Thinking ||
-                        state is IndicatorState.Processing)
+                        state is IndicatorState.Processing ||
+                        state is IndicatorState.EngineLoading)
                     ) {
                         isGenerating = true
                     }
@@ -331,10 +341,12 @@ class ChatViewModel @Inject constructor(
                 text = message.content.text,
                 pipelineStep = message.content.pipelineStep,
                 imageUri = message.content.imageUri,
+                tavilySources = message.tavilySources,
             ),
             formattedTimestamp = formatTimestamp(message.createdAt),
             indicatorState = computeIndicatorState(message),
-            modelDisplayName = modelDisplayName
+            modelDisplayName = modelDisplayName,
+            tavilySources = message.tavilySources,
         )
     }
 
@@ -350,6 +362,9 @@ class ChatViewModel @Inject constructor(
         if (message.role == Role.USER) return IndicatorState.None
         
         return when (message.messageState) {
+            MessageState.ENGINE_LOADING -> {
+                IndicatorState.EngineLoading
+            }
             MessageState.PROCESSING -> {
                 IndicatorState.Processing
             }

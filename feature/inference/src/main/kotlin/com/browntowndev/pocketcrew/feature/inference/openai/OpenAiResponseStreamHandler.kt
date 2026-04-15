@@ -77,10 +77,10 @@ internal class OpenAiResponseStreamHandler(
     fun toStreamedResponse(state: StreamState): StreamedOpenAiResponse =
         StreamedOpenAiResponse(
             emittedAny = state.emittedAny,
-            functionCall = state.toolCallRequest,
+            functionCalls = state.toolCallRequests.toList(),
             responseId = state.responseId,
-            providerToolCallId = state.providerToolCallId,
-            providerToolItemId = state.providerToolItemId,
+            providerToolCallIds = state.providerToolCallIds.toList(),
+            providerToolItemIds = state.providerToolItemIds.toList(),
             assistantMessageText = state.streamedAssistantMessage.toString(),
         )
 
@@ -241,7 +241,7 @@ internal class OpenAiResponseStreamHandler(
                     error
                 )
             }
-        state.toolCallRequest = ToolCallRequest(
+        state.toolCallRequests += ToolCallRequest(
             toolName = toolName,
             argumentsJson = argumentsJson,
             provider = provider,
@@ -249,8 +249,8 @@ internal class OpenAiResponseStreamHandler(
             chatId = chatId,
             userMessageId = userMessageId,
         )
-        state.providerToolCallId = cachedFunctionCall?.callId ?: functionCallDone.itemId()
-        state.providerToolItemId = cachedFunctionCall?.itemId ?: functionCallDone.itemId()
+        state.providerToolCallIds += cachedFunctionCall?.callId ?: functionCallDone.itemId()
+        state.providerToolItemIds += cachedFunctionCall?.itemId ?: functionCallDone.itemId()
         if (!allowToolCall) {
             throw IllegalStateException("Search skill recursion limit exceeded")
         }

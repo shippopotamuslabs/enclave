@@ -241,18 +241,45 @@ class XaiRequestMapperTest {
     }
 
     @Test
-    fun `mapToResponseParams serializes tavily_web_search when tooling is enabled`() {
+    fun `mapToResponseParams sets store to false`() {
+        val params = XaiRequestMapper.mapToResponseParams(
+            modelId = "grok-3",
+            prompt = "test",
+            history = emptyList(),
+            options = GenerationOptions(reasoningBudget = 0)
+        )
+
+        assertFalse(params.store().get())
+    }
+
+    @Test
+    fun `mapToChatCompletionParams sets store to false`() {
+        val params = XaiRequestMapper.mapToChatCompletionParams(
+            modelId = "grok-3",
+            prompt = "test",
+            history = emptyList(),
+            options = GenerationOptions(reasoningBudget = 0)
+        )
+
+        assertFalse(params.store().get())
+    }
+
+    @Test
+    fun `mapToResponseParams sets store to false when images are present`() {
+        val tempFile = java.io.File.createTempFile("test", ".png").apply {
+            writeBytes(byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
+            deleteOnExit()
+        }
         val params = XaiRequestMapper.mapToResponseParams(
             modelId = "grok-4-1-fast-non-reasoning",
-            prompt = "find recent android tool news",
+            prompt = "what is in this image?",
             history = emptyList(),
             options = GenerationOptions(
                 reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                imageUris = listOf(tempFile.toURI().toString())
             )
         )
 
-        assertTrue(params.toString().contains("tavily_web_search"))
+        assertFalse(params.store().get())
     }
 }

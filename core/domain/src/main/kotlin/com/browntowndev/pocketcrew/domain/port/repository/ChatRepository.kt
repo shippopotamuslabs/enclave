@@ -165,7 +165,8 @@ interface ChatRepository {
         thinkingRaw: String?,
         content: String,
         messageState: MessageState,
-        pipelineStep: PipelineStep?
+        pipelineStep: PipelineStep?,
+        tavilySources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = emptyList()
     )
 
     /**

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "db63a675d103112b9ee95303c4b15ac3",
+    "identityHash": "d95500e929a65e20ac09399927492d05",
     "entities": [
       {
         "tableName": "chat",
@@ -857,11 +857,83 @@
             ]
           }
         ]
+      },
+      {
+        "tableName": "tavily_source",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `message_id` TEXT NOT NULL, `title` TEXT NOT NULL, `url` TEXT NOT NULL, `content` TEXT NOT NULL, `score` REAL NOT NULL, PRIMARY KEY(`id`), FOREIGN KEY(`message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageId",
+            "columnName": "message_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "title",
+            "columnName": "title",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "content",
+            "columnName": "content",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "score",
+            "columnName": "score",
+            "affinity": "REAL",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_tavily_source_message_id",
+            "unique": false,
+            "columnNames": [
+              "message_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_tavily_source_message_id` ON `${TABLE_NAME}` (`message_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "message",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "message_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'db63a675d103112b9ee95303c4b15ac3')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd95500e929a65e20ac09399927492d05')"
     ]
   }
 }

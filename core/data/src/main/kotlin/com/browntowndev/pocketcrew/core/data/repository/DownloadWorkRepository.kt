@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.core.data.download.DownloadWorkKeys
 import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
@@ -29,7 +30,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class DownloadWorkRepository @Inject constructor(
-    private val workManager: WorkManager
+    private val workManager: WorkManager,
+    private val ioDispatcher: CoroutineDispatcher
 ) {
     companion object {
         private const val TAG = "DownloadWorkRepository"
@@ -70,18 +72,22 @@ class DownloadWorkRepository @Inject constructor(
         // emits on state AND progress changes (WorkManager 2.9+)
         return workManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
         .map { workInfos ->
-            // First try to find the specific work ID we're interested in
+            // Prioritize the specific work ID we're interested in, UNLESS it has
+            // reached an intermediate success state in a chain. If so, we must
+            // transition to the finalizer to reach the terminal READY state.
             val exact = workInfos.find { it.id == workId }
-            if (exact != null) return@map exact
+            if (exact != null && exact.state != WorkInfo.State.SUCCEEDED) {
+                return@map exact
+            }
 
-            // Fallback: select the best candidate from the chain
+            // Fallback or transition: select the best candidate from the chain
             selectBestWorkInfo(workInfos)
         }
         .catch { e ->
             Log.e(TAG, "[FLOW] Error observing work: ${e.message}", e)
             emit(null)
         }
-        .flowOn(Dispatchers.IO)
+        .flowOn(ioDispatcher)
     }
 
     /**
@@ -114,7 +120,7 @@ class DownloadWorkRepository @Inject constructor(
     /**
      * Check if there's active download work.
      */
-    suspend fun isWorkRunning(): Boolean = withContext(Dispatchers.IO) {
+    suspend fun isWorkRunning(): Boolean = withContext(ioDispatcher) {
         try {
             // Using getWorkInfosForUniqueWorkFlow().firstOrNull() avoids blocking the thread completely.
             val workInfo = workManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)

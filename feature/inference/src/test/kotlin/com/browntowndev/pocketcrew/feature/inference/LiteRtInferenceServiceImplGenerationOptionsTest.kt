@@ -42,7 +42,7 @@ class LiteRtInferenceServiceImplGenerationOptionsTest {
         mockConversation = mockk(relaxed = true)
         processThinkingTokens = ProcessThinkingTokensUseCase()
 
-        coEvery { mockConversationManager.getConversation(any(), any()) } returns mockConversation
+        coEvery { mockConversationManager.getConversation(any(), any(), any()) } returns mockConversation
     }
 
     @AfterEach

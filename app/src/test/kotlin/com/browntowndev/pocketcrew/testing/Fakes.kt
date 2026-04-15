@@ -193,7 +193,7 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
 
     override suspend fun restoreSoftDeletedModel(
         id: LocalModelId,
-        configurations: List<LocalModelConfiguration>
+        configurations: List<LocalModelConfiguration>,
     ): LocalModelAsset {
         val asset = getAssetById(id) ?: throw IllegalArgumentException("Asset with id $id not found")
         val restoredAsset = asset.copy(configurations = configurations)

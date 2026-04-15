@@ -303,6 +303,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 content = capture(contentSlot),
                 messageState = any(),
                 pipelineStep = any(),
+                tavilySources = any(),
             )
         } returns Unit
 

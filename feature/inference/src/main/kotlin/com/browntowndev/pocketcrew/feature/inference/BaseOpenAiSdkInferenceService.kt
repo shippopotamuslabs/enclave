@@ -6,10 +6,12 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
+import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiResponseStreamHandler
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamState
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
@@ -109,25 +111,35 @@ abstract class BaseOpenAiSdkInferenceService(
         )
 
     protected open fun mapToolingFollowUpResponseParams(
+        currentParams: ResponseCreateParams,
         prompt: String,
         options: GenerationOptions,
         requestHistory: List<ChatMessage>,
         initialResponse: StreamedOpenAiResponse,
-        toolResultJson: String,
+        results: List<Pair<ToolCallRequest, String>>,
     ): ResponseCreateParams {
+        val functionCallOutputs = results.map { (toolCall, resultJson) ->
+            // results and initialResponse.functionCalls are in the same order for parallel calls
+            val index = initialResponse.functionCalls.indexOf(toolCall)
+            val callId = if (index != -1) {
+                initialResponse.providerToolCallIds.getOrElse(index) {
+                    throw IllegalStateException("Missing provider tool call id at index $index for tool call provider=$provider model=$modelId")
+                }
+            } else {
+                "fallback_${java.util.UUID.randomUUID().toString().replace("-", "")}"
+            }
+
+            ResponseInputItem.ofFunctionCallOutput(
+                ResponseInputItem.FunctionCallOutput.builder()
+                    .callId(callId)
+                    .output(resultJson)
+                    .build()
+            )
+        }
         val builder = ResponseCreateParams.builder()
             .model(modelId)
-            .previousResponseId(initialResponse.responseId ?: throw IllegalStateException("Missing previous response id for tool call"))
-            .inputOfResponse(
-                listOf(
-                    ResponseInputItem.ofFunctionCallOutput(
-                        ResponseInputItem.FunctionCallOutput.builder()
-                            .callId(initialResponse.providerToolCallId ?: throw IllegalStateException("Missing provider tool call id for tool call"))
-                            .output(toolResultJson)
-                            .build()
-                    )
-                )
-            )
+            .previousResponseId(initialResponse.responseId ?: throw IllegalStateException("Missing previous response id for tool call provider=$provider model=$modelId"))
+            .inputOfResponse(functionCallOutputs)
         requestHistory
             .filter { it.role == Role.SYSTEM }
             .joinToString(separator = "\n\n", transform = ChatMessage::content)
@@ -163,15 +175,48 @@ abstract class BaseOpenAiSdkInferenceService(
                     emitEvent = emitEvent,
                 )
             },
-            onToolCallDetected = { it.functionCall },
-            onToolResultMapped = { _, response, resultJson ->
+            onToolCallDetected = { response ->
+                val sdkCalls = response.functionCalls
+                sdkCalls.ifEmpty {
+                    val rawText = response.assistantMessageText
+                    val envelope =
+                        runCatching { ToolEnvelopeParser.extractLocalToolEnvelope(rawText) }.getOrNull()
+                    if (envelope != null) {
+                        listOf(
+                            ToolCallRequest(
+                                toolName = envelope.toolName,
+                                argumentsJson = envelope.argumentsJson,
+                                provider = provider,
+                                modelType = modelType,
+                                chatId = options.chatId,
+                                userMessageId = options.userMessageId,
+                            )
+                        )
+                    } else {
+                        emptyList()
+                    }
+                }
+            },
+            onToolResultsMapped = { params, response, results ->
                 mapToolingFollowUpResponseParams(
+                    currentParams = params,
                     prompt = prompt,
                     options = options,
                     requestHistory = requestHistory,
                     initialResponse = response,
-                    toolResultJson = resultJson,
+                    results = results,
                 )
+            },
+            onToolResult = { toolCall, resultJson ->
+                if (toolCall.toolName == com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                    val assistantMessageId = options.assistantMessageId
+                    if (assistantMessageId != null) {
+                        val sources = com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(assistantMessageId, resultJson)
+                        if (sources.isNotEmpty()) {
+                            emitEvent(InferenceEvent.TavilyResults(sources, modelType))
+                        }
+                    }
+                }
             },
             onFinished = { _, _, _ ->
                 emitEvent(InferenceEvent.Finished(modelType))

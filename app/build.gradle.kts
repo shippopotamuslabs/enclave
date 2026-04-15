@@ -88,6 +88,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            installation {
+                // Disable for dev testing on Android 15+ to avoid INSTALL_BASELINE_PROFILE_FAILED
+                // Re-enable for final Google Play release for production performance
+                enableBaselineProfile = false
+            }
         }
         debug {
             enableUnitTestCoverage = true

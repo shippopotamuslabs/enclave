@@ -7,6 +7,8 @@ package com.browntowndev.pocketcrew.domain.model
  * are used by the UI layer for IndicatorState via MessageGenerationState flow.
  */
 enum class MessageState {
+    /** Engine is being loaded into memory */
+    ENGINE_LOADING,
     /** Message is being processed - streaming generation in progress */
     PROCESSING,
     /** Model is outputting thinking content (hidden) */

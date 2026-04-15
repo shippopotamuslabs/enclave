@@ -240,6 +240,7 @@ class GenerateChatResponseUseCase @Inject constructor(
             prompt = prompt,
             chatId = chatId,
             userMessageId = userMessageId,
+            assistantMessageId = assistantMessageId,
             modelType = modelType,
         )
 
@@ -249,12 +250,24 @@ class GenerateChatResponseUseCase @Inject constructor(
             closeConversation = false,
         ).collect { event ->
             when (event) {
+                is InferenceEvent.EngineLoading -> {
+                    emit(MessageGenerationState.EngineLoading(event.modelType))
+                }
+
+                is InferenceEvent.Processing -> {
+                    emit(MessageGenerationState.Processing(event.modelType))
+                }
+
                 is InferenceEvent.Thinking -> {
                     emit(MessageGenerationState.ThinkingLive(event.chunk, modelType))
                 }
 
                 is InferenceEvent.PartialResponse -> {
                     emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
+                }
+
+                is InferenceEvent.TavilyResults -> {
+                    emit(MessageGenerationState.TavilySourcesAttached(event.sources, event.modelType))
                 }
 
                 is InferenceEvent.Finished -> {

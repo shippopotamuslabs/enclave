@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
@@ -49,41 +50,19 @@ class OpenRouterInferenceServiceImpl(
         )
 
     override fun mapToolingFollowUpResponseParams(
+        currentParams: ResponseCreateParams,
         prompt: String,
         options: GenerationOptions,
         requestHistory: List<ChatMessage>,
         initialResponse: StreamedOpenAiResponse,
-        toolResultJson: String,
+        results: List<Pair<ToolCallRequest, String>>,
     ): ResponseCreateParams {
-        val functionCall = initialResponse.functionCall
-            ?: throw IllegalStateException("Missing function call payload for OpenRouter follow-up")
-        val callId = initialResponse.providerToolCallId
-            ?: throw IllegalStateException("Missing function call id for OpenRouter follow-up")
-        val functionItemId = initialResponse.providerToolItemId ?: "fc_${callId.sanitizeForOpenRouterId()}"
-        val builder = ResponseCreateParams.builder()
-            .model(modelId)
-        val inputItems = mutableListOf<ResponseInputItem>()
-        val systemMessages = mutableListOf<String>()
-
-        requestHistory.forEach { message ->
-            if (message.role == Role.SYSTEM) {
-                systemMessages += message.content
-            } else {
-                inputItems += ResponseInputItem.ofMessage(
-                    ResponseInputItem.Message.builder()
-                        .role(ResponseInputItem.Message.Role.of(message.role.name.lowercase()))
-                        .addInputTextContent(message.content)
-                        .build()
-                )
-            }
+        val builder = currentParams.toBuilder()
+        val inputItems = if (currentParams.input().isPresent && currentParams.input().get().isResponse()) {
+            currentParams.input().get().asResponse().toMutableList()
+        } else {
+            mutableListOf()
         }
-
-        inputItems += ResponseInputItem.ofMessage(
-            ResponseInputItem.Message.builder()
-                .role(ResponseInputItem.Message.Role.of("user"))
-                .addInputTextContent(prompt)
-                .build()
-        )
 
         initialResponse.assistantMessageText
             .takeIf { it.isNotBlank() }
@@ -96,29 +75,44 @@ class OpenRouterInferenceServiceImpl(
                 )
             }
 
-        inputItems += ResponseInputItem.ofFunctionCall(
-            ResponseFunctionToolCall.builder()
-                .id(functionItemId)
-                .callId(callId)
-                .name(functionCall.toolName)
-                .arguments(functionCall.argumentsJson)
-                .build()
-        )
-        inputItems += ResponseInputItem.ofFunctionCallOutput(
-            ResponseInputItem.FunctionCallOutput.builder()
-                .id("fco_${callId.sanitizeForOpenRouterId()}")
-                .callId(callId)
-                .output(toolResultJson)
-                .build()
-        )
+        // Map results back to their corresponding function calls in the initial response
+        results.forEach { (toolCall, resultJson) ->
+            val index = initialResponse.functionCalls.indexOf(toolCall)
+
+            val callId = if (index != -1) {
+                initialResponse.providerToolCallIds.getOrElse(index) {
+                    throw IllegalStateException("Missing function call id at index $index for OpenRouter follow-up")
+                }
+            } else {
+                "fallback_${java.util.UUID.randomUUID().toString().replace("-", "")}"
+            }
+
+            val functionItemId = if (index != -1) {
+                initialResponse.providerToolItemIds.getOrElse(index) {
+                    "fc_${callId.sanitizeForOpenRouterId()}"
+                }
+            } else {
+                "fc_${callId}"
+            }
+
+            inputItems += ResponseInputItem.ofFunctionCall(
+                ResponseFunctionToolCall.builder()
+                    .id(functionItemId)
+                    .callId(callId)
+                    .name(toolCall.toolName)
+                    .arguments(toolCall.argumentsJson)
+                    .build()
+            )
+            inputItems += ResponseInputItem.ofFunctionCallOutput(
+                ResponseInputItem.FunctionCallOutput.builder()
+                    .id("fco_${callId.sanitizeForOpenRouterId()}")
+                    .callId(callId)
+                    .output(resultJson)
+                    .build()
+            )
+        }
 
         builder.inputOfResponse(inputItems)
-        systemMessages.joinToString(separator = "\n\n")
-            .takeIf { it.isNotBlank() }
-            ?.let { builder.instructions(it) }
-        options.reasoningEffort?.let { builder.reasoning(ReasoningMapper.toSdkReasoning(it)) }
-        options.temperature?.let { builder.temperature(it.toDouble()) }
-        options.topP?.let { builder.topP(it.toDouble()) }
         options.safeOpenRouterFollowUpMaxTokens()?.let { builder.maxOutputTokens(it.toLong()) }
         OpenRouterRequestMapper.applyRoutingDefaults(builder, routing)
         return builder.build()

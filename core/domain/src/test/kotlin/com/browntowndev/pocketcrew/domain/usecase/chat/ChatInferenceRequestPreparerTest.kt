@@ -46,6 +46,7 @@ class ChatInferenceRequestPreparerTest {
             prompt = "What is in the image?",
             chatId = ChatId("chat"),
             userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
             modelType = ModelType.FAST,
         )
 
@@ -77,6 +78,7 @@ class ChatInferenceRequestPreparerTest {
             prompt = "Find similar defects and inspect the image",
             chatId = ChatId("chat"),
             userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
             modelType = ModelType.FAST,
         )
 

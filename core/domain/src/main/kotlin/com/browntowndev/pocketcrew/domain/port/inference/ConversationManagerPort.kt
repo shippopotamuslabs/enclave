@@ -19,7 +19,11 @@ interface ConversationManagerPort {
      * @param options Per-request generation options (e.g., sampler overrides).
      * @return The active ConversationPort instance
      */
-    suspend fun getConversation(modelType: ModelType, options: GenerationOptions? = null): ConversationPort
+    suspend fun getConversation(
+        modelType: ModelType, 
+        options: GenerationOptions? = null,
+        onLoadingStarted: suspend () -> Unit = {}
+    ): ConversationPort
 
     /**
      * Closes the current conversation and releases resources.
