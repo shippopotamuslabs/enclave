@@ -51,7 +51,7 @@ class LiteRtInferenceServiceImplTest {
 
         service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.FAST)
 
-        coEvery { mockConversationManager.getConversation(any(), any()) } returns mockConversation
+        coEvery { mockConversationManager.getConversation(any(), any(), any()) } returns mockConversation
     }
 
     @AfterEach

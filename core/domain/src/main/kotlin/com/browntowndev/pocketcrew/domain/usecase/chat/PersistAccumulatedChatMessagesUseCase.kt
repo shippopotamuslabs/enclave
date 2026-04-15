@@ -22,6 +22,7 @@ internal class PersistAccumulatedChatMessagesUseCase(
                     MessageState.PROCESSING
                 },
                 pipelineStep = getPipelineStepForModelType(accumulator.modelType),
+                tavilySources = accumulator.tavilySources.toList(),
             )
         }
     }

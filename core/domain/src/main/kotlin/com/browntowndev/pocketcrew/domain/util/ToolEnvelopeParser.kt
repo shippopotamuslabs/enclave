@@ -10,6 +10,7 @@ object ToolEnvelopeParser {
     private val TOOL_NAME_REGEX = Regex(""""name"\s*:\s*"([^"]+)"""")
     private val CDATA_TOOL_CALL_REGEX = Regex("""(?s)<!\[CDATA\[<tool>\s*(\{.*?\})\s*</tool>\]\]>""")
     private val WRAPPED_TOOL_CALL_REGEX = Regex("""(?s)<tool_call>\s*(\{.*?\})\s*</tool_call>""")
+    private val GLM_TOOL_CALL_REGEX = Regex("""(?s)<tool_call>\s*([a-zA-Z0-9_]+)\s*<arg_key>([^<]+)</arg_key>\s*<arg_value>(.*?)</arg_value>\s*</tool_call>""")
     private val RAW_TOOL_CALL_REGEX = Regex("""(?s)(.*?)(?:,\s*)?(\{"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{.*?\}\})(?:\s*,)?(.*)""")
 
     data class LocalToolEnvelope(
@@ -58,6 +59,20 @@ object ToolEnvelopeParser {
     }
 
     fun extractLocalToolEnvelope(text: String): LocalToolEnvelope? {
+        val glmMatch = GLM_TOOL_CALL_REGEX.find(text)
+        if (glmMatch != null) {
+            val toolName = glmMatch.groupValues[1]
+            val argKey = glmMatch.groupValues[2]
+            val argVal = glmMatch.groupValues[3].trim('"') // Handle potential quotes
+            val argumentsJson = buildSingleFieldArgumentsJson(argKey, argVal)
+            return LocalToolEnvelope(
+                toolName = toolName,
+                argumentsJson = argumentsJson,
+                visiblePrefix = text.substring(0, glmMatch.range.first),
+                visibleSuffix = text.substring(glmMatch.range.last + 1),
+            )
+        }
+
         val cdataMatch = if (text.contains("<![CDATA[<tool")) {
             CDATA_TOOL_CALL_REGEX.find(text)
                 ?: throw IllegalStateException("Malformed tool_call envelope")

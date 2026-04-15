@@ -87,7 +87,11 @@ class LlamaInferenceServiceImpl @Inject constructor(
      * Ensures the engine is loaded with the current model from registry.
      * If the model or config has changed since last load, tears down and reloads.
      */
-    private suspend fun ensureModelLoaded(modelType: ModelType, options: GenerationOptions) {
+    private suspend fun ensureModelLoaded(
+        modelType: ModelType, 
+        options: GenerationOptions,
+        onLoading: suspend () -> Unit = {}
+    ) {
         val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
             ?: throw IllegalStateException("No active configuration for $modelType")
 
@@ -123,6 +127,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             }
 
             // Model, config, options, or history changed - need to reinitialize
+            onLoading()
             sessionManager.shutdown()
             isInitialized = false
             hasTriedCpuFallback = false
@@ -250,8 +255,12 @@ class LlamaInferenceServiceImpl @Inject constructor(
         }
 
         try {
-            ensureModelLoaded(targetModelType, processedOptions)
+            ensureModelLoaded(targetModelType, processedOptions) {
+                emit(InferenceEvent.EngineLoading(targetModelType))
+            }
+            emit(InferenceEvent.Processing(targetModelType))
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             emit(InferenceEvent.Error(e, targetModelType))
             return@flow
         }
@@ -356,19 +365,34 @@ class LlamaInferenceServiceImpl @Inject constructor(
             },
             onToolCallDetected = { pass ->
                 ToolEnvelopeParser.extractLocalToolEnvelope(pass.fullText)?.let { envelope ->
-                    ToolCallRequest(
-                        toolName = envelope.toolName,
-                        argumentsJson = envelope.argumentsJson,
-                        provider = "LLAMA",
-                        modelType = targetModelType,
-                        chatId = options.chatId,
-                        userMessageId = options.userMessageId,
+                    listOf(
+                        ToolCallRequest(
+                            toolName = envelope.toolName,
+                            argumentsJson = envelope.argumentsJson,
+                            provider = "LLAMA",
+                            modelType = targetModelType,
+                            chatId = options.chatId,
+                            userMessageId = options.userMessageId,
+                        )
                     )
-                }
+                } ?: emptyList()
             },
-            onToolResultMapped = { params, _, resultJson ->
-                sessionManager.sendUserMessage(ToolEnvelopeParser.buildLocalToolResultMessage(resultJson))
+            onToolResultsMapped = { params, _, results ->
+                results.forEach { (_, resultJson) ->
+                    sessionManager.sendUserMessage(ToolEnvelopeParser.buildLocalToolResultMessage(resultJson))
+                }
                 params
+            },
+            onToolResult = { toolCall, resultJson ->
+                if (toolCall.toolName == com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                    val assistantMessageId = options.assistantMessageId
+                    if (assistantMessageId != null) {
+                        val sources = com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(assistantMessageId, resultJson)
+                        if (sources.isNotEmpty()) {
+                            emitEvent(InferenceEvent.TavilyResults(sources, targetModelType))
+                        }
+                    }
+                }
             },
             onNoToolCallOnFirstPass = { pass ->
                 emitProcessedText(pass.fullText, targetModelType, emitEvent)

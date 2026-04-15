@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
+import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
@@ -179,7 +180,8 @@ class FakeChatRepository : ChatRepository {
         thinkingRaw: String?,
         content: String,
         messageState: MessageState,
-        pipelineStep: PipelineStep?
+        pipelineStep: PipelineStep?,
+        tavilySources: List<TavilySource>
     ) {
         // No-op for testing
     }

@@ -49,7 +49,11 @@ class LiteRtInferenceServiceImpl @Inject constructor(
 
         suspend fun attemptInference(retryOnFail: Boolean) {
             try {
-                val conversation = conversationManager.getConversation(targetModelType, options)
+                val conversation = conversationManager.getConversation(targetModelType, options) {
+                    emit(InferenceEvent.EngineLoading(targetModelType))
+                }
+                emit(InferenceEvent.Processing(targetModelType))
+                
                 Log.d(TAG, "Sending prompt with options: $prompt")
 
                 conversation.sendMessageAsync(prompt, options).collect { response ->

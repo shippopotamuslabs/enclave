@@ -12,8 +12,11 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -52,7 +55,8 @@ class DownloadWorkRepositoryChainTest {
     @BeforeEach
     fun setup() {
         mockWorkManager = mockk(relaxed = true)
-        repository = DownloadWorkRepository(mockWorkManager)
+        // Inject UnconfinedTestDispatcher for IO work to avoid race conditions in tests
+        repository = DownloadWorkRepository(mockWorkManager, kotlinx.coroutines.test.UnconfinedTestDispatcher())
 
         mockkStatic(Log::class)
         every { Log.d(any<String>(), any<String>()) } returns 0
@@ -270,6 +274,66 @@ class DownloadWorkRepositoryChainTest {
         assertNotNull(result)
         assertEquals(downloadWorkId, result!!.id)
         assertEquals(WorkInfo.State.RUNNING, result.state)
+    }
+
+    // ===== REPO_08: observeDownloadProgress transitions from succeeded downloader to finalizer =====
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `REPO_08 - observeDownloadProgress transitions to finalizer when downloader succeeds`() = runTest {
+        // Given: Initially only downloader is running
+        val downloadWorkRunning = createMockWorkInfo(
+            id = downloadWorkId,
+            state = WorkInfo.State.RUNNING,
+            sessionId = ACTIVE_SESSION,
+            workerStage = STAGE_DOWNLOAD
+        )
+
+        val workList1 = listOf(downloadWorkRunning)
+
+        // Then downloader succeeds and finalizer starts
+        val downloadWorkSucceeded = createMockWorkInfo(
+            id = downloadWorkId,
+            state = WorkInfo.State.SUCCEEDED,
+            sessionId = ACTIVE_SESSION,
+            workerStage = STAGE_DOWNLOAD
+        )
+        val finalizeWorkRunning = createMockWorkInfo(
+            id = finalizeWorkId,
+            state = WorkInfo.State.RUNNING,
+            sessionId = ACTIVE_SESSION,
+            workerStage = STAGE_FINALIZE
+        )
+        val workList2 = listOf(downloadWorkSucceeded, finalizeWorkRunning)
+
+        val flow = kotlinx.coroutines.flow.MutableStateFlow(workList1)
+        every {
+            mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
+        } returns flow
+
+        // When: Observe progress starting with downloadWorkId
+        val results = mutableListOf<WorkInfo>()
+        val job = launch {
+            repository.observeDownloadProgress(downloadWorkId).collect {
+                if (it != null) results.add(it)
+            }
+        }
+
+        // Initially sees downloader
+        delay(100)
+        assertEquals(1, results.size)
+        assertEquals(downloadWorkId, results[0].id)
+
+        // Downloader succeeds, finalizer starts
+        flow.value = workList2
+        delay(100)
+
+        // Then: Should have transitioned to finalizer
+        assertEquals(2, results.size)
+        assertEquals(finalizeWorkId, results[1].id)
+        assertEquals(WorkInfo.State.RUNNING, results[1].state)
+
+        job.cancel()
     }
 
     // ===== Helper methods =====

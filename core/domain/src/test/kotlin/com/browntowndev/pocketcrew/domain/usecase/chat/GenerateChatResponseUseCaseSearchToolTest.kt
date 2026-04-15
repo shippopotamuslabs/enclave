@@ -118,6 +118,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 content = capture(contentSlot),
                 messageState = any(),
                 pipelineStep = any(),
+                tavilySources = any(),
             )
         } returns Unit
 
@@ -168,6 +169,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 content = any(),
                 messageState = MessageState.COMPLETE,
                 pipelineStep = any(),
+                tavilySources = any(),
             )
         }
         assertEquals("Use the search result summary.", contentSlot.captured)

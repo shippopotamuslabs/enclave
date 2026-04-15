@@ -123,7 +123,11 @@ class ConversationManagerImpl @Inject constructor(
      * @return The active ConversationPort instance wrapping the LiteRT Conversation
      * @throws IllegalStateException if no model is registered for this model type
      */
-    override suspend fun getConversation(modelType: ModelType, options: GenerationOptions?): ConversationPort = withContext(Dispatchers.IO) {
+    override suspend fun getConversation(
+        modelType: ModelType, 
+        options: GenerationOptions?,
+        onLoadingStarted: suspend () -> Unit
+    ): ConversationPort = withContext(Dispatchers.IO) {
         // Lock to avoid concurrent initializations and ensure consistent state
         mutex.withLock {
             val executor = toolExecutor
@@ -173,6 +177,7 @@ class ConversationManagerImpl @Inject constructor(
             val conversationRecreated = engineChanged || conversationChanged
 
             if (engineChanged) {
+                onLoadingStarted()
                 Log.d(
                     TAG,
                     "Recreating LiteRT engine for modelType=$modelType, modelPath=$modelPath memory=${memorySnapshot()}"

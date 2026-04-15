@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
+import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
@@ -11,6 +12,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
@@ -25,7 +27,8 @@ import kotlinx.coroutines.flow.map
 @Singleton
 class ChatRepositoryImpl @Inject constructor(
     private val chatDao: ChatDao,
-    private val messageDao: MessageDao
+    private val messageDao: MessageDao,
+    private val tavilySourceDao: TavilySourceDao,
 ) : ChatRepository {
 
     override fun getAllChats(): Flow<List<Chat>> {
@@ -43,7 +46,10 @@ class ChatRepositoryImpl @Inject constructor(
 
     override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> {
         return messageDao.getMessagesByChatIdFlow(chatId).map { entities ->
-            entities.map { it.toDomain() }
+            entities.map { entity ->
+                val tavilySources = tavilySourceDao.getByMessageId(entity.id)
+                entity.toDomain(tavilySources)
+            }
         }
     }
 
@@ -147,7 +153,8 @@ class ChatRepositoryImpl @Inject constructor(
         thinkingRaw: String?,
         content: String,
         messageState: MessageState,
-        pipelineStep: PipelineStep?
+        pipelineStep: PipelineStep?,
+        tavilySources: List<TavilySource>
     ) {
         messageDao.persistAllMessageData(
             messageId = messageId,
@@ -158,7 +165,8 @@ class ChatRepositoryImpl @Inject constructor(
             thinkingRaw = thinkingRaw,
             content = content,
             messageState = messageState,
-            pipelineStep = pipelineStep
+            pipelineStep = pipelineStep,
+            tavilySources = tavilySources.map { it.toEntity() }
         )
     }
 

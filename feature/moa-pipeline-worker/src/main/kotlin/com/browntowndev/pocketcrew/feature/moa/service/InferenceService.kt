@@ -353,6 +353,8 @@ class InferenceService : Service() {
 
             service.sendPrompt(prompt, options = options, closeConversation = true).collect { event ->
                 when (event) {
+                    is InferenceEvent.EngineLoading -> Unit
+                    is InferenceEvent.Processing -> Unit
                     is InferenceEvent.Thinking -> {
                         broadcastProgress(EXTRA_THINKING_CHUNK, event.chunk, getModelTypeForStep(step).name)
                     }
@@ -360,8 +362,8 @@ class InferenceService : Service() {
                         output += event.chunk
                         broadcastProgress(EXTRA_STEP_OUTPUT, event.chunk, getModelTypeForStep(step).name)
                     }
-                    is InferenceEvent.Finished -> {
-                        // Ignore. StepCompleted signifies completion for pipeline steps & is detected by flow finishing
+                    is InferenceEvent.TavilyResults -> Unit
+                    is InferenceEvent.Finished -> {                        // Ignore. StepCompleted signifies completion for pipeline steps & is detected by flow finishing
                     }
                     is InferenceEvent.SafetyBlocked -> {
                         throw SecurityException("Content blocked: ${event.reason}")

@@ -56,8 +56,11 @@ class AnalyzeImageUseCase @Inject constructor(
                         closeConversation = true,
                     ).collect { event ->
                         when (event) {
+                            is InferenceEvent.EngineLoading -> Unit
+                            is InferenceEvent.Processing -> Unit
                             is InferenceEvent.PartialResponse -> description.append(event.chunk)
                             is InferenceEvent.Thinking -> Unit
+                            is InferenceEvent.TavilyResults -> Unit
                             is InferenceEvent.Finished -> {
                                 loggingPort.info(
                                     TAG,

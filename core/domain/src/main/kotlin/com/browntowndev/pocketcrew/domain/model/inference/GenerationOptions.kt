@@ -25,4 +25,5 @@ data class GenerationOptions(
     val availableTools: List<ToolDefinition> = emptyList(),
     val chatId: ChatId? = null,
     val userMessageId: MessageId? = null,
+    val assistantMessageId: MessageId? = null,
 )

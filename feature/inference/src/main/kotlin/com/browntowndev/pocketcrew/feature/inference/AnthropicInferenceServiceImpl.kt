@@ -161,39 +161,53 @@ class AnthropicInferenceServiceImpl(
             },
             onToolCallDetected = { response ->
                 response.toolUse?.let { toolUse ->
-                    ToolCallRequest(
-                        toolName = toolUse.toolName,
-                        argumentsJson = toolUse.argumentsJson,
-                        provider = PROVIDER,
-                        modelType = modelType,
-                        chatId = options.chatId,
-                        userMessageId = options.userMessageId,
+                    listOf(
+                        ToolCallRequest(
+                            toolName = toolUse.toolName,
+                            argumentsJson = toolUse.argumentsJson,
+                            provider = PROVIDER,
+                            modelType = modelType,
+                            chatId = options.chatId,
+                            userMessageId = options.userMessageId,
+                        )
                     )
-                }
+                } ?: emptyList()
             },
-            onToolResultMapped = { params, response, resultJson ->
+            onToolResultsMapped = { params, response, results ->
                 val toolUse =
                     response.toolUse ?: throw IllegalStateException("Missing tool use in response")
+                
+                val resultBlocks = results.map { (toolCall, resultJson) ->
+                    ContentBlockParam.ofToolResult(
+                        ToolResultBlockParam.builder()
+                            .toolUseId(toolUse.id) // Currently Anthropic only captures one toolUse
+                            .content(resultJson)
+                            .build()
+                    )
+                }
+
                 params.toBuilder()
                     .messages(
                         params.messages() + listOf(
                             assistantToolUseMessage(toolUse),
                             MessageParam.builder()
                                 .role(MessageParam.Role.USER)
-                                .contentOfBlockParams(
-                                    listOf(
-                                        ContentBlockParam.ofToolResult(
-                                            ToolResultBlockParam.builder()
-                                                .toolUseId(toolUse.id)
-                                                .content(resultJson)
-                                                .build()
-                                        )
-                                    )
-                                )
+                                .contentOfBlockParams(resultBlocks)
                                 .build()
                         )
                     )
                     .build()
+            },
+            onToolResult = { toolCall, resultJson ->
+                if (toolCall.toolName == com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                    val assistantMessageId = options.assistantMessageId
+                    if (assistantMessageId != null) {
+                        val sources = com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(assistantMessageId, resultJson)
+                        if (sources.isNotEmpty()) {
+                            emitEvent(InferenceEvent.TavilyResults(sources, modelType))
+                        }
+                    }
+                }
             },
             onFinished = { _, _, _ ->
                 emitEvent(InferenceEvent.Finished(modelType))

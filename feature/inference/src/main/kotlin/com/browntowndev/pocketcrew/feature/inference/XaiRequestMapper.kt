@@ -40,6 +40,7 @@ object XaiRequestMapper {
         val sanitizedOptions = sanitizeChatOptions(modelId, options)
         val builder = ChatCompletionCreateParams.builder()
             .model(modelId)
+            .store(false)
 
         val messages = mutableListOf<ChatCompletionMessageParam>()
         history.filterNot(::isSyntheticAssistantError).forEach { msg ->
@@ -84,6 +85,7 @@ object XaiRequestMapper {
         val sanitizedOptions = sanitizeResponseOptions(modelId, options)
         val builder = ResponseCreateParams.builder()
             .model(modelId)
+            .store(false)
 
         val messages = mutableListOf<ResponseInputItem>()
 

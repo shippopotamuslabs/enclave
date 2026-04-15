@@ -44,7 +44,7 @@ import kotlin.coroutines.resumeWithException
  */
 class MediaPipeInferenceServiceImpl @Inject constructor(
     private val llmInference: LlmInferenceWrapper,
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val modelType: ModelType,
     private val activeModelProvider: ActiveModelProviderPort,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
@@ -89,7 +89,10 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
      * Gets the current session or creates and seeds a new one.
      * This operation is atomic to ensure history context is correctly injected.
      */
-    private suspend fun getOrCreateAndSeedSessionLocked(options: GenerationOptions): LlmSessionPort {
+    private suspend fun getOrCreateAndSeedSessionLocked(
+        options: GenerationOptions,
+        onLoading: () -> Unit = {}
+    ): LlmSessionPort {
         val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
             ?: throw IllegalStateException("No active configuration for $modelType")
 
@@ -119,6 +122,7 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
 
         session?.let { return it }
         
+        onLoading()
         Log.d(TAG, "Creating new MediaPipe session with options: $newSignature")
         val newSession = llmInference.createSession(
             com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession.LlmInferenceSessionOptions.builder()
@@ -186,8 +190,11 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
 
         try {
             val currentSession = mutex.withLock {
-                getOrCreateAndSeedSessionLocked(options)
+                getOrCreateAndSeedSessionLocked(options) {
+                    trySend(InferenceEvent.EngineLoading(targetModelType))
+                }
             }
+            trySend(InferenceEvent.Processing(targetModelType))
 
             options.imageUris.forEach { imageUri ->
                 val mpImage = loadMpImage(imageUri)
@@ -289,18 +296,22 @@ class MediaPipeInferenceServiceImpl @Inject constructor(
             },
             onToolCallDetected = { pass ->
                 ToolEnvelopeParser.extractLocalToolEnvelope(pass.text)?.let { envelope ->
-                    ToolCallRequest(
-                        toolName = envelope.toolName,
-                        argumentsJson = envelope.argumentsJson,
-                        provider = "MEDIAPIPE",
-                        modelType = targetModelType,
-                        chatId = options.chatId,
-                        userMessageId = options.userMessageId,
+                    listOf(
+                        ToolCallRequest(
+                            toolName = envelope.toolName,
+                            argumentsJson = envelope.argumentsJson,
+                            provider = "MEDIAPIPE",
+                            modelType = targetModelType,
+                            chatId = options.chatId,
+                            userMessageId = options.userMessageId,
+                        )
                     )
-                }
+                } ?: emptyList()
             },
-            onToolResultMapped = { params, _, resultJson ->
-                session.addQueryChunk(ToolEnvelopeParser.buildLocalToolResultMessage(resultJson))
+            onToolResultsMapped = { params, _, results ->
+                results.forEach { (_, resultJson) ->
+                    session.addQueryChunk(ToolEnvelopeParser.buildLocalToolResultMessage(resultJson))
+                }
                 params
             },
             onNoToolCallOnFirstPass = { pass ->

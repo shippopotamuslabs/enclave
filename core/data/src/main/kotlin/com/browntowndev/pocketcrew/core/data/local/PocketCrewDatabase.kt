@@ -14,7 +14,8 @@ import androidx.room.TypeConverters
         LocalModelConfigurationEntity::class,
         ApiCredentialsEntity::class,
         ApiModelConfigurationEntity::class,
-        DefaultModelEntity::class
+        DefaultModelEntity::class,
+        TavilySourceEntity::class
     ],
     version = 1,
     exportSchema = true
@@ -23,6 +24,7 @@ import androidx.room.TypeConverters
 abstract class PocketCrewDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
     abstract fun messageDao(): MessageDao
+    abstract fun tavilySourceDao(): TavilySourceDao
     abstract fun messageVisionAnalysisDao(): MessageVisionAnalysisDao
     abstract fun localModelsDao(): LocalModelsDao
     abstract fun localModelConfigurationsDao(): LocalModelConfigurationsDao

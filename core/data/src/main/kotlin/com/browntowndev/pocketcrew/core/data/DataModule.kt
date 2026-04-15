@@ -23,6 +23,7 @@ import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
+import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
@@ -102,6 +103,9 @@ object DataModule {
 
     @Provides
     fun provideMessageDao(database: PocketCrewDatabase): MessageDao = database.messageDao()
+
+    @Provides
+    fun provideTavilySourceDao(database: PocketCrewDatabase): TavilySourceDao = database.tavilySourceDao()
 
     @Provides
     fun provideMessageVisionAnalysisDao(database: PocketCrewDatabase): MessageVisionAnalysisDao =

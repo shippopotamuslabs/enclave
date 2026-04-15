@@ -119,7 +119,8 @@ abstract class MessageDao {
         thinkingRaw: String?,
         content: String,
         messageState: MessageState,
-        pipelineStep: PipelineStep?
+        pipelineStep: PipelineStep?,
+        tavilySources: List<TavilySourceEntity> = emptyList()
     ) {
         // Update model type
         updateMessageModelType(messageId, modelType)
@@ -144,8 +145,16 @@ abstract class MessageDao {
         // Update state
         updateMessageState(messageId, messageState)
 
+        // Persist search sources
+        if (tavilySources.isNotEmpty()) {
+            insertTavilySources(tavilySources)
+        }
+
         if (messageState == MessageState.COMPLETE) {
             updateMessageCreatedAt(messageId, System.currentTimeMillis())
         }
     }
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun insertTavilySources(sources: List<TavilySourceEntity>)
 }

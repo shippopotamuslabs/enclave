@@ -25,6 +25,9 @@ internal class ChatGenerationAccumulatorManager(
 
     suspend fun reduce(state: MessageGenerationState): AccumulatedMessages {
         when (state) {
+            is MessageGenerationState.EngineLoading -> {
+                getOrCreateAccumulator(state.modelType).currentState = MessageState.ENGINE_LOADING
+            }
             is MessageGenerationState.Processing -> {
                 getOrCreateAccumulator(state.modelType).currentState = MessageState.PROCESSING
             }
@@ -40,6 +43,12 @@ internal class ChatGenerationAccumulatorManager(
                 getOrCreateAccumulator(state.modelType).apply {
                     appendContent(state.textDelta)
                     currentState = MessageState.GENERATING
+                }
+            }
+
+            is MessageGenerationState.TavilySourcesAttached -> {
+                getOrCreateAccumulator(state.modelType).apply {
+                    tavilySources.addAll(state.sources)
                 }
             }
 
@@ -129,6 +138,7 @@ data class MessageSnapshot(
     val isComplete: Boolean = false,
     val messageState: MessageState = if (isComplete) MessageState.COMPLETE else MessageState.GENERATING,
     val pipelineStep: PipelineStep? = null,
+    val tavilySources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = emptyList(),
 )
 
 internal class MessageAccumulator(
@@ -141,6 +151,7 @@ internal class MessageAccumulator(
     var isComplete: Boolean = false,
     var currentState: MessageState = MessageState.GENERATING,
     var pipelineStep: PipelineStep? = null,
+    val tavilySources: MutableList<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = mutableListOf(),
 ) {
     val thinkingDurationSeconds: Long
         get() = if (thinkingStartTime != null && thinkingEndTime != null) {
@@ -174,6 +185,7 @@ internal class MessageAccumulator(
         isComplete = isComplete,
         messageState = currentState,
         pipelineStep = pipelineStep,
+        tavilySources = tavilySources.toList(),
     )
 }
 

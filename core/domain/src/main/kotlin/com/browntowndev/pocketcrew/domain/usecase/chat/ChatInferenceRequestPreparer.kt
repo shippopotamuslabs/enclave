@@ -22,6 +22,7 @@ internal class ChatInferenceRequestPreparer(
         prompt: String,
         chatId: ChatId,
         userMessageId: MessageId,
+        assistantMessageId: MessageId,
         modelType: ModelType,
     ): PreparedChatInferenceRequest {
         val settings = settingsRepository.settingsFlow.first()
@@ -103,6 +104,7 @@ internal class ChatInferenceRequestPreparer(
                 availableTools = availableTools,
                 chatId = chatId,
                 userMessageId = userMessageId,
+                assistantMessageId = assistantMessageId,
             ),
         )
     }

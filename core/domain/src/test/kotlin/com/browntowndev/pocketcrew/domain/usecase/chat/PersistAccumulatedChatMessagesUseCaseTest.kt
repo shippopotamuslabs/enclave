@@ -34,6 +34,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
                 content = capture(contentSlot),
                 messageState = capture(stateSlot),
                 pipelineStep = any(),
+                tavilySources = any(),
             )
         } returns Unit
         val manager = ChatGenerationAccumulatorManager(
@@ -125,6 +126,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
                 content = any(),
                 messageState = capture(stateSlot),
                 pipelineStep = any(),
+                tavilySources = any(),
             )
         } returns Unit
         val manager = ChatGenerationAccumulatorManager(
@@ -138,7 +140,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
         manager.reduce(MessageGenerationState.Processing(ModelType.FAST))
         PersistAccumulatedChatMessagesUseCase(chatRepository)(manager)
 
-        coVerify(exactly = 1) { chatRepository.persistAllMessageData(any(), any(), any(), any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { chatRepository.persistAllMessageData(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
         assertEquals(MessageState.PROCESSING, stateSlot.captured)
     }
 }

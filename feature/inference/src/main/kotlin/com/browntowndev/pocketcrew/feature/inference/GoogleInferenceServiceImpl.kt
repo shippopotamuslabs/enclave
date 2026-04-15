@@ -140,31 +140,46 @@ class GoogleInferenceServiceImpl(
                 },
                 onToolCallDetected = { response ->
                     response.functionCall?.let { functionCall ->
-                        ToolCallRequest(
-                            toolName = functionCall.name().orElseThrow {
-                                IllegalStateException("Google tool execution failed before final response")
-                            },
-                            argumentsJson = ToolEnvelopeParser.buildArgumentsJson(functionCall.args().orElse(emptyMap())),
-                            provider = PROVIDER,
-                            modelType = modelType,
-                            chatId = options.chatId,
-                            userMessageId = options.userMessageId,
+                        listOf(
+                            ToolCallRequest(
+                                toolName = functionCall.name().orElseThrow {
+                                    IllegalStateException("Google tool execution failed before final response")
+                                },
+                                argumentsJson = ToolEnvelopeParser.buildArgumentsJson(functionCall.args().orElse(emptyMap())),
+                                provider = PROVIDER,
+                                modelType = modelType,
+                                chatId = options.chatId,
+                                userMessageId = options.userMessageId,
+                            )
                         )
-                    }
+                    } ?: emptyList()
                 },
-                onToolResultMapped = { params, response, resultJson ->
-                    val functionCall = response.functionCall ?: throw IllegalStateException("Missing function call in response")
+                onToolResultsMapped = { params, response, results ->
+                    val functionResponses = results.map { (toolCall, resultJson) ->
+                        // Google expects one part per function response in a user-role Content
+                        // If they were parallel, we'd still have the initial function call names
+                        // For now, we assume the model emitted only one or we map each by its toolName.
+                        buildFunctionResponsePart(toolCall.toolName, resultJson)
+                    }
+
                     params + listOfNotNull(
                         response.assistantContent,
                         Content.builder()
                             .role("user")
-                            .parts(
-                                listOf(
-                                    buildFunctionResponsePart(functionCall, resultJson)
-                                )
-                            )
+                            .parts(functionResponses)
                             .build()
                     )
+                },
+                onToolResult = { toolCall, resultJson ->
+                    if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                        val assistantMessageId = options.assistantMessageId
+                        if (assistantMessageId != null) {
+                            val sources = com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(assistantMessageId, resultJson)
+                            if (sources.isNotEmpty()) {
+                                emitEvent(InferenceEvent.TavilyResults(sources, modelType))
+                            }
+                        }
+                    }
                 },
                 onFinished = { _, _, _ ->
                     emitEvent(InferenceEvent.Finished(modelType))
@@ -180,13 +195,11 @@ class GoogleInferenceServiceImpl(
     }
 
     private fun buildFunctionResponsePart(
-        functionCall: FunctionCall,
+        toolName: String,
         resultJson: String,
     ): Part =
         Part.fromFunctionResponse(
-            functionCall.name().orElseThrow {
-                IllegalStateException("Google tool execution failed before final response")
-            },
+            toolName,
             mapOf("output" to resultJson),
         )
 
