@@ -88,9 +88,68 @@ object AnthropicRequestMapper {
                     )
                 )
                 .build()
+            ToolDefinition.TAVILY_EXTRACT -> Tool.InputSchema.Properties.builder()
+                .putAdditionalProperty(
+                    "urls",
+                    JsonValue.from(
+                        mapOf(
+                            "type" to "array",
+                            "items" to mapOf("type" to "string"),
+                            "description" to "List of URLs to extract content from"
+                        )
+                    )
+                )
+                .putAdditionalProperty(
+                    "extract_depth",
+                    JsonValue.from(
+                        mapOf(
+                            "type" to "string",
+                            "description" to "Extraction depth: basic or advanced"
+                        )
+                    )
+                )
+                .putAdditionalProperty(
+                    "format",
+                    JsonValue.from(
+                        mapOf(
+                            "type" to "string",
+                            "description" to "Output format: markdown or text"
+                        )
+                    )
+                )
+                .build()
             ToolDefinition.ATTACHED_IMAGE_INSPECT -> Tool.InputSchema.Properties.builder()
                 .putAdditionalProperty(
                     "question",
+                    JsonValue.from(
+                        mapOf(
+                            "type" to "string"
+                        )
+                    )
+                )
+                .build()
+            ToolDefinition.SEARCH_CHAT_HISTORY -> Tool.InputSchema.Properties.builder()
+                .putAdditionalProperty(
+                    "query",
+                    JsonValue.from(
+                        mapOf(
+                            "type" to "string"
+                        )
+                    )
+                )
+                .build()
+            ToolDefinition.SEARCH_CHAT -> Tool.InputSchema.Properties.builder()
+                .putAdditionalProperty(
+                    "chat_id",
+                    JsonValue.from(
+                        mapOf(
+                            "type" to "string",
+                            "description" to "The ID of the chat to search"
+                        )
+                    )
+                )
+                .putAdditionalProperty(
+                    "query",
                     JsonValue.from(
                         mapOf(
                             "type" to "string"
@@ -104,7 +163,10 @@ object AnthropicRequestMapper {
     private fun ToolDefinition.requiredArguments(): List<String> =
         when (this) {
             ToolDefinition.TAVILY_WEB_SEARCH -> listOf("query")
+            ToolDefinition.TAVILY_EXTRACT -> listOf("urls", "extract_depth", "format")
             ToolDefinition.ATTACHED_IMAGE_INSPECT -> listOf("question")
+            ToolDefinition.SEARCH_CHAT_HISTORY -> listOf("query")
+            ToolDefinition.SEARCH_CHAT -> listOf("chat_id", "query")
             else -> error("Unsupported tool: $name")
         }
 

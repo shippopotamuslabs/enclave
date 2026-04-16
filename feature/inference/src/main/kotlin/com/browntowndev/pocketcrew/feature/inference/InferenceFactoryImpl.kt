@@ -5,7 +5,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.core.data.anthropic.AnthropicClientProvider
 import com.browntowndev.pocketcrew.core.data.google.GoogleGenAiClientProvider
 import com.browntowndev.pocketcrew.core.data.openai.OpenAiClientProvider
-import com.browntowndev.pocketcrew.core.data.repository.TavilySearchRepository
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
@@ -17,19 +16,15 @@ import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
-import com.browntowndev.pocketcrew.feature.inference.llama.GpuProfiler
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
-import com.browntowndev.pocketcrew.feature.inference.llama.LlamaBackend
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
-import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.security.MessageDigest
@@ -39,46 +34,10 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Provider
-import javax.inject.Singleton
-
-@Singleton
-class MediaPipeInferenceServiceFactory @Inject constructor(
-    @param:ApplicationContext private val context: Context,
-    private val activeModelProvider: ActiveModelProviderPort,
-    private val processThinkingTokens: ProcessThinkingTokensUseCase,
-    private val gpuProfiler: GpuProfiler,
-    private val orchestrator: LlmToolingOrchestrator,
-) {
-    suspend fun create(modelPath: String, modelType: ModelType, toolExecutor: ToolExecutorPort): LlmInferencePort = withContext(Dispatchers.IO) {
-        val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
-        val contextWindow = activeConfig?.contextWindow ?: activeConfig?.maxTokens ?: 4096
-        val detectedBackend = gpuProfiler.detectOptimalBackend()
-        val preferredBackend = if (detectedBackend != LlamaBackend.CPU) {
-            LlmInference.Backend.GPU
-        } else {
-            LlmInference.Backend.CPU
-        }
-
-        val options = LlmInference.LlmInferenceOptions.builder()
-            .setModelPath(modelPath)
-            .setMaxTokens(contextWindow)
-            .setMaxNumImages(10)
-            .setPreferredBackend(preferredBackend)
-            .build()
-        return@withContext MediaPipeInferenceServiceImpl(
-            llmInference = LlmInferenceWrapper(LlmInference.createFromOptions(context, options)),
-            context = context,
-            modelType = modelType,
-            activeModelProvider = activeModelProvider,
-            processThinkingTokens = processThinkingTokens,
-            orchestrator = orchestrator,
-        )
-    }
-}
 
 /**
  * Dynamic InferenceFactoryPort implementation.
- * Resolves the correct inference service (Llama, MediaPipe, LiteRT) dynamically
+ * Resolves the correct inference service (Llama, LiteRT) dynamically
  * based on the active model's file extension at inference time.
  */
 class InferenceFactoryImpl @Inject constructor(
@@ -91,7 +50,6 @@ class InferenceFactoryImpl @Inject constructor(
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
     private val llamaChatSessionManagerProvider: Provider<LlamaChatSessionManager>,
     private val conversationManagerProvider: Provider<ConversationManagerPort>,
-    private val mediaPipeFactory: MediaPipeInferenceServiceFactory,
     private val openAiClientProvider: OpenAiClientProvider,
     private val anthropicClientProvider: AnthropicClientProvider,
     private val googleGenAiClientProvider: GoogleGenAiClientProvider,
@@ -99,6 +57,7 @@ class InferenceFactoryImpl @Inject constructor(
     private val orchestrator: LlmToolingOrchestrator,
     private val inferenceLockManager: InferenceLockManager,
     private val toolExecutorProvider: Provider<ToolExecutorPort>,
+    private val toolExecutionEventPort: com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort,
 ) : InferenceFactoryPort {
 
     companion object {
@@ -467,14 +426,11 @@ class InferenceFactoryImpl @Inject constructor(
                         orchestrator = orchestrator,
                     )
                 }
-                "task" -> {
-                    val modelPath = getModelPath(filename)
-                    mediaPipeFactory.create(modelPath, modelType, toolExecutorProvider.get())
-                }
                 "litertlm" -> {
                     LiteRtInferenceServiceImpl(
                         conversationManager = conversationManagerProvider.get(),
                         processThinkingTokens = processThinkingTokens,
+                        toolExecutionEventPort = toolExecutionEventPort,
                         modelType = modelType,
                     )
                 }
@@ -482,6 +438,7 @@ class InferenceFactoryImpl @Inject constructor(
                     LiteRtInferenceServiceImpl(
                         conversationManager = conversationManagerProvider.get(),
                         processThinkingTokens = processThinkingTokens,
+                        toolExecutionEventPort = toolExecutionEventPort,
                         modelType = modelType,
                     )
                 }
@@ -562,8 +519,4 @@ class InferenceFactoryImpl @Inject constructor(
         return openRouterDefaults + normalizedCustomHeaders
     }
 
-    private fun getModelPath(filename: String): String {
-        val modelsDir = java.io.File(context.getExternalFilesDir(null), "models")
-        return java.io.File(modelsDir, filename).absolutePath
-    }
 }

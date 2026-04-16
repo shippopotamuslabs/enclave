@@ -9,6 +9,9 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrat
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
 import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseInputItem
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 
 class XaiInferenceServiceImpl(
     client: OpenAIClient,
@@ -40,6 +43,73 @@ class XaiInferenceServiceImpl(
             history = requestHistory,
             options = options,
         )
+
+    override fun mapToolingFollowUpResponseParams(
+        currentParams: ResponseCreateParams,
+        prompt: String,
+        options: GenerationOptions,
+        requestHistory: List<ChatMessage>,
+        initialResponse: StreamedOpenAiResponse,
+        results: List<Pair<ToolCallRequest, String>>,
+    ): ResponseCreateParams {
+        val builder = currentParams.toBuilder()
+        val inputItems = if (currentParams.input().isPresent && currentParams.input().get().isResponse()) {
+            currentParams.input().get().asResponse().toMutableList()
+        } else {
+            mutableListOf()
+        }
+
+        initialResponse.assistantMessageText
+            .takeIf { it.isNotBlank() }
+            ?.let { assistantText ->
+                inputItems += ResponseInputItem.ofMessage(
+                    ResponseInputItem.Message.builder()
+                        .role(ResponseInputItem.Message.Role.of("assistant"))
+                        .addInputTextContent(assistantText)
+                        .build()
+                )
+            }
+
+        // Map results back to their corresponding function calls in the initial response
+        results.forEach { (toolCall, resultJson) ->
+            val index = initialResponse.functionCalls.indexOf(toolCall)
+
+            val callId = if (index != -1) {
+                initialResponse.providerToolCallIds.getOrElse(index) {
+                    throw IllegalStateException("Missing function call id at index $index for xAI follow-up")
+                }
+            } else {
+                "fallback_${java.util.UUID.randomUUID().toString().replace("-", "")}"
+            }
+
+            val functionItemId = if (index != -1) {
+                initialResponse.providerToolItemIds.getOrElse(index) {
+                    "fc_${callId}"
+                }
+            } else {
+                "fc_${callId}"
+            }
+
+            inputItems += ResponseInputItem.ofFunctionCall(
+                com.openai.models.responses.ResponseFunctionToolCall.builder()
+                    .id(functionItemId)
+                    .callId(callId)
+                    .name(toolCall.toolName)
+                    .arguments(toolCall.argumentsJson)
+                    .build()
+            )
+            inputItems += ResponseInputItem.ofFunctionCallOutput(
+                ResponseInputItem.FunctionCallOutput.builder()
+                    .id("fco_${callId}")
+                    .callId(callId)
+                    .output(resultJson)
+                    .build()
+            )
+        }
+
+        builder.inputOfResponse(inputItems)
+        return builder.build()
+    }
 
     override suspend fun executePrompt(
         prompt: String,

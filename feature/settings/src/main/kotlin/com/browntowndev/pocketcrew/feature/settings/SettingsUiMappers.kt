@@ -64,7 +64,6 @@ class LocalModelAssetUiMapper @Inject constructor() {
         val format = when (asset.metadata.modelFileFormat) {
             ModelFileFormat.GGUF -> "GGUF"
             ModelFileFormat.LITERTLM -> "LiteRT"
-            ModelFileFormat.TASK -> "Task"
         }
 
         val cleanName = modelNamePart

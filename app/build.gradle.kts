@@ -145,7 +145,6 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.litertlm.android)
     implementation(libs.tflite.gpu)
-    implementation(libs.tasks.genai)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.crashlytics)

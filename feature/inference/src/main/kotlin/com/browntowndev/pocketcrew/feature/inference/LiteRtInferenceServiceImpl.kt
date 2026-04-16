@@ -8,19 +8,24 @@ import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
-import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
+import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 class LiteRtInferenceServiceImpl @Inject constructor(
     private val conversationManager: ConversationManagerPort,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
+    private val toolExecutionEventPort: ToolExecutionEventPort,
     private val modelType: ModelType,
 ) : LlmInferencePort {
     companion object {
@@ -40,25 +45,46 @@ class LiteRtInferenceServiceImpl @Inject constructor(
         conversationManager.setHistory(messages)
     }
 
-    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = flow {
+    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = channelFlow {
         val targetModelType = options.modelType ?: ModelType.FAST
         var isThinking = false
         val accumulatedThought = StringBuilder()
         val accumulatedText = StringBuilder()
         var buffer = ""
 
+        val eventJob = launch {
+            toolExecutionEventPort.events
+                .filterIsInstance<ToolExecutionEvent.Finished>()
+                .collect { event ->
+                    if (options.chatId != null && event.chatId != options.chatId) return@collect
+                    if (options.userMessageId != null && event.userMessageId != options.userMessageId) return@collect
+
+                    val resultJson = event.resultJson
+                    if (!resultJson.isNullOrEmpty()) {
+                        val assistantMessageId = options.assistantMessageId
+                        if (assistantMessageId != null) {
+                            val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
+                            val validSources = sources.filter { it.url.isNotEmpty() && it.title.isNotEmpty() }
+                            if (validSources.isNotEmpty()) {
+                                send(InferenceEvent.TavilyResults(validSources, targetModelType))
+                            }
+                        }
+                    }
+                }
+        }
+
         suspend fun attemptInference(retryOnFail: Boolean) {
             try {
                 val conversation = conversationManager.getConversation(targetModelType, options) {
-                    emit(InferenceEvent.EngineLoading(targetModelType))
+                    send(InferenceEvent.EngineLoading(targetModelType))
                 }
-                emit(InferenceEvent.Processing(targetModelType))
+                send(InferenceEvent.Processing(targetModelType))
                 
                 Log.d(TAG, "Sending prompt with options: $prompt")
 
                 conversation.sendMessageAsync(prompt, options).collect { response ->
                     if (response.thought.isNotEmpty()) {
-                        emit(InferenceEvent.Thinking(response.thought, targetModelType))
+                        send(InferenceEvent.Thinking(response.thought, targetModelType))
                     }
                     
                     if (response.text.isNotEmpty()) {
@@ -70,11 +96,11 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                             when (segment.kind) {
                                 SegmentKind.THINKING -> {
                                     accumulatedThought.append(segment.text)
-                                    emit(InferenceEvent.Thinking(segment.text, targetModelType))
+                                    send(InferenceEvent.Thinking(segment.text, targetModelType))
                                 }
                                 SegmentKind.VISIBLE -> {
                                     accumulatedText.append(segment.text)
-                                    emit(InferenceEvent.PartialResponse(segment.text, targetModelType))
+                                    send(InferenceEvent.PartialResponse(segment.text, targetModelType))
                                 }
                             }
                         }
@@ -84,14 +110,14 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                 if (buffer.isNotEmpty()) {
                     if (isThinking) {
                         accumulatedThought.append(buffer)
-                        emit(InferenceEvent.Thinking(buffer, targetModelType))
+                        send(InferenceEvent.Thinking(buffer, targetModelType))
                     } else {
                         accumulatedText.append(buffer)
-                        emit(InferenceEvent.PartialResponse(buffer, targetModelType))
+                        send(InferenceEvent.PartialResponse(buffer, targetModelType))
                     }
                 }
 
-                emit(InferenceEvent.Finished(targetModelType))
+                send(InferenceEvent.Finished(targetModelType))
             } catch (e: Exception) {
                 if (retryOnFail) {
                     Log.w(TAG, "LiteRT inference failed; resetting engine and retrying once", e)
@@ -108,7 +134,7 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                     attemptInference(retryOnFail = false)
                 } else {
                     Log.e(TAG, "Error sending prompt (retry failed)", e)
-                    emit(InferenceEvent.Error(e, targetModelType))
+                    send(InferenceEvent.Error(e, targetModelType))
                 }
             }
         }
@@ -116,6 +142,7 @@ class LiteRtInferenceServiceImpl @Inject constructor(
         try {
             attemptInference(retryOnFail = true)
         } finally {
+            eventJob.cancel()
             if (closeConversation) {
                 conversationManager.closeConversation()
             }

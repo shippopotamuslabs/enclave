@@ -18,9 +18,11 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.util.ChatHistoryCompressor
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
@@ -55,7 +57,7 @@ class ConversationManagerImpl @Inject constructor(
     private val localModelRepository: LocalModelRepositoryPort,
     private val activeModelProvider: ActiveModelProviderPort,
     private val loggingPort: LoggingPort,
-    private val toolExecutor: ToolExecutorPort? = null,
+    private val toolExecutor: ToolExecutorPort,
 ) : ConversationManagerPort {
 
     private val defaultSystemPrompt = """
@@ -73,7 +75,9 @@ class ConversationManagerImpl @Inject constructor(
         val topP: Double,
         val topK: Int,
         val hasSearchTool: Boolean,
+        val hasExtractTool: Boolean,
         val hasImageTool: Boolean,
+        val hasMemoryTools: Boolean,
     )
 
     // Cached state: updated whenever reloadIfNeeded is called.
@@ -82,6 +86,7 @@ class ConversationManagerImpl @Inject constructor(
     private var currentConfigId: LocalModelConfigurationId? = null
     private var currentThinkingEnabled: Boolean? = null
     private var currentSystemPrompt: String = defaultSystemPrompt
+    private var currentContextWindow: Int = 2048
     private var currentSamplerConfig: SamplerConfig? = null
     private var currentSignature: ConversationSignature? = null
 
@@ -105,6 +110,14 @@ class ConversationManagerImpl @Inject constructor(
     // NPU backends require samplerConfig=null (runtime doesn't support custom sampling on NPU)
     @Volatile
     private var activeBackendIsNpu: Boolean = false
+
+    // Flag to track if the current conversation has accumulated transient tool results
+    // that should be flushed before the next turn to prevent context window exhaustion.
+    @Volatile
+    private var hasTransientToolResults: Boolean = false
+
+    @Volatile
+    private var transientToolResultsChars: Int = 0
 
     private fun getModelPath(filename: String): String {
         // Use getExternalFilesDir to match ModelFileScanner's directory choice
@@ -130,7 +143,6 @@ class ConversationManagerImpl @Inject constructor(
     ): ConversationPort = withContext(Dispatchers.IO) {
         // Lock to avoid concurrent initializations and ensure consistent state
         mutex.withLock {
-            val executor = toolExecutor
             val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
                 ?: throw IllegalStateException("No active configuration for $modelType")
 
@@ -157,7 +169,10 @@ class ConversationManagerImpl @Inject constructor(
                 topK = options?.topK ?: activeConfig.topK ?: 40
             )
             val hasSearchTool = options?.availableTools?.contains(ToolDefinition.TAVILY_WEB_SEARCH) == true
+            val hasExtractTool = options?.availableTools?.contains(ToolDefinition.TAVILY_EXTRACT) == true
             val hasImageTool = options?.availableTools?.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT) == true
+            val hasMemoryTools = options?.availableTools?.contains(ToolDefinition.SEARCH_CHAT_HISTORY) == true ||
+                options?.availableTools?.contains(ToolDefinition.SEARCH_CHAT) == true
 
             val desiredSignature = ConversationSignature(
                 modelType = modelType,
@@ -168,12 +183,14 @@ class ConversationManagerImpl @Inject constructor(
                 topP = targetSamplerConfig.topP,
                 topK = targetSamplerConfig.topK,
                 hasSearchTool = hasSearchTool,
+                hasExtractTool = hasExtractTool,
                 hasImageTool = hasImageTool,
+                hasMemoryTools = hasMemoryTools,
             )
 
             val engineChanged = currentModelPath != modelPath || engine == null
             val conversationChanged =
-                currentSignature != desiredSignature || conversation == null || conversation?.isAlive != true
+                currentSignature != desiredSignature || conversation == null || conversation?.isAlive != true || hasTransientToolResults
             val conversationRecreated = engineChanged || conversationChanged
 
             if (engineChanged) {
@@ -184,12 +201,14 @@ class ConversationManagerImpl @Inject constructor(
                 )
                 closeEngineLocked()
                 currentModelPath = modelPath
+                hasTransientToolResults = false
             } else if (conversationChanged) {
                 Log.d(
                     TAG,
-                    "Recreating LiteRT conversation for modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled memory=${memorySnapshot()}"
+                    "Recreating LiteRT conversation for modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled, hasTransientToolResults=$hasTransientToolResults memory=${memorySnapshot()}"
                 )
                 closeConversationLocked()
+                hasTransientToolResults = false
             } else {
                 Log.d(
                     TAG,
@@ -203,9 +222,21 @@ class ConversationManagerImpl @Inject constructor(
             if (conversation == null || conversation?.isAlive != true) {
                 conversation?.close()
 
+                val contextWindow = activeConfig.contextWindow ?: 2048
+                val compressedHistory = ChatHistoryCompressor.compressHistory(
+                    history = history,
+                    systemPrompt = resolvedSystemPrompt,
+                    contextWindowTokens = contextWindow,
+                    bufferTokens = 1000
+                )
+
+                if (compressedHistory.size < history.size) {
+                    Log.d(TAG, "Compressed LiteRT history from ${history.size} to ${compressedHistory.size} messages to fit context window")
+                }
+
                 val conversationConfig = ConversationConfig(
                     systemInstruction = Contents.of(resolvedSystemPrompt),
-                    initialMessages = history.map { domainMsg ->
+                    initialMessages = compressedHistory.map { domainMsg ->
                         when (domainMsg.role) {
                             Role.USER -> Message.user(domainMsg.content)
                             Role.ASSISTANT -> Message.model(domainMsg.content)
@@ -217,11 +248,10 @@ class ConversationManagerImpl @Inject constructor(
                     samplerConfig = if (activeBackendIsNpu) null else targetSamplerConfig,
                     automaticToolCalling = true,
                     tools = buildList {
-                        if (executor != null && hasSearchTool) {
+                        if (hasSearchTool) {
                             add(
                                 tool(
                                     LocalSearchToolset(
-                                        toolExecutor = executor,
                                         modelType = modelType,
                                         chatId = chatId,
                                         userMessageId = userMessageId,
@@ -229,11 +259,41 @@ class ConversationManagerImpl @Inject constructor(
                                 )
                             )
                         }
-                        if (executor != null && hasImageTool) {
+                        if (hasExtractTool) {
+                            add(
+                                tool(
+                                    LocalExtractToolset(
+                                        modelType = modelType,
+                                        chatId = chatId,
+                                        userMessageId = userMessageId,
+                                    )
+                                )
+                            )
+                        }
+                        if (hasImageTool) {
                             add(
                                 tool(
                                     LocalImageInspectToolset(
-                                        toolExecutor = executor,
+                                        modelType = modelType,
+                                        chatId = chatId,
+                                        userMessageId = userMessageId,
+                                    )
+                                )
+                            )
+                        }
+                        if (hasMemoryTools) {
+                            add(
+                                tool(
+                                    LocalSearchChatHistoryToolset(
+                                        modelType = modelType,
+                                        chatId = chatId,
+                                        userMessageId = userMessageId,
+                                    )
+                                )
+                            )
+                            add(
+                                tool(
+                                    LocalSearchChatToolset(
                                         modelType = modelType,
                                         chatId = chatId,
                                         userMessageId = userMessageId,
@@ -267,6 +327,7 @@ class ConversationManagerImpl @Inject constructor(
             currentConfigId = configId
             currentThinkingEnabled = resolvedThinkingEnabled
             currentSystemPrompt = resolvedSystemPrompt
+            currentContextWindow = activeConfig.contextWindow ?: 2048
             currentSamplerConfig = targetSamplerConfig
 
             Log.d(
@@ -283,7 +344,6 @@ class ConversationManagerImpl @Inject constructor(
      * Maps LiteRT native tool calls to the domain [ToolExecutorPort].
      */
     private inner class LocalSearchToolset(
-        private val toolExecutor: ToolExecutorPort,
         private val modelType: ModelType,
         private val chatId: ChatId?,
         private val userMessageId: MessageId?,
@@ -329,8 +389,63 @@ class ConversationManagerImpl @Inject constructor(
         }
     }
 
+
+    private inner class LocalExtractToolset(
+        private val modelType: ModelType,
+        private val chatId: ChatId?,
+        private val userMessageId: MessageId?,
+    ) : ToolSet {
+        @Tool(description = "Extract and parse the full content from a list of URLs.")
+        fun tavily_extract(
+            @ToolParam(description = "JSON array of URLs to extract content from.") urls: String,
+            @ToolParam(description = "Extraction depth: basic or advanced.") extract_depth: String = "basic",
+            @ToolParam(description = "Output format: markdown or text.") format: String = "markdown",
+        ): String {
+            Log.d(TAG, "Executing native tool call: tavily_extract with urls: $urls")
+            loggingPort.info(
+                TAG,
+                "Native tool call requested tool=${ToolDefinition.TAVILY_EXTRACT.name} modelType=$modelType chatId=${chatId?.value ?: "<none>"} userMessageId=${userMessageId?.value ?: "<none>"} urlCount=${urls.length}"
+            )
+            return try {
+                runBlocking(Dispatchers.IO) {
+                    loggingPort.info(
+                        TAG,
+                        "Entered native tool coroutine tool=${ToolDefinition.TAVILY_EXTRACT.name} modelType=$modelType"
+                    )
+                    val parsedUrls = NativeToolResultFormatter.parseUrls(urls)
+                    val extractArgumentsJson = ToolEnvelopeParser.buildExtractArgumentsJson(
+                        urls = parsedUrls,
+                        extractDepth = extract_depth.takeIf { it.isNotBlank() } ?: "basic",
+                        format = format.takeIf { it.isNotBlank() } ?: "markdown",
+                    )
+                    val request = ToolCallRequest(
+                        toolName = ToolDefinition.TAVILY_EXTRACT.name,
+                        argumentsJson = extractArgumentsJson,
+                        provider = "LITERT",
+                        modelType = modelType,
+                        chatId = chatId,
+                        userMessageId = userMessageId,
+                    )
+                    loggingPort.info(
+                        TAG,
+                        "Dispatching native tool call tool=${request.toolName} provider=${request.provider} modelType=${request.modelType}"
+                    )
+                    executeToolSafely(request)
+                }
+            } catch (t: Throwable) {
+                val rootCause = t.rootCause()
+                loggingPort.error(
+                    TAG,
+                    "Native tool method failed before safe execution tool=${ToolDefinition.TAVILY_EXTRACT.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                    rootCause
+                )
+                buildToolErrorJson(ToolDefinition.TAVILY_EXTRACT.name, rootCause)
+            }
+        }
+
+    }
+
     private inner class LocalImageInspectToolset(
-        private val toolExecutor: ToolExecutorPort,
         private val modelType: ModelType,
         private val chatId: ChatId?,
         private val userMessageId: MessageId?,
@@ -376,24 +491,134 @@ class ConversationManagerImpl @Inject constructor(
         }
     }
 
+    private inner class LocalSearchChatHistoryToolset(
+        private val modelType: ModelType,
+        private val chatId: ChatId?,
+        private val userMessageId: MessageId?,
+    ) : ToolSet {
+        @Tool(description = "Search the user's past conversation history for context.")
+        fun search_chat_history(
+            @ToolParam(description = "The search query.") query: String
+        ): String {
+            Log.d(TAG, "Executing native tool call: search_chat_history with query: $query")
+            loggingPort.info(
+                TAG,
+                "Native tool call requested tool=${ToolDefinition.SEARCH_CHAT_HISTORY.name} modelType=$modelType queryChars=${query.length}"
+            )
+            return try {
+                runBlocking(Dispatchers.IO) {
+                    loggingPort.info(
+                        TAG,
+                        "Entered native tool coroutine tool=${ToolDefinition.SEARCH_CHAT_HISTORY.name} modelType=$modelType"
+                    )
+                    val request = ToolCallRequest(
+                        toolName = ToolDefinition.SEARCH_CHAT_HISTORY.name,
+                        argumentsJson = ToolEnvelopeParser.buildArgumentsJson(query),
+                        provider = "LITERT",
+                        modelType = modelType,
+                        chatId = chatId,
+                        userMessageId = userMessageId,
+                    )
+                    loggingPort.info(
+                        TAG,
+                        "Dispatching native tool call tool=${request.toolName} provider=${request.provider} modelType=${request.modelType}"
+                    )
+                    executeToolSafely(request)
+                }
+            } catch (t: Throwable) {
+                val rootCause = t.rootCause()
+                loggingPort.error(
+                    TAG,
+                    "Native tool method failed before safe execution tool=${ToolDefinition.SEARCH_CHAT_HISTORY.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                    rootCause
+                )
+                buildToolErrorJson(ToolDefinition.SEARCH_CHAT_HISTORY.name, rootCause)
+            }
+        }
+    }
+
+    private inner class LocalSearchChatToolset(
+        private val modelType: ModelType,
+        private val chatId: ChatId?,
+        private val userMessageId: MessageId?,
+    ) : ToolSet {
+        @Tool(description = "Search messages in a specific chat for details no longer in context.")
+        fun search_chat(
+            @ToolParam(description = "The ID of the chat to search.") chat_id: String,
+            @ToolParam(description = "The search query.") query: String
+        ): String {
+            Log.d(TAG, "Executing native tool call: search_chat with chatId: $chat_id query: $query")
+            loggingPort.info(
+                TAG,
+                "Native tool call requested tool=${ToolDefinition.SEARCH_CHAT.name} modelType=$modelType chatId=$chat_id queryChars=${query.length}"
+            )
+            return try {
+                runBlocking(Dispatchers.IO) {
+                    loggingPort.info(
+                        TAG,
+                        "Entered native tool coroutine tool=${ToolDefinition.SEARCH_CHAT.name} modelType=$modelType chatId=$chat_id"
+                    )
+                    val request = ToolCallRequest(
+                        toolName = ToolDefinition.SEARCH_CHAT.name,
+                        argumentsJson = ToolEnvelopeParser.buildSearchChatArgumentsJson(chat_id, query),
+                        provider = "LITERT",
+                        modelType = modelType,
+                        chatId = chatId,
+                        userMessageId = userMessageId,
+                    )
+                    loggingPort.info(
+                        TAG,
+                        "Dispatching native tool call tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"}"
+                    )
+                    executeToolSafely(request)
+                }
+            } catch (t: Throwable) {
+                val rootCause = t.rootCause()
+                loggingPort.error(
+                    TAG,
+                    "Native tool method failed before safe execution tool=${ToolDefinition.SEARCH_CHAT.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                    rootCause
+                )
+                buildToolErrorJson(ToolDefinition.SEARCH_CHAT.name, rootCause)
+            }
+        }
+    }
+
     private suspend fun executeToolSafely(request: ToolCallRequest): String {
         return try {
             loggingPort.debug(
                 TAG,
                 "executeToolSafely entered tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"}"
             )
-            val executor = requireNotNull(toolExecutor) {
-                "Tool executor is not available for native tool calls"
-            }
+
             loggingPort.debug(
                 TAG,
                 "Resolved ToolExecutorPort for native tool call tool=${request.toolName}"
             )
-            val resultJson = executor.execute(request).resultJson
+            val rawResultJson = toolExecutor.execute(request).resultJson
+            
+            // Estimate tokens used by history, system prompt, AND transient tool results (4 chars per token)
+            val historyChars = currentSystemPrompt.length + history.sumOf { it.content.length } + transientToolResultsChars
+            val estimatedUsedTokens = historyChars / 4
+
+            val resultJson = NativeToolResultFormatter.truncateToolResult(
+                resultJson = rawResultJson,
+                contextWindowTokens = currentContextWindow,
+                estimatedUsedTokens = estimatedUsedTokens,
+                bufferTokens = 1000 // Ensure space for the model to reply
+            )
+
             loggingPort.debug(
                 TAG,
-                "Native tool call completed tool=${request.toolName} payload=${resultJson.take(2000)}"
+                "Native tool call completed tool=${request.toolName} finalPayload=${resultJson.take(2000)}"
             )
+
+            if (!resultJson.contains("\"error\"")) {
+                hasTransientToolResults = true
+                // Account for the result json plus some buffer for the tool call request
+                transientToolResultsChars += resultJson.length + 500
+            }
+
             if (resultJson.contains("\"error\"")) {
                 loggingPort.error(
                     TAG,
@@ -542,6 +767,7 @@ class ConversationManagerImpl @Inject constructor(
         conversation?.close()
         conversation = null
         conversationPort = null
+        transientToolResultsChars = 0
         Log.d(TAG, "Closed LiteRT conversation memoryAfterClose=${memorySnapshot()}")
     }
 

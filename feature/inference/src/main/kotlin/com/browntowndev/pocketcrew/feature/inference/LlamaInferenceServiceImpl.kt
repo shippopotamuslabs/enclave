@@ -21,11 +21,13 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.util.ChatHistoryCompressor
+import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
@@ -73,9 +75,12 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
     private val mutex = Mutex()
     private var currentSignature: SessionSignature? = null
+    private var currentContextWindow: Int = 4096
+    private var currentSystemPrompt: String = ""
     private var history: List<DomainChatMessage> = emptyList()
     private var isInitialized = false
     private var hasTriedCpuFallback = false
+    private var transientToolResultsChars: Int = 0
 
     private fun getModelPath(filename: String): String {
         // Use getExternalFilesDir to match ModelFileScanner's directory choice
@@ -164,10 +169,24 @@ class LlamaInferenceServiceImpl @Inject constructor(
                         sampling = samplingConfig
                     )
                 )
-                sessionManager.setHistory(history)
+
+                val compressedHistory = ChatHistoryCompressor.compressHistory(
+                    history = history,
+                    systemPrompt = systemPrompt,
+                    contextWindowTokens = samplingConfig.contextWindow,
+                    bufferTokens = 1000
+                )
+
+                if (compressedHistory.size < history.size) {
+                    Log.d(TAG, "Compressed Llama history from ${history.size} to ${compressedHistory.size} messages to fit initial context window")
+                }
+
+                sessionManager.setHistory(compressedHistory)
                 sessionManager.startNewConversation()
                 isInitialized = true
                 currentSignature = newSignature
+                currentContextWindow = samplingConfig.contextWindow
+                currentSystemPrompt = systemPrompt
             } catch (e: Exception) {
                 // GPU initialization failed, try falling back to CPU
                 if (!hasTriedCpuFallback && samplingConfig.gpuLayers > 0) {
@@ -182,10 +201,24 @@ class LlamaInferenceServiceImpl @Inject constructor(
                             sampling = cpuConfig
                         )
                     )
-                    sessionManager.setHistory(history)
+
+                    val compressedHistory = ChatHistoryCompressor.compressHistory(
+                        history = history,
+                        systemPrompt = systemPrompt,
+                        contextWindowTokens = cpuConfig.contextWindow,
+                        bufferTokens = 1000
+                    )
+
+                    if (compressedHistory.size < history.size) {
+                        Log.d(TAG, "Compressed Llama history (CPU fallback) from ${history.size} to ${compressedHistory.size} messages to fit initial context window")
+                    }
+
+                    sessionManager.setHistory(compressedHistory)
                     sessionManager.startNewConversation()
                     isInitialized = true
                     currentSignature = newSignature
+                    currentContextWindow = cpuConfig.contextWindow
+                    currentSystemPrompt = systemPrompt
                     Log.i(TAG, "Successfully initialized with CPU fallback")
                 } else {
                     throw e
@@ -235,9 +268,10 @@ class LlamaInferenceServiceImpl @Inject constructor(
         }
     }
 
-    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = flow {
+    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = channelFlow {
         // Get model type from options (we'll need to add it to GenerationOptions)
         val targetModelType = options.modelType ?: ModelType.FAST
+        transientToolResultsChars = 0
 
         // Downscale images and save them to temporary files for the JNI engine
         val processedOptions = if (options.imageUris.isNotEmpty()) {
@@ -256,13 +290,13 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
         try {
             ensureModelLoaded(targetModelType, processedOptions) {
-                emit(InferenceEvent.EngineLoading(targetModelType))
+                send(InferenceEvent.EngineLoading(targetModelType))
             }
-            emit(InferenceEvent.Processing(targetModelType))
+            send(InferenceEvent.Processing(targetModelType))
         } catch (e: Exception) {
             if (e is CancellationException) throw e
-            emit(InferenceEvent.Error(e, targetModelType))
-            return@flow
+            send(InferenceEvent.Error(e, targetModelType))
+            return@channelFlow
         }
 
         var isThinking = false
@@ -272,11 +306,11 @@ class LlamaInferenceServiceImpl @Inject constructor(
             sessionManager.sendUserMessage(prompt)
 
             if (ToolEnvelopeParser.hasLocalToolContract(processedOptions.systemPrompt)) {
-                executeToolingPrompt(processedOptions, targetModelType) { emit(it) }
+                executeToolingPrompt(processedOptions, targetModelType) { send(it) }
                 if (closeConversation) {
                     sessionManager.clearConversation()
                 }
-                return@flow
+                return@channelFlow
             }
 
             // Use options-aware streaming instead of mutating samplingConfig
@@ -294,10 +328,10 @@ class LlamaInferenceServiceImpl @Inject constructor(
                         state.emittedSegments.forEach { segment ->
                             when (segment.kind) {
                                 SegmentKind.THINKING -> {
-                                    emit(InferenceEvent.Thinking(segment.text, targetModelType))
+                                    send(InferenceEvent.Thinking(segment.text, targetModelType))
                                 }
                                 SegmentKind.VISIBLE -> {
-                                    emit(InferenceEvent.PartialResponse(segment.text, targetModelType))
+                                    send(InferenceEvent.PartialResponse(segment.text, targetModelType))
                                 }
                             }
                         }
@@ -305,15 +339,15 @@ class LlamaInferenceServiceImpl @Inject constructor(
                     is GenerationEvent.Completed -> {
                         if (buffer.isNotEmpty()) {
                             if (isThinking) {
-                                emit(InferenceEvent.Thinking(buffer, targetModelType))
+                                send(InferenceEvent.Thinking(buffer, targetModelType))
                             } else {
-                                emit(InferenceEvent.PartialResponse(buffer, targetModelType))
+                                send(InferenceEvent.PartialResponse(buffer, targetModelType))
                             }
                         }
-                        emit(InferenceEvent.Finished(targetModelType))
+                        send(InferenceEvent.Finished(targetModelType))
                     }
                     is GenerationEvent.Error -> {
-                        emit(InferenceEvent.Error(event.throwable, targetModelType))
+                        send(InferenceEvent.Error(event.throwable, targetModelType))
                     }
                 }
             }
@@ -325,7 +359,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error during inference", e)
-            emit(InferenceEvent.Error(e, targetModelType))
+            send(InferenceEvent.Error(e, targetModelType))
         } finally {
             // Clean up temp files created for this prompt
             if (options.imageUris.isNotEmpty()) {
@@ -378,8 +412,20 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 } ?: emptyList()
             },
             onToolResultsMapped = { params, _, results ->
+                val historyChars = currentSystemPrompt.length + history.sumOf { it.content.length } + transientToolResultsChars
+                val estimatedUsedTokens = historyChars / 4
+
                 results.forEach { (_, resultJson) ->
-                    sessionManager.sendUserMessage(ToolEnvelopeParser.buildLocalToolResultMessage(resultJson))
+                    val truncatedResult = NativeToolResultFormatter.truncateToolResult(
+                        resultJson = resultJson,
+                        contextWindowTokens = currentContextWindow,
+                        estimatedUsedTokens = estimatedUsedTokens,
+                        bufferTokens = 1000
+                    )
+                    if (!truncatedResult.contains("\"error\"")) {
+                        transientToolResultsChars += truncatedResult.length + 500
+                    }
+                    sessionManager.sendUserMessage(ToolEnvelopeParser.buildLocalToolResultMessage(truncatedResult))
                 }
                 params
             },
