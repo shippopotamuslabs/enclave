@@ -83,7 +83,10 @@ class GenerateChatResponseUseCaseSearchToolTest {
 
         val options = inferenceService.getSentOptions().single()
         assertTrue(options.toolingEnabled)
-        assertEquals(listOf(ToolDefinition.TAVILY_WEB_SEARCH), options.availableTools)
+        assertTrue(options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+        assertTrue(options.availableTools.contains(ToolDefinition.TAVILY_EXTRACT))
+        assertTrue(options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
+        assertTrue(options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
     }
 
     @Test
@@ -267,8 +270,10 @@ class GenerateChatResponseUseCaseSearchToolTest {
         ).toList()
 
         val options = inferenceService.getSentOptions().single()
-        assertFalse(options.toolingEnabled)
-        assertTrue(options.availableTools.isEmpty())
+        assertTrue(options.toolingEnabled)
+        assertFalse(options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+        assertTrue(options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
+        assertTrue(options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
     }
 
     @Test
@@ -312,8 +317,9 @@ class GenerateChatResponseUseCaseSearchToolTest {
         ).toList()
 
         val options = inferenceService.getSentOptions().single()
-        assertEquals("Be concise.", options.systemPrompt)
-        assertFalse(options.systemPrompt!!.contains("<tool_call>"))
+        assertTrue(options.systemPrompt!!.contains("Be concise."))
+        assertTrue(options.systemPrompt!!.contains("search_chat_history"))
+        assertFalse(options.systemPrompt!!.contains("tavily_web_search"))
     }
 
     @Test
@@ -451,8 +457,10 @@ class GenerateChatResponseUseCaseSearchToolTest {
         ).toList()
 
         val options = fastService.getSentOptions().single()
-        assertFalse(options.toolingEnabled)
-        assertTrue(options.availableTools.isEmpty())
+        assertTrue(options.toolingEnabled)
+        assertFalse(options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+        assertTrue(options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
+        assertTrue(options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
         assertFalse(options.systemPrompt?.contains("attached_image_inspect") == true)
         assertEquals(listOf(ModelType.FAST), inferenceFactory.resolvedTypes)
     }

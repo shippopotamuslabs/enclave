@@ -19,4 +19,5 @@ data class TavilySource(
     val url: String,
     val content: String,
     val score: Double = 0.0,
+    val extracted: Boolean = false,
 )

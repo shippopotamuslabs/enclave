@@ -72,6 +72,10 @@ class FakeMessageRepository : MessageRepository {
         currentUserMessageId: MessageId,
     ): ResolvedImageTarget? = resolvedImageTarget
 
+    override suspend fun searchMessagesInChat(chatId: ChatId, query: String): List<Message> {
+        return emptyList()
+    }
+
     fun setMessagesForChat(messages: List<Message>) {
         getMessagesForChatResult = messages
     }

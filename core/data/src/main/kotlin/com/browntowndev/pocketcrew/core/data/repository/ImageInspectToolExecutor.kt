@@ -112,7 +112,7 @@ class ImageInspectToolExecutor @Inject constructor(
             .filter { message ->
                 message.role == Role.USER && message.content.imageUri != null
             }
-            .maxByOrNull { it.createdAt }
+            .maxByOrNull { it.createdAt ?: 0L }
 
         return latestImageMessage?.let { message ->
             ResolvedImageTarget(

@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisEntity
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
+import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -116,12 +117,18 @@ class MessageRepositoryImpl @Inject constructor(
         val messages = messageDao.getMessagesByChatId(chatId).map { it.toDomain() }
         val latestImageMessage = messages
             .filter { it.role == Role.USER && it.content.imageUri != null && it.id != currentUserMessageId }
-            .maxByOrNull { it.createdAt }
+            .maxByOrNull { it.createdAt ?: 0L }
         return latestImageMessage?.let {
             ResolvedImageTarget(
                 userMessageId = it.id,
                 imageUri = it.content.imageUri!!,
             )
         }
+    }
+
+    override suspend fun searchMessagesInChat(chatId: ChatId, query: String): List<Message> {
+        val sanitized = FtsSanitizer.sanitize(query)
+        if (sanitized.isBlank()) return emptyList()
+        return messageDao.searchMessagesByChatId(chatId, sanitized).map { it.toDomain() }
     }
 }

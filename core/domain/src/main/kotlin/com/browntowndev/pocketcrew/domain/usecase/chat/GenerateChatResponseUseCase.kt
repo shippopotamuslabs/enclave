@@ -17,6 +17,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.emitAll
@@ -90,7 +91,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                 }
             } finally {
                 try {
-                    withContext(Dispatchers.IO) {
+                    withContext(NonCancellable + Dispatchers.IO) {
                         persistAccumulatedMessages(accumulatorManager)
                     }
                 } catch (e: Exception) {

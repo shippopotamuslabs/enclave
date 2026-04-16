@@ -28,4 +28,11 @@ sealed class ToolExecutionEvent {
         val resultJson: String? = null,
         val error: String? = null,
     ) : ToolExecutionEvent()
+
+    data class Extracting(
+        override val eventId: String,
+        val url: String,
+        override val chatId: ChatId?,
+        override val userMessageId: MessageId?,
+    ) : ToolExecutionEvent()
 }

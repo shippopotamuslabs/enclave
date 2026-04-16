@@ -25,7 +25,7 @@ data class Message(
     val content: Content,
     val role: Role = Role.USER,
     val messageState: MessageState = MessageState.PROCESSING,
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: Long? = null,
     val thinkingDurationSeconds: Long? = null,
     val thinkingRaw: String? = null,
     val thinkingStartTime: Long? = null,

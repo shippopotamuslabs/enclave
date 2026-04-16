@@ -19,6 +19,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -51,8 +52,11 @@ class ChatInferenceRequestPreparerTest {
         )
 
         assertEquals(listOf("file:///tmp/direct.jpg"), request.options.imageUris)
-        assertTrue(request.options.availableTools.isEmpty())
-        assertTrue(!request.options.toolingEnabled)
+        assertFalse(request.options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+        assertFalse(request.options.availableTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
+        assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
+        assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
+        assertTrue(request.options.toolingEnabled)
         assertTrue(request.prompt.contains("The user attached an image."))
     }
 
@@ -89,6 +93,140 @@ class ChatInferenceRequestPreparerTest {
         assertTrue(request.options.systemPrompt?.contains("Be concise.") == true)
         assertTrue(request.options.systemPrompt?.contains("attached_image_inspect") == true)
         assertTrue(request.prompt.contains("use attached_image_inspect"))
+    }
+
+    @Test
+    fun `search enabled includes both TAVILY_WEB_SEARCH and TAVILY_EXTRACT in availableTools`() = runTest {
+        val preparer = ChatInferenceRequestPreparer(
+            activeModelProvider = mockActiveModelProvider(
+                fastConfig = fastTextConfig(),
+                visionConfig = null,
+            ),
+            settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+            messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            searchToolPromptComposer = SearchToolPromptComposer(),
+            loggingPort = mockk(relaxed = true),
+        )
+
+        val request = preparer(
+            prompt = "What is Android 17?",
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            modelType = ModelType.FAST,
+        )
+
+        assertTrue(request.options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+        assertTrue(request.options.availableTools.contains(ToolDefinition.TAVILY_EXTRACT))
+    }
+
+    @Test
+    fun `LiteRT model triggers LITE_RT_NATIVE strategy`() = runTest {
+        val preparer = ChatInferenceRequestPreparer(
+            activeModelProvider = mockActiveModelProvider(
+                fastConfig = fastTextConfig().copy(
+                    localModelFormat = com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.LITERTLM
+                ),
+                visionConfig = null,
+            ),
+            settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+            messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            searchToolPromptComposer = SearchToolPromptComposer(),
+            loggingPort = mockk(relaxed = true),
+        )
+
+        val request = preparer(
+            prompt = "Search for LiteRT",
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            modelType = ModelType.FAST,
+        )
+
+        assertTrue(request.options.systemPrompt?.contains("call:tavily_web_search") == true)
+        // tool_call may appear in strict rules
+    }
+
+    @Test
+    fun `API model triggers SDK_NATIVE strategy`() = runTest {
+        val preparer = ChatInferenceRequestPreparer(
+            activeModelProvider = mockActiveModelProvider(
+                fastConfig = apiVisionConfig(), // API model
+                visionConfig = null,
+            ),
+            settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+            messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            searchToolPromptComposer = SearchToolPromptComposer(),
+            loggingPort = mockk(relaxed = true),
+        )
+
+        val request = preparer(
+            prompt = "Search with API",
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            modelType = ModelType.FAST,
+        )
+
+        // SDK_NATIVE strategy should result in no tool instructions in system prompt
+        assertFalse(request.options.systemPrompt?.contains("tavily_web_search") == true)
+        assertTrue(request.options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+    }
+
+    @Test
+    fun `GGUF model triggers JSON_XML_ENVELOPE strategy`() = runTest {
+        val preparer = ChatInferenceRequestPreparer(
+            activeModelProvider = mockActiveModelProvider(
+                fastConfig = fastTextConfig().copy(
+                    localModelFormat = com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.GGUF
+                ),
+                visionConfig = null,
+            ),
+            settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
+            messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            searchToolPromptComposer = SearchToolPromptComposer(),
+            loggingPort = mockk(relaxed = true),
+        )
+
+        val request = preparer(
+            prompt = "Search for GGUF",
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            modelType = ModelType.FAST,
+        )
+
+        assertTrue(request.options.systemPrompt?.contains("<tool_call>") == true)
+        assertTrue(request.options.systemPrompt?.contains("tavily_web_search") == true)
+    }
+
+    @Test
+    fun `disabling search removes tools and instructions`() = runTest {
+        val preparer = ChatInferenceRequestPreparer(
+            activeModelProvider = mockActiveModelProvider(
+                fastConfig = fastTextConfig(),
+                visionConfig = null,
+            ),
+            settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
+            messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            searchToolPromptComposer = SearchToolPromptComposer(),
+            loggingPort = mockk(relaxed = true),
+        )
+
+        val request = preparer(
+            prompt = "Just chat",
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            modelType = ModelType.FAST,
+        )
+
+        assertFalse(request.options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+        assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
+        assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
+        assertTrue(request.options.toolingEnabled)
+        assertFalse(request.options.systemPrompt?.contains("tavily_web_search") == true)
+        assertTrue(request.options.systemPrompt?.contains("search_chat_history") == true)
     }
 
     @Test

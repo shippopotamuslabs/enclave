@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.usecase.chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -54,29 +55,35 @@ internal class ChatInferenceRequestPreparer(
 
         val strategy = when {
             config?.isLocal == true -> when (config.localModelFormat) {
-                com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.LITERTLM -> ToolCallStrategy.LITE_RT_NATIVE
-                com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.GGUF -> ToolCallStrategy.JSON_XML_ENVELOPE
-                com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.TASK -> ToolCallStrategy.JSON_XML_ENVELOPE
+                ModelFileFormat.LITERTLM -> ToolCallStrategy.LITE_RT_NATIVE
+                ModelFileFormat.GGUF -> ToolCallStrategy.JSON_XML_ENVELOPE
                 null -> ToolCallStrategy.JSON_XML_ENVELOPE
             }
             config?.isLocal == false -> ToolCallStrategy.SDK_NATIVE
             else -> ToolCallStrategy.JSON_XML_ENVELOPE
         }
 
-        val toolingEnabled = searchEnabled || imageHandling == ChatImageHandling.TOOL
+        val toolingEnabled = true // Memory tools are always available
         val systemPrompt = if (toolingEnabled) {
             searchToolPromptComposer.compose(
                 baseSystemPrompt = config?.systemPrompt,
                 includeSearchTool = searchEnabled,
                 includeImageInspectTool = imageHandling == ChatImageHandling.TOOL,
+                includeMemoryTools = true,
+                currentChatId = chatId.value,
                 strategy = strategy,
             )
         } else {
             config?.systemPrompt
         }
         val availableTools = buildList {
-            if (searchEnabled) add(ToolDefinition.TAVILY_WEB_SEARCH)
+            if (searchEnabled) {
+                add(ToolDefinition.TAVILY_WEB_SEARCH)
+                add(ToolDefinition.TAVILY_EXTRACT)
+            }
             if (imageHandling == ChatImageHandling.TOOL) add(ToolDefinition.ATTACHED_IMAGE_INSPECT)
+            add(ToolDefinition.SEARCH_CHAT_HISTORY)
+            add(ToolDefinition.SEARCH_CHAT)
         }
 
         return PreparedChatInferenceRequest(

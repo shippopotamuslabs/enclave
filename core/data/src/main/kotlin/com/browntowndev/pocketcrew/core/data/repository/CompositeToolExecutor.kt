@@ -15,12 +15,18 @@ import javax.inject.Singleton
  *
  * Routes:
  * - [ToolDefinition.TAVILY_WEB_SEARCH] → [SearchToolExecutorImpl]
+ * - [ToolDefinition.TAVILY_EXTRACT] → [ExtractToolExecutorImpl]
  * - [ToolDefinition.ATTACHED_IMAGE_INSPECT] → [ImageInspectToolExecutor]
+ * - [ToolDefinition.SEARCH_CHAT_HISTORY] → [SearchChatHistoryToolExecutor]
+ * - [ToolDefinition.SEARCH_CHAT] → [SearchChatToolExecutor]
  */
 @Singleton
 class CompositeToolExecutor @Inject constructor(
     private val searchToolExecutor: SearchToolExecutorImpl,
+    private val extractToolExecutor: ExtractToolExecutorImpl,
     private val imageInspectToolExecutor: ImageInspectToolExecutor,
+    private val searchChatHistoryToolExecutor: SearchChatHistoryToolExecutor,
+    private val searchChatToolExecutor: SearchChatToolExecutor,
     private val eventBus: ToolExecutionEventBus,
 ) : ToolExecutorPort {
 
@@ -41,7 +47,10 @@ class CompositeToolExecutor @Inject constructor(
         return try {
             val result = when (request.toolName) {
                 ToolDefinition.TAVILY_WEB_SEARCH.name -> searchToolExecutor.execute(request)
+                ToolDefinition.TAVILY_EXTRACT.name -> extractToolExecutor.execute(request)
                 ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> imageInspectToolExecutor.execute(request)
+                ToolDefinition.SEARCH_CHAT_HISTORY.name -> searchChatHistoryToolExecutor.execute(request)
+                ToolDefinition.SEARCH_CHAT.name -> searchChatToolExecutor.execute(request)
                 else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
             }
             
