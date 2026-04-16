@@ -361,6 +361,12 @@ class LlamaInferenceServiceImpl @Inject constructor(
             Log.e(TAG, "Error during inference", e)
             send(InferenceEvent.Error(e, targetModelType))
         } finally {
+            // Stop the native llama.cpp engine if still generating
+            try {
+                sessionManager.stopCurrentGeneration()
+            } catch (_: Exception) {
+                // Best-effort stop; engine may already be idle or shut down
+            }
             // Clean up temp files created for this prompt
             if (options.imageUris.isNotEmpty()) {
                 processedOptions.imageUris.forEach { uriString ->
