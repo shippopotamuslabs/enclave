@@ -89,4 +89,32 @@ class PocketCrewDatabaseMigrationTest {
             db.close()
         }
     }
+
+    @Test
+    fun `tavily_source table has extracted column with default false`() {
+        val db = Room.inMemoryDatabaseBuilder(
+            ApplicationProvider.getApplicationContext(),
+            PocketCrewDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val sqliteDb = db.openHelper.readableDatabase
+
+            val cursor = sqliteDb.query("PRAGMA table_info('tavily_source')")
+            val extractedColumn = buildMap {
+                cursor.use {
+                    while (it.moveToNext()) {
+                        val name = it.getString(it.getColumnIndexOrThrow("name"))
+                        val defaultValue = it.getString(it.getColumnIndexOrThrow("dflt_value"))
+                        put(name, defaultValue)
+                    }
+                }
+            }
+
+            assertTrue("extracted column should exist", extractedColumn.containsKey("extracted"))
+            assertEquals("extracted should default to 0 (false)", "0", extractedColumn["extracted"])
+        } finally {
+            db.close()
+        }
+    }
 }
