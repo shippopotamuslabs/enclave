@@ -192,12 +192,12 @@ class WorkProgressParserTest {
     @Test
     fun `parseFileProgress handles all ModelType enum values`() {
         // Given - each ModelType as apiValue (using correct apiValue strings)
-        val visionString = "model.task|0|100|QUEUED|0.0|vision"
-        val draftOneString = "model.task|0|100|QUEUED|0.0|draft_one"
-        val draftTwoString = "model.task|0|100|QUEUED|0.0|draft_two"
-        val mainString = "model.task|0|100|QUEUED|0.0|main"
-        val fastString = "model.task|0|100|QUEUED|0.0|fast"
-        val thinkingString = "model.task|0|100|QUEUED|0.0|thinking"
+        val visionString = "model.litertlm|0|100|QUEUED|0.0|vision"
+        val draftOneString = "model.litertlm|0|100|QUEUED|0.0|draft_one"
+        val draftTwoString = "model.litertlm|0|100|QUEUED|0.0|draft_two"
+        val mainString = "model.litertlm|0|100|QUEUED|0.0|main"
+        val fastString = "model.litertlm|0|100|QUEUED|0.0|fast"
+        val thinkingString = "model.litertlm|0|100|QUEUED|0.0|thinking"
 
         // Then - each should parse to correct ModelType
         assertEquals(listOf(ModelType.VISION), parser.parseFileProgress(visionString)?.modelTypes)

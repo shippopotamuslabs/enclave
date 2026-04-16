@@ -288,7 +288,7 @@ class WorkProgressParser @Inject constructor(
 
     /**
      * Derives modelTypes from filename when the backward compatibility merge fails.
-     * Filename format: "{modelType}.{extension}" e.g., "vision.litertlm", "main.task"
+     * Filename format: "{modelType}.{extension}" e.g., "vision.litertlm", "main.gguf"
      */
     private fun deriveModelTypesFromFilename(filename: String): List<ModelType> {
         val baseName = filename.substringBefore(".")
