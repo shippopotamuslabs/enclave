@@ -92,6 +92,7 @@ class GenerateChatResponseUseCase @Inject constructor(
             } finally {
                 try {
                     withContext(NonCancellable + Dispatchers.IO) {
+                        accumulatorManager.markIncompleteAsCancelled()
                         persistAccumulatedMessages(accumulatorManager)
                     }
                 } catch (e: Exception) {

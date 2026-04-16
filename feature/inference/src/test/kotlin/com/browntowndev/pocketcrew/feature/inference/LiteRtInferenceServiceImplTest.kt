@@ -233,4 +233,20 @@ class LiteRtInferenceServiceImplTest {
 
         coVerify { mockConversationManager.setHistory(history) }
     }
+
+    @Test
+    fun `sendPrompt should emit Finished when LiteRT throws CancellationException`() = runTest {
+        // Given - simulate LiteRT throwing CancellationException (user pressed stop)
+        val cancelException = java.util.concurrent.CancellationException("Generation cancelled")
+        every { mockConversation.sendMessageAsync(any(), any()) } returns kotlinx.coroutines.flow.flow {
+            throw cancelException
+        }
+
+        // When
+        val events = service.sendPrompt("Hello", closeConversation = false).toList()
+
+        // Then - should emit Finished instead of Error
+        assertTrue(events.any { it is InferenceEvent.Finished })
+        assertTrue(events.none { it is InferenceEvent.Error })
+    }
 }
