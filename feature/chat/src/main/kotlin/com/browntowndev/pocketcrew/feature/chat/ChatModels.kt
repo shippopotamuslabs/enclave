@@ -29,7 +29,9 @@ enum class MessageRole {
 
 enum class ToolCallBannerKind {
     SEARCH,
+    EXTRACT,
     IMAGE,
+    MEMORY,
 }
 
 data class ToolCallBannerUi(
