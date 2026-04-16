@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.app
 
-import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsApiProviderUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsApiProviderUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCases
@@ -11,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUse
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCasesImpl
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCasesImpl
 import dagger.Binds
 import dagger.Module

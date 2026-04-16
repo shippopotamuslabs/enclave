@@ -114,7 +114,7 @@ class FakeModelDownloadOrchestrator : ModelDownloadOrchestratorPort {
                         partialDownloads = emptyMap(),
                         allValid = true,
                     ),
-                availableToRedownload = emptyList()
+                availableToRedownload = emptyList(),
             )
         return startDownloads(modelsResult, wifiOnly)
     }
