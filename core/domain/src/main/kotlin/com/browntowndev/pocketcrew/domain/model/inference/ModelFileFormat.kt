@@ -5,6 +5,5 @@ package com.browntowndev.pocketcrew.domain.model.inference
  */
 enum class ModelFileFormat(val extension: String) {
     LITERTLM(".litertlm"),
-    TASK(".task"),
     GGUF(".gguf"),
 }
