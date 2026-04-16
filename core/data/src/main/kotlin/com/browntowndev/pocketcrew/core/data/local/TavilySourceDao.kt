@@ -13,4 +13,7 @@ interface TavilySourceDao {
 
     @Query("SELECT * FROM tavily_source WHERE message_id = :messageId")
     suspend fun getByMessageId(messageId: MessageId): List<TavilySourceEntity>
+
+    @Query("UPDATE tavily_source SET extracted = 1 WHERE url = :url")
+    suspend fun markExtracted(url: String)
 }

@@ -35,4 +35,6 @@ data class TavilySourceEntity(
     val content: String,
     @ColumnInfo(name = "score")
     val score: Double,
+    @ColumnInfo(name = "extracted", defaultValue = "0")
+    val extracted: Boolean = false,
 )
