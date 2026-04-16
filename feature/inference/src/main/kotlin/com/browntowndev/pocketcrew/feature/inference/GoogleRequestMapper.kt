@@ -148,10 +148,43 @@ object GoogleRequestMapper {
                     .description("The search query to execute")
                     .build()
             )
+            ToolDefinition.TAVILY_EXTRACT -> mapOf(
+                "urls" to Schema.builder()
+                    .type(Type(Type.Known.ARRAY))
+                    .items(Schema.builder()
+                        .type(Type(Type.Known.STRING))
+                        .build())
+                    .description("List of URLs to extract content from")
+                    .build(),
+                "extract_depth" to Schema.builder()
+                    .type(Type(Type.Known.STRING))
+                    .description("Extraction depth: basic or advanced")
+                    .build(),
+                "format" to Schema.builder()
+                    .type(Type(Type.Known.STRING))
+                    .description("Output format: markdown or text")
+                    .build()
+            )
             ToolDefinition.ATTACHED_IMAGE_INSPECT -> mapOf(
                 "question" to Schema.builder()
                     .type(Type(Type.Known.STRING))
                     .description("The question to ask about the attached image")
+                    .build()
+            )
+            ToolDefinition.SEARCH_CHAT_HISTORY -> mapOf(
+                "query" to Schema.builder()
+                    .type(Type(Type.Known.STRING))
+                    .description("The search query to find in past conversations")
+                    .build()
+            )
+            ToolDefinition.SEARCH_CHAT -> mapOf(
+                "chat_id" to Schema.builder()
+                    .type(Type(Type.Known.STRING))
+                    .description("The ID of the chat to search")
+                    .build(),
+                "query" to Schema.builder()
+                    .type(Type(Type.Known.STRING))
+                    .description("The search query to find in the conversation")
                     .build()
             )
             else -> error("Unsupported tool: $name")
@@ -160,7 +193,10 @@ object GoogleRequestMapper {
     private fun ToolDefinition.requiredArguments(): List<String> =
         when (this) {
             ToolDefinition.TAVILY_WEB_SEARCH -> listOf("query")
+            ToolDefinition.TAVILY_EXTRACT -> listOf("urls", "extract_depth", "format")
             ToolDefinition.ATTACHED_IMAGE_INSPECT -> listOf("question")
+            ToolDefinition.SEARCH_CHAT_HISTORY -> listOf("query")
+            ToolDefinition.SEARCH_CHAT -> listOf("chat_id", "query")
             else -> error("Unsupported tool: $name")
         }
 

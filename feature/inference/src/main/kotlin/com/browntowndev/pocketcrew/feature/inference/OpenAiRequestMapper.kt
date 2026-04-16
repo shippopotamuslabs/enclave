@@ -135,6 +135,7 @@ object OpenAiRequestMapper {
                             .putAdditionalProperty("type", JsonValue.from("object"))
                             .putAdditionalProperty("properties", JsonValue.from(toolProperties()))
                             .putAdditionalProperty("required", JsonValue.from(requiredArguments()))
+                            .putAdditionalProperty("additionalProperties", JsonValue.from(false))
                             .build()
                     )
                     .strict(true)
@@ -151,6 +152,7 @@ object OpenAiRequestMapper {
                     .putAdditionalProperty("type", JsonValue.from("object"))
                     .putAdditionalProperty("properties", JsonValue.from(toolProperties()))
                     .putAdditionalProperty("required", JsonValue.from(requiredArguments()))
+                    .putAdditionalProperty("additionalProperties", JsonValue.from(false))
                     .build()
             )
             .strict(true)
@@ -163,8 +165,36 @@ object OpenAiRequestMapper {
                     "type" to "string"
                 )
             )
+            ToolDefinition.TAVILY_EXTRACT -> mapOf(
+                "urls" to mapOf(
+                    "type" to "array",
+                    "items" to mapOf("type" to "string")
+                ),
+                "extract_depth" to mapOf(
+                    "type" to "string",
+                    "enum" to listOf("basic", "advanced")
+                ),
+                "format" to mapOf(
+                    "type" to "string",
+                    "enum" to listOf("markdown", "text")
+                )
+            )
             ToolDefinition.ATTACHED_IMAGE_INSPECT -> mapOf(
                 "question" to mapOf(
+                    "type" to "string"
+                )
+            )
+            ToolDefinition.SEARCH_CHAT_HISTORY -> mapOf(
+                "query" to mapOf(
+                    "type" to "string"
+                )
+            )
+            ToolDefinition.SEARCH_CHAT -> mapOf(
+                "chat_id" to mapOf(
+                    "type" to "string",
+                    "description" to "The ID of the chat to search."
+                ),
+                "query" to mapOf(
                     "type" to "string"
                 )
             )
@@ -174,7 +204,10 @@ object OpenAiRequestMapper {
     private fun ToolDefinition.requiredArguments(): List<String> =
         when (this) {
             ToolDefinition.TAVILY_WEB_SEARCH -> listOf("query")
+            ToolDefinition.TAVILY_EXTRACT -> listOf("urls", "extract_depth", "format")
             ToolDefinition.ATTACHED_IMAGE_INSPECT -> listOf("question")
+            ToolDefinition.SEARCH_CHAT_HISTORY -> listOf("query")
+            ToolDefinition.SEARCH_CHAT -> listOf("chat_id", "query")
             else -> error("Unsupported tool: $name")
         }
 

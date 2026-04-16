@@ -43,11 +43,9 @@ dependencies {
     // Inference native bindings
     implementation(project(":llama-android"))
 
-    // LiteRT and MediaPipe
+    // LiteRT
     implementation(libs.litertlm.android)
     implementation(libs.tflite.gpu)
-    implementation(libs.tasks.genai)
-    implementation(libs.tasks.core)
     implementation(libs.firebase.crashlytics)
 
     // OpenAI

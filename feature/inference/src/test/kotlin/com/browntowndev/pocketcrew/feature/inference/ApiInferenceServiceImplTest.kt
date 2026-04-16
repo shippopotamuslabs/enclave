@@ -245,7 +245,7 @@ class ApiInferenceServiceImplTest {
         )
         every { followUpStreamResponse2.close() } returns Unit
 
-        every { followUpStreamResponse3.stream() } returns Stream.of(mockFunctionCallDoneEvent())
+        every { followUpStreamResponse3.stream() } answers { Stream.of(mockFunctionCallDoneEvent(), mockCompletedEvent(responseId = "resp_call_4")) }
         every { followUpStreamResponse3.close() } returns Unit
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
             toolName = "tavily_web_search",

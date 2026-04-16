@@ -2,10 +2,6 @@ package com.browntowndev.pocketcrew.feature.inference.llama
 
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
-import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
-import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
-import com.browntowndev.pocketcrew.feature.inference.MediaPipeInferenceServiceFactory
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
@@ -119,26 +115,5 @@ class JniLlamaEnginePerformanceAuditTest {
 
         verify { engine.getContextUsageForCompression() }
         verify { engine.applyCompressionForContext(2) }
-    }
-}
-
-class MediaPipeInferenceServiceFactoryTest {
-    private val activeModelProvider: ActiveModelProviderPort = mockk()
-    private val processThinkingTokens: ProcessThinkingTokensUseCase = mockk()
-    private val gpuProfiler: GpuProfiler = mockk(relaxed = true)
-    private val context: android.content.Context = mockk(relaxed = true)
-
-    private val factory = MediaPipeInferenceServiceFactory(
-        context = context,
-        activeModelProvider = activeModelProvider,
-        processThinkingTokens = processThinkingTokens,
-        gpuProfiler = gpuProfiler,
-        orchestrator = LlmToolingOrchestrator(mockk(), mockk(relaxed = true)),
-    )
-
-    @Test
-    fun `create should use context window from active model config instead of hardcoded 16384`() = runTest {
-        // This test validates the factory now accepts dynamic config.
-        // Full integration test requires MediaPipe runtime (not available in unit tests).
     }
 }

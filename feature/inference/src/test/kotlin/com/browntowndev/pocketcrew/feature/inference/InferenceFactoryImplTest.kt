@@ -57,7 +57,6 @@ class InferenceFactoryImplTest {
     private val processThinkingTokens = mockk<ProcessThinkingTokensUseCase>(relaxed = true)
     private val llamaProvider = providerOf(mockk<LlamaChatSessionManager>(relaxed = true))
     private val conversationProvider = providerOf(mockk<ConversationManagerPort>(relaxed = true))
-    private val mediaPipeFactory = mockk<MediaPipeInferenceServiceFactory>(relaxed = true)
     private val openAiClientProvider = mockk<OpenAiClientProvider>()
     private val anthropicClientProvider = mockk<AnthropicClientProvider>()
     private val googleGenAiClientProvider = mockk<GoogleGenAiClientProvider>()
@@ -96,7 +95,6 @@ class InferenceFactoryImplTest {
             processThinkingTokens = processThinkingTokens,
             llamaChatSessionManagerProvider = llamaProvider,
             conversationManagerProvider = conversationProvider,
-            mediaPipeFactory = mediaPipeFactory,
             openAiClientProvider = openAiClientProvider,
             anthropicClientProvider = anthropicClientProvider,
             googleGenAiClientProvider = googleGenAiClientProvider,
@@ -104,6 +102,7 @@ class InferenceFactoryImplTest {
             orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
             inferenceLockManager = inferenceLockManager,
             toolExecutorProvider = toolExecutorProvider,
+            toolExecutionEventPort = mockk(relaxed = true),
         )
     }
 
