@@ -139,7 +139,6 @@ class ModelConfigFetcherImpl @Inject constructor(
 
     private fun parseModelFileFormatFromFileName(fileName: String): ModelFileFormat {
         return when {
-            fileName.endsWith(".task", ignoreCase = true) -> ModelFileFormat.TASK
             fileName.endsWith(".litertlm", ignoreCase = true) -> ModelFileFormat.LITERTLM
             fileName.endsWith(".gguf", ignoreCase = true) -> ModelFileFormat.GGUF
             else -> ModelFileFormat.LITERTLM
@@ -148,7 +147,6 @@ class ModelConfigFetcherImpl @Inject constructor(
 
     private fun parseModelFileFormat(format: String): ModelFileFormat {
         return when (format.uppercase()) {
-            "TASK" -> ModelFileFormat.TASK
             "LITERTLM" -> ModelFileFormat.LITERTLM
             "GGUF" -> ModelFileFormat.GGUF
             else -> ModelFileFormat.LITERTLM

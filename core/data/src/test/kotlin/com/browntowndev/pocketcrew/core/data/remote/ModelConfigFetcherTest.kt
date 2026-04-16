@@ -272,7 +272,7 @@ class ModelConfigFetcherTest {
                     localFileName = "draft.bin",
                     sha256 = "jkl012",
                     sizeInBytes = 300000L,
-                    modelFileFormat = ModelFileFormat.TASK
+                    modelFileFormat = ModelFileFormat.LITERTLM
                 ),
                 configurations = listOf(
                     LocalModelConfiguration(
