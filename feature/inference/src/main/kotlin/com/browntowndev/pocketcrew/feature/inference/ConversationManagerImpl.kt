@@ -127,6 +127,19 @@ class ConversationManagerImpl @Inject constructor(
 
     private val mutex = kotlinx.coroutines.sync.Mutex()
 
+    @Volatile
+    private var isCurrentGenerationCancelled: Boolean = false
+
+    override fun cancelCurrentGeneration() {
+        Log.d(TAG, "Current generation marked as cancelled. Native tools will be aborted.")
+        isCurrentGenerationCancelled = true
+    }
+
+    override fun cancelProcess() {
+        Log.d(TAG, "Cancelling LiteRT conversation process")
+        conversationPort?.cancelProcess()
+    }
+
     /**
      * Returns the active conversation, initializing it if needed.
      * Thread-safe: concurrent calls will return the same conversation instance.
@@ -141,6 +154,7 @@ class ConversationManagerImpl @Inject constructor(
         options: GenerationOptions?,
         onLoadingStarted: suspend () -> Unit
     ): ConversationPort = withContext(Dispatchers.IO) {
+        isCurrentGenerationCancelled = false
         // Lock to avoid concurrent initializations and ensure consistent state
         mutex.withLock {
             val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
@@ -377,6 +391,8 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     executeToolSafely(request)
                 }
+            } catch (e: java.util.concurrent.CancellationException) {
+                throw e
             } catch (t: Throwable) {
                 val rootCause = t.rootCause()
                 loggingPort.error(
@@ -432,6 +448,8 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     executeToolSafely(request)
                 }
+            } catch (e: java.util.concurrent.CancellationException) {
+                throw e
             } catch (t: Throwable) {
                 val rootCause = t.rootCause()
                 loggingPort.error(
@@ -479,6 +497,8 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     executeToolSafely(request)
                 }
+            } catch (e: java.util.concurrent.CancellationException) {
+                throw e
             } catch (t: Throwable) {
                 val rootCause = t.rootCause()
                 loggingPort.error(
@@ -525,6 +545,8 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     executeToolSafely(request)
                 }
+            } catch (e: java.util.concurrent.CancellationException) {
+                throw e
             } catch (t: Throwable) {
                 val rootCause = t.rootCause()
                 loggingPort.error(
@@ -572,6 +594,8 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     executeToolSafely(request)
                 }
+            } catch (e: java.util.concurrent.CancellationException) {
+                throw e
             } catch (t: Throwable) {
                 val rootCause = t.rootCause()
                 loggingPort.error(
@@ -585,6 +609,11 @@ class ConversationManagerImpl @Inject constructor(
     }
 
     private suspend fun executeToolSafely(request: ToolCallRequest): String {
+        if (isCurrentGenerationCancelled) {
+            loggingPort.warning(TAG, "Tool execution aborted: generation was cancelled.")
+            throw java.util.concurrent.CancellationException("Generation was cancelled")
+        }
+
         return try {
             loggingPort.debug(
                 TAG,
@@ -626,6 +655,8 @@ class ConversationManagerImpl @Inject constructor(
                 )
             }
             resultJson
+        } catch (e: java.util.concurrent.CancellationException) {
+            throw e
         } catch (t: Throwable) {
             val rootCause = t.rootCause()
             loggingPort.error(

@@ -11,6 +11,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCas
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
@@ -47,6 +48,7 @@ class ChatViewModelFlowTest {
     private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
     private lateinit var activeModelProvider: ActiveModelProviderPort
     private lateinit var errorHandler: ViewModelErrorHandler
+    private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
     private lateinit var toolExecutionEventPort: ToolExecutionEventPort
     private lateinit var loggingPort: LoggingPort
 
@@ -59,6 +61,7 @@ class ChatViewModelFlowTest {
         stageImageAttachmentUseCase = mockk(relaxed = true)
         activeModelProvider = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
+        cancelInferenceUseCase = mockk(relaxed = true)
         toolExecutionEventPort = mockk(relaxed = true)
         loggingPort = mockk(relaxed = true)
 
@@ -76,6 +79,7 @@ class ChatViewModelFlowTest {
             chatUseCases = chatUseCases,
             stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             savedStateHandle = savedStateHandle,
+            cancelInferenceUseCase = cancelInferenceUseCase,
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
             activeModelProvider = activeModelProvider,

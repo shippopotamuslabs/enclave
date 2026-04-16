@@ -98,6 +98,13 @@ internal class ChatGenerationAccumulatorManager(
             messages = _messages.mapValues { (_, accumulator) -> accumulator.toSnapshot() }
         )
 
+    fun markIncompleteAsCancelled() {
+        _messages.values.filter { !it.isComplete }.forEach { accumulator ->
+            accumulator.isComplete = true
+            accumulator.currentState = MessageState.COMPLETE
+        }
+    }
+
     private suspend fun getOrCreateAccumulator(modelType: ModelType): MessageAccumulator {
         val messageId = if (mode != Mode.CREW) {
             defaultAssistantMessageId

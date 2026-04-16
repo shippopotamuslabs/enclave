@@ -118,6 +118,14 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                 }
 
                 send(InferenceEvent.Finished(targetModelType))
+            } catch (e: java.util.concurrent.CancellationException) {
+                // LiteRT cancelProcess() signals cancellation through this exception type.
+                // Emit Finished so the UI transitions out of generating state cleanly.
+                Log.i(TAG, "Inference cancelled by user for modelType=$targetModelType")
+                send(InferenceEvent.Finished(targetModelType))
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Coroutine cancellation (e.g. inferenceJob.cancel()) — propagate normally
+                throw e
             } catch (e: Exception) {
                 if (retryOnFail) {
                     Log.w(TAG, "LiteRT inference failed; resetting engine and retrying once", e)
@@ -143,6 +151,7 @@ class LiteRtInferenceServiceImpl @Inject constructor(
             attemptInference(retryOnFail = true)
         } finally {
             eventJob.cancel()
+            conversationManager.cancelCurrentGeneration()
             if (closeConversation) {
                 conversationManager.closeConversation()
             }

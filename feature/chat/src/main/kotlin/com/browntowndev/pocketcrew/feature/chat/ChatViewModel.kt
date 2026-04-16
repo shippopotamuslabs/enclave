@@ -26,6 +26,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Compani
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.text.SimpleDateFormat
@@ -65,6 +66,7 @@ class ChatViewModel @Inject constructor(
     private val chatUseCases: ChatUseCases,
     private val stageImageAttachmentUseCase: StageImageAttachmentUseCase,
     private val savedStateHandle: SavedStateHandle,
+    private val cancelInferenceUseCase: CancelInferenceUseCase,
     inferenceLockManager: InferenceLockManager,
     private val modelDisplayNamesUseCase: GetModelDisplayNameUseCase,
     private val activeModelProvider: ActiveModelProviderPort,
@@ -478,6 +480,11 @@ class ChatViewModel @Inject constructor(
 
     fun stopGeneration() {
         inferenceJob?.cancel()
+        cancelInferenceUseCase()
+        // Clear in-flight messages and tool banner so the UI immediately
+        // transitions out of the generating/thinking state
+        _inFlightMessages.value = emptyMap()
+        _activeToolCallBanner.value = null
     }
 
     fun createNewChat() {

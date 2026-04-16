@@ -44,4 +44,19 @@ interface ConversationManagerPort {
      * After calling this, the ConversationManager should not be used.
      */
     suspend fun closeEngine()
+
+    /**
+     * Cancels the current ongoing generation. 
+     * This signals the underlying tool executor to abort any ongoing or pending tool calls
+     * to safely interrupt the native C++ engine.
+     */
+    fun cancelCurrentGeneration()
+
+    /**
+     * Cancels the active LiteRT conversation's generation process.
+     * This immediately signals the native C++ engine to stop producing tokens,
+     * causing the active [ConversationPort.sendMessageAsync] flow to terminate
+     * with a CancellationException via MessageCallback.onError.
+     */
+    fun cancelProcess()
 }

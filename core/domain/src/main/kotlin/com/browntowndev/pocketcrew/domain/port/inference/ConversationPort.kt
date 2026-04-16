@@ -17,6 +17,14 @@ interface ConversationPort {
      * @return A flow emitting response segments from the streaming response.
      */
     fun sendMessageAsync(message: String, options: GenerationOptions? = null): Flow<ConversationResponse>
+
+    /**
+     * Cancels the current ongoing generation on the LiteRT Conversation.
+     * This signals the native C++ engine to stop producing tokens immediately.
+     * The active [sendMessageAsync] flow will receive a CancellationException via
+     * its MessageCallback.onError callback, which the caller should handle gracefully.
+     */
+    fun cancelProcess()
 }
 
 /**

@@ -34,6 +34,11 @@ class ConversationImpl @Inject constructor(
         private const val TAG = "ConversationImpl"
     }
 
+    override fun cancelProcess() {
+        Log.d(TAG, "Cancelling LiteRT conversation process")
+        conversation.cancelProcess()
+    }
+
     override fun sendMessageAsync(message: String, options: GenerationOptions?): Flow<ConversationResponse> = flow {
         val userMessage = buildUserMessage(message, options)
         

@@ -41,6 +41,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import io.mockk.*
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -94,6 +95,7 @@ class ChatViewModelTest {
     private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
     private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
     private lateinit var activeModelProvider: FakeActiveModelProvider
+    private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
     private lateinit var toolExecutionEventPort: ToolExecutionEventPort
     private lateinit var loggingPort: LoggingPort
     private lateinit var errorHandler: ViewModelErrorHandler
@@ -105,6 +107,7 @@ class ChatViewModelTest {
         inferenceLockManager = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
         stageImageAttachmentUseCase = mockk(relaxed = true)
+        cancelInferenceUseCase = mockk(relaxed = true)
         toolExecutionEventPort = mockk(relaxed = true)
         loggingPort = mockk(relaxed = true)
         activeModelProvider = FakeActiveModelProvider()
@@ -164,6 +167,7 @@ class ChatViewModelTest {
             chatUseCases = chatUseCases,
             stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             savedStateHandle = savedStateHandle,
+            cancelInferenceUseCase = cancelInferenceUseCase,
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
             activeModelProvider = activeModelProvider,
@@ -483,6 +487,7 @@ class ChatViewModelTest {
             chatUseCases = chatUseCases,
             stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             savedStateHandle = savedStateHandle,
+            cancelInferenceUseCase = cancelInferenceUseCase,
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
             activeModelProvider = activeModelProvider,
@@ -548,5 +553,65 @@ class ChatViewModelTest {
             }
             assertNull(finalState.activeToolCallBanner)
         }
+    }
+
+    @Test
+    fun `stopGeneration clears in-flight messages and tool banner`() = runTest {
+        // Given - set up some in-flight messages and tool banner state
+        val eventFlow = kotlinx.coroutines.flow.MutableSharedFlow<ToolExecutionEvent>()
+        every { toolExecutionEventPort.events } returns eventFlow
+
+        val testChatId = ChatId("test-chat-id")
+        val testUserMessageId = MessageId("user-123")
+
+        val savedStateHandle = SavedStateHandle(mapOf("chatId" to testChatId.value))
+        chatViewModel = ChatViewModel(
+            settingsUseCases = settingsUseCases,
+            chatUseCases = chatUseCases,
+            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+            savedStateHandle = savedStateHandle,
+            cancelInferenceUseCase = cancelInferenceUseCase,
+            inferenceLockManager = inferenceLockManager,
+            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            activeModelProvider = activeModelProvider,
+            toolExecutionEventPort = toolExecutionEventPort,
+            errorHandler = errorHandler,
+            loggingPort = loggingPort
+        )
+
+        runCurrent()
+        advanceTimeBy(100)
+        runCurrent()
+
+        // Emit a tool event to set up the banner
+        val startEvent = ToolExecutionEvent.Started(
+            eventId = "tool-stop-test",
+            chatId = testChatId,
+            userMessageId = testUserMessageId,
+            toolName = TAVILY_WEB_SEARCH.name,
+            argumentsJson = "{}",
+            modelType = com.browntowndev.pocketcrew.domain.model.inference.ModelType.FAST
+        )
+        eventFlow.emit(startEvent)
+        runCurrent()
+
+        // Verify banner is active
+        var state = chatViewModel.uiState.value
+        while (state.activeToolCallBanner == null) {
+            advanceTimeBy(50)
+            runCurrent()
+            state = chatViewModel.uiState.value
+        }
+        assertNotNull(state.activeToolCallBanner, "Banner should be active before stopGeneration")
+
+        // When
+        chatViewModel.stopGeneration()
+
+        // Then
+        verify { cancelInferenceUseCase() }
+        val stateAfterStop = chatViewModel.uiState.value
+        assertNull(stateAfterStop.activeToolCallBanner, "Tool banner should be cleared after stopGeneration")
+        assertTrue(stateAfterStop.messages.none { it.indicatorState is IndicatorState.Thinking || it.indicatorState is IndicatorState.Generating || it.indicatorState is IndicatorState.Processing || it.indicatorState is IndicatorState.EngineLoading },
+            "No generating indicators should remain after stopGeneration")
     }
 }
