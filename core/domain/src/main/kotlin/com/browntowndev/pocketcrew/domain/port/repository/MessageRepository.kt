@@ -71,4 +71,15 @@ interface MessageRepository {
         chatId: ChatId,
         currentUserMessageId: MessageId,
     ): ResolvedImageTarget?
+
+    /**
+     * Searches messages within a specific chat using full-text search.
+     * Used by the search_chat tool to provide "infinite memory"
+     * for details lost to context window compaction or FIFO eviction.
+     *
+     * @param chatId The chat ID to search within.
+     * @param query The FTS-sanitized search query.
+     * @return List of matching messages in chronological order.
+     */
+    suspend fun searchMessagesInChat(chatId: ChatId, query: String): List<Message>
 }

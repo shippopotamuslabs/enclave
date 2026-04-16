@@ -21,7 +21,7 @@ object ToolEnvelopeParser {
     )
 
     fun requireSupportedTool(toolName: String) {
-        require(toolName == ToolDefinition.TAVILY_WEB_SEARCH.name || toolName == ToolDefinition.ATTACHED_IMAGE_INSPECT.name) {
+        require(toolName == ToolDefinition.TAVILY_WEB_SEARCH.name || toolName == ToolDefinition.TAVILY_EXTRACT.name || toolName == ToolDefinition.ATTACHED_IMAGE_INSPECT.name || toolName == ToolDefinition.SEARCH_CHAT_HISTORY.name || toolName == ToolDefinition.SEARCH_CHAT.name) {
             "Unsupported tool: $toolName"
         }
     }
@@ -44,11 +44,32 @@ object ToolEnvelopeParser {
             return buildImageInspectArgumentsJson(question)
         }
 
-        throw IllegalArgumentException("Tool argument 'query' or 'question' is required")
+        val urls = (arguments["urls"] as? List<*>)
+            ?.filterIsInstance<String>()
+            ?.takeIf(List<String>::isNotEmpty)
+        if (urls != null) {
+            val extractDepth = arguments["extract_depth"] as? String
+            val format = arguments["format"] as? String
+            return buildExtractArgumentsJson(urls, extractDepth, format)
+        }
+
+        throw IllegalArgumentException("Tool argument 'query', 'question', or 'urls' is required")
     }
 
     fun buildImageInspectArgumentsJson(question: String): String =
         buildSingleFieldArgumentsJson("question", question)
+
+    fun buildExtractArgumentsJson(
+        urls: List<String>,
+        extractDepth: String? = null,
+        format: String? = null,
+    ): String {
+        val json = org.json.JSONObject()
+        json.put("urls", org.json.JSONArray(urls))
+        json.put("extract_depth", extractDepth ?: "basic")
+        json.put("format", format ?: "markdown")
+        return json.toString()
+    }
 
     fun extractRequiredQuery(argumentsJson: String): String {
         return extractRequiredString(argumentsJson, "query")
@@ -56,6 +77,30 @@ object ToolEnvelopeParser {
 
     fun extractRequiredQuestion(argumentsJson: String): String {
         return extractRequiredString(argumentsJson, "question")
+    }
+
+    fun extractRequiredChatId(argumentsJson: String): String {
+        return extractRequiredString(argumentsJson, "chat_id")
+    }
+
+    fun buildSearchChatArgumentsJson(chatId: String, query: String): String {
+        val json = org.json.JSONObject()
+        json.put("chat_id", chatId)
+        json.put("query", query)
+        return json.toString()
+    }
+
+    fun extractRequiredUrls(argumentsJson: String): List<String> {
+        try {
+            val json = org.json.JSONObject(argumentsJson)
+            val urlsArray = json.optJSONArray("urls")
+            if (urlsArray != null && urlsArray.length() > 0) {
+                return (0 until urlsArray.length()).map { urlsArray.getString(it) }
+            }
+        } catch (e: Exception) {
+            // Fall through to throw
+        }
+        throw IllegalArgumentException("Tool argument 'urls' is required and must be a non-empty array")
     }
 
     fun extractLocalToolEnvelope(text: String): LocalToolEnvelope? {
@@ -102,6 +147,12 @@ object ToolEnvelopeParser {
         val argumentsJson = when (toolName) {
             ToolDefinition.TAVILY_WEB_SEARCH.name -> buildArgumentsJson(extractRequiredQuery(payload))
             ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> buildImageInspectArgumentsJson(extractRequiredQuestion(payload))
+            ToolDefinition.TAVILY_EXTRACT.name -> {
+                val urls = extractRequiredUrls(payload)
+                buildExtractArgumentsJson(urls)
+            }
+            ToolDefinition.SEARCH_CHAT_HISTORY.name -> buildArgumentsJson(extractRequiredQuery(payload))
+            ToolDefinition.SEARCH_CHAT.name -> buildSearchChatArgumentsJson(extractRequiredChatId(payload), extractRequiredQuery(payload))
             else -> throw IllegalArgumentException("Unsupported tool: $toolName")
         }
 
@@ -138,7 +189,10 @@ object ToolEnvelopeParser {
             (systemPrompt.contains("<tool_call>") || systemPrompt.contains("{\"name\"") || systemPrompt.contains("<![CDATA[<tool")) &&
             (
                 systemPrompt.contains(ToolDefinition.TAVILY_WEB_SEARCH.name) ||
-                    systemPrompt.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT.name)
+                    systemPrompt.contains(ToolDefinition.TAVILY_EXTRACT.name) ||
+                    systemPrompt.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT.name) ||
+                    systemPrompt.contains(ToolDefinition.SEARCH_CHAT_HISTORY.name) ||
+                    systemPrompt.contains(ToolDefinition.SEARCH_CHAT.name)
                 )
 
     fun buildLocalToolResultMessage(resultJson: String): String =

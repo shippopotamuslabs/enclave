@@ -18,6 +18,7 @@ class TavilySearchRepository @Inject constructor(
 ) {
     companion object {
         private const val SEARCH_URL = "https://api.tavily.com/search"
+        private const val EXTRACT_URL = "https://api.tavily.com/extract"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
 
@@ -64,6 +65,56 @@ class TavilySearchRepository @Inject constructor(
 
         return JSONObject()
             .put("query", query)
+            .put("results", mappedResults)
+            .toString()
+    }
+
+    fun extract(
+        urls: List<String>,
+        extractDepth: String = "basic",
+        format: String = "markdown",
+    ): String {
+        val apiKey = apiKeyManager.get(ApiKeyManager.TAVILY_SEARCH_ALIAS)
+            ?: throw IllegalStateException("Tavily API key is required when search is enabled")
+
+        val requestBody = JSONObject()
+            .put("urls", JSONArray(urls))
+            .put("api_key", apiKey)
+            .put("extract_depth", extractDepth)
+            .put("format", format)
+            .toString()
+            .toRequestBody(JSON_MEDIA_TYPE)
+
+        val request = Request.Builder()
+            .url(EXTRACT_URL)
+            .post(requestBody)
+            .build()
+
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("Tavily request failed with HTTP ${response.code}")
+            }
+
+            val body = response.body.string()
+            return mapExtractResponse(body)
+        }
+    }
+
+    internal fun mapExtractResponse(body: String): String {
+        val payload = JSONObject(body)
+        val mappedResults = JSONArray()
+        val results = payload.optJSONArray("results") ?: JSONArray()
+
+        for (index in 0 until results.length()) {
+            val item = results.optJSONObject(index) ?: continue
+            mappedResults.put(
+                JSONObject()
+                    .put("url", item.optString("url"))
+                    .put("raw_content", item.optString("raw_content"))
+            )
+        }
+
+        return JSONObject()
             .put("results", mappedResults)
             .toString()
     }
