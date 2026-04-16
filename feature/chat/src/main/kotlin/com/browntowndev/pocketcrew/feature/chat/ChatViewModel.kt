@@ -19,7 +19,9 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCas
 import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.ATTACHED_IMAGE_INSPECT
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.TAVILY_EXTRACT
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.TAVILY_WEB_SEARCH
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
@@ -158,16 +160,29 @@ class ChatViewModel @Inject constructor(
                     _activeToolCallBanner.value = ToolCallBannerUi(
                         kind = when (toolName) {
                             TAVILY_WEB_SEARCH.name -> ToolCallBannerKind.SEARCH
+                            TAVILY_EXTRACT.name -> ToolCallBannerKind.EXTRACT
                             ATTACHED_IMAGE_INSPECT.name -> ToolCallBannerKind.IMAGE
+                            ToolDefinition.SEARCH_CHAT_HISTORY.name -> ToolCallBannerKind.MEMORY
+                            ToolDefinition.SEARCH_CHAT.name -> ToolCallBannerKind.MEMORY
                             else -> ToolCallBannerKind.SEARCH
                         },
                         label = when (toolName) {
                             TAVILY_WEB_SEARCH.name -> "Searching with Tavily"
+                            TAVILY_EXTRACT.name -> "Reading webpage content"
                             ATTACHED_IMAGE_INSPECT.name -> "Inspecting image"
+                            ToolDefinition.SEARCH_CHAT_HISTORY.name -> "Searching chat history"
+                            ToolDefinition.SEARCH_CHAT.name -> "Searching chat"
                             else -> "Executing tool"
                         }
                     )
                 }
+                                is ToolExecutionEvent.Extracting -> {
+                    _activeToolCallBanner.value = ToolCallBannerUi(
+                        kind = ToolCallBannerKind.EXTRACT,
+                        label = "Reading ${event.url}"
+                    )
+                }
+
                 is ToolExecutionEvent.Finished -> {
                     val startTime = toolStartTimes[event.eventId] ?: return@onEach
                     val elapsed = System.currentTimeMillis() - startTime
@@ -259,7 +274,7 @@ class ChatViewModel @Inject constructor(
                 thinkingDurationSeconds = snapshot.thinkingDurationSeconds,
                 thinkingStartTime = snapshot.thinkingStartTime.takeIf { st: Long -> st != 0L },
                 thinkingEndTime = snapshot.thinkingEndTime.takeIf { et: Long -> et != 0L },
-                createdAt = 0L,
+                createdAt = null,
                 messageState = snapshot.messageState,
                 modelType = snapshot.modelType,
                 tavilySources = snapshot.tavilySources,
@@ -280,7 +295,7 @@ class ChatViewModel @Inject constructor(
         var hasActiveIndicator = false
         var activeIndicatorMessageId: MessageId? = null
         val chatMessages: List<ChatMessage> = allMergedMessages.values
-            .sortedBy { it.createdAt }
+            .sortedBy { it.createdAt ?: Long.MAX_VALUE }
             .map { message: Message ->
                 val chatMessage = mapToChatMessage(message)
                 val state = chatMessage.indicatorState
@@ -403,9 +418,8 @@ class ChatViewModel @Inject constructor(
     /**
      * Formats a timestamp for display.
      */
-    private fun formatTimestamp(timestamp: Long): String {
-        // Handle 0 timestamp (not set)
-        if (timestamp == 0L) return "Now"
+    private fun formatTimestamp(timestamp: Long?): String {
+        if (timestamp == null || timestamp == 0L) return ""
         // Simple timestamp formatting - could be enhanced
         val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
         return sdf.format(Date(timestamp))
@@ -462,6 +476,10 @@ class ChatViewModel @Inject constructor(
         _selectedImageUri.value = null
     }
 
+    fun stopGeneration() {
+        inferenceJob?.cancel()
+    }
+
     fun createNewChat() {
         _currentChatId.value = null
         _inputText.value = ""
@@ -491,7 +509,8 @@ class ChatViewModel @Inject constructor(
                     id = MessageId(UUID.randomUUID().toString()),
                     chatId = chatIdForMessage,
                     content = Content(text = input, imageUri = selectedImageUri),
-                    role = Role.USER
+                    role = Role.USER,
+                    createdAt = System.currentTimeMillis()
                 )
 
                 // Step 1: Save user message (creates new chat if needed)

@@ -197,11 +197,13 @@ fun AssistantResponse(
                 }
 
                 // Timestamp
-                Text(
-                    text = message.formattedTimestamp,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (message.formattedTimestamp.isNotBlank()) {
+                    Text(
+                        text = message.formattedTimestamp,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

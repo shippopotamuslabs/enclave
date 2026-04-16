@@ -22,6 +22,7 @@ fun ChatRoute(
             onNewChat()
         },
         onSendMessage = { viewModel.onSendMessage() },
+        onStopGenerating = viewModel::stopGeneration,
         onModeChange = viewModel::onModeChange,
         onInputChange = viewModel::onInputChange,
         onEditMessage = viewModel::onEditMessage,

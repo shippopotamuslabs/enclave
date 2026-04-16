@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
@@ -70,6 +71,7 @@ fun InputBar(
     onInputChange: (String) -> Unit,
     onModeChange: (ChatModeUi) -> Unit,
     onSend: (String) -> Unit,
+    onStopGenerating: () -> Unit,
     onAttach: () -> Unit,
     onClearAttachment: () -> Unit,
     modifier: Modifier = Modifier
@@ -340,12 +342,14 @@ fun InputBar(
                     }
                 }
 
-                // Send
+                // Send / Stop
                 val hasSendableContent = textFieldValue.text.isNotBlank() || selectedImageUri != null
-                val isSendDisabled = isGenerating || isGlobalInferenceBlocked
+                val isSendDisabled = (isGenerating || isGlobalInferenceBlocked) && !isGenerating
                 IconButton(
                     onClick = {
-                        if (hasSendableContent && !isSendDisabled) {
+                        if (isGenerating) {
+                            onStopGenerating()
+                        } else if (hasSendableContent && !isSendDisabled) {
                             val textToSend = textFieldValue.text
                             onSend(textToSend) // Send FIRST while inputText still has value
                             textFieldValue = TextFieldValue("") // Clear locally
@@ -354,12 +358,13 @@ fun InputBar(
                             focusManager.clearFocus()
                         }
                     },
-                    enabled = hasSendableContent && !isSendDisabled
+                    enabled = isGenerating || (hasSendableContent && !isSendDisabled)
                 ) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send message",
+                        imageVector = if (isGenerating) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send,
+                        contentDescription = if (isGenerating) "Stop generating" else "Send message",
                         tint = when {
+                            isGenerating -> MaterialTheme.colorScheme.error
                             isSendDisabled -> MaterialTheme.colorScheme.onSurfaceVariant
                             hasSendableContent -> MaterialTheme.colorScheme.primary
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
@@ -396,6 +401,7 @@ fun PreviewInputBar() {
             onInputChange = {},
             onModeChange = {},
             onSend = {},
+            onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
         )
@@ -420,6 +426,7 @@ fun PreviewInputBarExpanded() {
             onInputChange = {},
             onModeChange = {},
             onSend = {},
+            onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
         )
@@ -440,6 +447,7 @@ fun PreviewInputBarSingleLine() {
             onInputChange = {},
             onModeChange = {},
             onSend = {},
+            onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
         )
@@ -460,6 +468,7 @@ fun PreviewInputBarThinking() {
             onInputChange = {},
             onModeChange = {},
             onSend = {},
+            onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
         )
@@ -480,6 +489,7 @@ fun PreviewInputBarThinkingMode() {
             onInputChange = {},
             onModeChange = {},
             onSend = {},
+            onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
         )

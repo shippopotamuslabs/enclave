@@ -68,7 +68,9 @@ private fun BannerContent(banner: ToolCallBannerUi) {
                 painter = painterResource(
                     id = when (banner.kind) {
                         ToolCallBannerKind.SEARCH -> R.drawable.search
+                        ToolCallBannerKind.EXTRACT -> R.drawable.pageview
                         ToolCallBannerKind.IMAGE -> R.drawable.image
+                        ToolCallBannerKind.MEMORY -> R.drawable.search
                     }
                 ),
                 contentDescription = null,
