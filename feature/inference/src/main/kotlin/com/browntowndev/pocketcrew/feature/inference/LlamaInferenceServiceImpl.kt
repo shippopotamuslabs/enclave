@@ -16,12 +16,14 @@ import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManag
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.util.ChatHistoryCompressor
+import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -80,7 +82,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
     private var history: List<DomainChatMessage> = emptyList()
     private var isInitialized = false
     private var hasTriedCpuFallback = false
-    private var transientToolResultsChars: Int = 0
+    private var transientToolResultTokens: Int = 0
 
     private fun getModelPath(filename: String): String {
         // Use getExternalFilesDir to match ModelFileScanner's directory choice
@@ -140,7 +142,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             val modelPath = getModelPath(asset.metadata.localFileName)
             val mmprojPath = asset.metadata.mmprojLocalFileName?.let(::getModelPath)
             if (options.imageUris.isNotEmpty() &&
-                asset.metadata.visionCapable &&
+                asset.metadata.isMultimodal &&
                 asset.metadata.modelFileFormat == com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.GGUF &&
                 mmprojPath.isNullOrBlank()
             ) {
@@ -271,7 +273,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
     override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = channelFlow {
         // Get model type from options (we'll need to add it to GenerationOptions)
         val targetModelType = options.modelType ?: ModelType.FAST
-        transientToolResultsChars = 0
+        transientToolResultTokens = 0
 
         // Downscale images and save them to temporary files for the JNI engine
         val processedOptions = if (options.imageUris.isNotEmpty()) {
@@ -396,6 +398,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             providerName = "LLAMA",
             initialParams = options,
             tag = TAG,
+            maxToolCalls = options.maxToolCalls,
             onInferencePass = { params, allowToolCall ->
                 collectToolPreparationPass(
                     events = sessionManager.streamAssistantResponseWithOptions(params),
@@ -418,22 +421,51 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 } ?: emptyList()
             },
             onToolResultsMapped = { params, _, results ->
-                val historyChars = currentSystemPrompt.length + history.sumOf { it.content.length } + transientToolResultsChars
-                val estimatedUsedTokens = historyChars / 4
+                val tokenCounter = com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+                val modelId = currentSignature?.modelId?.value
+                val systemPromptTokens = tokenCounter.countTokens(currentSystemPrompt, modelId)
+                val historyTokens = history.sumOf { tokenCounter.countTokens(it.content, modelId) }
 
                 results.forEach { (_, resultJson) ->
+                    val estimatedUsedTokens = systemPromptTokens + historyTokens + transientToolResultTokens
                     val truncatedResult = NativeToolResultFormatter.truncateToolResult(
                         resultJson = resultJson,
                         contextWindowTokens = currentContextWindow,
                         estimatedUsedTokens = estimatedUsedTokens,
-                        bufferTokens = 1000
+                        bufferTokens = ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS,
+                        tokenCounter = tokenCounter,
+                        modelId = modelId,
                     )
                     if (!truncatedResult.contains("\"error\"")) {
-                        transientToolResultsChars += truncatedResult.length + 500
+                        transientToolResultTokens += tokenCounter.countTokens(truncatedResult, modelId) + 30
                     }
-                    sessionManager.sendUserMessage(ToolEnvelopeParser.buildLocalToolResultMessage(truncatedResult))
+                    val contextFull = (systemPromptTokens + historyTokens + transientToolResultTokens) >
+                        currentContextWindow * ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO
+                    val toolResultMessage = if (contextFull) {
+                        ToolEnvelopeParser.buildLocalToolResultMessage(truncatedResult) +
+                            "\n${ContextWindowPlanner.STOP_TOOLS_WARNING}"
+                    } else {
+                        ToolEnvelopeParser.buildLocalToolResultMessage(truncatedResult)
+                    }
+                    sessionManager.sendUserMessage(toolResultMessage)
                 }
                 params
+            },
+            onContextExceeded = { _, _ ->
+                // Llama uses local KV cache — mid-loop compaction isn't feasible.
+                // Detect whether context is exceeded and report to orchestrator
+                // so the contextFullWarned hard-error logic kicks in.
+                val tokenCounter = com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+                val modelId = currentSignature?.modelId?.value
+                val systemPromptTokens = tokenCounter.countTokens(currentSystemPrompt, modelId)
+                val historyTokens = history.sumOf { tokenCounter.countTokens(it.content, modelId) }
+                val estimatedUsedTokens = systemPromptTokens + historyTokens + transientToolResultTokens
+                val contextExceeded = estimatedUsedTokens >
+                    currentContextWindow * ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO
+                if (contextExceeded) {
+                    loggingPort.warning(TAG, "Llama context exceeded mid-loop: estimatedTokens=$estimatedUsedTokens window=$currentContextWindow")
+                }
+                ContextExceededResult(contextExceeded)
             },
             onToolResult = { toolCall, resultJson ->
                 if (toolCall.toolName == com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.TAVILY_WEB_SEARCH.name) {

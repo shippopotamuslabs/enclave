@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -12,6 +13,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -250,10 +252,98 @@ class LlmToolingOrchestratorTest {
         assertFalse(allowToolCallValues[2]) // 2 < 2 = false
     }
 
+    @Test
+    fun `allowToolCall is false after context warning`() = runTest {
+        val toolRequest = ToolCallRequest(
+            toolName = "tavily_web_search",
+            argumentsJson = """{"query":"context"}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+        )
+        val allowToolCallValues = mutableListOf<Boolean>()
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("tavily_web_search", "{}")
+
+        var inferencePassCount = 0
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "TestTag",
+            maxToolCalls = 5,
+            onInferencePass = { _, allowToolCall ->
+                allowToolCallValues += allowToolCall
+                inferencePassCount++
+                if (inferencePassCount == 1) "tool-call" else "no-tool"
+            },
+            onToolCallDetected = { response ->
+                if (response == "tool-call") listOf(toolRequest) else emptyList()
+            },
+            onToolResultsMapped = { _, _, _ -> "follow-up" },
+            onContextExceeded = { _, _ -> ContextExceededResult(contextExceeded = true) },
+            onFinished = { _, _, _ -> },
+        )
+
+        assertEquals(listOf(true, false), allowToolCallValues)
+    }
+
+    @Test
+    fun `tool execution failure is caught and reported as error JSON`() = runTest {
+        val toolRequest = ToolCallRequest(
+            toolName = "tavily_web_search",
+            argumentsJson = """{"query":"fail"}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+        )
+        // Simulate a parsing or execution error
+        coEvery { toolExecutor.execute(any()) } throws RuntimeException("Something went wrong")
+
+        var finalParams = ""
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "TestTag",
+            onInferencePass = { _, _ -> if (finalParams.isEmpty()) "tool-call" else "no-tool" },
+            onToolCallDetected = { if (it == "tool-call") listOf(toolRequest) else emptyList() },
+            onToolResultsMapped = { _, _, results ->
+                finalParams = "follow-up-${results.first().second}"
+                finalParams
+            },
+            onFinished = { _, _, _ -> },
+        )
+
+        assertTrue(finalParams.contains("Tool execution failed: Something went wrong"))
+        coVerify { toolExecutor.execute(any()) }
+    }
+
+    @Test
+    fun `unsupported tool name returns error JSON to LLM instead of throwing`() = runTest {
+        val badToolRequest = ToolCallRequest(
+            toolName = "hallucinated_tool",
+            argumentsJson = "{}",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+        )
+
+        var finalParams = ""
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "TestTag",
+            onInferencePass = { _, _ -> if (finalParams.isEmpty()) "tool-call" else "no-tool" },
+            onToolCallDetected = { if (it == "tool-call") listOf(badToolRequest) else emptyList() },
+            onToolResultsMapped = { _, _, results ->
+                finalParams = "follow-up-${results.first().second}"
+                finalParams
+            },
+            onFinished = { _, _, _ -> },
+        )
+
+        assertTrue(finalParams.contains("Unsupported tool: hallucinated_tool"))
+    }
+
     // ── Recursion limit ───────────────────────────────────────────────────────
 
     @Test
-    fun `throws IllegalStateException when tool call count exceeds maxToolCalls`() = runTest {
+    fun `handles tool call count exceeding maxToolCalls gracefully first then throws`() = runTest {
         val toolRequest = ToolCallRequest(
             toolName = "tavily_web_search",
             argumentsJson = """{"query":"test"}""",
@@ -265,32 +355,43 @@ class LlmToolingOrchestratorTest {
             resultJson = "{}",
         )
 
-        var inferencePassCount = 0
+        var warningReceived = false
+        var exceptionThrown = false
 
-        val exception = try {
+        try {
             orchestrator.execute<String, String>(
                 providerName = "TEST",
                 initialParams = "initial",
                 tag = "TestTag",
                 maxToolCalls = 1,
-                onInferencePass = { _, _ ->
-                    inferencePassCount++
-                    "response-with-tool"
+                onInferencePass = { params, _ ->
+                    // Pass 1: initial -> returns tool-call (count=0) -> Executed normally.
+                    // Pass 2: follow-up-{} -> returns tool-call (count=1) -> WARNED. (count becomes 2)
+                    // Pass 3: follow-up-warning -> returns tool-call (count=2) -> THROW.
+                    if (params == "initial" || params.contains("follow-up-{}") || params.contains("Recursion limit reached")) "tool-call" else "no-tool"
                 },
-                onToolCallDetected = { listOf(toolRequest) },
-                onToolResultsMapped = { _, _, _ -> "follow-up" },
+                onToolCallDetected = { if (it == "tool-call") listOf(toolRequest) else emptyList() },
+                onToolResultsMapped = { _, _, results ->
+                    val result = results.first().second
+                    if (result.contains("Recursion limit reached")) {
+                        warningReceived = true
+                    }
+                    "follow-up-$result"
+                },
                 onFinished = { _, _, _ -> },
             )
-            null
         } catch (e: IllegalStateException) {
-            e
+            if (e.message?.contains("recursion limit exceeded") == true) {
+                exceptionThrown = true
+            }
         }
 
-        assertEquals("Search skill recursion limit exceeded", exception?.message)
+        assertTrue(warningReceived, "Model should have received the warning first")
+        assertTrue(exceptionThrown, "Orchestrator should have thrown an exception after warning was ignored")
     }
 
     @Test
-    fun `does not execute tool when maxToolCalls is zero`() = runTest {
+    fun `does not execute tool when maxToolCalls is zero and throws on second attempt`() = runTest {
         val toolRequest = ToolCallRequest(
             toolName = "tavily_web_search",
             argumentsJson = """{"query":"test"}""",
@@ -298,52 +399,53 @@ class LlmToolingOrchestratorTest {
             modelType = ModelType.FAST,
         )
 
-        val exception = try {
+        var warningReceived = false
+        var exceptionThrown = false
+
+        try {
             orchestrator.execute<String, String>(
                 providerName = "TEST",
                 initialParams = "initial",
                 tag = "TestTag",
                 maxToolCalls = 0,
-                onInferencePass = { _, _ -> "response-with-tool" },
-                onToolCallDetected = { listOf(toolRequest) },
-                onToolResultsMapped = { _, _, _ -> "follow-up" },
+                onInferencePass = { params, _ ->
+                    if (params == "initial" || params.contains("Recursion limit reached")) "tool-call" else "no-tool"
+                },
+                onToolCallDetected = { if (it == "tool-call") listOf(toolRequest) else emptyList() },
+                onToolResultsMapped = { _, _, results ->
+                    val result = results.first().second
+                    if (result.contains("Recursion limit reached")) {
+                        warningReceived = true
+                    }
+                    result
+                },
                 onFinished = { _, _, _ -> },
             )
-            null
         } catch (e: IllegalStateException) {
-            e
+            if (e.message?.contains("recursion limit exceeded") == true) {
+                exceptionThrown = true
+            }
         }
 
-        assertEquals("Search skill recursion limit exceeded", exception?.message)
+        assertTrue(warningReceived, "Model should have received the warning first")
+        assertTrue(exceptionThrown)
     }
 
-    // ── Unsupported tool rejection ──────────────────────────────────────────────
-
     @Test
-    fun `throws IllegalArgumentException for unsupported tool name`() = runTest {
-        val badToolRequest = ToolCallRequest(
-            toolName = "unknown_tool",
-            argumentsJson = """{"q":"test"}""",
-            provider = "TEST",
-            modelType = ModelType.FAST,
+    fun `tool extraction failure is caught and reported as error JSON`() = runTest {
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "TestTag",
+            onInferencePass = { params, _ -> if (params == "initial") "tool-call" else "no-tool" },
+            onToolCallDetected = { if (it == "tool-call") throw RuntimeException("Malformed XML") else emptyList() },
+            onToolResultsMapped = { _, _, results ->
+                "follow-up-${results.first().second}"
+            },
+            onFinished = { params, _, _ ->
+                assertTrue(params.contains("Failed to parse tool call envelope: Malformed XML"))
+            },
         )
-
-        val exception = try {
-            orchestrator.execute<String, String>(
-                providerName = "TEST",
-                initialParams = "initial",
-                tag = "TestTag",
-                onInferencePass = { _, _ -> "response-with-bad-tool" },
-                onToolCallDetected = { listOf(badToolRequest) },
-                onToolResultsMapped = { _, _, _ -> "follow-up" },
-                onFinished = { _, _, _ -> },
-            )
-            null
-        } catch (e: IllegalArgumentException) {
-            e
-        }
-
-        assertTrue(exception?.message?.contains("Unsupported tool") == true)
     }
 
     // ── Tool executor receives correct ToolCallRequest ──────────────────────────
@@ -499,13 +601,7 @@ class LlmToolingOrchestratorTest {
         io.mockk.verify {
             loggingPort.info(
                 "TestTag",
-                match { it.contains("Tool call detected") && it.contains("tavily_web_search") && it.contains("iteration=1") }
-            )
-        }
-        io.mockk.verify {
-            loggingPort.info(
-                "TestTag",
-                match { it.contains("Tool call completed") && it.contains("tavily_web_search") }
+                match { it.contains("Tool call processed") && it.contains("tavily_web_search") && it.contains("iteration=1") }
             )
         }
     }
@@ -710,28 +806,199 @@ class LlmToolingOrchestratorTest {
 
     @Test
     fun `parallel tool calls increment toolCallCount and hit recursion limit correctly`() = runTest {
-        val toolRequest1 = ToolCallRequest("tavily_web_search", """{"q":"1"}""", "TEST", ModelType.FAST)
-        val toolRequest2 = ToolCallRequest("tavily_web_search", """{"q":"2"}""", "TEST", ModelType.FAST)
+        val toolRequest1 = ToolCallRequest("tavily_web_search", """{"query":"1"}""", "TEST", ModelType.FAST)
+        val toolRequest2 = ToolCallRequest("tavily_web_search", """{"query":"2"}""", "TEST", ModelType.FAST)
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("tavily_web_search", "{}")
 
-        val exception = try {
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "TestTag",
+            maxToolCalls = 1,
+            onInferencePass = { params, _ -> if (params == "initial") "parallel" else "no-tool" },
+            onToolCallDetected = { if (it == "parallel") listOf(toolRequest1, toolRequest2) else emptyList() },
+            onToolResultsMapped = { _, _, results ->
+                "follow-up-${results[0].second}-${results[1].second}"
+            },
+            onFinished = { params, count, _ ->
+                // First call succeeds, second hits limit
+                assertTrue(params.contains("follow-up-{}-{\"error\": \"Recursion limit reached."))
+                assertEquals(2, count)
+            },
+        )
+    }
+
+    // ── Context-full enforcement ──────────────────────────────────────────────
+
+    @Test
+    fun `onContextExceeded returning exceeded sets contextFullWarned and throws on next tool call`() = runTest {
+        val toolRequest = ToolCallRequest(
+            toolName = "tavily_web_search",
+            argumentsJson = """{"query":"test"}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+        )
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
+            toolName = "tavily_web_search",
+            resultJson = """{"results":[]}""",
+        )
+
+        var inferencePassCount = 0
+        var contextExceededCallCount = 0
+        var exceptionThrown = false
+
+        try {
             orchestrator.execute<String, String>(
                 providerName = "TEST",
                 initialParams = "initial",
                 tag = "TestTag",
-                maxToolCalls = 1,
-                onInferencePass = { _, _ -> "parallel" },
-                onToolCallDetected = { listOf(toolRequest1, toolRequest2) },
+                onInferencePass = { _, _ ->
+                    inferencePassCount++
+                    // Always return a tool call so the model "ignores" the warning
+                    "tool-call"
+                },
+                onToolCallDetected = { listOf(toolRequest) },
                 onToolResultsMapped = { _, _, _ -> "follow-up" },
+                onContextExceeded = { _, _ ->
+                    contextExceededCallCount++
+                    // First call: context exceeded (past threshold)
+                    ContextExceededResult(contextExceeded = true)
+                },
                 onFinished = { _, _, _ -> },
             )
-            null
         } catch (e: IllegalStateException) {
-            e
+            if (e.message?.contains("Context window exceeded") == true) {
+                exceptionThrown = true
+            }
         }
 
-        // The first parallel call succeeds (count=1), the second hits the limit (1 >= 1)
-        assertEquals("Search skill recursion limit exceeded", exception?.message)
+        // onContextExceeded should have been called at least once
+        assertTrue(contextExceededCallCount >= 1, "onContextExceeded should be called")
+        // The hard error should be thrown after the model ignores the warning
+        assertTrue(exceptionThrown, "Should throw IllegalStateException when model ignores context-full warning")
+    }
+
+    @Test
+    fun `onContextExceeded returning not exceeded does not trigger hard error`() = runTest {
+        val toolRequest = ToolCallRequest(
+            toolName = "tavily_web_search",
+            argumentsJson = """{"query":"test"}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+        )
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
+            toolName = "tavily_web_search",
+            resultJson = """{"results":[]}""",
+        )
+
+        var inferencePassCount = 0
+        var finishedToolCallCount = -1
+
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "TestTag",
+            maxToolCalls = 2,
+            onInferencePass = { _, _ ->
+                inferencePassCount++
+                if (inferencePassCount <= 2) "tool-call" else "no-tool"
+            },
+            onToolCallDetected = { if (it == "tool-call") listOf(toolRequest) else emptyList() },
+            onToolResultsMapped = { _, _, _ -> "follow-up" },
+            onContextExceeded = { _, _ ->
+                // Context is NOT exceeded
+                ContextExceededResult(contextExceeded = false)
+            },
+            onFinished = { _, toolCallCount, _ ->
+                finishedToolCallCount = toolCallCount
+            },
+        )
+
+        // Should complete normally with 2 tool calls
+        assertEquals(2, finishedToolCallCount)
+    }
+
+    @Test
+    fun `onContextExceeded with rebuiltParams swaps params in loop`() = runTest {
+        val toolRequest = ToolCallRequest(
+            toolName = "tavily_web_search",
+            argumentsJson = """{"query":"test"}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+        )
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
+            toolName = "tavily_web_search",
+            resultJson = """{"results":[]}""",
+        )
+
+        var receivedParams = ""
+        var inferencePassCount = 0
+
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "TestTag",
+            onInferencePass = { params, _ ->
+                receivedParams = params
+                inferencePassCount++
+                if (inferencePassCount == 1) "tool-call" else "no-tool"
+            },
+            onToolCallDetected = { if (it == "tool-call") listOf(toolRequest) else emptyList() },
+            onToolResultsMapped = { _, _, _ -> "follow-up" },
+            onContextExceeded = { _, _ ->
+                // Mid-loop compaction: return rebuilt params that are below threshold
+                ContextExceededResult(
+                    contextExceeded = false,
+                    rebuiltParams = "compacted-params",
+                )
+            },
+            onFinished = { _, _, _ -> },
+        )
+
+        // The next inference pass should receive the rebuilt params from onContextExceeded
+        assertEquals("compacted-params", receivedParams)
+    }
+
+    @Test
+    fun `context-full warning then no more tool calls completes normally`() = runTest {
+        val toolRequest = ToolCallRequest(
+            toolName = "tavily_web_search",
+            argumentsJson = """{"query":"test"}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+        )
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
+            toolName = "tavily_web_search",
+            resultJson = """{"results":[]}""",
+        )
+
+        var inferencePassCount = 0
+        var finishedToolCallCount = -1
+        var contextExceededCallCount = 0
+
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "TestTag",
+            onInferencePass = { _, _ ->
+                inferencePassCount++
+                // First pass: tool call. Second pass: no tool call (model heeds warning)
+                if (inferencePassCount == 1) "tool-call" else "no-tool"
+            },
+            onToolCallDetected = { if (it == "tool-call") listOf(toolRequest) else emptyList() },
+            onToolResultsMapped = { _, _, _ -> "follow-up" },
+            onContextExceeded = { _, _ ->
+                contextExceededCallCount++
+                ContextExceededResult(contextExceeded = true)
+            },
+            onFinished = { _, toolCallCount, _ ->
+                finishedToolCallCount = toolCallCount
+            },
+        )
+
+        // Model heeded the warning and stopped calling tools — should complete normally
+        assertEquals(1, finishedToolCallCount)
+        assertTrue(contextExceededCallCount >= 1)
     }
 }
 

@@ -12,6 +12,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.core.data.util.formatBytes
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Data class representing the download state of a single file spec.
@@ -57,7 +58,7 @@ class DownloadProgressTracker(
         const val TRACE_LOG_INTERVAL_MS = 5000L
     }
 
-    private var fileStates = mutableMapOf<String, FileDownloadState>()
+    private var fileStates = ConcurrentHashMap<String, FileDownloadState>()
     private var lastProgressUpdateTime = 0L
     private var lastTraceLogTime = 0L
 
@@ -78,7 +79,7 @@ class DownloadProgressTracker(
             )
         }.toMap()
 
-        fileStates = initialStates.toMutableMap()
+        fileStates = ConcurrentHashMap(initialStates)
     }
 
     /**
@@ -130,6 +131,7 @@ class DownloadProgressTracker(
             }
             FileProgress(
                 filename = filename,
+                sha256 = state.spec.sha256,
                 modelTypes = state.allModelTypesForFile,
                 bytesDownloaded = state.bytesDownloaded,
                 totalBytes = state.totalBytes,
@@ -241,9 +243,8 @@ class DownloadProgressTracker(
             } else {
                 0.0
             }
-            // Use all model types that share this file
-            val modelTypesStr = state.allModelTypesForFile.joinToString(",") { it.apiValue }
-            "$trackingFilename|${state.bytesDownloaded}|${state.totalBytes}|${state.status}|$fileSpeed|$modelTypesStr"
+            // Use SHA256 as the identifier for re-mapping roles in the UI layer
+            "$trackingFilename|${state.bytesDownloaded}|${state.totalBytes}|${state.status}|$fileSpeed|${state.spec.sha256}"
         }.toTypedArray()
 
         return workDataOf(

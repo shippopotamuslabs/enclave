@@ -14,6 +14,8 @@ import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -283,8 +285,8 @@ class ImageInspectToolExecutorTest {
 
         val json = result.resultJson
         // Verify it is valid JSON and contains the unescaped characters when read back
-        val jsonObject = org.json.JSONObject(json)
-        assertEquals("Question with \"quotes\" and\nnewlines.", jsonObject.getString("question"))
-        assertEquals("Analysis with \"quotes\" and\nnewlines.", jsonObject.getString("analysis"))
+        val jsonObject = kotlinx.serialization.json.Json.parseToJsonElement(json).jsonObject
+        assertEquals("Question with \"quotes\" and\nnewlines.", jsonObject["question"]!!.jsonPrimitive.content)
+        assertEquals("Analysis with \"quotes\" and\nnewlines.", jsonObject["analysis"]!!.jsonPrimitive.content)
     }
 }

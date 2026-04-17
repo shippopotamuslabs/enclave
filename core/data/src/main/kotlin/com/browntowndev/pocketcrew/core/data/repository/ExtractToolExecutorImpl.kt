@@ -1,17 +1,16 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
+import com.browntowndev.pocketcrew.domain.model.inference.TavilyExtractParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
-import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import kotlinx.coroutines.flow.first
-import org.json.JSONException
-import org.json.JSONObject
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -23,6 +22,7 @@ class ExtractToolExecutorImpl @Inject constructor(
     private val tavilySearchRepository: TavilySearchRepository,
     private val tavilySourceDao: TavilySourceDao,
     private val eventBus: ToolExecutionEventBus,
+    private val extractedUrlTracker: ExtractedUrlTrackerPort,
 ) : ToolExecutorPort {
 
     companion object {
@@ -31,7 +31,8 @@ class ExtractToolExecutorImpl @Inject constructor(
 
     override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
         requireSupportedTool(request.toolName)
-        val urls = ToolEnvelopeParser.extractRequiredUrls(request.argumentsJson)
+        val params = request.parameters as TavilyExtractParams
+        val urls = params.urls
 
         val searchEnabled = settingsRepository.settingsFlow.first().searchEnabled
         if (!searchEnabled) {
@@ -39,8 +40,8 @@ class ExtractToolExecutorImpl @Inject constructor(
             throw IllegalStateException("Search is disabled in settings")
         }
 
-        val extractDepth = extractOptionalString(request.argumentsJson, "extract_depth") ?: "basic"
-        val format = extractOptionalString(request.argumentsJson, "format") ?: "markdown"
+        val extractDepth = params.extract_depth.name
+        val format = params.format.name
 
         // Emit one Extracting event per URL
         for (url in urls) {
@@ -65,13 +66,14 @@ class ExtractToolExecutorImpl @Inject constructor(
             format = format,
         )
 
-        // Mark each URL as extracted in the DAO
+        // Mark each URL as extracted in the DAO and tracker
         for (url in urls) {
             try {
                 tavilySourceDao.markExtracted(url)
             } catch (e: Exception) {
                 loggingPort.warning(TAG, "Failed to mark source as extracted for url=$url: ${e.message}")
             }
+            extractedUrlTracker.add(url)
         }
 
         loggingPort.info(
@@ -89,18 +91,5 @@ class ExtractToolExecutorImpl @Inject constructor(
         require(toolName == ToolDefinition.TAVILY_EXTRACT.name) {
             "Unsupported tool: $toolName"
         }
-    }
-
-    private fun extractOptionalString(argumentsJson: String, fieldName: String): String? {
-        try {
-            val json = JSONObject(argumentsJson)
-            val value = json.optString(fieldName, "")
-            if (value.isNotBlank()) {
-                return value.trim()
-            }
-        } catch (e: JSONException) {
-            // Return null if parsing fails
-        }
-        return null
     }
 }

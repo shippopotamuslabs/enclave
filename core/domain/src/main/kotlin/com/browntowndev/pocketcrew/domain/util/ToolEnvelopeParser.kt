@@ -1,6 +1,18 @@
 package com.browntowndev.pocketcrew.domain.util
 
+import com.browntowndev.pocketcrew.domain.model.inference.AttachedImageInspectParams
+import com.browntowndev.pocketcrew.domain.model.inference.ExtractDepth
+import com.browntowndev.pocketcrew.domain.model.inference.ExtractFormat
+import com.browntowndev.pocketcrew.domain.model.inference.GetMessageContextParams
+import com.browntowndev.pocketcrew.domain.model.inference.SearchChatHistoryParams
+import com.browntowndev.pocketcrew.domain.model.inference.SearchChatParams
+import com.browntowndev.pocketcrew.domain.model.inference.TavilyExtractParams
+import com.browntowndev.pocketcrew.domain.model.inference.TavilyWebSearchParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Generic tool envelope parser that supports both search and image-inspect tools.
@@ -21,13 +33,13 @@ object ToolEnvelopeParser {
     )
 
     fun requireSupportedTool(toolName: String) {
-        require(toolName == ToolDefinition.TAVILY_WEB_SEARCH.name || toolName == ToolDefinition.TAVILY_EXTRACT.name || toolName == ToolDefinition.ATTACHED_IMAGE_INSPECT.name || toolName == ToolDefinition.SEARCH_CHAT_HISTORY.name || toolName == ToolDefinition.SEARCH_CHAT.name) {
+        require(ToolDefinition.fromName(toolName) != null) {
             "Unsupported tool: $toolName"
         }
     }
 
     fun buildArgumentsJson(query: String): String =
-        buildSingleFieldArgumentsJson("query", query)
+        ToolDefinition.TAVILY_WEB_SEARCH.encodeArguments(TavilyWebSearchParams(query))
 
     fun buildArgumentsJson(arguments: Map<String, *>): String {
         val query = (arguments["query"] as? String)
@@ -57,19 +69,19 @@ object ToolEnvelopeParser {
     }
 
     fun buildImageInspectArgumentsJson(question: String): String =
-        buildSingleFieldArgumentsJson("question", question)
+        ToolDefinition.ATTACHED_IMAGE_INSPECT.encodeArguments(AttachedImageInspectParams(question))
 
     fun buildExtractArgumentsJson(
         urls: List<String>,
         extractDepth: String? = null,
         format: String? = null,
-    ): String {
-        val json = org.json.JSONObject()
-        json.put("urls", org.json.JSONArray(urls))
-        json.put("extract_depth", extractDepth ?: "basic")
-        json.put("format", format ?: "markdown")
-        return json.toString()
-    }
+    ): String = ToolDefinition.TAVILY_EXTRACT.encodeArguments(
+        TavilyExtractParams(
+            urls = urls,
+            extract_depth = extractDepth?.let { ExtractDepth.valueOf(it) } ?: ExtractDepth.basic,
+            format = format?.let { ExtractFormat.valueOf(it) } ?: ExtractFormat.markdown
+        )
+    )
 
     fun extractRequiredQuery(argumentsJson: String): String {
         return extractRequiredString(argumentsJson, "query")
@@ -83,19 +95,28 @@ object ToolEnvelopeParser {
         return extractRequiredString(argumentsJson, "chat_id")
     }
 
-    fun buildSearchChatArgumentsJson(chatId: String, query: String): String {
-        val json = org.json.JSONObject()
-        json.put("chat_id", chatId)
-        json.put("query", query)
-        return json.toString()
+    fun buildSearchChatArgumentsJson(chatId: String, query: String): String =
+        ToolDefinition.SEARCH_CHAT.encodeArguments(SearchChatParams(chatId, query))
+
+    fun buildGetMessageContextArgumentsJson(messageId: String, before: Int? = null, after: Int? = null): String =
+        ToolDefinition.GET_MESSAGE_CONTEXT.encodeArguments(
+            GetMessageContextParams(
+                message_id = messageId,
+                before = before ?: 5,
+                after = after ?: 5
+            )
+        )
+
+    fun extractRequiredMessageId(argumentsJson: String): String {
+        return extractRequiredString(argumentsJson, "message_id")
     }
 
     fun extractRequiredUrls(argumentsJson: String): List<String> {
         try {
-            val json = org.json.JSONObject(argumentsJson)
-            val urlsArray = json.optJSONArray("urls")
-            if (urlsArray != null && urlsArray.length() > 0) {
-                return (0 until urlsArray.length()).map { urlsArray.getString(it) }
+            val json = kotlinx.serialization.json.Json.parseToJsonElement(argumentsJson).jsonObject
+            val urlsArray = json["urls"]?.jsonArray
+            if (urlsArray != null && urlsArray.isNotEmpty()) {
+                return urlsArray.map { it.jsonPrimitive.content }
             }
         } catch (e: Exception) {
             // Fall through to throw
@@ -151,8 +172,11 @@ object ToolEnvelopeParser {
                 val urls = extractRequiredUrls(payload)
                 buildExtractArgumentsJson(urls)
             }
-            ToolDefinition.SEARCH_CHAT_HISTORY.name -> buildArgumentsJson(extractRequiredQuery(payload))
+            ToolDefinition.SEARCH_CHAT_HISTORY.name -> ToolDefinition.SEARCH_CHAT_HISTORY.encodeArguments(
+                SearchChatHistoryParams(queries = listOf(extractRequiredQuery(payload)))
+            )
             ToolDefinition.SEARCH_CHAT.name -> buildSearchChatArgumentsJson(extractRequiredChatId(payload), extractRequiredQuery(payload))
+            ToolDefinition.GET_MESSAGE_CONTEXT.name -> buildGetMessageContextArgumentsJson(extractRequiredMessageId(payload))
             else -> throw IllegalArgumentException("Unsupported tool: $toolName")
         }
 
@@ -187,13 +211,7 @@ object ToolEnvelopeParser {
     fun hasLocalToolContract(systemPrompt: String?): Boolean =
         systemPrompt != null &&
             (systemPrompt.contains("<tool_call>") || systemPrompt.contains("{\"name\"") || systemPrompt.contains("<![CDATA[<tool")) &&
-            (
-                systemPrompt.contains(ToolDefinition.TAVILY_WEB_SEARCH.name) ||
-                    systemPrompt.contains(ToolDefinition.TAVILY_EXTRACT.name) ||
-                    systemPrompt.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT.name) ||
-                    systemPrompt.contains(ToolDefinition.SEARCH_CHAT_HISTORY.name) ||
-                    systemPrompt.contains(ToolDefinition.SEARCH_CHAT.name)
-                )
+            ToolDefinition.ALL_TOOLS.any { systemPrompt.contains(it.name) }
 
     fun buildLocalToolResultMessage(resultJson: String): String =
         "<tool_result>$resultJson</tool_result>"
@@ -203,9 +221,9 @@ object ToolEnvelopeParser {
 
     private fun extractRequiredString(argumentsJson: String, fieldName: String): String {
         try {
-            val json = org.json.JSONObject(argumentsJson)
-            val value = json.optString(fieldName, "")
-            if (value.isNotBlank()) {
+            val json = Json.parseToJsonElement(argumentsJson).jsonObject
+            val value = json[fieldName]?.jsonPrimitive?.content
+            if (!value.isNullOrBlank()) {
                 return value.trim()
             }
         } catch (e: Exception) {

@@ -115,49 +115,4 @@ class GoogleInferenceServiceImplTest {
         assertTrue(message.contains("Google tool execution failed before final response"), "Actual message: $message")
         assertEquals("boom", error.cause.cause?.message)
     }
-
-    @Test
-    fun `search enabled Google prompt rejects recursive second tool request`() = runTest {
-        val sdkClient = mockk<GoogleGenAiSdkClient>()
-        val toolExecutor = mockk<ToolExecutorPort>()
-        
-        coEvery { sdkClient.generateContentStream(any(), any(), any(), any(), any()) } coAnswers {
-            GoogleSdkResult(
-                emittedAny = true,
-                functionCall = FunctionCall.builder()
-                    .name("tavily_web_search")
-                    .args(mapOf("query" to "latest android tool calling"))
-                    .build(),
-                assistantContent = Content.builder().build(),
-            )
-        }
-
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
-            resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
-        )
-
-        val loggingPort = mockk<LoggingPort>(relaxed = true)
-        val service = GoogleInferenceServiceImpl(
-            sdkClient = sdkClient,
-            modelId = "gemini-2.5-flash",
-            modelType = ModelType.FAST,
-            loggingPort = loggingPort,
-            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
-        )
-
-        val events = service.sendPrompt(
-            prompt = "Search twice",
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
-            ),
-            closeConversation = false,
-        ).toList()
-
-        val error = events.filterIsInstance<InferenceEvent.Error>().single()
-        assertTrue(error.cause is IllegalStateException)
-        assertEquals("Search skill recursion limit exceeded", error.cause.message)
-    }
 }

@@ -50,7 +50,7 @@ class DefaultModelsDaoTest {
         val modelId = nextModelId()
         database.localModelsDao().upsert(LocalModelEntity(
             id = modelId,
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false, thinkingEnabled = false, isVision = false
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, isMultimodal = false
         ))
         val configId = LocalModelConfigurationId("test-local-config-1")
         database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
@@ -90,7 +90,7 @@ class DefaultModelsDaoTest {
         val apiId = ApiModelConfigurationId("test-api-config-1")
         database.localModelsDao().upsert(LocalModelEntity(
             id = modelId,
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false, thinkingEnabled = false, isVision = false
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, isMultimodal = false
         ))
         database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
             id = localId,
@@ -121,7 +121,7 @@ class DefaultModelsDaoTest {
         val apiId = ApiModelConfigurationId("test-api-config-1")
         database.localModelsDao().upsert(LocalModelEntity(
             id = modelId,
-            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false, thinkingEnabled = false, isVision = false
+            modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q", localFilename = "q", sha256 = "q", sizeInBytes = 1, isMultimodal = false
         ))
         database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(
             id = localId,

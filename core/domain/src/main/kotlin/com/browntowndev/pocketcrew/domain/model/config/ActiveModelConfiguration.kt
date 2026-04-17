@@ -9,7 +9,7 @@ data class ActiveModelConfiguration(
     val isLocal: Boolean,
     val name: String,
     val systemPrompt: String?,
-    val visionCapable: Boolean = false,
+    val isMultimodal: Boolean = false,
     val reasoningEffort: ApiReasoningEffort? = null,
     val temperature: Double?,
     val topK: Int?,

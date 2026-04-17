@@ -1,5 +1,7 @@
 package com.browntowndev.pocketcrew.domain.model.config
 
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+
 /**
  * Configuration for a local model tuning preset.
  *
@@ -8,6 +10,8 @@ package com.browntowndev.pocketcrew.domain.model.config
  *   When false, this is a user-created config and is editable.
  *   NOTE: Renamed from 'isDefault' to avoid confusion with DefaultModelEntity.
  *   'isSystemPreset' means "is a factory-provided preset from R2", NOT "is the currently active default".
+ * @param defaultAssignments Which ModelType slots this configuration should be assigned to by default.
+ *   This is a transient field populated from remote config; it is NOT persisted to the database.
  */
 data class LocalModelConfiguration(
     val id: LocalModelConfigurationId = LocalModelConfigurationId(""),
@@ -26,5 +30,10 @@ data class LocalModelConfiguration(
      * When true, this config is a factory preset from R2 and is read-only in UI.
      * When false, this is a user-created config and is editable.
      */
-    val isSystemPreset: Boolean = false
+    val isSystemPreset: Boolean = false,
+    /**
+     * Which ModelType slots this configuration should be assigned to by default.
+     * Transient — populated from remote config, not persisted to the database.
+     */
+    val defaultAssignments: List<ModelType> = emptyList()
 ) : ModelTuningConfiguration

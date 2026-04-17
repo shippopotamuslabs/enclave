@@ -39,12 +39,17 @@ googleServicesVersion = "4.4.4"
 firebaseCrashlyticsPluginVersion = "3.0.7"
 firebaseBomVersion = "34.12.0"
 
+kotlinx-serialization = "1.9.0"
 openai = "4.31.0"
 anthropic = "2.24.0"
 googleGenai = "1.47.0"
 coil = "3.4.0"
+jtokkit = "1.1.0"
 
 [libraries]
+jtokkit = { group = "com.knuddels", name = "jtokkit", version.ref = "jtokkit" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", version.ref = "kotlin" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "androidx-core-splashscreen" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -116,3 +121,4 @@ ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintVersion" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServicesVersion" }
 firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsPluginVersion" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

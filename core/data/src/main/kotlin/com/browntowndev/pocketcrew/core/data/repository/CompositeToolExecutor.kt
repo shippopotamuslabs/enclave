@@ -19,6 +19,7 @@ import javax.inject.Singleton
  * - [ToolDefinition.ATTACHED_IMAGE_INSPECT] → [ImageInspectToolExecutor]
  * - [ToolDefinition.SEARCH_CHAT_HISTORY] → [SearchChatHistoryToolExecutor]
  * - [ToolDefinition.SEARCH_CHAT] → [SearchChatToolExecutor]
+ * - [ToolDefinition.GET_MESSAGE_CONTEXT] → [GetMessageContextToolExecutor]
  */
 @Singleton
 class CompositeToolExecutor @Inject constructor(
@@ -27,6 +28,7 @@ class CompositeToolExecutor @Inject constructor(
     private val imageInspectToolExecutor: ImageInspectToolExecutor,
     private val searchChatHistoryToolExecutor: SearchChatHistoryToolExecutor,
     private val searchChatToolExecutor: SearchChatToolExecutor,
+    private val getMessageContextToolExecutor: GetMessageContextToolExecutor,
     private val eventBus: ToolExecutionEventBus,
 ) : ToolExecutorPort {
 
@@ -51,6 +53,7 @@ class CompositeToolExecutor @Inject constructor(
                 ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> imageInspectToolExecutor.execute(request)
                 ToolDefinition.SEARCH_CHAT_HISTORY.name -> searchChatHistoryToolExecutor.execute(request)
                 ToolDefinition.SEARCH_CHAT.name -> searchChatToolExecutor.execute(request)
+                ToolDefinition.GET_MESSAGE_CONTEXT.name -> getMessageContextToolExecutor.execute(request)
                 else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
             }
             

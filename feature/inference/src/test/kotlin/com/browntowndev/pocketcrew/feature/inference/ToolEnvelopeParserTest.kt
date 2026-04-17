@@ -191,4 +191,63 @@ class ToolEnvelopeParserTest {
 
         assertEquals("""{"question":"What is shown in this image?"}""", json)
     }
+
+    // --- get_message_context tool support ---
+
+    @Test
+    fun `requireSupportedTool accepts get_message_context`() {
+        ToolEnvelopeParser.requireSupportedTool(ToolDefinition.GET_MESSAGE_CONTEXT.name)
+    }
+
+    @Test
+    fun `extractLocalToolEnvelope parses get_message_context raw envelope`() {
+        val text = """Prefix,{"name":"get_message_context","arguments":{"message_id":"msg-123","before":3,"after":3}},Suffix"""
+        val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(text)
+        assertNotNull(envelope)
+        assertEquals("get_message_context", envelope!!.toolName)
+        assertTrue(envelope.argumentsJson.contains("message_id"))
+        assertEquals("Prefix", envelope.visiblePrefix)
+        assertEquals("Suffix", envelope.visibleSuffix)
+    }
+
+    @Test
+    fun `missing message_id fails for get_message_context tool`() {
+        val text = """{"name":"get_message_context","arguments":{}},"""
+        assertFailsWith<IllegalArgumentException> {
+            ToolEnvelopeParser.extractLocalToolEnvelope(text)
+        }
+    }
+
+    @Test
+    fun `buildGetMessageContextArgumentsJson produces valid JSON`() {
+        val json = ToolEnvelopeParser.buildGetMessageContextArgumentsJson("msg-789", 5, 5)
+        assertTrue(json.contains("message_id"))
+        assertTrue(json.contains("msg-789"))
+        assertTrue(json.contains("before"))
+        assertTrue(json.contains("after"))
+    }
+
+    @Test
+    fun `buildGetMessageContextArgumentsJson includes before and after defaults`() {
+        val json = ToolEnvelopeParser.buildGetMessageContextArgumentsJson("msg-789")
+        assertTrue(json.contains("message_id"))
+        assertTrue(json.contains("before"))
+        assertTrue(json.contains("after"))
+    }
+
+    @Test
+    fun `extractRequiredMessageId extracts message_id from arguments`() {
+        val argumentsJson = """{"message_id":"msg-abc"}"""
+        val messageId = ToolEnvelopeParser.extractRequiredMessageId(argumentsJson)
+        assertEquals("msg-abc", messageId)
+    }
+
+    @Test
+    fun `hasLocalToolContract detects get_message_context`() {
+        val prompt = "Use tools.\n" + ToolDefinition.GET_MESSAGE_CONTEXT.name + " is available."
+        assertFalse(ToolEnvelopeParser.hasLocalToolContract(prompt), "No envelope marker should fail")
+
+        val promptWithEnvelope = "Use tools.\n" + "{\"name\":\"get_message_context\",\"arguments\":{}}"
+        assertTrue(ToolEnvelopeParser.hasLocalToolContract(promptWithEnvelope))
+    }
 }

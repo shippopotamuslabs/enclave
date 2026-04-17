@@ -171,6 +171,10 @@ class FakeChatRepository : ChatRepository {
         }
     }
 
+    override suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat> {
+        return _chatsFlow.value.filter { it.id in ids }.associateBy { it.id }
+    }
+
     override suspend fun persistAllMessageData(
         messageId: MessageId,
         modelType: ModelType,
@@ -183,6 +187,10 @@ class FakeChatRepository : ChatRepository {
         pipelineStep: PipelineStep?,
         tavilySources: List<TavilySource>
     ) {
+        // No-op for testing
+    }
+
+    override suspend fun markSourcesExtracted(urls: List<String>) {
         // No-op for testing
     }
 }

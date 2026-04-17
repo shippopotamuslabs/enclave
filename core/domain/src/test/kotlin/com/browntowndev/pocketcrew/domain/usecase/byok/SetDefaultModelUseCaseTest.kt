@@ -77,7 +77,7 @@ class SetDefaultModelUseCaseTest {
                     displayName = "Vision API",
                     provider = ApiProvider.OPENAI,
                     modelId = "gpt-4o",
-                    isVision = true,
+                    isMultimodal = true,
                     credentialAlias = "vision-api",
                 )
                 useCase(modelType, localConfigId = null, apiConfigId = configId)
@@ -111,7 +111,7 @@ class SetDefaultModelUseCaseTest {
             displayName = "Vision API",
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
-            isVision = false,
+            isMultimodal = false,
             credentialAlias = "vision-api",
         )
 
@@ -119,6 +119,6 @@ class SetDefaultModelUseCaseTest {
             useCase(ModelType.VISION, localConfigId = null, apiConfigId = configId)
         }
 
-        assertEquals("Vision slot requires a vision-capable API model.", error.message)
+        assertEquals("Vision slot requires a multimodal API model.", error.message)
     }
 }

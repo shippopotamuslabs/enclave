@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 
 internal class PersistAccumulatedChatMessagesUseCase(
     private val chatRepository: ChatRepository,
+    private val extractedUrls: Set<String>,
 ) {
     suspend operator fun invoke(accumulatorManager: ChatGenerationAccumulatorManager) {
         accumulatorManager.messages.values.forEach { accumulator ->
@@ -24,6 +25,13 @@ internal class PersistAccumulatedChatMessagesUseCase(
                 pipelineStep = getPipelineStepForModelType(accumulator.modelType),
                 tavilySources = accumulator.tavilySources.toList(),
             )
+        }
+
+        // Re-apply extracted flags after persisting sources.
+        // The extract tool may have called markExtracted before sources were persisted,
+        // so the DAO update was a no-op. Now that sources exist in the DB, apply the flags.
+        if (extractedUrls.isNotEmpty()) {
+            chatRepository.markSourcesExtracted(extractedUrls.toList())
         }
     }
 

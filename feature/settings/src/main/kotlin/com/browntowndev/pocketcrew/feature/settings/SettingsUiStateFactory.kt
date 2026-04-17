@@ -152,6 +152,10 @@ class SettingsUiStateFactory @Inject constructor(
             sortOption = apiState.modelSortOption,
         )
 
+        val compactionApiModelDisplayName = persistedSettings.compactionApiModelId?.let { configId ->
+            apiModels.flatMap { it.configurations }.find { it.id.value == configId }?.displayName
+        }
+
         return SettingsUiState(
             home = SettingsHomeUiState(
                 theme = persistedSettings.theme,
@@ -217,22 +221,27 @@ class SettingsUiStateFactory @Inject constructor(
                 enabled = searchSkillState.enabled ?: persistedSettings.searchEnabled,
                 tavilyKeyPresent = persistedSettings.tavilyKeyPresent,
             ),
+            compaction = CompactionUiState(
+                providerType = persistedSettings.compactionProviderType,
+                apiModelId = persistedSettings.compactionApiModelId,
+                apiModelDisplayName = compactionApiModelDisplayName,
+            ),
             assignments = ModelAssignmentsUiState(
                 assignments = defaultModels.map { assignment ->
-                    val isVision = when {
+                    val isMultimodal = when {
                         assignment.apiConfigId != null -> {
                             apiModels.any { asset ->
-                                asset.isVision && asset.configurations.any { it.id == assignment.apiConfigId }
+                                asset.isMultimodal && asset.configurations.any { it.id == assignment.apiConfigId }
                             }
                         }
                         assignment.localConfigId != null -> {
                             localModels.any { asset ->
-                                asset.visionCapable && asset.configurations.any { it.id == assignment.localConfigId }
+                                asset.isMultimodal && asset.configurations.any { it.id == assignment.localConfigId }
                             }
                         }
                         else -> false
                     }
-                    assignment.toUi(isVision)
+                    assignment.toUi(isMultimodal)
                 },
                 isDialogOpen = assignmentsState.isOpen,
                 editingSlot = assignmentsState.editingSlot,

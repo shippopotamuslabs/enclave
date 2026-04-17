@@ -23,6 +23,7 @@ class CompositeToolExecutorTest {
     private lateinit var extractToolExecutor: ExtractToolExecutorImpl
     private lateinit var searchChatHistoryToolExecutor: SearchChatHistoryToolExecutor
     private lateinit var searchChatToolExecutor: SearchChatToolExecutor
+    private lateinit var getMessageContextToolExecutor: GetMessageContextToolExecutor
     private lateinit var eventBus: ToolExecutionEventBus
     private lateinit var compositeToolExecutor: CompositeToolExecutor
 
@@ -33,6 +34,7 @@ class CompositeToolExecutorTest {
         extractToolExecutor = mockk()
         searchChatHistoryToolExecutor = mockk()
         searchChatToolExecutor = mockk()
+        getMessageContextToolExecutor = mockk()
         eventBus = mockk(relaxed = true)
         compositeToolExecutor = CompositeToolExecutor(
             searchToolExecutor = searchToolExecutor,
@@ -40,6 +42,7 @@ class CompositeToolExecutorTest {
             extractToolExecutor = extractToolExecutor,
             searchChatHistoryToolExecutor = searchChatHistoryToolExecutor,
             searchChatToolExecutor = searchChatToolExecutor,
+            getMessageContextToolExecutor = getMessageContextToolExecutor,
             eventBus = eventBus
         )
     }

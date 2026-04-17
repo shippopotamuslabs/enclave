@@ -1,112 +1,128 @@
 {
-  "draft": {
-    "configId": "550e8400-e29b-41d4-a716-446655440002",
-    "huggingFaceModelName": "unsloth/LFM2.5-1.2B-Thinking-GGUF",
-    "fileName": "LFM2.5-1.2B-Thinking-Q8_0.gguf",
-    "displayName": "LFM 2.5 1.2B (Analytic Draft)",
-    "sha256": "e842afad2eebd724e714a867aaa9b48b3b71df26cd0eebf634b1b41dbb129516",
-    "source": "HF",
-    "systemPrompt": "You are the primary analytical drafter in a multi-model pipeline. You are logical, precise, and thorough. Handle messages containing TASK: COMPLEX_DRAFT_ANALYTICAL by drafting a response to the USER_PROMPT.",
-    "sizeInBytes": 1246254304,
-    "temperature": 0.05,
-    "topK": 50,
-    "topP": 0.92,
-    "minP": 0.1,
-    "repetitionPenalty": 1.05,
-    "contextWindow": 4096,
-    "maxTokens": 2048,
-    "thinkingEnabled": true
-  },
-  "draftTwo": {
-    "configId": "550e8400-e29b-41d4-a716-446655440003",
-    "huggingFaceModelName": "Jackrong/Qwen3.5-2B-Claude-4.6-Opus-Reasoning-Distilled-GGUF",
-    "fileName": "Qwen3.5-2B.Q8_0.gguf",
-    "displayName": "Qwen 3.5 2B",
-    "sha256": "fd6cad5e60993df99704e693e7006658e54e49289cfe02e519f93cf741f27136",
-    "source": "HF",
-    "systemPrompt": "You are the secondary creative-analytical drafter. You explore diverse, imaginative yet logically grounded drafts, exploring novel framings while maintaining strong reasoning structure. Reply to USER_PROMPT when you see TASK: COMPLEX_DRAFT_CREATIVE.",
-    "sizeInBytes": 2012008384,
-    "temperature": 0.38,
-    "topK": 25,
-    "topP": 0.78,
-    "minP": 0.1,
-    "repetitionPenalty": 1.05,
-    "contextWindow": 4096,
-    "maxTokens": 2048,
-    "thinkingEnabled": true
-  },
-  "main": {
-    "configId": "550e8400-e29b-41d4-a716-446655440004",
-    "huggingFaceModelName": "bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF",
-    "fileName": "ai21labs_AI21-Jamba-Reasoning-3B-Q8_0.gguf",
-    "displayName": "Jamba Reasoning 3B",
-    "sha256": "a6ce2452d5b1ddd4279607a44ff1b580bfae57695bdcb09b394a7b5e089bb8ff",
-    "source": "HF",
-    "systemPrompt": "You are the core synthesizer. TASK: COMPLEX_SYNTHESIZE. First, read ORIGINAL_USER_PROMPT and draft your own reply. Second, read DRAFT_1 and DRAFT_2. Synthesize a final, polished response combining the best elements. Include no meta-commentary.",
-    "sizeInBytes": 3407952352,
-    "temperature": 0.7,
-    "topK": 40,
-    "topP": 0.95,
-    "minP": 0.05,
-    "repetitionPenalty": 1.1,
-    "contextWindow": 8192,
-    "maxTokens": 2048,
-    "thinkingEnabled": true
-  },
-  "finalSynthesis": {
-    "configId": "550e8400-e29b-41d4-a716-446655440005",
-    "huggingFaceModelName": "unsloth/Qwen3.5-4B-GGUF",
-    "fileName": "Qwen3.5-4B-UD-Q4_K_XL.gguf",
-    "displayName": "Qwen 3.5 4B",
-    "sha256": "b252c5610a42ca82d20fe2a12813e9d069eed89292907e26c783eeb0bc961bc7",
-    "source": "HF",
-    "systemPrompt": "You are the final reviewer who improves draft answers. TASK: FINAL_REVIEW_AND_REPLY\n\n1. Evaluate CANDIDATE_ANSWER for correctness.\n2. Provide a BETTER answer or refine the candidate.\n3. Follow USER_SYSTEM_PROMPT instructions.\n\nBe direct without meta-commentary.",
-    "sizeInBytes": 2912109728,
-    "temperature": 0.7,
-    "topK": 40,
-    "topP": 0.92,
-    "minP": 0.05,
-    "repetitionPenalty": 1.05,
-    "contextWindow": 4096,
-    "maxTokens": 2048,
-    "thinkingEnabled": true
-  },
-  "fast": {
-    "configId": "550e8400-e29b-41d4-a716-446655440006",
-    "huggingFaceModelName": "litert-community/gemma-4-E4B-it-litert-lm",
-    "fileName": "gemma-4-E4B-it.litertlm",
-    "displayName": "Gemma 4 E4B (Fast)",
-    "sha256": "f335f2bfd1b758dc6476db16c0f41854bd6237e2658d604cbe566bcefd00a7bc",
-    "source": "R2",
-    "systemPrompt": "You are a helpful, direct, and concise AI assistant. Provide accurate answers quickly.",
-    "sizeInBytes": 3654467584,
-    "temperature": 0.8,
-    "topK": 50,
-    "topP": 0.9,
-    "minP": 0.07,
-    "repetitionPenalty": 1.05,
-    "contextWindow": 4096,
-    "maxTokens": 2048,
-    "thinkingEnabled": false,
-    "visionCapable": true
-  },
-  "thinking": {
-    "configId": "550e8400-e29b-41d4-a716-446655440007",
-    "huggingFaceModelName": "litert-community/gemma-4-E4B-it-litert-lm",
-    "fileName": "gemma-4-E4B-it.litertlm",
-    "displayName": "Gemma 4 E4B (Thinking)",
-    "sha256": "f335f2bfd1b758dc6476db16c0f41854bd6237e2658d604cbe566bcefd00a7bc",
-    "source": "R2",
-    "systemPrompt": "You are a highly analytical reasoning engine. Break down problems logically and identify root causes with precision. Excel at structural analysis and delivering elegant solutions to complex queries.",
-    "sizeInBytes": 3654467584,
-    "temperature": 0.05,
-    "topK": 50,
-    "topP": 0.9,
-    "minP": 0.1,
-    "repetitionPenalty": 1.05,
-    "contextWindow": 4096,
-    "maxTokens": 2048,
-    "thinkingEnabled": true,
-    "visionCapable": true
-  }
+  "assets": [
+    {
+      "huggingFaceModelName": "unsloth/LFM2.5-1.2B-Thinking-GGUF",
+      "fileName": "LFM2.5-1.2B-Thinking-Q8_0.gguf",
+      "sha256": "e842afad2eebd724e714a867aaa9b48b3b71df26cd0eebf634b1b41dbb129516",
+      "sizeInBytes": 1246254304,
+      "source": "HF",
+      "isMultimodal": false,
+      "configurations": [
+        {
+          "configId": "550e8400-e29b-41d4-a716-446655440002",
+          "displayName": "LFM 2.5 1.2B (Analytic Draft)",
+          "systemPrompt": "You are the primary analytical drafter in a multi-model pipeline. You are logical, precise, and thorough. Handle messages containing TASK: COMPLEX_DRAFT_ANALYTICAL by drafting a response to the USER_PROMPT.",
+          "temperature": 0.05,
+          "topK": 50,
+          "topP": 0.92,
+          "minP": 0.1,
+          "repetitionPenalty": 1.05,
+          "contextWindow": 8192,
+          "maxTokens": 2048,
+          "thinkingEnabled": true,
+          "defaultAssignments": ["draft_one"]
+        }
+      ]
+    },
+    {
+      "huggingFaceModelName": "Jackrong/Qwen3.5-2B-Claude-4.6-Opus-Reasoning-Distilled-GGUF",
+      "fileName": "Qwen3.5-2B.Q8_0.gguf",
+      "sha256": "fd6cad5e60993df99704e693e7006658e54e49289cfe02e519f93cf741f27136",
+      "sizeInBytes": 2012008384,
+      "source": "HF",
+      "isMultimodal": false,
+      "configurations": [
+        {
+          "configId": "550e8400-e29b-41d4-a716-446655440003",
+          "displayName": "Qwen 3.5 2B",
+          "systemPrompt": "You are the secondary creative-analytical drafter. You explore diverse, imaginative yet logically grounded drafts, exploring novel framings while maintaining strong reasoning structure. Reply to USER_PROMPT when you see TASK: COMPLEX_DRAFT_CREATIVE.",
+          "temperature": 0.38,
+          "topK": 25,
+          "topP": 0.78,
+          "minP": 0.1,
+          "repetitionPenalty": 1.05,
+          "contextWindow": 4096,
+          "maxTokens": 2048,
+          "thinkingEnabled": true,
+          "defaultAssignments": ["draft_two"]
+        }
+      ]
+    },
+    {
+      "huggingFaceModelName": "bartowski/ai21labs_AI21-Jamba-Reasoning-3B-GGUF",
+      "fileName": "ai21labs_AI21-Jamba-Reasoning-3B-Q8_0.gguf",
+      "sha256": "a6ce2452d5b1ddd4279607a44ff1b580bfae57695bdcb09b394a7b5e089bb8ff",
+      "sizeInBytes": 3407952352,
+      "source": "HF",
+      "isMultimodal": false,
+      "configurations": [
+        {
+          "configId": "550e8400-e29b-41d4-a716-446655440004",
+          "displayName": "Jamba Reasoning 3B",
+          "systemPrompt": "You are the core synthesizer. TASK: COMPLEX_SYNTHESIZE. First, read ORIGINAL_USER_PROMPT and draft your own reply. Second, read DRAFT_1 and DRAFT_2. Synthesize a final, polished response combining the best elements. Include no meta-commentary.",
+          "temperature": 0.7,
+          "topK": 40,
+          "topP": 0.95,
+          "minP": 0.05,
+          "repetitionPenalty": 1.1,
+          "contextWindow": 32768,
+          "maxTokens": 2048,
+          "thinkingEnabled": true,
+          "defaultAssignments": ["main"]
+        }
+      ]
+    },
+    {
+      "huggingFaceModelName": "litert-community/gemma-4-E4B-it-litert-lm",
+      "fileName": "gemma-4-E4B-it.litertlm",
+      "sha256": "f335f2bfd1b758dc6476db16c0f41854bd6237e2658d604cbe566bcefd00a7bc",
+      "sizeInBytes": 3654467584,
+      "source": "R2",
+      "isMultimodal": true,
+      "configurations": [
+        {
+          "configId": "550e8400-e29b-41d4-a716-446655440006",
+          "displayName": "Gemma 4 E4B (Fast)",
+          "systemPrompt": "You are a helpful, direct, and concise AI assistant. Provide accurate answers quickly.",
+          "temperature": 0.8,
+          "topK": 50,
+          "topP": 0.9,
+          "minP": 0.07,
+          "repetitionPenalty": 1.05,
+          "contextWindow": 8192,
+          "maxTokens": 2048,
+          "thinkingEnabled": false,
+          "defaultAssignments": ["fast"]
+        },
+        {
+          "configId": "550e8400-e29b-41d4-a716-446655440007",
+          "displayName": "Gemma 4 E4B (Thinking)",
+          "systemPrompt": "You are a highly analytical reasoning engine. Break down problems logically and identify root causes with precision. Excel at structural analysis and delivering elegant solutions to complex queries.",
+          "temperature": 0.05,
+          "topK": 50,
+          "topP": 0.9,
+          "minP": 0.1,
+          "repetitionPenalty": 1.05,
+          "contextWindow": 8192,
+          "maxTokens": 2048,
+          "thinkingEnabled": true,
+          "defaultAssignments": ["thinking"]
+        },
+        {
+          "configId": "550e8400-e29b-41d4-a716-446655440005",
+          "displayName": "Gemma 4 E4B (Final Synthesis)",
+          "systemPrompt": "You are the final reviewer who improves draft answers. TASK: FINAL_REVIEW_AND_REPLY\n\n1. Evaluate CANDIDATE_ANSWER for correctness.\n2. Provide a BETTER answer or refine the candidate.\n3. Follow USER_SYSTEM_PROMPT instructions.\n\nBe direct without meta-commentary.",
+          "temperature": 0.7,
+          "topK": 40,
+          "topP": 0.92,
+          "minP": 0.05,
+          "repetitionPenalty": 1.05,
+          "contextWindow": 8192,
+          "maxTokens": 2048,
+          "thinkingEnabled": true,
+          "defaultAssignments": ["final_synthesis"]
+        }
+      ]
+    }
+  ]
 }

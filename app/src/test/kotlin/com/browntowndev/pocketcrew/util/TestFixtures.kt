@@ -34,6 +34,7 @@ object TestFixtures {
 
     fun fileProgress(
         filename: String = "test_model.bin",
+        sha256: String = "test_sha256",
         modelTypes: List<ModelType> = listOf(ModelType.MAIN),
         bytesDownloaded: Long = 500_000_000L,
         totalBytes: Long = 1_000_000_000L,
@@ -42,6 +43,7 @@ object TestFixtures {
     ): FileProgress =
         FileProgress(
             filename = filename,
+            sha256 = sha256,
             modelTypes = modelTypes,
             bytesDownloaded = bytesDownloaded,
             totalBytes = totalBytes,

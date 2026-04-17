@@ -23,6 +23,7 @@ data class GenerationOptions(
     val contextWindow: Int? = null,
     val toolingEnabled: Boolean = false,
     val availableTools: List<ToolDefinition> = emptyList(),
+    val maxToolCalls: Int = 10,
     val chatId: ChatId? = null,
     val userMessageId: MessageId? = null,
     val assistantMessageId: MessageId? = null,

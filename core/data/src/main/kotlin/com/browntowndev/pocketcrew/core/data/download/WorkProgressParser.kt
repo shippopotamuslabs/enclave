@@ -125,54 +125,20 @@ class WorkProgressParser @Inject constructor(
             }
         }
 
-        // DIAGNOSTIC: Log if currentDownloads is empty (this is the likely root cause!)
+        // DIAGNOSTIC: Log if currentDownloads is empty
         if (currentDownloads.isEmpty()) {
-            Log.e(TAG, "[DIAGNOSTIC] CRITICAL: currentDownloads is EMPTY! This causes 'Waiting for model configuration...' message. Parsed files will be SKIPPED!")
+            Log.e(TAG, "[DIAGNOSTIC] CRITICAL: currentDownloads is EMPTY!")
         }
-        val fileProgressList = parsedFiles.mapNotNull { parsed ->
-            // Match by filename directly - this is the correct way to find the existing file
+        val fileProgressList = parsedFiles.map { parsed ->
+            // Match by SHA256 to preserve role mapping (ModelTypes) from the orchestrator
             val existing = currentDownloads.firstOrNull { download ->
-                download.filename == parsed.filename
+                download.sha256 == parsed.sha256
             }
-            // FIX: Handle empty currentDownloads by using parsed.modelTypes directly
-            // This fixes the "Waiting for model configuration..." bug when currentDownloads is empty
-            if (existing == null) {
-                // No existing entry - use parsed data directly (from worker)
-                if (parsed.modelTypes.isNotEmpty()) {
-                    Log.w(TAG, "[FIX_APPLIED] parseRunning: Using parsed modelTypes=${parsed.modelTypes} for filename=${parsed.filename} (no existing entry)")
-                    parsed
-                } else {
-                    // Try to derive from filename
-                    val derivedTypes = deriveModelTypesFromFilename(parsed.filename)
-                    if (derivedTypes.isNotEmpty()) {
-                        Log.w(TAG, "[FIX_APPLIED] parseRunning: Derived modelTypes=${derivedTypes} for filename=${parsed.filename}")
-                        parsed.copy(modelTypes = derivedTypes)
-                    } else {
-                        Log.e(TAG, "[ERROR] parseRunning: No modelTypes for filename=${parsed.filename}, falling back to filename")
-                        // Return with empty modelTypes - UI will handle this gracefully
-                        parsed
-                    }
-                }
-            } else if (existing.modelTypes.isNotEmpty()) {
-                // MERGE both sets of modelTypes - union with deduplication
-                // parsed.modelTypes is authoritative (from worker), existing from currentDownloads
-                val mergedModelTypes = (parsed.modelTypes + existing.modelTypes).distinctBy { it.name }
-                val result = parsed.copy(modelTypes = mergedModelTypes)
-                result
-            } else if (parsed.modelTypes.isNotEmpty()) {
-                // Existing has no modelTypes but parsed does - use parsed
-                Log.w(TAG, "[FIX_APPLIED] parseRunning: Using parsed modelTypes=${parsed.modelTypes} for filename=${parsed.filename}")
-                parsed
+            if (existing != null) {
+                parsed.copy(modelTypes = existing.modelTypes)
             } else {
-                // Neither has modelTypes - derive from filename
-                val derivedTypes = deriveModelTypesFromFilename(parsed.filename)
-                if (derivedTypes.isNotEmpty()) {
-                    Log.w(TAG, "[FIX_APPLIED] parseRunning: Derived modelTypes=${derivedTypes} for filename=${parsed.filename}")
-                    parsed.copy(modelTypes = derivedTypes)
-                } else {
-                    Log.e(TAG, "[ERROR] parseRunning: No modelTypes for filename=${parsed.filename}")
-                    parsed
-                }
+                Log.w(TAG, "No existing FileProgress found for SHA256: ${parsed.sha256}. UI roles may be missing.")
+                parsed
             }
         }
         val etaString = if (etaSeconds > 0) formatEta(etaSeconds) else null
@@ -235,7 +201,7 @@ class WorkProgressParser @Inject constructor(
 
     fun parseFileProgress(data: String): FileProgress? {
         val parts = data.split("|")
-        // Check for at least 6 parts (0-5 indices) since we need modelTypes at index 5
+        // Check for at least 6 parts (0-5 indices) since we need sha256 at index 5
         if (parts.size < 6) {
             Log.w(TAG, "[PARSE_ERROR] parseFileProgress: Not enough parts (need 6, got ${parts.size}): $data")
             return null
@@ -247,28 +213,14 @@ class WorkProgressParser @Inject constructor(
             val totalBytes = parts[2].toLong().coerceAtLeast(0L)
             val status = FileStatus.valueOf(parts[3])
             val speedMBs = parts[4].toDoubleOrNull()?.coerceAtLeast(0.0)
-
-            // Safely parse modelTypes, handle empty string
-            val modelTypesStr = parts.getOrNull(5) ?: ""
-            val modelTypes = if (modelTypesStr.isNotBlank()) {
-                modelTypesStr.split(",").mapNotNull { typeStr ->
-                    try {
-                        ModelType.fromApiValue(typeStr.trim())
-                    } catch (e: Exception) {
-                        Log.w(TAG, "[PARSE_ERROR] Failed to parse modelType: '$typeStr'")
-                        null
-                    }
-                }
-            } else {
-                Log.w(TAG, "[PARSE_WARN] parseFileProgress: Empty modelTypes for filename=$filename, will derive from filename")
-                emptyList()
-            }
+            val sha256 = parts[5]
 
             if (totalBytes in 1..<bytesDownloaded) return null
 
             FileProgress(
                 filename = filename,
-                modelTypes = modelTypes,
+                sha256 = sha256,
+                modelTypes = emptyList(), // Will be merged from currentDownloads using sha256
                 bytesDownloaded = bytesDownloaded,
                 totalBytes = totalBytes,
                 status = status,
@@ -284,19 +236,5 @@ class WorkProgressParser @Inject constructor(
         seconds < 60 -> "< 1 min"
         seconds < 3600 -> "${seconds / 60} min"
         else -> String.format(Locale.US, "%.1f hours", seconds / 3600.0)
-    }
-
-    /**
-     * Derives modelTypes from filename when the backward compatibility merge fails.
-     * Filename format: "{modelType}.{extension}" e.g., "vision.litertlm", "main.gguf"
-     */
-    private fun deriveModelTypesFromFilename(filename: String): List<ModelType> {
-        val baseName = filename.substringBefore(".")
-        return try {
-            listOf(ModelType.valueOf(baseName.uppercase()))
-        } catch (e: IllegalArgumentException) {
-            Log.w(TAG, "Could not derive ModelType from filename: $filename")
-            emptyList()
-        }
     }
 }

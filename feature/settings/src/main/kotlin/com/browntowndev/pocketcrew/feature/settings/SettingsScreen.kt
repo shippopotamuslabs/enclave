@@ -76,6 +76,7 @@ fun SettingsScreen(
     onNavigateToByokConfigure: () -> Unit,
     onStartCreateApiModelAsset: () -> Unit,
     onStartConfigureSearchSkill: () -> Unit,
+    onNavigateToCompactionConfigure: () -> Unit,
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
     onDeleteApiModelAsset: (ApiCredentialsId) -> Unit,
@@ -183,6 +184,13 @@ fun SettingsScreen(
                     subtitle = ModelType.VISION.description,
                     icon = Icons.Default.Visibility,
                     onClick = { onShowVisionSettingsSheet(true) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsNavigationItem(
+                    title = "Compaction",
+                    subtitle = "Manage context compression",
+                    icon = Icons.AutoMirrored.Filled.Rule,
+                    onClick = onNavigateToCompactionConfigure
                 )
             }
 
@@ -430,6 +438,7 @@ fun PreviewSettingsScreen() {
             onNavigateToByokConfigure = {},
             onStartCreateApiModelAsset = {},
             onStartConfigureSearchSkill = {},
+            onNavigateToCompactionConfigure = {},
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
             onDeleteApiModelAsset = {},

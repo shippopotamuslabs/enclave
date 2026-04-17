@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "a96921283f9663a08946c55d7e225801",
+    "identityHash": "182a9eec0be345d7ee82c8f99c3aaeb9",
     "entities": [
       {
         "tableName": "chat",
@@ -273,7 +273,7 @@
       },
       {
         "tableName": "message_search",
-        "createSql": "CREATE VIRTUAL TABLE IF NOT EXISTS `${TABLE_NAME}` USING FTS4(`id` TEXT NOT NULL, `content` TEXT NOT NULL, content=`message`)",
+        "createSql": "CREATE VIRTUAL TABLE IF NOT EXISTS `${TABLE_NAME}` USING FTS4(`id` TEXT NOT NULL, `content` TEXT NOT NULL, tokenize=porter, content=`message`)",
         "fields": [
           {
             "fieldPath": "id",
@@ -294,7 +294,7 @@
         },
         "ftsVersion": "FTS4",
         "ftsOptions": {
-          "tokenizer": "simple",
+          "tokenizer": "porter",
           "tokenizerArgs": [],
           "contentTable": "message",
           "languageIdColumnName": "",
@@ -312,7 +312,7 @@
       },
       {
         "tableName": "local_models",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `vision_capable` INTEGER NOT NULL, `mmproj_remote_filename` TEXT, `mmproj_local_filename` TEXT, `mmproj_sha256` TEXT, `mmproj_size_in_bytes` INTEGER, `thinking_enabled` INTEGER NOT NULL, `is_vision` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `model_file_format` TEXT NOT NULL, `huggingface_model_name` TEXT NOT NULL, `remote_filename` TEXT NOT NULL, `local_filename` TEXT NOT NULL, `sha256` TEXT NOT NULL, `size_in_bytes` INTEGER NOT NULL, `is_multimodal` INTEGER NOT NULL, `mmproj_remote_filename` TEXT, `mmproj_local_filename` TEXT, `mmproj_sha256` TEXT, `mmproj_size_in_bytes` INTEGER, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -357,8 +357,8 @@
             "notNull": true
           },
           {
-            "fieldPath": "visionCapable",
-            "columnName": "vision_capable",
+            "fieldPath": "isMultimodal",
+            "columnName": "is_multimodal",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -381,18 +381,6 @@
             "fieldPath": "mmprojSizeInBytes",
             "columnName": "mmproj_size_in_bytes",
             "affinity": "INTEGER"
-          },
-          {
-            "fieldPath": "thinkingEnabled",
-            "columnName": "thinking_enabled",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "isVision",
-            "columnName": "is_vision",
-            "affinity": "INTEGER",
-            "notNull": true
           },
           {
             "fieldPath": "updatedAt",
@@ -541,7 +529,7 @@
       },
       {
         "tableName": "api_credentials",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `provider` TEXT NOT NULL, `base_url` TEXT, `model_id` TEXT NOT NULL, `is_vision` INTEGER NOT NULL, `credential_alias` TEXT NOT NULL, `api_key_signature` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `display_name` TEXT NOT NULL, `provider` TEXT NOT NULL, `base_url` TEXT, `model_id` TEXT NOT NULL, `is_multimodal` INTEGER NOT NULL, `credential_alias` TEXT NOT NULL, `api_key_signature` TEXT, `created_at` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -573,8 +561,8 @@
             "notNull": true
           },
           {
-            "fieldPath": "isVision",
-            "columnName": "is_vision",
+            "fieldPath": "isMultimodal",
+            "columnName": "is_multimodal",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -939,7 +927,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a96921283f9663a08946c55d7e225801')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '182a9eec0be345d7ee82c8f99c3aaeb9')"
     ]
   }
 }

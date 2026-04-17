@@ -31,6 +31,7 @@ class DownloadViewModelUiModelTest {
         // Given - a FileProgress with a single ModelType
         val progress = FileProgress(
             filename = "test.bin",
+            sha256 = "test_sha",
             bytesDownloaded = 100,
             totalBytes = 1000,
             status = FileStatus.DOWNLOADING,
@@ -68,6 +69,7 @@ class DownloadViewModelUiModelTest {
         // Given - a FileProgress with multiple ModelTypes
         val progress = FileProgress(
             filename = "test.bin",
+            sha256 = "test_sha",
             bytesDownloaded = 100,
             totalBytes = 1000,
             status = FileStatus.DOWNLOADING,

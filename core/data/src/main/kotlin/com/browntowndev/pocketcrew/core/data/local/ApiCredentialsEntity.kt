@@ -30,8 +30,8 @@ data class ApiCredentialsEntity(
     @ColumnInfo(name = "model_id")
     val modelId: String,
 
-    @ColumnInfo(name = "is_vision")
-    val isVision: Boolean = false,
+    @ColumnInfo(name = "is_multimodal")
+    val isMultimodal: Boolean = false,
 
     @ColumnInfo(name = "credential_alias")
     val credentialAlias: String,

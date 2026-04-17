@@ -1,5 +1,7 @@
 package com.browntowndev.pocketcrew.domain.model.download
 
+import kotlinx.serialization.Serializable
+
 /**
  * Pure transfer descriptor used by ModelDownloadWorker.
  *
@@ -15,14 +17,15 @@ package com.browntowndev.pocketcrew.domain.model.download
  * - temperature/top-p/top-k/etc.
  * - any repository-only state
  */
+@Serializable
 data class DownloadFileSpec(
     val remoteFileName: String,
     val localFileName: String,
     val sha256: String,
     val sizeInBytes: Long,
-    val huggingFaceModelName: String,
-    val source: String,
-    val modelFileFormat: String,
+    val huggingFaceModelName: String = "",
+    val source: String = "HUGGING_FACE",
+    val modelFileFormat: String = "LITERTLM",
     val mmprojRemoteFileName: String? = null,
     val mmprojLocalFileName: String? = null,
     val mmprojSha256: String? = null,

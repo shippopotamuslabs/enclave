@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
@@ -20,13 +21,15 @@ class MessageRepositoryImplGetMessagesForChatTest {
 
     private lateinit var messageDao: MessageDao
     private lateinit var messageVisionAnalysisDao: MessageVisionAnalysisDao
+    private lateinit var chatSummaryDao: ChatSummaryDao
     private lateinit var repository: MessageRepositoryImpl
 
     @BeforeEach
     fun setup() {
         messageDao = mockk(relaxed = true)
         messageVisionAnalysisDao = mockk(relaxed = true)
-        repository = MessageRepositoryImpl(messageDao, messageVisionAnalysisDao)
+        chatSummaryDao = mockk(relaxed = true)
+        repository = MessageRepositoryImpl(messageDao, messageVisionAnalysisDao, chatSummaryDao)
     }
 
     // ========== Basic Functionality Tests ==========

@@ -19,6 +19,9 @@ import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -26,9 +29,6 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONException
-import org.json.JSONObject
 import java.io.File
 import java.net.SocketException
 import java.net.SocketTimeoutException
@@ -190,7 +190,7 @@ class ModelDownloadWorker @AssistedInject constructor(
                     logger.info(TAG, "All ${uniqueSpecs.size} unique file specs downloaded successfully")
 
                     // Build output data with chain metadata
-                    val shasJson = JSONArray(downloadedShas).toString()
+                    val shasJson = Json.encodeToString(downloadedShas)
                     Result.success(
                         workDataOf(
                             DownloadWorkKeys.KEY_SESSION_ID to sessionId,
@@ -220,38 +220,11 @@ class ModelDownloadWorker @AssistedInject constructor(
     private fun parseDownloadSpecs(): List<DownloadFileSpec>? {
         val filesJson = inputData.getString(DownloadWorkKeys.KEY_DOWNLOAD_FILES) ?: return null
         return try {
-            val array = JSONArray(filesJson)
-            (0 until array.length()).mapNotNull { index ->
-                try {
-                    parseFileSpecFromJson(array.getJSONObject(index))
-                } catch (e: Exception) {
-                    logger.error(TAG, "Failed to parse file spec at index $index: ${e.message}", e)
-                    null
-                }
-            }
+            Json { ignoreUnknownKeys = true }.decodeFromString<List<DownloadFileSpec>>(filesJson)
         } catch (e: Exception) {
             logger.error(TAG, "Failed to parse download files JSON: ${e.message}", e)
             null
         }
-    }
-
-    /**
-     * Converts a JSON object into a DownloadFileSpec.
-     */
-    private fun parseFileSpecFromJson(json: JSONObject): DownloadFileSpec {
-        return DownloadFileSpec(
-            remoteFileName = json.getString("remoteFileName"),
-            localFileName = json.getString("localFileName"),
-            sha256 = json.getString("sha256"),
-            sizeInBytes = json.getLong("sizeInBytes"),
-            huggingFaceModelName = json.optString("huggingFaceModelName", ""),
-            source = json.optString("source", "HUGGING_FACE"),
-            modelFileFormat = json.optString("modelFileFormat", "LITERTLM"),
-            mmprojRemoteFileName = json.optString("mmprojRemoteFileName").takeIf { it.isNotBlank() },
-            mmprojLocalFileName = json.optString("mmprojLocalFileName").takeIf { it.isNotBlank() },
-            mmprojSha256 = json.optString("mmprojSha256").takeIf { it.isNotBlank() },
-            mmprojSizeInBytes = json.optLong("mmprojSizeInBytes").takeIf { it > 0L },
-        )
     }
 
     /**

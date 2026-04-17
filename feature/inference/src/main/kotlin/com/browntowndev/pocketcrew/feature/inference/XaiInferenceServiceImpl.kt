@@ -3,15 +3,16 @@ package com.browntowndev.pocketcrew.feature.inference
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
+import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
+import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
-import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
-import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 
 class XaiInferenceServiceImpl(
     client: OpenAIClient,
@@ -51,6 +52,7 @@ class XaiInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         initialResponse: StreamedOpenAiResponse,
         results: List<Pair<ToolCallRequest, String>>,
+        appendStopToolsWarning: Boolean,
     ): ResponseCreateParams {
         val builder = currentParams.toBuilder()
         val inputItems = if (currentParams.input().isPresent && currentParams.input().get().isResponse()) {
@@ -103,6 +105,15 @@ class XaiInferenceServiceImpl(
                     .id("fco_${callId}")
                     .callId(callId)
                     .output(resultJson)
+                    .build()
+            )
+        }
+
+        if (appendStopToolsWarning) {
+            inputItems += ResponseInputItem.ofMessage(
+                ResponseInputItem.Message.builder()
+                    .role(ResponseInputItem.Message.Role.of("user"))
+                    .addInputTextContent(ContextWindowPlanner.STOP_TOOLS_WARNING)
                     .build()
             )
         }

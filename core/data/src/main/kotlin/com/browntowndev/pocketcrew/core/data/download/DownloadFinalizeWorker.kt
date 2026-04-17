@@ -17,7 +17,8 @@ import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import org.json.JSONArray
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 
 /**
  * Finalizes download work by performing post-download business logic.
@@ -111,23 +112,27 @@ class DownloadFinalizeWorker @AssistedInject constructor(
                 return Result.retry() // Retry on network failure
             }
 
-            val remoteConfig = remoteConfigResult.getOrNull() ?: emptyMap()
+            val remoteConfig = remoteConfigResult.getOrNull() ?: emptyList()
 
-            // Find assets whose SHA matches downloaded SHAs
-            val matchingAssets = remoteConfig.filter { (_, asset) ->
+            // Find assets whose SHA matches downloaded SHAs and resolve slot assignments
+            val matchingAssets = remoteConfig.filter { asset ->
                 asset.metadata.sha256 in downloadedShas
             }
 
             logger.info(TAG, "Found ${matchingAssets.size} matching assets for ${downloadedShas.size} downloaded SHAs")
 
-            // Sync each matching asset to the registry
-            for ((modelType, asset) in matchingAssets) {
-                try {
-                    syncLocalModelRegistryUseCase.invoke(modelType, asset)
-                    logger.debug(TAG, "Synced $modelType: ${asset.metadata.localFileName}")
-                } catch (e: Exception) {
-                    logger.warning(TAG, "Failed to sync $modelType: ${e.message}")
-                    // Continue with other assets - idempotent behavior
+            // Sync each matching asset's configurations to their assigned slots
+            for (asset in matchingAssets) {
+                for (config in asset.configurations) {
+                    for (modelType in config.defaultAssignments) {
+                        try {
+                            syncLocalModelRegistryUseCase.invoke(modelType, asset)
+                            logger.debug(TAG, "Synced $modelType: ${asset.metadata.localFileName}")
+                        } catch (e: Exception) {
+                            logger.warning(TAG, "Failed to sync $modelType: ${e.message}")
+                            // Continue with other assets - idempotent behavior
+                        }
+                    }
                 }
             }
 
@@ -187,15 +192,15 @@ class DownloadFinalizeWorker @AssistedInject constructor(
                 return Result.retry() // Retry on network failure
             }
 
-            val remoteConfig = remoteConfigResult.getOrNull() ?: emptyMap()
+            val remoteConfig = remoteConfigResult.getOrNull() ?: emptyList()
 
             // Find assets whose SHA matches downloaded SHAs
-            val matchingAssets = remoteConfig.filter { (_, asset) ->
+            val matchingAssets = remoteConfig.filter { asset ->
                 asset.metadata.sha256 in downloadedShas
             }
 
             // If the soft-deleted asset's SHA is in the matching assets, use its configurations
-            val assetToRestore = matchingAssets.values.find {
+            val assetToRestore = matchingAssets.find {
                 it.metadata.sha256 == softDeletedAsset.metadata.sha256
             } ?: softDeletedAsset
 
@@ -248,8 +253,7 @@ class DownloadFinalizeWorker @AssistedInject constructor(
      */
     private fun parseShas(json: String): List<String> {
         return try {
-            val array = JSONArray(json)
-            (0 until array.length()).map { array.getString(it) }
+            Json.decodeFromString(json)
         } catch (e: Exception) {
             logger.warning(TAG, "Failed to parse SHAs JSON: ${e.message}")
             emptyList()

@@ -142,11 +142,23 @@ class LlamaInferenceServiceImplTest {
     }
 
     @Test
-    fun `sendPrompt surfaces malformed llama tool envelope as typed failure`() = runTest {
+    fun `sendPrompt surfaces malformed llama tool envelope as feedback turn`() = runTest {
         coEvery { sessionManager.sendUserMessage(any()) } returns Unit
-        every { sessionManager.streamAssistantResponseWithOptions(any()) } returns flowOf(
-            GenerationEvent.Completed("""<tool_call>{"name":"tavily_web_search","arguments":""")
-        )
+
+        // Pass 1: Return a malformed envelope
+        // Pass 2: Return a normal response to finish the loop
+        var passCount = 0
+        every { sessionManager.streamAssistantResponseWithOptions(any()) } answers {
+            passCount++
+            if (passCount == 1) {
+                flowOf(GenerationEvent.Completed("""<tool_call>{"name":"tavily_web_search","arguments":"""))
+            } else {
+                flowOf(
+                    GenerationEvent.Token("Corrected."),
+                    GenerationEvent.Completed("Corrected.")
+                )
+            }
+        }
 
         val service = createService()
 
@@ -156,9 +168,13 @@ class LlamaInferenceServiceImplTest {
             closeConversation = false,
         ).toList()
 
-        val error = events.filterIsInstance<InferenceEvent.Error>().single()
-        assertTrue(error.cause is IllegalStateException)
-        assertEquals("Malformed tool_call envelope", error.cause.message)
+        // Check that a tool_result was sent with the error message
+        coVerify {
+            sessionManager.sendUserMessage(match { it.contains("Failed to parse tool call envelope") })
+        }
+
+        // Check that we got the final response from pass 2
+        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Corrected." })
     }
 
     @Test
@@ -216,7 +232,7 @@ class LlamaInferenceServiceImplTest {
                 sha256 = "abc123",
                 sizeInBytes = 1024L,
                 modelFileFormat = ModelFileFormat.GGUF,
-                visionCapable = true,
+                isMultimodal = true,
                 mmprojLocalFileName = "mmproj.gguf",
             ),
             configurations = emptyList(),
@@ -269,7 +285,7 @@ class LlamaInferenceServiceImplTest {
                 sha256 = "abc123",
                 sizeInBytes = 1024L,
                 modelFileFormat = ModelFileFormat.GGUF,
-                visionCapable = true,
+                isMultimodal = true,
             ),
             configurations = emptyList(),
         )
@@ -298,7 +314,7 @@ class LlamaInferenceServiceImplTest {
             localModelRepository = localModelRepository,
             activeModelProvider = activeModelProvider,
             context = context,
-            modelType = ModelType.FAST,
+            modelType = modelType,
             orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 

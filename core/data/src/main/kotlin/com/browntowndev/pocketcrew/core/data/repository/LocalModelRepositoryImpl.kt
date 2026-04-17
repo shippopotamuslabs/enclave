@@ -63,13 +63,11 @@ class LocalModelRepositoryImpl @Inject constructor(
             localFilename = asset.metadata.localFileName,
             sha256 = asset.metadata.sha256,
             sizeInBytes = asset.metadata.sizeInBytes,
-            visionCapable = asset.metadata.visionCapable,
+            isMultimodal = asset.metadata.isMultimodal,
             mmprojRemoteFilename = asset.metadata.mmprojRemoteFileName,
             mmprojLocalFilename = asset.metadata.mmprojLocalFileName,
             mmprojSha256 = asset.metadata.mmprojSha256,
             mmprojSizeInBytes = asset.metadata.mmprojSizeInBytes,
-            thinkingEnabled = asset.configurations.any { it.thinkingEnabled },
-            isVision = asset.metadata.visionCapable
         )
         modelsDao.upsert(entity)
         return entity.id
@@ -110,13 +108,11 @@ class LocalModelRepositoryImpl @Inject constructor(
             localFilename = metadata.localFileName,
             sha256 = metadata.sha256,
             sizeInBytes = metadata.sizeInBytes,
-            visionCapable = metadata.visionCapable,
+            isMultimodal = metadata.isMultimodal,
             mmprojRemoteFilename = metadata.mmprojRemoteFileName,
             mmprojLocalFilename = metadata.mmprojLocalFileName,
             mmprojSha256 = metadata.mmprojSha256,
             mmprojSizeInBytes = metadata.mmprojSizeInBytes,
-            thinkingEnabled = false,
-            isVision = false
         )
         modelsDao.upsert(entity)
         return entity.id
@@ -181,7 +177,7 @@ class LocalModelRepositoryImpl @Inject constructor(
                 sha256 = entity.sha256,
                 sizeInBytes = entity.sizeInBytes,
                 modelFileFormat = entity.modelFileFormat,
-                visionCapable = entity.visionCapable,
+                isMultimodal = entity.isMultimodal,
                 mmprojRemoteFileName = entity.mmprojRemoteFilename,
                 mmprojLocalFileName = entity.mmprojLocalFilename,
                 mmprojSha256 = entity.mmprojSha256,

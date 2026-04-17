@@ -203,5 +203,23 @@ interface ChatRepository {
      * @return Flow of matching chats
      */
     fun searchChats(query: String, ftsQuery: String): Flow<List<Chat>>
+
+    /**
+     * Retrieves chats by their IDs.
+     * Used by tool executors to resolve chat names for message results.
+     *
+     * @param ids The chat IDs to look up.
+     * @return Map of ChatId to Chat for found chats.
+     */
+    suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat>
+
+    /**
+     * Marks Tavily sources as extracted for the given URLs.
+     * Called after sources are persisted to ensure the extracted flag
+     * is set correctly even when extraction happens before persistence.
+     *
+     * @param urls The URLs that were extracted via the Tavily extract tool.
+     */
+    suspend fun markSourcesExtracted(urls: List<String>)
 }
 

@@ -88,7 +88,7 @@ class SaveApiProviderDraftUseCaseTest {
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
                 baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-                isVision = false,
+                isMultimodal = false,
                 credentialAlias = "",
                 apiKey = "xai-key",
             )
@@ -155,7 +155,7 @@ class SaveApiProviderDraftUseCaseTest {
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
                 baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-                isVision = false,
+                isMultimodal = false,
                 credentialAlias = "",
                 apiKey = "xai-key",
             )

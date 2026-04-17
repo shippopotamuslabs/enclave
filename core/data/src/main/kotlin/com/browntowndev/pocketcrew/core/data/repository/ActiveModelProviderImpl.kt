@@ -34,7 +34,7 @@ class ActiveModelProviderImpl @Inject constructor(
                 isLocal = true,
                 name = config.displayName,
                 systemPrompt = config.systemPrompt,
-                visionCapable = model.visionCapable,
+                isMultimodal = model.isMultimodal,
                 reasoningEffort = null,
                 temperature = config.temperature,
                 topK = config.topK,
@@ -58,7 +58,7 @@ class ActiveModelProviderImpl @Inject constructor(
                 isLocal = false,
                 name = config.displayName,
                 systemPrompt = config.systemPrompt,
-                visionCapable = credentials.isVision,
+                isMultimodal = credentials.isMultimodal,
                 reasoningEffort = config.reasoningEffort?.let {
                     com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort.fromWireValue(it)
                 },

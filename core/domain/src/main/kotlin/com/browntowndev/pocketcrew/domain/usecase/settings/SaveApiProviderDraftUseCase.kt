@@ -52,7 +52,7 @@ class SaveApiProviderDraftUseCase @Inject constructor(
                     provider = draft.provider,
                     modelId = draft.modelId,
                     baseUrl = draft.baseUrl.takeIf { !it.isNullOrBlank() } ?: draft.provider.defaultBaseUrl(),
-                    isVision = draft.isVision,
+                    isMultimodal = draft.isMultimodal,
                     credentialAlias = finalAlias,
                 ),
                 apiKey = draft.apiKey,

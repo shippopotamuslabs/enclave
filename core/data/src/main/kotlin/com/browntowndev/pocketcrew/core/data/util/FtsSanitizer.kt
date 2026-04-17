@@ -10,27 +10,42 @@ object FtsSanitizer {
     /**
      * Sanitizes a search query for SQLite FTS MATCH clauses.
      * Removes special characters that cause FTS parsing errors and appends wildcards to each term.
+     * Strips FTS boolean operators (AND, OR, NOT, NEAR) to prevent syntax errors from user input.
      * Supports Unicode characters for non-English search queries.
      */
     fun sanitize(query: String): String {
         if (query.isBlank()) return ""
-        
-        // Remove special characters while preserving Unicode word characters, spaces and underscores.
-        // We use explicit Unicode properties \p{L} (Letters), \p{N} (Numbers), and \p{M} (Marks)
-        // instead of (?U)\w to avoid PatternSyntaxException on Android.
+
         val sanitized = query.replace(FtsConstants.invalidCharsRegex, " ")
             .replace(FtsConstants.multipleSpacesRegex, " ")
             .trim()
-            
+
         if (sanitized.isEmpty()) return ""
-        
-        // Filter out SQLite FTS reserved keywords that could cause syntax errors if standalone.
+
         val keywordsSet = FtsConstants.reservedKeywords
         val words = sanitized.split(" ").filter { it.uppercase() !in keywordsSet }
-        
+
         if (words.isEmpty()) return ""
-        
-        // Append wildcard to EVERY word for better prefix matching (e.g., "kot cor" -> "kot* cor*")
+
         return words.joinToString(" ") { "$it*" }
+    }
+
+    /**
+     * Sanitizes multiple search queries and joins them with FTS OR operator.
+     * Used by tool executors that accept multiple query variants to cast a wider net.
+     *
+     * Each query is individually sanitized (stripping special chars, adding wildcards),
+     * then joined with " OR " so FTS matches any of them.
+     *
+     * For example: ["cow", "cow photo", "moo"] -> "cow* OR cow* photo* OR moo*"
+     */
+    fun sanitizeOrQuery(queries: List<String>): String {
+        val sanitizedQueries = queries
+            .map { sanitize(it) }
+            .filter { it.isNotBlank() }
+
+        if (sanitizedQueries.isEmpty()) return ""
+
+        return sanitizedQueries.joinToString(" OR ")
     }
 }

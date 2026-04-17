@@ -1,7 +1,7 @@
 package com.browntowndev.pocketcrew.domain.mapper
 
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
-import com.browntowndev.pocketcrew.domain.model.config.RemoteModelConfig
+import com.browntowndev.pocketcrew.domain.model.config.RemoteModelAsset
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -9,34 +9,37 @@ private const val MODEL_BASE_URL = "https://config.pocketcrew.app"
 
 /**
  * Mapper to convert between model configuration types and ModelFile.
- * Handles conversion from RegisteredModel and RemoteModelConfig to domain ModelFile.
+ * Handles conversion from RemoteModelAsset to domain ModelFile.
  */
 @Singleton
 class ModelConfigMapper @Inject constructor() {
     /**
-         * Converts a collection of RemoteModelConfig to a list of ModelFile.
-         * Groups by SHA256 to collect all modelTypes shared by the same remote file.
-         */
-    fun toModelFiles(registeredModels: Collection<RemoteModelConfig>): List<ModelFile> {
-        return registeredModels
-            .groupBy { it.sha256 }
-            .map { (sha256, models) ->
-                val first = models.first()
-                ModelFile(
-                    sizeBytes = first.sizeInBytes,
-                    url = "$MODEL_BASE_URL/${first.fileName}",
-                    sha256 = sha256,
-                    modelTypes = models.map { it.modelType }.distinct(),
-                    originalFileName = first.fileName,
-                    displayName = first.displayName,
-                    modelFileFormat = first.modelFileFormat,
-                    temperature = first.temperature,
-                    topK = first.topK,
-                    topP = first.topP,
-                    maxTokens = first.maxTokens,
-                    systemPrompt = first.systemPrompt,
-                    visionCapable = first.visionCapable
-                )
-            }
+     * Converts a collection of RemoteModelAsset to a list of ModelFile.
+     * Each asset maps to one ModelFile; configurations within an asset share the same file.
+     * The modelTypes are derived from the union of all defaultAssignments across configurations.
+     */
+    fun toModelFiles(assets: Collection<RemoteModelAsset>): List<ModelFile> {
+        return assets.map { asset ->
+            val allModelTypes = asset.configurations
+                .flatMap { it.defaultAssignments }
+                .distinct()
+
+            val primaryConfig = asset.configurations.firstOrNull()
+            ModelFile(
+                sizeBytes = asset.sizeInBytes,
+                url = "$MODEL_BASE_URL/${asset.fileName}",
+                sha256 = asset.sha256,
+                modelTypes = allModelTypes,
+                originalFileName = asset.fileName,
+                displayName = primaryConfig?.displayName ?: asset.fileName,
+                modelFileFormat = asset.modelFileFormat,
+                temperature = primaryConfig?.temperature ?: 0.7,
+                topK = primaryConfig?.topK ?: 40,
+                topP = primaryConfig?.topP ?: 0.95,
+                maxTokens = primaryConfig?.maxTokens ?: 4096,
+                systemPrompt = primaryConfig?.systemPrompt ?: "",
+                isMultimodal = asset.isMultimodal
+            )
+        }
     }
 }

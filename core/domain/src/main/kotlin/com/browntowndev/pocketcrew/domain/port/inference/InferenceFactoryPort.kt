@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.port.inference
 
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 class InferenceBusyException(
@@ -24,6 +25,14 @@ interface InferenceFactoryPort {
      */
     suspend fun <T> withInferenceService(
         modelType: ModelType,
+        block: suspend (LlmInferencePort) -> T
+    ): T
+
+    /**
+     * Runs [block] with the resolved inference service for a specific API configuration ID.
+     */
+    suspend fun <T> withInferenceServiceByConfigId(
+        configId: ApiModelConfigurationId,
         block: suspend (LlmInferencePort) -> T
     ): T
 }

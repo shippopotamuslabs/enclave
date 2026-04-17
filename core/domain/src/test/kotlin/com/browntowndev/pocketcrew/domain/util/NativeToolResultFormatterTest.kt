@@ -1,9 +1,12 @@
 package com.browntowndev.pocketcrew.domain.util
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
-import org.json.JSONObject
 
 class NativeToolResultFormatterTest {
 
@@ -31,13 +34,13 @@ class NativeToolResultFormatterTest {
             bufferTokens = 100
         )
         
-        val payload = JSONObject(truncated)
-        val item = payload.getJSONArray("results").getJSONObject(0)
-        val content = item.getString("content")
+        val payload = Json.parseToJsonElement(truncated).jsonObject
+        val item = payload["results"]!!.jsonArray[0].jsonObject
+        val content = item["content"]!!.jsonPrimitive.content
         
         assertTrue(content.length <= 400 + 100, "Content should be truncated to available budget")
         assertTrue(content.endsWith("... (truncated for context)"), "Content should have truncation suffix")
-        assertEquals("Search Result", item.getString("title"), "Title should remain untouched")
+        assertEquals("Search Result", item["title"]!!.jsonPrimitive.content, "Title should remain untouched")
     }
 
     @Test
@@ -62,9 +65,9 @@ class NativeToolResultFormatterTest {
             bufferTokens = 50
         )
         
-        val payload = JSONObject(truncated)
-        val item = payload.getJSONArray("results").getJSONObject(0)
-        val content = item.getString("raw_content")
+        val payload = Json.parseToJsonElement(truncated).jsonObject
+        val item = payload["results"]!!.jsonArray[0].jsonObject
+        val content = item["raw_content"]!!.jsonPrimitive.content
         
         assertTrue(content.length <= 200 + 100, "Raw content should be truncated")
         assertTrue(content.endsWith("... (truncated for context)"), "Content should have truncation suffix")
@@ -107,12 +110,12 @@ class NativeToolResultFormatterTest {
             bufferTokens = 50
         )
         
-        val payload = JSONObject(truncated)
-        val results = payload.getJSONArray("results")
-        assertEquals(3, results.length())
+        val payload = Json.parseToJsonElement(truncated).jsonObject
+        val results = payload["results"]!!.jsonArray
+        assertEquals(3, results.size)
         
         for (i in 0 until 3) {
-            val content = results.getJSONObject(i).getString("content")
+            val content = results[i].jsonObject["content"]!!.jsonPrimitive.content
             assertTrue(content.length <= 100 + 100, "Result $i should be truncated to floor budget of 100")
         }
     }
@@ -128,9 +131,9 @@ class NativeToolResultFormatterTest {
             estimatedUsedTokens = 0
         )
         
-        val payload = JSONObject(truncated)
-        val item = payload.getJSONArray("results").getJSONObject(0)
-        assertEquals("short and sweet", item.getString("content"), "Small results should preserve content")
+        val payload = Json.parseToJsonElement(truncated).jsonObject
+        val item = payload["results"]!!.jsonArray[0].jsonObject
+        assertEquals("short and sweet", item["content"]!!.jsonPrimitive.content, "Small results should preserve content")
     }
 
     @Test

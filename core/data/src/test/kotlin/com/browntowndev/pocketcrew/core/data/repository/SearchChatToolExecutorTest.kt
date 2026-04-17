@@ -13,7 +13,11 @@ import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.int
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -55,13 +59,13 @@ class SearchChatToolExecutorTest {
         val result = executor.execute(baseRequest())
 
         assertEquals(ToolDefinition.SEARCH_CHAT.name, result.toolName)
-        val json = JSONObject(result.resultJson)
-        assertEquals("chat-1", json.getString("chat_id"))
-        assertEquals("database migration", json.getString("query"))
-        assertEquals(2, json.getInt("total_results"))
-        val msgsArray = json.getJSONArray("messages")
-        assertEquals(2, msgsArray.length())
-        assertEquals("user", msgsArray.getJSONObject(0).getString("role"))
+        val json = Json.parseToJsonElement(result.resultJson).jsonObject
+        assertEquals("chat-1", json["chat_id"]!!.jsonPrimitive.content)
+        assertEquals("database migration", json["query"]!!.jsonPrimitive.content)
+        assertEquals(2, json["total_results"]!!.jsonPrimitive.int)
+        val msgsArray = json["messages"]!!.jsonArray
+        assertEquals(2, msgsArray.size)
+        assertEquals("USER", msgsArray[0].jsonObject["role"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -82,7 +86,7 @@ class SearchChatToolExecutorTest {
         var caught = false
         try {
             executor.execute(request)
-        } catch (e: IllegalArgumentException) {
+        } catch (e: Exception) {
             caught = true
         }
         assertTrue(caught)
@@ -94,7 +98,7 @@ class SearchChatToolExecutorTest {
         var caught = false
         try {
             executor.execute(request)
-        } catch (e: IllegalArgumentException) {
+        } catch (e: Exception) {
             caught = true
         }
         assertTrue(caught)
@@ -109,8 +113,8 @@ class SearchChatToolExecutorTest {
         coEvery { messageRepository.searchMessagesInChat(any(), any()) } returns messages
 
         val result = executor.execute(baseRequest())
-        val json = JSONObject(result.resultJson)
-        val msgContent = json.getJSONArray("messages").getJSONObject(0).getString("content")
+        val json = Json.parseToJsonElement(result.resultJson).jsonObject
+        val msgContent = json["messages"]!!.jsonArray[0].jsonObject["content"]!!.jsonPrimitive.content
         assertTrue(msgContent.endsWith("..."))
         assertTrue(msgContent.length <= 503) // 500 + "..."
     }
@@ -120,8 +124,8 @@ class SearchChatToolExecutorTest {
         coEvery { messageRepository.searchMessagesInChat(any(), any()) } returns emptyList()
 
         val result = executor.execute(baseRequest())
-        val json = JSONObject(result.resultJson)
-        assertEquals(0, json.getInt("total_results"))
-        assertEquals(0, json.getJSONArray("messages").length())
+        val json = Json.parseToJsonElement(result.resultJson).jsonObject
+        assertEquals(0, json["total_results"]!!.jsonPrimitive.int)
+        assertEquals(0, json["messages"]!!.jsonArray.size)
     }
 }

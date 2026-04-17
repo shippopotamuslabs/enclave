@@ -379,7 +379,7 @@ private fun LocalModelAssetCard(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        if (asset.visionCapable) {
+                        if (asset.isMultimodal) {
                             Spacer(modifier = Modifier.width(4.dp))
                             Icon(
                                 imageVector = Icons.Default.Visibility,
@@ -521,7 +521,7 @@ private fun LocalModelConfigListView(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    if (asset.visionCapable) {
+                    if (asset.isMultimodal) {
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.Visibility,

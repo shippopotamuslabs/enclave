@@ -183,6 +183,8 @@ class ChatViewModel @Inject constructor(
                         kind = ToolCallBannerKind.EXTRACT,
                         label = "Reading ${event.url}"
                     )
+                    // Mark matching sources as extracted in in-flight messages
+                    markSourceExtracted(event.url)
                 }
 
                 is ToolExecutionEvent.Finished -> {
@@ -578,6 +580,28 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * Marks a source URL as extracted in all in-flight message snapshots.
+     * Called when the extract tool begins reading a URL so the UI reflects the
+     * "read" indicator immediately during the conversation.
+     */
+    private fun markSourceExtracted(url: String) {
+        val current = _inFlightMessages.value
+        val updated = current.mapValues { (_, snapshot) ->
+            val hasMatchingSource = snapshot.tavilySources.any { it.url == url }
+            if (hasMatchingSource) {
+                snapshot.copy(
+                    tavilySources = snapshot.tavilySources.map { source ->
+                        if (source.url == url) source.copy(extracted = true) else source
+                    }
+                )
+            } else {
+                snapshot
+            }
+        }
+        _inFlightMessages.value = updated
+    }
+
+    /**
      * Internal test helper to allow unit tests to verify mapping logic.
      */
     internal fun mapToChatMessageForTesting(message: Message): ChatMessage = mapToChatMessage(message)
@@ -604,11 +628,11 @@ class ChatViewModel @Inject constructor(
         selectedMode: ChatModeUi,
     ): PhotoAttachmentPolicy {
         val apiVisionConfigured = activeModelProvider.getActiveConfiguration(ModelType.VISION)
-            ?.let { config -> config.isLocal == false && config.visionCapable }
+            ?.let { config -> config.isLocal == false && config.isMultimodal }
             ?: false
         val activeVisionCapable = when (selectedMode) {
-            ChatModeUi.FAST -> activeModelProvider.getActiveConfiguration(ModelType.FAST)?.visionCapable == true
-            ChatModeUi.THINKING -> activeModelProvider.getActiveConfiguration(ModelType.THINKING)?.visionCapable == true
+            ChatModeUi.FAST -> activeModelProvider.getActiveConfiguration(ModelType.FAST)?.isMultimodal == true
+            ChatModeUi.THINKING -> activeModelProvider.getActiveConfiguration(ModelType.THINKING)?.isMultimodal == true
             ChatModeUi.CREW -> false
         }
 

@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.app
 
 import android.content.Context
+import com.browntowndev.pocketcrew.domain.port.inference.CompactionPort
 import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -9,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPor
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.feature.inference.ConversationManagerImpl
 import com.browntowndev.pocketcrew.feature.inference.InferenceFactoryImpl
+import com.browntowndev.pocketcrew.feature.inference.compaction.CompactionOrchestrator
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -28,6 +30,10 @@ abstract class EngineModule {
     @Binds
     @Singleton
     abstract fun bindInferenceFactory(impl: InferenceFactoryImpl): InferenceFactoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindCompactionPort(impl: CompactionOrchestrator): CompactionPort
 
     companion object {
         // Consolidated ConversationManager provider - resolve models lazily via ModelRegistry

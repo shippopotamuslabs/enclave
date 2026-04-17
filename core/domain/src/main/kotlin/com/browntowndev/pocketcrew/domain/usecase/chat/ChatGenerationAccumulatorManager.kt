@@ -105,6 +105,20 @@ internal class ChatGenerationAccumulatorManager(
         }
     }
 
+    /**
+     * Marks tavily sources as extracted for the given URLs across all accumulators.
+     * Called when the extract tool completes so the UI reflects the read status immediately.
+     */
+    fun markSourcesExtracted(urls: List<String>) {
+        _messages.values.forEach { accumulator ->
+            val updatedSources = accumulator.tavilySources.map { source ->
+                if (source.url in urls) source.copy(extracted = true) else source
+            }
+            accumulator.tavilySources.clear()
+            accumulator.tavilySources.addAll(updatedSources)
+        }
+    }
+
     private suspend fun getOrCreateAccumulator(modelType: ModelType): MessageAccumulator {
         val messageId = if (mode != Mode.CREW) {
             defaultAssistantMessageId

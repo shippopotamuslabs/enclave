@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
@@ -74,6 +75,24 @@ class FakeMessageRepository : MessageRepository {
 
     override suspend fun searchMessagesInChat(chatId: ChatId, query: String): List<Message> {
         return emptyList()
+    }
+
+    override suspend fun searchMessagesAcrossChats(queries: List<String>): List<Message> {
+        return emptyList()
+    }
+
+    override suspend fun getMessagesAround(chatId: ChatId, timestamp: Long, before: Int, after: Int): List<Message> {
+        return emptyList()
+    }
+
+    override suspend fun getChatSummary(chatId: ChatId): ChatSummary? = null
+
+    override suspend fun saveChatSummary(summary: ChatSummary) {
+        // no-op for testing
+    }
+
+    override suspend fun deleteChatSummary(chatId: ChatId) {
+        // no-op for testing
     }
 
     fun setMessagesForChat(messages: List<Message>) {

@@ -53,6 +53,12 @@ abstract class MessageDao {
     @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY created_at IS NULL, created_at ASC")
     abstract suspend fun getMessagesByChatId(chatId: ChatId): List<MessageEntity>
 
+    @Query("SELECT * FROM message WHERE chat_id = :chatId AND created_at IS NOT NULL AND created_at < :timestamp ORDER BY created_at DESC LIMIT :limit")
+    abstract suspend fun getMessagesBefore(chatId: ChatId, timestamp: Long, limit: Int): List<MessageEntity>
+
+    @Query("SELECT * FROM message WHERE chat_id = :chatId AND created_at IS NOT NULL AND created_at > :timestamp ORDER BY created_at ASC LIMIT :limit")
+    abstract suspend fun getMessagesAfter(chatId: ChatId, timestamp: Long, limit: Int): List<MessageEntity>
+
     @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY created_at IS NULL, created_at ASC")
     abstract fun getMessagesByChatIdFlow(chatId: ChatId): Flow<List<MessageEntity>>
 

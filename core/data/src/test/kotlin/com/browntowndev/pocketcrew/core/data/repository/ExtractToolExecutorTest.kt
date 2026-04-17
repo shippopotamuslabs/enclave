@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -45,6 +46,7 @@ class ExtractToolExecutorTest {
             tavilySearchRepository = tavilySearchRepository,
             tavilySourceDao = tavilySourceDao,
             eventBus = eventBus,
+            extractedUrlTracker = mockk<ExtractedUrlTrackerPort>(relaxed = true),
         )
 
         val result = executor.execute(
@@ -84,6 +86,7 @@ class ExtractToolExecutorTest {
             tavilySearchRepository = tavilySearchRepository,
             tavilySourceDao = tavilySourceDao,
             eventBus = eventBus,
+            extractedUrlTracker = mockk<ExtractedUrlTrackerPort>(relaxed = true),
         )
 
         executor.execute(
@@ -124,6 +127,7 @@ class ExtractToolExecutorTest {
             tavilySearchRepository = tavilySearchRepository,
             tavilySourceDao = tavilySourceDao,
             eventBus = eventBus,
+            extractedUrlTracker = mockk<ExtractedUrlTrackerPort>(relaxed = true),
         )
 
         executor.execute(
@@ -155,6 +159,7 @@ class ExtractToolExecutorTest {
             tavilySearchRepository = tavilySearchRepository,
             tavilySourceDao = tavilySourceDao,
             eventBus = eventBus,
+            extractedUrlTracker = mockk<ExtractedUrlTrackerPort>(relaxed = true),
         )
 
         assertFailsWith<IllegalStateException> {
@@ -177,6 +182,7 @@ class ExtractToolExecutorTest {
             tavilySearchRepository = mockk(),
             tavilySourceDao = mockk(),
             eventBus = mockk(),
+            extractedUrlTracker = mockk<ExtractedUrlTrackerPort>(relaxed = true),
         )
 
         assertFailsWith<IllegalArgumentException> {
@@ -199,6 +205,7 @@ class ExtractToolExecutorTest {
             tavilySearchRepository = mockk(),
             tavilySourceDao = mockk(),
             eventBus = mockk(),
+            extractedUrlTracker = mockk<ExtractedUrlTrackerPort>(relaxed = true),
         )
 
         assertFailsWith<IllegalArgumentException> {
@@ -234,6 +241,7 @@ class ExtractToolExecutorTest {
             tavilySearchRepository = tavilySearchRepository,
             tavilySourceDao = tavilySourceDao,
             eventBus = eventBus,
+            extractedUrlTracker = mockk<ExtractedUrlTrackerPort>(relaxed = true),
         )
 
         executor.execute(

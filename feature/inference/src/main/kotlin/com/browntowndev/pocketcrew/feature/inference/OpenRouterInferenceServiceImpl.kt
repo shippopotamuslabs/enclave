@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
+import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
@@ -56,6 +57,7 @@ class OpenRouterInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         initialResponse: StreamedOpenAiResponse,
         results: List<Pair<ToolCallRequest, String>>,
+        appendStopToolsWarning: Boolean,
     ): ResponseCreateParams {
         val builder = currentParams.toBuilder()
         val inputItems = if (currentParams.input().isPresent && currentParams.input().get().isResponse()) {
@@ -108,6 +110,15 @@ class OpenRouterInferenceServiceImpl(
                     .id("fco_${callId.sanitizeForOpenRouterId()}")
                     .callId(callId)
                     .output(resultJson)
+                    .build()
+            )
+        }
+
+        if (appendStopToolsWarning) {
+            inputItems += ResponseInputItem.ofMessage(
+                ResponseInputItem.Message.builder()
+                    .role(ResponseInputItem.Message.Role.of("user"))
+                    .addInputTextContent(ContextWindowPlanner.STOP_TOOLS_WARNING)
                     .build()
             )
         }

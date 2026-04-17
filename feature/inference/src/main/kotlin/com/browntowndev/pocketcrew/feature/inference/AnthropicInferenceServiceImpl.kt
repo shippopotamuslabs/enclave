@@ -8,7 +8,10 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
+import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
+import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.JsonValue
@@ -16,6 +19,7 @@ import com.anthropic.models.messages.ContentBlockParam
 import com.anthropic.models.messages.MessageCreateParams
 import com.anthropic.models.messages.MessageParam
 import com.anthropic.models.messages.RawMessageStreamEvent
+import com.anthropic.models.messages.TextBlockParam
 import com.anthropic.models.messages.ToolUseBlockParam
 import com.anthropic.models.messages.ToolResultBlockParam
 import com.fasterxml.jackson.core.type.TypeReference
@@ -148,10 +152,12 @@ class AnthropicInferenceServiceImpl(
             options = options,
         )
 
+        val toolLoopPayloads = mutableListOf<String>()
         orchestrator.execute(
             providerName = PROVIDER,
             initialParams = initialParams,
             tag = TAG,
+            maxToolCalls = options.maxToolCalls,
             onInferencePass = { params, allowToolUse ->
                 streamMessages(
                     params = params,
@@ -186,17 +192,33 @@ class AnthropicInferenceServiceImpl(
                     )
                 }
 
+                toolLoopPayloads += results.map { it.second }
+                val contextExceeded = estimateContextExceeded(
+                    requestHistory = requestHistory,
+                    prompt = prompt,
+                    options = options,
+                    toolResultPayloads = toolLoopPayloads,
+                ).contextExceeded
                 params.toBuilder()
                     .messages(
-                        params.messages() + listOf(
+                        params.messages() + listOfNotNull(
                             assistantToolUseMessage(toolUse),
                             MessageParam.builder()
                                 .role(MessageParam.Role.USER)
                                 .contentOfBlockParams(resultBlocks)
-                                .build()
+                                .build(),
+                            stopToolsWarningMessage().takeIf { contextExceeded },
                         )
                     )
                     .build()
+            },
+            onContextExceeded = { params, results ->
+                estimateContextExceeded(
+                    requestHistory = requestHistory,
+                    prompt = prompt,
+                    options = options,
+                    toolResultPayloads = toolLoopPayloads,
+                )
             },
             onToolResult = { toolCall, resultJson ->
                 if (toolCall.toolName == com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.TAVILY_WEB_SEARCH.name) {
@@ -232,6 +254,57 @@ class AnthropicInferenceServiceImpl(
         )
         return historyWithSystemPrompt
     }
+
+    /**
+     * Estimates whether the request plus accumulated tool results exceeds the context window threshold.
+     * API providers are stateless between requests, so compaction happens before the request is sent;
+     * during a tool loop this method only detects pressure so the model can be told to stop.
+     */
+    private fun estimateContextExceeded(
+        requestHistory: List<ChatMessage>,
+        prompt: String,
+        options: GenerationOptions,
+        toolResultPayloads: List<String>,
+    ): ContextExceededResult<MessageCreateParams> {
+        val contextWindow = options.contextWindow ?: return ContextExceededResult(false)
+        val budget = ContextWindowPlanner.budgetFor(
+            contextWindowTokens = contextWindow,
+            options = options,
+            modelId = modelId,
+            tokenCounter = JTokkitTokenCounter,
+            thresholdRatio = ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO,
+        )
+        val totalTokens = ContextWindowPlanner.estimatePromptTokens(
+            history = requestHistory,
+            systemPrompt = null,
+            currentPrompt = prompt,
+            toolResultPayloads = toolResultPayloads,
+            modelId = modelId,
+            tokenCounter = JTokkitTokenCounter,
+        )
+        val contextExceeded = ContextWindowPlanner.shouldCompact(totalTokens, budget)
+        if (contextExceeded) {
+            loggingPort.warning(
+                TAG,
+                "Anthropic context exceeded mid-loop: estimatedTokens=$totalTokens usablePromptTokens=${budget.usablePromptTokens} thresholdTokens=${budget.thresholdTokens} window=$contextWindow"
+            )
+        }
+        return ContextExceededResult(contextExceeded)
+    }
+
+    private fun stopToolsWarningMessage(): MessageParam =
+        MessageParam.builder()
+            .role(MessageParam.Role.USER)
+            .contentOfBlockParams(
+                listOf(
+                    ContentBlockParam.ofText(
+                        TextBlockParam.builder()
+                            .text(ContextWindowPlanner.STOP_TOOLS_WARNING)
+                            .build()
+                    )
+                )
+            )
+            .build()
 
     private fun mergeSystemPrompt(
         history: List<ChatMessage>,
@@ -352,9 +425,6 @@ class AnthropicInferenceServiceImpl(
                             toolName = startedToolUse.name(),
                             initialInput = startedToolUse._input(),
                         )
-                        if (!allowToolUse) {
-                            throw IllegalStateException("Search skill recursion limit exceeded")
-                        }
                     }
 
                 }
