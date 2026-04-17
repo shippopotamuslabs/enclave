@@ -54,6 +54,12 @@ class ApiModelAssetUiMapper @Inject constructor() {
     )
 }
 
+private object LocalModelAssetConstants {
+    val dashGgufRegex = Regex("-GGUF$", RegexOption.IGNORE_CASE)
+    val dotGgufRegex = Regex("\\.gguf$", RegexOption.IGNORE_CASE)
+    val dotLitertlmRegex = Regex("\\.litertlm$", RegexOption.IGNORE_CASE)
+}
+
 class LocalModelAssetUiMapper @Inject constructor() {
     fun map(asset: LocalModelAsset): LocalModelAssetUi {
         val rawName = asset.metadata.huggingFaceModelName
@@ -68,9 +74,9 @@ class LocalModelAssetUiMapper @Inject constructor() {
         }
 
         val cleanName = modelNamePart
-            .replace(Regex("-GGUF$", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("\\.gguf$", RegexOption.IGNORE_CASE), "")
-            .replace(Regex("\\.litertlm$", RegexOption.IGNORE_CASE), "")
+            .replace(LocalModelAssetConstants.dashGgufRegex, "")
+            .replace(LocalModelAssetConstants.dotGgufRegex, "")
+            .replace(LocalModelAssetConstants.dotLitertlmRegex, "")
             .replace("-", " ")
 
         return LocalModelAssetUi(
