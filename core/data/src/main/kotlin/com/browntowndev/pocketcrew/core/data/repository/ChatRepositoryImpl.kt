@@ -204,4 +204,15 @@ class ChatRepositoryImpl @Inject constructor(
             entities.map { it.toDomain() }
         }
     }
+
+    override suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat> {
+        if (ids.isEmpty()) return emptyMap()
+        return chatDao.getChatsByIds(ids).associate { it.id to it.toDomain() }
+    }
+
+    override suspend fun markSourcesExtracted(urls: List<String>) {
+        for (url in urls) {
+            tavilySourceDao.markExtracted(url)
+        }
+    }
 }

@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.compose.runtime.Immutable
+import com.browntowndev.pocketcrew.domain.model.chat.CompactionProviderType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.usecase.settings.ModelDeletionTarget
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -34,6 +35,7 @@ data class SettingsUiState(
     val apiProvidersSheet: ApiProvidersSheetUiState = ApiProvidersSheetUiState(),
     val apiProviderEditor: ApiProviderEditorUiState = ApiProviderEditorUiState(),
     val searchSkillEditor: SearchSkillEditorUiState = SearchSkillEditorUiState(),
+    val compaction: CompactionUiState = CompactionUiState(),
     val assignments: ModelAssignmentsUiState = ModelAssignmentsUiState(),
     val deletion: DeletionFlowUiState = DeletionFlowUiState(),
 )
@@ -126,6 +128,13 @@ data class SearchSkillEditorUiState(
 )
 
 @Immutable
+data class CompactionUiState(
+    val providerType: CompactionProviderType = CompactionProviderType.DISABLED,
+    val apiModelId: String? = null,
+    val apiModelDisplayName: String? = null,
+)
+
+@Immutable
 data class ModelAssignmentsUiState(
     val assignments: List<DefaultModelAssignmentUi> = emptyList(),
     val isDialogOpen: Boolean = false,
@@ -171,7 +180,7 @@ data class ApiModelAssetUi(
     val provider: ApiProvider,
     val modelId: String,
     val baseUrl: String?,
-    val isVision: Boolean,
+    val isMultimodal: Boolean,
     val credentialAlias: String,
     val configurations: List<ApiModelConfigUi>
 )
@@ -226,7 +235,7 @@ data class DiscoveredApiModelUi(
     val promptPrice: Double? = null,
     val completionPrice: Double? = null,
     val providerName: String? = null,
-    val visionCapable: Boolean? = null,
+    val isMultimodal: Boolean? = null,
 )
 
 @Immutable
@@ -240,7 +249,7 @@ data class LocalModelAssetUi(
     val sizeInBytes: Long,
     val configurations: List<LocalModelConfigUi>,
     val isExpanded: Boolean = false,
-    val visionCapable: Boolean = false,
+    val isMultimodal: Boolean = false,
     val isSoftDeleted: Boolean = false
 )
 
@@ -269,7 +278,7 @@ data class DefaultModelAssignmentUi(
     val displayLabel: String,
     val providerName: String? = null,
     val presetName: String? = null,
-    val isVision: Boolean = false,
+    val isMultimodal: Boolean = false,
 )
 
 internal val ModelType.displayLabel: String
@@ -314,7 +323,7 @@ object MockSettingsData {
                 LocalModelConfigUi(id = LocalModelConfigurationId("cfg-2"), localModelId = LocalModelId("1"), displayName = "Creative", temperature = 1.2),
                 LocalModelConfigUi(id = LocalModelConfigurationId("cfg-3"), localModelId = LocalModelId("1"), displayName = "Precise", temperature = 0.1)
             ),
-            visionCapable = true
+            isMultimodal = true
         ),
         LocalModelAssetUi(
             metadataId = LocalModelId("2"),
@@ -337,7 +346,7 @@ object MockSettingsData {
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             baseUrl = null,
-            isVision = true,
+            isMultimodal = true,
             credentialAlias = "OpenAI Primary",
             configurations = listOf(
                 ApiModelConfigUi(id = ApiModelConfigurationId("cfg-1"), credentialsId = ApiCredentialsId("1"), displayName = "Balanced", temperature = 0.7),
@@ -350,7 +359,7 @@ object MockSettingsData {
             provider = ApiProvider.ANTHROPIC,
             modelId = "claude-3-5-sonnet-20240620",
             baseUrl = null,
-            isVision = true,
+            isMultimodal = true,
             credentialAlias = "Anthropic Work",
             configurations = listOf(
                 ApiModelConfigUi(id = ApiModelConfigurationId("cfg-3"), credentialsId = ApiCredentialsId("2"), displayName = "Standard", temperature = 0.7)
@@ -362,7 +371,7 @@ object MockSettingsData {
             provider = ApiProvider.OPENROUTER,
             modelId = "openai/gpt-5.2",
             baseUrl = ApiProvider.OPENROUTER.defaultBaseUrl(),
-            isVision = true,
+            isMultimodal = true,
             credentialAlias = "OpenRouter",
             configurations = listOf(
                 ApiModelConfigUi(
@@ -377,9 +386,9 @@ object MockSettingsData {
     )
 
     val defaultAssignments = listOf(
-        DefaultModelAssignmentUi(ModelType.MAIN, ModelSource.API, "GPT-4o (Balanced)", "Synthesis", "OpenAI", isVision = true),
-        DefaultModelAssignmentUi(ModelType.FAST, ModelSource.ON_DEVICE, "Llama 3 8B (Default)", "Fast", isVision = true),
-        DefaultModelAssignmentUi(ModelType.VISION, ModelSource.API, "Claude 3.5 Sonnet (Standard)", "Vision (API)", "Anthropic", isVision = true),
+        DefaultModelAssignmentUi(ModelType.MAIN, ModelSource.API, "GPT-4o (Balanced)", "Synthesis", "OpenAI", isMultimodal = true),
+        DefaultModelAssignmentUi(ModelType.FAST, ModelSource.ON_DEVICE, "Llama 3 8B (Default)", "Fast", isMultimodal = true),
+        DefaultModelAssignmentUi(ModelType.VISION, ModelSource.API, "Claude 3.5 Sonnet (Standard)", "Vision (API)", "Anthropic", isMultimodal = true),
         DefaultModelAssignmentUi(ModelType.THINKING, ModelSource.ON_DEVICE, "Llama 3 8B (Precise)", "Thinking")
     )
 

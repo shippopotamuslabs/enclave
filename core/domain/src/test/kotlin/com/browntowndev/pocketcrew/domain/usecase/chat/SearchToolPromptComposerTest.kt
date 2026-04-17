@@ -56,7 +56,7 @@ class SearchToolPromptComposerTest {
 
         assertTrue(composed.contains("call:tavily_web_search{query: <|\"|>...<|\"|>}"))
         assertTrue(composed.contains("tavily_extract. Note that 'urls' must be a SINGLE string"))
-        assertTrue(composed.contains("April 15, 2026"))
+        assertTrue(composed.contains("April 16, 2026"))
         // tool_call may appear in strict rules
     }
 
@@ -158,5 +158,32 @@ class SearchToolPromptComposerTest {
         )
 
         assertFalse(composed.contains("The current chat ID is"))
+    }
+
+    @Test
+    fun `compose includes get_message_context in JSON_XML_ENVELOPE memory tools contract`() {
+        val composed = composer.compose(
+            baseSystemPrompt = "Be concise.",
+            includeSearchTool = false,
+            includeImageInspectTool = false,
+            includeMemoryTools = true
+        )
+
+        assertTrue(composed.contains("get_message_context"))
+        assertTrue(composed.contains("message_id"))
+    }
+
+    @Test
+    fun `compose includes get_message_context in LITE_RT_NATIVE memory tools contract`() {
+        val composed = composer.compose(
+            baseSystemPrompt = "Be concise.",
+            includeSearchTool = false,
+            includeImageInspectTool = false,
+            includeMemoryTools = true,
+            strategy = ToolCallStrategy.LITE_RT_NATIVE
+        )
+
+        assertTrue(composed.contains("call:get_message_context"))
+        assertTrue(composed.contains("message_id"))
     }
 }

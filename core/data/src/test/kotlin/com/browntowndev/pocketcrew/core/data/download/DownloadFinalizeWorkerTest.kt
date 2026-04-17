@@ -22,7 +22,8 @@ import io.mockk.every
 import io.mockk.impl.annotations.MockK
 import io.mockk.mockk
 import io.mockk.mockkStatic
-import org.json.JSONArray
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -100,7 +101,7 @@ class DownloadFinalizeWorkerTest {
         // Default mock behavior
         coEvery { mockLocalModelRepository.getAllLocalAssets() } returns emptyList()
         coEvery { mockLocalModelRepository.getAssetById(any()) } returns null
-        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(emptyMap())
+        coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(emptyList())
 
         // Setup logging port mock with all logging methods
         every { mockLoggingPort.debug(any(), any()) } returns Unit
@@ -182,7 +183,7 @@ class DownloadFinalizeWorkerTest {
     @Test
     fun `success output includes finalizer stage`() = runTest {
         // Given: Valid startup finalization input
-        val downloadedShas = JSONArray(listOf(SHA_1)).toString()
+        val downloadedShas = Json.encodeToString(listOf(SHA_1))
         val inputData = workDataOf(
             KEY_SESSION_ID to SESSION_ID,
             KEY_REQUEST_KIND to REQUEST_INITIALIZE,
@@ -193,7 +194,7 @@ class DownloadFinalizeWorkerTest {
         // Remote config with matching SHA
         val remoteAsset = createTestAsset("model1.gguf", SHA_1)
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            mapOf(ModelType.MAIN to remoteAsset)
+            listOf(remoteAsset)
         )
         coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
 
@@ -219,7 +220,7 @@ class DownloadFinalizeWorkerTest {
     @Test
     fun `startup finalizer activates downloaded slots by SHA`() = runTest {
         // Given: Startup finalization input
-        val downloadedShas = JSONArray(listOf(SHA_1, SHA_2)).toString()
+        val downloadedShas = Json.encodeToString(listOf(SHA_1, SHA_2))
         val inputData = workDataOf(
             KEY_SESSION_ID to SESSION_ID,
             KEY_REQUEST_KIND to REQUEST_INITIALIZE,
@@ -229,11 +230,26 @@ class DownloadFinalizeWorkerTest {
 
         // Remote config with matching SHAs
         val remoteAsset1 = createTestAsset("model1.gguf", SHA_1)
-        val remoteAsset2 = createTestAsset("model2.gguf", SHA_2)
-        val remoteConfig = mapOf(
-            ModelType.MAIN to remoteAsset1,
-            ModelType.VISION to remoteAsset2
+        val remoteAsset2 = createTestAsset("model2.gguf", SHA_2).copy(
+            configurations = listOf(
+                LocalModelConfiguration(
+                    localModelId = LocalModelId("test-id"),
+                    displayName = "Test",
+                    temperature = 0.7,
+                    topK = 40,
+                    topP = 0.95,
+                    minP = 0.0,
+                    repetitionPenalty = 1.1,
+                    maxTokens = 4096,
+                    contextWindow = 4096,
+                    systemPrompt = "",
+                    isSystemPreset = true,
+                    thinkingEnabled = false,
+                    defaultAssignments = listOf(ModelType.VISION)
+                )
+            )
         )
+        val remoteConfig = listOf(remoteAsset1, remoteAsset2)
 
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(remoteConfig)
         coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
@@ -260,7 +276,7 @@ class DownloadFinalizeWorkerTest {
     @Test
     fun `startup finalizer ignores remote assets not downloaded in this session`() = runTest {
         // Given: Only SHA_1 was downloaded, but remote config has SHA_1, SHA_2, SHA_3
-        val downloadedShas = JSONArray(listOf(SHA_1)).toString()
+        val downloadedShas = Json.encodeToString(listOf(SHA_1))
         val inputData = workDataOf(
             KEY_SESSION_ID to SESSION_ID,
             KEY_REQUEST_KIND to REQUEST_INITIALIZE,
@@ -269,15 +285,47 @@ class DownloadFinalizeWorkerTest {
         setInputData(inputData)
 
         val remoteAsset1 = createTestAsset("model1.gguf", SHA_1)
-        val remoteAsset2 = createTestAsset("model2.gguf", SHA_2)
-        val remoteAsset3 = createTestAsset("model3.gguf", "sha-not-downloaded")
+        val remoteAsset2 = createTestAsset("model2.gguf", SHA_2).copy(
+            configurations = listOf(
+                LocalModelConfiguration(
+                    localModelId = LocalModelId("test-id"),
+                    displayName = "Test",
+                    temperature = 0.7,
+                    topK = 40,
+                    topP = 0.95,
+                    minP = 0.0,
+                    repetitionPenalty = 1.1,
+                    maxTokens = 4096,
+                    contextWindow = 4096,
+                    systemPrompt = "",
+                    isSystemPreset = true,
+                    thinkingEnabled = false,
+                    defaultAssignments = listOf(ModelType.VISION)
+                )
+            )
+        )
+        val remoteAsset3 = createTestAsset("model3.gguf", "sha-not-downloaded").copy(
+            configurations = listOf(
+                LocalModelConfiguration(
+                    localModelId = LocalModelId("test-id"),
+                    displayName = "Test",
+                    temperature = 0.7,
+                    topK = 40,
+                    topP = 0.95,
+                    minP = 0.0,
+                    repetitionPenalty = 1.1,
+                    maxTokens = 4096,
+                    contextWindow = 4096,
+                    systemPrompt = "",
+                    isSystemPreset = true,
+                    thinkingEnabled = false,
+                    defaultAssignments = listOf(ModelType.DRAFT_ONE)
+                )
+            )
+        )
 
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            mapOf(
-                ModelType.MAIN to remoteAsset1,
-                ModelType.VISION to remoteAsset2,
-                ModelType.DRAFT_ONE to remoteAsset3
-            )
+            listOf(remoteAsset1, remoteAsset2, remoteAsset3)
         )
         coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
 
@@ -306,7 +354,7 @@ class DownloadFinalizeWorkerTest {
     @Test
     fun `startup finalizer is idempotent under retry`() = runTest {
         // Given: Valid startup finalization input
-        val downloadedShas = JSONArray(listOf(SHA_1)).toString()
+        val downloadedShas = Json.encodeToString(listOf(SHA_1))
         val inputData = workDataOf(
             KEY_SESSION_ID to SESSION_ID,
             KEY_REQUEST_KIND to REQUEST_INITIALIZE,
@@ -316,7 +364,7 @@ class DownloadFinalizeWorkerTest {
 
         val remoteAsset = createTestAsset("model1.gguf", SHA_1)
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            mapOf(ModelType.MAIN to remoteAsset)
+            listOf(remoteAsset)
         )
         coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
 
@@ -343,7 +391,7 @@ class DownloadFinalizeWorkerTest {
     @Test
     fun `restore finalizer requires target model id`() = runTest {
         // Given: Restore input WITHOUT targetModelId (invalid)
-        val downloadedShas = JSONArray(listOf(SHA_1)).toString()
+        val downloadedShas = Json.encodeToString(listOf(SHA_1))
         val inputData = workDataOf(
             KEY_SESSION_ID to SESSION_ID,
             KEY_REQUEST_KIND to REQUEST_RESTORE,
@@ -372,7 +420,7 @@ class DownloadFinalizeWorkerTest {
     @Test
     fun `restore finalizer restores configs only after successful download`() = runTest {
         // Given: Restore finalization input
-        val downloadedShas = JSONArray(listOf(SHA_1)).toString()
+        val downloadedShas = Json.encodeToString(listOf(SHA_1))
         val inputData = workDataOf(
             KEY_SESSION_ID to SESSION_ID,
             KEY_REQUEST_KIND to REQUEST_RESTORE,
@@ -400,12 +448,13 @@ class DownloadFinalizeWorkerTest {
                     contextWindow = 4096,
                     systemPrompt = "Test",
                     isSystemPreset = true,
-                    thinkingEnabled = false
+                    thinkingEnabled = false,
+                    defaultAssignments = listOf(ModelType.MAIN)
                 )
             )
         )
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            mapOf(ModelType.UNASSIGNED to remoteAsset)
+            listOf(remoteAsset)
         )
 
         coEvery {
@@ -438,7 +487,7 @@ class DownloadFinalizeWorkerTest {
     @Test
     fun `restore finalizer rebuilds system presets from remote config`() = runTest {
         // Given: Restore finalization input
-        val downloadedShas = JSONArray(listOf(SHA_1)).toString()
+        val downloadedShas = Json.encodeToString(listOf(SHA_1))
         val inputData = workDataOf(
             KEY_SESSION_ID to SESSION_ID,
             KEY_REQUEST_KIND to REQUEST_RESTORE,
@@ -465,7 +514,8 @@ class DownloadFinalizeWorkerTest {
                     contextWindow = 4096,
                     systemPrompt = "Test",
                     isSystemPreset = true,
-                    thinkingEnabled = false
+                    thinkingEnabled = false,
+                    defaultAssignments = listOf(ModelType.MAIN)
                 ),
                 LocalModelConfiguration(
                     localModelId = LocalModelId("original-id-2"),
@@ -479,12 +529,13 @@ class DownloadFinalizeWorkerTest {
                     contextWindow = 2048,
                     systemPrompt = "Test 2",
                     isSystemPreset = true,
-                    thinkingEnabled = false
+                    thinkingEnabled = false,
+                    defaultAssignments = listOf(ModelType.MAIN)
                 )
             )
         )
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            mapOf(ModelType.UNASSIGNED to remoteAsset)
+            listOf(remoteAsset)
         )
         coEvery { mockLocalModelRepository.restoreSoftDeletedModel(any(), any()) } returns softDeletedAsset
 
@@ -512,7 +563,7 @@ class DownloadFinalizeWorkerTest {
     @Test
     fun `restore finalizer does not call SyncLocalModelRegistryUseCase`() = runTest {
         // Given: Restore finalization input
-        val downloadedShas = JSONArray(listOf(SHA_1)).toString()
+        val downloadedShas = Json.encodeToString(listOf(SHA_1))
         val inputData = workDataOf(
             KEY_SESSION_ID to SESSION_ID,
             KEY_REQUEST_KIND to REQUEST_RESTORE,
@@ -538,12 +589,13 @@ class DownloadFinalizeWorkerTest {
                     contextWindow = 4096,
                     systemPrompt = "",
                     isSystemPreset = true,
-                    thinkingEnabled = false
+                    thinkingEnabled = false,
+                    defaultAssignments = listOf(ModelType.MAIN)
                 )
             )
         )
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            mapOf(ModelType.UNASSIGNED to remoteAsset)
+            listOf(remoteAsset)
         )
         coEvery { mockLocalModelRepository.restoreSoftDeletedModel(any(), any()) } returns softDeletedAsset
 
@@ -565,7 +617,7 @@ class DownloadFinalizeWorkerTest {
     @Test
     fun `restore finalizer fails if soft-deleted asset no longer exists`() = runTest {
         // Given: Restore input but asset not found
-        val downloadedShas = JSONArray(listOf(SHA_1)).toString()
+        val downloadedShas = Json.encodeToString(listOf(SHA_1))
         val inputData = workDataOf(
             KEY_SESSION_ID to SESSION_ID,
             KEY_REQUEST_KIND to REQUEST_RESTORE,
@@ -594,7 +646,7 @@ class DownloadFinalizeWorkerTest {
     @Test
     fun `finalizer success output includes session and request metadata`() = runTest {
         // Given: Valid finalization input
-        val downloadedShas = JSONArray(listOf(SHA_1)).toString()
+        val downloadedShas = Json.encodeToString(listOf(SHA_1))
         val inputData = workDataOf(
             KEY_SESSION_ID to SESSION_ID,
             KEY_REQUEST_KIND to REQUEST_INITIALIZE,
@@ -604,7 +656,7 @@ class DownloadFinalizeWorkerTest {
 
         val remoteAsset = createTestAsset("model1.gguf", SHA_1)
         coEvery { mockModelConfigFetcher.fetchRemoteConfig() } returns Result.success(
-            mapOf(ModelType.MAIN to remoteAsset)
+            listOf(remoteAsset)
         )
         coEvery { mockSyncLocalModelRegistryUseCase.invoke(any(), any()) } returns mockk()
 
@@ -628,7 +680,7 @@ class DownloadFinalizeWorkerTest {
     @Test
     fun `finalizer failure output includes error metadata`() = runTest {
         // Given: Finalization that will fail
-        val downloadedShas = JSONArray(listOf(SHA_1)).toString()
+        val downloadedShas = Json.encodeToString(listOf(SHA_1))
         val inputData = workDataOf(
             KEY_SESSION_ID to SESSION_ID,
             KEY_REQUEST_KIND to REQUEST_RESTORE,
@@ -677,7 +729,8 @@ class DownloadFinalizeWorkerTest {
                     contextWindow = 4096,
                     systemPrompt = "",
                     isSystemPreset = true,
-                    thinkingEnabled = false
+                    thinkingEnabled = false,
+                    defaultAssignments = listOf(ModelType.MAIN)
                 )
             )
         )

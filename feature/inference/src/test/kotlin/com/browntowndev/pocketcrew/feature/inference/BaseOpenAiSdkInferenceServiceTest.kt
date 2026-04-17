@@ -238,17 +238,17 @@ class BaseOpenAiSdkInferenceServiceTest {
     }
 
     @Test
-    fun `executeToolingPrompt rejects unsupported tool name`() = runTest {
+    fun `executeToolingPrompt catches unsupported tool name and returns feedback`() = runTest {
         val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
         val orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort)
 
-        var exceptionCaught: IllegalArgumentException? = null
-        try {
-            orchestrator.execute<String, StreamedOpenAiResponse>(
-                providerName = "TEST_PROVIDER",
-                initialParams = "initial-params",
-                tag = "TestTag",
-                onInferencePass = { _, _ ->
+        var finalParams = ""
+        orchestrator.execute<String, StreamedOpenAiResponse>(
+            providerName = "TEST_PROVIDER",
+            initialParams = "initial",
+            tag = "TestTag",
+            onInferencePass = { params, _ ->
+                if (params == "initial") {
                     StreamedOpenAiResponse(
                         emittedAny = true,
                         functionCalls = listOf(
@@ -264,16 +264,26 @@ class BaseOpenAiSdkInferenceServiceTest {
                         providerToolItemIds = listOf("item_1"),
                         assistantMessageText = "",
                     )
-                },
-                onToolCallDetected = { it.functionCalls },
-                onToolResultsMapped = { _, _, _ -> "follow-up" },
-                onFinished = { _, _, _ -> },
-            )
-        } catch (e: IllegalArgumentException) {
-            exceptionCaught = e
-        }
+                } else {
+                    StreamedOpenAiResponse(
+                        emittedAny = true,
+                        functionCalls = emptyList(),
+                        responseId = "resp_2",
+                        providerToolCallIds = emptyList(),
+                        providerToolItemIds = emptyList(),
+                        assistantMessageText = "no-tool",
+                    )
+                }
+            },
+            onToolCallDetected = { if (it.assistantMessageText == "no-tool") emptyList() else it.functionCalls },
+            onToolResultsMapped = { _, _, results ->
+                finalParams = "follow-up-${results.first().second}"
+                finalParams
+            },
+            onFinished = { _, _, _ -> },
+        )
 
-        assertTrue(exceptionCaught?.message?.contains("Unsupported tool") == true)
+        assertTrue(finalParams.contains("Unsupported tool: unsupported_tool"))
     }
 
     // ── Parallel tool calls: onToolResultsMapped receives all tool calls ──────────

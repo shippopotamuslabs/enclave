@@ -71,7 +71,7 @@ data class ApiProviderDraft(
     val provider: ApiProvider,
     val modelId: String,
     val baseUrl: String?,
-    val isVision: Boolean,
+    val isMultimodal: Boolean,
     val credentialAlias: String,
     val apiKey: String,
     val sourceCredentialAlias: String? = null,

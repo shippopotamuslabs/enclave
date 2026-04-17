@@ -24,6 +24,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceFactory
 import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceService
+import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -40,6 +41,12 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class GenerateChatResponseUseCaseSearchToolTest {
+
+    private val noOpTracker = object : ExtractedUrlTrackerPort {
+        override val urls: Set<String> get() = emptySet()
+        override fun add(url: String) {}
+        override fun clear() {}
+    }
 
     @Test
     fun `FAST mode exposes tavily_web_search for non-local active models`() = runTest {
@@ -71,6 +78,10 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = true),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            extractedUrlTracker = noOpTracker,
+            compactionPort = object : com.browntowndev.pocketcrew.domain.port.inference.CompactionPort {
+                override suspend fun compactHistory(messages: List<com.browntowndev.pocketcrew.domain.model.chat.ChatMessage>): String? = null
+            },
         )
 
         useCase(
@@ -150,6 +161,10 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = true),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            extractedUrlTracker = noOpTracker,
+            compactionPort = object : com.browntowndev.pocketcrew.domain.port.inference.CompactionPort {
+                override suspend fun compactHistory(messages: List<com.browntowndev.pocketcrew.domain.model.chat.ChatMessage>): String? = null
+            },
         )
 
         val assistantMessageId = MessageId("2")
@@ -209,6 +224,10 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = true),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            extractedUrlTracker = noOpTracker,
+            compactionPort = object : com.browntowndev.pocketcrew.domain.port.inference.CompactionPort {
+                override suspend fun compactHistory(messages: List<com.browntowndev.pocketcrew.domain.model.chat.ChatMessage>): String? = null
+            },
         )
 
         useCase(
@@ -259,6 +278,10 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = false),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            extractedUrlTracker = noOpTracker,
+            compactionPort = object : com.browntowndev.pocketcrew.domain.port.inference.CompactionPort {
+                override suspend fun compactHistory(messages: List<com.browntowndev.pocketcrew.domain.model.chat.ChatMessage>): String? = null
+            },
         )
 
         useCase(
@@ -306,6 +329,10 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = false),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            extractedUrlTracker = noOpTracker,
+            compactionPort = object : com.browntowndev.pocketcrew.domain.port.inference.CompactionPort {
+                override suspend fun compactHistory(messages: List<com.browntowndev.pocketcrew.domain.model.chat.ChatMessage>): String? = null
+            },
         )
 
         useCase(
@@ -353,6 +380,10 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = true),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            extractedUrlTracker = noOpTracker,
+            compactionPort = object : com.browntowndev.pocketcrew.domain.port.inference.CompactionPort {
+                override suspend fun compactHistory(messages: List<com.browntowndev.pocketcrew.domain.model.chat.ChatMessage>): String? = null
+            },
         )
 
         useCase(
@@ -402,6 +433,10 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = false),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            extractedUrlTracker = noOpTracker,
+            compactionPort = object : com.browntowndev.pocketcrew.domain.port.inference.CompactionPort {
+                override suspend fun compactHistory(messages: List<com.browntowndev.pocketcrew.domain.model.chat.ChatMessage>): String? = null
+            },
         )
 
         useCase(
@@ -446,6 +481,10 @@ class GenerateChatResponseUseCaseSearchToolTest {
             ),
             settingsRepository = mockSettingsRepository(searchEnabled = false),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            extractedUrlTracker = noOpTracker,
+            compactionPort = object : com.browntowndev.pocketcrew.domain.port.inference.CompactionPort {
+                override suspend fun compactHistory(messages: List<com.browntowndev.pocketcrew.domain.model.chat.ChatMessage>): String? = null
+            },
         )
 
         useCase(
@@ -487,13 +526,13 @@ class GenerateChatResponseUseCaseSearchToolTest {
         repetitionPenalty = 1.1,
         contextWindow = 4096,
         thinkingEnabled = false,
-        visionCapable = false,
+        isMultimodal = false,
     )
 
     private fun fastVisionConfig(): ActiveModelConfiguration = fastTextConfig().copy(
         id = LocalModelConfigurationId("fast-vision"),
         name = "Fast Vision",
-        visionCapable = true,
+        isMultimodal = true,
     )
 
     private fun apiVisionConfig(): ActiveModelConfiguration = ActiveModelConfiguration(
@@ -510,7 +549,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
         repetitionPenalty = 1.0,
         contextWindow = 8192,
         thinkingEnabled = false,
-        visionCapable = true,
+        isMultimodal = true,
     )
 
     private fun mockMessageRepository(

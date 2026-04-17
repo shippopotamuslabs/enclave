@@ -17,6 +17,8 @@ interface SettingsPreferencesUseCases {
     val updateAllowMemories: UpdateAllowMemoriesUseCase
     val updateSearchEnabled: UpdateSearchEnabledUseCase
     val updateAlwaysUseVisionModel: UpdateAlwaysUseVisionModelUseCase
+    val updateCompactionProviderType: UpdateCompactionProviderTypeUseCase
+    val updateCompactionApiModelId: UpdateCompactionApiModelIdUseCase
     val saveTavilyApiKey: SaveTavilyApiKeyUseCase
     val clearTavilyApiKey: ClearTavilyApiKeyUseCase
 }

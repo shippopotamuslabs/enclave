@@ -60,7 +60,7 @@ class JniLlamaEnginePerformanceAuditTest {
     }
 
     @Test
-    fun `checkAndCompressContext prefers native context usage when available`() {
+    fun `checkAndCompressContext reports native context usage without mutating KV positions`() {
         val engine = spyk(JniLlamaEngine(gpuProfiler), recordPrivateCalls = true)
 
         val loadedField = JniLlamaEngine::class.java.getDeclaredField("loaded")
@@ -85,11 +85,11 @@ class JniLlamaEnginePerformanceAuditTest {
         method.invoke(engine)
 
         verify { engine.getContextUsageForCompression() }
-        verify { engine.applyCompressionForContext(2) }
+        verify(exactly = 0) { engine.applyCompressionForContext(any()) }
     }
 
     @Test
-    fun `checkAndCompressContext falls back to tracked token counts when native usage unavailable`() {
+    fun `checkAndCompressContext falls back to tracked token counts without mutating KV positions`() {
         val engine = spyk(JniLlamaEngine(gpuProfiler), recordPrivateCalls = true)
 
         val loadedField = JniLlamaEngine::class.java.getDeclaredField("loaded")
@@ -114,6 +114,6 @@ class JniLlamaEnginePerformanceAuditTest {
         method.invoke(engine)
 
         verify { engine.getContextUsageForCompression() }
-        verify { engine.applyCompressionForContext(2) }
+        verify(exactly = 0) { engine.applyCompressionForContext(any()) }
     }
 }

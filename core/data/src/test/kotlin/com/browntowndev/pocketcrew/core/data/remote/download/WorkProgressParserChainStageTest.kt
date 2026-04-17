@@ -102,6 +102,7 @@ class WorkProgressParserChainStageTest {
         val currentDownloads = listOf(
             FileProgress(
                 filename = "model.gguf",
+                sha256 = "sha1",
                 modelTypes = listOf(ModelType.MAIN),
                 bytesDownloaded = 1000000L,
                 totalBytes = 1000000L,
@@ -153,6 +154,7 @@ class WorkProgressParserChainStageTest {
         val currentDownloads = listOf(
             FileProgress(
                 filename = "model.gguf",
+                sha256 = "sha1",
                 modelTypes = listOf(ModelType.MAIN),
                 bytesDownloaded = 1000000L,
                 totalBytes = 1000000L,
@@ -322,6 +324,7 @@ class WorkProgressParserChainStageTest {
         val currentDownloads = listOf(
             FileProgress(
                 filename = "model.gguf",
+                sha256 = "sha1",
                 modelTypes = listOf(ModelType.MAIN),
                 bytesDownloaded = 1000000L,
                 totalBytes = 1000000L,

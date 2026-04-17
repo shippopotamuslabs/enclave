@@ -48,7 +48,7 @@ class ApiModelRepositoryImplTest {
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             baseUrl = "https://api.openai.com/v1",
-            isVision = true,
+            isMultimodal = true,
             credentialAlias = "my_key"
         )
 
@@ -60,7 +60,7 @@ class ApiModelRepositoryImplTest {
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             baseUrl = "https://api.openai.com/v1",
-            isVision = true,
+            isMultimodal = true,
             credentialAlias = "my_key",
         )
 
@@ -80,7 +80,7 @@ class ApiModelRepositoryImplTest {
                 it.provider == ApiProvider.OPENAI &&
                 it.modelId == "gpt-4o" &&
                 it.baseUrl == "https://api.openai.com/v1" &&
-                it.isVision == true &&
+                it.isMultimodal == true &&
                 it.apiKeySignature == expectedSignature
             }) 
         }
@@ -96,7 +96,7 @@ class ApiModelRepositoryImplTest {
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "my_key",
-            isVision = false
+            isMultimodal = false
         )
 
         repo.deleteCredentials(credId)
@@ -123,7 +123,7 @@ class ApiModelRepositoryImplTest {
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "my_key",
-            isVision = false,
+            isMultimodal = false,
         )
 
         val id = repo.saveCredentials(creds, "", null)
@@ -151,7 +151,7 @@ class ApiModelRepositoryImplTest {
             provider = ApiProvider.XAI,
             modelId = "grok-4.20",
             credentialAlias = "new_alias",
-            isVision = false,
+            isMultimodal = false,
         )
         io.mockk.every { apiKeyManager.get("existing_alias") } returns "stored-key"
 

@@ -8,5 +8,5 @@ data class DiscoveredApiModel(
     val created: Long? = null,
     val promptPrice: Double? = null,
     val completionPrice: Double? = null,
-    val visionCapable: Boolean? = null,
+    val isMultimodal: Boolean? = null,
 )

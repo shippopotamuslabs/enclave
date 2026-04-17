@@ -64,7 +64,8 @@ fun TavilySourceEntity.toDomain(): TavilySource = TavilySource(
     title = title,
     url = url,
     content = content,
-    score = score
+    score = score,
+    extracted = extracted,
 )
 
 fun TavilySource.toEntity(): TavilySourceEntity = TavilySourceEntity(
@@ -73,5 +74,6 @@ fun TavilySource.toEntity(): TavilySourceEntity = TavilySourceEntity(
     title = title,
     url = url,
     content = content,
-    score = score
+    score = score,
+    extracted = extracted,
 )

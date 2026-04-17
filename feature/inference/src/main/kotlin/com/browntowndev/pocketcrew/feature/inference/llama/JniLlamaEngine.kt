@@ -498,9 +498,10 @@ class JniLlamaEngine @Inject constructor(
     }
 
     /**
-     * Check if context needs compression and apply it if necessary.
-     * Uses llama.cpp's position compression to reduce context window usage.
-     * Prefer native KV usage, falling back to tracked prompt/generated tokens only if needed.
+     * Check context pressure for observability.
+     *
+     * Do not mutate llama.cpp KV positions here. Conversation compaction is handled at
+     * turn boundaries by rebuilding history from persisted summary + tail messages.
      */
     private fun checkAndCompressContext() {
         if (!loaded.get()) return
@@ -529,22 +530,8 @@ class JniLlamaEngine @Inject constructor(
             val usageRatio = totalTokensUsed.toFloat() / contextSize.toFloat()
             Log.i(TAG, "Context usage: $totalTokensUsed / $contextSize tokens (${(usageRatio * 100).toInt()}%)")
 
-            // Compress if approaching threshold
             if (usageRatio >= COMPRESSION_THRESHOLD_RATIO) {
-                Log.i(TAG, "Context at ${(usageRatio * 100).toInt()}%, triggering compression (factor=$COMPRESSION_FACTOR)")
-
-                // Save state before compression (for potential rollback)
-                val stateBefore = saveState()
-
-                val success = applyCompressionForContext(COMPRESSION_FACTOR)
-
-                if (success) {
-                    Log.i(TAG, "Context compression applied successfully")
-                } else {
-                    Log.w(TAG, "Compression failed, attempting to restore state")
-                    // Try to restore state if compression failed
-                    stateBefore?.let { restoreState(it) }
-                }
+                Log.i(TAG, "Context at ${(usageRatio * 100).toInt()}%; deferring compaction to turn-boundary history rebuild")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error checking/compressing context", e)

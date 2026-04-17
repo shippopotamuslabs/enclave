@@ -224,9 +224,34 @@ class ChatInferenceRequestPreparerTest {
         assertFalse(request.options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
         assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
         assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
+        assertTrue(request.options.availableTools.contains(ToolDefinition.GET_MESSAGE_CONTEXT))
         assertTrue(request.options.toolingEnabled)
         assertFalse(request.options.systemPrompt?.contains("tavily_web_search") == true)
         assertTrue(request.options.systemPrompt?.contains("search_chat_history") == true)
+    }
+
+    @Test
+    fun `GET_MESSAGE_CONTEXT is always included in availableTools`() = runTest {
+        val preparer = ChatInferenceRequestPreparer(
+            activeModelProvider = mockActiveModelProvider(
+                fastConfig = fastTextConfig(),
+                visionConfig = null,
+            ),
+            settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
+            messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            searchToolPromptComposer = SearchToolPromptComposer(),
+            loggingPort = mockk(relaxed = true),
+        )
+
+        val request = preparer(
+            prompt = "Hello",
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            modelType = ModelType.FAST,
+        )
+
+        assertTrue(request.options.availableTools.contains(ToolDefinition.GET_MESSAGE_CONTEXT))
     }
 
     @Test
@@ -273,13 +298,13 @@ class ChatInferenceRequestPreparerTest {
         repetitionPenalty = 1.1,
         contextWindow = 4096,
         thinkingEnabled = false,
-        visionCapable = false,
+        isMultimodal = false,
     )
 
     private fun fastVisionConfig(): ActiveModelConfiguration = fastTextConfig().copy(
         id = LocalModelConfigurationId("fast-vision"),
         name = "Fast Vision",
-        visionCapable = true,
+        isMultimodal = true,
     )
 
     private fun apiVisionConfig(): ActiveModelConfiguration = ActiveModelConfiguration(
@@ -296,6 +321,6 @@ class ChatInferenceRequestPreparerTest {
         repetitionPenalty = 1.0,
         contextWindow = 8192,
         thinkingEnabled = false,
-        visionCapable = true,
+        isMultimodal = true,
     )
 }

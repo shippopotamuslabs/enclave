@@ -2,11 +2,14 @@ package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
+import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
+import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.inference.CompactionPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceService
@@ -64,10 +67,13 @@ class ChatHistoryRehydratorTest {
                 activeAssistant,
             )
             coEvery { getVisionAnalysesForMessages(any()) } returns mapOf(priorUser.id to listOf(analysis))
+            coEvery { getChatSummary(any()) } returns null
         }
         val service = FakeInferenceService()
+        val compactionPort = mockk<CompactionPort>(relaxed = true)
         val rehydrator = ChatHistoryRehydrator(
             messageRepository = repository,
+            compactionPort = compactionPort,
             loggingPort = mockk<LoggingPort>(relaxed = true),
         )
 
@@ -96,10 +102,13 @@ class ChatHistoryRehydratorTest {
         val repository = mockk<MessageRepository> {
             coEvery { getMessagesForChat(any()) } returns listOf(priorUser)
             coEvery { getVisionAnalysesForMessages(any()) } returns emptyMap()
+            coEvery { getChatSummary(any()) } returns null
         }
         val service = FakeInferenceService()
+        val compactionPort = mockk<CompactionPort>(relaxed = true)
         val rehydrator = ChatHistoryRehydrator(
             messageRepository = repository,
+            compactionPort = compactionPort,
             loggingPort = mockk<LoggingPort>(relaxed = true),
         )
 
@@ -111,5 +120,71 @@ class ChatHistoryRehydratorTest {
         )
 
         assertEquals("[User attached an image]", service.getHistory().single().content)
+    }
+
+    @Test
+    fun `rehydrator replaces stale service history when local summarization is disabled`() = runTest {
+        val priorUser = Message(
+            id = MessageId("prior-user"),
+            chatId = ChatId("chat"),
+            content = Content(text = "word ".repeat(200)),
+            role = Role.USER,
+        )
+        val repository = mockk<MessageRepository> {
+            coEvery { getMessagesForChat(any()) } returns listOf(priorUser)
+            coEvery { getVisionAnalysesForMessages(any()) } returns emptyMap()
+            coEvery { getChatSummary(any()) } returns null
+        }
+        val service = FakeInferenceService()
+        service.setHistory(listOf(ChatMessage(Role.USER, "stale history")))
+        val compactionPort = mockk<CompactionPort> {
+            coEvery { compactHistory(any()) } returns null
+        }
+        val rehydrator = ChatHistoryRehydrator(
+            messageRepository = repository,
+            compactionPort = compactionPort,
+            loggingPort = mockk<LoggingPort>(relaxed = true),
+        )
+
+        rehydrator(
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("current-user"),
+            assistantMessageId = MessageId("active-assistant"),
+            service = service,
+            contextWindowTokens = 128,
+            allowLocalSummarization = false,
+        )
+
+        assertFalse(service.getHistory().any { it.content == "stale history" })
+    }
+
+    @Test
+    fun `rehydrator prepends saved summary as system context`() = runTest {
+        val summary = ChatSummary(
+            chatId = ChatId("chat"),
+            content = "The user prefers concise answers.",
+            lastSummarizedMessageId = null,
+        )
+        val repository = mockk<MessageRepository> {
+            coEvery { getMessagesForChat(any()) } returns emptyList()
+            coEvery { getVisionAnalysesForMessages(any()) } returns emptyMap()
+            coEvery { getChatSummary(any()) } returns summary
+        }
+        val service = FakeInferenceService()
+        val rehydrator = ChatHistoryRehydrator(
+            messageRepository = repository,
+            compactionPort = mockk(relaxed = true),
+            loggingPort = mockk<LoggingPort>(relaxed = true),
+        )
+
+        rehydrator(
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("current-user"),
+            assistantMessageId = MessageId("active-assistant"),
+            service = service,
+        )
+
+        assertEquals(Role.SYSTEM, service.getHistory().single().role)
+        assertTrue(service.getHistory().single().content.contains(summary.content))
     }
 }

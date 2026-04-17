@@ -136,7 +136,7 @@ fun ModelConfigurationScreen(
             val isVisionSlot = assignmentSlot == ModelType.VISION
             val localAssets = if (isVisionSlot) emptyList() else uiState.localModelsSheet.models
             val apiAssets = if (isVisionSlot) {
-                uiState.apiProvidersSheet.assets.filter { it.isVision }
+                uiState.apiProvidersSheet.assets.filter { it.isMultimodal }
             } else {
                 uiState.apiProvidersSheet.assets
             }
@@ -190,7 +190,7 @@ fun DefaultAssignmentsCard(
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
                                 )
-                                if (assignment.isVision) {
+                                if (assignment.isMultimodal) {
                                     Spacer(modifier = Modifier.width(4.dp))
                                     Icon(
                                         imageVector = Icons.Default.Visibility,
@@ -341,7 +341,7 @@ fun AssignmentSelectionContent(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            if (state.asset.visionCapable) {
+                            if (state.asset.isMultimodal) {
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(
                                     imageVector = Icons.Default.Visibility,
@@ -377,7 +377,7 @@ fun AssignmentSelectionContent(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
-                            if (state.asset.isVision) {
+                            if (state.asset.isMultimodal) {
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(
                                     imageVector = Icons.Default.Visibility,
@@ -455,7 +455,7 @@ fun AssignmentSelectionContent(
                                             title = asset.friendlyName,
                                             subtitle = "${asset.providerName} • ${asset.format}",
                                             presetCount = asset.configurations.size,
-                                            isVision = asset.visionCapable,
+                                            isMultimodal = asset.isMultimodal,
                                             isSelected = asset.configurations.any { it.id == selectedLocalId },
                                             onClick = { viewState = AssignmentSelectionView.LocalConfigList(asset) }
                                         )
@@ -466,7 +466,7 @@ fun AssignmentSelectionContent(
                                             title = asset.displayName,
                                             subtitle = "${asset.provider.displayName} • ${asset.modelId}",
                                             presetCount = asset.configurations.size,
-                                            isVision = asset.isVision,
+                                            isMultimodal = asset.isMultimodal,
                                             isSelected = asset.configurations.any { it.id == selectedApiId },
                                             onClick = { viewState = AssignmentSelectionView.ApiConfigList(asset) }
                                         )
@@ -564,7 +564,7 @@ private fun AssignmentAssetCard(
     title: String,
     subtitle: String,
     presetCount: Int,
-    isVision: Boolean = false,
+    isMultimodal: Boolean = false,
     isSelected: Boolean = false,
     onClick: () -> Unit
 ) {
@@ -603,7 +603,7 @@ private fun AssignmentAssetCard(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    if (isVision) {
+                    if (isMultimodal) {
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.Visibility,
@@ -761,7 +761,7 @@ fun PreviewAssignmentAssetCard() {
                 title = "Meta Llama 3 8B (Vision)",
                 subtitle = "meta-llama • GGUF",
                 presetCount = 3,
-                isVision = true,
+                isMultimodal = true,
                 isSelected = false,
                 onClick = {}
             )

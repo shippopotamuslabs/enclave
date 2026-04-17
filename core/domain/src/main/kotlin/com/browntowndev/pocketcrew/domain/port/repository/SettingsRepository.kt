@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
+import com.browntowndev.pocketcrew.domain.model.chat.CompactionProviderType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import kotlinx.coroutines.flow.Flow
@@ -18,6 +19,8 @@ data class SettingsData(
     val searchEnabled: Boolean = false,
     val alwaysUseVisionModel: Boolean = false,
     val tavilyKeyPresent: Boolean = false,
+    val compactionProviderType: CompactionProviderType = CompactionProviderType.DISABLED,
+    val compactionApiModelId: String? = null,
 )
 
 /**
@@ -39,6 +42,8 @@ interface SettingsRepository {
     suspend fun updateAllowMemories(allowed: Boolean)
     suspend fun updateSearchEnabled(enabled: Boolean)
     suspend fun updateAlwaysUseVisionModel(enabled: Boolean)
+    suspend fun updateCompactionProviderType(type: CompactionProviderType)
+    suspend fun updateCompactionApiModelId(modelId: String?)
     suspend fun saveTavilyApiKey(apiKey: String)
     suspend fun clearTavilyApiKey()
 }

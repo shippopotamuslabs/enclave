@@ -44,7 +44,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
             defaultAssistantMessageId = MessageId("assistant"),
             chatRepository = chatRepository,
         )
-        val persistUseCase = PersistAccumulatedChatMessagesUseCase(chatRepository)
+        val persistUseCase = PersistAccumulatedChatMessagesUseCase(chatRepository, emptySet())
 
         manager.reduce(
             MessageGenerationState.GeneratingText(
@@ -90,7 +90,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
             defaultAssistantMessageId = MessageId("assistant"),
             chatRepository = chatRepository,
         )
-        val persistUseCase = PersistAccumulatedChatMessagesUseCase(chatRepository)
+        val persistUseCase = PersistAccumulatedChatMessagesUseCase(chatRepository, emptySet())
 
         manager.reduce(
             MessageGenerationState.GeneratingText(
@@ -138,7 +138,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
         )
 
         manager.reduce(MessageGenerationState.Processing(ModelType.FAST))
-        PersistAccumulatedChatMessagesUseCase(chatRepository)(manager)
+        PersistAccumulatedChatMessagesUseCase(chatRepository, emptySet())(manager)
 
         coVerify(exactly = 1) { chatRepository.persistAllMessageData(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
         assertEquals(MessageState.PROCESSING, stateSlot.captured)

@@ -78,7 +78,7 @@ class ApiModelRepositoryImpl @Inject constructor(
                 provider = credentials.provider,
                 modelId = credentials.modelId,
                 baseUrl = storedBaseUrl,
-                isVision = credentials.isVision,
+                isMultimodal = credentials.isMultimodal,
                 credentialAlias = credentials.credentialAlias,
                 apiKeySignature = apiKeySignature,
                 createdAt = now,
@@ -93,7 +93,7 @@ class ApiModelRepositoryImpl @Inject constructor(
                 provider = credentials.provider,
                 modelId = credentials.modelId,
                 baseUrl = storedBaseUrl,
-                isVision = credentials.isVision,
+                isMultimodal = credentials.isMultimodal,
                 credentialAlias = credentials.credentialAlias,
                 apiKeySignature = apiKeySignature,
                 createdAt = existingEntity?.createdAt ?: now,
@@ -195,7 +195,7 @@ class ApiModelRepositoryImpl @Inject constructor(
         provider = provider,
         modelId = modelId,
         baseUrl = baseUrl,
-        isVision = isVision,
+        isMultimodal = isMultimodal,
         credentialAlias = credentialAlias
     )
     

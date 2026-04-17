@@ -31,8 +31,8 @@ internal class ChatInferenceRequestPreparer(
         val visionConfig = activeModelProvider.getActiveConfiguration(ModelType.VISION)
         val resolvedImageTarget = messageRepository.resolveLatestImageBearingUserMessage(chatId, userMessageId)
         val searchEnabled = settings.searchEnabled
-        val activeVisionCapable = config?.visionCapable == true
-        val apiVisionConfigured = visionConfig?.isLocal == false && visionConfig.visionCapable
+        val activeVisionCapable = config?.isMultimodal == true
+        val apiVisionConfigured = visionConfig?.isLocal == false && visionConfig.isMultimodal
         val hasImageContext = resolvedImageTarget != null
         val imageHandling = when {
             hasImageContext &&
@@ -84,6 +84,7 @@ internal class ChatInferenceRequestPreparer(
             if (imageHandling == ChatImageHandling.TOOL) add(ToolDefinition.ATTACHED_IMAGE_INSPECT)
             add(ToolDefinition.SEARCH_CHAT_HISTORY)
             add(ToolDefinition.SEARCH_CHAT)
+            add(ToolDefinition.GET_MESSAGE_CONTEXT)
         }
 
         return PreparedChatInferenceRequest(

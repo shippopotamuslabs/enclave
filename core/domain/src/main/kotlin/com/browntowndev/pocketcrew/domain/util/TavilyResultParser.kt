@@ -2,8 +2,11 @@ package com.browntowndev.pocketcrew.domain.util
 
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
-import org.json.JSONObject
-import org.json.JSONArray
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.double
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 object TavilyResultParser {
     /**
@@ -16,18 +19,18 @@ object TavilyResultParser {
     fun parse(messageId: MessageId, resultJson: String): List<TavilySource> {
         val sources = mutableListOf<TavilySource>()
         runCatching {
-            val payload = JSONObject(resultJson)
-            val results = payload.optJSONArray("results") ?: JSONArray()
+            val payload = Json.parseToJsonElement(resultJson).jsonObject
+            val results = payload["results"]?.jsonArray ?: return@runCatching
 
-            for (i in 0 until results.length()) {
-                val item = results.optJSONObject(i) ?: continue
+            for (itemElement in results) {
+                val item = itemElement.jsonObject
                 sources.add(
                     TavilySource(
                         messageId = messageId,
-                        title = item.optString("title", ""),
-                        url = item.optString("url", ""),
-                        content = item.optString("content", ""),
-                        score = item.optDouble("score", 0.0)
+                        title = item["title"]?.jsonPrimitive?.content ?: "",
+                        url = item["url"]?.jsonPrimitive?.content ?: "",
+                        content = item["content"]?.jsonPrimitive?.content ?: "",
+                        score = item["score"]?.jsonPrimitive?.double ?: 0.0
                     )
                 )
             }

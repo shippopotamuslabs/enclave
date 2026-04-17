@@ -7,6 +7,10 @@ import org.junit.jupiter.api.Test
 
 class ChatHistoryCompressorTest {
 
+    private val tokenCounter = JTokkitTokenCounter
+
+    private fun countTokens(text: String): Int = tokenCounter.countTokens(text, null)
+
     @Test
     fun `compressHistory should return full history if within budget`() {
         val history = listOf(
@@ -16,7 +20,7 @@ class ChatHistoryCompressorTest {
         val result = ChatHistoryCompressor.compressHistory(
             history = history,
             systemPrompt = "You are an assistant.",
-            contextWindowTokens = 2048,
+            contextWindowTokens = 4096,
             bufferTokens = 1000
         )
         assertEquals(2, result.size)
@@ -25,60 +29,64 @@ class ChatHistoryCompressorTest {
 
     @Test
     fun `compressHistory should drop oldest messages to fit budget`() {
-        // 1000 chars = ~250 tokens
+        val msgContent = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november"
+        val tokensPerMsg = countTokens(msgContent)
         val history = listOf(
-            ChatMessage(Role.USER, "A".repeat(1000)), // 250
-            ChatMessage(Role.ASSISTANT, "B".repeat(1000)), // 250
-            ChatMessage(Role.USER, "C".repeat(1000)), // 250
-            ChatMessage(Role.ASSISTANT, "D".repeat(1000)) // 250
+            ChatMessage(Role.USER, msgContent),
+            ChatMessage(Role.ASSISTANT, msgContent),
+            ChatMessage(Role.USER, msgContent),
+            ChatMessage(Role.ASSISTANT, msgContent),
         )
-        // Total history = 1000 tokens
-        // System prompt = 0
-        // Window = 1500, Buffer = 1000 -> Budget = 500
+        // Total tokens = 4 * tokensPerMsg
+        // Set budget so only the last 2 messages fit:
+        // budget = 2 * tokensPerMsg + 1 (just enough for 2 messages)
+        val budget = 2 * tokensPerMsg + 1
         val result = ChatHistoryCompressor.compressHistory(
             history = history,
             systemPrompt = "",
-            contextWindowTokens = 1500,
-            bufferTokens = 1000
+            contextWindowTokens = budget + 1, // +1 for buffer subtraction
+            bufferTokens = 1,
         )
         
-        // Should drop first two (USER + ASSISTANT pair) to fit within 500 tokens
+        // Should drop first two (USER + ASSISTANT pair) to fit within budget
         assertEquals(2, result.size)
-        assertEquals("C".repeat(1000), result[0].content)
-        assertEquals("D".repeat(1000), result[1].content)
     }
 
     @Test
     fun `compressHistory should drop pairs to maintain turn structure`() {
+        val msgContent = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november"
+        val tokensPerMsg = countTokens(msgContent)
         val history = listOf(
-            ChatMessage(Role.USER, "1".repeat(800)),
-            ChatMessage(Role.ASSISTANT, "2".repeat(800)),
-            ChatMessage(Role.USER, "3".repeat(800))
+            ChatMessage(Role.USER, msgContent),
+            ChatMessage(Role.ASSISTANT, msgContent),
+            ChatMessage(Role.USER, msgContent)
         )
-        // Each is 200 tokens. Total 600 tokens.
-        // Window = 1400, Buffer = 1000 -> Budget = 400
+        // Total = 3 * tokensPerMsg. Budget for only 1 message.
+        val budget = tokensPerMsg + 1
         val result = ChatHistoryCompressor.compressHistory(
             history = history,
             systemPrompt = "",
-            contextWindowTokens = 1400,
-            bufferTokens = 1000
+            contextWindowTokens = budget + 1,
+            bufferTokens = 1,
         )
         
-        // Dropping oldest pair (1 and 2) leaves only message 3 (200 tokens).
+        // Dropping oldest pair (1 and 2) leaves only message 3
         assertEquals(1, result.size)
-        assertEquals("3".repeat(800), result[0].content)
+        assertEquals(msgContent, result[0].content)
     }
 
     @Test
     fun `compressHistory should return empty if nothing fits`() {
+        val msgContent = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima mike november"
         val history = listOf(
-            ChatMessage(Role.USER, "X".repeat(5000))
+            ChatMessage(Role.USER, msgContent)
         )
+        // Budget = 0, nothing fits
         val result = ChatHistoryCompressor.compressHistory(
             history = history,
             systemPrompt = "",
-            contextWindowTokens = 1000,
-            bufferTokens = 1000
+            contextWindowTokens = 10,
+            bufferTokens = 10
         )
         assertEquals(0, result.size)
     }

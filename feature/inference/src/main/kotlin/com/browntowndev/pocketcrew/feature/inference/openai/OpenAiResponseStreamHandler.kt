@@ -251,9 +251,6 @@ internal class OpenAiResponseStreamHandler(
         )
         state.providerToolCallIds += cachedFunctionCall?.callId ?: functionCallDone.itemId()
         state.providerToolItemIds += cachedFunctionCall?.itemId ?: functionCallDone.itemId()
-        if (!allowToolCall) {
-            throw IllegalStateException("Search skill recursion limit exceeded")
-        }
         return state
     }
 

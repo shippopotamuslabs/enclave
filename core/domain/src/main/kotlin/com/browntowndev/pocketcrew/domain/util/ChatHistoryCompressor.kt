@@ -18,31 +18,36 @@ object ChatHistoryCompressor {
      *
      * @param history The list of chat messages to compress.
      * @param systemPrompt The system prompt that will be prepended to the history.
+     * @param currentPrompt The user prompt that will be sent with the history.
      * @param contextWindowTokens The total context window size of the model.
      * @param bufferTokens Safety buffer to reserve for the model's new response.
-     * @param charsPerToken Estimated characters per token for token count calculation.
+     * @param modelId Optional model ID to use for accurate token counting.
+     * @param tokenCounter The token counter implementation to use.
      * @return A truncated list of messages that fits within the target budget.
      */
     fun compressHistory(
         history: List<ChatMessage>,
         systemPrompt: String,
+        currentPrompt: String = "",
         contextWindowTokens: Int,
         bufferTokens: Int = 1000,
-        charsPerToken: Int = 4,
+        modelId: String? = null,
+        tokenCounter: TokenCounter = JTokkitTokenCounter,
     ): List<ChatMessage> {
         if (history.isEmpty()) return emptyList()
 
         val maxAllowedTokens = contextWindowTokens - bufferTokens
         if (maxAllowedTokens <= 0) return emptyList()
 
-        val systemPromptTokens = systemPrompt.length / charsPerToken
+        val systemPromptTokens = tokenCounter.countTokens(systemPrompt, modelId)
+        val currentPromptTokens = tokenCounter.countTokens(currentPrompt, modelId)
         
         var currentHistory = history.toMutableList()
         
         while (currentHistory.isNotEmpty()) {
-            val totalChars = currentHistory.sumOf { it.content.length }
-            val estimatedHistoryTokens = totalChars / charsPerToken
-            val totalEstimatedTokens = systemPromptTokens + estimatedHistoryTokens
+            val totalEstimatedTokens = systemPromptTokens +
+                currentPromptTokens +
+                currentHistory.sumOf { tokenCounter.countTokens(it.content, modelId) }
 
             if (totalEstimatedTokens <= maxAllowedTokens) {
                 break

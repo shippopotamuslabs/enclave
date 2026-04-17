@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -27,7 +28,9 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -345,31 +348,44 @@ fun InputBar(
                 // Send / Stop
                 val hasSendableContent = textFieldValue.text.isNotBlank() || selectedImageUri != null
                 val isSendDisabled = (isGenerating || isGlobalInferenceBlocked) && !isGenerating
-                IconButton(
-                    onClick = {
-                        if (isGenerating) {
-                            onStopGenerating()
-                        } else if (hasSendableContent && !isSendDisabled) {
-                            val textToSend = textFieldValue.text
-                            onSend(textToSend) // Send FIRST while inputText still has value
-                            textFieldValue = TextFieldValue("") // Clear locally
-                            onInputChange("") // Clear parent state
-                            isExpanded = false
-                            focusManager.clearFocus()
-                        }
-                    },
-                    enabled = isGenerating || (hasSendableContent && !isSendDisabled)
-                ) {
-                    Icon(
-                        imageVector = if (isGenerating) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send,
-                        contentDescription = if (isGenerating) "Stop generating" else "Send message",
-                        tint = when {
-                            isGenerating -> MaterialTheme.colorScheme.error
-                            isSendDisabled -> MaterialTheme.colorScheme.onSurfaceVariant
-                            hasSendableContent -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
+                if (isGenerating) {
+                    FilledIconButton(
+                        onClick = onStopGenerating,
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f),
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Stop generating",
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = {
+                            if (hasSendableContent && !isSendDisabled) {
+                                val textToSend = textFieldValue.text
+                                onSend(textToSend) // Send FIRST while inputText still has value
+                                textFieldValue = TextFieldValue("") // Clear locally
+                                onInputChange("") // Clear parent state
+                                isExpanded = false
+                                focusManager.clearFocus()
+                            }
+                        },
+                        enabled = hasSendableContent && !isSendDisabled
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "Send message",
+                            tint = when {
+                                isSendDisabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                                hasSendableContent -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
                 }
             }
 
@@ -486,6 +502,27 @@ fun PreviewInputBarThinkingMode() {
             photoAttachmentDisabledReason = null,
             selectedMode = ChatModeUi.THINKING,
             isGenerating = false,
+            onInputChange = {},
+            onModeChange = {},
+            onSend = {},
+            onStopGenerating = {},
+            onAttach = {},
+            onClearAttachment = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+fun PreviewInputBarStopIndicator() {
+    PocketCrewTheme {
+        InputBar(
+            inputText = "Generating response...",
+            selectedImageUri = null,
+            isPhotoAttachmentEnabled = true,
+            photoAttachmentDisabledReason = null,
+            selectedMode = ChatModeUi.FAST,
+            isGenerating = true,
             onInputChange = {},
             onModeChange = {},
             onSend = {},

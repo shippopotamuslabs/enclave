@@ -228,6 +228,18 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun onCompactionProviderTypeChange(type: com.browntowndev.pocketcrew.domain.model.chat.CompactionProviderType) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update compaction provider", "Failed to update setting")) {
+            preferencesUseCases.updateCompactionProviderType(type)
+        }
+    }
+
+    fun onCompactionApiModelIdChange(modelId: String?) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update compaction model", "Failed to update setting")) {
+            preferencesUseCases.updateCompactionApiModelId(modelId)
+        }
+    }
+
     fun onShowCustomizationSheet(show: Boolean) {
         _sheetVisibility.update { it.copy(customization = show) }
     }
@@ -555,6 +567,9 @@ class SettingsViewModel @Inject constructor(
 
     fun onTavilyApiKeyChange(key: String) {
         _currentTavilyApiKey.value = key
+        if (key.isBlank() && !uiState.value.searchSkillEditor.tavilyKeyPresent) {
+            _searchSkillState.update { it.copy(enabled = false) }
+        }
     }
 
     fun onClearTavilyApiKey() {
@@ -617,7 +632,7 @@ class SettingsViewModel @Inject constructor(
                     provider = assetDraft.provider,
                     modelId = assetDraft.modelId,
                     baseUrl = assetDraft.baseUrl,
-                    isVision = assetDraft.isVision,
+                    isMultimodal = assetDraft.isMultimodal,
                     credentialAlias = assetDraft.credentialAlias,
                     apiKey = _currentApiKey.value,
                     sourceCredentialAlias = sourceCredentialAlias,
@@ -872,8 +887,8 @@ class SettingsViewModel @Inject constructor(
         if (asset == null) return null
         val discoveredVisionCapability = models
             .find { it.id == asset.modelId }
-            ?.visionCapable
-        return discoveredVisionCapability?.let { asset.copy(isVision = it) } ?: asset
+            ?.isMultimodal
+        return discoveredVisionCapability?.let { asset.copy(isMultimodal = it) } ?: asset
     }
 
     private fun ApiModelAssetUi?.matchesDiscoveryScope(other: ApiModelAssetUi?): Boolean {

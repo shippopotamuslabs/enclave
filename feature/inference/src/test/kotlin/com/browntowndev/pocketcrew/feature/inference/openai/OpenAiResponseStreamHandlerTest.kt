@@ -213,8 +213,10 @@ class OpenAiResponseStreamHandlerTest {
         }
 
     @Test
-    fun `handleEvent throws IllegalStateException when allowToolCall is false and function call arrives`() =
+    fun `handleEvent captures tool call even when allowToolCall is false`() =
         kotlinx.coroutines.test.runTest {
+            // allowToolCall = false is a signal to the model, but if it hallucinations
+            // a call anyway, we capture it so the orchestrator can report the limit error.
             val handler = createHandler(allowToolCall = false)
             val state = StreamState()
 
@@ -227,12 +229,9 @@ class OpenAiResponseStreamHandlerTest {
             every { event.isFunctionCallArgumentsDone() } returns true
             every { event.functionCallArgumentsDone() } returns java.util.Optional.of(functionCallDone)
 
-            try {
-                handler.handleEvent(event, state)
-                org.junit.jupiter.api.Assertions.fail("Expected IllegalStateException")
-            } catch (e: IllegalStateException) {
-                assertEquals("Search skill recursion limit exceeded", e.message)
-            }
+            handler.handleEvent(event, state)
+            assertEquals(1, state.toolCallRequests.size)
+            assertEquals("tavily_web_search", state.toolCallRequests[0].toolName)
         }
 
     private fun mockFunctionCallArgumentsDoneEvent(

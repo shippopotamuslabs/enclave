@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
@@ -15,8 +17,6 @@ import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPo
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import io.mockk.coEvery
-import io.mockk.coVerify
-import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -60,19 +60,20 @@ class InitializeModelsUseCaseTest {
         // Given
         val sha = "sha256-hash"
         val fileName = "model.gguf"
-        
+
         // Remote config says R2
         val remoteAsset = createMockAsset(sha, fileName, source = DownloadSource.CLOUDFLARE_R2)
-        val remoteConfigs = mapOf(ModelType.MAIN to remoteAsset)
-        coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(remoteConfigs)
+        val remoteAssets = listOf(remoteAsset)
+        coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(remoteAssets)
 
         // Local DB has soft-deleted asset with default HF source
         val softDeletedAsset = createMockAsset(sha, fileName, source = DownloadSource.HUGGING_FACE)
         coEvery { localModelRepository.getSoftDeletedModels() } returns listOf(softDeletedAsset)
 
         // CheckModelsUseCase returns empty results for simplicity
+        // Since the asset is soft-deleted, it will be filtered out of slot assignments
         val emptyResult = DownloadModelsResult(
-            allModels = remoteConfigs,
+            allModels = emptyMap(),
             modelsToDownload = emptyList(),
             scanResult = ModelScanResult(emptyList(), emptyMap(), true),
             availableToRedownload = emptyList()
@@ -103,7 +104,21 @@ class InitializeModelsUseCaseTest {
                 modelFileFormat = ModelFileFormat.GGUF,
                 source = source
             ),
-            configurations = emptyList()
+            configurations = listOf(
+                LocalModelConfiguration(
+                    id = LocalModelConfigurationId("config-1"),
+                    localModelId = LocalModelId("1"),
+                    displayName = "Test Config",
+                    maxTokens = 2048,
+                    contextWindow = 4096,
+                    temperature = 0.7,
+                    topP = 0.95,
+                    topK = 40,
+                    repetitionPenalty = 1.1,
+                    systemPrompt = "You are helpful.",
+                    defaultAssignments = listOf(ModelType.MAIN)
+                )
+            )
         )
     }
 }

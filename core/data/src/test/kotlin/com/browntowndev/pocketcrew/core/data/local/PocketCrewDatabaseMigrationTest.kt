@@ -36,6 +36,7 @@ class PocketCrewDatabaseMigrationTest {
         assertTrue(hasTable("api_credentials"))
         assertTrue(hasTable("api_model_configurations"))
         assertTrue(hasTable("default_models"))
+        assertTrue(hasTable("chat_summary"))
         assertFalse(hasTable("models"))
         assertFalse(hasTable("api_models"))
 

@@ -1,11 +1,12 @@
 package com.browntowndev.pocketcrew.core.data.download
 
 import com.browntowndev.pocketcrew.domain.model.download.DownloadFileSpec
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.decodeFromString
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
-import org.json.JSONObject
 
 /**
  * Unit tests for ModelDownloadWorker file spec parsing.
@@ -13,19 +14,23 @@ import org.json.JSONObject
  */
 class ModelDownloadWorkerTest {
 
+    private val json = Json { ignoreUnknownKeys = true }
+
     @Test
     fun `parseFileSpecFromJson correctly parses complete file spec`() {
-        val json = JSONObject().apply {
-            put("remoteFileName", "Llama-3-8B-Instruct-Q4_K_M.gguf")
-            put("localFileName", "Llama-3-8B-Instruct-Q4_K_M.gguf")
-            put("sha256", "abc123def456")
-            put("sizeInBytes", 5_200_000_000L)
-            put("huggingFaceModelName", "meta-llama/Llama-3-8B-Instruct")
-            put("source", "HUGGING_FACE")
-            put("modelFileFormat", "GGUF")
-        }
+        val jsonStr = """
+            {
+                "remoteFileName": "Llama-3-8B-Instruct-Q4_K_M.gguf",
+                "localFileName": "Llama-3-8B-Instruct-Q4_K_M.gguf",
+                "sha256": "abc123def456",
+                "sizeInBytes": 5200000000,
+                "huggingFaceModelName": "meta-llama/Llama-3-8B-Instruct",
+                "source": "HUGGING_FACE",
+                "modelFileFormat": "GGUF"
+            }
+        """.trimIndent()
 
-        val result = parseFileSpecFromJson(json)
+        val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 
         assertNotNull(result)
         assertEquals("Llama-3-8B-Instruct-Q4_K_M.gguf", result.remoteFileName)
@@ -38,17 +43,19 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseFileSpecFromJson handles litertlm format`() {
-        val json = JSONObject().apply {
-            put("remoteFileName", "gemma-3n-E2B-it-int4.litertlm")
-            put("localFileName", "gemma-3n-E2B-it-int4.litertlm")
-            put("sha256", "def789ghi012")
-            put("sizeInBytes", 2_800_000_000L)
-            put("huggingFaceModelName", "google/gemma-3n-E2B")
-            put("source", "HUGGING_FACE")
-            put("modelFileFormat", "LITERTLM")
-        }
+        val jsonStr = """
+            {
+                "remoteFileName": "gemma-3n-E2B-it-int4.litertlm",
+                "localFileName": "gemma-3n-E2B-it-int4.litertlm",
+                "sha256": "def789ghi012",
+                "sizeInBytes": 2800000000,
+                "huggingFaceModelName": "google/gemma-3n-E2B",
+                "source": "HUGGING_FACE",
+                "modelFileFormat": "LITERTLM"
+            }
+        """.trimIndent()
 
-        val result = parseFileSpecFromJson(json)
+        val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 
         assertNotNull(result)
         assertEquals("LITERTLM", result.modelFileFormat)
@@ -56,17 +63,18 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseFileSpecFromJson defaults modelFileFormat on missing field`() {
-        val json = JSONObject().apply {
-            put("remoteFileName", "model.unknown")
-            put("localFileName", "model.unknown")
-            put("sha256", "abc123")
-            put("sizeInBytes", 1000L)
-            put("huggingFaceModelName", "test/model")
-            put("source", "HUGGING_FACE")
-            // modelFileFormat omitted - should default to LITERTLM
-        }
+        val jsonStr = """
+            {
+                "remoteFileName": "model.unknown",
+                "localFileName": "model.unknown",
+                "sha256": "abc123",
+                "sizeInBytes": 1000,
+                "huggingFaceModelName": "test/model",
+                "source": "HUGGING_FACE"
+            }
+        """.trimIndent()
 
-        val result = parseFileSpecFromJson(json)
+        val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 
         assertNotNull(result)
         assertEquals("LITERTLM", result.modelFileFormat)
@@ -74,21 +82,23 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseFileSpecFromJson parses mmproj fields`() {
-        val json = JSONObject().apply {
-            put("remoteFileName", "model.gguf")
-            put("localFileName", "model.gguf")
-            put("sha256", "sha123")
-            put("sizeInBytes", 1000L)
-            put("huggingFaceModelName", "test/model")
-            put("source", "HUGGING_FACE")
-            put("modelFileFormat", "GGUF")
-            put("mmprojRemoteFileName", "mmproj-model.gguf")
-            put("mmprojLocalFileName", "mmproj-model.gguf")
-            put("mmprojSha256", "mmsha456")
-            put("mmprojSizeInBytes", 500L)
-        }
+        val jsonStr = """
+            {
+                "remoteFileName": "model.gguf",
+                "localFileName": "model.gguf",
+                "sha256": "sha123",
+                "sizeInBytes": 1000,
+                "huggingFaceModelName": "test/model",
+                "source": "HUGGING_FACE",
+                "modelFileFormat": "GGUF",
+                "mmprojRemoteFileName": "mmproj-model.gguf",
+                "mmprojLocalFileName": "mmproj-model.gguf",
+                "mmprojSha256": "mmsha456",
+                "mmprojSizeInBytes": 500
+            }
+        """.trimIndent()
 
-        val result = parseFileSpecFromJson(json)
+        val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 
         assertNotNull(result)
         assertEquals("mmproj-model.gguf", result.mmprojRemoteFileName)
@@ -99,18 +109,19 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseFileSpecFromJson handles empty optional fields`() {
-        val json = JSONObject().apply {
-            put("remoteFileName", "model.gguf")
-            put("localFileName", "model.gguf")
-            put("sha256", "abc123")
-            put("sizeInBytes", 1000L)
-            put("huggingFaceModelName", "test/model")
-            put("source", "HUGGING_FACE")
-            put("modelFileFormat", "GGUF")
-            // mmproj fields omitted
-        }
+        val jsonStr = """
+            {
+                "remoteFileName": "model.gguf",
+                "localFileName": "model.gguf",
+                "sha256": "abc123",
+                "sizeInBytes": 1000,
+                "huggingFaceModelName": "test/model",
+                "source": "HUGGING_FACE",
+                "modelFileFormat": "GGUF"
+            }
+        """.trimIndent()
 
-        val result = parseFileSpecFromJson(json)
+        val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 
         assertNotNull(result)
         assertNull(result.mmprojRemoteFileName)
@@ -121,39 +132,20 @@ class ModelDownloadWorkerTest {
 
     @Test
     fun `parseFileSpecFromJson defaults source to HUGGING_FACE when omitted`() {
-        val json = JSONObject().apply {
-            put("remoteFileName", "model.gguf")
-            put("localFileName", "model.gguf")
-            put("sha256", "abc123")
-            put("sizeInBytes", 1000L)
-            put("huggingFaceModelName", "test/model")
-            // source omitted - should default to HUGGING_FACE
-            put("modelFileFormat", "GGUF")
-        }
+        val jsonStr = """
+            {
+                "remoteFileName": "model.gguf",
+                "localFileName": "model.gguf",
+                "sha256": "abc123",
+                "sizeInBytes": 1000,
+                "huggingFaceModelName": "test/model",
+                "modelFileFormat": "GGUF"
+            }
+        """.trimIndent()
 
-        val result = parseFileSpecFromJson(json)
+        val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
 
         assertNotNull(result)
         assertEquals("HUGGING_FACE", result.source)
-    }
-
-    /**
-     * Helper function that mirrors the actual parseFileSpecFromJson implementation.
-     * This is a copy for testing purposes - in the actual worker it is private.
-     */
-    private fun parseFileSpecFromJson(json: JSONObject): DownloadFileSpec {
-        return DownloadFileSpec(
-            remoteFileName = json.getString("remoteFileName"),
-            localFileName = json.getString("localFileName"),
-            sha256 = json.getString("sha256"),
-            sizeInBytes = json.getLong("sizeInBytes"),
-            huggingFaceModelName = json.getString("huggingFaceModelName"),
-            source = json.optString("source", "HUGGING_FACE"),
-            modelFileFormat = json.optString("modelFileFormat", "LITERTLM"),
-            mmprojRemoteFileName = json.optString("mmprojRemoteFileName").takeIf { it.isNotBlank() },
-            mmprojLocalFileName = json.optString("mmprojLocalFileName").takeIf { it.isNotBlank() },
-            mmprojSha256 = json.optString("mmprojSha256").takeIf { it.isNotBlank() },
-            mmprojSizeInBytes = json.optLong("mmprojSizeInBytes").takeIf { it > 0L },
-        )
     }
 }

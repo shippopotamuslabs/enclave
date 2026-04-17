@@ -33,8 +33,8 @@ data class LocalModelEntity(
     @ColumnInfo(name = "size_in_bytes")
     val sizeInBytes: Long,
 
-    @ColumnInfo(name = "vision_capable")
-    val visionCapable: Boolean = false,
+    @ColumnInfo(name = "is_multimodal")
+    val isMultimodal: Boolean = false,
 
     @ColumnInfo(name = "mmproj_remote_filename")
     val mmprojRemoteFilename: String? = null,
@@ -47,12 +47,6 @@ data class LocalModelEntity(
 
     @ColumnInfo(name = "mmproj_size_in_bytes")
     val mmprojSizeInBytes: Long? = null,
-
-    @ColumnInfo(name = "thinking_enabled")
-    val thinkingEnabled: Boolean = false,
-
-    @ColumnInfo(name = "is_vision")
-    val isVision: Boolean = false,
 
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis()

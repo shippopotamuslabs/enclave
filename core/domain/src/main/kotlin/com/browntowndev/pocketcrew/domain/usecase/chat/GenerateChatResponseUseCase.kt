@@ -13,6 +13,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import javax.inject.Inject
@@ -44,9 +45,12 @@ class GenerateChatResponseUseCase @Inject constructor(
     private val activeModelProvider: ActiveModelProviderPort,
     private val settingsRepository: SettingsRepository,
     private val searchToolPromptComposer: SearchToolPromptComposer,
+    private val extractedUrlTracker: ExtractedUrlTrackerPort,
+    private val compactionPort: com.browntowndev.pocketcrew.domain.port.inference.CompactionPort,
 ) {
     private val historyRehydrator = ChatHistoryRehydrator(
         messageRepository = messageRepository,
+        compactionPort = compactionPort,
         loggingPort = loggingPort,
     )
     private val inferenceRequestPreparer = ChatInferenceRequestPreparer(
@@ -56,7 +60,7 @@ class GenerateChatResponseUseCase @Inject constructor(
         searchToolPromptComposer = searchToolPromptComposer,
         loggingPort = loggingPort,
     )
-    private val persistAccumulatedMessages = PersistAccumulatedChatMessagesUseCase(chatRepository)
+    private val persistAccumulatedMessages = PersistAccumulatedChatMessagesUseCase(chatRepository, extractedUrlTracker.urls)
 
     operator fun invoke(
         prompt: String,
@@ -94,6 +98,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                     withContext(NonCancellable + Dispatchers.IO) {
                         accumulatorManager.markIncompleteAsCancelled()
                         persistAccumulatedMessages(accumulatorManager)
+                        extractedUrlTracker.clear()
                     }
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to persist messages", e)
@@ -182,7 +187,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                 emit(MessageGenerationState.Processing(ModelType.MAIN))
             }
             val apiVisionConfigured = activeModelProvider.getActiveConfiguration(ModelType.VISION)
-                ?.let { config -> config.isLocal == false && config.visionCapable }
+                ?.let { config -> config.isLocal == false && config.isMultimodal }
                 ?: false
             val crewPrompt = if (userHasImage && apiVisionConfigured) {
                 prepareChatPrompt(
@@ -232,12 +237,7 @@ class GenerateChatResponseUseCase @Inject constructor(
         service: LlmInferencePort,
         modelType: ModelType,
     ): Flow<MessageGenerationState> = flow {
-        try {
-            historyRehydrator(chatId, userMessageId, assistantMessageId, service)
-        } catch (e: Exception) {
-            loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
-        }
-
+        val config = activeModelProvider.getActiveConfiguration(modelType)
         val preparedRequest = inferenceRequestPreparer(
             prompt = prompt,
             chatId = chatId,
@@ -245,6 +245,21 @@ class GenerateChatResponseUseCase @Inject constructor(
             assistantMessageId = assistantMessageId,
             modelType = modelType,
         )
+
+        try {
+            historyRehydrator(
+                chatId = chatId,
+                userMessageId = userMessageId,
+                assistantMessageId = assistantMessageId,
+                service = service,
+                contextWindowTokens = config?.contextWindow ?: 4096,
+                allowLocalSummarization = config?.isLocal != true,
+                currentPrompt = preparedRequest.prompt,
+                options = preparedRequest.options,
+            )
+        } catch (e: Exception) {
+            loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
+        }
 
         service.sendPrompt(
             preparedRequest.prompt,

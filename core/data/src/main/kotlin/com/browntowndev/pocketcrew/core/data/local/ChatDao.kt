@@ -26,6 +26,9 @@ abstract class ChatDao {
     @Query("SELECT * FROM chat WHERE id = :id")
     abstract suspend fun getChatById(id: ChatId): ChatEntity?
 
+    @Query("SELECT * FROM chat WHERE id IN (:ids)")
+    abstract suspend fun getChatsByIds(ids: List<ChatId>): List<ChatEntity>
+
     @Query("UPDATE chat SET pinned = NOT pinned WHERE id = :chatId")
     abstract suspend fun updatePinStatus(chatId: ChatId): Int
 

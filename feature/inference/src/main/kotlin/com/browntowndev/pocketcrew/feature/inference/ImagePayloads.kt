@@ -52,6 +52,16 @@ internal object ImagePayloads {
         }
     }
 
+    /**
+     * Strips base64 data URI patterns from message content to prevent
+     * accidental base64 payload leakage in history turns sent to API providers.
+     * The rehydrator already strips images, but this is a defensive guard.
+     */
+    fun stripBase64DataUris(content: String): String =
+        BASE64_DATA_URI_REGEX.replace(content, "[image]")
+
+    private val BASE64_DATA_URI_REGEX = Regex("""data:image/[^;]+;base64,[A-Za-z0-9+/=\s]+""")
+
     private val supportedMimeTypes = setOf(
         "image/png",
         "image/jpeg",
