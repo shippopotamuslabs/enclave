@@ -1000,6 +1000,162 @@ class LlmToolingOrchestratorTest {
         assertEquals(1, finishedToolCallCount)
         assertTrue(contextExceededCallCount >= 1)
     }
+
+    // ── Context exceeded with rebuilt params (mid-loop compaction) ────────────
+
+    @Test
+    fun `onContextExceeded returning both contextExceeded and rebuiltParams triggers warning and swaps params`() = runTest {
+        val toolRequest = ToolCallRequest(
+            toolName = "tavily_web_search",
+            argumentsJson = """{"query":"test"}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+        )
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
+            toolName = "tavily_web_search",
+            resultJson = """{"results":[]}""",
+        )
+
+        var inferencePassCount = 0
+        var receivedParams = ""
+        var finishedToolCallCount = -1
+
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "TestTag",
+            maxToolCalls = 5,
+            onInferencePass = { params, _ ->
+                receivedParams = params
+                inferencePassCount++
+                // First pass: tool call. Second pass: model heeds warning, no more tools.
+                if (inferencePassCount == 1) "tool-call" else "no-tool"
+            },
+            onToolCallDetected = { if (it == "tool-call") listOf(toolRequest) else emptyList() },
+            onToolResultsMapped = { _, _, _ -> "follow-up" },
+            onContextExceeded = { _, _ ->
+                // Context exceeded AND we compacted — return both flags
+                ContextExceededResult(
+                    contextExceeded = true,
+                    rebuiltParams = "compacted-params",
+                )
+            },
+            onFinished = { _, toolCallCount, _ ->
+                finishedToolCallCount = toolCallCount
+            },
+        )
+
+        // Params should be swapped to the compacted version
+        assertEquals("compacted-params", receivedParams)
+        // Model heeded context-full warning — only 1 tool call
+        assertEquals(1, finishedToolCallCount)
+    }
+
+    @Test
+    fun `mid-loop compaction reduces context below threshold then model continues normally`() = runTest {
+        val toolRequest = ToolCallRequest(
+            toolName = "tavily_web_search",
+            argumentsJson = """{"query":"test"}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+        )
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
+            toolName = "tavily_web_search",
+            resultJson = """{"results":[]}""",
+        )
+
+        var inferencePassCount = 0
+        var contextExceededCallCount = 0
+        var finishedToolCallCount = -1
+
+        orchestrator.execute<String, String>(
+            providerName = "TEST",
+            initialParams = "initial",
+            tag = "TestTag",
+            maxToolCalls = 5,
+            onInferencePass = { _, _ ->
+                inferencePassCount++
+                // First pass: tool call. After compaction, model makes another tool call (now in budget).
+                // Third pass: model finishes.
+                when (inferencePassCount) {
+                    1, 2 -> "tool-call"
+                    else -> "no-tool"
+                }
+            },
+            onToolCallDetected = { if (it == "tool-call") listOf(toolRequest) else emptyList() },
+            onToolResultsMapped = { _, _, _ -> "follow-up" },
+            onContextExceeded = { callCount, _ ->
+                contextExceededCallCount++
+                // First call: context was exceeded but compaction fixed it.
+                // Return contextExceeded=false because compaction reduced below threshold.
+                ContextExceededResult(
+                    contextExceeded = false,
+                    rebuiltParams = "compacted-$callCount",
+                )
+            },
+            onFinished = { _, toolCallCount, _ ->
+                finishedToolCallCount = toolCallCount
+            },
+        )
+
+        // Mid-loop compaction was performed, context reduced below threshold,
+        // model was able to make another tool call, then finished normally
+        assertEquals(3, inferencePassCount)
+        assertEquals(2, finishedToolCallCount)
+        assertTrue(contextExceededCallCount >= 1)
+    }
+
+    @Test
+    fun `onContextExceeded rebuilds params multiple times if context stays exceeded`() = runTest {
+        val toolRequest = ToolCallRequest(
+            toolName = "tavily_web_search",
+            argumentsJson = """{"query":"test"}""",
+            provider = "TEST",
+            modelType = ModelType.FAST,
+        )
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
+            toolName = "tavily_web_search",
+            resultJson = """{"results":[]}""",
+        )
+
+        var paramsReceivedHistory = mutableListOf<String>()
+        var contextExceededCallCount = 0
+        var exceptionThrown = false
+
+        try {
+            orchestrator.execute<String, String>(
+                providerName = "TEST",
+                initialParams = "initial",
+                tag = "TestTag",
+                maxToolCalls = 5,
+                onInferencePass = { params, _ ->
+                    paramsReceivedHistory.add(params)
+                    // Model keeps calling tools despite warning
+                    "tool-call"
+                },
+                onToolCallDetected = { listOf(toolRequest) },
+                onToolResultsMapped = { _, _, _ -> "follow-up" },
+                onContextExceeded = { callCount, _ ->
+                    contextExceededCallCount++
+                    // Context stays exceeded every time — keep warning
+                    ContextExceededResult(
+                        contextExceeded = true,
+                        rebuiltParams = "compacted-$callCount",
+                    )
+                },
+                onFinished = { _, _, _ -> },
+            )
+        } catch (e: IllegalStateException) {
+            if (e.message?.contains("Context window exceeded") == true) {
+                exceptionThrown = true
+            }
+        }
+
+        // Should have thrown because model kept calling tools after context-full warning
+        assertTrue(exceptionThrown, "Should throw when model ignores persistent context-full warning")
+        // Params should have been rebuilt at least once
+        assertTrue(paramsReceivedHistory.size > 1, "Should have received rebuilt params")
+    }
 }
 
 private fun assertFalse(value: Boolean) {

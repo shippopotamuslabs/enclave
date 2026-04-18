@@ -41,11 +41,11 @@ object NativeToolResultFormatter {
             val results = payload["results"]?.jsonArray ?: return resultJson
             if (results.isEmpty()) return resultJson
 
-            // Divide available tokens across results, then convert to max chars per result
+            // Divide available tokens across results, then use token counter
+            // for precise truncation. If modelId is unavailable, fall back to the
+            // standard 4-chars-per-token BPE estimate.
             val maxTokensPerResult = maxOf(10, availableTokens / results.size)
-            // Estimate max chars from max tokens. JTokkit is a BPE encoder so 1 token ≈ 4 chars
-            // on average for English text. We use this as a safe upper bound for truncation.
-            val maxCharsPerResult = maxOf(100, maxTokensPerResult * 4)
+            val maxCharsPerResult = maxOf(100, maxTokensPerResult * 4)  // fallback BPE estimate
 
             var truncated = false
             val newResults = buildJsonArray {
@@ -56,7 +56,16 @@ object NativeToolResultFormatter {
                     // Truncate 'content' (search) or 'raw_content' (extract)
                     listOf("content", "raw_content").forEach { field ->
                         val original = item[field]?.jsonPrimitive?.content ?: ""
-                        if (original.length > maxCharsPerResult) {
+                        // Use tokenCounter for precise truncation when modelId is available,
+                        // otherwise fall back to the BPE-estimated char limit.
+                        val shouldTruncate = if (modelId != null) {
+                            tokenCounter.countTokens(original, modelId) > maxTokensPerResult
+                        } else {
+                            original.length > maxCharsPerResult
+                        }
+                        if (shouldTruncate) {
+                            // Truncate to the char-based limit (still needed even with precise
+                            // counting, since we can't remove tokens precisely from strings).
                             newItemMap[field] = JsonPrimitive(original.take(maxCharsPerResult) + "... (truncated for context)")
                             truncated = true
                         }
@@ -79,6 +88,35 @@ object NativeToolResultFormatter {
         } catch (e: Exception) {
             resultJson
         }
+    }
+
+    /**
+     * Truncates a tool result string to fit within the context window for API models.
+     * Unlike [truncateToolResult] which understands Tavily result structure,
+     * this method handles any string result by truncating it to fit within the
+     * available token budget.
+     *
+     * Returns the original string if it fits, or a truncated version with a marker.
+     * If [availableTokens] is <= 0, returns a minimal error JSON.
+     */
+    fun truncateForApiContext(
+        resultJson: String,
+        availableTokens: Int,
+        tokenCounter: TokenCounter = JTokkitTokenCounter,
+        modelId: String? = null,
+    ): String {
+        if (availableTokens <= 0) {
+            return """{"error": "cannot read page, context window too full"}"""
+        }
+        val resultTokens = tokenCounter.countTokens(resultJson, modelId)
+        if (resultTokens <= availableTokens) {
+            return resultJson
+        }
+        // Truncate to the available token budget using BPE estimate.
+        // We can't precisely remove tokens from strings, so we truncate by
+        // character count and add a truncation marker.
+        val maxChars = maxOf(100, availableTokens * 4)
+        return resultJson.take(maxChars) + "... (truncated for context)"
     }
 
     /**
