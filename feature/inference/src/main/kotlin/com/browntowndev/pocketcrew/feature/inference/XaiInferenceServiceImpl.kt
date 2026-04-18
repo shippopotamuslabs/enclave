@@ -8,6 +8,8 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
+import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
@@ -54,6 +56,24 @@ class XaiInferenceServiceImpl(
         results: List<Pair<ToolCallRequest, String>>,
         appendStopToolsWarning: Boolean,
     ): ResponseCreateParams {
+        // Truncate large tool results when context window is known
+        val truncationAvailableTokens = options.contextWindow?.let { cw ->
+            val budget = ContextWindowPlanner.budgetFor(
+                contextWindowTokens = cw,
+                options = options,
+                modelId = modelId,
+                tokenCounter = JTokkitTokenCounter,
+            )
+            val usedTokens = ContextWindowPlanner.estimatePromptTokens(
+                history = requestHistory,
+                systemPrompt = null,
+                currentPrompt = prompt,
+                toolResultPayloads = results.map { it.second },
+                modelId = modelId,
+                tokenCounter = JTokkitTokenCounter,
+            ) ?: 0
+            (budget.usablePromptTokens - usedTokens).coerceAtLeast(0)
+        }
         val builder = currentParams.toBuilder()
         val inputItems = if (currentParams.input().isPresent && currentParams.input().get().isResponse()) {
             currentParams.input().get().asResponse().toMutableList()
@@ -74,6 +94,16 @@ class XaiInferenceServiceImpl(
 
         // Map results back to their corresponding function calls in the initial response
         results.forEach { (toolCall, resultJson) ->
+            val truncatedResult = if (truncationAvailableTokens != null && truncationAvailableTokens > 0) {
+                NativeToolResultFormatter.truncateForApiContext(
+                    resultJson = resultJson,
+                    availableTokens = maxOf(truncationAvailableTokens / results.size.coerceAtLeast(1), 100),
+                    tokenCounter = JTokkitTokenCounter,
+                    modelId = modelId,
+                )
+            } else {
+                resultJson
+            }
             val index = initialResponse.functionCalls.indexOf(toolCall)
 
             val callId = if (index != -1) {
@@ -104,7 +134,7 @@ class XaiInferenceServiceImpl(
                 ResponseInputItem.FunctionCallOutput.builder()
                     .id("fco_${callId}")
                     .callId(callId)
-                    .output(resultJson)
+                    .output(truncatedResult)
                     .build()
             )
         }

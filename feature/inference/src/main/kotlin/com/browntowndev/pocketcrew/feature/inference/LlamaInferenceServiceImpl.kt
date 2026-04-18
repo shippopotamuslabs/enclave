@@ -24,6 +24,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPor
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.util.ChatHistoryCompressor
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
+import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -423,15 +424,23 @@ class LlamaInferenceServiceImpl @Inject constructor(
             onToolResultsMapped = { params, _, results ->
                 val tokenCounter = com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
                 val modelId = currentSignature?.modelId?.value
-                val systemPromptTokens = tokenCounter.countTokens(currentSystemPrompt, modelId)
-                val historyTokens = history.sumOf { tokenCounter.countTokens(it.content, modelId) }
+                val systemPromptTokens = ToolContextBudget.countSystemPromptTokens(currentSystemPrompt, modelId, tokenCounter)
+                val historyTokens = ToolContextBudget.countHistoryTokens(history, modelId, tokenCounter)
 
                 results.forEach { (_, resultJson) ->
-                    val estimatedUsedTokens = systemPromptTokens + historyTokens + transientToolResultTokens
+                    val evaluation = ToolContextBudget.evaluate(
+                        contextWindowTokens = currentContextWindow,
+                        systemPromptTokens = systemPromptTokens,
+                        historyTokens = historyTokens,
+                        transientToolResultTokens = transientToolResultTokens,
+                        options = GenerationOptions(reasoningBudget = 0),
+                        modelId = modelId,
+                        tokenCounter = tokenCounter,
+                    )
                     val truncatedResult = NativeToolResultFormatter.truncateToolResult(
                         resultJson = resultJson,
                         contextWindowTokens = currentContextWindow,
-                        estimatedUsedTokens = estimatedUsedTokens,
+                        estimatedUsedTokens = evaluation.totalTokens,
                         bufferTokens = ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS,
                         tokenCounter = tokenCounter,
                         modelId = modelId,
@@ -439,9 +448,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
                     if (!truncatedResult.contains("\"error\"")) {
                         transientToolResultTokens += tokenCounter.countTokens(truncatedResult, modelId) + 30
                     }
-                    val contextFull = (systemPromptTokens + historyTokens + transientToolResultTokens) >
-                        currentContextWindow * ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO
-                    val toolResultMessage = if (contextFull) {
+                    val toolResultMessage = if (evaluation.contextFull) {
                         ToolEnvelopeParser.buildLocalToolResultMessage(truncatedResult) +
                             "\n${ContextWindowPlanner.STOP_TOOLS_WARNING}"
                     } else {
@@ -457,15 +464,21 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 // so the contextFullWarned hard-error logic kicks in.
                 val tokenCounter = com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
                 val modelId = currentSignature?.modelId?.value
-                val systemPromptTokens = tokenCounter.countTokens(currentSystemPrompt, modelId)
-                val historyTokens = history.sumOf { tokenCounter.countTokens(it.content, modelId) }
-                val estimatedUsedTokens = systemPromptTokens + historyTokens + transientToolResultTokens
-                val contextExceeded = estimatedUsedTokens >
-                    currentContextWindow * ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO
-                if (contextExceeded) {
-                    loggingPort.warning(TAG, "Llama context exceeded mid-loop: estimatedTokens=$estimatedUsedTokens window=$currentContextWindow")
+                val systemPromptTokens = ToolContextBudget.countSystemPromptTokens(currentSystemPrompt, modelId, tokenCounter)
+                val historyTokens = ToolContextBudget.countHistoryTokens(history, modelId, tokenCounter)
+                val evaluation = ToolContextBudget.evaluate(
+                    contextWindowTokens = currentContextWindow,
+                    systemPromptTokens = systemPromptTokens,
+                    historyTokens = historyTokens,
+                    transientToolResultTokens = transientToolResultTokens,
+                    options = GenerationOptions(reasoningBudget = 0),
+                    modelId = modelId,
+                    tokenCounter = tokenCounter,
+                )
+                if (evaluation.contextFull) {
+                    loggingPort.warning(TAG, "Llama context exceeded mid-loop: estimatedTokens=${evaluation.totalTokens} window=$currentContextWindow")
                 }
-                ContextExceededResult(contextExceeded)
+                ContextExceededResult(evaluation.contextFull)
             },
             onToolResult = { toolCall, resultJson ->
                 if (toolCall.toolName == com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.TAVILY_WEB_SEARCH.name) {

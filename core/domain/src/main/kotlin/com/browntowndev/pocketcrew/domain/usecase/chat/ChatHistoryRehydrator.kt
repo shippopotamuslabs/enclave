@@ -30,20 +30,32 @@ internal class ChatHistoryRehydrator(
         assistantMessageId: MessageId,
         service: LlmInferencePort,
         contextWindowTokens: Int = 4096, // Fallback
-        allowLocalSummarization: Boolean = true,
+        allowLocalSummarization: Boolean = false,
         currentPrompt: String = "",
         options: GenerationOptions = GenerationOptions(reasoningBudget = 0),
     ) {
         var summary = messageRepository.getChatSummary(chatId)
         val allMessages = messageRepository.getMessagesForChat(chatId)
 
-        // If a summary exists, filter out messages that are older than or equal to the last summarized message
-        var relevantMessages = if (summary?.lastSummarizedMessageId != null) {
-            val lastSummarizedIndex = allMessages.indexOfFirst { it.id == summary.lastSummarizedMessageId }
-            if (lastSummarizedIndex != -1) {
-                allMessages.subList(lastSummarizedIndex + 1, allMessages.size)
+        // If a summary exists, filter out messages that are older than or equal to the last summarized message.
+        // If lastSummarizedMessageId is null (FK SET NULL from deleted message, or first compaction with no
+        // remaining messages), the summary covers everything — load no messages to avoid duplicate context.
+        var relevantMessages = if (summary != null) {
+            if (summary.lastSummarizedMessageId != null) {
+                val lastSummarizedIndex = allMessages.indexOfFirst { it.id == summary.lastSummarizedMessageId }
+                if (lastSummarizedIndex != -1) {
+                    allMessages.subList(lastSummarizedIndex + 1, allMessages.size)
+                } else {
+                    // Pointer message was deleted but summary still exists.
+                    // We can't determine which messages were already summarized, so we load all messages.
+                    // This is safer than showing only the summary (which might be stale) but may include
+                    // some duplicate context. The compressor will trim to fit.
+                    allMessages
+                }
             } else {
-                allMessages
+                // Summary exists but no pointer — summary covers everything.
+                // Load no messages to avoid duplicate context.
+                emptyList()
             }
         } else {
             allMessages
@@ -75,7 +87,12 @@ internal class ChatHistoryRehydrator(
                 TAG,
                 "Compaction triggered: estimatedTokens=$estimatedPromptTokens usablePromptTokens=${budget.usablePromptTokens} thresholdTokens=${budget.thresholdTokens} window=$contextWindowTokens"
             )
-            val compactedText = compactionPort.compactHistory(chatMessages)
+            val compactedText = try {
+                compactionPort.compactHistory(chatMessages)
+            } catch (e: Exception) {
+                loggingPort.warning(TAG, "Compaction port threw exception, falling back to FIFO trimming: ${e.message}")
+                null
+            }
             if (compactedText != null) {
                 val lastMessageId = filteredMessages.lastOrNull()?.id ?: summary?.lastSummarizedMessageId
                 val newSummary = ChatSummary(
@@ -108,10 +125,11 @@ internal class ChatHistoryRehydrator(
                     service.setHistory(emptyList())
                     val summaryText = rollingSummarizer.summarize(chatMessages, service)
                     if (summaryText != null) {
-                        // Find the split point: we'll use the message index corresponding to the 50% token split
-                        val systemPromptCount = if (chatMessages.firstOrNull()?.role == Role.SYSTEM) 1 else 0
-                        val totalTokens = chatMessages.drop(systemPromptCount).sumOf { tokenCounter.countTokens(it.content) }
-                        val targetTokens = totalTokens / 2
+                        // Find the split point: divide filteredMessages (excluding summary) at 50% token boundary.
+                        // We count tokens over filteredMessages only — the prior summary tokens are NOT included
+                        // in the split calculation because the summary will be re-incorporated by the new summary.
+                        val filteredTokens = filteredMessages.sumOf { tokenCounter.countTokens(it.content.text) }
+                        val targetTokens = filteredTokens / 2
 
                         var accumulatedTokens = 0
                         var splitIndexInHistory = 0

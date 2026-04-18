@@ -11,7 +11,9 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
+import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.JsonValue
@@ -183,11 +185,39 @@ class AnthropicInferenceServiceImpl(
                 val toolUse =
                     response.toolUse ?: throw IllegalStateException("Missing tool use in response")
                 
+                // Truncate large tool results to fit within context budget for API models.
+                val budget = options.contextWindow?.let { cw ->
+                    ContextWindowPlanner.budgetFor(
+                        contextWindowTokens = cw,
+                        options = options,
+                        modelId = modelId,
+                        tokenCounter = JTokkitTokenCounter,
+                        thresholdRatio = ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO,
+                    )
+                }
+                val usedTokens = budget?.let { b ->
+                    ContextWindowPlanner.estimatePromptTokens(
+                        history = requestHistory,
+                        systemPrompt = null,
+                        currentPrompt = prompt,
+                        toolResultPayloads = toolLoopPayloads,
+                        modelId = modelId,
+                        tokenCounter = JTokkitTokenCounter,
+                    )
+                } ?: 0
+                val availableTokens = budget?.let { b -> b.usablePromptTokens - usedTokens } ?: Int.MAX_VALUE
+
                 val resultBlocks = results.map { (toolCall, resultJson) ->
+                    val truncatedResult = NativeToolResultFormatter.truncateForApiContext(
+                        resultJson = resultJson,
+                        availableTokens = maxOf(availableTokens / results.size.coerceAtLeast(1), 100),
+                        tokenCounter = JTokkitTokenCounter,
+                        modelId = modelId,
+                    )
                     ContentBlockParam.ofToolResult(
                         ToolResultBlockParam.builder()
                             .toolUseId(toolUse.id) // Currently Anthropic only captures one toolUse
-                            .content(resultJson)
+                            .content(truncatedResult)
                             .build()
                     )
                 }
@@ -267,26 +297,19 @@ class AnthropicInferenceServiceImpl(
         toolResultPayloads: List<String>,
     ): ContextExceededResult<MessageCreateParams> {
         val contextWindow = options.contextWindow ?: return ContextExceededResult(false)
-        val budget = ContextWindowPlanner.budgetFor(
+        val contextExceeded = ToolContextBudget.isApiContextExceeded(
             contextWindowTokens = contextWindow,
-            options = options,
-            modelId = modelId,
-            tokenCounter = JTokkitTokenCounter,
-            thresholdRatio = ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO,
-        )
-        val totalTokens = ContextWindowPlanner.estimatePromptTokens(
             history = requestHistory,
             systemPrompt = null,
             currentPrompt = prompt,
             toolResultPayloads = toolResultPayloads,
+            options = options,
             modelId = modelId,
-            tokenCounter = JTokkitTokenCounter,
         )
-        val contextExceeded = ContextWindowPlanner.shouldCompact(totalTokens, budget)
         if (contextExceeded) {
             loggingPort.warning(
                 TAG,
-                "Anthropic context exceeded mid-loop: estimatedTokens=$totalTokens usablePromptTokens=${budget.usablePromptTokens} thresholdTokens=${budget.thresholdTokens} window=$contextWindow"
+                "Anthropic context exceeded mid-loop: window=$contextWindow"
             )
         }
         return ContextExceededResult(contextExceeded)

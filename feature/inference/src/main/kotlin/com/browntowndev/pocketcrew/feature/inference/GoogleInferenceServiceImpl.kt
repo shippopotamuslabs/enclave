@@ -12,7 +12,9 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
+import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCall
@@ -161,14 +163,42 @@ class GoogleInferenceServiceImpl(
                     } ?: emptyList()
                 },
                 onToolResultsMapped = { params, response, results ->
+                    // Truncate large tool results when context window is known
+                    val truncationAvailableTokens = options.contextWindow?.let { cw ->
+                        val budget = ContextWindowPlanner.budgetFor(
+                            contextWindowTokens = cw,
+                            options = options,
+                            modelId = modelId,
+                            tokenCounter = JTokkitTokenCounter,
+                        )
+                        val usedTokens = ContextWindowPlanner.estimatePromptTokens(
+                            history = requestHistory,
+                            systemPrompt = null,
+                            currentPrompt = prompt,
+                            toolResultPayloads = toolLoopPayloads,
+                            modelId = modelId,
+                            tokenCounter = JTokkitTokenCounter,
+                        ) ?: 0
+                        (budget.usablePromptTokens - usedTokens).coerceAtLeast(0)
+                    }
                     val functionResponses = results.map { (toolCall, resultJson) ->
+                        val truncatedResult = if (truncationAvailableTokens != null && truncationAvailableTokens > 0) {
+                            NativeToolResultFormatter.truncateForApiContext(
+                                resultJson = resultJson,
+                                availableTokens = maxOf(truncationAvailableTokens / results.size.coerceAtLeast(1), 100),
+                                tokenCounter = JTokkitTokenCounter,
+                                modelId = modelId,
+                            )
+                        } else {
+                            resultJson
+                        }
                         // Google expects one part per function response in a user-role Content
                         // If they were parallel, we'd still have the initial function call names
                         // For now, we assume the model emitted only one or we map each by its toolName.
-                        buildFunctionResponsePart(toolCall.toolName, resultJson)
+                        buildFunctionResponsePart(toolCall.toolName, truncatedResult)
                     }
 
-                    toolLoopPayloads += results.map { it.second }
+                    toolLoopPayloads += functionResponses.map { it.toString() }
                     val contextExceeded = estimateContextExceeded(
                         requestHistory = requestHistory,
                         prompt = prompt,
@@ -229,26 +259,19 @@ class GoogleInferenceServiceImpl(
         toolResultPayloads: List<String>,
     ): ContextExceededResult<List<Content>> {
         val contextWindow = options.contextWindow ?: return ContextExceededResult(false)
-        val budget = ContextWindowPlanner.budgetFor(
+        val contextExceeded = ToolContextBudget.isApiContextExceeded(
             contextWindowTokens = contextWindow,
-            options = options,
-            modelId = modelId,
-            tokenCounter = JTokkitTokenCounter,
-            thresholdRatio = ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO,
-        )
-        val totalTokens = ContextWindowPlanner.estimatePromptTokens(
             history = requestHistory,
             systemPrompt = null,
             currentPrompt = prompt,
             toolResultPayloads = toolResultPayloads,
+            options = options,
             modelId = modelId,
-            tokenCounter = JTokkitTokenCounter,
         )
-        val contextExceeded = ContextWindowPlanner.shouldCompact(totalTokens, budget)
         if (contextExceeded) {
             loggingPort.warning(
                 TAG,
-                "Google context exceeded mid-loop: estimatedTokens=$totalTokens usablePromptTokens=${budget.usablePromptTokens} thresholdTokens=${budget.thresholdTokens} window=$contextWindow"
+                "Google context exceeded mid-loop: window=$contextWindow"
             )
         }
         return ContextExceededResult(contextExceeded)

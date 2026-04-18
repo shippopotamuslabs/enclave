@@ -31,6 +31,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPor
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
+import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
@@ -722,11 +723,17 @@ class ConversationManagerImpl @Inject constructor(
             )
             val rawResultJson = toolExecutor.execute(request).resultJson
             
-            // Use accurate token counting for history, system prompt, and transient tool results
+            // Use ToolContextBudget for context evaluation and truncation
             val tokenCounter = com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
             val modelId = currentModelPath?.substringAfterLast('/')
-            val systemPromptTokens = tokenCounter.countTokens(currentSystemPrompt, modelId)
-            val historyTokens = history.sumOf { tokenCounter.countTokens(it.content, modelId) }
+            val systemPromptTokens = ToolContextBudget.countSystemPromptTokens(currentSystemPrompt, modelId, tokenCounter)
+            val historyTokens = ToolContextBudget.countHistoryTokens(history, modelId, tokenCounter)
+            val availableTokens = ToolContextBudget.localTruncationBudget(
+                contextWindowTokens = currentContextWindow,
+                systemPromptTokens = systemPromptTokens,
+                historyTokens = historyTokens,
+                transientToolResultTokens = transientToolResultTokens,
+            )
             val estimatedUsedTokens = systemPromptTokens + historyTokens + transientToolResultTokens
 
             val resultJson = NativeToolResultFormatter.truncateToolResult(
@@ -751,10 +758,18 @@ class ConversationManagerImpl @Inject constructor(
 
             // If context is nearly full after adding this tool result, append a system warning
             // telling the model to stop calling tools and provide a final response.
-            val contextFullAfterResult = (estimatedUsedTokens + transientToolResultTokens) >
-                currentContextWindow * ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO
+            val evaluation = ToolContextBudget.evaluate(
+                contextWindowTokens = currentContextWindow,
+                systemPromptTokens = systemPromptTokens,
+                historyTokens = historyTokens,
+                transientToolResultTokens = transientToolResultTokens,
+                options = GenerationOptions(reasoningBudget = 0),
+                modelId = modelId,
+                tokenCounter = tokenCounter,
+            )
+            val contextFullAfterResult = evaluation.contextFull
             val finalResult = if (contextFullAfterResult && !resultJson.contains("\"error\"")) {
-                loggingPort.warning(TAG, "Context nearly full after tool result. Appending stop-tools warning. tool=${request.toolName} usedTokens=${estimatedUsedTokens + transientToolResultTokens} window=$currentContextWindow")
+                loggingPort.warning(TAG, "Context nearly full after tool result. Appending stop-tools warning. tool=${request.toolName} usedTokens=${evaluation.totalTokens} window=$currentContextWindow")
                 contextFullWarned = true
                 resultJson + "\n${ContextWindowPlanner.STOP_TOOLS_WARNING}"
             } else {
