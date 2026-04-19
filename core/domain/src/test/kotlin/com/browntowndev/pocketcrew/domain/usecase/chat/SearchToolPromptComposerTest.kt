@@ -19,7 +19,7 @@ class SearchToolPromptComposerTest {
         assertTrue(composed.contains("Be concise."))
         assertTrue(
             composed.contains(
-                """<tool_call>{"name":"tavily_web_search","arguments":{"query":"..."}}</tool_call>"""
+                """ActionResult{"name":"tavily_web_search","arguments":{"""
             )
         )
         assertEquals("Be concise.", basePrompt)

@@ -1024,7 +1024,19 @@ class SettingsViewModelTest {
         assertEquals(0, viewModel.uiState.value.localModelsSheet.availableDownloads.size)
     }
 
-    private fun createViewModel(): SettingsViewModel {
+    private fun createViewModel(
+        apiAssets: List<ApiModelAsset> = emptyList(),
+        apiAssetsFlow: Flow<List<ApiModelAsset>> = flowOf(apiAssets),
+        settingsFlow: Flow<SettingsData> = flowOf(SettingsData()),
+        localAssetsFlow: Flow<List<LocalModelAsset>> = flowOf(emptyList()),
+        softDeletedModels: List<LocalModelAsset> = emptyList(),
+    ): SettingsViewModel {
+        every { getSettingsUseCase() } returns settingsFlow
+        every { getLocalModelAssetsUseCase() } returns localAssetsFlow
+        coEvery { getLocalModelAssetsUseCase.getSoftDeletedModels() } returns softDeletedModels
+        every { getApiModelAssetsUseCase() } returns apiAssetsFlow
+        every { getDefaultModelsUseCase() } returns flowOf(emptyList())
+
         val preferences = SettingsPreferencesUseCasesImpl(
             getSettings = getSettingsUseCase,
             updateTheme = updateThemeUseCase,
