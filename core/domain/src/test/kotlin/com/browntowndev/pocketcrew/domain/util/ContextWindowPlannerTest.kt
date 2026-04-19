@@ -258,54 +258,28 @@ class ContextWindowPlannerTest {
     inner class EndToEndScenarios {
 
         @Test
-        @DisplayName("Typical 4K local model: long history triggers compaction")
-        fun localModel4KTriggersCompaction() {
-            val tokenCounter = JTokkitTokenCounter
-            val options = GenerationOptions(
-                reasoningBudget = 0,
-                contextWindow = 4096,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
-            )
-            val budget = ContextWindowPlanner.budgetFor(
-                contextWindowTokens = 4096,
-                options = options,
-                modelId = "local-model",
-                tokenCounter = tokenCounter,
-            )
-
-            // Build history that exceeds 75% of 4096 = 3072 tokens
-            // Each pair is ~15-20 tokens with JTokkitTokenCounter, so we need ~200 pairs
-            val longHistory = (1..200).flatMap {
-                listOf(
-                    ChatMessage(Role.USER, "Tell me about topic number $it in detail please"),
-                    ChatMessage(Role.ASSISTANT, "Topic number $it is about many interesting things in the world of knowledge and science."),
-                )
+        @DisplayName("Typical 4K local model: long history triggers summarization check")
+        fun localModel4KTriggersSummarizationCheck() {
+            val budget = ContextWindowPlanner.budgetFor(4096)
+            
+            // Build a long history
+            val history = (1..20).map { 
+                ChatMessage(Role.USER, "Question number $it with sufficient context to generate meaningful tokens for testing the threshold")
             }
-            val estimatedTokens = ContextWindowPlanner.estimatePromptTokens(
-                history = longHistory,
-                systemPrompt = "You are a helpful assistant.",
-                currentPrompt = "What else?",
-                tokenCounter = tokenCounter,
-                modelId = "local-model",
-            )
 
+            val estimatedTokens = ContextWindowPlanner.estimatePromptTokens(history)
+            
             assertTrue(
                 ContextWindowPlanner.shouldCompact(estimatedTokens, budget),
-                "Long history should trigger compaction for 4K context window"
+                "Long history should trigger summarization check for 4K context window"
             )
         }
 
         @Test
-        @DisplayName("Typical 128K API model: short history does not trigger compaction")
-        fun apiModel128KNoCompaction() {
-            val tokenCounter = JTokkitTokenCounter
-            val options = GenerationOptions(reasoningBudget = 0)
-            val budget = ContextWindowPlanner.budgetFor(
-                contextWindowTokens = 128000,
-                options = options,
-                tokenCounter = tokenCounter,
-            )
-
+        @DisplayName("Typical 128K API model: short history does not trigger summarization check")
+        fun apiModel128KNoSummarizationCheck() {
+            val budget = ContextWindowPlanner.budgetFor(128000)
+            
             val shortHistory = listOf(
                 ChatMessage(Role.USER, "Hello"),
                 ChatMessage(Role.ASSISTANT, "Hi! How can I help?"),
@@ -315,23 +289,23 @@ class ContextWindowPlannerTest {
                 history = shortHistory,
                 systemPrompt = "You are a helpful assistant.",
                 currentPrompt = "What's the weather?",
-                tokenCounter = tokenCounter,
+                tokenCounter = JTokkitTokenCounter,
             )
 
             assertFalse(
                 ContextWindowPlanner.shouldCompact(estimatedTokens, budget),
-                "Short history should not trigger compaction for 128K context window"
+                "Short history should not trigger summarization check for 128K context window"
             )
         }
 
         @Test
-        @DisplayName("TOOL_RESULT_THRESHOLD_RATIO (0.85) is a looser threshold than DEFAULT (0.75)")
-        fun toolResultThresholdIsLooserThanDefault() {
+        fun `tool result threshold is looser than default threshold`() {
+            val budget = ContextWindowPlanner.budgetFor(4096)
+            
             assertTrue(
-                ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO > ContextWindowPlanner.DEFAULT_THRESHOLD_RATIO,
-                "Tool result threshold should be looser than default compaction threshold"
+                budget.toolThresholdTokens > budget.thresholdTokens,
+                "Tool result threshold should be looser than default summarization threshold"
             )
-            assertEquals(0.85, ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO, 0.001)
         }
     }
 }

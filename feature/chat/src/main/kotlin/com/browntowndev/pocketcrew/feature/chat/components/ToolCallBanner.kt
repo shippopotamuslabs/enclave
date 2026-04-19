@@ -90,34 +90,5 @@ private fun BannerContent(banner: ToolCallBannerUi) {
             ),
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
-        // Sources indicator - show as a pill if sources are present
-        if (banner.tavilySources.isNotEmpty()) {
-            Spacer(modifier = Modifier.width(8.dp))
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.attach_file),
-                        contentDescription = null,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Sources",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp
-                        )
-                    )
-                }
-            }
-        }
     }
 }

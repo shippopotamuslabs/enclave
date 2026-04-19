@@ -33,9 +33,15 @@ class SyncLocalModelRegistryUseCase @Inject constructor(
     ): SlotResolvedLocalModel {
         return transactionProvider.runInTransaction {
             val assetId = localModelRepository.upsertLocalAsset(asset)
-            val primaryConfig = asset.configurations.firstOrNull()
-                ?: throw IllegalArgumentException("Asset must contain at least one configuration")
             
+            if (asset.configurations.isEmpty()) {
+                throw IllegalArgumentException("Asset must contain at least one configuration")
+            }
+
+            // Find the specific config that is assigned to this modelType
+            val primaryConfig = asset.configurations.find { modelType in it.defaultAssignments }
+                ?: asset.configurations.first()
+
             // Use the configId from the config as the authoritative ID
             // If configId is empty (user-created config), let the repository generate one
             val configId = if (primaryConfig.id.value.isNotEmpty()) {
@@ -65,19 +71,36 @@ class SyncLocalModelRegistryUseCase @Inject constructor(
                 }
             }
             
-            val configToPersist = primaryConfig.copy(
-                id = finalConfigId ?: LocalModelConfigurationId(""),
-                localModelId = assetId
-            )
+            var persistedPrimaryConfigId: LocalModelConfigurationId? = null
+
+            // Upsert all configurations for the asset
+            asset.configurations.forEach { config ->
+                val isPrimary = (config == primaryConfig)
+                val idToUse = if (isPrimary) {
+                    finalConfigId ?: LocalModelConfigurationId("")
+                } else {
+                    if (config.id.value.isNotEmpty()) config.id else LocalModelConfigurationId("")
+                }
+                
+                val configToPersist = config.copy(
+                    id = idToUse,
+                    localModelId = assetId
+                )
+                
+                val returnedId = localModelRepository.upsertLocalConfiguration(configToPersist)
+                if (isPrimary) {
+                    persistedPrimaryConfigId = returnedId
+                }
+            }
+            
+            val persistedConfigId = persistedPrimaryConfigId!!
             
             logger.debug(
                 "SyncLocalModelRegistryUseCase",
                 "syncLocalModelRegistry($modelType): assetId=$assetId sha=${asset.metadata.sha256} " +
                     "file=${asset.metadata.localFileName} preset=${primaryConfig.displayName} " +
-                    "thinking=${primaryConfig.thinkingEnabled} configId=${finalConfigId?.value ?: "NEW"}"
+                    "thinking=${primaryConfig.thinkingEnabled} configId=${persistedConfigId.value}"
             )
-            
-            val persistedConfigId = localModelRepository.upsertLocalConfiguration(configToPersist)
             
             if (existingAssignment == null) {
                 defaultModelRepository.setDefault(modelType, localConfigId = persistedConfigId, apiConfigId = null)

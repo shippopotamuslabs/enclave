@@ -76,7 +76,7 @@ interface MessageRepository {
     /**
      * Searches messages within a specific chat using full-text search.
      * Used by the search_chat tool to provide "infinite memory"
-     * for details lost to context window compaction or FIFO eviction.
+     * for details lost to context window summarization or FIFO eviction.
      *
      * @param chatId The chat ID to search within.
      * @param query The FTS-sanitized search query.
@@ -110,10 +110,9 @@ interface MessageRepository {
     suspend fun getMessagesAround(chatId: ChatId, timestamp: Long, before: Int, after: Int): List<Message>
 
     /**
-     * Retrieves the latest summary for a chat.
-     *
-     * @param chatId The chat ID
-     * @return The summary if found, null otherwise
+     * Retrieves the rolling summary of a chat.
+     * The summary provides the LLM with high-level conversation context
+     * for details lost to context window summarization or FIFO eviction.
      */
     suspend fun getChatSummary(chatId: ChatId): ChatSummary?
 

@@ -78,7 +78,7 @@ object ToolSchemaGenerator {
                 val propClass = prop.returnType.jvmErasure
                 if (propClass.java.isEnum) {
                     putJsonArray("enum") {
-                        propClass.java.enumConstants.forEach { enumValue ->
+                        propClass.java.enumConstants?.forEach { enumValue ->
                             add(JsonPrimitive(enumValue.toString()))
                         }
                     }
