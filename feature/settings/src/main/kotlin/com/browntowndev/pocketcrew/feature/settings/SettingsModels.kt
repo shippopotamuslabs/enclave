@@ -1,7 +1,6 @@
 package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.compose.runtime.Immutable
-import com.browntowndev.pocketcrew.domain.model.chat.CompactionProviderType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.usecase.settings.ModelDeletionTarget
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -35,7 +34,6 @@ data class SettingsUiState(
     val apiProvidersSheet: ApiProvidersSheetUiState = ApiProvidersSheetUiState(),
     val apiProviderEditor: ApiProviderEditorUiState = ApiProviderEditorUiState(),
     val searchSkillEditor: SearchSkillEditorUiState = SearchSkillEditorUiState(),
-    val compaction: CompactionUiState = CompactionUiState(),
     val assignments: ModelAssignmentsUiState = ModelAssignmentsUiState(),
     val deletion: DeletionFlowUiState = DeletionFlowUiState(),
 )
@@ -125,13 +123,6 @@ data class SearchSkillEditorUiState(
     val isEditing: Boolean = false,
     val enabled: Boolean = false,
     val tavilyKeyPresent: Boolean = false,
-)
-
-@Immutable
-data class CompactionUiState(
-    val providerType: CompactionProviderType = CompactionProviderType.DISABLED,
-    val apiModelId: String? = null,
-    val apiModelDisplayName: String? = null,
 )
 
 @Immutable

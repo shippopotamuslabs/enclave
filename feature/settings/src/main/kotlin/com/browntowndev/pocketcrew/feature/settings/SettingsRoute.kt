@@ -18,7 +18,6 @@ fun SettingsRoute(
     onNavigateToModelConfigure: (ModelType) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
     onNavigateToLocalModelConfigure: () -> Unit,
-    onNavigateToCompactionConfigure: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -52,7 +51,6 @@ fun SettingsRoute(
         onDeleteApiModelAsset = viewModel::onDeleteApiModelAsset,
         onDeleteApiModelConfig = { id -> viewModel.onDeleteApiModelConfig(id, {}) },
         onNavigateToLocalModelConfigure = onNavigateToLocalModelConfigure,
-        onNavigateToCompactionConfigure = onNavigateToCompactionConfigure,
         onSelectLocalModelAsset = viewModel::onSelectLocalModelAsset,
         onSelectLocalModelConfig = viewModel::onSelectLocalModelConfig,
         onDeleteLocalModelAsset = viewModel::onDeleteLocalModelAsset,

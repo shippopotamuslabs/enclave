@@ -152,10 +152,6 @@ class SettingsUiStateFactory @Inject constructor(
             sortOption = apiState.modelSortOption,
         )
 
-        val compactionApiModelDisplayName = persistedSettings.compactionApiModelId?.let { configId ->
-            apiModels.flatMap { it.configurations }.find { it.id.value == configId }?.displayName
-        }
-
         return SettingsUiState(
             home = SettingsHomeUiState(
                 theme = persistedSettings.theme,
@@ -220,11 +216,6 @@ class SettingsUiStateFactory @Inject constructor(
                 isEditing = searchSkillState.isEditing,
                 enabled = searchSkillState.enabled ?: persistedSettings.searchEnabled,
                 tavilyKeyPresent = persistedSettings.tavilyKeyPresent,
-            ),
-            compaction = CompactionUiState(
-                providerType = persistedSettings.compactionProviderType,
-                apiModelId = persistedSettings.compactionApiModelId,
-                apiModelDisplayName = compactionApiModelDisplayName,
             ),
             assignments = ModelAssignmentsUiState(
                 assignments = defaultModels.map { assignment ->

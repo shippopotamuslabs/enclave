@@ -6,7 +6,6 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
-import com.browntowndev.pocketcrew.domain.model.chat.CompactionProviderType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
@@ -34,8 +33,6 @@ class SettingsRepositoryImpl @Inject constructor(
         private val SEARCH_ENABLED_KEY = booleanPreferencesKey("settings_search_enabled")
         private val ALWAYS_USE_VISION_MODEL_KEY = booleanPreferencesKey("settings_always_use_vision_model")
         private val TAVILY_KEY_PRESENT_KEY = booleanPreferencesKey("settings_tavily_key_present")
-        private val COMPACTION_PROVIDER_TYPE_KEY = stringPreferencesKey("settings_compaction_provider_type")
-        private val COMPACTION_API_MODEL_ID_KEY = stringPreferencesKey("settings_compaction_api_model_id")
     }
 
     override val settingsFlow: Flow<SettingsData> = dataStore.data.map { preferences ->
@@ -63,14 +60,6 @@ class SettingsRepositoryImpl @Inject constructor(
             alwaysUseVisionModel = preferences[ALWAYS_USE_VISION_MODEL_KEY] ?: false,
             tavilyKeyPresent = preferences[TAVILY_KEY_PRESENT_KEY]
                 ?: apiKeyManager.has(ApiKeyManager.TAVILY_SEARCH_ALIAS),
-            compactionProviderType = preferences[COMPACTION_PROVIDER_TYPE_KEY]?.let { name ->
-                try {
-                    CompactionProviderType.valueOf(name)
-                } catch (e: IllegalArgumentException) {
-                    CompactionProviderType.DISABLED
-                }
-            } ?: CompactionProviderType.DISABLED,
-            compactionApiModelId = preferences[COMPACTION_API_MODEL_ID_KEY],
         )
     }
 
@@ -125,22 +114,6 @@ class SettingsRepositoryImpl @Inject constructor(
     override suspend fun updateAlwaysUseVisionModel(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[ALWAYS_USE_VISION_MODEL_KEY] = enabled
-        }
-    }
-
-    override suspend fun updateCompactionProviderType(type: CompactionProviderType) {
-        dataStore.edit { preferences ->
-            preferences[COMPACTION_PROVIDER_TYPE_KEY] = type.name
-        }
-    }
-
-    override suspend fun updateCompactionApiModelId(modelId: String?) {
-        dataStore.edit { preferences ->
-            if (modelId == null) {
-                preferences.remove(COMPACTION_API_MODEL_ID_KEY)
-            } else {
-                preferences[COMPACTION_API_MODEL_ID_KEY] = modelId
-            }
         }
     }
 

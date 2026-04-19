@@ -228,18 +228,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onCompactionProviderTypeChange(type: com.browntowndev.pocketcrew.domain.model.chat.CompactionProviderType) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update compaction provider", "Failed to update setting")) {
-            preferencesUseCases.updateCompactionProviderType(type)
-        }
-    }
-
-    fun onCompactionApiModelIdChange(modelId: String?) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update compaction model", "Failed to update setting")) {
-            preferencesUseCases.updateCompactionApiModelId(modelId)
-        }
-    }
-
     fun onShowCustomizationSheet(show: Boolean) {
         _sheetVisibility.update { it.copy(customization = show) }
     }
