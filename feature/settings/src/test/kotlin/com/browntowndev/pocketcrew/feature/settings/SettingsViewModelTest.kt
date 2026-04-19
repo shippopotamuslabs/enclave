@@ -53,8 +53,6 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.ClearTavilyApiKeyUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateAllowMemoriesUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateAlwaysUseVisionModelUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCompactionProviderTypeUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCompactionApiModelIdUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomPromptTextUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomizationEnabledUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateHapticPressUseCase
@@ -99,8 +97,6 @@ class SettingsViewModelTest {
     private val updateSearchEnabledUseCase = mockk<UpdateSearchEnabledUseCase>(relaxed = true)
     private val saveTavilyApiKeyUseCase = mockk<SaveTavilyApiKeyUseCase>(relaxed = true)
     private val clearTavilyApiKeyUseCase = mockk<ClearTavilyApiKeyUseCase>(relaxed = true)
-    private val updateCompactionProviderTypeUseCase = mockk<UpdateCompactionProviderTypeUseCase>(relaxed = true)
-    private val updateCompactionApiModelIdUseCase = mockk<UpdateCompactionApiModelIdUseCase>(relaxed = true)
     private val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
     private val saveLocalModelConfigurationUseCase = mockk<SaveLocalModelConfigurationUseCase>(relaxed = true)
     private val deleteLocalModelConfigurationUseCase = mockk<DeleteLocalModelConfigurationUseCase>(relaxed = true)
@@ -1028,23 +1024,24 @@ class SettingsViewModelTest {
         assertEquals(0, viewModel.uiState.value.localModelsSheet.availableDownloads.size)
     }
 
-    private fun createViewModel(
-        apiAssets: List<ApiModelAsset> = emptyList(),
-        apiAssetsFlow: Flow<List<ApiModelAsset>> = flowOf(apiAssets),
-        settingsFlow: Flow<SettingsData> = flowOf(SettingsData()),
-        localAssetsFlow: Flow<List<LocalModelAsset>> = flowOf(emptyList()),
-        softDeletedModels: List<LocalModelAsset> = emptyList(),
-    ): SettingsViewModel {
-        every { getSettingsUseCase() } returns settingsFlow
-        every { getLocalModelAssetsUseCase() } returns localAssetsFlow
-        coEvery { getLocalModelAssetsUseCase.getSoftDeletedModels() } returns softDeletedModels
-        every { getApiModelAssetsUseCase() } returns apiAssetsFlow
-        every { getDefaultModelsUseCase() } returns flowOf(emptyList())
-
-        val applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase()
+    private fun createViewModel(): SettingsViewModel {
+        val preferences = SettingsPreferencesUseCasesImpl(
+            getSettings = getSettingsUseCase,
+            updateTheme = updateThemeUseCase,
+            updateHapticPress = updateHapticPressUseCase,
+            updateHapticResponse = updateHapticResponseUseCase,
+            updateCustomizationEnabled = updateCustomizationEnabledUseCase,
+            updateSelectedPromptOption = updateSelectedPromptOptionUseCase,
+            updateCustomPromptText = updateCustomPromptTextUseCase,
+            updateAllowMemories = updateAllowMemoriesUseCase,
+            updateAlwaysUseVisionModel = updateAlwaysUseVisionModelUseCase,
+            updateSearchEnabled = updateSearchEnabledUseCase,
+            saveTavilyApiKey = saveTavilyApiKeyUseCase,
+            clearTavilyApiKey = clearTavilyApiKeyUseCase,
+        )
         val localModelAssetUiMapper = LocalModelAssetUiMapper()
         val apiModelAssetUiMapper = ApiModelAssetUiMapper()
-        val settingsUseCases = createSettingsUseCases(applyApiModelMetadataDefaultsUseCase)
+        val settingsUseCases = createSettingsUseCases(preferences)
 
         coEvery {
             apiModelRepository.findMatchingCredentials(
@@ -1062,7 +1059,7 @@ class SettingsViewModelTest {
                 localModelAssetUiMapper = localModelAssetUiMapper,
                 apiModelAssetUiMapper = apiModelAssetUiMapper,
                 apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
-                applyApiModelMetadataDefaultsUseCase = applyApiModelMetadataDefaultsUseCase,
+                applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
             ),
             localModelAssetUiMapper = localModelAssetUiMapper,
             apiModelAssetUiMapper = apiModelAssetUiMapper,
@@ -1072,25 +1069,10 @@ class SettingsViewModelTest {
     }
 
     private fun createSettingsUseCases(
-        applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
+        preferences: SettingsPreferencesUseCasesImpl,
     ): SettingsUseCases {
         return SettingsUseCasesImpl(
-            preferences = SettingsPreferencesUseCasesImpl(
-                getSettings = getSettingsUseCase,
-                updateTheme = updateThemeUseCase,
-                updateHapticPress = updateHapticPressUseCase,
-                updateHapticResponse = updateHapticResponseUseCase,
-                updateCustomizationEnabled = updateCustomizationEnabledUseCase,
-                updateSelectedPromptOption = updateSelectedPromptOptionUseCase,
-                updateCustomPromptText = updateCustomPromptTextUseCase,
-                updateAllowMemories = updateAllowMemoriesUseCase,
-                updateAlwaysUseVisionModel = updateAlwaysUseVisionModelUseCase,
-                updateSearchEnabled = updateSearchEnabledUseCase,
-                saveTavilyApiKey = saveTavilyApiKeyUseCase,
-                clearTavilyApiKey = clearTavilyApiKeyUseCase,
-                updateCompactionProviderType = updateCompactionProviderTypeUseCase,
-                updateCompactionApiModelId = updateCompactionApiModelIdUseCase,
-            ),
+            preferences = preferences,
             localModels = SettingsLocalModelUseCasesImpl(
                 getLocalModelAssets = getLocalModelAssetsUseCase,
                 getRestorableLocalModels = GetRestorableLocalModelsUseCase(getLocalModelAssetsUseCase),
@@ -1110,7 +1092,7 @@ class SettingsViewModelTest {
                     fetchApiProviderModelsUseCase = fetchApiProviderModelsUseCase,
                     fetchApiProviderModelDetailUseCase = fetchApiProviderModelDetailUseCase,
                 ),
-                applyApiModelMetadataDefaults = applyApiModelMetadataDefaultsUseCase,
+                applyApiModelMetadataDefaults = ApplyApiModelMetadataDefaultsUseCase(),
             ),
             assignments = SettingsAssignmentUseCasesImpl(
                 getDefaultModels = getDefaultModelsUseCase,
