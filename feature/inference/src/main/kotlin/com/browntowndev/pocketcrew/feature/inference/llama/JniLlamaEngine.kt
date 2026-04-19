@@ -498,20 +498,19 @@ class JniLlamaEngine @Inject constructor(
     }
 
     /**
-     * Check context pressure for observability.
-     *
-     * Do not mutate llama.cpp KV positions here. Conversation compaction is handled at
-     * turn boundaries by rebuilding history from persisted summary + tail messages.
+     * Estimates whether the current prompt plus response plus context overhead will fit.
+     * Do not mutate llama.cpp KV positions here. Conversation management is handled at
+     * the turn boundary.
      */
-    private fun checkAndCompressContext() {
-        if (!loaded.get()) return
+    private fun isContextExceeded(): Boolean {
+        if (!loaded.get()) return false
 
         try {
             val contextSize = getContextSizeForCompression()
 
             if (contextSize <= 0) {
                 Log.w(TAG, "Cannot check context: size=$contextSize")
-                return
+                return false
             }
 
             val nativeUsage = getContextUsageForCompression()
@@ -524,18 +523,21 @@ class JniLlamaEngine @Inject constructor(
 
             if (totalTokensUsed <= 0) {
                 Log.w(TAG, "No token usage data available yet")
-                return
+                return false
             }
 
             val usageRatio = totalTokensUsed.toFloat() / contextSize.toFloat()
             Log.i(TAG, "Context usage: $totalTokensUsed / $contextSize tokens (${(usageRatio * 100).toInt()}%)")
 
-            if (usageRatio >= COMPRESSION_THRESHOLD_RATIO) {
-                Log.i(TAG, "Context at ${(usageRatio * 100).toInt()}%; deferring compaction to turn-boundary history rebuild")
+            if (usageRatio > COMPRESSION_THRESHOLD_RATIO) {
+                // Triggers warning only — mid-loop summarization is not supported by llama.cpp JNI.
+                Log.i(TAG, "Context at ${(usageRatio * 100).toInt()}%; deferring management to turn-boundary history rebuild")
+                return true
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error checking/compressing context", e)
+            Log.e(TAG, "Error checking context", e)
         }
+        return false
     }
 
     /**
@@ -557,6 +559,8 @@ class JniLlamaEngine @Inject constructor(
     internal fun getContextUsageForCompression(): Int = nativeGetContextUsage()
 
     internal fun applyCompressionForContext(factor: Int): Boolean = compressContext(factor)
+
+    private fun checkAndCompressContext(): Boolean = isContextExceeded()
 
     /**
      * Save the current llama state (KV cache + tokens) to a byte array.
