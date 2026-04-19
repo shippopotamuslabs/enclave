@@ -7,7 +7,9 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -94,9 +96,7 @@ fun ModelDownloadScreen(
     viewModel: DownloadViewModel = hiltViewModel<DownloadViewModel, DownloadViewModel.Factory>(
         key = (modelsResult?.modelsToDownload ?: emptyList()).hashCode().toString(),
         creationCallback = { factory ->
-            // Pass autoStartDownloads = false to prevent auto-start in init
-            // This ensures downloads are gated on notification permission confirmation
-            factory.create(modelsResult, errorMessage, autoStartDownloads = false)
+            factory.create(modelsResult, errorMessage, autoStartDownloads = true)
         }
     )
 ) {
@@ -104,7 +104,6 @@ fun ModelDownloadScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val downloadState by viewModel.downloadState.collectAsStateWithLifecycle()
     val wifiOnly by viewModel.wifiOnly.collectAsStateWithLifecycle()
-    val showWifiDialog by viewModel.showWifiDialog.collectAsStateWithLifecycle()
     val fileProgressList by viewModel.fileProgressList.collectAsStateWithLifecycle()
     
     // Track lifecycle for foreground state to prevent race condition with WorkManager foreground service
@@ -167,14 +166,10 @@ fun ModelDownloadScreen(
                     permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 }
             }
-        } else {
-            // Permission already granted or not needed - only check models if not already downloading
-            // This prevents destructive UI re-initialization that hides files
-            val currentStatus = downloadState.status
-            if (currentStatus == DownloadStatus.IDLE || currentStatus == DownloadStatus.ERROR) {
-                viewModel.checkModels()
-            }
         }
+        // Downloads are auto-started by ViewModel init when autoStartDownloads=true.
+        // No need to manually call checkModels() here — the downloadsStarted
+        // guard in the ViewModel prevents duplicate enqueuing.
     }
 
     // Navigate to main UI when ready
@@ -196,14 +191,6 @@ fun ModelDownloadScreen(
                 // User dismissed - still try to download but notifications won't show
                 viewModel.checkModels()
             }
-        )
-    }
-
-    // WiFi-only blocked dialog
-    if (showWifiDialog) {
-        WifiBlockedDialog(
-            onDownloadOnMobile = { viewModel.downloadOnMobileData() },
-            onDismiss = { viewModel.dismissWifiDialog() }
         )
     }
 
@@ -329,6 +316,7 @@ private fun DownloadHeader(
         } else {
             val animatedProgress by animateFloatAsState(
                 targetValue = progress(),
+                animationSpec = tween(durationMillis = 200, easing = LinearEasing),
                 label = "progress"
             )
 
@@ -424,7 +412,7 @@ private fun FileProgressList(
         ) {
             items(
                 items = files,
-                key = { it.displayName }
+                key = { it.sha256 }
             ) { file ->
                 FileProgressItem(
                     file = file,
@@ -520,6 +508,7 @@ private fun FileProgressItem(
 
                 val animatedProgress by animateFloatAsState(
                     targetValue = progress(),
+                    animationSpec = tween(durationMillis = 200, easing = LinearEasing),
                     label = "fileProgress"
                 )
 
@@ -779,39 +768,6 @@ private fun BackgroundNotice(hasPermission: Boolean) {
     }
 }
 
-@Composable
-private fun WifiBlockedDialog(
-    onDownloadOnMobile: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = {
-            Icon(
-                imageVector = Icons.Default.SignalWifiOff,
-                contentDescription = "Wi-Fi disabled",
-                tint = MaterialTheme.colorScheme.primary
-            )
-        },
-        title = {
-            Text("Wi-Fi Only Enabled")
-        },
-        text = {
-            Text("Downloads are paused because you're not connected to Wi-Fi. Would you like to download using mobile data instead?")
-        },
-        confirmButton = {
-            Button(onClick = onDownloadOnMobile) {
-                Text("Download on Mobile Data")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
 /**
  * Dialog shown when user has previously denied notification permission.
  * Explains why the permission is needed for background download progress.
@@ -854,6 +810,7 @@ private fun NotificationPermissionRationaleDialog(
 private val fakeFilesAllDownloading = listOf(
     FileProgressUiModel(
         filename = "model-qwen3-8b.gguf",
+        sha256 = "sha256-qwen3-8b",
         displayName = "Qwen 3 8B",
         bytesDownloaded = 2_500_000_000L,
         totalBytes = 5_000_000_000L,
@@ -862,6 +819,7 @@ private val fakeFilesAllDownloading = listOf(
     ),
     FileProgressUiModel(
         filename = "model-embeddings.gguf",
+        sha256 = "sha256-embeddings",
         displayName = "Embeddings",
         bytesDownloaded = 800_000_000L,
         totalBytes = 2_000_000_000L,
@@ -870,6 +828,7 @@ private val fakeFilesAllDownloading = listOf(
     ),
     FileProgressUiModel(
         filename = "model-tokenizer.gguf",
+        sha256 = "sha256-tokenizer",
         displayName = "Tokenizer",
         bytesDownloaded = 0L,
         totalBytes = 500_000_000L,
@@ -881,6 +840,7 @@ private val fakeFilesAllDownloading = listOf(
 private val fakeFilesMixedStates = listOf(
     FileProgressUiModel(
         filename = "model-qwen3-8b.gguf",
+        sha256 = "sha256-qwen3-8b",
         displayName = "Qwen 3 8B",
         bytesDownloaded = 5_000_000_000L,
         totalBytes = 5_000_000_000L,
@@ -889,6 +849,7 @@ private val fakeFilesMixedStates = listOf(
     ),
     FileProgressUiModel(
         filename = "model-embeddings.gguf",
+        sha256 = "sha256-embeddings",
         displayName = "Embeddings",
         bytesDownloaded = 1_500_000_000L,
         totalBytes = 2_000_000_000L,
@@ -897,6 +858,7 @@ private val fakeFilesMixedStates = listOf(
     ),
     FileProgressUiModel(
         filename = "model-tokenizer.gguf",
+        sha256 = "sha256-tokenizer",
         displayName = "Tokenizer",
         bytesDownloaded = 0L,
         totalBytes = 500_000_000L,
@@ -905,6 +867,7 @@ private val fakeFilesMixedStates = listOf(
     ),
     FileProgressUiModel(
         filename = "model-vision.gguf",
+        sha256 = "sha256-vision",
         displayName = "Vision Encoder",
         bytesDownloaded = 400_000_000L,
         totalBytes = 1_200_000_000L,
@@ -916,6 +879,7 @@ private val fakeFilesMixedStates = listOf(
 private val fakeFilesAllComplete = listOf(
     FileProgressUiModel(
         filename = "model-qwen3-8b.gguf",
+        sha256 = "sha256-qwen3-8b",
         displayName = "Qwen 3 8B",
         bytesDownloaded = 5_000_000_000L,
         totalBytes = 5_000_000_000L,
@@ -924,6 +888,7 @@ private val fakeFilesAllComplete = listOf(
     ),
     FileProgressUiModel(
         filename = "model-embeddings.gguf",
+        sha256 = "sha256-embeddings",
         displayName = "Embeddings",
         bytesDownloaded = 2_000_000_000L,
         totalBytes = 2_000_000_000L,
@@ -932,6 +897,7 @@ private val fakeFilesAllComplete = listOf(
     ),
     FileProgressUiModel(
         filename = "model-tokenizer.gguf",
+        sha256 = "sha256-tokenizer",
         displayName = "Tokenizer",
         bytesDownloaded = 500_000_000L,
         totalBytes = 500_000_000L,
@@ -1129,31 +1095,31 @@ private fun PreviewFileProgressItems() {
         ) {
             Text("Downloading", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
-                file = FileProgressUiModel("model.gguf", "Qwen 3 8B", 2_500_000_000L, 5_000_000_000L, FileStatus.DOWNLOADING, 12.4),
+                file = FileProgressUiModel("model.gguf", "sha256-1", "Qwen 3 8B", 2_500_000_000L, 5_000_000_000L, FileStatus.DOWNLOADING, 12.4),
                 progress = { 0.5f }
             )
 
             Text("Complete", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
-                file = FileProgressUiModel("model.gguf", "Embeddings", 2_000_000_000L, 2_000_000_000L, FileStatus.COMPLETE, null),
+                file = FileProgressUiModel("model.gguf", "sha256-2", "Embeddings", 2_000_000_000L, 2_000_000_000L, FileStatus.COMPLETE, null),
                 progress = { 1f }
             )
 
             Text("Failed", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
-                file = FileProgressUiModel("model.gguf", "Tokenizer", 150_000_000L, 500_000_000L, FileStatus.FAILED, null),
+                file = FileProgressUiModel("model.gguf", "sha256-3", "Tokenizer", 150_000_000L, 500_000_000L, FileStatus.FAILED, null),
                 progress = { 0.3f }
             )
 
             Text("Paused", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
-                file = FileProgressUiModel("model.gguf", "Vision Encoder", 400_000_000L, 1_200_000_000L, FileStatus.PAUSED, null),
+                file = FileProgressUiModel("model.gguf", "sha256-4", "Vision Encoder", 400_000_000L, 1_200_000_000L, FileStatus.PAUSED, null),
                 progress = { 0.33f }
             )
 
             Text("Queued", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             FileProgressItem(
-                file = FileProgressUiModel("model.gguf", "Large Model", 0L, 8_000_000_000L, FileStatus.QUEUED, null),
+                file = FileProgressUiModel("model.gguf", "sha256-5", "Large Model", 0L, 8_000_000_000L, FileStatus.QUEUED, null),
                 progress = { 0f }
             )
         }
@@ -1198,14 +1164,6 @@ private fun PreviewBackgroundNotice() {
             Text("Without Permission", style = MaterialTheme.typography.titleMedium)
             BackgroundNotice(hasPermission = false)
         }
-    }
-}
-
-@Preview(name = "WiFi Blocked Dialog")
-@Composable
-private fun PreviewWifiBlockedDialog() {
-    PocketCrewTheme {
-        WifiBlockedDialog(onDownloadOnMobile = {}, onDismiss = {})
     }
 }
 

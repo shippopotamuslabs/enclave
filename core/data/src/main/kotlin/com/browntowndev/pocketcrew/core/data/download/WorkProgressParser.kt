@@ -117,7 +117,25 @@ class WorkProgressParser @Inject constructor(
         val speedMBs = progress.getDouble(DownloadKey.SPEED_MBPS.key, 0.0)
         val etaSeconds = progress.getLong(DownloadKey.ETA_SECONDS.key, -1L)
 
-        val filesData = progress.getStringArray(DownloadKey.FILES_PROGRESS.key) ?: emptyArray()
+        val filesData = progress.getStringArray(DownloadKey.FILES_PROGRESS.key)
+
+        // If FILES_PROGRESS key is not set at all, pass null for currentDownloads
+        // so applyProgressUpdate preserves the existing list via null-coalescing.
+        // Only pass a list when the worker has explicitly set file progress data.
+        if (filesData == null) {
+            val etaString = if (etaSeconds > 0) formatEta(etaSeconds) else null
+            return DownloadProgressUpdate(
+                status = DownloadStatus.DOWNLOADING,
+                overallProgress = overallProgress,
+                modelsComplete = modelsComplete,
+                modelsTotal = modelsTotal,
+                currentDownloads = null,
+                estimatedTimeRemaining = etaString,
+                currentSpeedMBs = speedMBs.takeIf { it > 0 },
+                waitingForUnmeteredNetwork = false,
+                errorMessage = null
+            )
+        }
 
         val parsedFiles = filesData.mapNotNull { file ->
             parseFileProgress(file).also {
@@ -125,10 +143,6 @@ class WorkProgressParser @Inject constructor(
             }
         }
 
-        // DIAGNOSTIC: Log if currentDownloads is empty
-        if (currentDownloads.isEmpty()) {
-            Log.e(TAG, "[DIAGNOSTIC] CRITICAL: currentDownloads is EMPTY!")
-        }
         val fileProgressList = parsedFiles.map { parsed ->
             // Match by SHA256 to preserve role mapping (ModelTypes) from the orchestrator
             val existing = currentDownloads.firstOrNull { download ->

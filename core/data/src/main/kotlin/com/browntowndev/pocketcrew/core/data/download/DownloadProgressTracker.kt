@@ -140,10 +140,10 @@ class DownloadProgressTracker(
             )
         }
 
-        // Calculate AGGREGATE speed for the header as AVERAGE of actively downloading file speeds
+        // Calculate AGGREGATE speed for the header as SUM of actively downloading file speeds
         val downloadingFiles = filesProgress.filter { it.status == FileStatus.DOWNLOADING && (it.speedMBs ?: 0.0) > 0 }
         val currentSpeedMBps = if (downloadingFiles.isNotEmpty()) {
-            downloadingFiles.mapNotNull { it.speedMBs }.average()
+            downloadingFiles.mapNotNull { it.speedMBs }.sum()
         } else {
             0.0
         }

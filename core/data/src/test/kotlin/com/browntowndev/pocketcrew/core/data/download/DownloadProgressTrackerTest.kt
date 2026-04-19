@@ -130,6 +130,26 @@ class DownloadProgressTrackerTest {
     }
 
     @Test
+    fun computeOverallProgress_sumsSpeedsOfConcurrentDownloads() {
+        tracker.initialize(listOf(
+            createFileSpec("file1.litertlm", 1000L, sha256 = "sha256_file1"),
+            createFileSpec("file2.litertlm", 1000L, sha256 = "sha256_file2")
+        ))
+
+        // Mock different speeds for each file
+        every { mockSpeedTracker.calculateSpeedAndEta("file1.litertlm", any(), any()) } returns Pair(4.0, 100L)
+        every { mockSpeedTracker.calculateSpeedAndEta("file2.litertlm", any(), any()) } returns Pair(6.0, 150L)
+
+        tracker.updateFileState("sha256_file1") { it.copy(status = FileStatus.DOWNLOADING, bytesDownloaded = 500L) }
+        tracker.updateFileState("sha256_file2") { it.copy(status = FileStatus.DOWNLOADING, bytesDownloaded = 500L) }
+
+        val snapshot = tracker.computeOverallProgress()
+
+        // Total speed should be 4.0 + 6.0 = 10.0 (sum), not (4.0 + 6.0) / 2 = 5.0 (average)
+        assertEquals(10.0, snapshot.currentSpeedMBps, 0.01)
+    }
+
+    @Test
     fun computeOverallProgress_returnsZero_whenNoFiles() {
         tracker.initialize(emptyList())
 

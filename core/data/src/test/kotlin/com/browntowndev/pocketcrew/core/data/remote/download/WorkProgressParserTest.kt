@@ -230,4 +230,117 @@ class WorkProgressParserTest {
         assertEquals(DownloadStatus.WIFI_BLOCKED, result!!.status)
         assertEquals(true, result.waitingForUnmeteredNetwork)
     }
+
+    @Test
+    fun `parseRunning with null FILES_PROGRESS returns null currentDownloads`() {
+        // Given: WorkInfo in RUNNING state where FILES_PROGRESS key is not set
+        // This happens when the worker reports aggregate progress without per-file data
+        val workInfo = mockk<WorkInfo> {
+            every { state } returns WorkInfo.State.RUNNING
+            every { progress } returns mockk {
+                every { getFloat(DownloadKey.OVERALL_PROGRESS.key, 0f) } returns 0.3f
+                every { getInt(DownloadKey.MODELS_COMPLETE.key, 0) } returns 0
+                every { getInt(DownloadKey.MODELS_TOTAL.key, any()) } returns 1
+                every { getDouble(DownloadKey.SPEED_MBPS.key, 0.0) } returns 5.0
+                every { getLong(DownloadKey.ETA_SECONDS.key, -1L) } returns 60L
+                // FILES_PROGRESS key not set — returns null
+                every { getStringArray(DownloadKey.FILES_PROGRESS.key) } returns null
+            }
+            every { outputData } returns mockk {
+                every { getString(any()) } returns null
+            }
+        }
+
+        val currentDownloads = listOf(
+            FileProgress(
+                filename = "model.gguf",
+                sha256 = "sha1",
+                modelTypes = listOf(ModelType.MAIN),
+                bytesDownloaded = 500_000L,
+                totalBytes = 1_000_000L,
+                status = FileStatus.DOWNLOADING,
+                speedMBs = 5.0
+            )
+        )
+
+        // When: Parse
+        val result = parser.parse(workInfo, currentDownloads)
+
+        // Then: Returns update with null currentDownloads so state manager preserves existing list
+        assertNotNull(result)
+        assertEquals(DownloadStatus.DOWNLOADING, result!!.status)
+        assertNull(result.currentDownloads, "currentDownloads should be null when FILES_PROGRESS is not set")
+        assertEquals(0.3f, result.overallProgress)
+    }
+
+    @Test
+    fun `parseRunning with FILES_PROGRESS set returns parsed currentDownloads`() {
+        // Given: WorkInfo in RUNNING state with FILES_PROGRESS set
+        val workInfo = mockk<WorkInfo> {
+            every { state } returns WorkInfo.State.RUNNING
+            every { progress } returns mockk {
+                every { getFloat(DownloadKey.OVERALL_PROGRESS.key, 0f) } returns 0.5f
+                every { getInt(DownloadKey.MODELS_COMPLETE.key, 0) } returns 1
+                every { getInt(DownloadKey.MODELS_TOTAL.key, any()) } returns 1
+                every { getDouble(DownloadKey.SPEED_MBPS.key, 0.0) } returns 12.0
+                every { getLong(DownloadKey.ETA_SECONDS.key, -1L) } returns 120L
+                every { getStringArray(DownloadKey.FILES_PROGRESS.key) } returns arrayOf(
+                    "model.gguf|1000000|1000000|COMPLETE|0.0|sha1"
+                )
+            }
+            every { outputData } returns mockk {
+                every { getString(any()) } returns null
+            }
+        }
+
+        val currentDownloads = listOf(
+            FileProgress(
+                filename = "model.gguf",
+                sha256 = "sha1",
+                modelTypes = listOf(ModelType.MAIN),
+                bytesDownloaded = 500_000L,
+                totalBytes = 1_000_000L,
+                status = FileStatus.DOWNLOADING,
+                speedMBs = 12.0
+            )
+        )
+
+        // When: Parse
+        val result = parser.parse(workInfo, currentDownloads)
+
+        // Then: Returns update with parsed file progress from worker
+        assertNotNull(result)
+        assertEquals(DownloadStatus.DOWNLOADING, result!!.status)
+        assertNotNull(result.currentDownloads)
+        assertEquals(1, result.currentDownloads!!.size)
+        assertEquals(FileStatus.COMPLETE, result.currentDownloads!![0].status)
+        assertEquals(1_000_000L, result.currentDownloads!![0].bytesDownloaded)
+    }
+
+    @Test
+    fun `parseRunning with empty FILES_PROGRESS returns empty currentDownloads`() {
+        // Given: WorkInfo in RUNNING state with empty FILES_PROGRESS array
+        val workInfo = mockk<WorkInfo> {
+            every { state } returns WorkInfo.State.RUNNING
+            every { progress } returns mockk {
+                every { getFloat(DownloadKey.OVERALL_PROGRESS.key, 0f) } returns 0f
+                every { getInt(DownloadKey.MODELS_COMPLETE.key, 0) } returns 0
+                every { getInt(DownloadKey.MODELS_TOTAL.key, any()) } returns 0
+                every { getDouble(DownloadKey.SPEED_MBPS.key, 0.0) } returns 0.0
+                every { getLong(DownloadKey.ETA_SECONDS.key, -1L) } returns -1L
+                every { getStringArray(DownloadKey.FILES_PROGRESS.key) } returns emptyArray()
+            }
+            every { outputData } returns mockk {
+                every { getString(any()) } returns null
+            }
+        }
+
+        // When: Parse
+        val result = parser.parse(workInfo, emptyList())
+
+        // Then: Returns update with empty (non-null) currentDownloads
+        assertNotNull(result)
+        assertNotNull(result!!.currentDownloads)
+        assertEquals(0, result.currentDownloads!!.size)
+    }
 }

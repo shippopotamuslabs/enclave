@@ -13,8 +13,8 @@ import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.download.InitializeFileProgressUseCase
-import com.browntowndev.pocketcrew.domain.usecase.download.ValidateDownloadConditionsUseCase
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,7 +29,7 @@ import kotlinx.coroutines.channels.Channel
 class ModelDownloadOrchestratorImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val sessionManager: DownloadSessionManager,
-    private val validateConditions: ValidateDownloadConditionsUseCase,
+    private val deviceEnvironmentRepository: DeviceEnvironmentRepositoryPort,
     private val initializeFileProgress: InitializeFileProgressUseCase,
     private val workScheduler: DownloadWorkScheduler,
     private val progressParser: WorkProgressParser,
@@ -108,17 +108,16 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
             return true
         }
 
-        val check = validateConditions(modelsToDownload, wifiOnly)
-
-        if (!check.canStart) {
-            logger.info(TAG, "Validation failed - ${check.errorMessage}")
+        // Check storage availability (hard block — can't download without space).
+        // WiFi gating is handled by WorkManager's UNMETERED constraint, not a pre-check.
+        // The pre-check caused a race condition where ConnectivityManager hadn't
+        // updated WiFi state during app startup, blocking downloads that should start.
+        if (!deviceEnvironmentRepository.hasRequiredStorage(15L * 1024 * 1024 * 1024)) {
+            val errorMsg = "Insufficient storage space. Need at least 15 GB free."
+            logger.info(TAG, "Validation failed - $errorMsg")
             val initResult = initializeFileProgress(scan, modelsResult.allModels, _downloadState.value.currentDownloads)
             stateManager.applyProgressInit(initResult)
-            if (check.errorMessage?.contains("WiFi") == true) {
-                stateManager.updateState { copy(waitingForUnmeteredNetwork = true) }
-            } else {
-                stateManager.updateState { copy(status = DownloadStatus.ERROR, errorMessage = check.errorMessage) }
-            }
+            stateManager.updateState { copy(status = DownloadStatus.ERROR, errorMessage = errorMsg) }
             return false
         }
 
@@ -166,6 +165,12 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
             }"
         )
         workScheduler.enqueue(request)
+
+        // Set DOWNLOADING status immediately — WorkManager handles WiFi gating via
+        // UNMETERED constraint. If WiFi is unavailable, the work transitions to BLOCKED
+        // and the observer flow reports WIFI_BLOCKED via WorkProgressParser.
+        // Do NOT call isWifiConnected() here — it races with ConnectivityManager during
+        // app startup and incorrectly sets WIFI_BLOCKED when WiFi is already available.
         stateManager.updateStatus(DownloadStatus.DOWNLOADING)
         return true
     }
