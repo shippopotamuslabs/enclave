@@ -1025,7 +1025,8 @@ class LlmToolingOrchestratorTest {
             initialParams = "initial",
             tag = "TestTag",
             maxToolCalls = 5,
-            onInferencePass = { _, _ ->
+            onInferencePass = { params, _ ->
+                receivedParams = params
                 inferencePassCount++
                 // First pass: tool call. Second pass: model heeds warning, no more tools.
                 if (inferencePassCount == 1) "tool-call" else "no-tool"

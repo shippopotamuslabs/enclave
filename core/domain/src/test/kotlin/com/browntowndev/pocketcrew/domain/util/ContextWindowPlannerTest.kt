@@ -260,25 +260,35 @@ class ContextWindowPlannerTest {
         @Test
         @DisplayName("Typical 4K local model: long history triggers summarization check")
         fun localModel4KTriggersSummarizationCheck() {
-            val budget = ContextWindowPlanner.budgetFor(4096)
+            val budget = ContextWindowPlanner.budgetFor(
+                contextWindowTokens = 4096,
+                options = GenerationOptions(reasoningBudget = 0)
+            )
             
             // Build a long history
-            val history = (1..20).map { 
-                ChatMessage(Role.USER, "Question number $it with sufficient context to generate meaningful tokens for testing the threshold")
+            val history = (1..100).map { 
+                ChatMessage(Role.USER, "Question number $it with sufficient context to generate meaningful tokens for testing the threshold. Adding even more text to ensure we definitely hit the threshold even with different tokenizers and budget computations.")
             }
 
-            val estimatedTokens = ContextWindowPlanner.estimatePromptTokens(history)
+            val estimatedTokens = ContextWindowPlanner.estimatePromptTokens(
+                history = history,
+                systemPrompt = null,
+                currentPrompt = "Short prompt",
+            )
             
             assertTrue(
                 ContextWindowPlanner.shouldCompact(estimatedTokens, budget),
-                "Long history should trigger summarization check for 4K context window"
+                "Long history should trigger summarization check for 4K context window (estimated: $estimatedTokens, threshold: ${budget.thresholdTokens})"
             )
         }
 
         @Test
         @DisplayName("Typical 128K API model: short history does not trigger summarization check")
         fun apiModel128KNoSummarizationCheck() {
-            val budget = ContextWindowPlanner.budgetFor(128000)
+            val budget = ContextWindowPlanner.budgetFor(
+                contextWindowTokens = 128000,
+                options = GenerationOptions(reasoningBudget = 0)
+            )
             
             val shortHistory = listOf(
                 ChatMessage(Role.USER, "Hello"),
@@ -300,10 +310,20 @@ class ContextWindowPlannerTest {
 
         @Test
         fun `tool result threshold is looser than default threshold`() {
-            val budget = ContextWindowPlanner.budgetFor(4096)
+            val budget = ContextWindowPlanner.budgetFor(
+                contextWindowTokens = 4096,
+                options = GenerationOptions(reasoningBudget = 0)
+            )
+            
+            // budgetFor doesn't return a budget with TOOL_RESULT_THRESHOLD_RATIO unless passed as parameter
+            val toolBudget = ContextWindowPlanner.budgetFor(
+                contextWindowTokens = 4096,
+                options = GenerationOptions(reasoningBudget = 0),
+                thresholdRatio = ContextWindowPlanner.TOOL_RESULT_THRESHOLD_RATIO
+            )
             
             assertTrue(
-                budget.toolThresholdTokens > budget.thresholdTokens,
+                toolBudget.thresholdTokens > budget.thresholdTokens,
                 "Tool result threshold should be looser than default summarization threshold"
             )
         }

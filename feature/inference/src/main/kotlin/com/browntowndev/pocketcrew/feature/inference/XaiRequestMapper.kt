@@ -196,6 +196,9 @@ object XaiRequestMapper {
         if (reasoningEffort == null) {
             return null
         }
+        if (ApiProviderModelPolicy.isXaiGrok420Family(modelId)) {
+            return if (ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)) reasoningEffort else null
+        }
         if (ApiProviderModelPolicy.isXaiGrok3MiniModel(modelId)) {
             return reasoningEffort
         }

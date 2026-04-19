@@ -23,14 +23,4 @@ class FakeInferenceFactory : InferenceFactoryPort {
             ?: throw IllegalStateException("Service for $modelType not configured")
         return block(service)
     }
-
-    override suspend fun <T> withInferenceServiceByConfigId(
-        configId: ApiModelConfigurationId,
-        block: suspend (LlmInferencePort) -> T
-    ): T {
-        exceptionToThrow?.let { throw it }
-        val service = serviceToReturn
-            ?: throw IllegalStateException("Service for configId $configId not configured")
-        return block(service)
-    }
 }
