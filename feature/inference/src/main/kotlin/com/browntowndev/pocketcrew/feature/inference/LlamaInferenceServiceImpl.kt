@@ -3,33 +3,38 @@ package com.browntowndev.pocketcrew.feature.inference
 import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
-import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
-import com.browntowndev.pocketcrew.feature.inference.llama.ChatMessage
-import com.browntowndev.pocketcrew.feature.inference.llama.ChatRole
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.util.ChatHistoryCompressor
+import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
+import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
+import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
 /**
@@ -46,7 +51,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
     private val activeModelProvider: ActiveModelProviderPort,
     @ApplicationContext private val context: Context,
     private val modelType: ModelType,
-    internal val toolExecutor: ToolExecutorPort? = null,
+    val orchestrator: LlmToolingOrchestrator,
 ) : LlmInferencePort {
 
     companion object {
@@ -71,10 +76,14 @@ class LlamaInferenceServiceImpl @Inject constructor(
         val fullText: String,
     )
 
+    private val mutex = Mutex()
     private var currentSignature: SessionSignature? = null
+    private var currentContextWindow: Int = 4096
+    private var currentSystemPrompt: String = ""
     private var history: List<DomainChatMessage> = emptyList()
     private var isInitialized = false
     private var hasTriedCpuFallback = false
+    private var transientToolResultTokens: Int = 0
 
     private fun getModelPath(filename: String): String {
         // Use getExternalFilesDir to match ModelFileScanner's directory choice
@@ -86,7 +95,11 @@ class LlamaInferenceServiceImpl @Inject constructor(
      * Ensures the engine is loaded with the current model from registry.
      * If the model or config has changed since last load, tears down and reloads.
      */
-    private suspend fun ensureModelLoaded(modelType: ModelType, options: GenerationOptions) {
+    private suspend fun ensureModelLoaded(
+        modelType: ModelType, 
+        options: GenerationOptions,
+        onLoading: suspend () -> Unit = {}
+    ) {
         val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
             ?: throw IllegalStateException("No active configuration for $modelType")
 
@@ -114,74 +127,105 @@ class LlamaInferenceServiceImpl @Inject constructor(
             maxTokens = targetMaxTokens,
         )
 
-        if (isInitialized && currentSignature == newSignature) {
-            // Only update history if the model/options haven't changed
-            sessionManager.setHistory(history)
-            return
-        }
+        mutex.withLock {
+            if (isInitialized && currentSignature == newSignature) {
+                // Only update history if the model/options haven't changed
+                sessionManager.setHistory(history)
+                return@withLock
+            }
 
-        // Model, config, options, or history changed - need to reinitialize
-        sessionManager.shutdown()
-        isInitialized = false
-        hasTriedCpuFallback = false
+            // Model, config, options, or history changed - need to reinitialize
+            onLoading()
+            sessionManager.shutdown()
+            isInitialized = false
+            hasTriedCpuFallback = false
 
-        val modelPath = getModelPath(asset.metadata.localFileName)
-        val mmprojPath = asset.metadata.mmprojLocalFileName?.let(::getModelPath)
-        if (options.imageUris.isNotEmpty() &&
-            asset.metadata.visionCapable &&
-            asset.metadata.modelFileFormat == com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.GGUF &&
-            mmprojPath.isNullOrBlank()
-        ) {
-            throw IllegalStateException("Vision-capable GGUF model requires an mmproj companion file.")
-        }
-        val systemPrompt = activeConfig.systemPrompt ?: "You are a helpful assistant."
-        val samplingConfig = LlamaSamplingConfig(
-            temperature = targetTemperature,
-            topP = targetTopP,
-            topK = targetTopK,
-            minP = activeConfig.minP?.toFloat() ?: 0.0f,
-            maxTokens = targetMaxTokens,
-            contextWindow = activeConfig.contextWindow ?: 4096,
-            batchSize = 256,
-            gpuLayers = 32, // Will be adjusted by GpuConfig.forDevice
-            thinkingEnabled = targetReasoningBudget > 0,
-            repeatPenalty = activeConfig.repetitionPenalty?.toFloat() ?: 1.1f
-        )
-
-        try {
-            sessionManager.initializeEngine(
-                LlamaModelConfig(
-                    modelPath = modelPath,
-                    mmprojPath = mmprojPath,
-                    systemPrompt = systemPrompt,
-                    sampling = samplingConfig
-                )
+            val modelPath = getModelPath(asset.metadata.localFileName)
+            val mmprojPath = asset.metadata.mmprojLocalFileName?.let(::getModelPath)
+            if (options.imageUris.isNotEmpty() &&
+                asset.metadata.isMultimodal &&
+                asset.metadata.modelFileFormat == com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.GGUF &&
+                mmprojPath.isNullOrBlank()
+            ) {
+                throw IllegalStateException("Vision-capable GGUF model requires an mmproj companion file.")
+            }
+            val systemPrompt = activeConfig.systemPrompt ?: "You are a helpful assistant."
+            val samplingConfig = LlamaSamplingConfig(
+                temperature = targetTemperature,
+                topP = targetTopP,
+                topK = targetTopK,
+                minP = activeConfig.minP?.toFloat() ?: 0.0f,
+                maxTokens = targetMaxTokens,
+                contextWindow = activeConfig.contextWindow ?: 4096,
+                batchSize = 256,
+                gpuLayers = 32, // Will be adjusted by GpuConfig.forDevice
+                thinkingEnabled = targetReasoningBudget > 0,
+                repeatPenalty = activeConfig.repetitionPenalty?.toFloat() ?: 1.1f
             )
-            sessionManager.setHistory(history)
-            sessionManager.startNewConversation()
-            isInitialized = true
-            currentSignature = newSignature
-        } catch (e: Exception) {
-            // GPU initialization failed, try falling back to CPU
-            if (!hasTriedCpuFallback && samplingConfig.gpuLayers > 0) {
-                Log.w(TAG, "GPU initialization failed, falling back to CPU: ${e.message}")
-                hasTriedCpuFallback = true
-                val cpuConfig = samplingConfig.copy(gpuLayers = 0)
+
+            try {
                 sessionManager.initializeEngine(
                     LlamaModelConfig(
                         modelPath = modelPath,
                         mmprojPath = mmprojPath,
                         systemPrompt = systemPrompt,
-                        sampling = cpuConfig
+                        sampling = samplingConfig
                     )
                 )
-                sessionManager.setHistory(history)
+
+                val compressedHistory = ChatHistoryCompressor.compressHistory(
+                    history = history,
+                    systemPrompt = systemPrompt,
+                    contextWindowTokens = samplingConfig.contextWindow,
+                    bufferTokens = 1000
+                )
+
+                if (compressedHistory.size < history.size) {
+                    Log.d(TAG, "Compressed Llama history from ${history.size} to ${compressedHistory.size} messages to fit initial context window")
+                }
+
+                sessionManager.setHistory(compressedHistory)
                 sessionManager.startNewConversation()
                 isInitialized = true
                 currentSignature = newSignature
-                Log.i(TAG, "Successfully initialized with CPU fallback")
-            } else {
-                throw e
+                currentContextWindow = samplingConfig.contextWindow
+                currentSystemPrompt = systemPrompt
+            } catch (e: Exception) {
+                // GPU initialization failed, try falling back to CPU
+                if (!hasTriedCpuFallback && samplingConfig.gpuLayers > 0) {
+                    Log.w(TAG, "GPU initialization failed, falling back to CPU: ${e.message}")
+                    hasTriedCpuFallback = true
+                    val cpuConfig = samplingConfig.copy(gpuLayers = 0)
+                    sessionManager.initializeEngine(
+                        LlamaModelConfig(
+                            modelPath = modelPath,
+                            mmprojPath = mmprojPath,
+                            systemPrompt = systemPrompt,
+                            sampling = cpuConfig
+                        )
+                    )
+
+                    val compressedHistory = ChatHistoryCompressor.compressHistory(
+                        history = history,
+                        systemPrompt = systemPrompt,
+                        contextWindowTokens = cpuConfig.contextWindow,
+                        bufferTokens = 1000
+                    )
+
+                    if (compressedHistory.size < history.size) {
+                        Log.d(TAG, "Compressed Llama history (CPU fallback) from ${history.size} to ${compressedHistory.size} messages to fit initial context window")
+                    }
+
+                    sessionManager.setHistory(compressedHistory)
+                    sessionManager.startNewConversation()
+                    isInitialized = true
+                    currentSignature = newSignature
+                    currentContextWindow = cpuConfig.contextWindow
+                    currentSystemPrompt = systemPrompt
+                    Log.i(TAG, "Successfully initialized with CPU fallback")
+                } else {
+                    throw e
+                }
             }
         }
     }
@@ -192,12 +236,14 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
     override suspend fun closeSession() {
         // Constitutional Fix: remove runBlocking.
-        try {
-            sessionManager.shutdown()
-            isInitialized = false
-            currentSignature = null
-        } catch (e: Exception) {
-            Log.w(TAG, "Error shutting down session", e)
+        mutex.withLock {
+            try {
+                sessionManager.shutdown()
+                isInitialized = false
+                currentSignature = null
+            } catch (e: Exception) {
+                Log.w(TAG, "Error shutting down session", e)
+            }
         }
     }
 
@@ -207,23 +253,28 @@ class LlamaInferenceServiceImpl @Inject constructor(
      */
     suspend fun clearConversation() {
         // Constitutional Fix: remove runBlocking.
-        try {
-            sessionManager.clearConversation()
-        } catch (e: Exception) {
-            Log.w(TAG, "Error clearing conversation", e)
+        mutex.withLock {
+            try {
+                sessionManager.clearConversation()
+            } catch (e: Exception) {
+                Log.w(TAG, "Error clearing conversation", e)
+            }
         }
     }
 
     override suspend fun setHistory(messages: List<DomainChatMessage>) {
-        if (this.history != messages) {
-            this.history = messages.toList()
-            // Session will be reloaded on next sendPrompt due to signature change
+        mutex.withLock {
+            if (this.history != messages) {
+                this.history = messages.toList()
+                // Session will be reloaded on next sendPrompt due to signature change
+            }
         }
     }
 
-    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = flow {
+    override fun sendPrompt(prompt: String, options: GenerationOptions, closeConversation: Boolean): Flow<InferenceEvent> = channelFlow {
         // Get model type from options (we'll need to add it to GenerationOptions)
         val targetModelType = options.modelType ?: ModelType.FAST
+        transientToolResultTokens = 0
 
         // Downscale images and save them to temporary files for the JNI engine
         val processedOptions = if (options.imageUris.isNotEmpty()) {
@@ -241,10 +292,14 @@ class LlamaInferenceServiceImpl @Inject constructor(
         }
 
         try {
-            ensureModelLoaded(targetModelType, processedOptions)
+            ensureModelLoaded(targetModelType, processedOptions) {
+                send(InferenceEvent.EngineLoading(targetModelType))
+            }
+            send(InferenceEvent.Processing(targetModelType))
         } catch (e: Exception) {
-            emit(InferenceEvent.Error(e, targetModelType))
-            return@flow
+            if (e is CancellationException) throw e
+            send(InferenceEvent.Error(e, targetModelType))
+            return@channelFlow
         }
 
         var isThinking = false
@@ -254,11 +309,11 @@ class LlamaInferenceServiceImpl @Inject constructor(
             sessionManager.sendUserMessage(prompt)
 
             if (ToolEnvelopeParser.hasLocalToolContract(processedOptions.systemPrompt)) {
-                executeToolingPrompt(processedOptions, targetModelType) { emit(it) }
+                executeToolingPrompt(processedOptions, targetModelType) { send(it) }
                 if (closeConversation) {
                     sessionManager.clearConversation()
                 }
-                return@flow
+                return@channelFlow
             }
 
             // Use options-aware streaming instead of mutating samplingConfig
@@ -276,10 +331,10 @@ class LlamaInferenceServiceImpl @Inject constructor(
                         state.emittedSegments.forEach { segment ->
                             when (segment.kind) {
                                 SegmentKind.THINKING -> {
-                                    emit(InferenceEvent.Thinking(segment.text, targetModelType))
+                                    send(InferenceEvent.Thinking(segment.text, targetModelType))
                                 }
                                 SegmentKind.VISIBLE -> {
-                                    emit(InferenceEvent.PartialResponse(segment.text, targetModelType))
+                                    send(InferenceEvent.PartialResponse(segment.text, targetModelType))
                                 }
                             }
                         }
@@ -287,15 +342,15 @@ class LlamaInferenceServiceImpl @Inject constructor(
                     is GenerationEvent.Completed -> {
                         if (buffer.isNotEmpty()) {
                             if (isThinking) {
-                                emit(InferenceEvent.Thinking(buffer, targetModelType))
+                                send(InferenceEvent.Thinking(buffer, targetModelType))
                             } else {
-                                emit(InferenceEvent.PartialResponse(buffer, targetModelType))
+                                send(InferenceEvent.PartialResponse(buffer, targetModelType))
                             }
                         }
-                        emit(InferenceEvent.Finished(targetModelType))
+                        send(InferenceEvent.Finished(targetModelType))
                     }
                     is GenerationEvent.Error -> {
-                        emit(InferenceEvent.Error(event.throwable, targetModelType))
+                        send(InferenceEvent.Error(event.throwable, targetModelType))
                     }
                 }
             }
@@ -303,10 +358,18 @@ class LlamaInferenceServiceImpl @Inject constructor(
             if (closeConversation) {
                 sessionManager.clearConversation()
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error during inference", e)
-            emit(InferenceEvent.Error(e, targetModelType))
+            send(InferenceEvent.Error(e, targetModelType))
         } finally {
+            // Stop the native llama.cpp engine if still generating
+            try {
+                sessionManager.stopCurrentGeneration()
+            } catch (_: Exception) {
+                // Best-effort stop; engine may already be idle or shut down
+            }
             // Clean up temp files created for this prompt
             if (options.imageUris.isNotEmpty()) {
                 processedOptions.imageUris.forEach { uriString ->
@@ -332,63 +395,120 @@ class LlamaInferenceServiceImpl @Inject constructor(
         targetModelType: ModelType,
         emitEvent: suspend (InferenceEvent) -> Unit,
     ) {
-        val executor = requireNotNull(toolExecutor) {
-            "Tool executor not configured for local search"
-        }
+        orchestrator.execute(
+            providerName = "LLAMA",
+            initialParams = options,
+            tag = TAG,
+            maxToolCalls = options.maxToolCalls,
+            onInferencePass = { params, allowToolCall ->
+                collectToolPreparationPass(
+                    events = sessionManager.streamAssistantResponseWithOptions(params),
+                    targetModelType = targetModelType,
+                    emitEvent = emitEvent,
+                )
+            },
+            onToolCallDetected = { pass ->
+                ToolEnvelopeParser.extractLocalToolEnvelope(pass.fullText)?.let { envelope ->
+                    listOf(
+                        ToolCallRequest(
+                            toolName = envelope.toolName,
+                            argumentsJson = envelope.argumentsJson,
+                            provider = "LLAMA",
+                            modelType = targetModelType,
+                            chatId = options.chatId,
+                            userMessageId = options.userMessageId,
+                        )
+                    )
+                } ?: emptyList()
+            },
+            onToolResultsMapped = { params, _, results ->
+                val tokenCounter = com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+                val modelId = currentSignature?.modelId?.value
+                val systemPromptTokens = ToolContextBudget.countSystemPromptTokens(currentSystemPrompt, modelId, tokenCounter)
+                val historyTokens = ToolContextBudget.countHistoryTokens(history, modelId, tokenCounter)
 
-        val firstPass = collectToolPreparationPass(
-            events = sessionManager.streamAssistantResponseWithOptions(options),
-            targetModelType = targetModelType,
-            emitEvent = emitEvent,
+                results.forEach { (_, resultJson) ->
+                    val evaluation = ToolContextBudget.evaluate(
+                        contextWindowTokens = currentContextWindow,
+                        systemPromptTokens = systemPromptTokens,
+                        historyTokens = historyTokens,
+                        transientToolResultTokens = transientToolResultTokens,
+                        options = GenerationOptions(reasoningBudget = 0),
+                        modelId = modelId,
+                        tokenCounter = tokenCounter,
+                    )
+                    val truncatedResult = NativeToolResultFormatter.truncateToolResult(
+                        resultJson = resultJson,
+                        contextWindowTokens = currentContextWindow,
+                        estimatedUsedTokens = evaluation.totalTokens,
+                        bufferTokens = ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS,
+                        tokenCounter = tokenCounter,
+                        modelId = modelId,
+                    )
+                    if (!truncatedResult.contains("\"error\"")) {
+                        transientToolResultTokens += tokenCounter.countTokens(truncatedResult, modelId) + 30
+                    }
+                    val toolResultMessage = if (evaluation.contextFull) {
+                        ToolEnvelopeParser.buildLocalToolResultMessage(truncatedResult) +
+                            "\n${ContextWindowPlanner.STOP_TOOLS_WARNING}"
+                    } else {
+                        ToolEnvelopeParser.buildLocalToolResultMessage(truncatedResult)
+                    }
+                    sessionManager.sendUserMessage(toolResultMessage)
+                }
+                params
+            },
+            onContextExceeded = { _, _ ->
+                // Llama uses local KV cache, so mid-loop rebuilding is not feasible.
+                // Estimate current pressure from the same inputs used by ToolContextBudget.
+                val tokenCounter = com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+                val modelId = currentSignature?.modelId?.value
+                val systemPromptTokens = ToolContextBudget.countSystemPromptTokens(currentSystemPrompt, modelId, tokenCounter)
+                val historyTokens = ToolContextBudget.countHistoryTokens(history, modelId, tokenCounter)
+                val evaluation = ToolContextBudget.evaluate(
+                    contextWindowTokens = currentContextWindow,
+                    systemPromptTokens = systemPromptTokens,
+                    historyTokens = historyTokens,
+                    transientToolResultTokens = transientToolResultTokens,
+                    options = GenerationOptions(reasoningBudget = 0),
+                    modelId = modelId,
+                    tokenCounter = tokenCounter,
+                )
+                val ratio = if (currentContextWindow > 0) {
+                    evaluation.totalTokens.toFloat() / currentContextWindow.toFloat()
+                } else {
+                    0f
+                }
+                if (ratio > 0.9f) {
+                    ContextExceededResult(contextExceeded = true)
+                } else {
+                    if (evaluation.contextFull) {
+                        loggingPort.warning(TAG, "Llama context exceeded mid-loop: estimatedTokens=${evaluation.totalTokens} window=$currentContextWindow")
+                    }
+                    ContextExceededResult(evaluation.contextFull)
+                }
+            },
+            onToolResult = { toolCall, resultJson ->
+                if (toolCall.toolName == com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                    val assistantMessageId = options.assistantMessageId
+                    if (assistantMessageId != null) {
+                        val sources = com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(assistantMessageId, resultJson)
+                        if (sources.isNotEmpty()) {
+                            emitEvent(InferenceEvent.TavilyResults(sources, targetModelType))
+                        }
+                    }
+                }
+            },
+            onNoToolCallOnFirstPass = { pass ->
+                emitProcessedText(pass.fullText, targetModelType, emitEvent)
+            },
+            onFinished = { _, toolCallCount, lastResponse ->
+                if (toolCallCount > 0 && lastResponse != null) {
+                    emitProcessedText(lastResponse.fullText, targetModelType, emitEvent)
+                }
+                emitEvent(InferenceEvent.Finished(targetModelType))
+            }
         )
-        val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(firstPass.fullText)
-        if (envelope == null) {
-            Log.i(TAG, "Tool loop complete without tool call provider=LLAMA modelType=$targetModelType")
-            emitProcessedText(firstPass.fullText, targetModelType, emitEvent)
-            emitEvent(InferenceEvent.Finished(targetModelType))
-            return
-        }
-
-        val toolRequest = ToolCallRequest(
-            toolName = envelope.toolName,
-            argumentsJson = envelope.argumentsJson,
-            provider = "LLAMA",
-            modelType = targetModelType,
-            chatId = options.chatId,
-            userMessageId = options.userMessageId,
-        )
-        ToolEnvelopeParser.requireSupportedTool(toolRequest.toolName)
-        val toolArg = when (toolRequest.toolName) {
-            ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolRequest.argumentsJson)
-            else -> ToolEnvelopeParser.extractRequiredQuery(toolRequest.argumentsJson)
-        }
-        Log.i(TAG, "Tool call detected provider=LLAMA tool=${toolRequest.toolName} arg=$toolArg")
-        val toolResult = executor.execute(toolRequest)
-        Log.i(
-            TAG,
-            "Tool call completed provider=LLAMA tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
-        )
-
-        sessionManager.sendUserMessage(ToolEnvelopeParser.buildLocalToolResultMessage(toolResult.resultJson))
-
-        val followUpGeneration = try {
-            streamBufferedGeneration(
-                events = sessionManager.streamAssistantResponseWithOptions(options),
-                targetModelType = targetModelType,
-                emitVisible = true,
-                emitEvent = emitEvent,
-            )
-        } catch (error: Exception) {
-            throw IllegalStateException("Failed to resume llama generation after tool replay", error)
-        }
-        if (ToolEnvelopeParser.extractLocalToolEnvelope(followUpGeneration.fullText) != null) {
-            Log.w(TAG, "Recursive tool call detected provider=LLAMA modelType=$targetModelType")
-            throw IllegalStateException("Search skill recursion limit exceeded")
-        }
-
-        emitProcessedText(envelope.visiblePrefix, targetModelType, emitEvent)
-        emitProcessedText(envelope.visibleSuffix, targetModelType, emitEvent)
-        emitEvent(InferenceEvent.Finished(targetModelType))
     }
 
     private suspend fun collectToolPreparationPass(

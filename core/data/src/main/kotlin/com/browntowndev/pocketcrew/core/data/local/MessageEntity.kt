@@ -54,7 +54,7 @@ data class MessageEntity(
     @ColumnInfo(name = "message_state")
     val messageState: MessageState = MessageState.PROCESSING,
     @ColumnInfo(name = "created_at")
-    val createdAt: Long = System.currentTimeMillis(),
+    val createdAt: Long? = null,
     @ColumnInfo(name = "model_type")
     val modelType: ModelType? = null,
     @ColumnInfo(name = "pipeline_step")

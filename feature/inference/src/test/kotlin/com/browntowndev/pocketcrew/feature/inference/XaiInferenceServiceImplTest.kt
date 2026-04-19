@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.openai.client.OpenAIClient
 import com.openai.core.http.StreamResponse
 import com.openai.errors.OpenAIInvalidDataException
@@ -72,12 +73,13 @@ class XaiInferenceServiceImplTest {
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
 
+        val loggingPort = mockk<LoggingPort>(relaxed = true)
         val service = XaiInferenceServiceImpl(
             client = client,
             modelId = "grok-4-1-fast-non-reasoning",
             modelType = ModelType.FAST,
-            loggingPort = mockk<LoggingPort>(relaxed = true),
-            toolExecutor = toolExecutor,
+            loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
         service.setHistory(listOf(ChatMessage(Role.SYSTEM, "You are direct.")))
 
@@ -138,12 +140,13 @@ class XaiInferenceServiceImplTest {
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
 
+        val loggingPort = mockk<LoggingPort>(relaxed = true)
         val service = XaiInferenceServiceImpl(
             client = client,
             modelId = "grok-4-1-fast-non-reasoning",
             modelType = ModelType.FAST,
-            loggingPort = mockk<LoggingPort>(relaxed = true),
-            toolExecutor = toolExecutor,
+            loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
         val events = service.sendPrompt(

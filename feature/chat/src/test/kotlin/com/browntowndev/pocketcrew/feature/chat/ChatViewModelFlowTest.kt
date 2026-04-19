@@ -11,10 +11,14 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCas
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import org.junit.jupiter.api.BeforeEach
@@ -44,6 +48,9 @@ class ChatViewModelFlowTest {
     private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
     private lateinit var activeModelProvider: ActiveModelProviderPort
     private lateinit var errorHandler: ViewModelErrorHandler
+    private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
+    private lateinit var toolExecutionEventPort: ToolExecutionEventPort
+    private lateinit var loggingPort: LoggingPort
 
     @BeforeEach
     fun setup() {
@@ -54,10 +61,15 @@ class ChatViewModelFlowTest {
         stageImageAttachmentUseCase = mockk(relaxed = true)
         activeModelProvider = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
+        cancelInferenceUseCase = mockk(relaxed = true)
+        toolExecutionEventPort = mockk(relaxed = true)
+        loggingPort = mockk(relaxed = true)
 
-        coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
+        coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
+        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
-        every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
+        every { toolExecutionEventPort.events } returns MutableSharedFlow()
+        coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
         coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
 
         val savedStateHandle = SavedStateHandle()
@@ -67,10 +79,13 @@ class ChatViewModelFlowTest {
             chatUseCases = chatUseCases,
             stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             savedStateHandle = savedStateHandle,
+            cancelInferenceUseCase = cancelInferenceUseCase,
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
             activeModelProvider = activeModelProvider,
-            errorHandler = errorHandler
+            errorHandler = errorHandler,
+            toolExecutionEventPort = toolExecutionEventPort,
+            loggingPort = loggingPort
         )
     }
 

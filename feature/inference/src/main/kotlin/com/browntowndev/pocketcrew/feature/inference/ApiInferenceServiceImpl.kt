@@ -5,7 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
 
@@ -16,7 +16,7 @@ class ApiInferenceServiceImpl(
     modelType: ModelType,
     baseUrl: String? = null,
     loggingPort: LoggingPort,
-    toolExecutor: ToolExecutorPort? = null,
+    orchestrator: LlmToolingOrchestrator,
 ) : BaseOpenAiSdkInferenceService(
     client = client,
     modelId = modelId,
@@ -24,7 +24,7 @@ class ApiInferenceServiceImpl(
     modelType = modelType,
     baseUrl = baseUrl,
     loggingPort = loggingPort,
-    toolExecutor = toolExecutor,
+    orchestrator = orchestrator,
 ) {
 
     override val tag: String = "ApiInferenceService"
@@ -58,6 +58,7 @@ class ApiInferenceServiceImpl(
                 params = responseParams,
                 emitEvent = emitEvent,
             )
+            emitEvent(InferenceEvent.Finished(modelType))
         } catch (e: Exception) {
             if (e is BadRequestException || e.message?.contains("400") == true || e.message?.contains("Bad Request") == true) {
                 loggingPort.warning(
@@ -75,6 +76,7 @@ class ApiInferenceServiceImpl(
                 options = options
             )
             streamChatCompletions(chatParams, emitEvent)
+            emitEvent(InferenceEvent.Finished(modelType))
         }
     }
 }

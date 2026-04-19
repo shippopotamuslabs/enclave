@@ -38,8 +38,7 @@ kotlin {
 }
 
 ksp {
-    arg("room.generateKotlin", "true")
-    arg("room.schemaLocation", "$projectDir/schemas")
+    // Empty as room is in :core:data
 }
 
 android {
@@ -89,6 +88,11 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            installation {
+                // Disable for dev testing on Android 15+ to avoid INSTALL_BASELINE_PROFILE_FAILED
+                // Re-enable for final Google Play release for production performance
+                enableBaselineProfile = false
+            }
         }
         debug {
             enableUnitTestCoverage = true
@@ -141,7 +145,6 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.litertlm.android)
     implementation(libs.tflite.gpu)
-    implementation(libs.tasks.genai)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.crashlytics)
@@ -160,7 +163,6 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.hilt.work)
-    ksp(libs.hilt.work.compiler)
     implementation(libs.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.work.runtime.ktx)
@@ -168,7 +170,6 @@ dependencies {
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
-    ksp(libs.room.compiler)
     testImplementation(project(":core:data"))
     testImplementation(project(":core:testing"))
     testImplementation(libs.junit.jupiter)

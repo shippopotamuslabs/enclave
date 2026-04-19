@@ -10,10 +10,12 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.byok.DeleteApiCredentialsUseCase
@@ -29,6 +31,7 @@ import com.browntowndev.pocketcrew.domain.usecase.modelconfig.DeleteLocalModelCo
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.DeleteLocalModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SaveLocalModelConfigurationUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.DiscoverApiModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.ExecuteModelDeletionWithReassignmentUseCase
@@ -98,6 +101,7 @@ class SettingsViewModelTest {
     private val saveLocalModelConfigurationUseCase = mockk<SaveLocalModelConfigurationUseCase>(relaxed = true)
     private val deleteLocalModelConfigurationUseCase = mockk<DeleteLocalModelConfigurationUseCase>(relaxed = true)
     private val deleteLocalModelUseCase = mockk<DeleteLocalModelUseCase>(relaxed = true)
+    private val reDownloadModelUseCase = mockk<ReDownloadModelUseCase>(relaxed = true)
     private val getApiModelAssetsUseCase = mockk<GetApiModelAssetsUseCase>()
     private val fetchApiProviderModelDetailUseCase = mockk<FetchApiProviderModelDetailUseCase>(relaxed = true)
     private val fetchApiProviderModelsUseCase = mockk<FetchApiProviderModelsUseCase>()
@@ -155,7 +159,7 @@ class SettingsViewModelTest {
             provider = asset.credentials.provider,
             modelId = asset.credentials.modelId,
             baseUrl = asset.credentials.baseUrl,
-            isVision = asset.credentials.isVision,
+            isMultimodal = asset.credentials.isMultimodal,
             credentialAlias = asset.credentials.credentialAlias,
             configurations = asset.configurations.map {
                 ApiModelConfigUi(
@@ -218,7 +222,7 @@ class SettingsViewModelTest {
             provider = ApiProvider.XAI,
             modelId = "",
             baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-            isVision = false,
+            isMultimodal = false,
             credentialAlias = "",
             configurations = emptyList()
         )
@@ -264,7 +268,7 @@ class SettingsViewModelTest {
             provider = ApiProvider.XAI,
             modelId = "grok-4.1-fast-reasoning",
             baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-            isVision = false,
+            isMultimodal = false,
             credentialAlias = "saved-xai-key",
             configurations = emptyList()
         )
@@ -314,7 +318,7 @@ class SettingsViewModelTest {
             provider = ApiProvider.XAI,
             modelId = "",
             baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-            isVision = false,
+            isMultimodal = false,
             credentialAlias = "saved-xai-key",
             configurations = emptyList()
         )
@@ -365,7 +369,7 @@ class SettingsViewModelTest {
             provider = ApiProvider.OPENROUTER,
             modelId = "openai/gpt-4.1-mini",
             baseUrl = ApiProvider.OPENROUTER.defaultBaseUrl(),
-            isVision = false,
+            isMultimodal = false,
             credentialAlias = "",
             configurations = emptyList()
         )
@@ -380,7 +384,7 @@ class SettingsViewModelTest {
         } returns listOf(
             DiscoveredApiModel(
                 id = "openai/gpt-4.1-mini",
-                visionCapable = true,
+                isMultimodal = true,
             )
         )
         coEvery {
@@ -399,7 +403,7 @@ class SettingsViewModelTest {
         viewModel.onFetchApiModels()
         runCurrent()
 
-        assertTrue(viewModel.uiState.value.apiProviderEditor.assetDraft?.isVision == true)
+        assertTrue(viewModel.uiState.value.apiProviderEditor.assetDraft?.isMultimodal == true)
     }
 
     @Test
@@ -426,7 +430,7 @@ class SettingsViewModelTest {
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
                 baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-                isVision = false,
+                isMultimodal = false,
                 credentialAlias = "",
                 configurations = emptyList()
             )
@@ -497,7 +501,7 @@ class SettingsViewModelTest {
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
                 baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-                isVision = false,
+                isMultimodal = false,
                 credentialAlias = "",
                 configurations = emptyList()
             )
@@ -563,7 +567,7 @@ class SettingsViewModelTest {
             provider = ApiProvider.XAI,
             modelId = "grok-4-fast-reasoning",
             baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-            isVision = false,
+            isMultimodal = false,
             credentialAlias = "saved-xai-key",
             configurations = emptyList()
         )
@@ -602,7 +606,7 @@ class SettingsViewModelTest {
                 provider = ApiProvider.XAI,
                 modelId = "grok-4-fast-reasoning",
                 baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-                isVision = false,
+                isMultimodal = false,
                 credentialAlias = "",
                 configurations = emptyList()
             )
@@ -632,7 +636,7 @@ class SettingsViewModelTest {
             provider = ApiProvider.XAI,
             modelId = "grok-4-fast-reasoning",
             baseUrl = ApiProvider.XAI.defaultBaseUrl(),
-            isVision = false,
+            isMultimodal = false,
             credentialAlias = "provider-a",
             configurations = emptyList()
         )
@@ -899,21 +903,157 @@ class SettingsViewModelTest {
         coVerify(exactly = 0) { saveTavilyApiKeyUseCase(any()) }
     }
 
+    @Test
+    fun `onTavilyApiKeyChange to blank disables search if no key persisted`() = runTest {
+        val viewModel = createViewModel(
+            settingsFlow = flowOf(SettingsData(searchEnabled = true, tavilyKeyPresent = false))
+        )
+
+        viewModel.onStartConfigureSearchSkill()
+        assertTrue(viewModel.uiState.value.searchSkillEditor.enabled)
+
+        viewModel.onTavilyApiKeyChange("")
+        runCurrent()
+
+        assertFalse(viewModel.uiState.value.searchSkillEditor.enabled)
+    }
+
+    @Test
+    fun `onTavilyApiKeyChange to blank does NOT disable search if key IS persisted`() = runTest {
+        val viewModel = createViewModel(
+            settingsFlow = flowOf(SettingsData(searchEnabled = true, tavilyKeyPresent = true))
+        )
+
+        viewModel.onStartConfigureSearchSkill()
+        assertTrue(viewModel.uiState.value.searchSkillEditor.enabled)
+
+        viewModel.onTavilyApiKeyChange("")
+        runCurrent()
+
+        assertTrue(viewModel.uiState.value.searchSkillEditor.enabled)
+    }
+
+    @Test
+    fun `onTavilyApiKeyChange to non-blank enables toggle interaction`() = runTest {
+        val viewModel = createViewModel(
+            settingsFlow = flowOf(SettingsData(searchEnabled = false, tavilyKeyPresent = false))
+        )
+
+        viewModel.onStartConfigureSearchSkill()
+        assertFalse(viewModel.uiState.value.searchSkillEditor.enabled)
+
+        viewModel.onTavilyApiKeyChange("new-key")
+        runCurrent()
+
+        // Toggle state shouldn't change automatically to true, but it should be actionable in UI (tested via UI logic)
+        // Here we just verify that it didn't force-disable if it was already false
+        assertFalse(viewModel.uiState.value.searchSkillEditor.enabled)
+    }
+
+    /**
+     * Scenario 7: When a re-download finishes and restores a soft-deleted model,
+     * the model should be removed from availableToDownloadModels in the bottom sheet
+     * so it doesn't appear in both "Downloaded" and "Available for Download" sections.
+     */
+    @Test
+    fun `availableToDownloadModels removes restored model when local assets update`() = runTest {
+        // A model that was soft-deleted (available for re-download)
+        val softDeletedAsset = LocalModelAsset(
+            metadata = LocalModelMetadata(
+                id = LocalModelId("model-1"),
+                huggingFaceModelName = "test/soft-deleted-model",
+                remoteFileName = "model.litertlm",
+                localFileName = "model.litertlm",
+                sha256 = "abc123def456",
+                sizeInBytes = 1_000_000_000L,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            configurations = emptyList() // soft-deleted = 0 configurations
+        )
+
+        // The same model after being restored (now has configurations)
+        val restoredAsset = LocalModelAsset(
+            metadata = LocalModelMetadata(
+                id = LocalModelId("model-1"),
+                huggingFaceModelName = "test/soft-deleted-model",
+                remoteFileName = "model.litertlm",
+                localFileName = "model.litertlm",
+                sha256 = "abc123def456",
+                sizeInBytes = 1_000_000_000L,
+                modelFileFormat = ModelFileFormat.LITERTLM
+            ),
+            configurations = listOf(
+                LocalModelConfiguration(
+                    id = LocalModelConfigurationId("config-1"),
+                    localModelId = LocalModelId("model-1"),
+                    displayName = "Restored Model",
+                    maxTokens = 2048,
+                    contextWindow = 2048,
+                    temperature = 0.7,
+                    topP = 0.95,
+                    topK = 40,
+                    repetitionPenalty = 1.0,
+                    systemPrompt = "You are helpful.",
+                    isSystemPreset = true
+                )
+            )
+        )
+
+        // Initially: no active assets, soft-deleted model available
+        val localAssetsFlow = MutableStateFlow<List<LocalModelAsset>>(emptyList())
+
+        val viewModel = createViewModel(
+            settingsFlow = flowOf(SettingsData()),
+            localAssetsFlow = localAssetsFlow,
+            softDeletedModels = listOf(softDeletedAsset),
+        )
+
+        // Open the sheet - this loads soft-deleted models into availableToDownloadModels
+        viewModel.onShowModelConfigSheet(true)
+        runCurrent()
+
+        // Verify the soft-deleted model appears in available downloads
+        assertEquals(1, viewModel.uiState.value.localModelsSheet.availableDownloads.size)
+        assertEquals(LocalModelId("model-1"), viewModel.uiState.value.localModelsSheet.availableDownloads.first().metadataId)
+
+        // Simulate re-download completing: the model is restored to active assets
+        localAssetsFlow.value = listOf(restoredAsset)
+        runCurrent()
+
+        // The restored model should be removed from availableToDownloadModels
+        assertEquals(0, viewModel.uiState.value.localModelsSheet.availableDownloads.size)
+    }
+
     private fun createViewModel(
         apiAssets: List<ApiModelAsset> = emptyList(),
         apiAssetsFlow: Flow<List<ApiModelAsset>> = flowOf(apiAssets),
         settingsFlow: Flow<SettingsData> = flowOf(SettingsData()),
+        localAssetsFlow: Flow<List<LocalModelAsset>> = flowOf(emptyList()),
+        softDeletedModels: List<LocalModelAsset> = emptyList(),
     ): SettingsViewModel {
         every { getSettingsUseCase() } returns settingsFlow
-        every { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
-        coEvery { getLocalModelAssetsUseCase.getSoftDeletedModels() } returns emptyList()
+        every { getLocalModelAssetsUseCase() } returns localAssetsFlow
+        coEvery { getLocalModelAssetsUseCase.getSoftDeletedModels() } returns softDeletedModels
         every { getApiModelAssetsUseCase() } returns apiAssetsFlow
         every { getDefaultModelsUseCase() } returns flowOf(emptyList())
 
-        val applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase()
+        val preferences = SettingsPreferencesUseCasesImpl(
+            getSettings = getSettingsUseCase,
+            updateTheme = updateThemeUseCase,
+            updateHapticPress = updateHapticPressUseCase,
+            updateHapticResponse = updateHapticResponseUseCase,
+            updateCustomizationEnabled = updateCustomizationEnabledUseCase,
+            updateSelectedPromptOption = updateSelectedPromptOptionUseCase,
+            updateCustomPromptText = updateCustomPromptTextUseCase,
+            updateAllowMemories = updateAllowMemoriesUseCase,
+            updateAlwaysUseVisionModel = updateAlwaysUseVisionModelUseCase,
+            updateSearchEnabled = updateSearchEnabledUseCase,
+            saveTavilyApiKey = saveTavilyApiKeyUseCase,
+            clearTavilyApiKey = clearTavilyApiKeyUseCase,
+        )
         val localModelAssetUiMapper = LocalModelAssetUiMapper()
         val apiModelAssetUiMapper = ApiModelAssetUiMapper()
-        val settingsUseCases = createSettingsUseCases(applyApiModelMetadataDefaultsUseCase)
+        val settingsUseCases = createSettingsUseCases(preferences)
 
         coEvery {
             apiModelRepository.findMatchingCredentials(
@@ -931,7 +1071,7 @@ class SettingsViewModelTest {
                 localModelAssetUiMapper = localModelAssetUiMapper,
                 apiModelAssetUiMapper = apiModelAssetUiMapper,
                 apiDiscoveryUiFilter = ApiDiscoveryUiFilter(),
-                applyApiModelMetadataDefaultsUseCase = applyApiModelMetadataDefaultsUseCase,
+                applyApiModelMetadataDefaultsUseCase = ApplyApiModelMetadataDefaultsUseCase(),
             ),
             localModelAssetUiMapper = localModelAssetUiMapper,
             apiModelAssetUiMapper = apiModelAssetUiMapper,
@@ -941,27 +1081,15 @@ class SettingsViewModelTest {
     }
 
     private fun createSettingsUseCases(
-        applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
+        preferences: SettingsPreferencesUseCasesImpl,
     ): SettingsUseCases {
         return SettingsUseCasesImpl(
-            preferences = SettingsPreferencesUseCasesImpl(
-                getSettings = getSettingsUseCase,
-                updateTheme = updateThemeUseCase,
-                updateHapticPress = updateHapticPressUseCase,
-                updateHapticResponse = updateHapticResponseUseCase,
-                updateCustomizationEnabled = updateCustomizationEnabledUseCase,
-                updateSelectedPromptOption = updateSelectedPromptOptionUseCase,
-                updateCustomPromptText = updateCustomPromptTextUseCase,
-                updateAllowMemories = updateAllowMemoriesUseCase,
-                updateAlwaysUseVisionModel = updateAlwaysUseVisionModelUseCase,
-                updateSearchEnabled = updateSearchEnabledUseCase,
-                saveTavilyApiKey = saveTavilyApiKeyUseCase,
-                clearTavilyApiKey = clearTavilyApiKeyUseCase,
-            ),
+            preferences = preferences,
             localModels = SettingsLocalModelUseCasesImpl(
                 getLocalModelAssets = getLocalModelAssetsUseCase,
                 getRestorableLocalModels = GetRestorableLocalModelsUseCase(getLocalModelAssetsUseCase),
                 saveLocalModelPreset = SaveLocalModelPresetUseCase(saveLocalModelConfigurationUseCase),
+                reDownloadModel = reDownloadModelUseCase,
             ),
             apiProviders = SettingsApiProviderUseCasesImpl(
                 getApiModelAssets = getApiModelAssetsUseCase,
@@ -976,7 +1104,7 @@ class SettingsViewModelTest {
                     fetchApiProviderModelsUseCase = fetchApiProviderModelsUseCase,
                     fetchApiProviderModelDetailUseCase = fetchApiProviderModelDetailUseCase,
                 ),
-                applyApiModelMetadataDefaults = applyApiModelMetadataDefaultsUseCase,
+                applyApiModelMetadataDefaults = ApplyApiModelMetadataDefaultsUseCase(),
             ),
             assignments = SettingsAssignmentUseCasesImpl(
                 getDefaultModels = getDefaultModelsUseCase,

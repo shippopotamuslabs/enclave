@@ -90,10 +90,11 @@ fun SearchSkillConfigurationForm(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Spacer(modifier = Modifier.width(12.dp))
+            val isToggleActionable = apiKey.isNotBlank() || state.tavilyKeyPresent
             Switch(
-                checked = state.enabled,
+                checked = state.enabled && isToggleActionable,
                 onCheckedChange = onEnabledChange,
+                enabled = isToggleActionable,
             )
         }
 
@@ -167,7 +168,7 @@ fun CredentialsConfigurationForm(
     var reusableCredentialDropdownExpanded by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
     var showModelSelectionSheet by remember { mutableStateOf(false) }
-    val discoveredVisionCapability = selectedModelMetadata?.visionCapable
+    val discoveredVisionCapability = selectedModelMetadata?.isMultimodal
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Provider Selection
@@ -343,8 +344,8 @@ fun CredentialsConfigurationForm(
             }
             Spacer(modifier = Modifier.width(12.dp))
             Switch(
-                checked = discoveredVisionCapability ?: asset.isVision,
-                onCheckedChange = { onAssetChange(asset.copy(isVision = it)) },
+                checked = discoveredVisionCapability ?: asset.isMultimodal,
+                onCheckedChange = { onAssetChange(asset.copy(isMultimodal = it)) },
                 enabled = discoveredVisionCapability == null,
             )
         }

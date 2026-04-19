@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -28,6 +27,7 @@ fun ChatScreen(
     onNavigateToHistory: () -> Unit,
     onNewChat: () -> Unit,
     onSendMessage: (String) -> Unit,
+    onStopGenerating: () -> Unit,
     onModeChange: (ChatModeUi) -> Unit,
     onInputChange: (String) -> Unit,
     onEditMessage: (String) -> Unit,
@@ -55,7 +55,6 @@ fun ChatScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .navigationBarsPadding()
                 .imePadding(),
         ) {
             // Message area — shrinks via weight(1f) when keyboard opens
@@ -64,6 +63,8 @@ fun ChatScreen(
                     modifier = Modifier.fillMaxSize(),
                     messages = uiState.messages,
                     hasActiveIndicator = uiState.hasActiveIndicator,
+                    activeToolCallBanner = uiState.activeToolCallBanner,
+                    activeIndicatorMessageId = uiState.activeIndicatorMessageId,
                     onEditMessage = onEditMessage,
                 )
 
@@ -91,6 +92,7 @@ fun ChatScreen(
                 onInputChange = onInputChange,
                 onModeChange = onModeChange,
                 onSend = onSendMessage,
+                onStopGenerating = onStopGenerating,
                 onAttach = {
                     imagePickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -113,6 +115,7 @@ private fun PreviewChatScreenLight() {
             onNavigateToHistory = {},
             onNewChat = {},
             onSendMessage = {},
+            onStopGenerating = {},
             onModeChange = {},
             onInputChange = {},
             onEditMessage = {},
@@ -151,6 +154,7 @@ private fun PreviewChatScreenWithMessages() {
             onNavigateToHistory = {},
             onNewChat = {},
             onSendMessage = {},
+            onStopGenerating = {},
             onModeChange = {},
             onInputChange = {},
             onEditMessage = {},
@@ -172,6 +176,7 @@ private fun PreviewChatScreenThinking() {
             onNavigateToHistory = {},
             onNewChat = {},
             onSendMessage = {},
+            onStopGenerating = {},
             onModeChange = {},
             onInputChange = {},
             onEditMessage = {},
@@ -193,6 +198,7 @@ private fun PreviewChatScreenShield() {
             onNavigateToHistory = {},
             onNewChat = {},
             onSendMessage = {},
+            onStopGenerating = {},
             onModeChange = {},
             onInputChange = {},
             onEditMessage = {},
@@ -214,6 +220,7 @@ private fun PreviewChatScreenExpandedInput() {
             onNavigateToHistory = {},
             onNewChat = {},
             onSendMessage = {},
+            onStopGenerating = {},
             onModeChange = {},
             onInputChange = {},
             onEditMessage = {},

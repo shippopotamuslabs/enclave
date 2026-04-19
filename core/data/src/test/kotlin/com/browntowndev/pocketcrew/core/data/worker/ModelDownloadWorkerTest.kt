@@ -5,15 +5,13 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.browntowndev.pocketcrew.core.data.download.DownloadNotificationManager
 import com.browntowndev.pocketcrew.core.data.download.DownloadProgressTracker
+import com.browntowndev.pocketcrew.core.data.download.DownloadWorkKeys
 import com.browntowndev.pocketcrew.core.data.download.ModelDownloadWorker
-import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -31,8 +29,6 @@ class ModelDownloadWorkerTest {
     private lateinit var mockFileDownloader: FileDownloaderPort
     private lateinit var mockModelUrlProvider: ModelUrlProviderPort
     private lateinit var worker: ModelDownloadWorker
-
-    private val testSessionId = "test-session-123"
 
     @BeforeEach
     fun setup() {
@@ -106,21 +102,19 @@ class ModelDownloadWorkerTest {
     inner class InputDataTests {
 
         @Test
-        @DisplayName("Input data can be retrieved from worker parameters")
-        fun inputData_canBeRetrieved() {
-            // New format: modelType|remoteFileName|localFileName|presetName|huggingFaceModelName|sizeInBytes|sha256|modelFileFormat|temperature|topK|topP|minP|repetitionPenalty|maxTokens|contextWindow|systemPrompt
-            val modelData = "MAIN|test-remote.gguf|test-local.gguf|Test Preset|TheBloke/TestModel|1000|abc123def456|LITERTLM|0.7|40|0.95|0.0|1.1|2048|2048|You are a helpful assistant"
+        @DisplayName("Worker input data uses KEY_DOWNLOAD_FILES for structured file specs")
+        fun inputData_usesKeyDownloadFiles() {
+            val filesJson = """[{"remoteFileName":"test.gguf","localFileName":"test.gguf","sha256":"abc123","sizeInBytes":1000,"huggingFaceModelName":"test/model","source":"HUGGING_FACE","modelFileFormat":"GGUF"}]"""
             every { mockWorkerParams.inputData } returns workDataOf(
-                "model_files" to arrayOf(modelData),
-                "session_id" to testSessionId
+                DownloadWorkKeys.KEY_DOWNLOAD_FILES to filesJson,
+                DownloadWorkKeys.KEY_SESSION_ID to "test-session-123",
+                DownloadWorkKeys.KEY_REQUEST_KIND to "INITIALIZE_MODELS",
+                DownloadWorkKeys.KEY_TARGET_MODEL_ID to ""
             )
 
             val inputData = mockWorkerParams.inputData
-            val files = inputData.getStringArray("model_files")
-            val sessionId = inputData.getString("session_id")
-
-            assertNotNull(files)
-            assertNotNull(sessionId)
+            assertNotNull(inputData.getString(DownloadWorkKeys.KEY_DOWNLOAD_FILES))
+            assertNotNull(inputData.getString(DownloadWorkKeys.KEY_SESSION_ID))
         }
 
         @Test

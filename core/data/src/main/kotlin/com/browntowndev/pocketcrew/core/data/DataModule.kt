@@ -19,11 +19,14 @@ import com.browntowndev.pocketcrew.core.data.download.remote.DynamicModelUrlProv
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
+import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
+import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
+import com.browntowndev.pocketcrew.core.data.local.MIGRATION_1_2
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
@@ -36,10 +39,13 @@ import com.browntowndev.pocketcrew.core.data.repository.DeviceEnvironmentReposit
 
 import com.browntowndev.pocketcrew.core.data.repository.MessageRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ModelConfigProviderImpl
+import com.browntowndev.pocketcrew.core.data.repository.ExtractedUrlTracker
+import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.pocketcrew.core.data.repository.LocalModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.RoomTransactionProvider
 import com.browntowndev.pocketcrew.core.data.repository.CompositeToolExecutor
+import com.browntowndev.pocketcrew.core.data.repository.ToolExecutionEventBus
 import com.browntowndev.pocketcrew.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
@@ -49,6 +55,7 @@ import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
@@ -91,6 +98,7 @@ object DataModule {
             PocketCrewDatabase::class.java,
             "pocket_crew_db"
         )
+        .addMigrations(MIGRATION_1_2)
         .fallbackToDestructiveMigration(dropAllTables = false)
         .build()
     }
@@ -100,6 +108,12 @@ object DataModule {
 
     @Provides
     fun provideMessageDao(database: PocketCrewDatabase): MessageDao = database.messageDao()
+
+    @Provides
+    fun provideChatSummaryDao(database: PocketCrewDatabase): ChatSummaryDao = database.chatSummaryDao()
+
+    @Provides
+    fun provideTavilySourceDao(database: PocketCrewDatabase): TavilySourceDao = database.tavilySourceDao()
 
     @Provides
     fun provideMessageVisionAnalysisDao(database: PocketCrewDatabase): MessageVisionAnalysisDao =
@@ -181,6 +195,10 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindExtractedUrlTracker(impl: ExtractedUrlTracker): ExtractedUrlTrackerPort
+
+    @Binds
+    @Singleton
     abstract fun bindDeviceEnvironmentRepository(impl: DeviceEnvironmentRepository): DeviceEnvironmentRepositoryPort
 
     @Binds
@@ -194,6 +212,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindModelConfigProvider(impl: ModelConfigProviderImpl): ModelConfigProvider
+
+    @Binds
+    @Singleton
+    abstract fun bindActiveModelProvider(impl: ActiveModelProviderImpl): ActiveModelProviderPort
 
     @Binds
     @Singleton
@@ -237,9 +259,9 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindActiveModelProvider(impl: ActiveModelProviderImpl): ActiveModelProviderPort
+    abstract fun bindToolExecutor(impl: CompositeToolExecutor): ToolExecutorPort
 
     @Binds
     @Singleton
-    abstract fun bindToolExecutor(impl: CompositeToolExecutor): ToolExecutorPort
+    abstract fun bindToolExecutionEventPort(impl: ToolExecutionEventBus): ToolExecutionEventPort
 }

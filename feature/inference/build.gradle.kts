@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.hilt)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -43,11 +44,9 @@ dependencies {
     // Inference native bindings
     implementation(project(":llama-android"))
 
-    // LiteRT and MediaPipe
+    // LiteRT
     implementation(libs.litertlm.android)
     implementation(libs.tflite.gpu)
-    implementation(libs.tasks.genai)
-    implementation(libs.tasks.core)
     implementation(libs.firebase.crashlytics)
 
     // OpenAI

@@ -26,6 +26,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.anthropic.client.AnthropicClient
 import com.google.genai.Client
@@ -56,7 +57,6 @@ class InferenceFactoryImplTest {
     private val processThinkingTokens = mockk<ProcessThinkingTokensUseCase>(relaxed = true)
     private val llamaProvider = providerOf(mockk<LlamaChatSessionManager>(relaxed = true))
     private val conversationProvider = providerOf(mockk<ConversationManagerPort>(relaxed = true))
-    private val mediaPipeFactory = mockk<MediaPipeInferenceServiceFactory>(relaxed = true)
     private val openAiClientProvider = mockk<OpenAiClientProvider>()
     private val anthropicClientProvider = mockk<AnthropicClientProvider>()
     private val googleGenAiClientProvider = mockk<GoogleGenAiClientProvider>()
@@ -95,13 +95,14 @@ class InferenceFactoryImplTest {
             processThinkingTokens = processThinkingTokens,
             llamaChatSessionManagerProvider = llamaProvider,
             conversationManagerProvider = conversationProvider,
-            mediaPipeFactory = mediaPipeFactory,
             openAiClientProvider = openAiClientProvider,
             anthropicClientProvider = anthropicClientProvider,
             googleGenAiClientProvider = googleGenAiClientProvider,
             loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
             inferenceLockManager = inferenceLockManager,
             toolExecutorProvider = toolExecutorProvider,
+            toolExecutionEventPort = mockk(relaxed = true),
         )
     }
 
@@ -512,10 +513,10 @@ class InferenceFactoryImplTest {
             modelId = "claude-sonnet-4-20250514",
         ) as AnthropicInferenceServiceImpl
 
-        val openAiExecutor = openAiService.toolExecutor
-        assertEquals(openAiExecutor, openRouterService.toolExecutor)
-        assertEquals(openAiExecutor, xaiService.toolExecutor)
-        assertEquals(openAiExecutor, anthropicService.toolExecutor)
+        val openAiExecutor = openAiService.orchestrator.toolExecutor
+        assertEquals(openAiExecutor, openRouterService.orchestrator.toolExecutor)
+        assertEquals(openAiExecutor, xaiService.orchestrator.toolExecutor)
+        assertEquals(openAiExecutor, anthropicService.orchestrator.toolExecutor)
         assertTrue(openAiExecutor is ToolExecutorPort)
     }
 
@@ -540,7 +541,7 @@ class InferenceFactoryImplTest {
 
         val service = factory.withInferenceService(ModelType.FAST) { it } as LlamaInferenceServiceImpl
 
-        assertTrue(service.toolExecutor is ToolExecutorPort)
+        assertTrue(service.orchestrator.toolExecutor is ToolExecutorPort)
     }
 
     @Test

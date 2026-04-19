@@ -25,17 +25,88 @@ class WorkProgressParser @Inject constructor(
         workInfo: WorkInfo,
         currentDownloads: List<FileProgress>
     ): DownloadProgressUpdate? {
+        // Extract worker stage from output data (available on terminal states)
+        // or from progress data (available during running state).
+        // Safe to null: legacy single-worker chains don't set worker_stage.
+        val workerStage = runCatching {
+            workInfo.outputData.getString(DownloadWorkKeys.KEY_WORKER_STAGE)
+        }.getOrNull()
+            ?: runCatching {
+                workInfo.progress.getString(DownloadWorkKeys.KEY_WORKER_STAGE)
+            }.getOrNull()
+
+        when (workInfo.state) {
+            WorkInfo.State.SUCCEEDED -> {
+                // In a two-worker chain, only FINALIZE success is terminal
+                if (workerStage == DownloadWorkKeys.STAGE_DOWNLOAD) {
+                    return parseSucceededDownload(workInfo, currentDownloads)
+                }
+                // FINALIZE success (or legacy single-worker) is terminal
+                return parseSucceeded(workInfo, currentDownloads)
+            }
+            WorkInfo.State.FAILED -> {
+                // Both download and finalize failures are terminal
+                return parseFailed(workInfo, currentDownloads)
+            }
+            else -> { /* handled below */ }
+        }
+
         return when (workInfo.state) {
-            WorkInfo.State.RUNNING -> parseRunning(workInfo, currentDownloads)
-            WorkInfo.State.SUCCEEDED -> parseSucceeded(workInfo, currentDownloads)
-            WorkInfo.State.FAILED -> parseFailed(workInfo, currentDownloads)
-            WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> {
+            WorkInfo.State.RUNNING -> {
+                // Finalizer running means bytes are done, just finalizing registry
+                if (workerStage == DownloadWorkKeys.STAGE_FINALIZE) {
+                    DownloadProgressUpdate(
+                        status = DownloadStatus.DOWNLOADING,
+                        overallProgress = 1.0f,
+                        modelsComplete = currentDownloads.size,
+                        modelsTotal = currentDownloads.size,
+                        currentDownloads = currentDownloads,
+                        clearSession = false
+                    )
+                } else {
+                    parseRunning(workInfo, currentDownloads)
+                }
+            }
+            WorkInfo.State.ENQUEUED -> {
                 DownloadProgressUpdate(status = DownloadStatus.CHECKING)
+            }
+            WorkInfo.State.BLOCKED -> {
+                DownloadProgressUpdate(
+                    status = DownloadStatus.WIFI_BLOCKED,
+                    waitingForUnmeteredNetwork = true
+                )
             }
             WorkInfo.State.CANCELLED -> {
                 DownloadProgressUpdate(status = DownloadStatus.PAUSED)
             }
+            else -> null
         }
+    }
+
+    /**
+     * SUCCEEDED download worker is intermediate - not terminal in a two-worker chain.
+     * Return null so the UI waits for the finalizer to complete.
+     */
+    private fun parseSucceededDownload(
+        workInfo: WorkInfo,
+        currentDownloads: List<FileProgress>
+    ): DownloadProgressUpdate? {
+        val workSessionId = workInfo.outputData.getString(DownloadWorkKeys.KEY_SESSION_ID)
+        if (sessionManager.isSessionStale(workSessionId)) {
+            Log.w(TAG, "Ignoring stale SUCCEEDED download worker: sessionId=$workSessionId")
+            return null
+        }
+        // Download worker succeeded but finalizer hasn't run yet.
+        // Preserve current progress but don't emit READY.
+        Log.d(TAG, "Download worker SUCCEEDED (intermediate) – waiting for finalizer, sessionId=$workSessionId")
+        return DownloadProgressUpdate(
+            status = DownloadStatus.DOWNLOADING,
+            overallProgress = 1.0f,
+            modelsComplete = currentDownloads.size,
+            modelsTotal = currentDownloads.size,
+            currentDownloads = currentDownloads,
+            clearSession = false
+        )
     }
 
     private fun parseRunning(workInfo: WorkInfo, currentDownloads: List<FileProgress>): DownloadProgressUpdate {
@@ -46,7 +117,25 @@ class WorkProgressParser @Inject constructor(
         val speedMBs = progress.getDouble(DownloadKey.SPEED_MBPS.key, 0.0)
         val etaSeconds = progress.getLong(DownloadKey.ETA_SECONDS.key, -1L)
 
-        val filesData = progress.getStringArray(DownloadKey.FILES_PROGRESS.key) ?: emptyArray()
+        val filesData = progress.getStringArray(DownloadKey.FILES_PROGRESS.key)
+
+        // If FILES_PROGRESS key is not set at all, pass null for currentDownloads
+        // so applyProgressUpdate preserves the existing list via null-coalescing.
+        // Only pass a list when the worker has explicitly set file progress data.
+        if (filesData == null) {
+            val etaString = if (etaSeconds > 0) formatEta(etaSeconds) else null
+            return DownloadProgressUpdate(
+                status = DownloadStatus.DOWNLOADING,
+                overallProgress = overallProgress,
+                modelsComplete = modelsComplete,
+                modelsTotal = modelsTotal,
+                currentDownloads = null,
+                estimatedTimeRemaining = etaString,
+                currentSpeedMBs = speedMBs.takeIf { it > 0 },
+                waitingForUnmeteredNetwork = false,
+                errorMessage = null
+            )
+        }
 
         val parsedFiles = filesData.mapNotNull { file ->
             parseFileProgress(file).also {
@@ -54,54 +143,16 @@ class WorkProgressParser @Inject constructor(
             }
         }
 
-        // DIAGNOSTIC: Log if currentDownloads is empty (this is the likely root cause!)
-        if (currentDownloads.isEmpty()) {
-            Log.e(TAG, "[DIAGNOSTIC] CRITICAL: currentDownloads is EMPTY! This causes 'Waiting for model configuration...' message. Parsed files will be SKIPPED!")
-        }
-        val fileProgressList = parsedFiles.mapNotNull { parsed ->
-            // Match by filename directly - this is the correct way to find the existing file
+        val fileProgressList = parsedFiles.map { parsed ->
+            // Match by SHA256 to preserve role mapping (ModelTypes) from the orchestrator
             val existing = currentDownloads.firstOrNull { download ->
-                download.filename == parsed.filename
+                download.sha256 == parsed.sha256
             }
-            // FIX: Handle empty currentDownloads by using parsed.modelTypes directly
-            // This fixes the "Waiting for model configuration..." bug when currentDownloads is empty
-            if (existing == null) {
-                // No existing entry - use parsed data directly (from worker)
-                if (parsed.modelTypes.isNotEmpty()) {
-                    Log.w(TAG, "[FIX_APPLIED] parseRunning: Using parsed modelTypes=${parsed.modelTypes} for filename=${parsed.filename} (no existing entry)")
-                    parsed
-                } else {
-                    // Try to derive from filename
-                    val derivedTypes = deriveModelTypesFromFilename(parsed.filename)
-                    if (derivedTypes.isNotEmpty()) {
-                        Log.w(TAG, "[FIX_APPLIED] parseRunning: Derived modelTypes=${derivedTypes} for filename=${parsed.filename}")
-                        parsed.copy(modelTypes = derivedTypes)
-                    } else {
-                        Log.e(TAG, "[ERROR] parseRunning: No modelTypes for filename=${parsed.filename}, falling back to filename")
-                        // Return with empty modelTypes - UI will handle this gracefully
-                        parsed
-                    }
-                }
-            } else if (existing.modelTypes.isNotEmpty()) {
-                // MERGE both sets of modelTypes - union with deduplication
-                // parsed.modelTypes is authoritative (from worker), existing from currentDownloads
-                val mergedModelTypes = (parsed.modelTypes + existing.modelTypes).distinctBy { it.name }
-                val result = parsed.copy(modelTypes = mergedModelTypes)
-                result
-            } else if (parsed.modelTypes.isNotEmpty()) {
-                // Existing has no modelTypes but parsed does - use parsed
-                Log.w(TAG, "[FIX_APPLIED] parseRunning: Using parsed modelTypes=${parsed.modelTypes} for filename=${parsed.filename}")
-                parsed
+            if (existing != null) {
+                parsed.copy(modelTypes = existing.modelTypes)
             } else {
-                // Neither has modelTypes - derive from filename
-                val derivedTypes = deriveModelTypesFromFilename(parsed.filename)
-                if (derivedTypes.isNotEmpty()) {
-                    Log.w(TAG, "[FIX_APPLIED] parseRunning: Derived modelTypes=${derivedTypes} for filename=${parsed.filename}")
-                    parsed.copy(modelTypes = derivedTypes)
-                } else {
-                    Log.e(TAG, "[ERROR] parseRunning: No modelTypes for filename=${parsed.filename}")
-                    parsed
-                }
+                Log.w(TAG, "No existing FileProgress found for SHA256: ${parsed.sha256}. UI roles may be missing.")
+                parsed
             }
         }
         val etaString = if (etaSeconds > 0) formatEta(etaSeconds) else null
@@ -114,13 +165,13 @@ class WorkProgressParser @Inject constructor(
             currentDownloads = fileProgressList,
             estimatedTimeRemaining = etaString,
             currentSpeedMBs = speedMBs.takeIf { it > 0 },
-            wifiBlocked = false,
+            waitingForUnmeteredNetwork = false,
             errorMessage = null
         )
     }
 
     private fun parseSucceeded(workInfo: WorkInfo, currentDownloads: List<FileProgress>): DownloadProgressUpdate? {
-        val workSessionId = workInfo.outputData.getString(DownloadWorkScheduler.KEY_SESSION_ID)
+        val workSessionId = workInfo.outputData.getString(DownloadWorkKeys.KEY_SESSION_ID)
 
         if (sessionManager.isSessionStale(workSessionId)) {
             Log.w(TAG, "Ignoring stale SUCCEEDED: workSessionId=$workSessionId")
@@ -145,7 +196,7 @@ class WorkProgressParser @Inject constructor(
         workInfo: WorkInfo,
         currentDownloads: List<FileProgress>
     ): DownloadProgressUpdate? {
-        val workSessionId = workInfo.outputData.getString(DownloadWorkScheduler.KEY_SESSION_ID)
+        val workSessionId = workInfo.outputData.getString(DownloadWorkKeys.KEY_SESSION_ID)
 
         // Ignore failures from old/stale sessions - these are from previous app runs
         if (sessionManager.isSessionStale(workSessionId)) {
@@ -153,17 +204,18 @@ class WorkProgressParser @Inject constructor(
             return null
         }
 
-        val errorMessage = workInfo.outputData.getString("error_message") ?: "Download failed"
+        val errorMessage = workInfo.outputData.getString(DownloadWorkKeys.KEY_ERROR_MESSAGE) ?: "Download failed"
         return DownloadProgressUpdate(
             status = DownloadStatus.ERROR,
             errorMessage = errorMessage,
-            currentDownloads = currentDownloads
+            currentDownloads = currentDownloads,
+            clearSession = true
         )
     }
 
     fun parseFileProgress(data: String): FileProgress? {
         val parts = data.split("|")
-        // Check for at least 6 parts (0-5 indices) since we need modelTypes at index 5
+        // Check for at least 6 parts (0-5 indices) since we need sha256 at index 5
         if (parts.size < 6) {
             Log.w(TAG, "[PARSE_ERROR] parseFileProgress: Not enough parts (need 6, got ${parts.size}): $data")
             return null
@@ -175,28 +227,14 @@ class WorkProgressParser @Inject constructor(
             val totalBytes = parts[2].toLong().coerceAtLeast(0L)
             val status = FileStatus.valueOf(parts[3])
             val speedMBs = parts[4].toDoubleOrNull()?.coerceAtLeast(0.0)
-
-            // Safely parse modelTypes, handle empty string
-            val modelTypesStr = parts.getOrNull(5) ?: ""
-            val modelTypes = if (modelTypesStr.isNotBlank()) {
-                modelTypesStr.split(",").mapNotNull { typeStr ->
-                    try {
-                        ModelType.fromApiValue(typeStr.trim())
-                    } catch (e: Exception) {
-                        Log.w(TAG, "[PARSE_ERROR] Failed to parse modelType: '$typeStr'")
-                        null
-                    }
-                }
-            } else {
-                Log.w(TAG, "[PARSE_WARN] parseFileProgress: Empty modelTypes for filename=$filename, will derive from filename")
-                emptyList()
-            }
+            val sha256 = parts[5]
 
             if (totalBytes in 1..<bytesDownloaded) return null
 
             FileProgress(
                 filename = filename,
-                modelTypes = modelTypes,
+                sha256 = sha256,
+                modelTypes = emptyList(), // Will be merged from currentDownloads using sha256
                 bytesDownloaded = bytesDownloaded,
                 totalBytes = totalBytes,
                 status = status,
@@ -212,19 +250,5 @@ class WorkProgressParser @Inject constructor(
         seconds < 60 -> "< 1 min"
         seconds < 3600 -> "${seconds / 60} min"
         else -> String.format(Locale.US, "%.1f hours", seconds / 3600.0)
-    }
-
-    /**
-     * Derives modelTypes from filename when the backward compatibility merge fails.
-     * Filename format: "{modelType}.{extension}" e.g., "vision.litertlm", "main.task"
-     */
-    private fun deriveModelTypesFromFilename(filename: String): List<ModelType> {
-        val baseName = filename.substringBefore(".")
-        return try {
-            listOf(ModelType.valueOf(baseName.uppercase()))
-        } catch (e: IllegalArgumentException) {
-            Log.w(TAG, "Could not derive ModelType from filename: $filename")
-            emptyList()
-        }
     }
 }

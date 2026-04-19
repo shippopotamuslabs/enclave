@@ -47,10 +47,11 @@ object AnthropicRequestMapper {
         history
             .filterNot(::isSyntheticAssistantError)
             .forEach { message ->
+                val sanitizedContent = ImagePayloads.stripBase64DataUris(message.content)
                 when (message.role) {
                     Role.SYSTEM -> Unit
-                    Role.USER -> builder.addUserMessage(message.content)
-                    Role.ASSISTANT -> builder.addAssistantMessage(message.content)
+                    Role.USER -> builder.addUserMessage(sanitizedContent)
+                    Role.ASSISTANT -> builder.addAssistantMessage(sanitizedContent)
                 }
             }
 
@@ -70,43 +71,43 @@ object AnthropicRequestMapper {
                 Tool.InputSchema.builder()
                     .type(JsonValue.from("object"))
                     .properties(toolProperties())
-                    .required(requiredArguments())
+                    .required(schema.required)
                     .build()
             )
             .strict(true)
             .build()
 
-    private fun ToolDefinition.toolProperties(): Tool.InputSchema.Properties =
-        when (this) {
-            ToolDefinition.TAVILY_WEB_SEARCH -> Tool.InputSchema.Properties.builder()
-                .putAdditionalProperty(
-                    "query",
-                    JsonValue.from(
-                        mapOf(
-                            "type" to "string"
-                        )
-                    )
-                )
-                .build()
-            ToolDefinition.ATTACHED_IMAGE_INSPECT -> Tool.InputSchema.Properties.builder()
-                .putAdditionalProperty(
-                    "question",
-                    JsonValue.from(
-                        mapOf(
-                            "type" to "string"
-                        )
-                    )
-                )
-                .build()
-            else -> error("Unsupported tool: $name")
+    private fun ToolDefinition.toolProperties(): Tool.InputSchema.Properties {
+        val builder = Tool.InputSchema.Properties.builder()
+        schema.properties.forEach { (key, value) ->
+            builder.putAdditionalProperty(key, value.toAnthropicJsonValue())
         }
+        return builder.build()
+    }
 
-    private fun ToolDefinition.requiredArguments(): List<String> =
-        when (this) {
-            ToolDefinition.TAVILY_WEB_SEARCH -> listOf("query")
-            ToolDefinition.ATTACHED_IMAGE_INSPECT -> listOf("question")
-            else -> error("Unsupported tool: $name")
+    private fun kotlinx.serialization.json.JsonElement.toAnthropicJsonValue(): JsonValue {
+        return when (this) {
+            is kotlinx.serialization.json.JsonPrimitive -> {
+                if (isString) JsonValue.from(content)
+                else {
+                    content.toBooleanStrictOrNull()?.let { JsonValue.from(it) }
+                        ?: content.toLongOrNull()?.let { JsonValue.from(it) }
+                        ?: content.toDoubleOrNull()?.let { JsonValue.from(it) }
+                        ?: JsonValue.from(content)
+                }
+            }
+            is kotlinx.serialization.json.JsonObject -> {
+                val map = mutableMapOf<String, JsonValue>()
+                forEach { (k, v) -> map[k] = v.toAnthropicJsonValue() }
+                JsonValue.from(map)
+            }
+            is kotlinx.serialization.json.JsonArray -> {
+                val list = map { it.toAnthropicJsonValue() }
+                JsonValue.from(list)
+            }
+            else -> JsonValue.from(null as String?)
         }
+    }
 
     private fun buildSystemPrompt(
         history: List<ChatMessage>,

@@ -12,21 +12,26 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -70,6 +75,7 @@ fun InputBar(
     onInputChange: (String) -> Unit,
     onModeChange: (ChatModeUi) -> Unit,
     onSend: (String) -> Unit,
+    onStopGenerating: () -> Unit,
     onAttach: () -> Unit,
     onClearAttachment: () -> Unit,
     modifier: Modifier = Modifier
@@ -110,10 +116,9 @@ fun InputBar(
         modifier = modifier
             .fillMaxWidth()
             .then(if (isExpanded) Modifier.fillMaxHeight(0.9f) else Modifier.heightIn(min = 56.dp))
-            .padding(horizontal = 8.dp)
             .animateContentSize()
             .then(if (!isExpanded) Modifier.clickable { focusRequester.requestFocus() } else Modifier),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 2.dp
     ) {
@@ -121,7 +126,8 @@ fun InputBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (isExpanded) Modifier.fillMaxHeight() else Modifier)
-                .padding(8.dp),
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = when {
                 isExpanded -> Arrangement.SpaceBetween
                 else -> Arrangement.spacedBy(6.dp)
@@ -340,31 +346,47 @@ fun InputBar(
                     }
                 }
 
-                // Send
+                // Send / Stop
                 val hasSendableContent = textFieldValue.text.isNotBlank() || selectedImageUri != null
-                val isSendDisabled = isGenerating || isGlobalInferenceBlocked
-                IconButton(
-                    onClick = {
-                        if (hasSendableContent && !isSendDisabled) {
-                            val textToSend = textFieldValue.text
-                            onSend(textToSend) // Send FIRST while inputText still has value
-                            textFieldValue = TextFieldValue("") // Clear locally
-                            onInputChange("") // Clear parent state
-                            isExpanded = false
-                            focusManager.clearFocus()
-                        }
-                    },
-                    enabled = hasSendableContent && !isSendDisabled
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.Send,
-                        contentDescription = "Send message",
-                        tint = when {
-                            isSendDisabled -> MaterialTheme.colorScheme.onSurfaceVariant
-                            hasSendableContent -> MaterialTheme.colorScheme.primary
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
+                val isSendDisabled = (isGenerating || isGlobalInferenceBlocked) && !isGenerating
+                if (isGenerating) {
+                    FilledIconButton(
+                        onClick = onStopGenerating,
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f),
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Stop,
+                            contentDescription = "Stop generating",
+                        )
+                    }
+                } else {
+                    IconButton(
+                        onClick = {
+                            if (hasSendableContent && !isSendDisabled) {
+                                val textToSend = textFieldValue.text
+                                onSend(textToSend) // Send FIRST while inputText still has value
+                                textFieldValue = TextFieldValue("") // Clear locally
+                                onInputChange("") // Clear parent state
+                                isExpanded = false
+                                focusManager.clearFocus()
+                            }
+                        },
+                        enabled = hasSendableContent && !isSendDisabled
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "Send message",
+                            tint = when {
+                                isSendDisabled -> MaterialTheme.colorScheme.onSurfaceVariant
+                                hasSendableContent -> MaterialTheme.colorScheme.primary
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
                 }
             }
 
@@ -396,6 +418,7 @@ fun PreviewInputBar() {
             onInputChange = {},
             onModeChange = {},
             onSend = {},
+            onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
         )
@@ -420,6 +443,7 @@ fun PreviewInputBarExpanded() {
             onInputChange = {},
             onModeChange = {},
             onSend = {},
+            onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
         )
@@ -440,6 +464,7 @@ fun PreviewInputBarSingleLine() {
             onInputChange = {},
             onModeChange = {},
             onSend = {},
+            onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
         )
@@ -460,6 +485,7 @@ fun PreviewInputBarThinking() {
             onInputChange = {},
             onModeChange = {},
             onSend = {},
+            onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
         )
@@ -480,6 +506,28 @@ fun PreviewInputBarThinkingMode() {
             onInputChange = {},
             onModeChange = {},
             onSend = {},
+            onStopGenerating = {},
+            onAttach = {},
+            onClearAttachment = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+fun PreviewInputBarStopIndicator() {
+    PocketCrewTheme {
+        InputBar(
+            inputText = "Generating response...",
+            selectedImageUri = null,
+            isPhotoAttachmentEnabled = true,
+            photoAttachmentDisabledReason = null,
+            selectedMode = ChatModeUi.FAST,
+            isGenerating = true,
+            onInputChange = {},
+            onModeChange = {},
+            onSend = {},
+            onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
         )

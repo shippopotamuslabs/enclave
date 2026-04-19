@@ -2,9 +2,6 @@ package com.browntowndev.pocketcrew.feature.inference.llama
 
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
-import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
-import com.browntowndev.pocketcrew.feature.inference.MediaPipeInferenceServiceFactory
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.spyk
@@ -63,7 +60,7 @@ class JniLlamaEnginePerformanceAuditTest {
     }
 
     @Test
-    fun `checkAndCompressContext prefers native context usage when available`() {
+    fun `checkAndCompressContext reports native context usage without mutating KV positions`() {
         val engine = spyk(JniLlamaEngine(gpuProfiler), recordPrivateCalls = true)
 
         val loadedField = JniLlamaEngine::class.java.getDeclaredField("loaded")
@@ -88,11 +85,11 @@ class JniLlamaEnginePerformanceAuditTest {
         method.invoke(engine)
 
         verify { engine.getContextUsageForCompression() }
-        verify { engine.applyCompressionForContext(2) }
+        verify(exactly = 0) { engine.applyCompressionForContext(any()) }
     }
 
     @Test
-    fun `checkAndCompressContext falls back to tracked token counts when native usage unavailable`() {
+    fun `checkAndCompressContext falls back to tracked token counts without mutating KV positions`() {
         val engine = spyk(JniLlamaEngine(gpuProfiler), recordPrivateCalls = true)
 
         val loadedField = JniLlamaEngine::class.java.getDeclaredField("loaded")
@@ -117,26 +114,6 @@ class JniLlamaEnginePerformanceAuditTest {
         method.invoke(engine)
 
         verify { engine.getContextUsageForCompression() }
-        verify { engine.applyCompressionForContext(2) }
-    }
-}
-
-class MediaPipeInferenceServiceFactoryTest {
-    private val activeModelProvider: ActiveModelProviderPort = mockk()
-    private val processThinkingTokens: ProcessThinkingTokensUseCase = mockk()
-    private val gpuProfiler: GpuProfiler = mockk(relaxed = true)
-    private val context: android.content.Context = mockk(relaxed = true)
-
-    private val factory = MediaPipeInferenceServiceFactory(
-        context = context,
-        activeModelProvider = activeModelProvider,
-        processThinkingTokens = processThinkingTokens,
-        gpuProfiler = gpuProfiler
-    )
-
-    @Test
-    fun `create should use context window from active model config instead of hardcoded 16384`() = runTest {
-        // This test validates the factory now accepts dynamic config.
-        // Full integration test requires MediaPipe runtime (not available in unit tests).
+        verify(exactly = 0) { engine.applyCompressionForContext(any()) }
     }
 }

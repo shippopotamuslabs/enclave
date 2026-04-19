@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.openai.client.OpenAIClient
 import com.openai.core.http.StreamResponse
 import com.openai.models.responses.Response
@@ -71,12 +72,13 @@ class OpenRouterInferenceServiceImplTest {
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
 
+        val loggingPort = mockk<LoggingPort>(relaxed = true)
         val service = OpenRouterInferenceServiceImpl(
             client = client,
             modelId = "openai/gpt-5.2:nitro",
             modelType = ModelType.FAST,
-            loggingPort = mockk<LoggingPort>(relaxed = true),
-            toolExecutor = toolExecutor,
+            loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
         val events = service.sendPrompt(
@@ -141,12 +143,13 @@ class OpenRouterInferenceServiceImplTest {
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
 
+        val loggingPort = mockk<LoggingPort>(relaxed = true)
         val service = OpenRouterInferenceServiceImpl(
             client = client,
             modelId = "openai/gpt-5.2:nitro",
             modelType = ModelType.FAST,
-            loggingPort = mockk<LoggingPort>(relaxed = true),
-            toolExecutor = toolExecutor,
+            loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
         val events = service.sendPrompt(

@@ -289,7 +289,7 @@ private fun ByokAssetListView(
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
-                                    if (asset.isVision) {
+                                    if (asset.isMultimodal) {
                                         Spacer(modifier = Modifier.width(4.dp))
                                         Icon(
                                             imageVector = Icons.Default.Visibility,
@@ -385,7 +385,7 @@ private fun ByokConfigListView(
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
-                    if (asset.isVision) {
+                    if (asset.isMultimodal) {
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.Visibility,

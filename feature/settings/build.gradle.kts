@@ -42,6 +42,7 @@ dependencies {
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
@@ -63,6 +64,7 @@ dependencies {
 
     // DataStore
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.work.runtime.ktx)
 
     // Unit tests
     testImplementation(libs.junit.jupiter)
@@ -71,7 +73,7 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(project(":core:testing"))
-    
+
     // JUnit 5 Engine for test discovery
     testRuntimeOnly("org.junit.platform:junit-platform-engine")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")

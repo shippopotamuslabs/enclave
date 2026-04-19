@@ -11,7 +11,7 @@ data class DownloadProgressUpdate(
     val currentDownloads: List<FileProgress>? = null,
     val estimatedTimeRemaining: String? = null,
     val currentSpeedMBs: Double? = null,
-    val wifiBlocked: Boolean? = null,
+    val waitingForUnmeteredNetwork: Boolean? = null,
     val errorMessage: String? = null,
     val clearSession: Boolean = false
 )

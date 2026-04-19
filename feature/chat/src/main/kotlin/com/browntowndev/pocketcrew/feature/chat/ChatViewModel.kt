@@ -1,4 +1,5 @@
 package com.browntowndev.pocketcrew.feature.chat
+import androidx.compose.ui.text.toLowerCase
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,13 +12,21 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.ATTACHED_IMAGE_INSPECT
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.TAVILY_EXTRACT
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.TAVILY_WEB_SEARCH
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.text.SimpleDateFormat
@@ -28,6 +37,7 @@ import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -56,10 +66,13 @@ class ChatViewModel @Inject constructor(
     private val chatUseCases: ChatUseCases,
     private val stageImageAttachmentUseCase: StageImageAttachmentUseCase,
     private val savedStateHandle: SavedStateHandle,
+    private val cancelInferenceUseCase: CancelInferenceUseCase,
     inferenceLockManager: InferenceLockManager,
     private val modelDisplayNamesUseCase: GetModelDisplayNameUseCase,
     private val activeModelProvider: ActiveModelProviderPort,
+    private val toolExecutionEventPort: ToolExecutionEventPort,
     private val errorHandler: ViewModelErrorHandler,
+    private val loggingPort: LoggingPort,
 ) : ViewModel() {
 
     companion object {
@@ -91,6 +104,14 @@ class ChatViewModel @Inject constructor(
     // Holds dynamically loaded display names
     private val _modelDisplayNames = MutableStateFlow<Map<ModelType, String>>(emptyMap())
 
+    // Tracks the current active tool call banner (transient, non-persisted)
+    private val _activeToolCallBanner = MutableStateFlow<ToolCallBannerUi?>(null)
+
+    // Tracks IDs of active tool events to enforce min 1s display rule
+    private val activeToolIds = mutableSetOf<String>()
+    private val activeToolJobs = mutableMapOf<String, Job>()
+    private val toolStartTimes = mutableMapOf<String, Long>()
+
     private val photoAttachmentPolicyFlow = combine(
         settingsUseCases.getSettings(),
         _selectedMode,
@@ -112,6 +133,86 @@ class ChatViewModel @Inject constructor(
             }
             _modelDisplayNames.value = names
         }
+
+        // Observe tool execution events to show transient UI banners
+        observeToolEvents()
+    }
+
+    /**
+     * Observes tool lifecycle events and manages banner visibility with a 1s minimum gate.
+     */
+    private fun observeToolEvents() {
+        toolExecutionEventPort.events.onEach { event ->
+            val currentChatIdVal = _currentChatId.value ?: initialChatId
+            val turnChatId = event.chatId
+
+            loggingPort.debug("ChatViewModel", "Received tool execution event: type=${event::class.java.simpleName} eventId=${event.eventId} turnChatId=${turnChatId?.value} currentChatId=${currentChatIdVal?.value}")
+
+            // Only show if it matches the current conversation context
+            if (turnChatId != currentChatIdVal) return@onEach
+
+            when (event) {
+                is ToolExecutionEvent.Started -> {
+                    // Cancel any pending cleanup for this tool if it matches a previous ID
+                    activeToolJobs[event.eventId]?.cancel()
+                    activeToolIds.add(event.eventId)
+                    toolStartTimes[event.eventId] = System.currentTimeMillis()
+
+                    val toolName = event.toolName.lowercase()
+                    _activeToolCallBanner.value = ToolCallBannerUi(
+                        kind = when (toolName) {
+                            TAVILY_WEB_SEARCH.name -> ToolCallBannerKind.SEARCH
+                            TAVILY_EXTRACT.name -> ToolCallBannerKind.EXTRACT
+                            ATTACHED_IMAGE_INSPECT.name -> ToolCallBannerKind.IMAGE
+                            ToolDefinition.SEARCH_CHAT_HISTORY.name -> ToolCallBannerKind.MEMORY
+                            ToolDefinition.SEARCH_CHAT.name -> ToolCallBannerKind.MEMORY
+                            else -> ToolCallBannerKind.SEARCH
+                        },
+                        label = when (toolName) {
+                            TAVILY_WEB_SEARCH.name -> "Searching with Tavily"
+                            TAVILY_EXTRACT.name -> "Reading webpage content"
+                            ATTACHED_IMAGE_INSPECT.name -> "Inspecting image"
+                            ToolDefinition.SEARCH_CHAT_HISTORY.name -> "Searching chat history"
+                            ToolDefinition.SEARCH_CHAT.name -> "Searching chat"
+                            else -> "Executing tool"
+                        }
+                    )
+                }
+                                is ToolExecutionEvent.Extracting -> {
+                    _activeToolCallBanner.value = ToolCallBannerUi(
+                        kind = ToolCallBannerKind.EXTRACT,
+                        label = "Reading ${event.url}"
+                    )
+                    // Mark matching sources as extracted in in-flight messages
+                    markSourceExtracted(event.url)
+                }
+
+                is ToolExecutionEvent.Finished -> {
+                    val startTime = toolStartTimes[event.eventId] ?: return@onEach
+                    val elapsed = System.currentTimeMillis() - startTime
+                    val remaining = (1000 - elapsed).coerceAtLeast(0)
+
+                    // Collect sources for the banner if available
+                    val sources = event.resultJson?.let { 
+                        com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(MessageId("temp"), it)
+                    } ?: emptyList()
+
+                    activeToolJobs[event.eventId] = viewModelScope.launch {
+                        if (sources.isNotEmpty()) {
+                            _activeToolCallBanner.value = _activeToolCallBanner.value?.copy(tavilySources = sources)
+                        }
+                        delay(remaining)
+                        activeToolIds.remove(event.eventId)
+                        // Only clear if no other tools are active to prevent UI flickering
+                        if (activeToolIds.isEmpty()) {
+                            _activeToolCallBanner.value = null
+                        }
+                        toolStartTimes.remove(event.eventId)
+                        activeToolJobs.remove(event.eventId)
+                    }
+                }
+            }
+        }.launchIn(viewModelScope)
     }
 
     /**
@@ -147,12 +248,14 @@ class ChatViewModel @Inject constructor(
                 chatUseCases.getChat(id).debounce(50)
             }
         },
-        _inFlightMessages
+        _inFlightMessages,
+        _activeToolCallBanner
     ) {
         inputsWithPolicy: UiInputsWithPolicy,
         isBlocked: Boolean,
         messages: List<Message>,
-        inFlight: Map<MessageId, MessageSnapshot> ->
+        inFlight: Map<MessageId, MessageSnapshot>,
+        activeBanner: ToolCallBannerUi? ->
 
         val inputs = inputsWithPolicy.inputs
         val attachmentPolicy = inputsWithPolicy.attachmentPolicy
@@ -175,9 +278,10 @@ class ChatViewModel @Inject constructor(
                 thinkingDurationSeconds = snapshot.thinkingDurationSeconds,
                 thinkingStartTime = snapshot.thinkingStartTime.takeIf { st: Long -> st != 0L },
                 thinkingEndTime = snapshot.thinkingEndTime.takeIf { et: Long -> et != 0L },
-                createdAt = 0L,
+                createdAt = null,
                 messageState = snapshot.messageState,
-                modelType = snapshot.modelType
+                modelType = snapshot.modelType,
+                tavilySources = snapshot.tavilySources,
             )
         }
         
@@ -193,16 +297,19 @@ class ChatViewModel @Inject constructor(
         // Sort chronologically and map domain messages to UI messages
         var isGenerating = false
         var hasActiveIndicator = false
+        var activeIndicatorMessageId: MessageId? = null
         val chatMessages: List<ChatMessage> = allMergedMessages.values
-            .sortedBy { it.createdAt }
+            .sortedBy { it.createdAt ?: Long.MAX_VALUE }
             .map { message: Message ->
                 val chatMessage = mapToChatMessage(message)
                 val state = chatMessage.indicatorState
                 if (state != null && state !is IndicatorState.None) {
                     hasActiveIndicator = true
+                    activeIndicatorMessageId = chatMessage.id
                     if (!isGenerating && (state is IndicatorState.Generating ||
                         state is IndicatorState.Thinking ||
-                        state is IndicatorState.Processing)
+                        state is IndicatorState.Processing ||
+                        state is IndicatorState.EngineLoading)
                     ) {
                         isGenerating = true
                     }
@@ -222,7 +329,9 @@ class ChatViewModel @Inject constructor(
             hapticResponse = settings.hapticResponse,
             chatId = _currentChatId.value ?: initialChatId,
             isGenerating = isGenerating,
-            hasActiveIndicator = hasActiveIndicator
+            hasActiveIndicator = hasActiveIndicator,
+            activeIndicatorMessageId = activeIndicatorMessageId,
+            activeToolCallBanner = activeBanner
         )
     }.stateIn(
         scope = viewModelScope,
@@ -251,10 +360,12 @@ class ChatViewModel @Inject constructor(
                 text = message.content.text,
                 pipelineStep = message.content.pipelineStep,
                 imageUri = message.content.imageUri,
+                tavilySources = message.tavilySources,
             ),
             formattedTimestamp = formatTimestamp(message.createdAt),
             indicatorState = computeIndicatorState(message),
-            modelDisplayName = modelDisplayName
+            modelDisplayName = modelDisplayName,
+            tavilySources = message.tavilySources,
         )
     }
 
@@ -270,6 +381,9 @@ class ChatViewModel @Inject constructor(
         if (message.role == Role.USER) return IndicatorState.None
         
         return when (message.messageState) {
+            MessageState.ENGINE_LOADING -> {
+                IndicatorState.EngineLoading
+            }
             MessageState.PROCESSING -> {
                 IndicatorState.Processing
             }
@@ -308,9 +422,8 @@ class ChatViewModel @Inject constructor(
     /**
      * Formats a timestamp for display.
      */
-    private fun formatTimestamp(timestamp: Long): String {
-        // Handle 0 timestamp (not set)
-        if (timestamp == 0L) return "Now"
+    private fun formatTimestamp(timestamp: Long?): String {
+        if (timestamp == null || timestamp == 0L) return ""
         // Simple timestamp formatting - could be enhanced
         val sdf = SimpleDateFormat("h:mm a", Locale.getDefault())
         return sdf.format(Date(timestamp))
@@ -367,6 +480,15 @@ class ChatViewModel @Inject constructor(
         _selectedImageUri.value = null
     }
 
+    fun stopGeneration() {
+        inferenceJob?.cancel()
+        cancelInferenceUseCase()
+        // Clear in-flight messages and tool banner so the UI immediately
+        // transitions out of the generating/thinking state
+        _inFlightMessages.value = emptyMap()
+        _activeToolCallBanner.value = null
+    }
+
     fun createNewChat() {
         _currentChatId.value = null
         _inputText.value = ""
@@ -396,7 +518,8 @@ class ChatViewModel @Inject constructor(
                     id = MessageId(UUID.randomUUID().toString()),
                     chatId = chatIdForMessage,
                     content = Content(text = input, imageUri = selectedImageUri),
-                    role = Role.USER
+                    role = Role.USER,
+                    createdAt = System.currentTimeMillis()
                 )
 
                 // Step 1: Save user message (creates new chat if needed)
@@ -457,6 +580,28 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
+     * Marks a source URL as extracted in all in-flight message snapshots.
+     * Called when the extract tool begins reading a URL so the UI reflects the
+     * "read" indicator immediately during the conversation.
+     */
+    private fun markSourceExtracted(url: String) {
+        val current = _inFlightMessages.value
+        val updated = current.mapValues { (_, snapshot) ->
+            val hasMatchingSource = snapshot.tavilySources.any { it.url == url }
+            if (hasMatchingSource) {
+                snapshot.copy(
+                    tavilySources = snapshot.tavilySources.map { source ->
+                        if (source.url == url) source.copy(extracted = true) else source
+                    }
+                )
+            } else {
+                snapshot
+            }
+        }
+        _inFlightMessages.value = updated
+    }
+
+    /**
      * Internal test helper to allow unit tests to verify mapping logic.
      */
     internal fun mapToChatMessageForTesting(message: Message): ChatMessage = mapToChatMessage(message)
@@ -483,11 +628,11 @@ class ChatViewModel @Inject constructor(
         selectedMode: ChatModeUi,
     ): PhotoAttachmentPolicy {
         val apiVisionConfigured = activeModelProvider.getActiveConfiguration(ModelType.VISION)
-            ?.let { config -> config.isLocal == false && config.visionCapable }
+            ?.let { config -> config.isLocal == false && config.isMultimodal }
             ?: false
         val activeVisionCapable = when (selectedMode) {
-            ChatModeUi.FAST -> activeModelProvider.getActiveConfiguration(ModelType.FAST)?.visionCapable == true
-            ChatModeUi.THINKING -> activeModelProvider.getActiveConfiguration(ModelType.THINKING)?.visionCapable == true
+            ChatModeUi.FAST -> activeModelProvider.getActiveConfiguration(ModelType.FAST)?.isMultimodal == true
+            ChatModeUi.THINKING -> activeModelProvider.getActiveConfiguration(ModelType.THINKING)?.isMultimodal == true
             ChatModeUi.CREW -> false
         }
 

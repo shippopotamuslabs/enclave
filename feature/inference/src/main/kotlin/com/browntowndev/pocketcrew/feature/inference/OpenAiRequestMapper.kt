@@ -36,15 +36,16 @@ object OpenAiRequestMapper {
         val messages = mutableListOf<ChatCompletionMessageParam>()
 
         history.filterNot(::isSyntheticAssistantError).forEach { msg ->
+            val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
             when (msg.role) {
                 Role.SYSTEM -> {
-                    messages.add(ChatCompletionMessageParam.ofSystem(ChatCompletionSystemMessageParam.builder().content(msg.content).build()))
+                    messages.add(ChatCompletionMessageParam.ofSystem(ChatCompletionSystemMessageParam.builder().content(sanitizedContent).build()))
                 }
                 Role.USER -> {
-                    messages.add(ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder().content(msg.content).build()))
+                    messages.add(ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder().content(sanitizedContent).build()))
                 }
                 Role.ASSISTANT -> {
-                    messages.add(ChatCompletionMessageParam.ofAssistant(ChatCompletionAssistantMessageParam.builder().content(msg.content).build()))
+                    messages.add(ChatCompletionMessageParam.ofAssistant(ChatCompletionAssistantMessageParam.builder().content(sanitizedContent).build()))
                 }
             }
         }
@@ -84,10 +85,11 @@ object OpenAiRequestMapper {
 
         history.filterNot(::isSyntheticAssistantError).forEach { msg ->
             if (msg.role == Role.SYSTEM) {
-                systemMessages += msg.content
+                systemMessages += ImagePayloads.stripBase64DataUris(msg.content)
                 return@forEach
             }
 
+            val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
             val role = when (msg.role) {
                 Role.USER -> ResponseInputItem.Message.Role.of("user")
                 Role.ASSISTANT -> ResponseInputItem.Message.Role.of("assistant")
@@ -97,7 +99,7 @@ object OpenAiRequestMapper {
                 ResponseInputItem.ofMessage(
                     ResponseInputItem.Message.builder()
                         .role(role)
-                        .addInputTextContent(msg.content)
+                        .addInputTextContent(sanitizedContent)
                         .build()
                 )
             )
@@ -133,8 +135,9 @@ object OpenAiRequestMapper {
                     .parameters(
                         FunctionParameters.builder()
                             .putAdditionalProperty("type", JsonValue.from("object"))
-                            .putAdditionalProperty("properties", JsonValue.from(toolProperties()))
-                            .putAdditionalProperty("required", JsonValue.from(requiredArguments()))
+                            .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
+                            .putAdditionalProperty("required", JsonValue.from(schema.required))
+                            .putAdditionalProperty("additionalProperties", JsonValue.from(false))
                             .build()
                     )
                     .strict(true)
@@ -149,34 +152,38 @@ object OpenAiRequestMapper {
             .parameters(
                 FunctionTool.Parameters.builder()
                     .putAdditionalProperty("type", JsonValue.from("object"))
-                    .putAdditionalProperty("properties", JsonValue.from(toolProperties()))
-                    .putAdditionalProperty("required", JsonValue.from(requiredArguments()))
+                    .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
+                    .putAdditionalProperty("required", JsonValue.from(schema.required))
+                    .putAdditionalProperty("additionalProperties", JsonValue.from(false))
                     .build()
             )
             .strict(true)
             .build()
 
-    private fun ToolDefinition.toolProperties(): Map<String, Any> =
-        when (this) {
-            ToolDefinition.TAVILY_WEB_SEARCH -> mapOf(
-                "query" to mapOf(
-                    "type" to "string"
-                )
-            )
-            ToolDefinition.ATTACHED_IMAGE_INSPECT -> mapOf(
-                "question" to mapOf(
-                    "type" to "string"
-                )
-            )
-            else -> error("Unsupported tool: $name")
+    private fun kotlinx.serialization.json.JsonObject.toMap(): Map<String, Any> {
+        val map = mutableMapOf<String, Any>()
+        forEach { (k, v) ->
+            map[k] = v.toPrimitiveOrMap()
         }
+        return map
+    }
 
-    private fun ToolDefinition.requiredArguments(): List<String> =
-        when (this) {
-            ToolDefinition.TAVILY_WEB_SEARCH -> listOf("query")
-            ToolDefinition.ATTACHED_IMAGE_INSPECT -> listOf("question")
-            else -> error("Unsupported tool: $name")
+    private fun kotlinx.serialization.json.JsonElement.toPrimitiveOrMap(): Any {
+        return when (this) {
+            is kotlinx.serialization.json.JsonPrimitive -> {
+                if (isString) content
+                else {
+                    content.toBooleanStrictOrNull()
+                        ?: content.toLongOrNull()
+                        ?: content.toDoubleOrNull()
+                        ?: content
+                }
+            }
+            is kotlinx.serialization.json.JsonObject -> toMap()
+            is kotlinx.serialization.json.JsonArray -> map { it.toPrimitiveOrMap() }
+            else -> Any()
         }
+    }
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)

@@ -12,5 +12,5 @@ data class DownloadState(
     val estimatedTimeRemaining: String? = null,   // "23 min", "1.8 hours", "Calculating..."
     val currentSpeedMBs: Double? = null,          // e.g. 12.4
     val errorMessage: String? = null,
-    val wifiBlocked: Boolean = false                // True if blocked due to WiFi-only setting
+    val waitingForUnmeteredNetwork: Boolean = false          // True if blocked because unmetered (WiFi) network is required but unavailable
 )

@@ -127,4 +127,13 @@ class ConversationImplTest {
         assertEquals("", results[0].thought)
     }
 
+    @Test
+    fun `cancelProcess delegates to LiteRT conversation`() {
+        // When
+        conversationImpl.cancelProcess()
+
+        // Then
+        verify { mockLiteRtConversation.cancelProcess() }
+    }
+
 }

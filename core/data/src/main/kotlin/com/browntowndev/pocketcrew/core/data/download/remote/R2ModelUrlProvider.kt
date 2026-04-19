@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.download.remote
 
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.download.DownloadFileSpec
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,7 +20,7 @@ class R2ModelUrlProvider @Inject constructor() : ModelUrlProviderPort {
 
     override fun getConfigUrl(): String = "$R2_BUCKET_URL/model_config.json"
 
-    override fun getModelDownloadUrl(asset: LocalModelAsset): String {
-        return "$R2_BUCKET_URL/${asset.metadata.remoteFileName}"
+    override fun getModelDownloadUrl(spec: DownloadFileSpec): String {
+        return "$R2_BUCKET_URL/${spec.remoteFileName}"
     }
 }

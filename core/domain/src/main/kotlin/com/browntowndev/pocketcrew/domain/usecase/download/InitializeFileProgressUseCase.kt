@@ -51,6 +51,7 @@ class InitializeFileProgressUseCase @Inject constructor() {
 
             FileProgress(
                 filename = trackingKey,
+                sha256 = asset.metadata.sha256,
                 modelTypes = combinedModelTypes,
                 bytesDownloaded = resumeBytes,
                 totalBytes = asset.metadata.sizeInBytes,

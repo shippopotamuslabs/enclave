@@ -181,6 +181,29 @@ class SettingsViewModel @Inject constructor(
         initialValue = SettingsUiState(),
     )
 
+    /**
+     * When local model assets change (e.g., a re-download completes and restores
+     * a soft-deleted model), remove it from the "Available for Download" list
+     * so it doesn't appear in both sections simultaneously.
+     */
+    init {
+        viewModelScope.launch {
+            localModelAssetsFlow.collect { activeAssets ->
+                val activeSha256s = activeAssets.map { it.metadata.sha256 }.toSet()
+                _localModelsState.update { current ->
+                    val filtered = current.availableToDownloadModels.filterNot { restoredAsset ->
+                        restoredAsset.metadata.sha256 in activeSha256s
+                    }
+                    if (filtered.size != current.availableToDownloadModels.size) {
+                        current.copy(availableToDownloadModels = filtered)
+                    } else {
+                        current
+                    }
+                }
+            }
+        }
+    }
+
     fun onThemeChange(theme: AppTheme) {
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update theme", "Failed to update theme")) {
             preferencesUseCases.updateTheme(theme)
@@ -532,6 +555,9 @@ class SettingsViewModel @Inject constructor(
 
     fun onTavilyApiKeyChange(key: String) {
         _currentTavilyApiKey.value = key
+        if (key.isBlank() && !uiState.value.searchSkillEditor.tavilyKeyPresent) {
+            _searchSkillState.update { it.copy(enabled = false) }
+        }
     }
 
     fun onClearTavilyApiKey() {
@@ -594,7 +620,7 @@ class SettingsViewModel @Inject constructor(
                     provider = assetDraft.provider,
                     modelId = assetDraft.modelId,
                     baseUrl = assetDraft.baseUrl,
-                    isVision = assetDraft.isVision,
+                    isMultimodal = assetDraft.isMultimodal,
                     credentialAlias = assetDraft.credentialAlias,
                     apiKey = _currentApiKey.value,
                     sourceCredentialAlias = sourceCredentialAlias,
@@ -849,8 +875,8 @@ class SettingsViewModel @Inject constructor(
         if (asset == null) return null
         val discoveredVisionCapability = models
             .find { it.id == asset.modelId }
-            ?.visionCapable
-        return discoveredVisionCapability?.let { asset.copy(isVision = it) } ?: asset
+            ?.isMultimodal
+        return discoveredVisionCapability?.let { asset.copy(isMultimodal = it) } ?: asset
     }
 
     private fun ApiModelAssetUi?.matchesDiscoveryScope(other: ApiModelAssetUi?): Boolean {

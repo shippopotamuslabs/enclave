@@ -2,28 +2,32 @@ package com.browntowndev.pocketcrew.core.data.download
 
 import androidx.work.Data
 import androidx.work.workDataOf
+import com.browntowndev.pocketcrew.domain.model.download.DownloadFileSpec
 import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.download.requiredArtifacts
+import com.browntowndev.pocketcrew.domain.model.download.totalArtifactSizeInBytes
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.core.data.util.formatBytes
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Data class representing the download state of a single file.
- * This is moved from ModelDownloadWorker to enable centralized progress tracking.
+ * Data class representing the download state of a single file spec.
+ * Uses DownloadFileSpec directly — the download worker does not need
+ * model type or configuration information.
  */
 data class FileDownloadState(
-    val metadata: LocalModelMetadata,
+    val spec: DownloadFileSpec,
     val status: FileStatus = FileStatus.QUEUED,
     val bytesDownloaded: Long = 0L,
-    val totalBytes: Long = metadata.sizeInBytes,
+    val totalBytes: Long = spec.totalArtifactSizeInBytes(),
     val error: String? = null,
     // All model types that use this file (grouped by SHA256)
-    val allModelTypesForFile: List<ModelType>
+    // Empty in download worker; populated by orchestrator-level trackers if needed
+    val allModelTypesForFile: List<ModelType> = emptyList()
 )
 
 /**
@@ -54,36 +58,28 @@ class DownloadProgressTracker(
         const val TRACE_LOG_INTERVAL_MS = 5000L
     }
 
-    private var fileStates = mutableMapOf<String, FileDownloadState>()
+    private var fileStates = ConcurrentHashMap<String, FileDownloadState>()
     private var lastProgressUpdateTime = 0L
     private var lastTraceLogTime = 0L
 
     /**
-     * Initialize tracker with list of model files.
-     * Groups models by SHA256 hash to track ALL model types that use each file.
-     * Uses SHA256 as the tracking key since it's unique per file content.
+     * Initialize tracker with a list of download file specs.
+     * Deduplicates by SHA256 hash internally. Model types are left empty
+     * since the download worker does not have model type information.
      */
-    fun initialize(models: Map<ModelType, LocalModelAsset>) {
-        // Group models by SHA256 to combine multiple modelTypes that share the same file
-        val groupedBySha256 = models.entries.groupBy { it.value.metadata.sha256 }
-
-        val initialStates = groupedBySha256.map { (sha256, entries) ->
-            val primaryAsset = entries.first().value
-            // Collect ALL model types that use this file
-            val allModelTypes = entries.map { it.key }.distinct()
-
-            sha256 to FileDownloadState(
-                metadata = primaryAsset.metadata,
+    fun initialize(specs: List<DownloadFileSpec>) {
+        val initialStates = specs.distinctBy { it.sha256 }.map { spec ->
+            spec.sha256 to FileDownloadState(
+                spec = spec,
                 status = FileStatus.QUEUED,
                 bytesDownloaded = 0L,
-                totalBytes = primaryAsset.metadata.sizeInBytes,
+                totalBytes = spec.totalArtifactSizeInBytes(),
                 error = null,
-                // Store all model types that use this file
-                allModelTypesForFile = allModelTypes
+                allModelTypesForFile = emptyList()
             )
         }.toMap()
 
-        fileStates = initialStates.toMutableMap()
+        fileStates = ConcurrentHashMap(initialStates)
     }
 
     /**
@@ -97,7 +93,7 @@ class DownloadProgressTracker(
             ?: throw IllegalStateException(
                 "Cannot update file state for SHA256 '$sha256'. " +
                 "The file was not initialized. " +
-                "Ensure initialize() was called with models containing this SHA256."
+                "Ensure initialize() was called with specs containing this SHA256."
             )
         val newState = update(currentState)
         fileStates[sha256] = newState
@@ -119,11 +115,11 @@ class DownloadProgressTracker(
             completedFiles.toFloat() / totalFiles.coerceAtLeast(1)
         }
 
-        val currentFile = fileStates.values.find { it.status == FileStatus.DOWNLOADING }?.metadata?.remoteFileName ?: ""
+        val currentFile = fileStates.values.find { it.status == FileStatus.DOWNLOADING }?.spec?.remoteFileName ?: ""
 
         // Calculate PER-FILE speed for each file
         val filesProgress = fileStates.values.map { state ->
-            val filename = state.metadata.remoteFileName
+            val filename = state.spec.remoteFileName
             val (fileSpeed, fileEta) = if (state.status == FileStatus.DOWNLOADING) {
                 speedTracker.calculateSpeedAndEta(
                     filename,
@@ -135,7 +131,7 @@ class DownloadProgressTracker(
             }
             FileProgress(
                 filename = filename,
-                // Use all model types that share this file
+                sha256 = state.spec.sha256,
                 modelTypes = state.allModelTypesForFile,
                 bytesDownloaded = state.bytesDownloaded,
                 totalBytes = state.totalBytes,
@@ -144,17 +140,15 @@ class DownloadProgressTracker(
             )
         }
 
-        // Calculate AGGREGATE speed for the header as AVERAGE of actively downloading file speeds
-        // (not sum, as that would double-count when multiple files download in parallel)
+        // Calculate AGGREGATE speed for the header as SUM of actively downloading file speeds
         val downloadingFiles = filesProgress.filter { it.status == FileStatus.DOWNLOADING && (it.speedMBs ?: 0.0) > 0 }
         val currentSpeedMBps = if (downloadingFiles.isNotEmpty()) {
-            downloadingFiles.mapNotNull { it.speedMBs }.average()
+            downloadingFiles.mapNotNull { it.speedMBs }.sum()
         } else {
             0.0
         }
 
         // Calculate ETA based on the SLOWEST (furthest away) downloading file
-        // This is the correct approach since all files download in parallel
         val etaSeconds = downloadingFiles
             .mapNotNull { file ->
                 val remainingBytes = file.totalBytes - file.bytesDownloaded
@@ -243,15 +237,14 @@ class DownloadProgressTracker(
         val filesProgressMap = snapshot.filesProgress.associateBy { it.filename }
 
         val filesProgressArray = fileStates.values.map { state ->
-            val trackingFilename = state.metadata.remoteFileName
+            val trackingFilename = state.spec.remoteFileName
             val fileSpeed = if (state.status == FileStatus.DOWNLOADING) {
                 filesProgressMap[trackingFilename]?.speedMBs ?: 0.0
             } else {
                 0.0
             }
-            // Use all model types that share this file
-            val modelTypesStr = state.allModelTypesForFile.joinToString(",") { it.apiValue }
-            "$trackingFilename|${state.bytesDownloaded}|${state.totalBytes}|${state.status}|$fileSpeed|$modelTypesStr"
+            // Use SHA256 as the identifier for re-mapping roles in the UI layer
+            "$trackingFilename|${state.bytesDownloaded}|${state.totalBytes}|${state.status}|$fileSpeed|${state.spec.sha256}"
         }.toTypedArray()
 
         return workDataOf(
@@ -326,5 +319,5 @@ class DownloadProgressTracker(
      * Get current downloading file name.
      */
     fun getCurrentDownloadingFile(): String? = fileStates.values
-        .find { it.status == FileStatus.DOWNLOADING }?.metadata?.remoteFileName
+        .find { it.status == FileStatus.DOWNLOADING }?.spec?.remoteFileName
 }

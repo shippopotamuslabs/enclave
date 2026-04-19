@@ -1,13 +1,15 @@
 package com.browntowndev.pocketcrew.domain.model.config
 
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 
 data class ActiveModelConfiguration(
     val id: ModelConfigurationId,
     val isLocal: Boolean,
     val name: String,
     val systemPrompt: String?,
-    val visionCapable: Boolean = false,
+    val isMultimodal: Boolean = false,
     val reasoningEffort: ApiReasoningEffort? = null,
     val temperature: Double?,
     val topK: Int?,
@@ -16,5 +18,7 @@ data class ActiveModelConfiguration(
     val minP: Double?,
     val repetitionPenalty: Double?,
     val contextWindow: Int?,
-    val thinkingEnabled: Boolean
+    val thinkingEnabled: Boolean,
+    val localModelFormat: ModelFileFormat? = null,
+    val apiProvider: ApiProvider? = null,
 )

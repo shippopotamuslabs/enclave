@@ -138,7 +138,7 @@ fun ByokConfigureScreen(
         provider = ApiProvider.ANTHROPIC,
         modelId = "",
         baseUrl = ApiProvider.ANTHROPIC.defaultBaseUrl(),
-        isVision = false,
+        isMultimodal = false,
         credentialAlias = "",
         configurations = emptyList()
     )

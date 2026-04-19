@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
+import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.core.data.repository.DownloadWorkRepository
 import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
@@ -65,6 +66,7 @@ class DownloadViewModel @AssistedInject constructor(
     // UI model for displaying file progress with anthropomorphized names
     data class FileProgressUiModel(
         val filename: String,
+        val sha256: String,
         val displayName: String,
         val bytesDownloaded: Long,
         val totalBytes: Long,
@@ -89,6 +91,7 @@ class DownloadViewModel @AssistedInject constructor(
         }
         return FileProgressUiModel(
             filename = filename,
+            sha256 = sha256,
             displayName = displayName,
             bytesDownloaded = bytesDownloaded,
             totalBytes = totalBytes,
@@ -112,6 +115,11 @@ class DownloadViewModel @AssistedInject constructor(
     // Job to track work observation coroutine - prevents concurrent collections
     private var workObservationJob: Job? = null
 
+    // Tracks whether startDownloads() has already been called to prevent
+    // duplicate enqueuing from both auto-start and UI-triggered paths
+    @Volatile
+    private var downloadsStarted = false
+
     val downloadState: StateFlow<DownloadState> = modelDownloadOrchestrator.downloadState
         .stateIn(
             scope = viewModelScope,
@@ -131,10 +139,6 @@ class DownloadViewModel @AssistedInject constructor(
     // User preferences
     private val _wifiOnly = MutableStateFlow(true)
     val wifiOnly: StateFlow<Boolean> = _wifiOnly.asStateFlow()
-
-    // Show WiFi override dialog
-    private val _showWifiDialog = MutableStateFlow(false)
-    val showWifiDialog: StateFlow<Boolean> = _showWifiDialog.asStateFlow()
 
     init {
         // If there's an initial error from app initialization, set it and skip download logic
@@ -167,12 +171,25 @@ class DownloadViewModel @AssistedInject constructor(
 
     /**
      * Check and start downloads if needed.
+     * Called after user grants notification permission — handles the case where
+     * auto-start set downloadsStarted=true but the orchestrator hasn't progressed
+     * past IDLE/CHECKING (e.g., due to a race condition during init).
      */
     fun checkModels() {
         Log.d(TAG, "Checking models...")
         viewModelScope.launch {
             val modelsToDownload = modelsResult.modelsToDownload
             if (modelsToDownload.isNotEmpty()) {
+                val currentStatus = modelDownloadOrchestrator.downloadState.value.status
+                // If downloads should have started but status is still IDLE/CHECKING,
+                // the init auto-start likely failed. Reset the guard and retry.
+                if (downloadsStarted && currentStatus != null &&
+                    currentStatus != DownloadStatus.DOWNLOADING &&
+                    currentStatus != DownloadStatus.PAUSED &&
+                    currentStatus != DownloadStatus.WIFI_BLOCKED) {
+                    Log.d(TAG, "checkModels: downloadsStarted=true but status=$currentStatus, resetting guard")
+                    downloadsStarted = false
+                }
                 Log.d(TAG, "${modelsToDownload.size} models missing, starting downloads")
                 // Start downloads
                 startDownloads()
@@ -184,38 +201,28 @@ class DownloadViewModel @AssistedInject constructor(
 
     /**
      * Start downloading models.
-     * The foreground state is tracked via lifecycle callbacks in the UI layer.
-     * If the app is in foreground when this is called, downloads proceed normally.
-     * If not in foreground, downloads will fail with ForegroundServiceStartNotAllowedException
-     * but that's handled gracefully by the worker returning failure.
+     * WorkManager handles ForegroundServiceStartNotAllowedException internally
+     * by returning Result.retry(), so we no longer gate on foreground state.
      */
     fun startDownloads() {
-        Log.d(TAG, "startDownloads called (wifiOnly=${_wifiOnly.value}, isInForeground=$isInForeground)")
+        if (downloadsStarted) {
+            Log.d(TAG, "startDownloads: already started, skipping duplicate call")
+            return
+        }
+        downloadsStarted = true
+        Log.d(TAG, "startDownloads called (wifiOnly=${_wifiOnly.value})")
         
         viewModelScope.launch {
-            // Block downloads when NOT in foreground to prevent ForegroundServiceStartNotAllowedException
-            if (!isInForeground) {
-                hasPendingDownloadCheck = true
-                Log.w(TAG, "App not in foreground - blocking download, will retry when foregrounded")
-                return@launch
-            }
-
-            val started = modelDownloadOrchestrator.startDownloads(modelsResult = modelsResult, wifiOnly = _wifiOnly.value)
-            if (!started) {
-                // Blocked by WiFi-only
-                Log.w(TAG, "Downloads blocked, showing WiFi dialog")
-                _showWifiDialog.value = true
-            } else {
-                // IMPORTANT: Re-observe work progress after starting downloads
-                // The work ID may have changed (KEEP_POLICY_REPLACE creates new work)
-                observeWorkProgress()
-            }
+            modelDownloadOrchestrator.startDownloads(modelsResult = modelsResult, wifiOnly = _wifiOnly.value)
+            // Re-observe work progress after starting downloads
+            // The work ID may have changed (KEEP_POLICY_REPLACE creates new work)
+            observeWorkProgress()
         }
     }
     
     /**
      * Called when the app moves to foreground.
-     * Used to track foreground state for race condition prevention.
+     * Retries pending download check if one was blocked.
      */
     fun onAppForegrounded() {
         Log.d(TAG, "App foregrounded")
@@ -224,7 +231,7 @@ class DownloadViewModel @AssistedInject constructor(
         if (hasPendingDownloadCheck) {
             hasPendingDownloadCheck = false
             viewModelScope.launch {
-                checkModels()
+                startDownloads()
             }
         }
     }
@@ -243,6 +250,7 @@ class DownloadViewModel @AssistedInject constructor(
      */
     fun pauseDownloads() {
         Log.i(TAG, "User action: pause downloads")
+        downloadsStarted = false
         modelDownloadOrchestrator.pauseDownloads()
     }
 
@@ -271,8 +279,10 @@ class DownloadViewModel @AssistedInject constructor(
      */
     fun retryFailed() {
         Log.i(TAG, "User action: retry failed downloads")
+        downloadsStarted = false
         viewModelScope.launch {
             modelDownloadOrchestrator.retryFailed()
+            observeWorkProgress()
         }
     }
 
@@ -282,18 +292,11 @@ class DownloadViewModel @AssistedInject constructor(
     fun downloadOnMobileData() {
         Log.i(TAG, "User action: download on mobile data (override WiFi-only)")
         _wifiOnly.value = false
-        _showWifiDialog.value = false
+        downloadsStarted = false
         viewModelScope.launch {
             modelDownloadOrchestrator.downloadOnMobileData()
+            observeWorkProgress()
         }
-    }
-
-    /**
-     * Dismiss WiFi dialog.
-     */
-    fun dismissWifiDialog() {
-        Log.d(TAG, "User action: dismiss WiFi dialog")
-        _showWifiDialog.value = false
     }
 
     /**

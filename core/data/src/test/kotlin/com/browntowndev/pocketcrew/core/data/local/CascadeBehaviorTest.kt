@@ -47,8 +47,7 @@ class CascadeBehaviorTest {
         val model = LocalModelEntity(
             id = modelId,
             modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q",
-            localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false,
-            thinkingEnabled = false, isVision = false
+            localFilename = "q", sha256 = "q", sizeInBytes = 1, isMultimodal = false
         )
         database.localModelsDao().upsert(model)
         database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(id = LocalModelConfigurationId("test-config-1"), localModelId = modelId, displayName = "c1"))
@@ -82,8 +81,7 @@ class CascadeBehaviorTest {
         val model = LocalModelEntity(
             id = modelId,
             modelFileFormat = ModelFileFormat.GGUF, huggingFaceModelName = "q", remoteFilename = "q",
-            localFilename = "q", sha256 = "q", sizeInBytes = 1, visionCapable = false,
-            thinkingEnabled = false, isVision = false
+            localFilename = "q", sha256 = "q", sizeInBytes = 1, isMultimodal = false
         )
         database.localModelsDao().upsert(model)
         database.localModelConfigurationsDao().upsert(LocalModelConfigurationEntity(id = LocalModelConfigurationId("test-config-1"), localModelId = modelId, displayName = "c1"))

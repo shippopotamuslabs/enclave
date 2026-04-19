@@ -35,15 +35,23 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
+import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.TAVILY_WEB_SEARCH
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import io.mockk.*
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -87,6 +95,9 @@ class ChatViewModelTest {
     private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
     private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
     private lateinit var activeModelProvider: FakeActiveModelProvider
+    private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
+    private lateinit var toolExecutionEventPort: ToolExecutionEventPort
+    private lateinit var loggingPort: LoggingPort
     private lateinit var errorHandler: ViewModelErrorHandler
 
     @BeforeEach
@@ -96,6 +107,9 @@ class ChatViewModelTest {
         inferenceLockManager = mockk(relaxed = true)
         errorHandler = mockk(relaxed = true)
         stageImageAttachmentUseCase = mockk(relaxed = true)
+        cancelInferenceUseCase = mockk(relaxed = true)
+        toolExecutionEventPort = mockk(relaxed = true)
+        loggingPort = mockk(relaxed = true)
         activeModelProvider = FakeActiveModelProvider()
         activeModelProvider.setConfiguration(
             ModelType.FAST,
@@ -113,7 +127,7 @@ class ChatViewModelTest {
                 repetitionPenalty = 1.1,
                 contextWindow = 4096,
                 thinkingEnabled = false,
-                visionCapable = true,
+                isMultimodal = true,
             )
         )
         activeModelProvider.setConfiguration(
@@ -132,16 +146,19 @@ class ChatViewModelTest {
                 repetitionPenalty = 1.1,
                 contextWindow = 4096,
                 thinkingEnabled = false,
-                visionCapable = true,
+                isMultimodal = true,
             )
         )
         
         // Stub coroutineExceptionHandler to return a real one to avoid ClassCastException with MockK
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
-        every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
+        coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
+        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
+        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
         // Create a simple fake for GetModelDisplayNameUseCase
         modelDisplayNamesUseCase = mockk(relaxed = true)
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
+        every { toolExecutionEventPort.events } returns MutableSharedFlow()
 
         val savedStateHandle = SavedStateHandle()
 
@@ -150,10 +167,13 @@ class ChatViewModelTest {
             chatUseCases = chatUseCases,
             stageImageAttachmentUseCase = stageImageAttachmentUseCase,
             savedStateHandle = savedStateHandle,
+            cancelInferenceUseCase = cancelInferenceUseCase,
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
             activeModelProvider = activeModelProvider,
-            errorHandler = errorHandler
+            toolExecutionEventPort = toolExecutionEventPort,
+            errorHandler = errorHandler,
+            loggingPort = loggingPort
         )
     }
 
@@ -451,5 +471,125 @@ class ChatViewModelTest {
 
         // Then: pipelineStep should be null
         assertNull(chatMessage.content.pipelineStep, "pipelineStep should be null when not set in Message")
+    }
+
+    @Test
+    fun `ToolCallBanner state updates on start and finish`() = runTest {
+        val eventFlow = kotlinx.coroutines.flow.MutableSharedFlow<ToolExecutionEvent>()
+        every { toolExecutionEventPort.events } returns eventFlow
+
+        val testChatId = ChatId("test-chat-id")
+        val testUserMessageId = MessageId("user-123")
+        
+        val savedStateHandle = SavedStateHandle(mapOf("chatId" to testChatId.value))
+        chatViewModel = ChatViewModel(
+            settingsUseCases = settingsUseCases,
+            chatUseCases = chatUseCases,
+            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+            savedStateHandle = savedStateHandle,
+            cancelInferenceUseCase = cancelInferenceUseCase,
+            inferenceLockManager = inferenceLockManager,
+            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            activeModelProvider = activeModelProvider,
+            toolExecutionEventPort = toolExecutionEventPort,
+            errorHandler = errorHandler,
+            loggingPort = loggingPort
+        )
+
+        // Give init and observeToolEvents a chance to subscribe
+        runCurrent()
+
+        chatViewModel.uiState.test {
+            // Give the debounce(50) in ChatViewModel.uiState a chance to fire
+            advanceTimeBy(100)
+            runCurrent()
+            
+            // 1. Initial State
+            val initialState = awaitItem()
+            assertNull(initialState.activeToolCallBanner)
+
+            // 2. Emit Started Event
+            val startEvent = ToolExecutionEvent.Started(
+                eventId = "tool-1",
+                chatId = testChatId,
+                userMessageId = testUserMessageId,
+                toolName = TAVILY_WEB_SEARCH.name,
+                argumentsJson = "{}",
+                modelType = com.browntowndev.pocketcrew.domain.model.inference.ModelType.FAST
+            )
+            eventFlow.emit(startEvent)
+            runCurrent() // Crucial: let observeToolEvents process the event
+            
+            // Should see a new state with the banner. Use a loop/skip to be robust against other updates.
+            var stateWithBanner = awaitItem()
+            while (stateWithBanner.activeToolCallBanner == null) {
+                stateWithBanner = awaitItem()
+            }
+            
+            assertNotNull(stateWithBanner.activeToolCallBanner)
+            assertEquals("Searching with Tavily", stateWithBanner.activeToolCallBanner?.label)
+
+            // 3. Emit Finished Event
+            val finishEvent = ToolExecutionEvent.Finished(
+                eventId = "tool-1",
+                chatId = testChatId,
+                userMessageId = testUserMessageId
+            )
+            eventFlow.emit(finishEvent)
+            runCurrent()
+            
+            // Banner should still be present (1s minimum rule)
+            // No new state should be emitted yet as banner hasn't changed (job only started)
+            assertNotNull(chatViewModel.uiState.value.activeToolCallBanner)
+
+            // 4. Advance time to pass the gate
+            advanceTimeBy(1500)
+            runCurrent()
+            
+            // Now the banner should be dismissed
+            var finalState = awaitItem()
+            while (finalState.activeToolCallBanner != null) {
+                 finalState = awaitItem()
+            }
+            assertNull(finalState.activeToolCallBanner)
+        }
+    }
+
+    @Test
+    fun `stopGeneration cancels inference and clears tool banner`() = runTest {
+        // Given - set up some in-flight messages and tool banner state
+        val eventFlow = kotlinx.coroutines.flow.MutableSharedFlow<ToolExecutionEvent>()
+        every { toolExecutionEventPort.events } returns eventFlow
+
+        val testChatId = ChatId("test-chat-id")
+        val testUserMessageId = MessageId("user-123")
+
+        val savedStateHandle = SavedStateHandle(mapOf("chatId" to testChatId.value))
+        chatViewModel = ChatViewModel(
+            settingsUseCases = settingsUseCases,
+            chatUseCases = chatUseCases,
+            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+            savedStateHandle = savedStateHandle,
+            cancelInferenceUseCase = cancelInferenceUseCase,
+            inferenceLockManager = inferenceLockManager,
+            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            activeModelProvider = activeModelProvider,
+            toolExecutionEventPort = toolExecutionEventPort,
+            errorHandler = errorHandler,
+            loggingPort = loggingPort
+        )
+
+        runCurrent()
+        advanceTimeBy(100)
+        runCurrent()
+
+        // When
+        chatViewModel.stopGeneration()
+
+        // Then - cancelInferenceUseCase should be called
+        verify { cancelInferenceUseCase() }
+        // Tool banner should be null (either cleared or never set)
+        val stateAfterStop = chatViewModel.uiState.value
+        assertNull(stateAfterStop.activeToolCallBanner, "Tool banner should be null after stopGeneration")
     }
 }

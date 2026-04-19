@@ -42,7 +42,7 @@ class LiteRtInferenceServiceImplGenerationOptionsTest {
         mockConversation = mockk(relaxed = true)
         processThinkingTokens = ProcessThinkingTokensUseCase()
 
-        coEvery { mockConversationManager.getConversation(any(), any()) } returns mockConversation
+        coEvery { mockConversationManager.getConversation(any(), any(), any()) } returns mockConversation
     }
 
     @AfterEach
@@ -55,7 +55,7 @@ class LiteRtInferenceServiceImplGenerationOptionsTest {
         val responses = flowOf(ConversationResponse(text = "response"))
         every { mockConversation.sendMessageAsync(any(), any()) } returns responses
 
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.FAST)
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, mockk(relaxed = true), ModelType.FAST)
         val options = GenerationOptions(reasoningBudget = 2048)
         // Actually collect the flow to exercise the implementation
         val events = service.sendPrompt("hello", options, closeConversation = false).toList()
@@ -72,7 +72,7 @@ class LiteRtInferenceServiceImplGenerationOptionsTest {
         val responses = flowOf(ConversationResponse(text = "response"))
         every { mockConversation.sendMessageAsync(any(), capture(optionSlot)) } returns responses
 
-        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, ModelType.VISION)
+        val service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, mockk(relaxed = true), ModelType.VISION)
         service.sendPrompt("describe", options, closeConversation = false).toList()
 
         assertEquals(listOf("file:///tmp/test-image.jpg"), optionSlot.captured.imageUris)

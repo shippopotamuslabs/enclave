@@ -35,8 +35,8 @@ class SetDefaultModelUseCaseImpl @Inject constructor(
                 ?: throw IllegalArgumentException("Vision slot requires a valid API model configuration.")
             val credentials = apiModelRepository.getCredentialsById(config.apiCredentialsId)
                 ?: throw IllegalArgumentException("Vision slot requires a valid API model provider.")
-            require(credentials.isVision) {
-                "Vision slot requires a vision-capable API model."
+            require(credentials.isMultimodal) {
+                "Vision slot requires a multimodal API model."
             }
         }
         defaultModelRepository.setDefault(modelType, localConfigId, apiConfigId)

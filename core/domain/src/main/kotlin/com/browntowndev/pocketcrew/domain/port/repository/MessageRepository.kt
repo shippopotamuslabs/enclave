@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.domain.port.repository
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
@@ -71,4 +72,61 @@ interface MessageRepository {
         chatId: ChatId,
         currentUserMessageId: MessageId,
     ): ResolvedImageTarget?
+
+    /**
+     * Searches messages within a specific chat using full-text search.
+     * Used by the search_chat tool to provide "infinite memory"
+     * for details lost to context window summarization or FIFO eviction.
+     *
+     * @param chatId The chat ID to search within.
+     * @param query The FTS-sanitized search query.
+     * @return List of matching messages in chronological order.
+     */
+    suspend fun searchMessagesInChat(chatId: ChatId, query: String): List<Message>
+
+    /**
+     * Searches messages across all chats using full-text search.
+     * Used by the search_chat_history tool to find relevant messages
+     * from the user's past conversations.
+     *
+     * Multiple queries are OR'd together so any match is returned.
+     *
+     * @param queries The search queries to match against.
+     * @return List of matching messages in chronological order, each with its chatId.
+     */
+    suspend fun searchMessagesAcrossChats(queries: List<String>): List<Message>
+
+    /**
+     * Retrieves messages surrounding a specific message in its chat.
+     * Used for context expansion — when a matched message is found,
+     * this returns N messages before and after it for better understanding.
+     *
+     * @param chatId The chat ID the message belongs to.
+     * @param timestamp The created_at timestamp of the anchor message.
+     * @param before Number of messages before the anchor to return.
+     * @param after Number of messages after the anchor to return.
+     * @return List of messages in chronological order around the anchor.
+     */
+    suspend fun getMessagesAround(chatId: ChatId, timestamp: Long, before: Int, after: Int): List<Message>
+
+    /**
+     * Retrieves the rolling summary of a chat.
+     * The summary provides the LLM with high-level conversation context
+     * for details lost to context window summarization or FIFO eviction.
+     */
+    suspend fun getChatSummary(chatId: ChatId): ChatSummary?
+
+    /**
+     * Saves or updates the summary for a chat.
+     *
+     * @param summary The summary to save
+     */
+    suspend fun saveChatSummary(summary: ChatSummary)
+
+    /**
+     * Deletes the summary for a chat.
+     *
+     * @param chatId The chat ID
+     */
+    suspend fun deleteChatSummary(chatId: ChatId)
 }

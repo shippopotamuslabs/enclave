@@ -156,6 +156,7 @@ class InitializeFileProgressUseCaseTest {
         val existingDownloads = listOf(
             FileProgress(
                 filename = "main.litertlm",
+                sha256 = "abc123",
                 modelTypes = listOf(ModelType.MAIN),
                 bytesDownloaded = 750000L,
                 totalBytes = 1000000L,

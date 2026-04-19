@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
+import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
@@ -11,6 +12,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
@@ -19,13 +21,15 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 
 @Singleton
 class ChatRepositoryImpl @Inject constructor(
     private val chatDao: ChatDao,
-    private val messageDao: MessageDao
+    private val messageDao: MessageDao,
+    private val tavilySourceDao: TavilySourceDao,
 ) : ChatRepository {
 
     override fun getAllChats(): Flow<List<Chat>> {
@@ -42,8 +46,20 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> {
-        return messageDao.getMessagesByChatIdFlow(chatId).map { entities ->
-            entities.map { it.toDomain() }
+        // Combine the message table Flow with a tavily_source table Flow.
+        // This ensures that source-level changes (e.g. extracted flag updates)
+        // trigger a re-read, even though the message table itself hasn't changed.
+        // Without this, markExtracted on tavily_source would not cause the
+        // messages Flow to re-emit, and the UI would show stale extracted=false.
+        return combine(
+            messageDao.getMessagesByChatIdFlow(chatId),
+            tavilySourceDao.getByChatIdFlow(chatId),
+        ) { entities, sources ->
+            val sourcesByMessage = sources.groupBy { it.messageId }
+            entities.map { entity ->
+                val messageSources = sourcesByMessage[entity.id].orEmpty()
+                entity.toDomain(messageSources)
+            }
         }
     }
 
@@ -147,7 +163,8 @@ class ChatRepositoryImpl @Inject constructor(
         thinkingRaw: String?,
         content: String,
         messageState: MessageState,
-        pipelineStep: PipelineStep?
+        pipelineStep: PipelineStep?,
+        tavilySources: List<TavilySource>
     ) {
         messageDao.persistAllMessageData(
             messageId = messageId,
@@ -158,7 +175,8 @@ class ChatRepositoryImpl @Inject constructor(
             thinkingRaw = thinkingRaw,
             content = content,
             messageState = messageState,
-            pipelineStep = pipelineStep
+            pipelineStep = pipelineStep,
+            tavilySources = tavilySources.map { it.toEntity() }
         )
     }
 
@@ -194,6 +212,17 @@ class ChatRepositoryImpl @Inject constructor(
         val sanitizedFts = FtsSanitizer.sanitize(ftsQuery)
         return chatDao.searchChats(query, sanitizedFts).map { entities ->
             entities.map { it.toDomain() }
+        }
+    }
+
+    override suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat> {
+        if (ids.isEmpty()) return emptyMap()
+        return chatDao.getChatsByIds(ids).associate { it.id to it.toDomain() }
+    }
+
+    override suspend fun markSourcesExtracted(urls: List<String>) {
+        for (url in urls) {
+            tavilySourceDao.markExtracted(url)
         }
     }
 }

@@ -78,7 +78,12 @@ fun NavGraphBuilder.settingsGraph(
                     navController.navigate(SettingsDestination.LOCAL_MODEL_CONFIGURE)
                 },
                 onNavigateToModelConfigure = { modelType ->
-                    navController.navigate("model_configure/${modelType.name}")
+                    navController.navigate(
+                        SettingsDestination.MODEL_CONFIGURE.replace(
+                            "{modelType}",
+                            modelType.name
+                        )
+                    )
                 },
                 viewModel = hiltViewModel(parentEntry)
             )

@@ -92,13 +92,13 @@ class ApiModelCatalogRepositoryImplTest {
                     id = "claude-haiku-4-5-20251001",
                     name = "Claude Haiku 4.5",
                     created = OffsetDateTime.of(2025, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond(),
-                    visionCapable = false,
+                    isMultimodal = false,
                 ),
                 DiscoveredApiModel(
                     id = "claude-sonnet-4-20250514",
                     name = "Claude Sonnet 4",
                     created = OffsetDateTime.of(2025, 5, 14, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond(),
-                    visionCapable = true,
+                    isMultimodal = true,
                 ),
             ),
             models,
@@ -173,7 +173,7 @@ class ApiModelCatalogRepositoryImplTest {
                 DiscoveredApiModel(
                     id = "anthropic/claude-sonnet-4",
                     contextWindowTokens = 200_000,
-                    visionCapable = false,
+                    isMultimodal = false,
                 ),
                 DiscoveredApiModel(
                     id = "openai/gpt-5.2",
@@ -183,7 +183,7 @@ class ApiModelCatalogRepositoryImplTest {
                     completionPrice = 15.0,
                     contextWindowTokens = 400_000,
                     maxOutputTokens = 128_000,
-                    visionCapable = true,
+                    isMultimodal = true,
                 ),
             ),
             models,
@@ -216,7 +216,7 @@ class ApiModelCatalogRepositoryImplTest {
                     created = 1723507200L,
                     promptPrice = 0.2,
                     completionPrice = 0.4,
-                    visionCapable = true,
+                    isMultimodal = true,
                 )
             ),
             models,
@@ -251,7 +251,7 @@ class ApiModelCatalogRepositoryImplTest {
                     promptPrice = 0.2,
                     completionPrice = 0.5,
                     contextWindowTokens = 131_072,
-                    visionCapable = false,
+                    isMultimodal = false,
                 )
             ),
             models,
@@ -284,7 +284,7 @@ class ApiModelCatalogRepositoryImplTest {
                 promptPrice = 0.2,
                 completionPrice = 0.5,
                 contextWindowTokens = 256_000,
-                visionCapable = true,
+                isMultimodal = true,
             ),
             model,
         )

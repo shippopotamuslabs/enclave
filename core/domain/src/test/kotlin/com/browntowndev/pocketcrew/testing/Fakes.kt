@@ -268,6 +268,16 @@ class FakeLocalModelRepository : LocalModelRepositoryPort {
     override suspend fun getAssetById(id: LocalModelId): LocalModelAsset? {
         return _assets.value.values.find { it.metadata.id == id }
     }
+
+    override suspend fun restoreSoftDeletedModel(
+        id: LocalModelId,
+        configurations: List<LocalModelConfiguration>
+    ): LocalModelAsset {
+        val asset = getAssetById(id) ?: throw NoSuchElementException("Model $id not found")
+        val restoredAsset = asset.copy(configurations = configurations)
+        _assets.value = _assets.value + (id to restoredAsset)
+        return restoredAsset
+    }
 }
 
 class FakeApiModelRepository : ApiModelRepositoryPort {

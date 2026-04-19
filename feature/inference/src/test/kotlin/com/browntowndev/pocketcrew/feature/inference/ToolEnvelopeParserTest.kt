@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -11,6 +12,21 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertFailsWith
 
 class ToolEnvelopeParserTest {
+
+    @Test
+    fun `extractRequiredQuestion handles escaped JSON and robust parsing`() {
+        val argumentsJson = """{"question":"What's the status? \"Ready\"."}"""
+        val question = ToolEnvelopeParser.extractRequiredQuestion(argumentsJson)
+        assertEquals("What's the status? \"Ready\".", question)
+    }
+
+    @Test
+    fun `extractRequiredQuestion falls back to regex for malformed JSON`() {
+        val argumentsJson = """{"question":"Partial JSON..."""
+        // Regex should still pick it up if it matches the pattern
+        val question = ToolEnvelopeParser.extractRequiredQuestion(argumentsJson)
+        assertEquals("Partial JSON...", question)
+    }
 
     // --- Generic local parser accepts valid search envelope ---
 
@@ -174,5 +190,64 @@ class ToolEnvelopeParserTest {
         )
 
         assertEquals("""{"question":"What is shown in this image?"}""", json)
+    }
+
+    // --- get_message_context tool support ---
+
+    @Test
+    fun `requireSupportedTool accepts get_message_context`() {
+        ToolEnvelopeParser.requireSupportedTool(ToolDefinition.GET_MESSAGE_CONTEXT.name)
+    }
+
+    @Test
+    fun `extractLocalToolEnvelope parses get_message_context raw envelope`() {
+        val text = """Prefix,{"name":"get_message_context","arguments":{"message_id":"msg-123","before":3,"after":3}},Suffix"""
+        val envelope = ToolEnvelopeParser.extractLocalToolEnvelope(text)
+        assertNotNull(envelope)
+        assertEquals("get_message_context", envelope!!.toolName)
+        assertTrue(envelope.argumentsJson.contains("message_id"))
+        assertEquals("Prefix", envelope.visiblePrefix)
+        assertEquals("Suffix", envelope.visibleSuffix)
+    }
+
+    @Test
+    fun `missing message_id fails for get_message_context tool`() {
+        val text = """{"name":"get_message_context","arguments":{}},"""
+        assertFailsWith<IllegalArgumentException> {
+            ToolEnvelopeParser.extractLocalToolEnvelope(text)
+        }
+    }
+
+    @Test
+    fun `buildGetMessageContextArgumentsJson produces valid JSON`() {
+        val json = ToolEnvelopeParser.buildGetMessageContextArgumentsJson("msg-789", 5, 5)
+        assertTrue(json.contains("message_id"))
+        assertTrue(json.contains("msg-789"))
+        assertTrue(json.contains("before"))
+        assertTrue(json.contains("after"))
+    }
+
+    @Test
+    fun `buildGetMessageContextArgumentsJson includes before and after defaults`() {
+        val json = ToolEnvelopeParser.buildGetMessageContextArgumentsJson("msg-789")
+        assertTrue(json.contains("message_id"))
+        assertTrue(json.contains("before"))
+        assertTrue(json.contains("after"))
+    }
+
+    @Test
+    fun `extractRequiredMessageId extracts message_id from arguments`() {
+        val argumentsJson = """{"message_id":"msg-abc"}"""
+        val messageId = ToolEnvelopeParser.extractRequiredMessageId(argumentsJson)
+        assertEquals("msg-abc", messageId)
+    }
+
+    @Test
+    fun `hasLocalToolContract detects get_message_context`() {
+        val prompt = "Use tools.\n" + ToolDefinition.GET_MESSAGE_CONTEXT.name + " is available."
+        assertFalse(ToolEnvelopeParser.hasLocalToolContract(prompt), "No envelope marker should fail")
+
+        val promptWithEnvelope = "Use tools.\n" + "{\"name\":\"get_message_context\",\"arguments\":{}}"
+        assertTrue(ToolEnvelopeParser.hasLocalToolContract(promptWithEnvelope))
     }
 }
