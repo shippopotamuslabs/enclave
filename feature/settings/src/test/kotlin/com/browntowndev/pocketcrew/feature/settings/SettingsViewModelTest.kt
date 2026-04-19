@@ -39,6 +39,7 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.GetSettingsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.PrepareModelDeletionUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.ResolveAssignedModelSelectionUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SaveApiPresetUseCase
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.usecase.settings.SaveApiProviderDraftUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SaveTavilyApiKeyUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SaveLocalModelPresetUseCase
