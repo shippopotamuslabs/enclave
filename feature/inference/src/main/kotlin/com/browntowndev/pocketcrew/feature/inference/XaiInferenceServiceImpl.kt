@@ -189,11 +189,13 @@ class XaiInferenceServiceImpl(
             val badRequest = e is BadRequestException || e.message?.contains("400") == true || e.message?.contains("Bad Request") == true
             if (!badRequest || !chatFallbackAllowed) {
                 if (badRequest && multiAgentModel) {
+                    val hint = "Responses API rejected xAI multi-agent request. NOTE: xAI currently requires developer account beta access to use custom 'client-side' tools with multi-agent models. If you see a 400 error here, your API key is likely unauthorized for tools on this model."
                     loggingPort.error(
                         tag,
-                        "Responses API rejected xAI multi-agent request. Chat fallback is disabled for this model. ${describeException(e)}",
+                        "$hint Error: ${describeException(e)}",
                         e
                     )
+                    throw Exception("API Error (XAI Responses): ${e.message}\n$hint", e)
                 }
                 throw e
             }
