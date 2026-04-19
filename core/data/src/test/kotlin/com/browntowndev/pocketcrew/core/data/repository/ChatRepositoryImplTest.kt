@@ -3,8 +3,14 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
+import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
+import com.browntowndev.pocketcrew.core.data.local.TavilySourceEntity
+import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -90,5 +96,40 @@ class ChatRepositoryImplTest {
         repository.togglePinStatus(ChatId("10"))
 
         coVerify { chatDao.updatePinStatus(ChatId("10")) }
+    }
+
+    @Test
+    fun `D4 getMessagesForChat combines messages with tavily sources`() = runTest {
+        val chatId = ChatId("chat-1")
+        val messageId = MessageId("msg-1")
+        val messageEntity = MessageEntity(
+            id = messageId,
+            chatId = chatId,
+            content = "Hello",
+            role = Role.ASSISTANT,
+            userMessageId = MessageId("user-1"),
+            messageState = MessageState.COMPLETE,
+            modelType = ModelType.FAST,
+        )
+        val sourceEntity = TavilySourceEntity(
+            id = "src-1",
+            messageId = messageId,
+            title = "Test Source",
+            url = "https://example.com",
+            content = "Test content",
+            score = 0.9,
+            extracted = true,
+        )
+
+        every { messageDao.getMessagesByChatIdFlow(chatId) } returns flowOf(listOf(messageEntity))
+        every { tavilySourceDao.getByChatIdFlow(chatId) } returns flowOf(listOf(sourceEntity))
+
+        val result = repository.getMessagesForChat(chatId).first()
+
+        assertEquals(1, result.size)
+        assertEquals(1, result[0].tavilySources.size)
+        assertEquals("https://example.com", result[0].tavilySources[0].url)
+        assertTrue(result[0].tavilySources[0].extracted,
+            "Extracted source should have extracted=true from tavily_source table")
     }
 }

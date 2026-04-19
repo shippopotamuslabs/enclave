@@ -21,6 +21,7 @@ import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 
@@ -45,10 +46,19 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> {
-        return messageDao.getMessagesByChatIdFlow(chatId).map { entities ->
+        // Combine the message table Flow with a tavily_source table Flow.
+        // This ensures that source-level changes (e.g. extracted flag updates)
+        // trigger a re-read, even though the message table itself hasn't changed.
+        // Without this, markExtracted on tavily_source would not cause the
+        // messages Flow to re-emit, and the UI would show stale extracted=false.
+        return combine(
+            messageDao.getMessagesByChatIdFlow(chatId),
+            tavilySourceDao.getByChatIdFlow(chatId),
+        ) { entities, sources ->
+            val sourcesByMessage = sources.groupBy { it.messageId }
             entities.map { entity ->
-                val tavilySources = tavilySourceDao.getByMessageId(entity.id)
-                entity.toDomain(tavilySources)
+                val messageSources = sourcesByMessage[entity.id].orEmpty()
+                entity.toDomain(messageSources)
             }
         }
     }
