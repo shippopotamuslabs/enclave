@@ -31,7 +31,6 @@ import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPor
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
-import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
@@ -44,6 +43,7 @@ import com.google.ai.edge.litertlm.Tool
 import com.google.ai.edge.litertlm.ToolParam
 import com.google.ai.edge.litertlm.ToolSet
 import com.google.ai.edge.litertlm.tool
+import androidx.annotation.VisibleForTesting
 import java.lang.reflect.InvocationTargetException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
@@ -705,10 +705,14 @@ class ConversationManagerImpl @Inject constructor(
             throw java.util.concurrent.CancellationException("Generation was cancelled")
         }
 
-        // Hard error: if the model was already warned that context is full but still calls tools
+        // Return a compact error payload instead of throwing across the native boundary.
+        // The LiteRT tool loop can keep running and surface the failure as a model-visible turn.
         if (contextFullWarned) {
-            loggingPort.error(TAG, "Model ignored context-full warning and called another tool tool=${request.toolName}. Termination forced.")
-            throw IllegalStateException("Context window exceeded: Model was warned to stop calling tools but continued. Try simplifying your request.")
+            loggingPort.error(
+                TAG,
+                "Model ignored context-full warning and called another tool tool=${request.toolName}. Returning stop-tools error payload."
+            )
+            return LocalToolResultPolicy.buildContextWindowExceededToolError(request.toolName)
         }
 
         return try {
@@ -722,67 +726,45 @@ class ConversationManagerImpl @Inject constructor(
                 "Resolved ToolExecutorPort for native tool call tool=${request.toolName}"
             )
             val rawResultJson = toolExecutor.execute(request).resultJson
-            
-            // Use ToolContextBudget for context evaluation and truncation
-            val tokenCounter = com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
             val modelId = currentModelPath?.substringAfterLast('/')
-            val systemPromptTokens = ToolContextBudget.countSystemPromptTokens(currentSystemPrompt, modelId, tokenCounter)
-            val historyTokens = ToolContextBudget.countHistoryTokens(history, modelId, tokenCounter)
-            val availableTokens = ToolContextBudget.localTruncationBudget(
+            val decision = LocalToolResultPolicy.evaluate(
+                rawResultJson = rawResultJson,
                 contextWindowTokens = currentContextWindow,
-                systemPromptTokens = systemPromptTokens,
-                historyTokens = historyTokens,
+                currentSystemPrompt = currentSystemPrompt,
+                history = history,
                 transientToolResultTokens = transientToolResultTokens,
-            )
-            val estimatedUsedTokens = systemPromptTokens + historyTokens + transientToolResultTokens
-
-            val resultJson = NativeToolResultFormatter.truncateToolResult(
-                resultJson = rawResultJson,
-                contextWindowTokens = currentContextWindow,
-                estimatedUsedTokens = estimatedUsedTokens,
-                bufferTokens = ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS,
-                tokenCounter = tokenCounter,
                 modelId = modelId,
             )
 
             loggingPort.debug(
                 TAG,
-                "Native tool call completed tool=${request.toolName} finalPayload=${resultJson.take(2000)}"
+                "Native tool call completed tool=${request.toolName} finalPayload=${decision.finalResult.take(2000)}"
             )
 
-            if (!resultJson.contains("\"error\"")) {
+            if (decision.shouldTrackTransientToolResult) {
                 hasTransientToolResults = true
                 // Track actual token count of tool result (plus a small buffer for the tool call request)
-                transientToolResultTokens += tokenCounter.countTokens(resultJson, modelId) + 30
+                transientToolResultTokens += com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter.countTokens(
+                    decision.finalResult,
+                    modelId,
+                ) + 30
             }
 
-            // If context is nearly full after adding this tool result, append a system warning
-            // telling the model to stop calling tools and provide a final response.
-            val evaluation = ToolContextBudget.evaluate(
-                contextWindowTokens = currentContextWindow,
-                systemPromptTokens = systemPromptTokens,
-                historyTokens = historyTokens,
-                transientToolResultTokens = transientToolResultTokens,
-                options = GenerationOptions(reasoningBudget = 0),
-                modelId = modelId,
-                tokenCounter = tokenCounter,
-            )
-            val contextFullAfterResult = evaluation.contextFull
-            val finalResult = if (contextFullAfterResult && !resultJson.contains("\"error\"")) {
-                loggingPort.warning(TAG, "Context nearly full after tool result. Appending stop-tools warning. tool=${request.toolName} usedTokens=${evaluation.totalTokens} window=$currentContextWindow")
+            if (decision.contextFull) {
+                loggingPort.warning(
+                    TAG,
+                    "Context nearly full after tool result. Appending stop-tools warning. tool=${request.toolName} usedTokens=${decision.totalTokens} window=$currentContextWindow"
+                )
                 contextFullWarned = true
-                resultJson + "\n${ContextWindowPlanner.STOP_TOOLS_WARNING}"
-            } else {
-                resultJson
             }
 
-            if (finalResult.contains("\"error\"")) {
+            if (decision.finalResult.contains("\"error\"")) {
                 loggingPort.error(
                     TAG,
-                    "Native tool call returned error payload tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"} payload=${finalResult.take(2000)}"
+                    "Native tool call returned error payload tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"} payload=${decision.finalResult.take(2000)}"
                 )
             }
-            finalResult
+            decision.finalResult
         } catch (e: java.util.concurrent.CancellationException) {
             throw e
         } catch (t: Throwable) {
@@ -795,6 +777,15 @@ class ConversationManagerImpl @Inject constructor(
             buildToolErrorJson(request.toolName, rootCause)
         }
     }
+
+    @VisibleForTesting
+    internal fun forceContextFullWarnedForTest(value: Boolean) {
+        contextFullWarned = value
+    }
+
+    @VisibleForTesting
+    internal suspend fun executeToolSafelyForTest(request: ToolCallRequest): String =
+        executeToolSafely(request)
 
     private fun buildToolErrorJson(toolName: String, throwable: Throwable): String =
         """{"error":"tool_execution_failed","tool":"${escapeJson(toolName)}","exception":"${escapeJson(throwable::class.java.simpleName)}","message":"${escapeJson(throwable.message ?: "Unknown error")}"}"""

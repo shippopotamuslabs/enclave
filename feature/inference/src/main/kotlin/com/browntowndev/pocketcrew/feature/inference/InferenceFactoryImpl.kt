@@ -21,7 +21,6 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceType
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
@@ -125,123 +124,6 @@ class InferenceFactoryImpl @Inject constructor(
         } finally {
             inferenceLockManager.releaseLock()
         }
-    }
-
-    override suspend fun <T> withInferenceServiceByConfigId(
-        configId: ApiModelConfigurationId,
-        block: suspend (LlmInferencePort) -> T
-    ): T {
-        // API models don't need a lock because they are stateless cloud services
-        val service = withContext(Dispatchers.IO) {
-            val apiConfig = apiModelRepository.getConfigurationById(configId)
-            val apiCreds = apiConfig?.let { apiModelRepository.getCredentialsById(it.apiCredentialsId) }
-            val apiKey = apiCreds?.let { apiKeyProvider.getApiKey(it.credentialAlias) }
-
-            if (apiConfig == null || apiCreds == null || apiKey == null) {
-                throw IllegalStateException("Compaction requires a valid API configuration and credentials.")
-            }
-
-            val requestHeaders = buildRequestHeaders(apiCreds.provider, apiConfig.customHeaders)
-            val resolvedBaseUrl = apiCreds.baseUrl?.takeIf { it.isNotBlank() } ?: apiCreds.provider.defaultBaseUrl()
-
-            // Use ModelType.UNASSIGNED and configId to create a unique identity that won't conflict with main slots
-            val requestedIdentity = createApiIdentity(
-                modelType = ModelType.UNASSIGNED,
-                apiConfig = apiConfig,
-                apiCreds = apiCreds,
-                apiKey = apiKey,
-                requestHeaders = requestHeaders,
-                resolvedBaseUrl = resolvedBaseUrl
-            )
-
-            mutex.withLock {
-                // Check if we already have an active service for this identity
-                val existingEntry = activeIdentities.entries.find { it.value == requestedIdentity }
-                if (existingEntry != null) {
-                    return@withLock activeServices[existingEntry.key]!!
-                }
-
-                val newService = when (apiCreds.provider) {
-                    ApiProvider.ANTHROPIC -> AnthropicInferenceServiceImpl(
-                        client = anthropicClientProvider.getClient(
-                            apiKey = apiKey,
-                            baseUrl = resolvedBaseUrl,
-                            headers = requestHeaders
-                        ),
-                        modelId = apiCreds.modelId,
-                        modelType = ModelType.UNASSIGNED,
-                        baseUrl = resolvedBaseUrl,
-                        loggingPort = loggingPort,
-                        orchestrator = orchestrator,
-                    )
-                    ApiProvider.GOOGLE -> {
-                        val client = googleGenAiClientProvider.getClient(
-                            apiKey = apiKey,
-                            baseUrl = resolvedBaseUrl,
-                            headers = requestHeaders,
-                        )
-                        val sdkClient = GoogleGenAiSdkClientImpl(
-                            modelsApiProvider = { client.models },
-                            modelType = ModelType.UNASSIGNED,
-                            loggingPort = loggingPort,
-                        )
-                        GoogleInferenceServiceImpl(
-                            sdkClient = sdkClient,
-                            modelId = apiCreds.modelId,
-                            modelType = ModelType.UNASSIGNED,
-                            baseUrl = resolvedBaseUrl,
-                            loggingPort = loggingPort,
-                            orchestrator = orchestrator,
-                        )
-                    }
-                    ApiProvider.OPENROUTER -> OpenRouterInferenceServiceImpl(
-                        client = openAiClientProvider.getClient(
-                            apiKey = apiKey,
-                            baseUrl = resolvedBaseUrl,
-                            headers = requestHeaders
-                        ),
-                        modelId = apiCreds.modelId,
-                        modelType = ModelType.UNASSIGNED,
-                        routing = apiConfig.openRouterRouting,
-                        baseUrl = resolvedBaseUrl,
-                        loggingPort = loggingPort,
-                        orchestrator = orchestrator,
-                    )
-                    ApiProvider.XAI -> XaiInferenceServiceImpl(
-                        client = openAiClientProvider.getClient(
-                            apiKey = apiKey,
-                            baseUrl = resolvedBaseUrl,
-                            headers = requestHeaders
-                        ),
-                        modelId = apiCreds.modelId,
-                        modelType = ModelType.UNASSIGNED,
-                        baseUrl = resolvedBaseUrl,
-                        loggingPort = loggingPort,
-                        orchestrator = orchestrator,
-                    )
-                    else -> ApiInferenceServiceImpl(
-                        client = openAiClientProvider.getClient(
-                            apiKey = apiKey,
-                            baseUrl = resolvedBaseUrl,
-                            headers = requestHeaders
-                        ),
-                        modelId = apiCreds.modelId,
-                        provider = apiCreds.provider.name,
-                        modelType = ModelType.UNASSIGNED,
-                        baseUrl = resolvedBaseUrl,
-                        loggingPort = loggingPort,
-                        orchestrator = orchestrator,
-                    )
-                }
-
-                // Cache this service under ModelType.UNASSIGNED to keep it alive during the block
-                activeServices[ModelType.UNASSIGNED] = newService
-                activeIdentities[ModelType.UNASSIGNED] = requestedIdentity
-                newService
-            }
-        }
-
-        return block(service)
     }
 
     private fun resolveLockType(
