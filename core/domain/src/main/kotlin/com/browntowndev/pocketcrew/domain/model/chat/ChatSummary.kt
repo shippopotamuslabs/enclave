@@ -1,8 +1,10 @@
 package com.browntowndev.pocketcrew.domain.model.chat
 
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+
 /**
- * Domain model for a chat context summary.
- * Used for rolling context compaction.
+ * Used for rolling context summarization.
  */
 data class ChatSummary(
     val chatId: ChatId,
