@@ -9,7 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.port.inference.CompactionPort
+import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceService
@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.DisplayName
 
 class ChatHistoryRehydratorTest {
 
@@ -70,10 +71,8 @@ class ChatHistoryRehydratorTest {
             coEvery { getChatSummary(any()) } returns null
         }
         val service = FakeInferenceService()
-        val compactionPort = mockk<CompactionPort>(relaxed = true)
         val rehydrator = ChatHistoryRehydrator(
             messageRepository = repository,
-            compactionPort = compactionPort,
             loggingPort = mockk<LoggingPort>(relaxed = true),
         )
 
@@ -105,10 +104,8 @@ class ChatHistoryRehydratorTest {
             coEvery { getChatSummary(any()) } returns null
         }
         val service = FakeInferenceService()
-        val compactionPort = mockk<CompactionPort>(relaxed = true)
         val rehydrator = ChatHistoryRehydrator(
             messageRepository = repository,
-            compactionPort = compactionPort,
             loggingPort = mockk<LoggingPort>(relaxed = true),
         )
 
@@ -137,12 +134,8 @@ class ChatHistoryRehydratorTest {
         }
         val service = FakeInferenceService()
         service.setHistory(listOf(ChatMessage(Role.USER, "stale history")))
-        val compactionPort = mockk<CompactionPort> {
-            coEvery { compactHistory(any()) } returns null
-        }
         val rehydrator = ChatHistoryRehydrator(
             messageRepository = repository,
-            compactionPort = compactionPort,
             loggingPort = mockk<LoggingPort>(relaxed = true),
         )
 
@@ -152,7 +145,7 @@ class ChatHistoryRehydratorTest {
             assistantMessageId = MessageId("active-assistant"),
             service = service,
             contextWindowTokens = 128,
-            allowLocalSummarization = false,
+            shouldSummarize = false,
         )
 
         assertFalse(service.getHistory().any { it.content == "stale history" })
@@ -173,7 +166,6 @@ class ChatHistoryRehydratorTest {
         val service = FakeInferenceService()
         val rehydrator = ChatHistoryRehydrator(
             messageRepository = repository,
-            compactionPort = mockk(relaxed = true),
             loggingPort = mockk<LoggingPort>(relaxed = true),
         )
 

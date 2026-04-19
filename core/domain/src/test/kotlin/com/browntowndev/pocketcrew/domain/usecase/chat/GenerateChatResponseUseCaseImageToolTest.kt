@@ -427,9 +427,6 @@ class GenerateChatResponseUseCaseImageToolTest {
                 override fun add(url: String) {}
                 override fun clear() {}
             },
-            compactionPort = object : com.browntowndev.pocketcrew.domain.port.inference.CompactionPort {
-                override suspend fun compactHistory(messages: List<com.browntowndev.pocketcrew.domain.model.chat.ChatMessage>): String? = null
-            },
         )
     }
 
