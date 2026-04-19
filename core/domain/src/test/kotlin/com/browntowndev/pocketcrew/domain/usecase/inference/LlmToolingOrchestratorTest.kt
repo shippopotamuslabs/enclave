@@ -946,17 +946,17 @@ class LlmToolingOrchestratorTest {
             onToolCallDetected = { if (it == "tool-call") listOf(toolRequest) else emptyList() },
             onToolResultsMapped = { _, _, _ -> "follow-up" },
             onContextExceeded = { _, _ ->
-                // Mid-loop compaction: return rebuilt params that are below threshold
+                // Mid-loop history rebuild: return rebuilt params that are below threshold
                 ContextExceededResult(
                     contextExceeded = false,
-                    rebuiltParams = "compacted-params",
+                    rebuiltParams = "rebuilt-params",
                 )
             },
             onFinished = { _, _, _ -> },
         )
 
         // The next inference pass should receive the rebuilt params from onContextExceeded
-        assertEquals("compacted-params", receivedParams)
+        assertEquals("rebuilt-params", receivedParams)
     }
 
     @Test
@@ -1001,7 +1001,7 @@ class LlmToolingOrchestratorTest {
         assertTrue(contextExceededCallCount >= 1)
     }
 
-    // ── Context exceeded with rebuilt params (mid-loop compaction) ────────────
+    // ── Context exceeded with rebuilt params (mid-loop history rebuild) ────────────
 
     @Test
     fun `onContextExceeded returning both contextExceeded and rebuiltParams triggers warning and swaps params`() = runTest {
@@ -1025,8 +1025,7 @@ class LlmToolingOrchestratorTest {
             initialParams = "initial",
             tag = "TestTag",
             maxToolCalls = 5,
-            onInferencePass = { params, _ ->
-                receivedParams = params
+            onInferencePass = { _, _ ->
                 inferencePassCount++
                 // First pass: tool call. Second pass: model heeds warning, no more tools.
                 if (inferencePassCount == 1) "tool-call" else "no-tool"
@@ -1037,7 +1036,7 @@ class LlmToolingOrchestratorTest {
                 // Context exceeded AND we compacted — return both flags
                 ContextExceededResult(
                     contextExceeded = true,
-                    rebuiltParams = "compacted-params",
+                    rebuiltParams = "rebuilt-params",
                 )
             },
             onFinished = { _, toolCallCount, _ ->
@@ -1046,13 +1045,13 @@ class LlmToolingOrchestratorTest {
         )
 
         // Params should be swapped to the compacted version
-        assertEquals("compacted-params", receivedParams)
+        assertEquals("rebuilt-params", receivedParams)
         // Model heeded context-full warning — only 1 tool call
         assertEquals(1, finishedToolCallCount)
     }
 
     @Test
-    fun `mid-loop compaction reduces context below threshold then model continues normally`() = runTest {
+    fun `mid-loop history rebuild reduces context below threshold then model continues normally`() = runTest {
         val toolRequest = ToolCallRequest(
             toolName = "tavily_web_search",
             argumentsJson = """{"query":"test"}""",
@@ -1075,7 +1074,7 @@ class LlmToolingOrchestratorTest {
             maxToolCalls = 5,
             onInferencePass = { _, _ ->
                 inferencePassCount++
-                // First pass: tool call. After compaction, model makes another tool call (now in budget).
+                // First pass: tool call. After history rebuild, model makes another tool call (now in budget).
                 // Third pass: model finishes.
                 when (inferencePassCount) {
                     1, 2 -> "tool-call"
@@ -1086,11 +1085,11 @@ class LlmToolingOrchestratorTest {
             onToolResultsMapped = { _, _, _ -> "follow-up" },
             onContextExceeded = { callCount, _ ->
                 contextExceededCallCount++
-                // First call: context was exceeded but compaction fixed it.
-                // Return contextExceeded=false because compaction reduced below threshold.
+                // First call: context was exceeded but history rebuild fixed it.
+                // Return contextExceeded=false because history rebuild reduced below threshold.
                 ContextExceededResult(
                     contextExceeded = false,
-                    rebuiltParams = "compacted-$callCount",
+                    rebuiltParams = "rebuilt-$callCount",
                 )
             },
             onFinished = { _, toolCallCount, _ ->
@@ -1098,7 +1097,7 @@ class LlmToolingOrchestratorTest {
             },
         )
 
-        // Mid-loop compaction was performed, context reduced below threshold,
+        // Mid-loop history rebuild was performed, context reduced below threshold,
         // model was able to make another tool call, then finished normally
         assertEquals(3, inferencePassCount)
         assertEquals(2, finishedToolCallCount)
@@ -1128,8 +1127,8 @@ class LlmToolingOrchestratorTest {
                 initialParams = "initial",
                 tag = "TestTag",
                 maxToolCalls = 5,
-                onInferencePass = { params, _ ->
-                    paramsReceivedHistory.add(params)
+                onInferencePass = { _, _ ->
+                    paramsReceivedHistory.add("initial")
                     // Model keeps calling tools despite warning
                     "tool-call"
                 },
@@ -1140,7 +1139,7 @@ class LlmToolingOrchestratorTest {
                     // Context stays exceeded every time — keep warning
                     ContextExceededResult(
                         contextExceeded = true,
-                        rebuiltParams = "compacted-$callCount",
+                        rebuiltParams = "rebuilt-$callCount",
                     )
                 },
                 onFinished = { _, _, _ -> },
