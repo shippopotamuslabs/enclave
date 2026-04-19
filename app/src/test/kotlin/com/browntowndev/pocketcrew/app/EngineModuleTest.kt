@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.app
 import android.content.Context
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.feature.inference.ConversationManagerImpl
@@ -30,10 +31,11 @@ class EngineModuleTest {
             val localModelRepository = mockk<LocalModelRepositoryPort>()
             val activeModelProvider = mockk<ActiveModelProviderPort>()
             val loggingPort = mockk<LoggingPort>(relaxed = true)
+            val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
 
             coEvery { activeModelProvider.getActiveConfiguration(ModelType.MAIN) } returns null
 
-            val manager = ConversationManagerImpl(context, localModelRepository, activeModelProvider, loggingPort)
+            val manager = ConversationManagerImpl(context, localModelRepository, activeModelProvider, loggingPort, toolExecutor)
 
             assertThrows<IllegalStateException> {
                 manager.getConversation(ModelType.MAIN, null)

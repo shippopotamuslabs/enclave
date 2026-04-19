@@ -30,8 +30,8 @@ class DownloadWorkRepositoryTest {
     @BeforeEach
     fun setup() {
         mockWorkManager = mockk(relaxed = true)
-        repository = DownloadWorkRepository(mockWorkManager)
-
+        // Inject UnconfinedTestDispatcher to bypass threading issues in tests
+        repository = DownloadWorkRepository(mockWorkManager, kotlinx.coroutines.test.UnconfinedTestDispatcher())
         // Mock the Log class to prevent RuntimeException in unit tests
         mockkStatic(Log::class)
         every { Log.d(any<String>(), any<String>()) } returns 0

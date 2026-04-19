@@ -69,7 +69,7 @@ object GoogleRequestMapper {
                     Role.SYSTEM -> "user"
                 }
             )
-            .parts(listOf(Part.fromText(message.content)))
+            .parts(listOf(Part.fromText(ImagePayloads.stripBase64DataUris(message.content))))
             .build()
 
     private fun buildSystemInstruction(
@@ -132,7 +132,7 @@ object GoogleRequestMapper {
                             Schema.builder()
                                 .type(Type(Type.Known.OBJECT))
                                 .properties(toolProperties())
-                                .required(requiredArguments())
+                                .required(schema.required)
                                 .build()
                         )
                         .build()
@@ -140,29 +140,58 @@ object GoogleRequestMapper {
             )
             .build()
 
-    private fun ToolDefinition.toolProperties(): Map<String, Schema> =
-        when (this) {
-            ToolDefinition.TAVILY_WEB_SEARCH -> mapOf(
-                "query" to Schema.builder()
-                    .type(Type(Type.Known.STRING))
-                    .description("The search query to execute")
-                    .build()
-            )
-            ToolDefinition.ATTACHED_IMAGE_INSPECT -> mapOf(
-                "question" to Schema.builder()
-                    .type(Type(Type.Known.STRING))
-                    .description("The question to ask about the attached image")
-                    .build()
-            )
-            else -> error("Unsupported tool: $name")
+    private fun ToolDefinition.toolProperties(): Map<String, Schema> {
+        val map = mutableMapOf<String, Schema>()
+        schema.properties.forEach { (key, value) ->
+            map[key] = value.toGoogleSchema()
         }
+        return map
+    }
 
-    private fun ToolDefinition.requiredArguments(): List<String> =
+    private fun kotlinx.serialization.json.JsonElement.toGoogleSchema(): Schema {
+        val builder = Schema.builder()
         when (this) {
-            ToolDefinition.TAVILY_WEB_SEARCH -> listOf("query")
-            ToolDefinition.ATTACHED_IMAGE_INSPECT -> listOf("question")
-            else -> error("Unsupported tool: $name")
+            is kotlinx.serialization.json.JsonObject -> {
+                val typeStr = (get("type") as? kotlinx.serialization.json.JsonPrimitive)?.content
+                val type = when (typeStr) {
+                    "string" -> Type(Type.Known.STRING)
+                    "integer" -> Type(Type.Known.INTEGER)
+                    "number" -> Type(Type.Known.NUMBER)
+                    "boolean" -> Type(Type.Known.BOOLEAN)
+                    "array" -> Type(Type.Known.ARRAY)
+                    "object" -> Type(Type.Known.OBJECT)
+                    else -> Type(Type.Known.STRING)
+                }
+                builder.type(type)
+
+                (get("description") as? kotlinx.serialization.json.JsonPrimitive)?.content?.let {
+                    builder.description(it)
+                }
+
+                if (typeStr == "array") {
+                    get("items")?.toGoogleSchema()?.let { builder.items(it) }
+                }
+
+                if (typeStr == "object") {
+                    val props = mutableMapOf<String, Schema>()
+                    (get("properties") as? kotlinx.serialization.json.JsonObject)?.forEach { (k, v) ->
+                        props[k] = v.toGoogleSchema()
+                    }
+                    builder.properties(props)
+
+                    val req = (get("required") as? kotlinx.serialization.json.JsonArray)?.map {
+                        (it as kotlinx.serialization.json.JsonPrimitive).content
+                    }
+                    builder.required(req)
+                }
+                
+                // Google SDK doesn't seem to have a direct .enum() method on Schema.Builder in this version.
+                // We'll skip it for now or find the correct method.
+            }
+            else -> builder.type(Type(Type.Known.STRING))
         }
+        return builder.build()
+    }
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)

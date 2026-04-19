@@ -46,6 +46,18 @@ interface LlmInferencePort {
  */
 sealed interface InferenceEvent {
     /**
+     * Emitted when the on-device engine is being loaded from disk or initialized.
+     * @param modelType The type of model being loaded.
+     */
+    data class EngineLoading(val modelType: ModelType) : InferenceEvent
+
+    /**
+     * Emitted when the engine is loaded and waiting for the first token.
+     * @param modelType The type of model that is processing.
+     */
+    data class Processing(val modelType: ModelType) : InferenceEvent
+
+    /**
      * Emitted when the model is generating reasoning/Chain-of-Thought.
      * @param chunk The raw chunk of thought just generated.
      * @param modelType The type of model used to generate this chunk.
@@ -58,6 +70,13 @@ sealed interface InferenceEvent {
      * @param modelType The type of model used to generate this chunk.
      */
     data class PartialResponse(val chunk: String, val modelType: ModelType) : InferenceEvent
+
+    /**
+     * Emitted when a Tavily search tool execution completes with results.
+     * @param sources The list of search results returned by Tavily.
+     * @param modelType The type of model that triggered the search.
+     */
+    data class TavilyResults(val sources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource>, val modelType: ModelType) : InferenceEvent
 
     /**
      * Emitted when the generation is complete.

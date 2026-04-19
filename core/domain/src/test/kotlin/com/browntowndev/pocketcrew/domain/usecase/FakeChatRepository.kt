@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
+import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
@@ -170,6 +171,10 @@ class FakeChatRepository : ChatRepository {
         }
     }
 
+    override suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat> {
+        return _chatsFlow.value.filter { it.id in ids }.associateBy { it.id }
+    }
+
     override suspend fun persistAllMessageData(
         messageId: MessageId,
         modelType: ModelType,
@@ -179,8 +184,13 @@ class FakeChatRepository : ChatRepository {
         thinkingRaw: String?,
         content: String,
         messageState: MessageState,
-        pipelineStep: PipelineStep?
+        pipelineStep: PipelineStep?,
+        tavilySources: List<TavilySource>
     ) {
+        // No-op for testing
+    }
+
+    override suspend fun markSourcesExtracted(urls: List<String>) {
         // No-op for testing
     }
 }

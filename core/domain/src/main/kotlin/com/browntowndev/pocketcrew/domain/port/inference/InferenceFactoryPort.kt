@@ -12,15 +12,8 @@ class InferenceBusyException(
  */
 interface InferenceFactoryPort {
     /**
-     * Runs [block] with the resolved inference service for [modelType].
-     *
-     * Implementations own both lifecycle and concurrency:
-     * - only one on-device inference may run at a time
-     * - same model identity reuses the already loaded engine
-     * - a different model identity closes the previous idle engine before loading the next
-     *
-     * If another on-device inference is already in progress, implementations should throw
-     * [InferenceBusyException].
+     * Executes a block of work with an inference service.
+     * Manages model lifecycle and engine-level mutual exclusion.
      */
     suspend fun <T> withInferenceService(
         modelType: ModelType,

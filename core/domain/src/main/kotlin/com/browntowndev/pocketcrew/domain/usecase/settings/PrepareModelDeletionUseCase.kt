@@ -49,7 +49,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
         val deletedAsset = localAssets.find { it.metadata.id == id }
         val requiresApiVisionOnly = ModelType.VISION in needingReassignment
         val requiresVisionCompatibility =
-            requiresApiVisionOnly || deletedAsset?.metadata?.visionCapable == true
+            requiresApiVisionOnly || deletedAsset?.metadata?.isMultimodal == true
         return PreparedModelDeletion.Ready(
             target = ModelDeletionTarget.LocalModelAsset(id),
             modelTypesNeedingReassignment = needingReassignment,
@@ -75,7 +75,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
         val deletedAsset = localAssets.find { asset -> asset.configurations.any { it.id == id } }
         val requiresApiVisionOnly = ModelType.VISION in needingReassignment
         val requiresVisionCompatibility =
-            requiresApiVisionOnly || deletedAsset?.metadata?.visionCapable == true
+            requiresApiVisionOnly || deletedAsset?.metadata?.isMultimodal == true
         return PreparedModelDeletion.Ready(
             target = ModelDeletionTarget.LocalModelPreset(id),
             modelTypesNeedingReassignment = needingReassignment,
@@ -146,7 +146,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
         if (!requireApiVisionOnly) {
             localAssets.forEach { asset ->
                 if (asset.metadata.id == excludeLocalModelId) return@forEach
-                if (requireVisionCompatibility && !asset.metadata.visionCapable) return@forEach
+                if (requireVisionCompatibility && !asset.metadata.isMultimodal) return@forEach
 
                 asset.configurations.forEach { config ->
                     if (config.id == excludeLocalConfigId) return@forEach
@@ -165,7 +165,7 @@ class PrepareModelDeletionUseCase @Inject constructor(
 
         apiAssets.forEach { asset ->
             if (asset.credentials.id == excludeApiCredentialsId) return@forEach
-            if (requireVisionCompatibility && !asset.credentials.isVision) return@forEach
+            if (requireVisionCompatibility && !asset.credentials.isMultimodal) return@forEach
 
             asset.configurations.forEach { config ->
                 if (config.id == excludeApiConfigId) return@forEach

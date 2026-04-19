@@ -13,10 +13,13 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+
+import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.emitAll
@@ -43,6 +46,7 @@ class GenerateChatResponseUseCase @Inject constructor(
     private val activeModelProvider: ActiveModelProviderPort,
     private val settingsRepository: SettingsRepository,
     private val searchToolPromptComposer: SearchToolPromptComposer,
+    private val extractedUrlTracker: ExtractedUrlTrackerPort,
 ) {
     private val historyRehydrator = ChatHistoryRehydrator(
         messageRepository = messageRepository,
@@ -55,7 +59,7 @@ class GenerateChatResponseUseCase @Inject constructor(
         searchToolPromptComposer = searchToolPromptComposer,
         loggingPort = loggingPort,
     )
-    private val persistAccumulatedMessages = PersistAccumulatedChatMessagesUseCase(chatRepository)
+    private val persistAccumulatedMessages = PersistAccumulatedChatMessagesUseCase(chatRepository, extractedUrlTracker.urls)
 
     operator fun invoke(
         prompt: String,
@@ -84,14 +88,28 @@ class GenerateChatResponseUseCase @Inject constructor(
                 chatRepository = chatRepository,
             )
 
+            // Observe extraction events so the accumulator marks sources as extracted
+            // in real time, ensuring the UI shows the “read” indicator during generation
+            // and the persisted snapshots carry the correct flag.
             try {
                 baseFlow.collect { state ->
+                    // Apply any URLs that have been extracted since the last emission.
+                    // The ExtractedUrlTracker is updated by the ExtractToolExecutor when a URL
+                    // is read, but the accumulator's sources still have extracted=false. We
+                    // reconcile this here so that snapshots emitted to the ViewModel carry the
+                    // correct extracted flag in real time.
+                    val extractedUrls = extractedUrlTracker.urls
+                    if (extractedUrls.isNotEmpty()) {
+                        accumulatorManager.markSourcesExtracted(extractedUrls.toList())
+                    }
                     emit(accumulatorManager.reduce(state))
                 }
             } finally {
                 try {
-                    withContext(Dispatchers.IO) {
+                    withContext(NonCancellable + Dispatchers.IO) {
+                        accumulatorManager.markIncompleteAsCancelled()
                         persistAccumulatedMessages(accumulatorManager)
+                        extractedUrlTracker.clear()
                     }
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to persist messages", e)
@@ -180,7 +198,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                 emit(MessageGenerationState.Processing(ModelType.MAIN))
             }
             val apiVisionConfigured = activeModelProvider.getActiveConfiguration(ModelType.VISION)
-                ?.let { config -> config.isLocal == false && config.visionCapable }
+                ?.let { config -> config.isLocal == false && config.isMultimodal }
                 ?: false
             val crewPrompt = if (userHasImage && apiVisionConfigured) {
                 prepareChatPrompt(
@@ -230,18 +248,29 @@ class GenerateChatResponseUseCase @Inject constructor(
         service: LlmInferencePort,
         modelType: ModelType,
     ): Flow<MessageGenerationState> = flow {
-        try {
-            historyRehydrator(chatId, userMessageId, assistantMessageId, service)
-        } catch (e: Exception) {
-            loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
-        }
-
+        val config = activeModelProvider.getActiveConfiguration(modelType)
         val preparedRequest = inferenceRequestPreparer(
             prompt = prompt,
             chatId = chatId,
             userMessageId = userMessageId,
+            assistantMessageId = assistantMessageId,
             modelType = modelType,
         )
+
+        try {
+            historyRehydrator(
+                chatId = chatId,
+                userMessageId = userMessageId,
+                assistantMessageId = assistantMessageId,
+                service = service,
+                contextWindowTokens = config?.contextWindow ?: 4096,
+                shouldSummarize = config?.isLocal != true,
+                currentPrompt = preparedRequest.prompt,
+                options = preparedRequest.options,
+            )
+        } catch (e: Exception) {
+            loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
+        }
 
         service.sendPrompt(
             preparedRequest.prompt,
@@ -249,12 +278,24 @@ class GenerateChatResponseUseCase @Inject constructor(
             closeConversation = false,
         ).collect { event ->
             when (event) {
+                is InferenceEvent.EngineLoading -> {
+                    emit(MessageGenerationState.EngineLoading(event.modelType))
+                }
+
+                is InferenceEvent.Processing -> {
+                    emit(MessageGenerationState.Processing(event.modelType))
+                }
+
                 is InferenceEvent.Thinking -> {
                     emit(MessageGenerationState.ThinkingLive(event.chunk, modelType))
                 }
 
                 is InferenceEvent.PartialResponse -> {
                     emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
+                }
+
+                is InferenceEvent.TavilyResults -> {
+                    emit(MessageGenerationState.TavilySourcesAttached(event.sources, event.modelType))
                 }
 
                 is InferenceEvent.Finished -> {

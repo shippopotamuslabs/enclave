@@ -20,9 +20,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
@@ -31,6 +33,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,11 +50,15 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
@@ -80,7 +87,40 @@ fun LocalModelsBottomSheet(
     onDeleteLocalModelAsset: (LocalModelId) -> Unit,
     onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
     onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
-    onDismissDeletionSafety: () -> Unit
+    onDismissDeletionSafety: () -> Unit,
+    reDownloadViewModel: ModelReDownloadViewModel = hiltViewModel()
+) {
+    val reDownloadStates by reDownloadViewModel.reDownloadStates.collectAsStateWithLifecycle()
+
+    LocalModelsBottomSheetContent(
+        uiState = uiState,
+        reDownloadStates = reDownloadStates,
+        onDismiss = onDismiss,
+        onNavigateToLocalModelConfigure = onNavigateToLocalModelConfigure,
+        onSelectLocalModelAsset = onSelectLocalModelAsset,
+        onSelectLocalModelConfig = onSelectLocalModelConfig,
+        onDeleteLocalModelAsset = onDeleteLocalModelAsset,
+        onDeleteLocalModelConfig = onDeleteLocalModelConfig,
+        onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
+        onDismissDeletionSafety = onDismissDeletionSafety,
+        onReDownloadModel = { modelId -> reDownloadViewModel.reDownloadModel(modelId) }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LocalModelsBottomSheetContent(
+    uiState: SettingsUiState,
+    reDownloadStates: Map<LocalModelId, ReDownloadProgress>,
+    onDismiss: () -> Unit,
+    onNavigateToLocalModelConfigure: () -> Unit,
+    onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
+    onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
+    onDeleteLocalModelAsset: (LocalModelId) -> Unit,
+    onDeleteLocalModelConfig: (LocalModelConfigurationId) -> Unit,
+    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
+    onDismissDeletionSafety: () -> Unit,
+    onReDownloadModel: (LocalModelId) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var pendingDeleteTarget by remember { mutableStateOf<LocalDeleteTarget?>(null) }
@@ -145,13 +185,12 @@ fun LocalModelsBottomSheet(
                         LocalModelAssetListView(
                             localModels = uiState.localModelsSheet.models,
                             availableToDownloadModels = uiState.localModelsSheet.availableDownloads,
+                            reDownloadStates = reDownloadStates,
                             onSelectAsset = { asset -> onSelectLocalModelAsset(asset) },
                             onRequestDeleteAsset = { asset ->
                                 pendingDeleteTarget = LocalDeleteTarget.Asset(asset.metadataId, asset.friendlyName)
                             },
-                            onDownloadNewModel = {
-                                // TODO: Download new model
-                            }
+                            onReDownloadModel = onReDownloadModel
                         )
                     }
                     is LocalModelsSheetView.Reassignment -> {
@@ -209,9 +248,10 @@ fun LocalModelsBottomSheet(
 private fun LocalModelAssetListView(
     localModels: List<LocalModelAssetUi>,
     availableToDownloadModels: List<LocalModelAssetUi>,
+    reDownloadStates: Map<LocalModelId, ReDownloadProgress>,
     onSelectAsset: (LocalModelAssetUi) -> Unit,
     onRequestDeleteAsset: (LocalModelAssetUi) -> Unit,
-    onDownloadNewModel: () -> Unit
+    onReDownloadModel: (LocalModelId) -> Unit
 ) {
     Column {
         Text(
@@ -253,8 +293,13 @@ private fun LocalModelAssetListView(
                 items(localModels, key = { it.metadataId.value }) { asset ->
                     LocalModelAssetCard(
                         asset = asset,
-                        onSelectAsset = onSelectAsset,
-                        onRequestDeleteAsset = onRequestDeleteAsset
+                        reDownloadProgress = reDownloadStates[asset.metadataId],
+                        onSelectAsset = {
+                            if (asset.isSoftDeleted) onReDownloadModel(asset.metadataId)
+                            else onSelectAsset(asset)
+                        },
+                        onRequestDeleteAsset = onRequestDeleteAsset,
+                        onReDownloadClick = { onReDownloadModel(asset.metadataId) }
                     )
                 }
             }
@@ -272,8 +317,10 @@ private fun LocalModelAssetListView(
                 items(availableToDownloadModels, key = { "dl_${it.metadataId.value}" }) { asset ->
                     LocalModelAssetCard(
                         asset = asset,
-                        onSelectAsset = { /* Re-download logic */ },
-                        onRequestDeleteAsset = null
+                        reDownloadProgress = reDownloadStates[asset.metadataId],
+                        onSelectAsset = { onReDownloadModel(asset.metadataId) },
+                        onRequestDeleteAsset = null,
+                        onReDownloadClick = { onReDownloadModel(asset.metadataId) }
                     )
                 }
             }
@@ -294,8 +341,10 @@ private fun LocalModelAssetListView(
 @Composable
 private fun LocalModelAssetCard(
     asset: LocalModelAssetUi,
+    reDownloadProgress: ReDownloadProgress?,
     onSelectAsset: (LocalModelAssetUi) -> Unit,
-    onRequestDeleteAsset: ((LocalModelAssetUi) -> Unit)?
+    onRequestDeleteAsset: ((LocalModelAssetUi) -> Unit)?,
+    onReDownloadClick: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
 
@@ -330,7 +379,7 @@ private fun LocalModelAssetCard(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        if (asset.visionCapable) {
+                        if (asset.isMultimodal) {
                             Spacer(modifier = Modifier.width(4.dp))
                             Icon(
                                 imageVector = Icons.Default.Visibility,
@@ -362,19 +411,71 @@ private fun LocalModelAssetCard(
                     }
                 }
 
-                if (onRequestDeleteAsset == null) {
-                    Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = "Download Model ${asset.friendlyName}",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
+                if (onRequestDeleteAsset == null || reDownloadProgress != null || asset.isSoftDeleted) {
+                    Box(
+                        modifier = Modifier.size(24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when (reDownloadProgress) {
+                            null, ReDownloadProgress.Idle -> {
+                                IconButton(
+                                    onClick = onReDownloadClick,
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Download,
+                                        contentDescription = "Download Model ${asset.friendlyName}",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            is ReDownloadProgress.Preparing -> {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    strokeCap = StrokeCap.Round
+                                )
+                            }
+                            is ReDownloadProgress.Downloading -> {
+                                CircularProgressIndicator(
+                                    progress = { reDownloadProgress.progress },
+                                    modifier = Modifier.size(20.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    strokeCap = StrokeCap.Round
+                                )
+                            }
+                            is ReDownloadProgress.Complete -> {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Download Complete",
+                                    tint = Color(0xFF4CAF50), // Green
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            is ReDownloadProgress.Failed -> {
+                                Icon(
+                                    imageVector = Icons.Default.Error,
+                                    contentDescription = "Download Failed: ${reDownloadProgress.error}",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
                 }
 
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "View details",
-                    modifier = Modifier.padding(start = 4.dp)
-                )
+                if (reDownloadProgress == null && onRequestDeleteAsset != null && !asset.isSoftDeleted) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = "View details",
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
             }
         }
 
@@ -420,7 +521,7 @@ private fun LocalModelConfigListView(
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    if (asset.visionCapable) {
+                    if (asset.isMultimodal) {
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = Icons.Default.Visibility,
@@ -568,8 +669,9 @@ private fun Double.format(digits: Int) = "%.${digits}f".format(this)
 @Composable
 fun PreviewLocalModelsBottomSheetAssets() {
     PocketCrewTheme {
-        LocalModelsBottomSheet(
+        LocalModelsBottomSheetContent(
             uiState = MockSettingsData.baseUiState,
+            reDownloadStates = emptyMap(),
             onDismiss = {},
             onNavigateToLocalModelConfigure = {},
             onSelectLocalModelAsset = {},
@@ -577,7 +679,8 @@ fun PreviewLocalModelsBottomSheetAssets() {
             onDeleteLocalModelAsset = {},
             onDeleteLocalModelConfig = {},
             onConfirmDeletionWithReassignment = { _, _ -> },
-            onDismissDeletionSafety = {}
+            onDismissDeletionSafety = {},
+            onReDownloadModel = {}
         )
     }
 }
@@ -586,12 +689,13 @@ fun PreviewLocalModelsBottomSheetAssets() {
 @Composable
 fun PreviewLocalModelsBottomSheetContext() {
     PocketCrewTheme {
-        LocalModelsBottomSheet(
+        LocalModelsBottomSheetContent(
             uiState = MockSettingsData.baseUiState.copy(
                 localModelsSheet = MockSettingsData.baseUiState.localModelsSheet.copy(
                     selectedAsset = MockSettingsData.localModels[0]
                 )
             ),
+            reDownloadStates = emptyMap(),
             onDismiss = {},
             onNavigateToLocalModelConfigure = {},
             onSelectLocalModelAsset = {},
@@ -599,7 +703,8 @@ fun PreviewLocalModelsBottomSheetContext() {
             onDeleteLocalModelAsset = {},
             onDeleteLocalModelConfig = {},
             onConfirmDeletionWithReassignment = { _, _ -> },
-            onDismissDeletionSafety = {}
+            onDismissDeletionSafety = {},
+            onReDownloadModel = {}
         )
     }
 }

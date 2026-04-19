@@ -1,10 +1,12 @@
 package com.browntowndev.pocketcrew.domain.usecase.download
 
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.RemoteModelAsset
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
@@ -38,58 +40,86 @@ class InitializeModelsUseCase @Inject constructor(
     }
 
     /**
+     * Resolves remote asset configurations into slot assignments.
+     * Each RemoteModelConfiguration may specify defaultAssignments indicating which
+     * ModelType slots it should be assigned to.
+     */
+    private fun resolveSlotAssignments(
+        remoteAssets: List<RemoteModelAsset>,
+        localAssets: List<LocalModelAsset>
+    ): Map<ModelType, Pair<LocalModelAsset, LocalModelConfigurationId>> {
+        val result = mutableMapOf<ModelType, Pair<LocalModelAsset, LocalModelConfigurationId>>()
+        for ((assetIndex, remoteAsset) in remoteAssets.withIndex()) {
+            val localAsset = localAssets[assetIndex]
+            for (config in remoteAsset.configurations) {
+                for (modelType in config.defaultAssignments) {
+                    result[modelType] = Pair(localAsset, config.configId)
+                }
+            }
+        }
+        return result
+    }
+
+    /**
      * Returns the full DownloadModelsResult including scan result and models to download.
      * This allows passing scan results downstream to avoid duplicate scanning.
      */
     private suspend fun checkModelsResult(): DownloadModelsResult {
         // Fetch remote config
         val remoteConfigResult = modelConfigFetcher.fetchRemoteConfig()
-        val remoteConfigs = remoteConfigResult.getOrElse {
+        val remoteAssets = remoteConfigResult.getOrElse {
             logPort.error(TAG, "Failed to fetch remote config: ${it.message}")
 
             // If config fetch error occurs, fallback to using current models
-            val currentModels = com.browntowndev.pocketcrew.domain.model.inference.ModelType.entries
-                .associateWith { modelType -> 
-                    val config = activeModelProvider.getActiveConfiguration(modelType)
-                    if (config != null && config.isLocal) {
-                        localModelRepository.getAssetByConfigId(config.id as LocalModelConfigurationId)
-                    } else null
-                }
-                .filterValues { it != null }
-                .mapValues { it.value!! }
+            val currentModels = ModelType.entries.associateWith { modelType ->
+                val config = activeModelProvider.getActiveConfiguration(modelType)
+                if (config != null && config.isLocal) {
+                    localModelRepository.getAssetByConfigId(config.id as LocalModelConfigurationId)
+                } else null
+            }.filterValues { it != null }.mapValues { it.value!! }
 
             // If there are no current models, throw the error
             if (currentModels.isEmpty()) throw it
-            
-            currentModels
+
+            // Return a minimal result with current models
+            return checkModelsUseCase(expectedModels = currentModels)
         }
 
-        logPort.debug(TAG, "Fetched ${remoteConfigs.size} remote configs")
+        logPort.debug(TAG, "Fetched ${remoteAssets.size} remote assets")
+
+        // Build slot-to-asset map from defaultAssignments
+        val slotAssignments = mutableMapOf<ModelType, LocalModelAsset>()
+        for (asset in remoteAssets) {
+            for (config in asset.configurations) {
+                for (modelType in config.defaultAssignments) {
+                    slotAssignments[modelType] = asset
+                }
+            }
+        }
 
         // Source of truth for soft-deleted models is getSoftDeletedModels()
         val softDeletedAssets = localModelRepository.getSoftDeletedModels()
-        
+
         if (softDeletedAssets.isNotEmpty()) {
             logPort.debug(TAG, "Found ${softDeletedAssets.size} soft-deleted models available for re-download: ${
                 softDeletedAssets.map { it.metadata.huggingFaceModelName }
             }")
         }
 
-        // Exclude soft-deleted model types from remote configs so CheckModelsUseCase
-        // doesn't queue them for download. We identify soft-deleted model types
-        // by looking for remote configs that match a soft-deleted asset SHA.
+        // Exclude soft-deleted model types from slot assignments so CheckModelsUseCase
+        // doesn't queue them for download.
         val softDeletedShaSet = softDeletedAssets.mapTo(mutableSetOf()) { it.metadata.sha256 }
-        val filteredRemoteConfigs = remoteConfigs.filter { (_, remoteAsset) ->
-            remoteAsset.metadata.sha256 !in softDeletedShaSet
+        val filteredSlotAssignments = slotAssignments.filter { (_, asset) ->
+            asset.metadata.sha256 !in softDeletedShaSet
         }
 
         // Check if models are ready using CheckModelsUseCase
         val modelsResult = checkModelsUseCase(
-            expectedModels = filteredRemoteConfigs
+            expectedModels = filteredSlotAssignments
         )
 
         // Include soft-deleted models in availableToRedownload ONLY if they are still on remote.
-        val remoteShaMap = remoteConfigs.values.associateBy { it.metadata.sha256 }
+        val remoteShaMap = remoteAssets.associateBy { it.metadata.sha256 }
         val availableSoftDeleted = softDeletedAssets
             .filter { it.metadata.sha256 in remoteShaMap.keys }
             .map { asset ->
@@ -104,12 +134,12 @@ class InitializeModelsUseCase @Inject constructor(
             .distinctBy { it.metadata.sha256 }
 
         // Deferred Activation Strategy:
-        // 1. If physical file is already valid (not in modelsToDownload): Update registry immediately (tuning-only change).
+        // 1. If physical file is already valid (not in modelsToDownload): Update registry immediately.
         // 2. If physical file is missing/invalid: DO NOT update registry yet. Activation happens after download success.
-        
+
         val modelsToDownloadShaSet = modelsResult.modelsToDownload.mapTo(mutableSetOf()) { it.metadata.sha256 }
-        
-        remoteConfigs.forEach { (modelType, remoteAsset) ->
+
+        slotAssignments.forEach { (modelType, remoteAsset) ->
             if (remoteAsset.metadata.sha256 !in modelsToDownloadShaSet) {
                 // The physical asset is already present locally and valid.
                 // Apply the slot config immediately instead of waiting for a download that will never be scheduled.

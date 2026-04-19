@@ -303,6 +303,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 content = capture(contentSlot),
                 messageState = any(),
                 pipelineStep = any(),
+                tavilySources = any(),
             )
         } returns Unit
 
@@ -421,6 +422,11 @@ class GenerateChatResponseUseCaseImageToolTest {
             activeModelProvider = activeModelProvider,
             settingsRepository = settingsRepository,
             searchToolPromptComposer = SearchToolPromptComposer(),
+            extractedUrlTracker = object : com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort {
+                override val urls: Set<String> get() = emptySet()
+                override fun add(url: String) {}
+                override fun clear() {}
+            },
         )
     }
 
@@ -446,13 +452,13 @@ class GenerateChatResponseUseCaseImageToolTest {
         repetitionPenalty = 1.1,
         contextWindow = 4096,
         thinkingEnabled = false,
-        visionCapable = false,
+        isMultimodal = false,
     )
 
     private fun fastVisionConfig(): ActiveModelConfiguration = fastTextConfig().copy(
         id = LocalModelConfigurationId("fast-vision"),
         name = "Fast Vision",
-        visionCapable = true,
+        isMultimodal = true,
     )
 
     private fun apiVisionConfig(): ActiveModelConfiguration = ActiveModelConfiguration(
@@ -469,7 +475,7 @@ class GenerateChatResponseUseCaseImageToolTest {
         repetitionPenalty = 1.0,
         contextWindow = 8192,
         thinkingEnabled = false,
-        visionCapable = true,
+        isMultimodal = true,
     )
 
     private fun mockMessageRepository(
@@ -486,6 +492,7 @@ class GenerateChatResponseUseCaseImageToolTest {
         }
         coEvery { resolveLatestImageBearingUserMessage(any(), any()) } returns resolvedImageTarget
         coEvery { saveVisionAnalysis(any(), any(), any(), any(), any()) } returns Unit
+        coEvery { getChatSummary(any()) } returns null
     }
 
     private fun mockSettingsRepository(settings: SettingsData = SettingsData()): SettingsRepository = mockk {

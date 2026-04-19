@@ -24,6 +24,7 @@ interface GoogleGenAiSdkClient {
         modelId: String,
         contents: List<Content>,
         config: GenerateContentConfig,
+        allowToolCall: Boolean = false,
         emitEvent: suspend (InferenceEvent) -> Unit
     ): GoogleSdkResult
 }
@@ -44,6 +45,7 @@ internal class GoogleGenAiSdkClientImpl(
         modelId: String,
         contents: List<Content>,
         config: GenerateContentConfig,
+        allowToolCall: Boolean,
         emitEvent: suspend (InferenceEvent) -> Unit
     ): GoogleSdkResult {
         logRequestDetails(modelId, contents)
@@ -91,11 +93,10 @@ internal class GoogleGenAiSdkClientImpl(
             throw e
         }
 
-        emitEvent(InferenceEvent.Finished(modelType))
         return GoogleSdkResult(
             emittedAny = emittedAny,
             functionCall = lastFunctionCall,
-            assistantContent = assistantContent
+            assistantContent = assistantContent,
         )
     }
 

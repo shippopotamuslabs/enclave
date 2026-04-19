@@ -25,6 +25,9 @@ internal class ChatGenerationAccumulatorManager(
 
     suspend fun reduce(state: MessageGenerationState): AccumulatedMessages {
         when (state) {
+            is MessageGenerationState.EngineLoading -> {
+                getOrCreateAccumulator(state.modelType).currentState = MessageState.ENGINE_LOADING
+            }
             is MessageGenerationState.Processing -> {
                 getOrCreateAccumulator(state.modelType).currentState = MessageState.PROCESSING
             }
@@ -40,6 +43,12 @@ internal class ChatGenerationAccumulatorManager(
                 getOrCreateAccumulator(state.modelType).apply {
                     appendContent(state.textDelta)
                     currentState = MessageState.GENERATING
+                }
+            }
+
+            is MessageGenerationState.TavilySourcesAttached -> {
+                getOrCreateAccumulator(state.modelType).apply {
+                    tavilySources.addAll(state.sources)
                 }
             }
 
@@ -89,6 +98,27 @@ internal class ChatGenerationAccumulatorManager(
             messages = _messages.mapValues { (_, accumulator) -> accumulator.toSnapshot() }
         )
 
+    fun markIncompleteAsCancelled() {
+        _messages.values.filter { !it.isComplete }.forEach { accumulator ->
+            accumulator.isComplete = true
+            accumulator.currentState = MessageState.COMPLETE
+        }
+    }
+
+    /**
+     * Marks tavily sources as extracted for the given URLs across all accumulators.
+     * Called when the extract tool completes so the UI reflects the read status immediately.
+     */
+    fun markSourcesExtracted(urls: List<String>) {
+        _messages.values.forEach { accumulator ->
+            val updatedSources = accumulator.tavilySources.map { source ->
+                if (source.url in urls) source.copy(extracted = true) else source
+            }
+            accumulator.tavilySources.clear()
+            accumulator.tavilySources.addAll(updatedSources)
+        }
+    }
+
     private suspend fun getOrCreateAccumulator(modelType: ModelType): MessageAccumulator {
         val messageId = if (mode != Mode.CREW) {
             defaultAssistantMessageId
@@ -129,6 +159,7 @@ data class MessageSnapshot(
     val isComplete: Boolean = false,
     val messageState: MessageState = if (isComplete) MessageState.COMPLETE else MessageState.GENERATING,
     val pipelineStep: PipelineStep? = null,
+    val tavilySources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = emptyList(),
 )
 
 internal class MessageAccumulator(
@@ -141,6 +172,7 @@ internal class MessageAccumulator(
     var isComplete: Boolean = false,
     var currentState: MessageState = MessageState.GENERATING,
     var pipelineStep: PipelineStep? = null,
+    val tavilySources: MutableList<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = mutableListOf(),
 ) {
     val thinkingDurationSeconds: Long
         get() = if (thinkingStartTime != null && thinkingEndTime != null) {
@@ -174,6 +206,7 @@ internal class MessageAccumulator(
         isComplete = isComplete,
         messageState = currentState,
         pipelineStep = pipelineStep,
+        tavilySources = tavilySources.toList(),
     )
 }
 

@@ -34,7 +34,7 @@ class ActiveModelProviderImpl @Inject constructor(
                 isLocal = true,
                 name = config.displayName,
                 systemPrompt = config.systemPrompt,
-                visionCapable = model.visionCapable,
+                isMultimodal = model.isMultimodal,
                 reasoningEffort = null,
                 temperature = config.temperature,
                 topK = config.topK,
@@ -43,7 +43,9 @@ class ActiveModelProviderImpl @Inject constructor(
                 minP = config.minP,
                 repetitionPenalty = config.repetitionPenalty,
                 contextWindow = config.contextWindow,
-                thinkingEnabled = config.thinkingEnabled
+                thinkingEnabled = config.thinkingEnabled,
+                localModelFormat = model.modelFileFormat,
+                apiProvider = null
             )
         }
         
@@ -56,7 +58,7 @@ class ActiveModelProviderImpl @Inject constructor(
                 isLocal = false,
                 name = config.displayName,
                 systemPrompt = config.systemPrompt,
-                visionCapable = credentials.isVision,
+                isMultimodal = credentials.isMultimodal,
                 reasoningEffort = config.reasoningEffort?.let {
                     com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort.fromWireValue(it)
                 },
@@ -67,7 +69,9 @@ class ActiveModelProviderImpl @Inject constructor(
                 minP = null, // API models might not have minP
                 repetitionPenalty = null, // API models might not have repetitionPenalty
                 contextWindow = config.contextWindow,
-                thinkingEnabled = config.reasoningEffort != null
+                thinkingEnabled = config.reasoningEffort != null,
+                localModelFormat = null,
+                apiProvider = credentials.provider
             )
         }
 

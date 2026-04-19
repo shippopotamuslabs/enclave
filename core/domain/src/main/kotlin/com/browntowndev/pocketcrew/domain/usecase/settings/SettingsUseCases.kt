@@ -4,6 +4,7 @@ import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCase
 
 interface SettingsPreferencesUseCases {
     val getSettings: GetSettingsUseCase
@@ -24,6 +25,7 @@ interface SettingsLocalModelUseCases {
     val getLocalModelAssets: GetLocalModelAssetsUseCase
     val getRestorableLocalModels: GetRestorableLocalModelsUseCase
     val saveLocalModelPreset: SaveLocalModelPresetUseCase
+    val reDownloadModel: ReDownloadModelUseCase
 }
 
 interface SettingsApiProviderUseCases {

@@ -8,6 +8,6 @@ data class ApiCredentials(
     val provider: ApiProvider,
     val modelId: String,
     val baseUrl: String? = null,
-    val isVision: Boolean = false,
+    val isMultimodal: Boolean = false,
     val credentialAlias: String,
 )

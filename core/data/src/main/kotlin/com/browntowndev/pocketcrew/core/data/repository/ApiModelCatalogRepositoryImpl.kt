@@ -8,14 +8,69 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
 import com.google.genai.types.Model
-import javax.inject.Inject
-import javax.inject.Singleton
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.Call
 import okhttp3.Request
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import org.json.JSONObject
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Serializable
+private data class OpenRouterModelsResponse(
+    val data: List<OpenRouterModel> = emptyList()
+)
+
+@Serializable
+private data class OpenRouterModel(
+    val id: String,
+    val name: String? = null,
+    val created: Long? = null,
+    val pricing: OpenRouterPricing? = null,
+    val context_length: Int? = null,
+    val top_provider: OpenRouterTopProvider? = null,
+    val architecture: OpenRouterArchitecture? = null
+)
+
+@Serializable
+private data class OpenRouterPricing(
+    val prompt: String? = null,
+    val completion: String? = null
+)
+
+@Serializable
+private data class OpenRouterTopProvider(
+    val max_completion_tokens: Int? = null
+)
+
+@Serializable
+private data class OpenRouterArchitecture(
+    val input_modalities: List<String> = emptyList()
+)
+
+@Serializable
+private data class XaiModelsResponse(
+    val models: List<XaiModel>? = null,
+    val data: List<XaiModel>? = null
+)
+
+@Serializable
+private data class XaiModel(
+    val id: String,
+    val name: String? = null,
+    val created: Long? = null,
+    val prompt_text_token_price: Double? = null,
+    val prompt_token_price: Double? = null,
+    val completion_text_token_price: Double? = null,
+    val completion_token_price: Double? = null,
+    val max_prompt_length: Int? = null,
+    val context_length: Int? = null,
+    val input_modalities: List<String> = emptyList(),
+    val aliases: List<String> = emptyList()
+)
 
 @Singleton
 class ApiModelCatalogRepositoryImpl @Inject constructor(
@@ -26,6 +81,7 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
 ) : ApiModelCatalogPort {
     private companion object {
         private const val TAG = "ApiModelCatalog"
+        private val json = Json { ignoreUnknownKeys = true }
     }
 
     override suspend fun fetchModels(
@@ -56,7 +112,7 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
                         id = it.id(),
                         name = it.displayName(),
                         created = it.createdAt().toEpochSecond(),
-                        visionCapable = it.capabilities()
+                        isMultimodal = it.capabilities()
                             .map { capabilities -> capabilities.imageInput().supported() }
                             .orElse(null),
                     )
@@ -168,33 +224,18 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
     }
 
     internal fun parseOpenRouterModels(responseBody: String): List<DiscoveredApiModel> {
-        val data = JSONObject(responseBody).optJSONArray("data") ?: return emptyList()
-        return buildList {
-            for (index in 0 until data.length()) {
-                val model = data.optJSONObject(index) ?: continue
-                val id = model.optString("id")
-                if (id.isBlank()) continue
-                
-                val pricing = model.optJSONObject("pricing")
-                
-                add(
-                    DiscoveredApiModel(
-                        id = id,
-                        name = model.optString("name").takeIf { it.isNotBlank() },
-                        created = model.optLongOrNull("created"),
-                        promptPrice = pricing?.optString("prompt")?.toDoubleOrNull()?.asUsdPerMillionFromPerToken(),
-                        completionPrice = pricing?.optString("completion")?.toDoubleOrNull()?.asUsdPerMillionFromPerToken(),
-                        contextWindowTokens = model.optIntOrNull("context_length"),
-                        maxOutputTokens = model
-                            .optJSONObject("top_provider")
-                            ?.optIntOrNull("max_completion_tokens"),
-                        visionCapable = model
-                            .optJSONObject("architecture")
-                            ?.optJSONArray("input_modalities")
-                            ?.supportsImageInput(),
-                    )
-                )
-            }
+        val response = json.decodeFromString<OpenRouterModelsResponse>(responseBody)
+        return response.data.map { model ->
+            DiscoveredApiModel(
+                id = model.id,
+                name = model.name?.takeIf { it.isNotBlank() },
+                created = model.created,
+                promptPrice = model.pricing?.prompt?.toDoubleOrNull()?.asUsdPerMillionFromPerToken(),
+                completionPrice = model.pricing?.completion?.toDoubleOrNull()?.asUsdPerMillionFromPerToken(),
+                contextWindowTokens = model.context_length,
+                maxOutputTokens = model.top_provider?.max_completion_tokens,
+                isMultimodal = model.architecture?.input_modalities?.any { it.equals("image", ignoreCase = true) } ?: false,
+            )
         }
             .distinctBy(DiscoveredApiModel::id)
             .sortedBy(DiscoveredApiModel::id)
@@ -304,32 +345,22 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
     }
 
     internal fun parseXaiModels(responseBody: String): List<DiscoveredApiModel> {
-        val payload = JSONObject(responseBody)
-        val data = payload.optJSONArray("models") ?: payload.optJSONArray("data") ?: return emptyList()
+        val response = json.decodeFromString<XaiModelsResponse>(responseBody)
+        val data = response.models ?: response.data ?: return emptyList()
 
-        return buildList {
-            for (index in 0 until data.length()) {
-                val model = data.optJSONObject(index) ?: continue
-                val id = model.optString("id")
-                if (id.isBlank()) continue
+        return data.map { model ->
+            val promptPrice = model.prompt_text_token_price ?: model.prompt_token_price
+            val completionPrice = model.completion_text_token_price ?: model.completion_token_price
 
-                val promptPrice = model.optDoubleOrNull("prompt_text_token_price")
-                    ?: model.optDoubleOrNull("prompt_token_price")
-                val completionPrice = model.optDoubleOrNull("completion_text_token_price")
-                    ?: model.optDoubleOrNull("completion_token_price")
-
-                add(
-                    DiscoveredApiModel(
-                        id = id,
-                        name = model.optString("name").takeIf { it.isNotBlank() } ?: id,
-                        created = model.optLongOrNull("created"),
-                        promptPrice = promptPrice?.asUsdPerMillionFromXai(),
-                        completionPrice = completionPrice?.asUsdPerMillionFromXai(),
-                        contextWindowTokens = model.optIntOrNull("max_prompt_length"),
-                        visionCapable = model.optJSONArray("input_modalities")?.supportsImageInput(),
-                    )
-                )
-            }
+            DiscoveredApiModel(
+                id = model.id,
+                name = model.name?.takeIf { it.isNotBlank() } ?: model.id,
+                created = model.created,
+                promptPrice = promptPrice?.asUsdPerMillionFromXai(),
+                completionPrice = completionPrice?.asUsdPerMillionFromXai(),
+                contextWindowTokens = model.max_prompt_length,
+                isMultimodal = model.input_modalities.any { it.equals("image", ignoreCase = true) },
+            )
         }
             .distinctBy(DiscoveredApiModel::id)
             .sortedBy(DiscoveredApiModel::id)
@@ -339,36 +370,21 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
         responseBody: String,
         requestedModelId: String,
     ): DiscoveredApiModel? {
-        val model = JSONObject(responseBody)
-        val canonicalId = model.optString("id").takeIf { it.isNotBlank() } ?: return null
-        val aliases = model.optJSONArray("aliases")
-        val matchedAlias = aliases
-            ?.let { array ->
-                buildList {
-                    for (index in 0 until array.length()) {
-                        val alias = array.optString(index)
-                        if (alias.isNotBlank()) {
-                            add(alias)
-                        }
-                    }
-                }
-            }
-            ?.firstOrNull { it == requestedModelId }
+        val model = json.decodeFromString<XaiModel>(responseBody)
+        val canonicalId = model.id.takeIf { it.isNotBlank() } ?: return null
+        val matchedAlias = model.aliases.firstOrNull { it == requestedModelId }
 
-        val promptPrice = model.optDoubleOrNull("prompt_text_token_price")
-            ?: model.optDoubleOrNull("prompt_token_price")
-        val completionPrice = model.optDoubleOrNull("completion_text_token_price")
-            ?: model.optDoubleOrNull("completion_token_price")
+        val promptPrice = model.prompt_text_token_price ?: model.prompt_token_price
+        val completionPrice = model.completion_text_token_price ?: model.completion_token_price
 
         return DiscoveredApiModel(
             id = matchedAlias ?: requestedModelId.takeIf { it.isNotBlank() } ?: canonicalId,
-            name = model.optString("name").takeIf { it.isNotBlank() } ?: matchedAlias ?: canonicalId,
-            created = model.optLongOrNull("created"),
+            name = model.name?.takeIf { it.isNotBlank() } ?: matchedAlias ?: canonicalId,
+            created = model.created,
             promptPrice = promptPrice?.asUsdPerMillionFromXai(),
             completionPrice = completionPrice?.asUsdPerMillionFromXai(),
-            contextWindowTokens = model.optIntOrNull("max_prompt_length")
-                ?: model.optIntOrNull("context_length"),
-            visionCapable = model.optJSONArray("input_modalities")?.supportsImageInput(),
+            contextWindowTokens = model.max_prompt_length ?: model.context_length,
+            isMultimodal = model.input_modalities.any { it.equals("image", ignoreCase = true) },
         )
     }
 
@@ -379,34 +395,4 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
     private fun Double.asUsdPerMillionFromXai(): Double? =
         takeIf { isFinite() && this >= 0.0 }
             ?.div(10_000.0)
-
-    private fun JSONObject.optIntOrNull(name: String): Int? =
-        if (has(name) && !isNull(name)) {
-            optInt(name)
-        } else {
-            null
-        }
-
-    private fun JSONObject.optLongOrNull(name: String): Long? =
-        if (has(name) && !isNull(name)) {
-            optLong(name)
-        } else {
-            null
-        }
-
-    private fun JSONObject.optDoubleOrNull(name: String): Double? =
-        if (has(name) && !isNull(name)) {
-            optDouble(name)
-        } else {
-            null
-        }
-
-    private fun org.json.JSONArray.supportsImageInput(): Boolean {
-        for (index in 0 until length()) {
-            if (optString(index).equals("image", ignoreCase = true)) {
-                return true
-            }
-        }
-        return false
-    }
 }

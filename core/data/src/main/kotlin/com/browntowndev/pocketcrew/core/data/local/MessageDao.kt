@@ -30,7 +30,16 @@ abstract class MessageDao {
     """)
     abstract fun searchMessages(query: String): Flow<List<MessageEntity>>
 
-    @Query("SELECT * FROM message ORDER BY created_at ASC")
+    @Query("""
+        SELECT message.* FROM message
+        JOIN message_search ON message.rowid = message_search.rowid
+        WHERE message_search MATCH :query
+        AND message.chat_id = :chatId
+        ORDER BY message.created_at IS NULL, message.created_at ASC
+    """)
+    abstract suspend fun searchMessagesByChatId(chatId: ChatId, query: String): List<MessageEntity>
+
+    @Query("SELECT * FROM message ORDER BY created_at IS NULL, created_at ASC")
     abstract fun getAllMessages(): Flow<List<MessageEntity>>
 
     @Query("UPDATE message SET content = :content, thinking_duration_seconds = :thinkingDuration, thinking_raw = :thinkingRaw WHERE id = :id")
@@ -41,10 +50,16 @@ abstract class MessageDao {
         thinkingRaw: String?
     )
 
-    @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY created_at ASC")
+    @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY created_at IS NULL, created_at ASC")
     abstract suspend fun getMessagesByChatId(chatId: ChatId): List<MessageEntity>
 
-    @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY created_at ASC")
+    @Query("SELECT * FROM message WHERE chat_id = :chatId AND created_at IS NOT NULL AND created_at < :timestamp ORDER BY created_at DESC LIMIT :limit")
+    abstract suspend fun getMessagesBefore(chatId: ChatId, timestamp: Long, limit: Int): List<MessageEntity>
+
+    @Query("SELECT * FROM message WHERE chat_id = :chatId AND created_at IS NOT NULL AND created_at > :timestamp ORDER BY created_at ASC LIMIT :limit")
+    abstract suspend fun getMessagesAfter(chatId: ChatId, timestamp: Long, limit: Int): List<MessageEntity>
+
+    @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY created_at IS NULL, created_at ASC")
     abstract fun getMessagesByChatIdFlow(chatId: ChatId): Flow<List<MessageEntity>>
 
     /**
@@ -55,7 +70,7 @@ abstract class MessageDao {
      * @param states The list of message states to filter by (PROCESSING, THINKING, GENERATING)
      * @return List of messages matching the given states
      */
-    @Query("SELECT * FROM message WHERE chat_id = :chatId AND message_state IN (:states) ORDER BY created_at ASC")
+    @Query("SELECT * FROM message WHERE chat_id = :chatId AND message_state IN (:states) ORDER BY created_at IS NULL, created_at ASC")
     abstract suspend fun getMessagesByStates(
         chatId: ChatId,
         states: List<MessageState>
@@ -119,7 +134,8 @@ abstract class MessageDao {
         thinkingRaw: String?,
         content: String,
         messageState: MessageState,
-        pipelineStep: PipelineStep?
+        pipelineStep: PipelineStep?,
+        tavilySources: List<TavilySourceEntity> = emptyList()
     ) {
         // Update model type
         updateMessageModelType(messageId, modelType)
@@ -144,8 +160,16 @@ abstract class MessageDao {
         // Update state
         updateMessageState(messageId, messageState)
 
+        // Persist search sources
+        if (tavilySources.isNotEmpty()) {
+            insertTavilySources(tavilySources)
+        }
+
         if (messageState == MessageState.COMPLETE) {
             updateMessageCreatedAt(messageId, System.currentTimeMillis())
         }
     }
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun insertTavilySources(sources: List<TavilySourceEntity>)
 }

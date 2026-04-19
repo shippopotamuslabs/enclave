@@ -33,8 +33,8 @@ class MessageStateTest {
     }
 
     @Test
-    fun messageState_hasExactlyFourValues() {
+    fun messageState_hasExactlyFiveValues() {
         val values = MessageState.entries
-        assertEquals(4, values.size)
+        assertEquals(5, values.size)
     }
 }

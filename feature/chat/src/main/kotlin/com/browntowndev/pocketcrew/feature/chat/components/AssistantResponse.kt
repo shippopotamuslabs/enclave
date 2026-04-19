@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalUriHandler
 import android.content.ClipData
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
@@ -40,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
 import com.browntowndev.pocketcrew.feature.chat.IndicatorState
@@ -59,10 +62,14 @@ fun AssistantResponse(
     // Get content and pipeline step from ContentUi
     val contentText = message.content.text
     val pipelineStep = message.content.pipelineStep
+    val isStreaming = message.indicatorState !is IndicatorState.Complete &&
+                     message.indicatorState !is IndicatorState.None &&
+                     !isPreview
 
     // State for step completion bottom sheet
     var showStepDetails by remember { mutableStateOf(false) }
     var selectedStepName by remember { mutableStateOf("") }
+    var showSources by remember { mutableStateOf(false) }
 
     // Show bottom sheet if triggered
     if (showStepDetails) {
@@ -71,7 +78,18 @@ fun AssistantResponse(
                 isVisible = showStepDetails,
                 content = contentText, // Always use live content from message
                 stepName = selectedStepName,
+                isStreaming = isStreaming,
                 onDismiss = { showStepDetails = false }
+            )
+        )
+    }
+
+    if (showSources) {
+        DetailBottomSheet(
+            config = DetailBottomSheetConfig.Sources(
+                isVisible = showSources,
+                sources = message.tavilySources,
+                onDismiss = { showSources = false }
             )
         )
     }
@@ -100,7 +118,7 @@ fun AssistantResponse(
                 markdown = contentText,
                 modifier = Modifier.fillMaxWidth(),
                 enableScroll = false,
-                isStreaming = true,
+                isStreaming = isStreaming,
                 isPreview = isPreview, // So preview text is rendered
             )
 
@@ -111,41 +129,81 @@ fun AssistantResponse(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                // Copy Button - only visible if response is complete
-                val isComplete = message.indicatorState is IndicatorState.Complete || 
-                                message.indicatorState is IndicatorState.None || 
-                                isPreview
-                if (isComplete) {
-                    IconButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                clipboardManager.setClipEntry(
-                                    ClipEntry(ClipData.newPlainText("Pocket Crew Response", contentText)),
-                                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    // Action Buttons - Copy and Sources
+                    val isComplete = message.indicatorState is IndicatorState.Complete || 
+                                    message.indicatorState is IndicatorState.None || 
+                                    isPreview
+                    
+                    if (isComplete) {
+                        // Copy Button
+                        IconButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    clipboardManager.setClipEntry(
+                                        ClipEntry(ClipData.newPlainText("Pocket Crew Response", contentText)),
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .offset(x = (-8).dp)
+                                .size(32.dp),
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.content_copy),
+                                contentDescription = "Copy response",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+
+                        // Sources Pill Button
+                        if (message.tavilySources.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .padding(start = 4.dp)
+                                    .clickable { showSources = true }
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.link),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Sources",
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        )
+                                    )
+                                }
                             }
-                        },
-                        modifier = Modifier
-                            .offset(x = (-8).dp)
-                            .size(32.dp),
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.content_copy),
-                            contentDescription = "Copy response",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp),
-                        )
+                        }
+                    } else {
+                        // Spacer to maintain layout if button is hidden
+                        Spacer(modifier = Modifier.size(32.dp).offset(x = (-8).dp))
                     }
-                } else {
-                    // Spacer to maintain layout if button is hidden
-                    Spacer(modifier = Modifier.size(32.dp).offset(x = (-8).dp))
                 }
 
                 // Timestamp
-                Text(
-                    text = message.formattedTimestamp,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (message.formattedTimestamp.isNotBlank()) {
+                    Text(
+                        text = message.formattedTimestamp,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }
@@ -164,6 +222,7 @@ private fun CompletedStepRow(
 ) {
     // Only hide if we have no output AND we aren't actively working on it
     val isStepActive = indicatorState is IndicatorState.Processing ||
+            indicatorState is IndicatorState.EngineLoading ||
             indicatorState is IndicatorState.Thinking ||
             indicatorState is IndicatorState.Generating
     if (stepOutput.isEmpty() && !isStepActive) return
@@ -172,6 +231,7 @@ private fun CompletedStepRow(
     val previewText = "Tap to View"
 
     val statusText = when (indicatorState) {
+        is IndicatorState.EngineLoading -> "I'm loading the engine from disk..."
         is IndicatorState.Processing -> "I'm processing your request now..."
         is IndicatorState.Thinking -> "I'm thinking about the next step..."
         is IndicatorState.Generating -> "I understand the request and I'm generating my response now."

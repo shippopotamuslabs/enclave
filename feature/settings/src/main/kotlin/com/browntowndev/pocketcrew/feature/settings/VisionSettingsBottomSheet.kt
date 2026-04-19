@@ -67,7 +67,7 @@ fun VisionSettingsBottomSheet(
                     modifier = Modifier.padding(bottom = 24.dp),
                     slotLabel = "Vision",
                     localAssets = emptyList(), // Vision is API only usually
-                    apiAssets = uiState.apiProvidersSheet.assets.filter { it.isVision },
+                    apiAssets = uiState.apiProvidersSheet.assets.filter { it.isMultimodal },
                     onDismiss = onDismiss,
                     onBack = { isDrilledDown = false },
                     onSelect = { localId, apiId ->

@@ -1,11 +1,15 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
+import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
+import com.browntowndev.pocketcrew.core.data.local.ChatSummaryEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisEntity
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
+import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
@@ -13,6 +17,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
+import kotlinx.coroutines.flow.first
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -31,6 +36,7 @@ import javax.inject.Singleton
 class MessageRepositoryImpl @Inject constructor(
     private val messageDao: MessageDao,
     private val messageVisionAnalysisDao: MessageVisionAnalysisDao,
+    private val chatSummaryDao: ChatSummaryDao,
 ) : MessageRepository {
 
     /**
@@ -116,12 +122,54 @@ class MessageRepositoryImpl @Inject constructor(
         val messages = messageDao.getMessagesByChatId(chatId).map { it.toDomain() }
         val latestImageMessage = messages
             .filter { it.role == Role.USER && it.content.imageUri != null && it.id != currentUserMessageId }
-            .maxByOrNull { it.createdAt }
+            .maxByOrNull { it.createdAt ?: 0L }
         return latestImageMessage?.let {
             ResolvedImageTarget(
                 userMessageId = it.id,
                 imageUri = it.content.imageUri!!,
             )
         }
+    }
+
+    override suspend fun searchMessagesInChat(chatId: ChatId, query: String): List<Message> {
+        val sanitized = FtsSanitizer.sanitize(query)
+        if (sanitized.isBlank()) return emptyList()
+        return messageDao.searchMessagesByChatId(chatId, sanitized).map { it.toDomain() }
+    }
+
+    override suspend fun searchMessagesAcrossChats(queries: List<String>): List<Message> {
+        val sanitized = FtsSanitizer.sanitizeOrQuery(queries)
+        if (sanitized.isBlank()) return emptyList()
+        return messageDao.searchMessages(sanitized).first().map { it.toDomain() }
+    }
+
+    override suspend fun getMessagesAround(chatId: ChatId, timestamp: Long, before: Int, after: Int): List<Message> {
+        val beforeMessages = messageDao.getMessagesBefore(chatId, timestamp, before).reversed().map { it.toDomain() }
+        val afterMessages = messageDao.getMessagesAfter(chatId, timestamp, after).map { it.toDomain() }
+        return beforeMessages + afterMessages
+    }
+
+    override suspend fun getChatSummary(chatId: ChatId): ChatSummary? {
+        return chatSummaryDao.getSummaryForChatSync(chatId)?.let { entity ->
+            ChatSummary(
+                chatId = entity.chatId,
+                content = entity.content,
+                lastSummarizedMessageId = entity.lastSummarizedMessageId
+            )
+        }
+    }
+
+    override suspend fun saveChatSummary(summary: ChatSummary) {
+        chatSummaryDao.insertOrUpdateSummary(
+            ChatSummaryEntity(
+                chatId = summary.chatId,
+                content = summary.content,
+                lastSummarizedMessageId = summary.lastSummarizedMessageId
+            )
+        )
+    }
+
+    override suspend fun deleteChatSummary(chatId: ChatId) {
+        chatSummaryDao.deleteSummaryForChat(chatId)
     }
 }

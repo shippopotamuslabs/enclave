@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.local
 
+import app.cash.turbine.test
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
@@ -11,6 +12,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -181,6 +183,44 @@ class LocalModelsDaoTest {
         val activeResults = activeModels.filter { it.id == activeId }
         assert(activeResults.size == 1) {
             "Active model (has configs) should appear in observeAllActive()"
+        }
+    }
+
+    @Test
+    fun `observeAllActive re-emits when configurations change`() = runTest {
+        val configDao = database.localModelConfigurationsDao()
+        val activeId = nextId()
+        val configId = LocalModelConfigurationId("test-config-flow")
+
+        dao.upsert(
+            LocalModelEntity(
+                id = activeId,
+                modelFileFormat = ModelFileFormat.GGUF,
+                huggingFaceModelName = "qwen",
+                remoteFilename = "qwen.gguf",
+                localFilename = "qwen.gguf",
+                sha256 = "flow123",
+                sizeInBytes = 1000L,
+            )
+        )
+
+        dao.observeAllActive().test {
+            assertTrue(awaitItem().isEmpty())
+
+            configDao.upsert(
+                LocalModelConfigurationEntity(
+                    id = configId,
+                    localModelId = activeId,
+                    displayName = "Creative",
+                )
+            )
+
+            assertEquals(listOf(activeId), awaitItem().map(LocalModelEntity::id))
+
+            configDao.deleteById(configId)
+
+            assertTrue(awaitItem().isEmpty())
+            cancelAndIgnoreRemainingEvents()
         }
     }
 

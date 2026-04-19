@@ -52,4 +52,54 @@ class FtsSanitizerTest {
         // single code point é
         assertEquals("é*", FtsSanitizer.sanitize("é"))
     }
+
+    // ==================== sanitizeOrQuery tests ====================
+
+    @Test
+    fun `sanitizeOrQuery with single query returns sanitized query`() {
+        assertEquals("hello* world*", FtsSanitizer.sanitizeOrQuery(listOf("hello world")))
+    }
+
+    @Test
+    fun `sanitizeOrQuery with multiple queries joins with OR`() {
+        assertEquals("cow* OR cow* photo* OR moo*", FtsSanitizer.sanitizeOrQuery(listOf("cow", "cow photo", "moo")))
+    }
+
+    @Test
+    fun `sanitizeOrQuery with empty list returns empty`() {
+        assertEquals("", FtsSanitizer.sanitizeOrQuery(emptyList()))
+    }
+
+    @Test
+    fun `sanitizeOrQuery filters out blank queries`() {
+        assertEquals("hello*", FtsSanitizer.sanitizeOrQuery(listOf("hello", "   ", "")))
+    }
+
+    @Test
+    fun `sanitizeOrQuery with all blank queries returns empty`() {
+        assertEquals("", FtsSanitizer.sanitizeOrQuery(listOf("   ", "", "  ")))
+    }
+
+    @Test
+    fun `sanitizeOrQuery strips FTS keywords from individual queries before joining`() {
+        // "hello AND" should become "hello*" (AND stripped), "world OR NOT" becomes "world*" (OR, NOT stripped)
+        assertEquals("hello* OR world*", FtsSanitizer.sanitizeOrQuery(listOf("hello AND", "world OR NOT")))
+    }
+
+    @Test
+    fun `sanitizeOrQuery sanitizes special characters in each query`() {
+        assertEquals("hello* OR world*", FtsSanitizer.sanitizeOrQuery(listOf("\"hello\"", "world!")))
+    }
+
+    @Test
+    fun `sanitizeOrQuery supports Unicode in each query`() {
+        assertEquals("こんにちは* OR привет*", FtsSanitizer.sanitizeOrQuery(listOf("こんにちは", "привет")))
+    }
+
+    @Test
+    fun `sanitizeOrQuery with many queries produces correct OR chain`() {
+        val queries = listOf("cow", "cows", "cattle", "moo", "mooing", "bovine")
+        val expected = "cow* OR cows* OR cattle* OR moo* OR mooing* OR bovine*"
+        assertEquals(expected, FtsSanitizer.sanitizeOrQuery(queries))
+    }
 }

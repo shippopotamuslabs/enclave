@@ -1,12 +1,15 @@
 package com.browntowndev.pocketcrew.domain.model.inference
 
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 
 /**
  * Represents a single step in the Crew ChatModeUi pipeline.
  * Each step runs as an independent inference pass.
  */
+@Serializable
 enum class PipelineStep {
     /** Creative/divergent thinking - broad, novel angles */
     DRAFT_ONE,
@@ -55,6 +58,7 @@ enum class PipelineStep {
  * @property thinkingSteps List of thinking step descriptions for UI
  * @property startTimeMs Timestamp when the pipeline started (for duration calculation)
  */
+@Serializable
 data class PipelineState(
     val chatId: String,
     val currentStep: PipelineStep,
@@ -102,22 +106,7 @@ data class PipelineState(
      * Internal use only - for WorkManager serialization.
      */
     fun toJson(): String {
-        val stepOutputsJson = JSONObject().apply {
-            stepOutputs.forEach { (step, output) ->
-                put(step.name, output)
-            }
-        }
-        val thinkingStepsJson = JSONArray().apply {
-            thinkingSteps.forEach { put(it) }
-        }
-        return JSONObject().apply {
-            put("chatId", chatId)
-            put("currentStep", currentStep.name)
-            put("userMessage", userMessage)
-            put("stepOutputs", stepOutputsJson)
-            put("thinkingSteps", thinkingStepsJson)
-            put("startTimeMs", startTimeMs)
-        }.toString()
+        return Json.encodeToString(this)
     }
 
     companion object {
@@ -151,30 +140,7 @@ data class PipelineState(
          * Deserializes from JSON string.
          */
         fun fromJson(json: String): PipelineState {
-            val jsonObj = JSONObject(json)
-            val stepOutputsJson = jsonObj.optJSONObject("stepOutputs") ?: JSONObject()
-            val stepOutputs = mutableMapOf<PipelineStep, String>()
-            stepOutputsJson.keys().forEach { key ->
-                try {
-                    val step = PipelineStep.fromString(key)
-                    stepOutputs[step] = stepOutputsJson.getString(key)
-                } catch (e: Exception) {
-                    // Skip invalid entries
-                }
-            }
-            val thinkingStepsJson = jsonObj.optJSONArray("thinkingSteps") ?: JSONArray()
-            val thinkingSteps = mutableListOf<String>()
-            for (i in 0 until thinkingStepsJson.length()) {
-                thinkingSteps.add(thinkingStepsJson.getString(i))
-            }
-            return PipelineState(
-                chatId = jsonObj.getString("chatId"),
-                currentStep = PipelineStep.fromString(jsonObj.getString("currentStep")),
-                userMessage = jsonObj.getString("userMessage"),
-                stepOutputs = stepOutputs,
-                thinkingSteps = thinkingSteps,
-                startTimeMs = jsonObj.optLong("startTimeMs", System.currentTimeMillis())
-            )
+            return Json.decodeFromString(json)
         }
     }
 }

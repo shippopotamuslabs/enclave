@@ -22,7 +22,7 @@ class ApiModelAssetUiMapper @Inject constructor() {
         provider = asset.credentials.provider,
         modelId = asset.credentials.modelId,
         baseUrl = asset.credentials.baseUrl ?: asset.credentials.provider.defaultBaseUrl(),
-        isVision = asset.credentials.isVision,
+        isMultimodal = asset.credentials.isMultimodal,
         credentialAlias = asset.credentials.credentialAlias,
         configurations = asset.configurations.map(::mapConfig),
     )
@@ -64,7 +64,6 @@ class LocalModelAssetUiMapper @Inject constructor() {
         val format = when (asset.metadata.modelFileFormat) {
             ModelFileFormat.GGUF -> "GGUF"
             ModelFileFormat.LITERTLM -> "LiteRT"
-            ModelFileFormat.TASK -> "Task"
         }
 
         val cleanName = modelNamePart
@@ -82,7 +81,8 @@ class LocalModelAssetUiMapper @Inject constructor() {
             remoteFileName = asset.metadata.remoteFileName,
             sizeInBytes = asset.metadata.sizeInBytes,
             configurations = asset.configurations.map(::mapConfig),
-            visionCapable = asset.metadata.visionCapable,
+            isMultimodal = asset.metadata.isMultimodal,
+            isSoftDeleted = asset.configurations.isEmpty(),
         )
     }
 
@@ -183,14 +183,14 @@ class ReassignmentOptionUiMapper @Inject constructor() {
         }
 }
 
-internal fun DefaultModelAssignment.toUi(isVision: Boolean = false): DefaultModelAssignmentUi = DefaultModelAssignmentUi(
+internal fun DefaultModelAssignment.toUi(isMultimodal: Boolean = false): DefaultModelAssignmentUi = DefaultModelAssignmentUi(
     modelType = modelType,
     source = if (apiConfigId != null) ModelSource.API else ModelSource.ON_DEVICE,
     currentModelName = displayName ?: "Unknown",
     displayLabel = modelType.displayLabel,
     providerName = providerName,
     presetName = presetName,
-    isVision = isVision,
+    isMultimodal = isMultimodal,
 )
 
 internal fun blankApiModelAssetDraft(): ApiModelAssetUi = ApiModelAssetUi(
@@ -199,7 +199,7 @@ internal fun blankApiModelAssetDraft(): ApiModelAssetUi = ApiModelAssetUi(
     provider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.ANTHROPIC,
     modelId = "",
     baseUrl = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.ANTHROPIC.defaultBaseUrl(),
-    isVision = false,
+    isMultimodal = false,
     credentialAlias = "",
     configurations = emptyList(),
 )
@@ -219,6 +219,6 @@ internal fun DiscoveredApiModel.toUi(): DiscoveredApiModelUi {
         promptPrice = promptPrice,
         completionPrice = completionPrice,
         providerName = provider,
-        visionCapable = visionCapable,
+        isMultimodal = isMultimodal,
     )
 }

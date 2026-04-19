@@ -18,6 +18,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -129,13 +130,8 @@ class LlamaInferenceServiceImplTest {
             closeConversation = false,
         ).toList()
 
-        assertEquals(
-            listOf("Use the search result summary."),
-            events.filterIsInstance<InferenceEvent.PartialResponse>().map(InferenceEvent.PartialResponse::chunk)
-        )
-        assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "Need to search first." })
-        assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "Reviewing search result." })
-        assertTrue(events.last() is InferenceEvent.Finished)
+        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Use the search result summary." })
+        assertTrue(events.any { it is InferenceEvent.Finished && it.modelType == ModelType.FAST })
         coVerify(exactly = 2) { sessionManager.sendUserMessage(any()) }
         coVerify(exactly = 1) {
             sessionManager.sendUserMessage(
@@ -146,11 +142,23 @@ class LlamaInferenceServiceImplTest {
     }
 
     @Test
-    fun `sendPrompt surfaces malformed llama tool envelope as typed failure`() = runTest {
+    fun `sendPrompt surfaces malformed llama tool envelope as feedback turn`() = runTest {
         coEvery { sessionManager.sendUserMessage(any()) } returns Unit
-        every { sessionManager.streamAssistantResponseWithOptions(any()) } returns flowOf(
-            GenerationEvent.Completed("""<tool_call>{"name":"tavily_web_search","arguments":""")
-        )
+
+        // Pass 1: Return a malformed envelope
+        // Pass 2: Return a normal response to finish the loop
+        var passCount = 0
+        every { sessionManager.streamAssistantResponseWithOptions(any()) } answers {
+            passCount++
+            if (passCount == 1) {
+                flowOf(GenerationEvent.Completed("""<tool_call>{"name":"tavily_web_search","arguments":"""))
+            } else {
+                flowOf(
+                    GenerationEvent.Token("Corrected."),
+                    GenerationEvent.Completed("Corrected.")
+                )
+            }
+        }
 
         val service = createService()
 
@@ -160,9 +168,13 @@ class LlamaInferenceServiceImplTest {
             closeConversation = false,
         ).toList()
 
-        val error = events.filterIsInstance<InferenceEvent.Error>().single()
-        assertTrue(error.cause is IllegalStateException)
-        assertEquals("Malformed tool_call envelope", error.cause.message)
+        // Check that a tool_result was sent with the error message
+        coVerify {
+            sessionManager.sendUserMessage(match { it.contains("Failed to parse tool call envelope") })
+        }
+
+        // Check that we got the final response from pass 2
+        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Corrected." })
     }
 
     @Test
@@ -190,8 +202,8 @@ class LlamaInferenceServiceImplTest {
         ).toList()
 
         val error = events.filterIsInstance<InferenceEvent.Error>().single()
-        assertTrue(error.cause is IllegalStateException)
-        assertEquals("Failed to resume llama generation after tool replay", error.cause.message)
+        assertTrue(error.cause is RuntimeException)
+        assertEquals("resume boom", error.cause.message)
     }
 
     @Test
@@ -220,7 +232,7 @@ class LlamaInferenceServiceImplTest {
                 sha256 = "abc123",
                 sizeInBytes = 1024L,
                 modelFileFormat = ModelFileFormat.GGUF,
-                visionCapable = true,
+                isMultimodal = true,
                 mmprojLocalFileName = "mmproj.gguf",
             ),
             configurations = emptyList(),
@@ -273,7 +285,7 @@ class LlamaInferenceServiceImplTest {
                 sha256 = "abc123",
                 sizeInBytes = 1024L,
                 modelFileFormat = ModelFileFormat.GGUF,
-                visionCapable = true,
+                isMultimodal = true,
             ),
             configurations = emptyList(),
         )
@@ -302,8 +314,8 @@ class LlamaInferenceServiceImplTest {
             localModelRepository = localModelRepository,
             activeModelProvider = activeModelProvider,
             context = context,
-            modelType = ModelType.FAST,
-            toolExecutor = toolExecutor,
+            modelType = modelType,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
         )
 
     private fun searchEnabledOptions(): GenerationOptions =

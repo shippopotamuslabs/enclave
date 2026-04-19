@@ -18,6 +18,7 @@ enum class FileStatus {
  */
 data class FileProgress(
     val filename: String,
+    val sha256: String,
     val modelTypes: List<ModelType> = emptyList(),
     val bytesDownloaded: Long,
     val totalBytes: Long,

@@ -10,4 +10,10 @@ data class ToolCallRequest(
     val modelType: ModelType,
     val chatId: ChatId? = null,
     val userMessageId: MessageId? = null,
-)
+) {
+    val parameters: ToolParameters by lazy {
+        val definition = ToolDefinition.fromName(toolName)
+            ?: throw IllegalArgumentException("Unknown tool: $toolName")
+        definition.decodeArguments(argumentsJson)
+    }
+}

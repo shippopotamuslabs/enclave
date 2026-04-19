@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.usecase.chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -22,6 +23,7 @@ internal class ChatInferenceRequestPreparer(
         prompt: String,
         chatId: ChatId,
         userMessageId: MessageId,
+        assistantMessageId: MessageId,
         modelType: ModelType,
     ): PreparedChatInferenceRequest {
         val settings = settingsRepository.settingsFlow.first()
@@ -29,8 +31,8 @@ internal class ChatInferenceRequestPreparer(
         val visionConfig = activeModelProvider.getActiveConfiguration(ModelType.VISION)
         val resolvedImageTarget = messageRepository.resolveLatestImageBearingUserMessage(chatId, userMessageId)
         val searchEnabled = settings.searchEnabled
-        val activeVisionCapable = config?.visionCapable == true
-        val apiVisionConfigured = visionConfig?.isLocal == false && visionConfig.visionCapable
+        val activeVisionCapable = config?.isMultimodal == true
+        val apiVisionConfigured = visionConfig?.isLocal == false && visionConfig.isMultimodal
         val hasImageContext = resolvedImageTarget != null
         val imageHandling = when {
             hasImageContext &&
@@ -51,18 +53,38 @@ internal class ChatInferenceRequestPreparer(
             logLocalPrompt(prompt, modelType)
         }
 
-        val toolingEnabled = searchEnabled || imageHandling == ChatImageHandling.TOOL
-        val systemPrompt = when {
-            config?.isLocal == true && toolingEnabled -> searchToolPromptComposer.compose(
-                baseSystemPrompt = config.systemPrompt,
+        val strategy = when {
+            config?.isLocal == true -> when (config.localModelFormat) {
+                ModelFileFormat.LITERTLM -> ToolCallStrategy.LITE_RT_NATIVE
+                ModelFileFormat.GGUF -> ToolCallStrategy.JSON_XML_ENVELOPE
+                null -> ToolCallStrategy.JSON_XML_ENVELOPE
+            }
+            config?.isLocal == false -> ToolCallStrategy.SDK_NATIVE
+            else -> ToolCallStrategy.JSON_XML_ENVELOPE
+        }
+
+        val toolingEnabled = true // Memory tools are always available
+        val systemPrompt = if (toolingEnabled) {
+            searchToolPromptComposer.compose(
+                baseSystemPrompt = config?.systemPrompt,
                 includeSearchTool = searchEnabled,
                 includeImageInspectTool = imageHandling == ChatImageHandling.TOOL,
+                includeMemoryTools = true,
+                currentChatId = chatId.value,
+                strategy = strategy,
             )
-            else -> config?.systemPrompt
+        } else {
+            config?.systemPrompt
         }
         val availableTools = buildList {
-            if (searchEnabled) add(ToolDefinition.TAVILY_WEB_SEARCH)
+            if (searchEnabled) {
+                add(ToolDefinition.TAVILY_WEB_SEARCH)
+                add(ToolDefinition.TAVILY_EXTRACT)
+            }
             if (imageHandling == ChatImageHandling.TOOL) add(ToolDefinition.ATTACHED_IMAGE_INSPECT)
+            add(ToolDefinition.SEARCH_CHAT_HISTORY)
+            add(ToolDefinition.SEARCH_CHAT)
+            add(ToolDefinition.GET_MESSAGE_CONTEXT)
         }
 
         return PreparedChatInferenceRequest(
@@ -90,6 +112,7 @@ internal class ChatInferenceRequestPreparer(
                 availableTools = availableTools,
                 chatId = chatId,
                 userMessageId = userMessageId,
+                assistantMessageId = assistantMessageId,
             ),
         )
     }

@@ -47,7 +47,6 @@ class GoogleGenAiSdkClientImplTest {
 
         assertTrue(events.any { it is InferenceEvent.Thinking && it.chunk == "Thinking..." })
         assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Hello!" })
-        assertTrue(events.any { it is InferenceEvent.Finished })
         
         assertEquals("my_tool", result.functionCall?.name()?.get())
         assertTrue(result.emittedAny)

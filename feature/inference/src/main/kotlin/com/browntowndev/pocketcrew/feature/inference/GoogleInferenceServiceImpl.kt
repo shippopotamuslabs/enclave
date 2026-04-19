@@ -9,10 +9,17 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
+import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
+import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
+import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
+import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
+import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
+import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCall
 import com.google.genai.types.Part
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -25,7 +32,7 @@ class GoogleInferenceServiceImpl(
     private val modelType: ModelType,
     private val baseUrl: String? = null,
     private val loggingPort: LoggingPort,
-    internal val toolExecutor: ToolExecutorPort? = null,
+    val orchestrator: LlmToolingOrchestrator,
 ) : LlmInferencePort {
 
     companion object {
@@ -34,7 +41,7 @@ class GoogleInferenceServiceImpl(
         private const val PROVIDER = "GOOGLE"
     }
 
-    private val conversationHistory = mutableListOf<ChatMessage>()
+    private val conversationHistory = CopyOnWriteArrayList<ChatMessage>()
 
     override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
         return sendPrompt(prompt, GenerationOptions(reasoningBudget = 0), closeConversation)
@@ -100,7 +107,13 @@ class GoogleInferenceServiceImpl(
             "GenerateContent request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(request.config.toString())}"
         )
 
-        sdkClient.generateContentStream(modelId, request.contents, request.config, emitEvent)
+        sdkClient.generateContentStream(
+            modelId = modelId,
+            contents = request.contents,
+            config = request.config,
+            emitEvent = emitEvent
+        )
+        emitEvent(InferenceEvent.Finished(modelType))
     }
 
     private suspend fun executeToolingPrompt(
@@ -109,81 +122,122 @@ class GoogleInferenceServiceImpl(
         requestHistory: List<ChatMessage>,
         emitEvent: suspend (InferenceEvent) -> Unit,
     ) {
-        val executor = requireNotNull(toolExecutor) {
-            "Tool executor not configured for provider=$PROVIDER"
-        }
+        logImagePayloads(options)
+        val request = GoogleRequestMapper.mapToGenerateContentRequest(
+            prompt = prompt,
+            history = requestHistory,
+            options = options,
+        )
 
+        val toolLoopPayloads = mutableListOf<String>()
         try {
-            logImagePayloads(options)
-            val request = GoogleRequestMapper.mapToGenerateContentRequest(
-                prompt = prompt,
-                history = requestHistory,
-                options = options,
-            )
-            loggingPort.debug(
-                TAG,
-                "GenerateContent tool request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(request.config.toString())}"
-            )
+            orchestrator.execute<List<Content>, GoogleSdkResult>(
+                providerName = PROVIDER,
+                initialParams = request.contents,
+                tag = TAG,
+                maxToolCalls = options.maxToolCalls,
+                onInferencePass = { params, allowToolCall ->
 
-            val initialResponse = sdkClient.generateContentStream(modelId, request.contents, request.config, emitEvent)
-            val functionCall = initialResponse.functionCall
-            if (functionCall == null) {
-                loggingPort.info(
-                    TAG,
-                    "Tool loop complete without tool call provider=$PROVIDER model=$modelId modelType=$modelType"
-                )
-                return
-            }
-
-            val toolRequest = ToolCallRequest(
-                toolName = functionCall.name().orElseThrow {
-                    IllegalStateException("Google tool execution failed before final response")
-                },
-                argumentsJson = ToolEnvelopeParser.buildArgumentsJson(functionCall.args().orElse(emptyMap())),
-                provider = PROVIDER,
-                modelType = modelType,
-                chatId = options.chatId,
-                userMessageId = options.userMessageId,
-            )
-            ToolEnvelopeParser.requireSupportedTool(toolRequest.toolName)
-            val toolArg = when (toolRequest.toolName) {
-                ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> ToolEnvelopeParser.extractRequiredQuestion(toolRequest.argumentsJson)
-                else -> ToolEnvelopeParser.extractRequiredQuery(toolRequest.argumentsJson)
-            }
-            loggingPort.info(
-                TAG,
-                "Tool call detected provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} arg=$toolArg"
-            )
-            val toolResult = executor.execute(toolRequest)
-            loggingPort.info(
-                TAG,
-                "Tool call completed provider=$PROVIDER model=$modelId tool=${toolRequest.toolName} resultChars=${toolResult.resultJson.length}"
-            )
-
-            val followUpContents = request.contents + listOfNotNull(
-                initialResponse.assistantContent,
-                Content.builder()
-                    .role("user")
-                    .parts(
-                        listOf(
-                            buildFunctionResponsePart(functionCall, toolResult.resultJson)
-                        )
+                    sdkClient.generateContentStream(
+                        modelId = modelId,
+                        contents = params,
+                        config = request.config,
+                        allowToolCall = allowToolCall,
+                        emitEvent = emitEvent
                     )
-                    .build()
+                },
+                onToolCallDetected = { response ->
+                    response.functionCall?.let { functionCall ->
+                        listOf(
+                            ToolCallRequest(
+                                toolName = functionCall.name().orElseThrow {
+                                    IllegalStateException("Google tool execution failed before final response")
+                                },
+                                argumentsJson = ToolEnvelopeParser.buildArgumentsJson(functionCall.args().orElse(emptyMap())),
+                                provider = PROVIDER,
+                                modelType = modelType,
+                                chatId = options.chatId,
+                                userMessageId = options.userMessageId,
+                            )
+                        )
+                    } ?: emptyList()
+                },
+                onToolResultsMapped = { params, response, results ->
+                    // Truncate large tool results when context window is known
+                    val truncationAvailableTokens = options.contextWindow?.let { cw ->
+                        val budget = ContextWindowPlanner.budgetFor(
+                            contextWindowTokens = cw,
+                            options = options,
+                            modelId = modelId,
+                            tokenCounter = JTokkitTokenCounter,
+                        )
+                        val usedTokens = ContextWindowPlanner.estimatePromptTokens(
+                            history = requestHistory,
+                            systemPrompt = null,
+                            currentPrompt = prompt,
+                            toolResultPayloads = toolLoopPayloads,
+                            modelId = modelId,
+                            tokenCounter = JTokkitTokenCounter,
+                        ) ?: 0
+                        (budget.usablePromptTokens - usedTokens).coerceAtLeast(0)
+                    }
+                    val functionResponses = results.map { (toolCall, resultJson) ->
+                        val truncatedResult = if (truncationAvailableTokens != null && truncationAvailableTokens > 0) {
+                            NativeToolResultFormatter.truncateForApiContext(
+                                resultJson = resultJson,
+                                availableTokens = maxOf(truncationAvailableTokens / results.size.coerceAtLeast(1), 100),
+                                tokenCounter = JTokkitTokenCounter,
+                                modelId = modelId,
+                            )
+                        } else {
+                            resultJson
+                        }
+                        // Google expects one part per function response in a user-role Content
+                        // If they were parallel, we'd still have the initial function call names
+                        // For now, we assume the model emitted only one or we map each by its toolName.
+                        buildFunctionResponsePart(toolCall.toolName, truncatedResult)
+                    }
+
+                    toolLoopPayloads += functionResponses.map { it.toString() }
+                    val contextExceeded = estimateContextExceeded(
+                        requestHistory = requestHistory,
+                        prompt = prompt,
+                        options = options,
+                        toolResultPayloads = toolLoopPayloads,
+                    ).contextExceeded
+
+                    params + listOfNotNull(
+                        response.assistantContent,
+                        Content.builder()
+                            .role("user")
+                            .parts(functionResponses)
+                            .build(),
+                        stopToolsWarningContent().takeIf { contextExceeded },
+                    )
+                },
+                onContextExceeded = { params, results ->
+                    estimateContextExceeded(
+                        requestHistory = requestHistory,
+                        prompt = prompt,
+                        options = options,
+                        toolResultPayloads = toolLoopPayloads,
+                    )
+                },
+                onToolResult = { toolCall, resultJson ->
+                    if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                        val assistantMessageId = options.assistantMessageId
+                        if (assistantMessageId != null) {
+                            val sources = com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(assistantMessageId, resultJson)
+                            if (sources.isNotEmpty()) {
+                                emitEvent(InferenceEvent.TavilyResults(sources, modelType))
+                            }
+                        }
+                    }
+                },
+                onFinished = { _, _, _ ->
+                    emitEvent(InferenceEvent.Finished(modelType))
+                }
             )
-
-            val followUpResponse = sdkClient.generateContentStream(modelId, followUpContents, request.config, emitEvent)
-            if (followUpResponse.functionCall != null) {
-                loggingPort.warning(
-                    TAG,
-                    "Recursive tool call detected provider=$PROVIDER model=$modelId"
-                )
-                throw IllegalStateException("Search skill recursion limit exceeded")
-            }
-
-            if (!followUpResponse.emittedAny) {
-                throw IllegalStateException("Google tool execution failed before final response")
-            }
         } catch (e: IllegalArgumentException) {
             throw e
         } catch (e: IllegalStateException) {
@@ -193,14 +247,50 @@ class GoogleInferenceServiceImpl(
         }
     }
 
+    /**
+     * Estimates whether the request plus accumulated tool results exceeds the context window threshold.
+     * API providers are stateless between requests, so summarization happens before the request is sent;
+     * mid-loop history rebuilding is possible but not yet implemented for API providers.
+     * Returns a [ContextExceededResult] indicating whether context is exceeded after
+     * any mid-loop history rebuilding.
+     */
+    private fun estimateContextExceeded(
+        requestHistory: List<ChatMessage>,
+        prompt: String,
+        options: GenerationOptions,
+        toolResultPayloads: List<String>,
+    ): ContextExceededResult<List<Content>> {
+        val contextWindow = options.contextWindow ?: return ContextExceededResult(false)
+        val contextExceeded = ToolContextBudget.isApiContextExceeded(
+            contextWindowTokens = contextWindow,
+            history = requestHistory,
+            systemPrompt = null,
+            currentPrompt = prompt,
+            toolResultPayloads = toolResultPayloads,
+            options = options,
+            modelId = modelId,
+        )
+        if (contextExceeded) {
+            loggingPort.warning(
+                TAG,
+                "Google context exceeded mid-loop: window=$contextWindow"
+            )
+        }
+        return ContextExceededResult(contextExceeded)
+    }
+
+    private fun stopToolsWarningContent(): Content =
+        Content.builder()
+            .role("user")
+            .parts(listOf(Part.fromText(ContextWindowPlanner.STOP_TOOLS_WARNING)))
+            .build()
+
     private fun buildFunctionResponsePart(
-        functionCall: FunctionCall,
+        toolName: String,
         resultJson: String,
     ): Part =
         Part.fromFunctionResponse(
-            functionCall.name().orElseThrow {
-                IllegalStateException("Google tool execution failed before final response")
-            },
+            toolName,
             mapOf("output" to resultJson),
         )
 

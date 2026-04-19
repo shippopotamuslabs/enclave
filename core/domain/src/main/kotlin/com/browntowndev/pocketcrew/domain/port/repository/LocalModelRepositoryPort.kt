@@ -48,4 +48,17 @@ interface LocalModelRepositoryPort {
      * @return The LocalModelAsset if found, null otherwise
      */
     suspend fun getAssetByConfigId(configId: LocalModelConfigurationId): LocalModelAsset?
+    /**
+     * Restores a soft-deleted model by re-creating its system preset configurations.
+     * The model file still needs to be re-downloaded after this.
+     *
+     * @param id The LocalModelEntity database ID
+     * @param configurations The system configurations to restore (from remote config match)
+     * @return The restored LocalModelAsset
+     */
+    suspend fun restoreSoftDeletedModel(
+        id: LocalModelId,
+        configurations: List<LocalModelConfiguration>
+    ): LocalModelAsset
 }
+

@@ -40,18 +40,20 @@ object XaiRequestMapper {
         val sanitizedOptions = sanitizeChatOptions(modelId, options)
         val builder = ChatCompletionCreateParams.builder()
             .model(modelId)
+            .store(false)
 
         val messages = mutableListOf<ChatCompletionMessageParam>()
         history.filterNot(::isSyntheticAssistantError).forEach { msg ->
+            val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
             when (msg.role) {
                 Role.SYSTEM -> {
-                    messages.add(ChatCompletionMessageParam.ofSystem(ChatCompletionSystemMessageParam.builder().content(msg.content).build()))
+                    messages.add(ChatCompletionMessageParam.ofSystem(ChatCompletionSystemMessageParam.builder().content(sanitizedContent).build()))
                 }
                 Role.USER -> {
-                    messages.add(ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder().content(msg.content).build()))
+                    messages.add(ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder().content(sanitizedContent).build()))
                 }
                 Role.ASSISTANT -> {
-                    messages.add(ChatCompletionMessageParam.ofAssistant(ChatCompletionAssistantMessageParam.builder().content(msg.content).build()))
+                    messages.add(ChatCompletionMessageParam.ofAssistant(ChatCompletionAssistantMessageParam.builder().content(sanitizedContent).build()))
                 }
             }
         }
@@ -67,13 +69,33 @@ object XaiRequestMapper {
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
         sanitizedOptions.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
+        
+        val toolsPayload = mutableListOf<Map<String, Any>>()
+        
+        // Add native tools for models that support them (e.g., grok-4.20 family)
+        if (modelId.startsWith("grok-4.20")) {
+            toolsPayload.add(mapOf("type" to "web_search"))
+            toolsPayload.add(mapOf("type" to "x_search"))
+            toolsPayload.add(mapOf("type" to "code_execution"))
+        }
+
         if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
-            options.availableTools.forEach { builder.addTool(it.toChatCompletionTool()) }
-            builder.parallelToolCalls(false)
+            if (isMultiAgentModel(modelId)) {
+                // NOTE: Client-side tools are not currently available for multi-agent models
+                // in the public xAI API without developer beta access. Stripping them out to prevent 400 errors.
+            } else {
+                toolsPayload.addAll(options.availableTools.map { it.toChatCompletionToolMap() })
+                builder.parallelToolCalls(false)
+            }
+        }
+
+        if (toolsPayload.isNotEmpty()) {
+            builder.putAdditionalBodyProperty("tools", JsonValue.from(toolsPayload))
         }
 
         return builder.build()
     }
+
 
     fun mapToResponseParams(
         modelId: String,
@@ -84,10 +106,12 @@ object XaiRequestMapper {
         val sanitizedOptions = sanitizeResponseOptions(modelId, options)
         val builder = ResponseCreateParams.builder()
             .model(modelId)
+            .store(false)
 
         val messages = mutableListOf<ResponseInputItem>()
 
         history.filterNot(::isSyntheticAssistantError).forEach { msg ->
+            val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
             val role = when (msg.role) {
                 Role.USER -> ResponseInputItem.Message.Role.of("user")
                 Role.ASSISTANT -> ResponseInputItem.Message.Role.of("assistant")
@@ -98,7 +122,7 @@ object XaiRequestMapper {
                 ResponseInputItem.ofMessage(
                     ResponseInputItem.Message.builder()
                         .role(role)
-                        .addInputTextContent(msg.content)
+                        .addInputTextContent(sanitizedContent)
                         .build()
                 )
             )
@@ -111,14 +135,32 @@ object XaiRequestMapper {
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
         sanitizedOptions.maxTokens?.let { builder.maxOutputTokens(it.toLong()) }
+        
+        val toolsPayload = mutableListOf<Map<String, Any>>()
+        
+        // Add native tools for models that support them (e.g., grok-4.20 family)
+        if (modelId.startsWith("grok-4.20")) {
+            toolsPayload.add(mapOf("type" to "web_search"))
+            toolsPayload.add(mapOf("type" to "x_search"))
+            toolsPayload.add(mapOf("type" to "code_execution"))
+        }
+
         if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
-            options.availableTools.forEach { builder.addTool(it.toResponsesTool()) }
-            builder.parallelToolCalls(false)
-            builder.maxToolCalls(1)
+            if (isMultiAgentModel(modelId)) {
+                // NOTE: Client-side tools are not currently available for multi-agent models
+                // in the public xAI API without developer beta access. Stripping them out to prevent 400 errors.
+            } else {
+                toolsPayload.addAll(options.availableTools.map { it.toResponseToolPayloadMap() })
+            }
+        }
+
+        if (toolsPayload.isNotEmpty()) {
+            builder.putAdditionalBodyProperty("tools", JsonValue.from(toolsPayload))
         }
 
         return builder.build()
     }
+
 
     fun isMultiAgentModel(modelId: String): Boolean =
         ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)
@@ -154,6 +196,9 @@ object XaiRequestMapper {
         if (reasoningEffort == null) {
             return null
         }
+        if (ApiProviderModelPolicy.isXaiGrok420Family(modelId)) {
+            return if (ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)) reasoningEffort else null
+        }
         if (ApiProviderModelPolicy.isXaiGrok3MiniModel(modelId)) {
             return reasoningEffort
         }
@@ -170,44 +215,67 @@ object XaiRequestMapper {
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
 
-    private fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool =
-        ChatCompletionFunctionTool.builder()
-            .function(
-                FunctionDefinition.builder()
-                    .name(name)
-                    .description(description)
-                    .parameters(
-                        FunctionParameters.builder()
-                            .putAdditionalProperty("type", JsonValue.from("object"))
-                            .putAdditionalProperty("properties", JsonValue.from(toolProperties()))
-                            .putAdditionalProperty("required", JsonValue.from(listOf("query")))
-                            .build()
-                    )
-                    .strict(true)
-                    .build()
-            )
-            .build()
+    private fun ToolDefinition.toChatCompletionToolMap(): Map<String, Any> {
+        val parametersMap = mutableMapOf<String, Any>(
+            "type" to "object",
+            "properties" to schema.properties.toMap()
+        )
+        if (schema.required.isNotEmpty()) {
+            parametersMap["required"] = schema.required
+        }
 
-    private fun ToolDefinition.toResponsesTool(): FunctionTool =
-        FunctionTool.builder()
-            .name(name)
-            .description(description)
-            .parameters(
-                FunctionTool.Parameters.builder()
-                    .putAdditionalProperty("type", JsonValue.from("object"))
-                    .putAdditionalProperty("properties", JsonValue.from(toolProperties()))
-                    .putAdditionalProperty("required", JsonValue.from(listOf("query")))
-                    .build()
-            )
-            .strict(true)
-            .build()
-
-    private fun toolProperties(): Map<String, Any> =
-        mapOf(
-            "query" to mapOf(
-                "type" to "string"
+        return mapOf(
+            "type" to "function",
+            "function" to mapOf(
+                "name" to name,
+                "description" to description,
+                "parameters" to parametersMap,
+                "strict" to false
             )
         )
+    }
+
+    private fun ToolDefinition.toResponseToolPayloadMap(): Map<String, Any> {
+        val parametersMap = mutableMapOf<String, Any>(
+            "type" to "object",
+            "properties" to schema.properties.toMap()
+        )
+        if (schema.required.isNotEmpty()) {
+            parametersMap["required"] = schema.required
+        }
+
+        return mapOf(
+            "type" to "function",
+            "name" to name,
+            "description" to description,
+            "parameters" to parametersMap,
+            "strict" to false
+        )
+    }
+
+    private fun kotlinx.serialization.json.JsonObject.toMap(): Map<String, Any> {
+        val map = mutableMapOf<String, Any>()
+        forEach { (k, v) ->
+            map[k] = v.toPrimitiveOrMap()
+        }
+        return map
+    }
+
+    private fun kotlinx.serialization.json.JsonElement.toPrimitiveOrMap(): Any {
+        return when (this) {
+            is kotlinx.serialization.json.JsonPrimitive -> {
+                if (isString) content
+                else {
+                    content.toBooleanStrictOrNull()
+                        ?: content.toLongOrNull()
+                        ?: content.toDoubleOrNull()
+                        ?: content
+                }
+            }
+            is kotlinx.serialization.json.JsonObject -> toMap()
+            is kotlinx.serialization.json.JsonArray -> map { it.toPrimitiveOrMap() }
+        }
+    }
 
     private fun buildChatCompletionUserMessage(
         prompt: String,

@@ -171,7 +171,7 @@ data class ApiModelAssetUi(
     val provider: ApiProvider,
     val modelId: String,
     val baseUrl: String?,
-    val isVision: Boolean,
+    val isMultimodal: Boolean,
     val credentialAlias: String,
     val configurations: List<ApiModelConfigUi>
 )
@@ -226,7 +226,7 @@ data class DiscoveredApiModelUi(
     val promptPrice: Double? = null,
     val completionPrice: Double? = null,
     val providerName: String? = null,
-    val visionCapable: Boolean? = null,
+    val isMultimodal: Boolean? = null,
 )
 
 @Immutable
@@ -240,7 +240,8 @@ data class LocalModelAssetUi(
     val sizeInBytes: Long,
     val configurations: List<LocalModelConfigUi>,
     val isExpanded: Boolean = false,
-    val visionCapable: Boolean = false
+    val isMultimodal: Boolean = false,
+    val isSoftDeleted: Boolean = false
 )
 
 @Immutable
@@ -268,7 +269,7 @@ data class DefaultModelAssignmentUi(
     val displayLabel: String,
     val providerName: String? = null,
     val presetName: String? = null,
-    val isVision: Boolean = false,
+    val isMultimodal: Boolean = false,
 )
 
 internal val ModelType.displayLabel: String
@@ -280,6 +281,7 @@ internal val ModelType.displayLabel: String
         ModelType.DRAFT_ONE -> "Draft 1"
         ModelType.DRAFT_TWO -> "Draft 2"
         ModelType.FINAL_SYNTHESIS -> "Final Refinement"
+        ModelType.UNASSIGNED -> "Unassigned"
     }
 
 internal val ModelType.description: String
@@ -291,6 +293,7 @@ internal val ModelType.description: String
         ModelType.DRAFT_ONE -> "Generates the initial analytical draft for the Crew pipeline."
         ModelType.DRAFT_TWO -> "Produces a secondary creative draft for the Crew pipeline."
         ModelType.FINAL_SYNTHESIS -> "Polishes and refines the synthesized content for a professional final output."
+        ModelType.UNASSIGNED -> "A model that is downloaded but not currently assigned to a specific engine role."
     }
 
 /**
@@ -311,7 +314,7 @@ object MockSettingsData {
                 LocalModelConfigUi(id = LocalModelConfigurationId("cfg-2"), localModelId = LocalModelId("1"), displayName = "Creative", temperature = 1.2),
                 LocalModelConfigUi(id = LocalModelConfigurationId("cfg-3"), localModelId = LocalModelId("1"), displayName = "Precise", temperature = 0.1)
             ),
-            visionCapable = true
+            isMultimodal = true
         ),
         LocalModelAssetUi(
             metadataId = LocalModelId("2"),
@@ -334,7 +337,7 @@ object MockSettingsData {
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             baseUrl = null,
-            isVision = true,
+            isMultimodal = true,
             credentialAlias = "OpenAI Primary",
             configurations = listOf(
                 ApiModelConfigUi(id = ApiModelConfigurationId("cfg-1"), credentialsId = ApiCredentialsId("1"), displayName = "Balanced", temperature = 0.7),
@@ -347,7 +350,7 @@ object MockSettingsData {
             provider = ApiProvider.ANTHROPIC,
             modelId = "claude-3-5-sonnet-20240620",
             baseUrl = null,
-            isVision = true,
+            isMultimodal = true,
             credentialAlias = "Anthropic Work",
             configurations = listOf(
                 ApiModelConfigUi(id = ApiModelConfigurationId("cfg-3"), credentialsId = ApiCredentialsId("2"), displayName = "Standard", temperature = 0.7)
@@ -359,7 +362,7 @@ object MockSettingsData {
             provider = ApiProvider.OPENROUTER,
             modelId = "openai/gpt-5.2",
             baseUrl = ApiProvider.OPENROUTER.defaultBaseUrl(),
-            isVision = true,
+            isMultimodal = true,
             credentialAlias = "OpenRouter",
             configurations = listOf(
                 ApiModelConfigUi(
@@ -374,9 +377,9 @@ object MockSettingsData {
     )
 
     val defaultAssignments = listOf(
-        DefaultModelAssignmentUi(ModelType.MAIN, ModelSource.API, "GPT-4o (Balanced)", "Synthesis", "OpenAI", isVision = true),
-        DefaultModelAssignmentUi(ModelType.FAST, ModelSource.ON_DEVICE, "Llama 3 8B (Default)", "Fast", isVision = true),
-        DefaultModelAssignmentUi(ModelType.VISION, ModelSource.API, "Claude 3.5 Sonnet (Standard)", "Vision (API)", "Anthropic", isVision = true),
+        DefaultModelAssignmentUi(ModelType.MAIN, ModelSource.API, "GPT-4o (Balanced)", "Synthesis", "OpenAI", isMultimodal = true),
+        DefaultModelAssignmentUi(ModelType.FAST, ModelSource.ON_DEVICE, "Llama 3 8B (Default)", "Fast", isMultimodal = true),
+        DefaultModelAssignmentUi(ModelType.VISION, ModelSource.API, "Claude 3.5 Sonnet (Standard)", "Vision (API)", "Anthropic", isMultimodal = true),
         DefaultModelAssignmentUi(ModelType.THINKING, ModelSource.ON_DEVICE, "Llama 3 8B (Precise)", "Thinking")
     )
 

@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import javax.inject.Inject
 
 class SearchToolPromptComposer @Inject constructor() {
@@ -8,40 +9,126 @@ class SearchToolPromptComposer @Inject constructor() {
         baseSystemPrompt: String?,
         includeSearchTool: Boolean = true,
         includeImageInspectTool: Boolean = false,
+        includeMemoryTools: Boolean = true,
+        currentChatId: String? = null,
+        strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
     ): String =
         listOfNotNull(
             baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
-            localToolContract(includeSearchTool, includeImageInspectTool).takeIf(String::isNotEmpty),
+            localToolContract(includeSearchTool, includeImageInspectTool, includeMemoryTools, currentChatId, strategy).takeIf(String::isNotEmpty),
         ).joinToString(separator = "\n\n")
 
     companion object {
-        const val SEARCH_TOOL_CONTRACT: String = """
-When you need current or external information, respond with exactly one tool envelope and no surrounding prose:
-<![CDATA[<tool>{"name":"tavily_web_search","arguments":{"query":"..."}}</tool>]]>
+        private fun searchToolContract(strategy: ToolCallStrategy): String {
+            val extractNote = if (strategy == ToolCallStrategy.LITE_RT_NATIVE) {
+                " Note that 'urls' must be a SINGLE string where you list the URLs separated by commas. For very long pages, only the most relevant first part will be provided to fit the context window:"
+            } else ""
 
-After you receive a <tool_result>...</tool_result> message, continue the answer for the user using that result.
-Do not expose tool JSON, tool envelopes, or tool results in the final answer.
-"""
+            return """
+# TOOL USE MANDATE:
+You have access to real-time information via '${ToolDefinition.TAVILY_WEB_SEARCH.name}' and '${ToolDefinition.TAVILY_EXTRACT.name}'. 
+If the user's request involves ANY of the following, you MUST call the search tool before answering:
+- Current events, news, or recent developments.
+- Dates, times, or schedules (today is April 16, 2026).
+- Verifying facts, statistics, or status of products/companies.
+- Anything where your internal knowledge might be stale or incomplete.
+- Any terms you don't recognize.
 
-        const val IMAGE_INSPECT_CONTRACT: String = """
-When you need to inspect a previously attached image to answer a question about it, respond with exactly one tool envelope and no surrounding prose:
-<![CDATA[<tool>{"name":"attached_image_inspect","arguments":{"question":"..."}}</tool>]]>
-"""
+DO NOT ASSUME you know the answer. When in doubt, SEARCH.
+
+To search:
+${ToolDefinition.TAVILY_WEB_SEARCH.toExample(strategy)}
+
+If you need to read the full content of a webpage from the search results, use ${ToolDefinition.TAVILY_EXTRACT.name}.$extractNote
+${ToolDefinition.TAVILY_EXTRACT.toExample(strategy)}
+""".trimIndent()
+        }
+
+        private fun imageInspectContract(strategy: ToolCallStrategy): String = """
+# IMAGE INSPECTION MANDATE:
+When the user asks about a previously attached image, you MUST use '${ToolDefinition.ATTACHED_IMAGE_INSPECT.name}' to get details. 
+DO NOT rely on memory if you need specific visual verification.
+
+To inspect:
+${ToolDefinition.ATTACHED_IMAGE_INSPECT.toExample(strategy)}
+""".trimIndent()
+
+        private fun memoryToolsContract(currentChatId: String?, strategy: ToolCallStrategy): String = buildString {
+            append("""
+# CONVERSATION MEMORY TOOLS:
+You have access to '${ToolDefinition.SEARCH_CHAT_HISTORY.name}', '${ToolDefinition.SEARCH_CHAT.name}', and '${ToolDefinition.GET_MESSAGE_CONTEXT.name}' to recall information.
+
+- Use '${ToolDefinition.SEARCH_CHAT_HISTORY.name}' when the user mentions or references a previous conversation, topic, or detail from a past chat. Provide multiple query variants (synonyms, alternate phrasings) to cast a wide net. It returns matching messages with surrounding context.
+- Use '${ToolDefinition.SEARCH_CHAT.name}' when you need to search messages within a specific chat. You must provide the chat_id (from ${ToolDefinition.SEARCH_CHAT_HISTORY.name} results or the current chat ID noted below).
+- Use '${ToolDefinition.GET_MESSAGE_CONTEXT.name}' when you found a relevant message but need more surrounding context to understand the conversation flow. Provide the message_id and how many messages before/after you need.
+""".trimIndent())
+            
+            if (strategy == ToolCallStrategy.LITE_RT_NATIVE) {
+                append("\n\nFor '${ToolDefinition.SEARCH_CHAT_HISTORY.name}', provide queries as a single comma-separated string.")
+            }
+
+            if (currentChatId != null) {
+                append("\n\nThe current chat ID is \"" + currentChatId + "\". Use this ID with ${ToolDefinition.SEARCH_CHAT.name} to search messages in the current conversation.")
+            }
+            append("""
+
+To search past chats:
+${ToolDefinition.SEARCH_CHAT_HISTORY.toExample(strategy)}
+
+To search messages in a specific chat:
+${ToolDefinition.SEARCH_CHAT.toExample(strategy)}
+
+To get surrounding context for a message:
+${ToolDefinition.GET_MESSAGE_CONTEXT.toExample(strategy)}
+""".trimIndent())
+        }
+
+        private fun strictRules(strategy: ToolCallStrategy): String = when (strategy) {
+            ToolCallStrategy.JSON_XML_ENVELOPE -> """
+# STRICT EXECUTION RULES:
+1. Respond ONLY with the <tool_call> tag. No preamble, no "Sure, let me search", no markdown code blocks.
+2. After you receive a <tool_result>...</tool_result> message, use that data to provide a comprehensive answer.
+3. NEVER expose raw tool JSON or <tool_call> tags in your final response to the user.
+""".trimIndent()
+            ToolCallStrategy.LITE_RT_NATIVE -> """
+# STRICT EXECUTION RULES:
+1. Use exactly the 'call:tool_name{...}' format shown above.
+2. Enclose all string arguments in <|"|> and <|"|>, not standard double quotes.
+3. Close the argument list with exactly '}' (Do NOT add trailing brackets like ']').
+4. Respond ONLY with the tool call. No conversational preamble or surrounding text.
+5. NEVER wrap the tool call in special tokens or tags like <tool_call>, <tool_call|>, or [TOOL]. The response must start immediately with 'call:'.
+""".trimIndent()
+            ToolCallStrategy.SDK_NATIVE -> ""
+        }
 
         fun localToolContract(
             includeSearchTool: Boolean = true,
             includeImageInspectTool: Boolean = false,
-        ): String =
-            buildString {
+            includeMemoryTools: Boolean = true,
+            currentChatId: String? = null,
+            strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
+        ): String {
+            if (!includeSearchTool && !includeImageInspectTool && !includeMemoryTools) return ""
+            if (strategy == ToolCallStrategy.SDK_NATIVE) return ""
+
+            return buildString {
                 if (includeSearchTool) {
-                    append(SEARCH_TOOL_CONTRACT.trim())
+                    append(searchToolContract(strategy))
                 }
                 if (includeImageInspectTool) {
-                    if (isNotEmpty()) {
-                        append("\n\n")
-                    }
-                    append(IMAGE_INSPECT_CONTRACT.trim())
+                    if (isNotEmpty()) append("\n\n")
+                    append(imageInspectContract(strategy))
+                }
+                if (includeMemoryTools) {
+                    if (isNotEmpty()) append("\n\n")
+                    append(memoryToolsContract(currentChatId, strategy))
+                }
+                val rules = strictRules(strategy)
+                if (rules.isNotEmpty()) {
+                    append("\n\n")
+                    append(rules)
                 }
             }
+        }
     }
 }

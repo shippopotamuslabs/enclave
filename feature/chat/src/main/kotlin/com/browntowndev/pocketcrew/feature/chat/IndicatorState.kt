@@ -5,6 +5,9 @@ package com.browntowndev.pocketcrew.feature.chat
  * No None - state is always one of these variants.
  */
 sealed class IndicatorState {
+    /** Engine loading state - shows engine loading indicator */
+    object EngineLoading : IndicatorState()
+
     /** Processing state - shows processing indicator */
     object Processing : IndicatorState()
 

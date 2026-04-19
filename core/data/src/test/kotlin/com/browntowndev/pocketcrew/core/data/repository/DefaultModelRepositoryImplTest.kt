@@ -98,7 +98,7 @@ class DefaultModelRepositoryImplTest {
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "key1",
-            isVision = false
+            isMultimodal = false
         )
 
         val result = repo.getDefault(ModelType.VISION)

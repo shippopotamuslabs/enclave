@@ -1,3 +1,5 @@
+@file:Suppress("ktlint:standard:function-naming")
+
 package com.browntowndev.pocketcrew.presentation
 
 import androidx.compose.foundation.layout.Box
@@ -21,7 +23,6 @@ import com.browntowndev.pocketcrew.presentation.navigation.PocketCrewNavGraph
 import com.browntowndev.pocketcrew.presentation.navigation.Routes
 import kotlinx.coroutines.launch
 
-@Suppress("FunctionNaming")
 @Composable
 fun PocketCrewApp(
     viewModel: PocketCrewAppViewModel = hiltViewModel(),

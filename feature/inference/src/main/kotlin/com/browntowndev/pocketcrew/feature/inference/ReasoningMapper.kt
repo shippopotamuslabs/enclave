@@ -17,4 +17,9 @@ internal object ReasoningMapper {
             .effort(toSdkEffort(effort))
             .summary(Reasoning.Summary.CONCISE)
             .build()
+
+    fun toSdkReasoningEffortOnly(effort: ApiReasoningEffort): Reasoning =
+        Reasoning.builder()
+            .effort(toSdkEffort(effort))
+            .build()
 }

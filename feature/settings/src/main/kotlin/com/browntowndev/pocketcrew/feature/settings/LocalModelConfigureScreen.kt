@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.feature.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,10 +23,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.material3.TextButton
@@ -37,18 +41,20 @@ import com.browntowndev.pocketcrew.domain.model.inference.SystemPromptTemplates
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
+import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
 @Composable
 fun LocalModelConfigureRoute(
     onNavigateBack: () -> Unit,
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -79,6 +85,8 @@ fun LocalModelConfigureScreen(
     onSave: () -> Unit
 ) {
     val config = uiState.localModelEditor.configDraft ?: LocalModelConfigUi()
+    var showSystemPromptSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     Scaffold(
         topBar = {
@@ -111,39 +119,17 @@ fun LocalModelConfigureScreen(
                 enabled = !config.isSystemPreset
             )
 
-            Column {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    var expanded by remember { mutableStateOf(false) }
-                    Row {
-                        TextButton(
-                            onClick = { expanded = true },
-                            enabled = !config.isSystemPreset
-                        ) {
-                            Text("Import Template")
-                        }
-                        DropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
-                        ) {
-                            SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
-                                DropdownMenuItem(
-                                    text = { Text(modelType.displayName()) },
-                                    onClick = {
-                                        onConfigChange(config.copy(systemPrompt = prompt))
-                                        expanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (!config.isSystemPreset) Modifier.clickable { showSystemPromptSheet = true }
+                        else Modifier
+                    )
+            ) {
                 OutlinedTextField(
-                    value = config.systemPrompt,
-                    onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
+                    value = config.systemPrompt.ifBlank { "Tap to edit system prompt" },
+                    onValueChange = {},
                     label = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("System Prompt")
@@ -153,13 +139,91 @@ fun LocalModelConfigureScreen(
                             )
                         }
                     },
+                    enabled = false,
+                    readOnly = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     minLines = 4,
                     maxLines = 4,
-                    readOnly = config.isSystemPreset,
-                    enabled = !config.isSystemPreset
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                        disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 )
+            }
+
+            if (showSystemPromptSheet) {
+                JumpFreeModalBottomSheet(
+                    onDismissRequest = { showSystemPromptSheet = false },
+                    sheetState = sheetState
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 20.dp)
+                            .padding(bottom = 32.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Edit System Prompt",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            var expanded by remember { mutableStateOf(false) }
+                            Row {
+                                TextButton(onClick = { expanded = true }) {
+                                    Text("Import Template")
+                                }
+                                DropdownMenu(
+                                    expanded = expanded,
+                                    onDismissRequest = { expanded = false }
+                                ) {
+                                    SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
+                                        DropdownMenuItem(
+                                            text = { Text(modelType.displayName()) },
+                                            onClick = {
+                                                onConfigChange(config.copy(systemPrompt = prompt))
+                                                expanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        OutlinedTextField(
+                            value = config.systemPrompt,
+                            onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            placeholder = { Text("Enter system prompt...") },
+                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Button(
+                            onClick = { showSystemPromptSheet = false },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Done", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
 
             ConfigurationHeader("Context")

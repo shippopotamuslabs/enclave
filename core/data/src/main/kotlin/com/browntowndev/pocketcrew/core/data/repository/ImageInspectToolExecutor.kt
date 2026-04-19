@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.core.data.repository
+
 import com.browntowndev.pocketcrew.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.AttachedImageInspectParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
@@ -8,11 +10,30 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.usecase.chat.AnalyzeImageUseCase
-import org.json.JSONException
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
 import java.lang.reflect.InvocationTargetException
 import javax.inject.Inject
 import javax.inject.Singleton
+
+@Serializable
+private data class ImageInspectResult(
+    val resolved_message_id: String,
+    val image_uri: String,
+    val question: String,
+    val analysis: String
+)
+
+@Serializable
+private data class ImageInspectError(
+    val error: String,
+    val resolved_message_id: String,
+    val image_uri: String,
+    val question: String,
+    val exception: String,
+    val message: String
+)
 
 @Singleton
 class ImageInspectToolExecutor @Inject constructor(
@@ -27,7 +48,8 @@ class ImageInspectToolExecutor @Inject constructor(
 
     override suspend fun execute(request: ToolCallRequest): ToolExecutionResult {
         requireSupportedTool(request.toolName)
-        val question = extractRequiredQuestion(request.argumentsJson)
+        val params = request.parameters as AttachedImageInspectParams
+        val question = params.question
 
         loggingPort.info(
             TAG,
@@ -39,10 +61,7 @@ class ImageInspectToolExecutor @Inject constructor(
             loggingPort.warning(TAG, "Image inspect tool invoked without chat context (chatId=$chatId, userMessageId=${request.userMessageId})")
             return ToolExecutionResult(
                 toolName = request.toolName,
-                resultJson = JSONObject()
-                    .put("error", "no context")
-                    .put("message", "Image inspection requires chat context that is not available in this execution path.")
-                    .toString(),
+                resultJson = """{"error": "no context", "message": "Image inspection requires chat context that is not available in this execution path."}""",
             )
         }
 
@@ -55,10 +74,7 @@ class ImageInspectToolExecutor @Inject constructor(
             loggingPort.warning(TAG, "Image inspect tool invoked but no resolvable image exists")
             return ToolExecutionResult(
                 toolName = request.toolName,
-                resultJson = JSONObject()
-                    .put("error", "no image")
-                    .put("message", "No previously attached image is available in this chat.")
-                    .toString(),
+                resultJson = """{"error": "no image", "message": "No previously attached image is available in this chat."}""",
             )
         }
 
@@ -111,7 +127,7 @@ class ImageInspectToolExecutor @Inject constructor(
             .filter { message ->
                 message.role == Role.USER && message.content.imageUri != null
             }
-            .maxByOrNull { it.createdAt }
+            .maxByOrNull { it.createdAt ?: 0L }
 
         return latestImageMessage?.let { message ->
             ResolvedImageTarget(
@@ -127,41 +143,33 @@ class ImageInspectToolExecutor @Inject constructor(
         }
     }
 
-    private fun extractRequiredQuestion(argumentsJson: String): String {
-        try {
-            return JSONObject(argumentsJson)
-                .optString("question", "")
-                .trim()
-                .takeIf(String::isNotEmpty)
-                ?: throw IllegalArgumentException("Tool argument 'question' is required")
-        } catch (error: JSONException) {
-            throw IllegalArgumentException("Tool argument 'question' is required", error)
-        }
-    }
-
     private fun buildResultJson(
         target: ResolvedImageTarget,
         question: String,
         analysis: String,
-    ): String = JSONObject()
-        .put("resolved_message_id", target.userMessageId.value)
-        .put("image_uri", target.imageUri)
-        .put("question", question)
-        .put("analysis", analysis)
-        .toString()
+    ): String = Json.encodeToString(
+        ImageInspectResult(
+            resolved_message_id = target.userMessageId.value,
+            image_uri = target.imageUri,
+            question = question,
+            analysis = analysis
+        )
+    )
 
     private fun buildErrorJson(
         target: ResolvedImageTarget,
         question: String,
         throwable: Throwable,
-    ): String = JSONObject()
-        .put("error", "vision_tool_failed")
-        .put("resolved_message_id", target.userMessageId.value)
-        .put("image_uri", target.imageUri)
-        .put("question", question)
-        .put("exception", throwable::class.java.simpleName)
-        .put("message", throwable.message ?: "Unknown error")
-        .toString()
+    ): String = Json.encodeToString(
+        ImageInspectError(
+            error = "vision_tool_failed",
+            resolved_message_id = target.userMessageId.value,
+            image_uri = target.imageUri,
+            question = question,
+            exception = throwable::class.java.simpleName,
+            message = throwable.message ?: "Unknown error"
+        )
+    )
 
     private fun Throwable.rootCause(): Throwable {
         val cause = when (this) {
