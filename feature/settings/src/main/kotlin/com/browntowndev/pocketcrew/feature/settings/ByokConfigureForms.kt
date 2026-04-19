@@ -437,6 +437,292 @@ fun CredentialsConfigurationForm(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+
+@Composable
+fun SystemPromptConfiguration(
+    config: ApiModelConfigUi,
+    onConfigChange: (ApiModelConfigUi) -> Unit
+) {
+    var showSystemPromptSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    Box(
+        modifier = Modifier.fillMaxWidth().clickable { showSystemPromptSheet = true }
+    ) {
+        OutlinedTextField(
+            value = config.systemPrompt.ifBlank { "Tap to edit system prompt" },
+            onValueChange = {},
+            label = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("System Prompt")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    PersistentTooltip(
+                        description = "Certain pipeline slots (like Crew Mode or Vision) require specialized system prompts to function correctly. Use the Import button to load a template."
+                    )
+                }
+            },
+            enabled = false,
+            readOnly = true,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            minLines = 4,
+            maxLines = 4,
+            colors = OutlinedTextFieldDefaults.colors(
+                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        )
+    }
+
+    if (showSystemPromptSheet) {
+        JumpFreeModalBottomSheet(
+            onDismissRequest = { showSystemPromptSheet = false },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = 32.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Edit System Prompt",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    var expanded by remember { mutableStateOf(false) }
+                    Row {
+                        TextButton(
+                            onClick = { expanded = true }
+                        ) {
+                            Text("Import Template")
+                        }
+                        DropdownMenu(
+                            expanded = expanded,
+                            onDismissRequest = { expanded = false }
+                        ) {
+                            SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
+                                DropdownMenuItem(
+                                    text = { Text(modelType.displayName()) },
+                                    onClick = {
+                                        onConfigChange(config.copy(systemPrompt = prompt))
+                                        expanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
+                    value = config.systemPrompt,
+                    onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    placeholder = { Text("Enter system prompt...") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Button(
+                    onClick = { showSystemPromptSheet = false },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Done", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ContextConfiguration(
+    config: ApiModelConfigUi,
+    hasReadonlyContextWindow: Boolean,
+    supportsMaxTokens: Boolean,
+    onConfigChange: (ApiModelConfigUi) -> Unit
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        OutlinedTextField(
+            modifier = Modifier.weight(1f),
+            value = config.contextWindow,
+            onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
+            readOnly = hasReadonlyContextWindow,
+            label = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Context Window")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    PersistentTooltip(description = "Total tokens (input + output) the model can process at once.")
+                }
+            },
+            shape = RoundedCornerShape(12.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
+        )
+
+        if (supportsMaxTokens) {
+            OutlinedTextField(
+                modifier = Modifier.weight(1f),
+                value = config.maxTokens,
+                onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
+                label = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Max Tokens")
+                        Spacer(modifier = Modifier.width(4.dp))
+                        PersistentTooltip(description = "Maximum number of tokens the model can generate in a single response.")
+                    }
+                },
+                shape = RoundedCornerShape(12.dp),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TuningConfiguration(
+    parameterSupport: ApiModelParameterSupport,
+    config: ApiModelConfigUi,
+    onConfigChange: (ApiModelConfigUi) -> Unit
+) {
+    val reasoningPolicy = parameterSupport.reasoningPolicy
+    var reasoningDropdownExpanded by remember(config.reasoningEffort, reasoningPolicy) { mutableStateOf(false) }
+
+    if (parameterSupport.supportsTopK) {
+        OutlinedTextField(
+            value = config.topK,
+            onValueChange = { onConfigChange(config.copy(topK = it)) },
+            label = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Top K")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    PersistentTooltip(description = "Limits the next token choice to the K most likely tokens.")
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done)
+        )
+    }
+
+    if (parameterSupport.supportsReasoningEffort) {
+        ExposedDropdownMenuBox(
+            expanded = reasoningDropdownExpanded,
+            onExpandedChange = { reasoningDropdownExpanded = it },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = reasoningSelectionLabel(config.reasoningEffort, reasoningPolicy),
+                onValueChange = {},
+                readOnly = true,
+                label = {
+                    Text(if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) "Agent Count" else "Reasoning")
+                },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = reasoningDropdownExpanded) },
+                modifier = Modifier
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                    .fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                placeholder = {
+                    Text(
+                        if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
+                            "Select agent count"
+                        } else {
+                            "Select reasoning level"
+                        }
+                    )
+                }
+            )
+            ExposedDropdownMenu(
+                expanded = reasoningDropdownExpanded,
+                onDismissRequest = { reasoningDropdownExpanded = false }
+            ) {
+                reasoningOptions(reasoningPolicy).forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.label) },
+                        onClick = {
+                            onConfigChange(config.copy(reasoningEffort = option.effort))
+                            reasoningDropdownExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        Text(
+            text = if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
+                "xAI multi-agent maps 4 agents to low reasoning and 16 agents to high reasoning."
+            } else {
+                "Reasoning support varies by provider and model."
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    if (parameterSupport.supportsMinP) {
+        TuningSlider(
+            label = "Min P",
+            description = "Limits the next token choice to tokens with probability at least P times the probability of the most likely token.",
+            value = config.minP.toFloat(),
+            range = 0f..1f,
+            onValueChange = { onConfigChange(config.copy(minP = it.toDouble())) }
+        )
+    }
+
+    TuningSlider(
+        label = "Temperature",
+        description = "Controls randomness. Lower values are more deterministic; higher values are more creative.",
+        value = config.temperature.toFloat(),
+        range = 0f..2f,
+        onValueChange = { onConfigChange(config.copy(temperature = it.toDouble())) }
+    )
+
+    TuningSlider(
+        label = "Top P",
+        description = "Limits the next token choice to a subset of tokens whose cumulative probability exceeds P.",
+        value = config.topP.toFloat(),
+        range = 0f..1f,
+        onValueChange = { onConfigChange(config.copy(topP = it.toDouble())) }
+    )
+
+    if (parameterSupport.supportsFrequencyPenalty) {
+        TuningSlider(
+            label = "Frequency Penalty",
+            description = "Penalizes tokens based on their frequency in the generated text so far.",
+            value = config.frequencyPenalty.toFloat(),
+            range = -2f..2f,
+            onValueChange = { onConfigChange(config.copy(frequencyPenalty = it.toDouble())) }
+        )
+    }
+
+    if (parameterSupport.supportsPresencePenalty) {
+        TuningSlider(
+            label = "Presence Penalty",
+            description = "Penalizes tokens based on whether they have appeared at least once in the generated text.",
+            value = config.presencePenalty.toFloat(),
+            range = -2f..2f,
+            onValueChange = { onConfigChange(config.copy(presencePenalty = it.toDouble())) }
+        )
+    }
+}
+
 @Composable
 fun PresetConfigurationForm(
     provider: ApiProvider,
@@ -446,10 +732,6 @@ fun PresetConfigurationForm(
     onConfigChange: (ApiModelConfigUi) -> Unit,
     onNavigateToCustomHeaders: () -> Unit
 ) {
-    val reasoningPolicy = parameterSupport.reasoningPolicy
-    var reasoningDropdownExpanded by remember(config.reasoningEffort, reasoningPolicy) { mutableStateOf(false) }
-    var showSystemPromptSheet by remember { mutableStateOf(false) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val hasReadonlyContextWindow = selectedModelMetadata?.contextWindowTokens != null
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -463,110 +745,11 @@ fun PresetConfigurationForm(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next)
         )
 
-        Box(
-            modifier = Modifier.fillMaxWidth().clickable { showSystemPromptSheet = true }
-        ) {
-            OutlinedTextField(
-                value = config.systemPrompt.ifBlank { "Tap to edit system prompt" },
-                onValueChange = {},
-                label = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("System Prompt")
-                        Spacer(modifier = Modifier.width(4.dp))
-                        PersistentTooltip(
-                            description = "Certain pipeline slots (like Crew Mode or Vision) require specialized system prompts to function correctly. Use the Import button to load a template."
-                        )
-                    }
-                },
-                enabled = false,
-                readOnly = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                minLines = 4,
-                maxLines = 4,
-                colors = OutlinedTextFieldDefaults.colors(
-                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                    disabledBorderColor = MaterialTheme.colorScheme.outline,
-                    disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                    disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            )
-        }
-        
-        if (showSystemPromptSheet) {
-            JumpFreeModalBottomSheet(
-                onDismissRequest = { showSystemPromptSheet = false },
-                sheetState = sheetState
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 20.dp)
-                        .padding(bottom = 32.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Edit System Prompt",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        
-                        var expanded by remember { mutableStateOf(false) }
-                        Row {
-                            TextButton(
-                                onClick = { expanded = true }
-                            ) {
-                                Text("Import Template")
-                            }
-                            DropdownMenu(
-                                expanded = expanded,
-                                onDismissRequest = { expanded = false }
-                            ) {
-                                SystemPromptTemplates.getAll().forEach { (modelType, prompt) ->
-                                    DropdownMenuItem(
-                                        text = { Text(modelType.displayName()) },
-                                        onClick = {
-                                            onConfigChange(config.copy(systemPrompt = prompt))
-                                            expanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    OutlinedTextField(
-                        value = config.systemPrompt,
-                        onValueChange = { onConfigChange(config.copy(systemPrompt = it)) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        shape = RoundedCornerShape(12.dp),
-                        placeholder = { Text("Enter system prompt...") },
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences)
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Button(
-                        onClick = { showSystemPromptSheet = false },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Done", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-        
+        SystemPromptConfiguration(
+            config = config,
+            onConfigChange = onConfigChange
+        )
+
         if (provider == ApiProvider.OPENROUTER) {
             OpenRouterRoutingCard(
                 routing = config.openRouterRouting,
@@ -576,160 +759,20 @@ fun PresetConfigurationForm(
 
         ConfigurationHeader("Context")
 
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            OutlinedTextField(
-                modifier = Modifier.weight(1f),
-                value = config.contextWindow,
-                onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
-                readOnly = hasReadonlyContextWindow,
-                label = { 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Context Window")
-                        Spacer(modifier = Modifier.width(4.dp))
-                        PersistentTooltip(description = "Total tokens (input + output) the model can process at once.")
-                    }
-                },
-                shape = RoundedCornerShape(12.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
-            )
-
-            if (parameterSupport.supportsMaxTokens) {
-                OutlinedTextField(
-                    modifier = Modifier.weight(1f),
-                    value = config.maxTokens,
-                    onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
-                    label = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Max Tokens")
-                            Spacer(modifier = Modifier.width(4.dp))
-                            PersistentTooltip(description = "Maximum number of tokens the model can generate in a single response.")
-                        }
-                    },
-                    shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
-                )
-            }
-        }
+        ContextConfiguration(
+            config = config,
+            hasReadonlyContextWindow = hasReadonlyContextWindow,
+            supportsMaxTokens = parameterSupport.supportsMaxTokens,
+            onConfigChange = onConfigChange
+        )
 
         ConfigurationHeader("Tuning")
 
-        if (parameterSupport.supportsTopK) {
-            OutlinedTextField(
-                value = config.topK,
-                onValueChange = { onConfigChange(config.copy(topK = it)) },
-                label = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Top K")
-                        Spacer(modifier = Modifier.width(4.dp))
-                        PersistentTooltip(description = "Limits the next token choice to the K most likely tokens.")
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done)
-            )
-        }
-
-        if (parameterSupport.supportsReasoningEffort) {
-            ExposedDropdownMenuBox(
-                expanded = reasoningDropdownExpanded,
-                onExpandedChange = { reasoningDropdownExpanded = it },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = reasoningSelectionLabel(config.reasoningEffort, reasoningPolicy),
-                    onValueChange = {},
-                    readOnly = true,
-                    label = {
-                        Text(if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) "Agent Count" else "Reasoning")
-                    },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = reasoningDropdownExpanded) },
-                    modifier = Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                        .fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    placeholder = {
-                        Text(
-                            if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
-                                "Select agent count"
-                            } else {
-                                "Select reasoning level"
-                            }
-                        )
-                    }
-                )
-                ExposedDropdownMenu(
-                    expanded = reasoningDropdownExpanded,
-                    onDismissRequest = { reasoningDropdownExpanded = false }
-                ) {
-                    reasoningOptions(reasoningPolicy).forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option.label) },
-                            onClick = {
-                                onConfigChange(config.copy(reasoningEffort = option.effort))
-                                reasoningDropdownExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
-
-            Text(
-                text = if (reasoningPolicy.controlStyle == ApiReasoningControlStyle.XAI_MULTI_AGENT) {
-                    "xAI multi-agent maps 4 agents to low reasoning and 16 agents to high reasoning."
-                } else {
-                    "Reasoning support varies by provider and model."
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        if (parameterSupport.supportsMinP) {
-            TuningSlider(
-                label = "Min P",
-                description = "Limits the next token choice to tokens with probability at least P times the probability of the most likely token.",
-                value = config.minP.toFloat(),
-                range = 0f..1f,
-                onValueChange = { onConfigChange(config.copy(minP = it.toDouble())) }
-            )
-        }
-
-        TuningSlider(
-            label = "Temperature",
-            description = "Controls randomness. Lower values are more deterministic; higher values are more creative.",
-            value = config.temperature.toFloat(),
-            range = 0f..2f,
-            onValueChange = { onConfigChange(config.copy(temperature = it.toDouble())) }
+        TuningConfiguration(
+            parameterSupport = parameterSupport,
+            config = config,
+            onConfigChange = onConfigChange
         )
-
-        TuningSlider(
-            label = "Top P",
-            description = "Limits the next token choice to a subset of tokens whose cumulative probability exceeds P.",
-            value = config.topP.toFloat(),
-            range = 0f..1f,
-            onValueChange = { onConfigChange(config.copy(topP = it.toDouble())) }
-        )
-
-        if (parameterSupport.supportsFrequencyPenalty) {
-            TuningSlider(
-                label = "Frequency Penalty",
-                description = "Penalizes tokens based on their frequency in the generated text so far.",
-                value = config.frequencyPenalty.toFloat(),
-                range = -2f..2f,
-                onValueChange = { onConfigChange(config.copy(frequencyPenalty = it.toDouble())) }
-            )
-        }
-
-        if (parameterSupport.supportsPresencePenalty) {
-            TuningSlider(
-                label = "Presence Penalty",
-                description = "Penalizes tokens based on whether they have appeared at least once in the generated text.",
-                value = config.presencePenalty.toFloat(),
-                range = -2f..2f,
-                onValueChange = { onConfigChange(config.copy(presencePenalty = it.toDouble())) }
-            )
-        }
 
         ConfigurationHeader("Headers")
 
