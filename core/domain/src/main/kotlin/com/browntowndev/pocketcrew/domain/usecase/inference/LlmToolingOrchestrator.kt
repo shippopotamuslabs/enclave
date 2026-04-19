@@ -11,8 +11,8 @@ import javax.inject.Inject
 
 /**
  * Result of checking whether the context window is exceeded during a tool loop.
- * If mid-loop compaction was performed, [rebuiltParams] contains the new params
- * built from the compacted history. If compaction failed or was insufficient,
+ * If mid-loop history rebuilding was performed, [rebuiltParams] contains the new params
+ * built from the updated history. If rebuilding failed or was insufficient,
  * [contextExceeded] remains true and the model will be warned to stop calling tools.
  */
 data class ContextExceededResult<TParams>(
@@ -57,7 +57,7 @@ class LlmToolingOrchestrator @Inject constructor(
      *   and a list of pairs containing each [ToolCallRequest] and its corresponding result JSON.
      * @param onContextExceeded A lambda called after tool results are mapped to check if context window
      *   is past threshold. Returns a [ContextExceededResult] indicating whether context is exceeded
-     *   (after any mid-loop compaction), and optionally containing rebuilt params from compacted history.
+     *   (after any mid-loop history rebuilding), and optionally containing rebuilt params from the updated history.
      * @param onToolResult A lambda called for each individual tool result (e.g., for source tracking).
      * @param onNoToolCallOnFirstPass An optional lambda called if the first pass contains no tool calls.
      * @param onFinished A lambda called after the loop finishes.
@@ -177,7 +177,7 @@ class LlmToolingOrchestrator @Inject constructor(
             val contextResult = onContextExceeded(currentParams, turnResults)
             if (contextResult.rebuiltParams != null) {
                 currentParams = contextResult.rebuiltParams
-                loggingPort.info(tag, "Mid-loop compaction rebuilt params provider=$providerName")
+                loggingPort.info(tag, "Mid-loop history rebuilt params provider=$providerName")
             }
             if (contextResult.contextExceeded) {
                 contextFullWarned = true

@@ -287,8 +287,10 @@ class AnthropicInferenceServiceImpl(
 
     /**
      * Estimates whether the request plus accumulated tool results exceeds the context window threshold.
-     * API providers are stateless between requests, so compaction happens before the request is sent;
-     * during a tool loop this method only detects pressure so the model can be told to stop.
+     * API providers are stateless between requests, so summarization happens before the request is sent;
+     * mid-loop history rebuilding is possible but not yet implemented for API providers.
+     * Returns a [ContextExceededResult] indicating whether context is exceeded after
+     * any mid-loop history rebuilding.
      */
     private fun estimateContextExceeded(
         requestHistory: List<ChatMessage>,

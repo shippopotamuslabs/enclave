@@ -459,9 +459,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 params
             },
             onContextExceeded = { _, _ ->
-                // Llama uses local KV cache — mid-loop compaction isn't feasible.
-                // Detect whether context is exceeded and report to orchestrator
-                // so the contextFullWarned hard-error logic kicks in.
+                // Llama uses local KV cache, so mid-loop rebuilding is not feasible.
+                // Estimate current pressure from the same inputs used by ToolContextBudget.
                 val tokenCounter = com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
                 val modelId = currentSignature?.modelId?.value
                 val systemPromptTokens = ToolContextBudget.countSystemPromptTokens(currentSystemPrompt, modelId, tokenCounter)
@@ -475,10 +474,19 @@ class LlamaInferenceServiceImpl @Inject constructor(
                     modelId = modelId,
                     tokenCounter = tokenCounter,
                 )
-                if (evaluation.contextFull) {
-                    loggingPort.warning(TAG, "Llama context exceeded mid-loop: estimatedTokens=${evaluation.totalTokens} window=$currentContextWindow")
+                val ratio = if (currentContextWindow > 0) {
+                    evaluation.totalTokens.toFloat() / currentContextWindow.toFloat()
+                } else {
+                    0f
                 }
-                ContextExceededResult(evaluation.contextFull)
+                if (ratio > 0.9f) {
+                    ContextExceededResult(contextExceeded = true)
+                } else {
+                    if (evaluation.contextFull) {
+                        loggingPort.warning(TAG, "Llama context exceeded mid-loop: estimatedTokens=${evaluation.totalTokens} window=$currentContextWindow")
+                    }
+                    ContextExceededResult(evaluation.contextFull)
+                }
             },
             onToolResult = { toolCall, resultJson ->
                 if (toolCall.toolName == com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.TAVILY_WEB_SEARCH.name) {
