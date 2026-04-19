@@ -46,7 +46,9 @@ object ApiProviderModelPolicy {
 
     private val xaiMultiAgentEfforts = listOf(
         ApiReasoningEffort.LOW,
+        ApiReasoningEffort.MEDIUM,
         ApiReasoningEffort.HIGH,
+        ApiReasoningEffort.XHIGH,
     )
 
     fun supportsModelDiscovery(provider: ApiProvider): Boolean =
@@ -111,13 +113,11 @@ object ApiProviderModelPolicy {
             return ApiModelParameterSupport(reasoningPolicy = reasoningPolicy)
         }
 
+        // xAI only accepts user-controlled reasoning effort on the grok-3-mini and multi-agent families.
         val reasoningEffortSupported = when {
             isXaiGrok3MiniModel(modelId) -> true
             isXaiMultiAgentModel(modelId) -> true
-            isXaiGrok3Model(modelId) -> false
-            isXaiGrok4ReasoningFamily(modelId) -> false
-            isXaiGrok4NonReasoningFamily(modelId) -> false
-            else -> true
+            else -> false
         }
 
         return ApiModelParameterSupport(
