@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.domain.port.inference
 
-import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 class InferenceBusyException(
@@ -13,26 +12,11 @@ class InferenceBusyException(
  */
 interface InferenceFactoryPort {
     /**
-     * Runs [block] with the resolved inference service for [modelType].
-     *
-     * Implementations own both lifecycle and concurrency:
-     * - only one on-device inference may run at a time
-     * - same model identity reuses the already loaded engine
-     * - a different model identity closes the previous idle engine before loading the next
-     *
-     * If another on-device inference is already in progress, implementations should throw
-     * [InferenceBusyException].
+     * Executes a block of work with an inference service.
+     * Manages model lifecycle and engine-level mutual exclusion.
      */
     suspend fun <T> withInferenceService(
         modelType: ModelType,
-        block: suspend (LlmInferencePort) -> T
-    ): T
-
-    /**
-     * Runs [block] with the resolved inference service for a specific API configuration ID.
-     */
-    suspend fun <T> withInferenceServiceByConfigId(
-        configId: ApiModelConfigurationId,
         block: suspend (LlmInferencePort) -> T
     ): T
 }
