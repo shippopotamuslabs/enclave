@@ -34,7 +34,7 @@ data class ToolDefinition(
     fun toExample(strategy: ToolCallStrategy): String = when (strategy) {
         ToolCallStrategy.JSON_XML_ENVELOPE -> {
             val arguments = buildExampleJsonMap()
-            "<tool_call>{\"name\":\"$name\",\"arguments\":$arguments}</tool_call>"
+            "ActionResult{\"name\":\"$name\",\"arguments\":$arguments}ActionResult"
         }
         ToolCallStrategy.LITE_RT_NATIVE -> {
             val args = buildExampleLiteRtArgs()
@@ -140,7 +140,7 @@ data class ToolDefinition(
 
         val SEARCH_CHAT = ToolDefinition(
             name = "search_chat",
-            description = "Search messages in a specific chat for details no longer in the context window due to summarization, compaction, or FIFO eviction. Use when the user references something from earlier in a conversation that you cannot recall. Requires a chat_id (obtained from search_chat_history or from the current chat ID provided in your instructions).",
+            description = "Search messages in a specific chat for details no longer in the context window due to summarization or FIFO eviction. Use when the user references something from earlier in a conversation that you cannot recall. Requires a chat_id (obtained from search_chat_history or from the current chat ID provided in your instructions).",
             parametersClass = SearchChatParams::class,
         )
 
