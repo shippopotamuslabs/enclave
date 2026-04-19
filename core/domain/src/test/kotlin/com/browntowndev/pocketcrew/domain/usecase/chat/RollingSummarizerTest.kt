@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * Tests for [RollingSummarizer] — the fallback summarization strategy used when
- * the primary CompactionProvider returns null and allowLocalSummarization is true.
+ * context budget is exceeded and shouldSummarize is true.
  *
  * Uses [FakeInferenceServiceForRollingSummarizer] to control inference responses.
  */

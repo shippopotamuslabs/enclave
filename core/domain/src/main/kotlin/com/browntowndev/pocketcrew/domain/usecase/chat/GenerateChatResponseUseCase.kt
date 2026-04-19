@@ -13,6 +13,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+
 import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
@@ -46,11 +47,9 @@ class GenerateChatResponseUseCase @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val searchToolPromptComposer: SearchToolPromptComposer,
     private val extractedUrlTracker: ExtractedUrlTrackerPort,
-    private val compactionPort: com.browntowndev.pocketcrew.domain.port.inference.CompactionPort,
 ) {
     private val historyRehydrator = ChatHistoryRehydrator(
         messageRepository = messageRepository,
-        compactionPort = compactionPort,
         loggingPort = loggingPort,
     )
     private val inferenceRequestPreparer = ChatInferenceRequestPreparer(
@@ -89,8 +88,20 @@ class GenerateChatResponseUseCase @Inject constructor(
                 chatRepository = chatRepository,
             )
 
+            // Observe extraction events so the accumulator marks sources as extracted
+            // in real time, ensuring the UI shows the “read” indicator during generation
+            // and the persisted snapshots carry the correct flag.
             try {
                 baseFlow.collect { state ->
+                    // Apply any URLs that have been extracted since the last emission.
+                    // The ExtractedUrlTracker is updated by the ExtractToolExecutor when a URL
+                    // is read, but the accumulator's sources still have extracted=false. We
+                    // reconcile this here so that snapshots emitted to the ViewModel carry the
+                    // correct extracted flag in real time.
+                    val extractedUrls = extractedUrlTracker.urls
+                    if (extractedUrls.isNotEmpty()) {
+                        accumulatorManager.markSourcesExtracted(extractedUrls.toList())
+                    }
                     emit(accumulatorManager.reduce(state))
                 }
             } finally {
@@ -253,7 +264,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                 assistantMessageId = assistantMessageId,
                 service = service,
                 contextWindowTokens = config?.contextWindow ?: 4096,
-                allowLocalSummarization = config?.isLocal != true,
+                shouldSummarize = config?.isLocal != true,
                 currentPrompt = preparedRequest.prompt,
                 options = preparedRequest.options,
             )

@@ -8,6 +8,14 @@ internal class PersistAccumulatedChatMessagesUseCase(
     private val extractedUrls: Set<String>,
 ) {
     suspend operator fun invoke(accumulatorManager: ChatGenerationAccumulatorManager) {
+        // Apply extracted flags from the tracker before persisting.
+        // This ensures the DB write has extracted=true even if the accumulator
+        // snapshot was created before the extraction event was processed.
+        val extractedUrls = extractedUrls
+        if (extractedUrls.isNotEmpty()) {
+            accumulatorManager.markSourcesExtracted(extractedUrls.toList())
+        }
+
         accumulatorManager.messages.values.forEach { accumulator ->
             chatRepository.persistAllMessageData(
                 messageId = accumulator.messageId,

@@ -8,7 +8,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageVisionAnalysis
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
-import com.browntowndev.pocketcrew.domain.port.inference.CompactionPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
@@ -19,7 +18,6 @@ import com.browntowndev.pocketcrew.domain.util.TokenCounter
 
 internal class ChatHistoryRehydrator(
     private val messageRepository: MessageRepository,
-    private val compactionPort: CompactionPort,
     private val loggingPort: LoggingPort,
     private val tokenCounter: TokenCounter = JTokkitTokenCounter,
 ) {
@@ -30,7 +28,7 @@ internal class ChatHistoryRehydrator(
         assistantMessageId: MessageId,
         service: LlmInferencePort,
         contextWindowTokens: Int = 4096, // Fallback
-        allowLocalSummarization: Boolean = false,
+        shouldSummarize: Boolean = false,
         currentPrompt: String = "",
         options: GenerationOptions = GenerationOptions(reasoningBudget = 0),
     ) {
@@ -38,7 +36,7 @@ internal class ChatHistoryRehydrator(
         val allMessages = messageRepository.getMessagesForChat(chatId)
 
         // If a summary exists, filter out messages that are older than or equal to the last summarized message.
-        // If lastSummarizedMessageId is null (FK SET NULL from deleted message, or first compaction with no
+        // If lastSummarizedMessageId is null (FK SET NULL from deleted message, or first summarization with no
         // remaining messages), the summary covers everything — load no messages to avoid duplicate context.
         var relevantMessages = if (summary != null) {
             if (summary.lastSummarizedMessageId != null) {
@@ -85,98 +83,71 @@ internal class ChatHistoryRehydrator(
         if (ContextWindowPlanner.shouldCompact(estimatedPromptTokens, budget)) {
             loggingPort.info(
                 TAG,
-                "Compaction triggered: estimatedTokens=$estimatedPromptTokens usablePromptTokens=${budget.usablePromptTokens} thresholdTokens=${budget.thresholdTokens} window=$contextWindowTokens"
+                "Context budget exceeded: estimatedTokens=$estimatedPromptTokens usablePromptTokens=${budget.usablePromptTokens} thresholdTokens=${budget.thresholdTokens} window=$contextWindowTokens"
             )
-            val compactedText = try {
-                compactionPort.compactHistory(chatMessages)
-            } catch (e: Exception) {
-                loggingPort.warning(TAG, "Compaction port threw exception, falling back to FIFO trimming: ${e.message}")
-                null
-            }
-            if (compactedText != null) {
-                val lastMessageId = filteredMessages.lastOrNull()?.id ?: summary?.lastSummarizedMessageId
-                val newSummary = ChatSummary(
-                    chatId = chatId,
-                    content = compactedText,
-                    lastSummarizedMessageId = lastMessageId,
-                )
-                messageRepository.saveChatSummary(newSummary)
 
-                // Refresh local state after successful compaction
-                summary = newSummary
-                relevantMessages = emptyList() // All summarized
-                filteredMessages = emptyList()
-                analysesByMessage = emptyMap()
-                chatMessages = buildChatMessages(summary, filteredMessages, analysesByMessage)
+            // Do not run local summarization for local models; it uses the same overloaded engine.
+            if (!shouldSummarize) {
                 loggingPort.info(
                     TAG,
-                    "Compaction successful. New summary size: ${tokenCounter.countTokens(compactedText)} tokens",
+                    "Context budget exceeded, but summarization is not allowed (likely a local model). Falling through to FIFO trimming.",
                 )
             } else {
-                // Fallback: Rolling Summarization
-                // Do not run local summarization for local models; it uses the same overloaded engine.
-                if (!allowLocalSummarization) {
-                    loggingPort.info(
-                        TAG,
-                        "Compaction provider disabled or failed, and local summarization is not allowed. Falling through to FIFO trimming.",
-                    )
-                } else {
-                    loggingPort.info(TAG, "Compaction provider disabled or failed, attempting rolling summarization")
-                    service.setHistory(emptyList())
-                    val summaryText = rollingSummarizer.summarize(chatMessages, service)
-                    if (summaryText != null) {
-                        // Find the split point: divide filteredMessages (excluding summary) at 50% token boundary.
-                        // We count tokens over filteredMessages only — the prior summary tokens are NOT included
-                        // in the split calculation because the summary will be re-incorporated by the new summary.
-                        val filteredTokens = filteredMessages.sumOf { tokenCounter.countTokens(it.content.text) }
-                        val targetTokens = filteredTokens / 2
+                loggingPort.info(TAG, "Attempting rolling summarization")
+                service.setHistory(emptyList())
+                val summaryText = rollingSummarizer.summarize(chatMessages, service)
+                if (summaryText != null) {
+                    // Find the split point: divide filteredMessages (excluding summary) at 50% token boundary.
+                    // We count tokens over filteredMessages only — the prior summary tokens are NOT included
+                    // in the split calculation because the summary will be re-incorporated by the new summary.
+                    val filteredTokens = filteredMessages.sumOf { tokenCounter.countTokens(it.content.text) }
+                    val targetTokens = filteredTokens / 2
 
-                        var accumulatedTokens = 0
-                        var splitIndexInHistory = 0
-                        for (i in filteredMessages.indices) {
-                            accumulatedTokens += tokenCounter.countTokens(filteredMessages[i].content.text)
-                            if (accumulatedTokens >= targetTokens) {
-                                splitIndexInHistory = i
-                                break
-                            }
+                    var accumulatedTokens = 0
+                    var splitIndexInHistory = 0
+                    for (i in filteredMessages.indices) {
+                        accumulatedTokens += tokenCounter.countTokens(filteredMessages[i].content.text)
+                        if (accumulatedTokens >= targetTokens) {
+                            splitIndexInHistory = i
+                            break
                         }
-
-                        val lastSummarizedMsgId =
-                            filteredMessages.getOrNull(splitIndexInHistory)?.id ?: summary?.lastSummarizedMessageId
-
-                        val newSummary = ChatSummary(
-                            chatId = chatId,
-                            content = summaryText,
-                            lastSummarizedMessageId = lastSummarizedMsgId,
-                        )
-                        messageRepository.saveChatSummary(newSummary)
-
-                        // Refresh local state
-                        summary = newSummary
-                        loggingPort.info(TAG, "Rolling summarization successful")
-
-                        // Re-calculate chatMessages for the current turn
-                        val refreshedAllMessages = messageRepository.getMessagesForChat(chatId)
-                        val refreshedRelevantMessages = if (newSummary.lastSummarizedMessageId != null) {
-                            val lastIndex = refreshedAllMessages.indexOfFirst { it.id == newSummary.lastSummarizedMessageId }
-                            if (lastIndex != -1) {
-                                refreshedAllMessages.subList(lastIndex + 1, refreshedAllMessages.size)
-                            } else {
-                                refreshedAllMessages
-                            }
-                        } else refreshedAllMessages
-
-                        val refreshedFilteredMessages = refreshedRelevantMessages
-                            .filter { it.content.text.isNotBlank() || it.content.imageUri != null }
-                            .filter { it.id != userMessageId }
-                            .filter { it.id != assistantMessageId }
-
-                        chatMessages = buildChatMessages(
-                            summary,
-                            refreshedFilteredMessages,
-                            messageRepository.getVisionAnalysesForMessages(refreshedFilteredMessages.map { it.id }),
-                        )
                     }
+
+                    val lastSummarizedMsgId =
+                        filteredMessages.getOrNull(splitIndexInHistory)?.id ?: summary?.lastSummarizedMessageId
+
+                    val newSummary = ChatSummary(
+                        chatId = chatId,
+                        content = summaryText,
+                        lastSummarizedMessageId = lastSummarizedMsgId,
+                    )
+                    messageRepository.saveChatSummary(newSummary)
+
+                    // Refresh local state
+                    summary = newSummary
+                    loggingPort.info(TAG, "Rolling summarization successful")
+
+                    // Re-calculate chatMessages for the current turn
+                    val refreshedAllMessages = messageRepository.getMessagesForChat(chatId)
+                    val refreshedRelevantMessages = if (newSummary.lastSummarizedMessageId != null) {
+                        val lastIndex = refreshedAllMessages.indexOfFirst { it.id == newSummary.lastSummarizedMessageId }
+                        if (lastIndex != -1) {
+                            refreshedAllMessages.subList(lastIndex + 1, refreshedAllMessages.size)
+                        } else {
+                            refreshedAllMessages
+                        }
+                    } else refreshedAllMessages
+
+                    val refreshedFilteredMessages = refreshedRelevantMessages
+                        .filter { it.content.text.isNotBlank() || it.content.imageUri != null }
+                        .filter { it.id != userMessageId }
+                        .filter { it.id != assistantMessageId }
+
+                    chatMessages = buildChatMessages(
+                        summary,
+                        refreshedFilteredMessages,
+                        messageRepository.getVisionAnalysesForMessages(refreshedFilteredMessages.map { it.id }),
+                    )
                 }
             }
         }
