@@ -69,14 +69,22 @@ class ApiProviderModelPolicyTest {
     }
 
     @Test
-    fun `xai multi-agent policy exposes two agent-count-backed reasoning options`() {
+    fun `xai multi-agent policy exposes documented agent-count-backed reasoning options`() {
         val policy = ApiProviderModelPolicy.reasoningPolicy(
             provider = ApiProvider.XAI,
             modelId = "grok-4.20-multi-agent-0309",
         )
 
         assertEquals(ApiReasoningControlStyle.XAI_MULTI_AGENT, policy.controlStyle)
-        assertEquals(listOf(ApiReasoningEffort.LOW, ApiReasoningEffort.HIGH), policy.supportedEfforts)
+        assertEquals(
+            listOf(
+                ApiReasoningEffort.LOW,
+                ApiReasoningEffort.MEDIUM,
+                ApiReasoningEffort.HIGH,
+                ApiReasoningEffort.XHIGH,
+            ),
+            policy.supportedEfforts,
+        )
         assertEquals(ApiReasoningEffort.LOW, policy.defaultEffort)
     }
 
@@ -191,6 +199,24 @@ class ApiProviderModelPolicyTest {
         assertFalse(multiAgent.supportsFrequencyPenalty)
         assertFalse(multiAgent.supportsPresencePenalty)
         assertTrue(multiAgent.supportsReasoningEffort)
+
+        val grok420Reasoning = ApiProviderModelPolicy.parameterSupport(
+            provider = ApiProvider.XAI,
+            modelId = "grok-4.20-reasoning",
+        )
+        assertFalse(grok420Reasoning.supportsReasoningEffort)
+
+        val grok420 = ApiProviderModelPolicy.parameterSupport(
+            provider = ApiProvider.XAI,
+            modelId = "grok-4.20",
+        )
+        assertFalse(grok420.supportsReasoningEffort)
+
+        val grok41Fast = ApiProviderModelPolicy.parameterSupport(
+            provider = ApiProvider.XAI,
+            modelId = "grok-4-1-fast",
+        )
+        assertFalse(grok41Fast.supportsReasoningEffort)
 
         val grok4Reasoning = ApiProviderModelPolicy.parameterSupport(
             provider = ApiProvider.XAI,

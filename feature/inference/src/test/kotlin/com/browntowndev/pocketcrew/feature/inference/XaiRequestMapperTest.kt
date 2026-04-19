@@ -45,20 +45,21 @@ class XaiRequestMapperTest {
     }
 
     @Test
-    fun `mapToResponseParams includes low reasoning for multi agent mode`() {
+    fun `mapToResponseParams includes effort only reasoning for multi agent mode`() {
         val params = XaiRequestMapper.mapToResponseParams(
             modelId = "grok-4.20-multi-agent",
             prompt = "hello",
             history = emptyList(),
             options = GenerationOptions(
                 reasoningBudget = 0,
-                reasoningEffort = ApiReasoningEffort.LOW
+                reasoningEffort = ApiReasoningEffort.XHIGH
             )
         )
 
         assertTrue(params.reasoning().isPresent)
-        assertTrue(params.reasoning().get().toString().contains("low"))
-        assertTrue(params.reasoning().get().toString().contains("concise"))
+        assertEquals("xhigh", params.reasoning().get().effort().get().toString())
+        assertFalse(params.reasoning().get().summary().isPresent)
+        assertFalse(params.reasoning().get().generateSummary().isPresent)
     }
 
     @Test
@@ -153,6 +154,21 @@ class XaiRequestMapperTest {
     }
 
     @Test
+    fun `mapToResponseParams removes reasoning effort for grok 420 family`() {
+        val params = XaiRequestMapper.mapToResponseParams(
+            modelId = "grok-4.20-reasoning",
+            prompt = "hello",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                reasoningEffort = ApiReasoningEffort.LOW,
+            ),
+        )
+
+        assertFalse(params.reasoning().isPresent)
+    }
+
+    @Test
     fun `mapToResponseParams never sends max tokens for multi agent suffix model`() {
         val params = XaiRequestMapper.mapToResponseParams(
             modelId = "grok-4.20-multi-agent-0309",
@@ -166,6 +182,69 @@ class XaiRequestMapperTest {
 
         assertFalse(params.maxOutputTokens().isPresent)
         assertFalse(params.tools().isPresent)
+    }
+
+    @Test
+    fun `mapToResponseParams does not send xai tool planner overrides`() {
+        val params = XaiRequestMapper.mapToResponseParams(
+            modelId = "grok-4.20-multi-agent",
+            prompt = "hello",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+            ),
+        )
+
+        assertFalse(params.maxToolCalls().isPresent)
+        assertFalse(params.parallelToolCalls().isPresent)
+    }
+
+    @Test
+    fun `mapToResponseParams sends xai compatible non strict tool schema`() {
+        val params = XaiRequestMapper.mapToResponseParams(
+            modelId = "grok-4.20-multi-agent",
+            prompt = "hello",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+            ),
+        )
+
+        val toolsPayload = params._additionalBodyProperties()["tools"].toString()
+        assertFalse(params.tools().isPresent)
+        assertFalse(toolsPayload.contains("strict"))
+        assertFalse(toolsPayload.contains("additionalProperties"))
+        assertTrue(toolsPayload.contains("type"))
+        assertTrue(toolsPayload.contains("function"))
+        assertTrue(toolsPayload.contains("tavily_web_search"))
+        assertTrue(toolsPayload.contains("properties"))
+        assertTrue(toolsPayload.contains("required"))
+    }
+
+    @Test
+    fun `mapToChatCompletionParams sends xai compatible non strict tool schema`() {
+        val params = XaiRequestMapper.mapToChatCompletionParams(
+            modelId = "grok-3",
+            prompt = "hello",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+            ),
+        )
+
+        val tool = params.tools().orElseThrow().single().asFunction().function()
+        val schema = tool.parameters().orElseThrow()._additionalProperties()
+        assertFalse(tool.strict().isPresent)
+        assertFalse(schema.containsKey("additionalProperties"))
+        assertTrue(schema.containsKey("type"))
+        assertTrue(schema.containsKey("properties"))
+        assertTrue(schema.containsKey("required"))
     }
 
     @Test
