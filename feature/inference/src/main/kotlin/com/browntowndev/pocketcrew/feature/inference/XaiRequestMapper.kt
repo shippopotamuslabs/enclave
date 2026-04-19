@@ -69,13 +69,33 @@ object XaiRequestMapper {
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
         sanitizedOptions.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
+        
+        val toolsPayload = mutableListOf<Map<String, Any>>()
+        
+        // Add native tools for models that support them (e.g., grok-4.20 family)
+        if (modelId.startsWith("grok-4.20")) {
+            toolsPayload.add(mapOf("type" to "web_search"))
+            toolsPayload.add(mapOf("type" to "x_search"))
+            toolsPayload.add(mapOf("type" to "code_execution"))
+        }
+
         if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
-            options.availableTools.forEach { builder.addTool(it.toChatCompletionTool()) }
-            builder.parallelToolCalls(false)
+            if (isMultiAgentModel(modelId)) {
+                // NOTE: Client-side tools are not currently available for multi-agent models
+                // in the public xAI API without developer beta access. Stripping them out to prevent 400 errors.
+            } else {
+                toolsPayload.addAll(options.availableTools.map { it.toChatCompletionToolMap() })
+                builder.parallelToolCalls(false)
+            }
+        }
+
+        if (toolsPayload.isNotEmpty()) {
+            builder.putAdditionalBodyProperty("tools", JsonValue.from(toolsPayload))
         }
 
         return builder.build()
     }
+
 
     fun mapToResponseParams(
         modelId: String,
@@ -115,14 +135,32 @@ object XaiRequestMapper {
         options.temperature?.let { builder.temperature(it.toDouble()) }
         options.topP?.let { builder.topP(it.toDouble()) }
         sanitizedOptions.maxTokens?.let { builder.maxOutputTokens(it.toLong()) }
+        
+        val toolsPayload = mutableListOf<Map<String, Any>>()
+        
+        // Add native tools for models that support them (e.g., grok-4.20 family)
+        if (modelId.startsWith("grok-4.20")) {
+            toolsPayload.add(mapOf("type" to "web_search"))
+            toolsPayload.add(mapOf("type" to "x_search"))
+            toolsPayload.add(mapOf("type" to "code_execution"))
+        }
+
         if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
-            options.availableTools.forEach { builder.addTool(it.toResponsesTool()) }
-            builder.parallelToolCalls(false)
-            builder.maxToolCalls(1)
+            if (isMultiAgentModel(modelId)) {
+                // NOTE: Client-side tools are not currently available for multi-agent models
+                // in the public xAI API without developer beta access. Stripping them out to prevent 400 errors.
+            } else {
+                toolsPayload.addAll(options.availableTools.map { it.toResponseToolPayloadMap() })
+            }
+        }
+
+        if (toolsPayload.isNotEmpty()) {
+            builder.putAdditionalBodyProperty("tools", JsonValue.from(toolsPayload))
         }
 
         return builder.build()
     }
+
 
     fun isMultiAgentModel(modelId: String): Boolean =
         ApiProviderModelPolicy.isXaiMultiAgentModel(modelId)
@@ -174,39 +212,43 @@ object XaiRequestMapper {
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =
         message.role == Role.ASSISTANT && message.content.startsWith(SYNTHETIC_API_ERROR_PREFIX)
 
-    private fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool =
-        ChatCompletionFunctionTool.builder()
-            .function(
-                FunctionDefinition.builder()
-                    .name(name)
-                    .description(description)
-                    .parameters(
-                        FunctionParameters.builder()
-                            .putAdditionalProperty("type", JsonValue.from("object"))
-                            .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
-                            .putAdditionalProperty("required", JsonValue.from(schema.required))
-                            .putAdditionalProperty("additionalProperties", JsonValue.from(false))
-                            .build()
-                    )
-                    .strict(true)
-                    .build()
-            )
-            .build()
+    private fun ToolDefinition.toChatCompletionToolMap(): Map<String, Any> {
+        val parametersMap = mutableMapOf<String, Any>(
+            "type" to "object",
+            "properties" to schema.properties.toMap()
+        )
+        if (schema.required.isNotEmpty()) {
+            parametersMap["required"] = schema.required
+        }
 
-    private fun ToolDefinition.toResponsesTool(): FunctionTool =
-        FunctionTool.builder()
-            .name(name)
-            .description(description)
-            .parameters(
-                FunctionTool.Parameters.builder()
-                    .putAdditionalProperty("type", JsonValue.from("object"))
-                    .putAdditionalProperty("properties", JsonValue.from(schema.properties.toMap()))
-                    .putAdditionalProperty("required", JsonValue.from(schema.required))
-                    .putAdditionalProperty("additionalProperties", JsonValue.from(false))
-                    .build()
+        return mapOf(
+            "type" to "function",
+            "function" to mapOf(
+                "name" to name,
+                "description" to description,
+                "parameters" to parametersMap,
+                "strict" to false
             )
-            .strict(true)
-            .build()
+        )
+    }
+
+    private fun ToolDefinition.toResponseToolPayloadMap(): Map<String, Any> {
+        val parametersMap = mutableMapOf<String, Any>(
+            "type" to "object",
+            "properties" to schema.properties.toMap()
+        )
+        if (schema.required.isNotEmpty()) {
+            parametersMap["required"] = schema.required
+        }
+
+        return mapOf(
+            "type" to "function",
+            "name" to name,
+            "description" to description,
+            "parameters" to parametersMap,
+            "strict" to false
+        )
+    }
 
     private fun kotlinx.serialization.json.JsonObject.toMap(): Map<String, Any> {
         val map = mutableMapOf<String, Any>()
@@ -229,7 +271,6 @@ object XaiRequestMapper {
             }
             is kotlinx.serialization.json.JsonObject -> toMap()
             is kotlinx.serialization.json.JsonArray -> map { it.toPrimitiveOrMap() }
-            else -> Any()
         }
     }
 
