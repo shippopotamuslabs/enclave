@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -115,10 +116,9 @@ fun InputBar(
         modifier = modifier
             .fillMaxWidth()
             .then(if (isExpanded) Modifier.fillMaxHeight(0.9f) else Modifier.heightIn(min = 56.dp))
-            .padding(horizontal = 8.dp)
             .animateContentSize()
             .then(if (!isExpanded) Modifier.clickable { focusRequester.requestFocus() } else Modifier),
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 2.dp
     ) {
@@ -126,7 +126,8 @@ fun InputBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(if (isExpanded) Modifier.fillMaxHeight() else Modifier)
-                .padding(8.dp),
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = when {
                 isExpanded -> Arrangement.SpaceBetween
                 else -> Arrangement.spacedBy(6.dp)

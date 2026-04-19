@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.domain.usecase
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
-import com.browntowndev.pocketcrew.domain.model.chat.CompactionProviderType
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
@@ -115,14 +114,6 @@ class FakeSettingsRepository : SettingsRepository {
         updateAlwaysUseVisionModelCallCount++
         lastAlwaysUseVisionModelValue = enabled
         _settingsFlow.value = _settingsFlow.value.copy(alwaysUseVisionModel = enabled)
-    }
-
-    override suspend fun updateCompactionProviderType(type: CompactionProviderType) {
-        _settingsFlow.value = _settingsFlow.value.copy(compactionProviderType = type)
-    }
-
-    override suspend fun updateCompactionApiModelId(modelId: String?) {
-        _settingsFlow.value = _settingsFlow.value.copy(compactionApiModelId = modelId)
     }
 
     override suspend fun saveTavilyApiKey(apiKey: String) {

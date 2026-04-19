@@ -107,7 +107,7 @@ object ToolContextBudget {
 
     /**
      * Evaluates whether an API model's context is exceeded and whether mid-loop
-     * compaction should be triggered.
+     * summarization should be triggered.
      *
      * @param contextWindowTokens Total context window size.
      * @param history Conversation history messages.
