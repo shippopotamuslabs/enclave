@@ -28,6 +28,25 @@ class ModelFileScanner @Inject constructor(
         private const val TAG = "ModelFileScanner"
     }
 
+    private fun isSafeChildOf(child: File, parent: File): Boolean {
+        val childCanonical = child.canonicalPath
+        val parentCanonical = parent.canonicalPath + File.separator
+        return childCanonical.startsWith(parentCanonical)
+    }
+
+    private fun getSafeFile(parentDir: File, filename: String): File {
+        if (filename.isBlank()) {
+            throw SecurityException("Filename must not be blank")
+        }
+        val safeName = File(filename).name
+        val resolvedFile = File(parentDir, safeName)
+        if (!isSafeChildOf(resolvedFile, parentDir)) {
+            throw SecurityException("Resolved path escapes target directory: $filename")
+        }
+        return resolvedFile
+    }
+
+
     /**
      * Scan the models directory and create it if it doesn't exist.
      * Validates expected models against physical files on disk (existence and size).
@@ -62,9 +81,9 @@ class ModelFileScanner @Inject constructor(
             var assetInvalid = false
             expectedAsset.metadata.requiredArtifacts().forEach { artifact ->
                 val filename = artifact.localFileName
-                val file = File(modelsDir, filename)
-                val tempFile = File(modelsDir, "${filename}${ModelConfig.TEMP_EXTENSION}")
-                val metaFile = File(modelsDir, "${filename}${ModelConfig.TEMP_META_EXTENSION}")
+                val file = getSafeFile(modelsDir, filename)
+                val tempFile = getSafeFile(modelsDir, "${filename}${ModelConfig.TEMP_EXTENSION}")
+                val metaFile = getSafeFile(modelsDir, "${filename}${ModelConfig.TEMP_META_EXTENSION}")
 
                 val fileExists = file.exists()
                 val tempExists = tempFile.exists()
@@ -153,7 +172,7 @@ class ModelFileScanner @Inject constructor(
 
             if (artifacts.isNotEmpty()) {
                 artifacts.forEach { artifact ->
-                    val file = File(modelsDir, artifact.localFileName)
+                    val file = getSafeFile(modelsDir, artifact.localFileName)
                     if (file.exists()) {
                         val deleted = file.delete()
                         if (!deleted) {
@@ -161,14 +180,14 @@ class ModelFileScanner @Inject constructor(
                         }
                     }
 
-                    val tempFile = File(modelsDir, "${artifact.localFileName}${ModelConfig.TEMP_EXTENSION}")
+                    val tempFile = getSafeFile(modelsDir, "${artifact.localFileName}${ModelConfig.TEMP_EXTENSION}")
                     if (tempFile.exists()) {
                         val tempDeleted = tempFile.delete()
                         if (!tempDeleted) {
                             Log.w(TAG, "Failed to delete temp file: ${tempFile.absolutePath}")
                         }
                     }
-                    val metaFile = File(modelsDir, "${artifact.localFileName}${ModelConfig.TEMP_META_EXTENSION}")
+                    val metaFile = getSafeFile(modelsDir, "${artifact.localFileName}${ModelConfig.TEMP_META_EXTENSION}")
                     if (metaFile.exists()) {
                         metaFile.delete()
                     }
@@ -206,13 +225,13 @@ class ModelFileScanner @Inject constructor(
 
         // First check that all required files exist with content
         val allFilesExist = requiredFiles.all { filename ->
-            val file = File(modelsDir, filename)
+            val file = getSafeFile(modelsDir, filename)
             file.exists() && file.length() > 0
         }
 
         // Also verify no partial .tmp files exist (from failed downloads)
         val noPartialDownloads = requiredFiles.all { filename ->
-            val tempFile = File(modelsDir, "$filename${ModelConfig.TEMP_EXTENSION}")
+            val tempFile = getSafeFile(modelsDir, "$filename${ModelConfig.TEMP_EXTENSION}")
             !tempFile.exists()
         }
 
