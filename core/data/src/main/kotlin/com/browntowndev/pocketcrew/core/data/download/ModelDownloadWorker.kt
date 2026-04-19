@@ -254,6 +254,12 @@ class ModelDownloadWorker @AssistedInject constructor(
                     totalBytes = totalExpectedBytes
                 )
             }
+            // Force an immediate progress update for already-complete files
+            try {
+                setProgress(progressTracker.serializeToWorkData())
+            } catch (e: Exception) {
+                logger.warning(TAG, "Failed to update progress for pre-existing file: ${e.message}")
+            }
             // Trigger final progress update for this spec
             progressChannel.trySend(Unit)
 
@@ -328,7 +334,13 @@ class ModelDownloadWorker @AssistedInject constructor(
                 )
             }
 
-            // Final progress update after spec download completes
+            // Force an immediate progress update when a file completes
+            // to ensure the UI shows the checkmark without waiting for throttle
+            try {
+                setProgress(progressTracker.serializeToWorkData())
+            } catch (e: Exception) {
+                logger.warning(TAG, "Failed to update progress on completion: ${e.message}")
+            }
             progressChannel.trySend(Unit)
 
             val sessionId = requireNotNull(inputData.getString(DownloadWorkKeys.KEY_SESSION_ID)) {

@@ -23,6 +23,10 @@ class HttpFileDownloader @Inject constructor(
 
     companion object {
         private const val TAG = "HttpFileDownloader"
+
+        // Sync to disk every 64MB to balance durability with download performance.
+        // Per-chunk fsync (every 8KB) caused 20-30x slowdown due to blocking I/O.
+        private const val SYNC_INTERVAL_BYTES = 64L * 1024 * 1024
     }
 
     override suspend fun downloadFile(
@@ -127,19 +131,27 @@ class HttpFileDownloader @Inject constructor(
                 DigestInputStream(body.byteStream(), digest).use { inputStream ->
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
+                    var bytesSinceLastSync = 0L
 
                     while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                         val byteBuffer = ByteBuffer.wrap(buffer, 0, bytesRead)
                         channel.write(byteBuffer)
                         totalBytesRead += bytesRead
+                        bytesSinceLastSync += bytesRead
 
-                        // Force write to physical disk (atomic write+flush)
-                        channel.force(true)
+                        // Periodic sync to disk (every 64MB) for durability
+                        if (bytesSinceLastSync >= SYNC_INTERVAL_BYTES) {
+                            channel.force(true)
+                            bytesSinceLastSync = 0L
+                        }
 
                         // Report progress
                         progressCallback?.onProgress(totalBytesRead, actualTotalSize.coerceAtLeast(config.expectedSizeBytes))
                     }
                 }
+
+                // Final sync before hash verification to ensure data is durable
+                channel.force(true)
             } finally {
                 channel.close()
             }
@@ -238,19 +250,27 @@ class HttpFileDownloader @Inject constructor(
                 DigestInputStream(body.byteStream(), digest).use { inputStream ->
                     val buffer = ByteArray(8192)
                     var bytesRead: Int
+                    var bytesSinceLastSync = 0L
 
                     while (inputStream.read(buffer).also { bytesRead = it } != -1) {
                         val byteBuffer = ByteBuffer.wrap(buffer, 0, bytesRead)
                         channel.write(byteBuffer)
                         totalBytesRead += bytesRead
+                        bytesSinceLastSync += bytesRead
 
-                        // Force write to physical disk
-                        channel.force(true)
+                        // Periodic sync to disk (every 64MB) for durability
+                        if (bytesSinceLastSync >= SYNC_INTERVAL_BYTES) {
+                            channel.force(true)
+                            bytesSinceLastSync = 0L
+                        }
 
                         // Report progress
                         progressCallback?.onProgress(totalBytesRead, actualTotalSize)
                     }
                 }
+
+                // Final sync before hash verification to ensure data is durable
+                channel.force(true)
             } finally {
                 channel.close()
             }

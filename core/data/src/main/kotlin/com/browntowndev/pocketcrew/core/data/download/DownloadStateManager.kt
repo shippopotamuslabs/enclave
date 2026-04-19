@@ -36,15 +36,9 @@ class DownloadStateManager(
                 overallProgress = update.overallProgress ?: it.overallProgress,
                 modelsComplete = update.modelsComplete ?: it.modelsComplete,
                 modelsTotal = update.modelsTotal ?: it.modelsTotal,
-                // Preserves existing currentDownloads when update returns empty list
-                // This prevents UI flicker when transitioning from waiting to downloading
-                // Empty list means parser couldn't find currentDownloads but has parsed data
-                // Null means no update was provided, empty list means explicit clear (which we ignore)
-                currentDownloads = if (update.currentDownloads?.isEmpty() == true && it.currentDownloads.isNotEmpty()) {
-                    it.currentDownloads
-                } else {
-                    update.currentDownloads ?: it.currentDownloads
-                },
+                // Null means no update was provided — preserve existing list.
+                // Non-null (including empty list) is an explicit update from the parser.
+                currentDownloads = update.currentDownloads ?: it.currentDownloads,
                 estimatedTimeRemaining = update.estimatedTimeRemaining ?: it.estimatedTimeRemaining,
                 currentSpeedMBs = update.currentSpeedMBs ?: it.currentSpeedMBs,
                 waitingForUnmeteredNetwork = update.waitingForUnmeteredNetwork ?: it.waitingForUnmeteredNetwork,
