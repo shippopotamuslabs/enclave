@@ -63,6 +63,7 @@ fun ChatScreen(
                     modifier = Modifier.fillMaxSize(),
                     messages = uiState.messages,
                     hasActiveIndicator = uiState.hasActiveIndicator,
+                    isGenerating = uiState.isGenerating,
                     activeToolCallBanner = uiState.activeToolCallBanner,
                     activeIndicatorMessageId = uiState.activeIndicatorMessageId,
                     onEditMessage = onEditMessage,
