@@ -39,9 +39,12 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.TAVILY_WEB_SEARCH
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
+import com.browntowndev.pocketcrew.domain.usecase.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.MergeMessagesUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
 import io.mockk.*
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -56,6 +59,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -153,6 +157,7 @@ class ChatViewModelTest {
         // Stub coroutineExceptionHandler to return a real one to avoid ClassCastException with MockK
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
         coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
+        every { chatUseCases.mergeMessagesUseCase } returns MergeMessagesUseCase()
         every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
         // Create a simple fake for GetModelDisplayNameUseCase
@@ -235,6 +240,121 @@ class ChatViewModelTest {
         } finally {
             collectJob.cancel()
         }
+    }
+
+    @Test
+    fun `onSendMessage keeps in-flight response visible until database confirms complete`() = runTest {
+        val chatId = ChatId("chat")
+        val userMessageId = MessageId("user")
+        val assistantMessageId = MessageId("assistant")
+        val dbMessages = MutableStateFlow<List<Message>>(emptyList())
+
+        coEvery { chatUseCases.getChat(chatId) } returns dbMessages
+        coEvery { chatUseCases.processPrompt(any()) } returns CreateUserMessageUseCase.PromptResult(
+            userMessageId = userMessageId,
+            assistantMessageId = assistantMessageId,
+            chatId = chatId,
+        )
+        coEvery {
+            chatUseCases.generateChatResponse(any(), any(), any(), any(), any())
+        } returns flowOf(
+            AccumulatedMessages(
+                messages = mapOf(
+                    assistantMessageId to createAssistantSnapshot(
+                        id = assistantMessageId,
+                        content = "streaming answer",
+                        state = MessageState.GENERATING,
+                    )
+                )
+            )
+        )
+
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        try {
+            runCurrent()
+
+            chatViewModel.onInputChange("hello")
+            chatViewModel.onSendMessage()
+            runCurrent()
+            advanceTimeBy(100)
+            runCurrent()
+
+            assertTrue(
+                chatViewModel.uiState.value.messages.any { message ->
+                    message.id == assistantMessageId && message.content.text == "streaming answer"
+                },
+                "In-flight assistant response should remain visible after generation flow completion.",
+            )
+
+            dbMessages.value = listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "final answer",
+                    state = MessageState.COMPLETE,
+                )
+            )
+            runCurrent()
+            advanceTimeBy(100)
+            runCurrent()
+
+            assertTrue(
+                chatViewModel.uiState.value.messages.any { message ->
+                    message.id == assistantMessageId && message.content.text == "final answer"
+                },
+                "Persisted COMPLETE assistant response should replace the in-flight response.",
+            )
+        } finally {
+            collectJob.cancel()
+        }
+    }
+
+    @Test
+    fun `pruneCompletedInFlightMessages removes only database confirmed complete ids`() {
+        val completeId = MessageId("complete")
+        val generatingId = MessageId("generating")
+        val missingId = MessageId("missing")
+        val current = mapOf(
+            completeId to createAssistantSnapshot(completeId, "complete", MessageState.GENERATING),
+            generatingId to createAssistantSnapshot(generatingId, "generating", MessageState.GENERATING),
+            missingId to createAssistantSnapshot(missingId, "missing", MessageState.GENERATING),
+        )
+
+        val result = pruneCompletedInFlightMessages(
+            current = current,
+            dbMessages = listOf(
+                createAssistantMessage(completeId, "complete", MessageState.COMPLETE),
+                createAssistantMessage(generatingId, "generating", MessageState.GENERATING),
+            ),
+        )
+
+        assertFalse(result.containsKey(completeId))
+        assertTrue(result.containsKey(generatingId))
+        assertTrue(result.containsKey(missingId))
+    }
+
+    @Test
+    fun `pruneCompletedInFlightMessages retains entries until database message is complete`() {
+        val assistantMessageId = MessageId("assistant")
+        val current = mapOf(
+            assistantMessageId to createAssistantSnapshot(
+                id = assistantMessageId,
+                content = "streaming answer",
+                state = MessageState.GENERATING,
+            )
+        )
+
+        val result = pruneCompletedInFlightMessages(
+            current = current,
+            dbMessages = listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "",
+                    state = MessageState.PROCESSING,
+                )
+            ),
+        )
+
+        assertEquals(current, result)
     }
 
     // ========================================================================
@@ -592,4 +712,29 @@ class ChatViewModelTest {
         val stateAfterStop = chatViewModel.uiState.value
         assertNull(stateAfterStop.activeToolCallBanner, "Tool banner should be null after stopGeneration")
     }
+
+    private fun createAssistantSnapshot(
+        id: MessageId,
+        content: String,
+        state: MessageState,
+    ): MessageSnapshot = MessageSnapshot(
+        messageId = id,
+        modelType = ModelType.FAST,
+        content = content,
+        thinkingRaw = "",
+        messageState = state,
+    )
+
+    private fun createAssistantMessage(
+        id: MessageId,
+        content: String,
+        state: MessageState,
+    ): Message = Message(
+        id = id,
+        chatId = ChatId("chat"),
+        content = Content(text = content),
+        role = Role.ASSISTANT,
+        messageState = state,
+        createdAt = 1L,
+    )
 }
