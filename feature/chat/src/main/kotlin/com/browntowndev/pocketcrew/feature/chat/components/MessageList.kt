@@ -1,16 +1,20 @@
 package com.browntowndev.pocketcrew.feature.chat.components
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -58,74 +62,142 @@ import com.browntowndev.pocketcrew.feature.chat.fakeLongMessages
 fun MessageList(
     messages: List<ChatMessage>,
     hasActiveIndicator: Boolean,
+    isGenerating: Boolean = false,
     activeToolCallBanner: ToolCallBannerUi? = null,
     activeIndicatorMessageId: MessageId? = null,
-    modifier: Modifier = Modifier,
     isPreview: Boolean = false,
-    onEditMessage: (String) -> Unit = {},
+    onEditMessage: (String) -> Unit = { _: String -> },
+    modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
 
-    // Auto-scroll to bottom (index 0 in reverseLayout) when messages are added
-    LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) {
-            listState.animateScrollToItem(0)
+    // Identification of the latest user interaction
+    val latestUserMessageIndex = messages.indexOfLast { it.role == MessageRole.User }
+    val latestUserMessageId = if (latestUserMessageIndex != -1) messages[latestUserMessageIndex].id else null
+
+    // Tracking for auto-scroll logic
+
+    var lastScrolledUserMessageId by remember { mutableStateOf<MessageId?>(null) }
+    var isInitialLoadDone by remember { mutableStateOf(false) }
+
+    // 1. Initial Load: Scroll to the last item once
+    LaunchedEffect(messages.isNotEmpty()) {
+        if (!isInitialLoadDone && messages.isNotEmpty()) {
+            val lastIndex = if (latestUserMessageIndex != -1) latestUserMessageIndex else messages.lastIndex
+            listState.scrollToItem(lastIndex)
+            isInitialLoadDone = true
+        }
+    }
+
+    // 2. New user message: animate-scroll to the active interaction (last item)
+    LaunchedEffect(latestUserMessageId) {
+        if (latestUserMessageId != null &&
+            latestUserMessageId != lastScrolledUserMessageId &&
+            isInitialLoadDone) {
+
+            listState.animateScrollToItem(latestUserMessageIndex)
+            lastScrolledUserMessageId = latestUserMessageId
         }
     }
 
     if (messages.isEmpty() && !hasActiveIndicator) {
         EmptyState(modifier = modifier)
     } else {
-        LazyColumn(
-            modifier = modifier,
-            state = listState,
-            reverseLayout = true,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(vertical = 16.dp),
-        ) {
-            items(
-                count = messages.size,
-                key = { index: Int -> "msg_${messages[messages.size - 1 - index].id}" },
-            ) { index: Int ->
-                val messageIndex = messages.size - 1 - index
-                val message = messages[messageIndex]
+        BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+            val viewportHeight = maxHeight
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 10.dp)
-                ) {
-
-                    // ============================================================
-                    // Indicator rendering - shows at TOP for Assistant messages
-                    // (below content for User messages since they have no indicators)
-                    // ============================================================
-                    Indicators(
-                        modelDisplayName = message.modelDisplayName,
-                        indicatorState = message.indicatorState
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                state = listState,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 16.dp),
+            ) {
+                // 1. History: all messages before the latest user prompt
+                val historyCount = if (latestUserMessageIndex != -1) latestUserMessageIndex else messages.size
+                items(
+                    count = historyCount,
+                    key = { index -> "history_msg_${messages[index].id}" }
+                ) { index ->
+                    MessageItem(
+                        message = messages[index],
+                        activeIndicatorMessageId = activeIndicatorMessageId,
+                        activeToolCallBanner = activeToolCallBanner,
+                        onEditMessage = onEditMessage,
+                        isPreview = isPreview
                     )
+                }
 
-                    ToolCallBanner(
-                        banner = if (message.id == activeIndicatorMessageId) activeToolCallBanner else null,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
-                    // ============================================================
-                    // Content rendering based on message role
-                    // ============================================================
-                    if (message.role == MessageRole.User) {
-                        MessageBubble(
-                            message = message,
-                            onEditClick = onEditMessage,
-                        )
-                    } else {
-                        AssistantResponse(
-                            message = message,
-                            isPreview = isPreview,
-                        )
+                // 2. Active interaction: user prompt + streaming response in one item.
+                //    heightIn(min = viewportHeight) ensures this item is at least viewport-tall so that
+                //    scrolling here pins the user message at the top. The rest of the column
+                //    is just empty space if the content is shorter than the viewport.
+                if (latestUserMessageIndex != -1) {
+                    item(key = "active_interaction") {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = viewportHeight),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            for (i in latestUserMessageIndex until messages.size) {
+                                MessageItem(
+                                    message = messages[i],
+                                    activeIndicatorMessageId = activeIndicatorMessageId,
+                                    activeToolCallBanner = activeToolCallBanner,
+                                    onEditMessage = onEditMessage,
+                                    isPreview = isPreview
+                                )
+                            }
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Renders a single message (User bubble or Assistant response).
+ */
+@Composable
+private fun MessageItem(
+    message: ChatMessage,
+    activeIndicatorMessageId: MessageId?,
+    activeToolCallBanner: ToolCallBannerUi?,
+    onEditMessage: (String) -> Unit,
+    isPreview: Boolean,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp)
+    ) {
+        // ============================================================
+        // Indicator rendering - shows at TOP for Assistant messages
+        // ============================================================
+        Indicators(
+            modelDisplayName = message.modelDisplayName,
+            indicatorState = message.indicatorState
+        )
+
+        ToolCallBanner(
+            banner = if (message.id == activeIndicatorMessageId) activeToolCallBanner else null,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        // ============================================================
+        // Content rendering based on message role
+        // ============================================================
+        if (message.role == MessageRole.User) {
+            MessageBubble(
+                message = message,
+                onEditClick = onEditMessage,
+            )
+        } else {
+            AssistantResponse(
+                message = message,
+                isPreview = isPreview,
+            )
         }
     }
 }
@@ -902,7 +974,7 @@ private fun PreviewMessageListWithToolCall() {
                     formattedTimestamp = "10:30 AM",
                 ),
                 ChatMessage(
-                    id = messageId,
+                    id = MessageId("2"),
                     chatId = ChatId("1"),
                     role = MessageRole.Assistant,
                     content = ContentUi(text = ""),
