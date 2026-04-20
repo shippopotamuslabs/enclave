@@ -11,7 +11,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.dp
 import com.hrm.markdown.renderer.AdmonitionStyle
 import com.hrm.markdown.renderer.MarkdownTheme
 
@@ -79,12 +81,48 @@ fun PocketCrewTheme(
 }
 
 private fun darkHeadingStyles() = listOf(
-    Typography.headlineLarge.copy(color = DarkOnBackground, textDecoration = TextDecoration.None),
-    Typography.headlineMedium.copy(color = DarkOnBackground, textDecoration = TextDecoration.None),
-    Typography.titleLarge.copy(color = DarkOnBackground, textDecoration = TextDecoration.None),
-    Typography.titleMedium.copy(color = DarkOnBackground, textDecoration = TextDecoration.None),
-    Typography.titleMedium.copy(color = DarkOnSurfaceVariant, textDecoration = TextDecoration.None),
-    Typography.titleMedium.copy(color = DarkOnSurfaceVariant, textDecoration = TextDecoration.None),
+    LlmBodyTextStyle.copy(
+        color = DarkOnBackground,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = Typography.headlineLarge.fontSize,
+        lineHeight = Typography.headlineLarge.lineHeight,
+        textDecoration = TextDecoration.None,
+    ),
+    LlmBodyTextStyle.copy(
+        color = DarkOnBackground,
+        fontWeight = FontWeight.ExtraBold,
+        fontSize = Typography.headlineMedium.fontSize,
+        lineHeight = Typography.headlineMedium.lineHeight,
+        textDecoration = TextDecoration.None,
+    ),
+    LlmBodyTextStyle.copy(
+        color = DarkOnBackground,
+        fontWeight = FontWeight.Bold,
+        fontSize = Typography.titleLarge.fontSize,
+        lineHeight = Typography.titleLarge.lineHeight,
+        textDecoration = TextDecoration.None,
+    ),
+    LlmBodyTextStyle.copy(
+        color = DarkOnBackground,
+        fontWeight = FontWeight.Bold,
+        fontSize = Typography.titleMedium.fontSize,
+        lineHeight = Typography.titleMedium.lineHeight,
+        textDecoration = TextDecoration.None,
+    ),
+    LlmBodyTextStyle.copy(
+        color = DarkOnSurfaceVariant,
+        fontWeight = FontWeight.Bold,
+        fontSize = Typography.titleMedium.fontSize,
+        lineHeight = Typography.titleMedium.lineHeight,
+        textDecoration = TextDecoration.None,
+    ),
+    LlmBodyTextStyle.copy(
+        color = DarkOnSurfaceVariant,
+        fontWeight = FontWeight.Bold,
+        fontSize = Typography.titleMedium.fontSize,
+        lineHeight = Typography.titleMedium.lineHeight,
+        textDecoration = TextDecoration.None,
+    ),
 )
 
 private fun darkAdmonitionStyles(): Map<String, AdmonitionStyle> = mapOf(
@@ -122,7 +160,7 @@ private fun darkAdmonitionStyles(): Map<String, AdmonitionStyle> = mapOf(
 
 fun darkMarkdownTheme(): MarkdownTheme = MarkdownTheme(
     headingStyles = darkHeadingStyles(),
-    bodyStyle = Typography.bodyLarge.copy(color = DarkOnBackground),
+    bodyStyle = LlmBodyTextStyle.copy(color = DarkOnBackground),
     inlineCodeStyle = SpanStyle(color = DarkOnBackground),
     inlineCodeBackground = DarkSurfaceVariant,
     codeBlockStyle = Typography.bodySmall.copy(
@@ -130,6 +168,7 @@ fun darkMarkdownTheme(): MarkdownTheme = MarkdownTheme(
         color = DarkOnBackground,
     ),
     codeBlockBackground = DarkSurface,
+    blockSpacing = 18.dp,
     blockQuoteBorderColor = DarkOutline,
     blockQuoteTextColor = DarkOnSurfaceVariant,
     dividerColor = DarkOutline,

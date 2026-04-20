@@ -51,6 +51,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
@@ -186,6 +187,7 @@ fun InputBar(
                             },
                             textStyle = TextStyle(
                                 color = MaterialTheme.colorScheme.onSurface,
+                                fontFamily = FontFamily.SansSerif,
                                 fontSize = 16.sp,
                                 lineHeight = 22.sp
                             ),
@@ -239,6 +241,7 @@ fun InputBar(
                         },
                         textStyle = TextStyle(
                             color = MaterialTheme.colorScheme.onSurface,
+                            fontFamily = FontFamily.SansSerif,
                             fontSize = 16.sp,
                             lineHeight = 22.sp
                         ),

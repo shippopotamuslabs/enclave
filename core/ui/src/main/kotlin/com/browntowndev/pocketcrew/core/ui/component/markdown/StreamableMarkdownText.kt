@@ -17,6 +17,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import com.browntowndev.pocketcrew.core.ui.theme.LlmBodyTextStyle
 import com.browntowndev.pocketcrew.core.ui.theme.darkMarkdownTheme
 import com.hrm.markdown.renderer.Markdown
 import kotlinx.coroutines.delay
@@ -138,7 +139,7 @@ fun SimpleMarkdownText(
     }
     Text(
         text = annotatedString,
-        style = MaterialTheme.typography.bodyMedium.copy(
+        style = LlmBodyTextStyle.copy(
             color = MaterialTheme.colorScheme.onBackground
         ),
         modifier = modifier,
