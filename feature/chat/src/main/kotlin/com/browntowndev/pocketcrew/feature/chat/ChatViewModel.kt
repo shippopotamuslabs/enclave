@@ -52,6 +52,7 @@ import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 
@@ -77,6 +78,7 @@ class ChatViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "ChatViewModel"
+        private const val IN_FLIGHT_COMPLETION_FALLBACK_MS = 5_000L
     }
 
     /**
@@ -123,6 +125,16 @@ class ChatViewModel @Inject constructor(
 
     // Job for tracking inference flow collection (for cancellation in onCleared)
     private var inferenceJob: Job? = null
+    private var inFlightCompletionFallbackJob: Job? = null
+
+    private val dbMessagesFlow = _currentChatId.flatMapLatest { chatId: ChatId? ->
+        val id: ChatId? = chatId ?: initialChatId
+        if (id == null) {
+            flowOf(emptyList())
+        } else {
+            chatUseCases.getChat(id)
+        }
+    }
 
     init {
         // Load display names asynchronously
@@ -136,6 +148,7 @@ class ChatViewModel @Inject constructor(
 
         // Observe tool execution events to show transient UI banners
         observeToolEvents()
+        observeCompletedInFlightMessages()
     }
 
     /**
@@ -240,14 +253,7 @@ class ChatViewModel @Inject constructor(
     val uiState: StateFlow<ChatUiState> = combine(
         uiInputsWithPolicyFlow,
         inferenceLockManager.isInferenceBlocked,
-        _currentChatId.flatMapLatest { chatId: ChatId? ->
-            val id: ChatId? = chatId ?: initialChatId
-            if (id == null) {
-                flowOf(emptyList())
-            } else {
-                chatUseCases.getChat(id).debounce(50)
-            }
-        },
+        dbMessagesFlow.debounce(50),
         _inFlightMessages,
         _activeToolCallBanner
     ) {
@@ -338,6 +344,34 @@ class ChatViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = ChatUiState()
     )
+
+    private fun observeCompletedInFlightMessages() {
+        dbMessagesFlow.onEach { messages ->
+            pruneInFlightMessagesConfirmedByDatabase(messages)
+        }.launchIn(viewModelScope)
+    }
+
+    private fun pruneInFlightMessagesConfirmedByDatabase(messages: List<Message>) {
+        _inFlightMessages.update { current ->
+            pruneCompletedInFlightMessages(current, messages)
+        }
+        if (_inFlightMessages.value.isEmpty()) {
+            cancelInFlightCompletionFallback()
+        }
+    }
+
+    private fun scheduleInFlightCompletionFallback() {
+        inFlightCompletionFallbackJob?.cancel()
+        inFlightCompletionFallbackJob = viewModelScope.launch {
+            delay(IN_FLIGHT_COMPLETION_FALLBACK_MS)
+            _inFlightMessages.value = emptyMap()
+        }
+    }
+
+    private fun cancelInFlightCompletionFallback() {
+        inFlightCompletionFallbackJob?.cancel()
+        inFlightCompletionFallbackJob = null
+    }
 
     /**
      * Maps domain Message to ChatMessage for the UI layer.
@@ -485,6 +519,7 @@ class ChatViewModel @Inject constructor(
         cancelInferenceUseCase()
         // Clear in-flight messages and tool banner so the UI immediately
         // transitions out of the generating/thinking state
+        cancelInFlightCompletionFallback()
         _inFlightMessages.value = emptyMap()
         _activeToolCallBanner.value = null
     }
@@ -493,6 +528,7 @@ class ChatViewModel @Inject constructor(
         _currentChatId.value = null
         _inputText.value = ""
         _selectedImageUri.value = null
+        cancelInFlightCompletionFallback()
         _inFlightMessages.value = emptyMap()
         inferenceJob?.cancel()
         // Ensure SavedStateHandle is also cleared so chatId doesn't persist on recreation
@@ -534,6 +570,7 @@ class ChatViewModel @Inject constructor(
                 _selectedImageUri.value = null
 
                 // Clear previous in-flight messages
+                cancelInFlightCompletionFallback()
                 _inFlightMessages.value = emptyMap()
 
                 // Use mode to route to appropriate service
@@ -547,13 +584,13 @@ class ChatViewModel @Inject constructor(
                 ).onEach { state ->
                     // Merge new messages with existing in-flight messages
                     // In-flight messages override database messages for same messageId
-                    _inFlightMessages.value += state.messages
+                    _inFlightMessages.update { current -> current + state.messages }
                 }.catch { cause ->
                     errorHandler.handleError(TAG, "Inference failed", cause, "Failed to generate response. Please try again.")
                 }.onCompletion { cause ->
-                    // Clear in-flight after flow completion
-                    // Database has been updated with final state via persistAccumulatedMessages
-                    _inFlightMessages.value = emptyMap()
+                    if (cause == null && _inFlightMessages.value.isNotEmpty()) {
+                        scheduleInFlightCompletionFallback()
+                    }
                 }.launchIn(viewModelScope)
             }
         }
@@ -669,5 +706,22 @@ class ChatViewModel @Inject constructor(
         super.onCleared()
         // Cancel any ongoing inference flow
         inferenceJob?.cancel()
+        inFlightCompletionFallbackJob?.cancel()
     }
+}
+
+internal fun pruneCompletedInFlightMessages(
+    current: Map<MessageId, MessageSnapshot>,
+    dbMessages: List<Message>,
+): Map<MessageId, MessageSnapshot> {
+    if (current.isEmpty()) return current
+
+    val completedMessageIds = dbMessages.asSequence()
+        .filter { message -> message.messageState == MessageState.COMPLETE }
+        .map { message -> message.id }
+        .toSet()
+
+    if (completedMessageIds.isEmpty()) return current
+
+    return current.filterKeys { messageId -> messageId !in completedMessageIds }
 }
