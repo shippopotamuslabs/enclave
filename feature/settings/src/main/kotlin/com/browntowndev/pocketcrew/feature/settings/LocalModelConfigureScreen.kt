@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,6 +42,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.SystemPromptTemplates
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -99,6 +101,10 @@ fun LocalModelConfigureScreen(
     var showSystemPromptSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    val isSaveEnabled = !config.isSystemPreset &&
+            config.displayName.isNotBlank() &&
+            config.contextWindow.isNotBlank()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -109,6 +115,33 @@ fun LocalModelConfigureScreen(
                     }
                 }
             )
+        },
+        bottomBar = {
+            if (!config.isSystemPreset) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 20.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Button(
+                        onClick = onSave,
+                        enabled = isSaveEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                            .testTag("SaveButton"),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            text = "Save Preset",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
     ) { padding ->
         Column(
@@ -381,18 +414,6 @@ fun LocalModelConfigureScreen(
                 )
             }
 
-            if (!config.isSystemPreset) {
-                Button(
-                    onClick = onSave,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("Save Preset", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
-                }
-            }
-            
             Spacer(modifier = Modifier.height(32.dp))
         }
     }

@@ -38,7 +38,7 @@ internal data class ApiProvidersTransientState(
     val discoveredApiModelScope: ApiModelDiscoveryScope? = null,
     val isDiscoveringApiModels: Boolean = false,
     val modelSearchQuery: String = "",
-    val modelProviderFilter: String? = null,
+    val modelProviderFilters: Set<String> = emptySet(),
     val modelSortOption: ModelSortOption = ModelSortOption.A_TO_Z,
 )
 
@@ -148,7 +148,7 @@ class SettingsUiStateFactory @Inject constructor(
         val filteredDiscoveredApiModels = apiDiscoveryUiFilter.filter(
             models = discoveredApiModels,
             query = apiState.modelSearchQuery,
-            providerFilter = apiState.modelProviderFilter,
+            providerFilters = apiState.modelProviderFilters,
             sortOption = apiState.modelSortOption,
         )
 
@@ -209,7 +209,7 @@ class SettingsUiStateFactory @Inject constructor(
                     filteredModels = filteredDiscoveredApiModels,
                     isLoading = apiState.isDiscoveringApiModels,
                     searchQuery = apiState.modelSearchQuery,
-                    providerFilter = apiState.modelProviderFilter,
+                    providerFilters = apiState.modelProviderFilters,
                     sortOption = apiState.modelSortOption,
                 ),
             ),

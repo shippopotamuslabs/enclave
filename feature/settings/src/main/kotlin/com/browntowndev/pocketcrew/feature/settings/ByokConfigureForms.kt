@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -69,6 +72,7 @@ fun SearchSkillConfigurationForm(
     onClearSavedKey: () -> Unit,
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
+    val showSavedIndicator = state.tavilyKeyPresent && apiKey.isEmpty()
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(
@@ -101,18 +105,35 @@ fun SearchSkillConfigurationForm(
         OutlinedTextField(
             value = apiKey,
             onValueChange = onApiKeyChange,
-            label = { Text("Tavily API Key") },
+            label = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Tavily API Key")
+                    if (showSavedIndicator) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Key saved",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             placeholder = {
-                if (state.tavilyKeyPresent) {
-                    Text("A saved Tavily key is already stored")
+                if (showSavedIndicator) {
+                    Text("Saved securely")
                 }
             },
             supportingText = {
                 Text(
                     if (state.tavilyKeyPresent) {
-                        "A Tavily key is stored securely. Entering a new key replaces it."
+                        if (apiKey.isEmpty()) {
+                            "The stored key stays encrypted and hidden. Typing here switches back to a new key."
+                        } else {
+                            "You are entering a new key. The previously stored key will be replaced upon saving."
+                        }
                     } else {
                         "Save a Tavily key before enabling live web search."
                     }
@@ -205,87 +226,105 @@ fun ModelSelectionField(
     isFetchingModels: Boolean,
     canFetchModels: Boolean,
     searchQuery: String,
-    providerFilter: String?,
+    providerFilters: Set<String>,
     sortOption: ModelSortOption,
     onAssetChange: (ApiModelAssetUi) -> Unit,
     onFetchModels: () -> Unit,
     onUpdateSearchQuery: (String) -> Unit,
-    onUpdateProviderFilter: (String?) -> Unit,
+    onToggleProviderFilter: (String) -> Unit,
+    onClearProviderFilters: () -> Unit,
     onUpdateSortOption: (ModelSortOption) -> Unit
 ) {
     var showModelSelectionSheet by remember { mutableStateOf(false) }
+    val hasModels = availableModels.isNotEmpty()
 
-    Box(modifier = Modifier.fillMaxWidth().clickable { showModelSelectionSheet = true }) {
-        OutlinedTextField(
-            value = asset.modelId,
-            onValueChange = { onAssetChange(asset.copy(modelId = it)) },
-            readOnly = true,
-            enabled = false,
-            label = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Model")
-                    if (availableModels.isEmpty()) {
-                        Spacer(modifier = Modifier.width(4.dp))
-                        PersistentTooltip(description = "Model discovery is optional. You can always enter a model ID manually.")
-                    }
-                }
-            },
-            placeholder = {
-                Text(
-                    if (availableModels.isEmpty()) {
-                        "Type a model ID or load models"
-                    } else {
-                        "Type a model ID or choose one below"
-                    }
-                )
-            },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                disabledBorderColor = MaterialTheme.colorScheme.outline,
-                disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            ),
-            trailingIcon = {
-                // Invisible spacer to reserve space for the overlaid icon
-                Spacer(modifier = Modifier.size(24.dp))
-            }
-        )
-
+    Column {
         Box(
-            modifier = Modifier.matchParentSize(),
-            contentAlignment = Alignment.CenterEnd
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (hasModels) Modifier.clickable { showModelSelectionSheet = true } else Modifier)
         ) {
-            if (isFetchingModels) {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .padding(end = 12.dp)
-                        .size(24.dp),
-                    strokeWidth = 2.dp
-                )
-            } else if (availableModels.isEmpty()) {
-                IconButton(
-                    onClick = onFetchModels,
-                    enabled = canFetchModels,
-                    modifier = Modifier.padding(end = 4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = "Load Models"
+            OutlinedTextField(
+                value = asset.modelId,
+                onValueChange = { onAssetChange(asset.copy(modelId = it)) },
+                readOnly = true,
+                enabled = false,
+                label = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Model")
+                        if (!hasModels) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            PersistentTooltip(description = "Model discovery is optional. You can always enter a model ID manually.")
+                        }
+                    }
+                },
+                placeholder = {
+                    Text(
+                        if (!hasModels) {
+                            "Type a model ID or load models"
+                        } else {
+                            "Type a model ID or choose one below"
+                        }
                     )
-                }
-            } else {
-                IconButton(
-                    onClick = { showModelSelectionSheet = true },
-                    modifier = Modifier.padding(end = 4.dp)
-                ) {
+                },
+                supportingText = {
+                    Text(
+                        text = if (isFetchingModels) {
+                            "Fetching models..."
+                        } else if (hasModels) {
+                            "${availableModels.size} models discovered"
+                        } else {
+                            "Load models for better configuration"
+                        }
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                    disabledBorderColor = MaterialTheme.colorScheme.outline,
+                    disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                ),
+                trailingIcon = if (hasModels) ({
                     Icon(
                         imageVector = Icons.Default.ArrowDropDown,
-                        contentDescription = "Select Model"
+                        contentDescription = "Select Model",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }) else null
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextButton(
+                onClick = onFetchModels,
+                enabled = !isFetchingModels && canFetchModels,
+            ) {
+                if (isFetchingModels) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .padding(end = 8.dp)
+                            .size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary // Keep it primary or use contentColor
+                    )
+                    Text("Loading models\u2026")
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .size(16.dp)
+                    )
+                    Text(if (!hasModels) "Load Models" else "Refresh Models")
                 }
             }
         }
@@ -296,10 +335,11 @@ fun ModelSelectionField(
             availableModels = availableModels,
             filteredModels = filteredModels,
             searchQuery = searchQuery,
-            providerFilter = providerFilter,
+            providerFilters = providerFilters,
             sortOption = sortOption,
             onUpdateSearchQuery = onUpdateSearchQuery,
-            onUpdateProviderFilter = onUpdateProviderFilter,
+            onToggleProviderFilter = onToggleProviderFilter,
+            onClearProviderFilters = onClearProviderFilters,
             onUpdateSortOption = onUpdateSortOption,
             onModelSelected = { selectedModelId ->
                 onAssetChange(asset.copy(modelId = selectedModelId))
@@ -413,18 +453,21 @@ fun CredentialsConfigurationForm(
     selectedModelMetadata: DiscoveredApiModelUi?,
     isFetchingModels: Boolean,
     searchQuery: String,
-    providerFilter: String?,
+    providerFilters: Set<String>,
     sortOption: ModelSortOption,
     onAssetChange: (ApiModelAssetUi) -> Unit,
     onApiKeyChange: (String) -> Unit,
     onSelectReusableCredential: (ApiCredentialsId?) -> Unit,
     onFetchModels: () -> Unit,
     onUpdateSearchQuery: (String) -> Unit,
-    onUpdateProviderFilter: (String?) -> Unit,
+    onToggleProviderFilter: (String) -> Unit,
+    onClearProviderFilters: () -> Unit,
     onUpdateSortOption: (ModelSortOption) -> Unit
 ) {
     var passwordVisible by remember { mutableStateOf(false) }
     val discoveredVisionCapability = selectedModelMetadata?.isMultimodal
+    val isKeySaved = selectedReusableCredential != null || asset.credentialsId.value.isNotEmpty()
+    val showSavedIndicator = isKeySaved && apiKey.isEmpty()
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ProviderSelectionField(
@@ -433,38 +476,14 @@ fun CredentialsConfigurationForm(
         )
 
         OutlinedTextField(
-            value = asset.displayName,
-            onValueChange = { onAssetChange(asset.copy(displayName = it)) },
-            label = { Text("Display Name (e.g. My OpenAI)") },
+            value = asset.baseUrl ?: "",
+            onValueChange = { onAssetChange(asset.copy(baseUrl = it)) },
+            label = { Text("Base URL (Optional)") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
 
         val canUseStoredCredential = asset.credentialsId.value.isEmpty() && reusableCredentials.isNotEmpty()
-        val canFetchModels = !isFetchingModels && (apiKey.isNotBlank() || asset.credentialsId.value.isNotEmpty() || selectedReusableCredential != null)
-
-        ModelSelectionField(
-            asset = asset,
-            availableModels = availableModels,
-            filteredModels = filteredModels,
-            isFetchingModels = isFetchingModels,
-            canFetchModels = canFetchModels,
-            searchQuery = searchQuery,
-            providerFilter = providerFilter,
-            sortOption = sortOption,
-            onAssetChange = onAssetChange,
-            onFetchModels = onFetchModels,
-            onUpdateSearchQuery = onUpdateSearchQuery,
-            onUpdateProviderFilter = onUpdateProviderFilter,
-            onUpdateSortOption = onUpdateSortOption
-        )
-
-        VisionCapabilitySwitch(
-            discoveredVisionCapability = discoveredVisionCapability,
-            asset = asset,
-            onAssetChange = onAssetChange
-        )
-
         if (canUseStoredCredential) {
             ReusableCredentialDropdown(
                 reusableCredentials = reusableCredentials,
@@ -476,18 +495,37 @@ fun CredentialsConfigurationForm(
         OutlinedTextField(
             value = apiKey,
             onValueChange = onApiKeyChange,
-            label = { Text("API Key") },
+            label = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("API Key")
+                    if (showSavedIndicator) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Key saved",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp),
             placeholder = {
-                if (selectedReusableCredential != null) {
-                    Text("Using saved key from ${selectedReusableCredential.displayName}")
+                if (showSavedIndicator) {
+                    Text("Saved securely")
                 }
             },
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             supportingText = {
-                if (selectedReusableCredential != null) {
-                    Text("The stored key stays encrypted and hidden. Typing here switches back to a new key.")
+                if (isKeySaved) {
+                    Text(
+                        text = if (apiKey.isEmpty()) {
+                            "The stored key stays encrypted and hidden. Typing here switches back to a new key."
+                        } else {
+                            "You are entering a new key. The previously stored key will be replaced upon saving."
+                        }
+                    )
                 }
             },
             trailingIcon = {
@@ -501,11 +539,35 @@ fun CredentialsConfigurationForm(
         )
 
         OutlinedTextField(
-            value = asset.baseUrl ?: "",
-            onValueChange = { onAssetChange(asset.copy(baseUrl = it)) },
-            label = { Text("Base URL (Optional)") },
+            value = asset.displayName,
+            onValueChange = { onAssetChange(asset.copy(displayName = it)) },
+            label = { Text("Display Name (e.g. My OpenAI)") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
+        )
+
+        val canFetchModels = !isFetchingModels && (apiKey.isNotBlank() || asset.credentialsId.value.isNotEmpty() || selectedReusableCredential != null)
+        ModelSelectionField(
+            asset = asset,
+            availableModels = availableModels,
+            filteredModels = filteredModels,
+            isFetchingModels = isFetchingModels,
+            canFetchModels = canFetchModels,
+            searchQuery = searchQuery,
+            providerFilters = providerFilters,
+            sortOption = sortOption,
+            onAssetChange = onAssetChange,
+            onFetchModels = onFetchModels,
+            onUpdateSearchQuery = onUpdateSearchQuery,
+            onToggleProviderFilter = onToggleProviderFilter,
+            onClearProviderFilters = onClearProviderFilters,
+            onUpdateSortOption = onUpdateSortOption
+        )
+
+        VisionCapabilitySwitch(
+            discoveredVisionCapability = discoveredVisionCapability,
+            asset = asset,
+            onAssetChange = onAssetChange
         )
     }
 }
@@ -624,7 +686,6 @@ fun SystemPromptConfiguration(
         }
     }
 }
-
 @Composable
 fun ContextConfiguration(
     config: ApiModelConfigUi,
@@ -881,7 +942,8 @@ fun PreviewByokConfigureCredentials() {
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
             onUpdateModelSearchQuery = {},
-            onUpdateModelProviderFilter = {},
+            onToggleModelProviderFilter = {},
+            onClearModelProviderFilters = {},
             onUpdateModelSortOption = {},
             onSaveApiCredentials = {},
             onSaveApiModelConfig = {},
@@ -914,7 +976,8 @@ fun PreviewByokConfigurePreset() {
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
             onUpdateModelSearchQuery = {},
-            onUpdateModelProviderFilter = {},
+            onToggleModelProviderFilter = {},
+            onClearModelProviderFilters = {},
             onUpdateModelSortOption = {},
             onSaveApiCredentials = {},
             onSaveApiModelConfig = {},
@@ -957,7 +1020,8 @@ fun PreviewByokConfigurePresetWithHeaders() {
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
             onUpdateModelSearchQuery = {},
-            onUpdateModelProviderFilter = {},
+            onToggleModelProviderFilter = {},
+            onClearModelProviderFilters = {},
             onUpdateModelSortOption = {},
             onSaveApiCredentials = {},
             onSaveApiModelConfig = {},
@@ -990,7 +1054,8 @@ fun PreviewByokConfigureOpenRouterPreset() {
             onSelectReusableApiCredential = {},
             onFetchApiModels = {},
             onUpdateModelSearchQuery = {},
-            onUpdateModelProviderFilter = {},
+            onToggleModelProviderFilter = {},
+            onClearModelProviderFilters = {},
             onUpdateModelSortOption = {},
             onSaveApiCredentials = {},
             onSaveApiModelConfig = {},
