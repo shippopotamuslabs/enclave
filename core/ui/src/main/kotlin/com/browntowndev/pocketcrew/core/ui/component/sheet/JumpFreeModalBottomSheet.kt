@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
@@ -99,8 +101,8 @@ fun JumpFreeModalBottomSheet(
         tonalElevation = tonalElevation,
         scrimColor = scrimColor,
         dragHandle = dragHandle,
-        // Use WindowInsets.ime instead of structural insets to break the feedback loop.
-        contentWindowInsets = { WindowInsets.ime }
+        // Use WindowInsets.ime and WindowInsets.statusBars to respect system bars and break the feedback loop.
+        contentWindowInsets = { WindowInsets.ime.union(WindowInsets.statusBars) }
     ) {
         Column(
             modifier = Modifier.navigationBarsPadding()

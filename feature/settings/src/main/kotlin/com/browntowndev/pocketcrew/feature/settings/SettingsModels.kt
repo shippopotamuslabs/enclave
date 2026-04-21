@@ -106,7 +106,7 @@ data class ApiModelDiscoveryUiState(
     val filteredModels: List<DiscoveredApiModelUi> = emptyList(),
     val isLoading: Boolean = false,
     val searchQuery: String = "",
-    val providerFilter: String? = null,
+    val providerFilters: Set<String> = emptySet(),
     val sortOption: ModelSortOption = ModelSortOption.A_TO_Z,
 )
 
