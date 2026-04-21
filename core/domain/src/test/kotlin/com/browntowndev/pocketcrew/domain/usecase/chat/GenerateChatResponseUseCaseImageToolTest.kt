@@ -429,14 +429,11 @@ class GenerateChatResponseUseCaseImageToolTest {
             loggingPort = mockk<LoggingPort>(relaxed = true),
         )
         return GenerateChatResponseUseCase(
-            inferenceFactory = inferenceFactory,
             pipelineExecutor = pipelineExecutor,
             chatRepository = chatRepository,
             messageRepository = messageRepository,
             loggingPort = mockk<LoggingPort>(relaxed = true),
             activeModelProvider = activeModelProvider,
-            settingsRepository = settingsRepository,
-            searchToolPromptComposer = SearchToolPromptComposer(),
             extractedUrlTracker = object : com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort {
                 override val urls: Set<String> get() = emptySet()
                 override fun add(url: String) {}

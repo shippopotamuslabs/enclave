@@ -19,6 +19,7 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCa
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
+import com.browntowndev.pocketcrew.feature.inference.ActiveChatTurnStore
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -85,7 +86,8 @@ class ChatViewModelNavigationTest {
             activeModelProvider = activeModelProvider,
             errorHandler = errorHandler,
             toolExecutionEventPort = toolExecutionEventPort,
-            loggingPort = loggingPort
+            loggingPort = loggingPort,
+            activeChatTurnSnapshotPort = ActiveChatTurnStore(),
         )
     }
 

@@ -4,8 +4,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.usecase.chat.AccumulatedMessages
-import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -67,28 +65,7 @@ class InferenceEventBusTest {
         collectJob.cancel()
     }
 
-    @Test
-    fun `observeChatSnapshot replays latest accumulated messages to late observer`() = runTest {
-        val snapshot = AccumulatedMessages(
-            messages = mapOf(
-                MessageId("assistant-id") to MessageSnapshot(
-                    messageId = MessageId("assistant-id"),
-                    modelType = ModelType.FAST,
-                    content = "streamed while viewmodel was gone",
-                    thinkingRaw = "",
-                )
-            )
-        )
-
-        bus.emitChatSnapshot(key, snapshot)
-
-        val result = bus.observeChatSnapshot(key).first()
-
-        assertEquals(snapshot, result)
-    }
-
     // --- Pipeline stream tests ---
-
     @Test
     fun `hasPipelineStream returns false when no stream opened`() {
         assertFalse(bus.hasPipelineStream("no-such-chat"))

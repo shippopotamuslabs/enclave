@@ -60,12 +60,17 @@ fun StreamableMarkdownText(
     if (markdown.isEmpty()) return // Prevents spinner from showing when text is empty
 
     // Debounce / throttle logic for streaming text
-    var displayedText by remember { mutableStateOf(if (isStreaming) "" else markdown) }
     val targetText by rememberUpdatedState(markdown)
+    var displayedText by remember { mutableStateOf(if (isStreaming) "" else markdown) }
+
+    // When streaming stops, immediately sync displayedText to prevent
+    // the typewriter animation from freezing with stale partial content.
+    if (!isStreaming && displayedText != targetText) {
+        displayedText = targetText
+    }
 
     LaunchedEffect(isStreaming) {
         if (!isStreaming) {
-            displayedText = targetText
             return@LaunchedEffect
         }
 
@@ -100,7 +105,7 @@ fun StreamableMarkdownText(
         }
     }
 
-    val textToRender = if (isStreaming) displayedText else targetText
+    val textToRender = displayedText
 
     // In preview mode, use SimpleMarkdownText to avoid library initialization issues
     if (isPreview) {
