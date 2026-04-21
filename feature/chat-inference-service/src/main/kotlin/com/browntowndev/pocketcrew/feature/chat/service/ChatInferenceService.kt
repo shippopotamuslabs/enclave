@@ -18,6 +18,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
@@ -90,6 +92,9 @@ class ChatInferenceService : Service() {
     lateinit var inferenceEventBus: InferenceEventBus
 
     @Inject
+    lateinit var activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort
+
+    @Inject
     lateinit var chatGenerationProgressPersister: ChatGenerationProgressPersister
 
     private lateinit var historyRehydrator: ChatHistoryRehydrator
@@ -132,6 +137,7 @@ class ChatInferenceService : Service() {
             ACTION_STOP -> {
                 loggingPort.info(TAG, "ACTION_STOP received")
                 stopInference()
+                stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
                 stopSelf()
             }
         }
@@ -212,7 +218,7 @@ class ChatInferenceService : Service() {
                     persistenceSession = persistenceSession,
                 )
             } finally {
-                stopForeground(STOP_FOREGROUND_DETACH)
+                stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
                 stopSelf()
             }
         }
@@ -300,10 +306,9 @@ class ChatInferenceService : Service() {
         state: MessageGenerationState,
         persistenceSession: ChatGenerationProgressSession,
     ) {
-        val key = InferenceEventBus.ChatRequestKey(chatId, assistantMessageId)
         val snapshot = persistenceSession.applyState(state)
-        inferenceEventBus.emitChatSnapshot(
-            key = key,
+        activeChatTurnSnapshotPort.publish(
+            key = ActiveChatTurnKey(chatId, assistantMessageId),
             snapshot = snapshot,
         )
         emitState(chatId, assistantMessageId, state)
@@ -375,10 +380,10 @@ class ChatInferenceService : Service() {
     private fun maybeShowCompletionNotification(chatId: ChatId) {
         val isForeground = ProcessLifecycleOwner.get().lifecycle.currentState
             .isAtLeast(Lifecycle.State.STARTED)
-        if (!isForeground) {
+        if (ChatInferenceNotificationPolicy.shouldShowCompletionNotification(isForeground)) {
             showCompletionNotification(chatId)
         } else {
-            loggingPort.debug(TAG, "App is foregrounded — skipping completion notification")
+            loggingPort.debug(TAG, "App is foregrounded; skipping completion notification")
         }
     }
 

@@ -1,15 +1,15 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.inference.ChatInferenceExecutorPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
-import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
-import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
-import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -17,7 +17,6 @@ import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 
 import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
-import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -26,6 +25,7 @@ import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.withContext
 import java.util.concurrent.CancellationException
 
@@ -39,16 +39,14 @@ import java.util.concurrent.CancellationException
  * 4. Uses buffer(64) for backpressure handling.
  */
 class GenerateChatResponseUseCase @Inject constructor(
-    private val inferenceFactory: InferenceFactoryPort,
     private val pipelineExecutor: PipelineExecutorPort,
     private val chatRepository: ChatRepository,
     private val messageRepository: MessageRepository,
     private val loggingPort: LoggingPort,
     private val activeModelProvider: ActiveModelProviderPort,
-    private val settingsRepository: SettingsRepository,
-    private val searchToolPromptComposer: SearchToolPromptComposer,
     private val extractedUrlTracker: ExtractedUrlTrackerPort,
     private val chatInferenceExecutor: ChatInferenceExecutorPort,
+    private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort = NoOpActiveChatTurnSnapshotPort,
 ) {
     private val persistAccumulatedMessages = PersistAccumulatedChatMessagesUseCase(chatRepository, extractedUrlTracker.urls)
 
@@ -99,7 +97,17 @@ class GenerateChatResponseUseCase @Inject constructor(
                     if (state.isTerminal) {
                         terminalSeen = true
                     }
-                    emit(accumulatorManager.reduce(state))
+                    val accumulatedMessages = accumulatorManager.reduce(state)
+                    if (!backgroundInferenceEnabled) {
+                        activeChatTurnSnapshotPort.publish(
+                            key = ActiveChatTurnKey(
+                                chatId = chatId,
+                                assistantMessageId = assistantMessageId,
+                            ),
+                            snapshot = accumulatedMessages,
+                        )
+                    }
+                    emit(accumulatedMessages)
                 }
             } finally {
                 try {
@@ -235,4 +243,24 @@ class GenerateChatResponseUseCase @Inject constructor(
         private const val TAG = "GenerateChatResponse"
         private const val FLOW_BUFFER_SIZE = 64
     }
+}
+
+private object NoOpActiveChatTurnSnapshotPort : ActiveChatTurnSnapshotPort {
+    override fun observe(key: ActiveChatTurnKey): Flow<AccumulatedMessages?> {
+        return flowOf(null)
+    }
+
+    override suspend fun publish(
+        key: ActiveChatTurnKey,
+        snapshot: AccumulatedMessages,
+    ) = Unit
+
+    override suspend fun markSourcesExtracted(
+        key: ActiveChatTurnKey,
+        urls: List<String>,
+    ) = Unit
+
+    override suspend fun acknowledgeHandoff(key: ActiveChatTurnKey) = Unit
+
+    override suspend fun clear(key: ActiveChatTurnKey) = Unit
 }

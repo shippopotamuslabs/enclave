@@ -1,5 +1,5 @@
 package com.browntowndev.pocketcrew.feature.chat
-import androidx.compose.ui.text.toLowerCase
+
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,13 +10,15 @@ import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
+import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
-import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
@@ -28,7 +30,6 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
-import com.browntowndev.pocketcrew.feature.inference.InferenceEventBus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -45,16 +46,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.emptyFlow
-
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -78,12 +77,11 @@ class ChatViewModel @Inject constructor(
     private val toolExecutionEventPort: ToolExecutionEventPort,
     private val errorHandler: ViewModelErrorHandler,
     private val loggingPort: LoggingPort,
-    private val inferenceEventBus: InferenceEventBus = InferenceEventBus(),
+    private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "ChatViewModel"
-        private const val IN_FLIGHT_COMPLETION_FALLBACK_MS = 5_000L
     }
 
     /**
@@ -103,10 +101,6 @@ class ChatViewModel @Inject constructor(
 
     // Track current chat ID for continuing conversations
     private val _currentChatId = MutableStateFlow<ChatId?>(null)
-
-    // Accumulates real-time inference updates before database persistence
-    // Merged with database messages in uiState for real-time UI updates
-    private val _inFlightMessages = MutableStateFlow<Map<MessageId, MessageSnapshot>>(emptyMap())
 
     // Holds dynamically loaded display names
     private val _modelDisplayNames = MutableStateFlow<Map<ModelType, String>>(emptyMap())
@@ -130,7 +124,10 @@ class ChatViewModel @Inject constructor(
 
     // Job for tracking inference flow collection (for cancellation in onCleared)
     private var inferenceJob: Job? = null
-    private var inFlightCompletionFallbackJob: Job? = null
+
+    private val _requestedTurnKey = MutableStateFlow<ActiveChatTurnKey?>(null)
+    private val _acknowledgedTurnKeys = MutableStateFlow<Set<ActiveChatTurnKey>>(emptySet())
+    private val handoffAcknowledgementsInFlight = mutableSetOf<ActiveChatTurnKey>()
 
     private val activeChatIdFlow = _currentChatId
         .map { chatId -> chatId ?: initialChatId }
@@ -141,6 +138,65 @@ class ChatViewModel @Inject constructor(
             flowOf(emptyList())
         } else {
             chatUseCases.getChat(id)
+        }
+    }
+
+    private val activeTurnCandidateFlow = combine(
+        activeChatIdFlow,
+        dbMessagesFlow,
+        _requestedTurnKey,
+    ) { chatId, messages, requestedTurnKey ->
+        val incompleteKey = chatId?.let { id ->
+            messages
+                .lastOrNull { message ->
+                    message.role == Role.ASSISTANT && message.messageState != MessageState.COMPLETE
+                }
+                ?.let { message -> ActiveChatTurnKey(id, message.id) }
+        }
+        val requestedKey = requestedTurnKey?.takeIf { key ->
+            key.chatId == chatId &&
+                messages.none { message ->
+                    message.id == key.assistantMessageId && message.messageState == MessageState.COMPLETE
+                }
+        }
+        ActiveTurnCandidate(
+            chatId = chatId,
+            messages = messages,
+            key = requestedKey ?: incompleteKey,
+        )
+    }
+
+    private val activeTurnKeyFlow = combine(
+        activeTurnCandidateFlow,
+        _acknowledgedTurnKeys,
+    ) { candidate, acknowledgedKeys ->
+        candidate to acknowledgedKeys
+    }.scan(null as ActiveChatTurnKey?) { currentKey, (candidate, acknowledgedKeys) ->
+        val candidateKey = candidate.key?.takeUnless { key -> key in acknowledgedKeys }
+        when {
+            currentKey != null && currentKey in acknowledgedKeys -> null
+            candidateKey != null -> candidateKey
+            currentKey != null && candidate.chatId == currentKey.chatId &&
+                candidate.messages.any { message ->
+                    message.id == currentKey.assistantMessageId &&
+                        message.messageState == MessageState.COMPLETE
+                } -> currentKey
+            else -> null
+        }
+    }.distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = null,
+        )
+
+    private val activeTurnSnapshotFlow = activeTurnKeyFlow.flatMapLatest { key ->
+        if (key == null) {
+            flowOf(ActiveTurnSnapshotState(key = null, snapshot = null))
+        } else {
+            activeChatTurnSnapshotPort.observe(key).map { snapshot ->
+                ActiveTurnSnapshotState(key = key, snapshot = snapshot)
+            }
         }
     }
 
@@ -156,36 +212,6 @@ class ChatViewModel @Inject constructor(
 
         // Observe tool execution events to show transient UI banners
         observeToolEvents()
-        observeActiveBackgroundInference()
-    }
-
-    private fun observeActiveBackgroundInference() {
-        combine(
-            activeChatIdFlow,
-            dbMessagesFlow,
-        ) { chatId, messages ->
-            val assistantMessageId = messages
-                .lastOrNull { message ->
-                    message.role == Role.ASSISTANT && message.messageState != MessageState.COMPLETE
-                }
-                ?.id
-            if (chatId != null && assistantMessageId != null) {
-                InferenceEventBus.ChatRequestKey(chatId, assistantMessageId)
-            } else {
-                null
-            }
-        }.distinctUntilChanged()
-            .flatMapLatest { requestKey ->
-                if (requestKey == null) {
-                    emptyFlow()
-                } else {
-                    inferenceEventBus.observeChatSnapshot(requestKey)
-                }
-            }
-            .onEach { accumulatedMessages ->
-                _inFlightMessages.update { current -> current + accumulatedMessages.messages }
-            }
-            .launchIn(viewModelScope)
     }
 
     /**
@@ -228,12 +254,13 @@ class ChatViewModel @Inject constructor(
                         }
                     )
                 }
-                                is ToolExecutionEvent.Extracting -> {
+
+                is ToolExecutionEvent.Extracting -> {
                     _activeToolCallBanner.value = ToolCallBannerUi(
                         kind = ToolCallBannerKind.EXTRACT,
                         label = "Reading ${event.url}"
                     )
-                    // Mark matching sources as extracted in in-flight messages
+                    // Mark matching sources as extracted in the active turn snapshot.
                     markSourceExtracted(event.url)
                 }
 
@@ -243,7 +270,7 @@ class ChatViewModel @Inject constructor(
                     val remaining = (1000 - elapsed).coerceAtLeast(0)
 
                     // Collect sources for the banner if available
-                    val sources = event.resultJson?.let { 
+                    val sources = event.resultJson?.let {
                         com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(MessageId("temp"), it)
                     } ?: emptyList()
 
@@ -267,7 +294,7 @@ class ChatViewModel @Inject constructor(
 
     /**
      * Main UI state flow.
-     * Combines settings, messages from database, inference lock state, and in-flight messages.
+     * Combines settings, database messages, inference lock state, and active turn snapshots.
      * Uses nested combine for 6 flows (Kotlin only supports up to 5-arg combine natively).
      */
     private val uiInputsFlow = combine(
@@ -291,13 +318,13 @@ class ChatViewModel @Inject constructor(
         uiInputsWithPolicyFlow,
         inferenceLockManager.isInferenceBlocked,
         dbMessagesFlow,
-        _inFlightMessages,
-        _activeToolCallBanner
+        activeTurnSnapshotFlow,
+        _activeToolCallBanner,
     ) {
         inputsWithPolicy: UiInputsWithPolicy,
         isBlocked: Boolean,
         messages: List<Message>,
-        inFlight: Map<MessageId, MessageSnapshot>,
+        activeTurnSnapshotState: ActiveTurnSnapshotState,
         activeBanner: ToolCallBannerUi? ->
 
         val inputs = inputsWithPolicy.inputs
@@ -305,44 +332,19 @@ class ChatViewModel @Inject constructor(
         val settings: SettingsData = inputs.settings
         val inputText: String = inputs.inputText
         val selectedMode: ChatModeUi = inputs.selectedMode
-        
-        // Convert DB messages to map for merging
-        val dbMessagesMap: Map<MessageId, Message> = messages.associateBy { m: Message -> m.id }
-        
-        // Convert in-flight MessageSnapshots to Message objects for merging
-        val inFlightMessagesMap: Map<MessageId, Message> = inFlight.mapValues { entry: Map.Entry<MessageId, MessageSnapshot> ->
-            val snapshot: MessageSnapshot = entry.value
-            Message(
-                id = snapshot.messageId,
-                chatId = _currentChatId.value ?: initialChatId ?: ChatId(""),
-                role = Role.ASSISTANT,
-                content = Content(text = snapshot.content, pipelineStep = snapshot.pipelineStep),
-                thinkingRaw = snapshot.thinkingRaw.ifBlank { null },
-                thinkingDurationSeconds = snapshot.thinkingDurationSeconds,
-                thinkingStartTime = snapshot.thinkingStartTime.takeIf { st: Long -> st != 0L },
-                thinkingEndTime = snapshot.thinkingEndTime.takeIf { et: Long -> et != 0L },
-                createdAt = null,
-                messageState = snapshot.messageState,
-                modelType = snapshot.modelType,
-                tavilySources = snapshot.tavilySources,
-            )
-        }
-        
-        // Merge using use case - DB COMPLETE wins, otherwise use in-flight
-        val mergedMessages: Map<MessageId, Message> = dbMessagesMap.mapValues { (id, dbMessage) ->
-            val inFlightMessage = inFlightMessagesMap[id]
-            chatUseCases.mergeMessagesUseCase(dbMessage, inFlightMessage) ?: dbMessage
-        }
-        
-        // Also include any in-flight messages that don't have a DB counterpart
-        val allMergedMessages = mergedMessages + inFlightMessagesMap.filterKeys { it !in mergedMessages }
+
+        val projectedMessages = projectChatMessages(
+            dbMessages = messages,
+            activeSnapshot = activeTurnSnapshotState.snapshot,
+            chatId = activeTurnSnapshotState.key?.chatId ?: _currentChatId.value ?: initialChatId,
+            mergeMessagesUseCase = chatUseCases.mergeMessagesUseCase,
+        )
         
         // Sort chronologically and map domain messages to UI messages
         var isGenerating = false
         var hasActiveIndicator = false
         var activeIndicatorMessageId: MessageId? = null
-        val chatMessages: List<ChatMessage> = allMergedMessages.values
-            .sortedBy { it.createdAt ?: Long.MAX_VALUE }
+        val chatMessages: List<ChatMessage> = projectedMessages
             .map { message: Message ->
                 val chatMessage = mapToChatMessage(message)
                 val state = chatMessage.indicatorState
@@ -360,12 +362,9 @@ class ChatViewModel @Inject constructor(
                 chatMessage
             }
 
-        // Prune in-flight messages that are now confirmed by the database,
-        // ensuring the DB message is already present in this same emission
-        // before the in-flight entry is removed. This eliminates the flicker
-        // that occurred when the non-debounced prune observer removed in-flight
-        // entries before the combine had received the corresponding DB data.
-        pruneInFlightMessagesAsync(messages, inFlight)
+        // This stays inside state projection so Room COMPLETE is visible before
+        // the active snapshot is cleared; a sibling collector can race this path.
+        acknowledgeHandoffIfNeeded(messages, activeTurnSnapshotState)
 
         ChatUiState(
             messages = chatMessages,
@@ -390,23 +389,12 @@ class ChatViewModel @Inject constructor(
         initialValue = ChatUiState()
     )
 
-    /**
-     * Prunes in-flight messages whose IDs are now confirmed as COMPLETE in the database.
-     *
-     * Called from inside the [uiState] combine so that the prune only happens after
-     * the COMPLETE DB message is already part of the current emission — eliminating
-     * the flicker gap that occurred when the old observeCompletedInFlightMessages()
-     * pruned on a non-debounced DB flow before the combine had received the data.
-     *
-     * Uses an async launch to avoid mutating _inFlightMessages inside the combine
-     * lambda, which would trigger a re-emission loop. The launched coroutine posts
-     * the update after the current combine emission has been delivered.
-     */
-    private fun pruneInFlightMessagesAsync(
+    private fun acknowledgeHandoffIfNeeded(
         dbMessages: List<Message>,
-        currentInFlight: Map<MessageId, MessageSnapshot>,
+        activeTurnSnapshotState: ActiveTurnSnapshotState,
     ) {
-        if (currentInFlight.isEmpty()) return
+        val key = activeTurnSnapshotState.key ?: return
+        val activeSnapshot = activeTurnSnapshotState.snapshot ?: return
 
         val completedDbIds = dbMessages.asSequence()
             .filter { it.messageState == MessageState.COMPLETE }
@@ -415,30 +403,21 @@ class ChatViewModel @Inject constructor(
 
         if (completedDbIds.isEmpty()) return
 
-        val idsToPrune = currentInFlight.keys.filter { it in completedDbIds }
-        if (idsToPrune.isEmpty()) return
+        val shouldAcknowledge = activeSnapshot.messages.keys.any { id -> id in completedDbIds }
+        if (!shouldAcknowledge) return
+        if (!handoffAcknowledgementsInFlight.add(key)) return
 
         viewModelScope.launch {
-            _inFlightMessages.update { current ->
-                current.filterKeys { it !in completedDbIds }
-            }
-            if (_inFlightMessages.value.isEmpty()) {
-                cancelInFlightCompletionFallback()
+            try {
+                activeChatTurnSnapshotPort.acknowledgeHandoff(key)
+                _acknowledgedTurnKeys.update { keys -> keys + key }
+                if (_requestedTurnKey.value == key) {
+                    _requestedTurnKey.update { null }
+                }
+            } finally {
+                handoffAcknowledgementsInFlight.remove(key)
             }
         }
-    }
-
-    private fun scheduleInFlightCompletionFallback() {
-        inFlightCompletionFallbackJob?.cancel()
-        inFlightCompletionFallbackJob = viewModelScope.launch {
-            delay(IN_FLIGHT_COMPLETION_FALLBACK_MS)
-            _inFlightMessages.value = emptyMap()
-        }
-    }
-
-    private fun cancelInFlightCompletionFallback() {
-        inFlightCompletionFallbackJob?.cancel()
-        inFlightCompletionFallbackJob = null
     }
 
     /**
@@ -585,19 +564,29 @@ class ChatViewModel @Inject constructor(
     fun stopGeneration() {
         inferenceJob?.cancel()
         cancelInferenceUseCase()
-        // Clear in-flight messages and tool banner so the UI immediately
-        // transitions out of the generating/thinking state
-        cancelInFlightCompletionFallback()
-        _inFlightMessages.value = emptyMap()
+        activeTurnKeyFlow.value?.let { key ->
+            viewModelScope.launch {
+                activeChatTurnSnapshotPort.clear(key)
+                _requestedTurnKey.update { current -> if (current == key) null else current }
+                _acknowledgedTurnKeys.update { keys -> keys + key }
+                handoffAcknowledgementsInFlight.remove(key)
+            }
+        }
         _activeToolCallBanner.value = null
     }
 
     fun createNewChat() {
+        activeTurnKeyFlow.value?.let { key ->
+            viewModelScope.launch {
+                activeChatTurnSnapshotPort.clear(key)
+                _acknowledgedTurnKeys.update { keys -> keys + key }
+                handoffAcknowledgementsInFlight.remove(key)
+            }
+        }
         _currentChatId.value = null
         _inputText.value = ""
         _selectedImageUri.value = null
-        cancelInFlightCompletionFallback()
-        _inFlightMessages.value = emptyMap()
+        _requestedTurnKey.value = null
         inferenceJob?.cancel()
         // Ensure SavedStateHandle is also cleared so chatId doesn't persist on recreation
         savedStateHandle["chatId"] = null
@@ -632,17 +621,19 @@ class ChatViewModel @Inject constructor(
 
                 // Update current chat ID to continue this conversation
                 _currentChatId.value = promptResult.chatId
+                val turnKey = ActiveChatTurnKey(
+                    chatId = promptResult.chatId,
+                    assistantMessageId = promptResult.assistantMessageId,
+                )
+                _acknowledgedTurnKeys.update { keys -> keys - turnKey }
+                _requestedTurnKey.value = turnKey
 
                 // Clear input text
                 _inputText.value = ""
                 _selectedImageUri.value = null
 
-                // Clear previous in-flight messages
-                cancelInFlightCompletionFallback()
-                _inFlightMessages.value = emptyMap()
-
                 // Use mode to route to appropriate service
-                // Collect flow to update _inFlightMessages for real-time UI updates
+                // Collect the flow to keep direct inference alive and surface errors.
                 inferenceJob = chatUseCases.generateChatResponse(
                     prompt = input,
                     userMessageId = promptResult.userMessageId,
@@ -650,16 +641,10 @@ class ChatViewModel @Inject constructor(
                     chatId = promptResult.chatId,
                     mode = _selectedMode.value.toDomain(),
                     backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
-                ).onEach { state ->
-                    // Merge new messages with existing in-flight messages
-                    // In-flight messages override database messages for same messageId
-                    _inFlightMessages.update { current -> current + state.messages }
+                ).onEach {
+                    // Snapshot publication is owned by the generation pipeline through ActiveChatTurnSnapshotPort.
                 }.catch { cause ->
                     errorHandler.handleError(TAG, "Inference failed", cause, "Failed to generate response. Please try again.")
-                }.onCompletion { cause ->
-                    if (cause == null && _inFlightMessages.value.isNotEmpty()) {
-                        scheduleInFlightCompletionFallback()
-                    }
                 }.launchIn(viewModelScope)
             }
         }
@@ -685,26 +670,14 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Marks a source URL as extracted in all in-flight message snapshots.
-     * Called when the extract tool begins reading a URL so the UI reflects the
-     * "read" indicator immediately during the conversation.
-     */
     private fun markSourceExtracted(url: String) {
-        val current = _inFlightMessages.value
-        val updated = current.mapValues { (_, snapshot) ->
-            val hasMatchingSource = snapshot.tavilySources.any { it.url == url }
-            if (hasMatchingSource) {
-                snapshot.copy(
-                    tavilySources = snapshot.tavilySources.map { source ->
-                        if (source.url == url) source.copy(extracted = true) else source
-                    }
-                )
-            } else {
-                snapshot
-            }
+        val key = activeTurnKeyFlow.value ?: return
+        viewModelScope.launch {
+            activeChatTurnSnapshotPort.markSourcesExtracted(
+                key = key,
+                urls = listOf(url),
+            )
         }
-        _inFlightMessages.value = updated
     }
 
     /**
@@ -727,6 +700,17 @@ class ChatViewModel @Inject constructor(
     private data class UiInputsWithPolicy(
         val inputs: UiInputs,
         val attachmentPolicy: PhotoAttachmentPolicy,
+    )
+
+    private data class ActiveTurnCandidate(
+        val chatId: ChatId?,
+        val messages: List<Message>,
+        val key: ActiveChatTurnKey?,
+    )
+
+    private data class ActiveTurnSnapshotState(
+        val key: ActiveChatTurnKey?,
+        val snapshot: AccumulatedMessages?,
     )
 
     private suspend fun resolvePhotoAttachmentPolicy(
@@ -775,22 +759,5 @@ class ChatViewModel @Inject constructor(
         super.onCleared()
         // Cancel any ongoing inference flow
         inferenceJob?.cancel()
-        inFlightCompletionFallbackJob?.cancel()
     }
-}
-
-internal fun pruneCompletedInFlightMessages(
-    current: Map<MessageId, MessageSnapshot>,
-    dbMessages: List<Message>,
-): Map<MessageId, MessageSnapshot> {
-    if (current.isEmpty()) return current
-
-    val completedMessageIds = dbMessages.asSequence()
-        .filter { message -> message.messageState == MessageState.COMPLETE }
-        .map { message -> message.id }
-        .toSet()
-
-    if (completedMessageIds.isEmpty()) return current
-
-    return current.filterKeys { messageId -> messageId !in completedMessageIds }
 }

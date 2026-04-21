@@ -85,14 +85,11 @@ class GenerateChatResponseUseCaseSearchToolTest {
         val settingsRepository = mockSettingsRepository(searchEnabled = true)
         val messageRepository = mockMessageRepository()
         val useCase = GenerateChatResponseUseCase(
-            inferenceFactory = inferenceFactory,
             pipelineExecutor = mockPipelineExecutor(),
             chatRepository = mockk(relaxed = true),
             messageRepository = messageRepository,
             loggingPort = mockk(relaxed = true),
             activeModelProvider = activeModelProvider,
-            settingsRepository = settingsRepository,
-            searchToolPromptComposer = SearchToolPromptComposer(),
             extractedUrlTracker = noOpTracker,
             chatInferenceExecutor = createChatInferenceExecutor(
                 inferenceFactory = inferenceFactory,
@@ -154,14 +151,11 @@ class GenerateChatResponseUseCaseSearchToolTest {
         val settingsRepository = mockSettingsRepository(searchEnabled = true)
         val messageRepository = mockMessageRepository()
         val useCase = GenerateChatResponseUseCase(
-            inferenceFactory = inferenceFactory,
             pipelineExecutor = mockPipelineExecutor(),
             chatRepository = mockk(relaxed = true),
             messageRepository = messageRepository,
             loggingPort = mockk(relaxed = true),
             activeModelProvider = activeModelProvider,
-            settingsRepository = settingsRepository,
-            searchToolPromptComposer = SearchToolPromptComposer(),
             extractedUrlTracker = noOpTracker,
             chatInferenceExecutor = createChatInferenceExecutor(
                 inferenceFactory = inferenceFactory,

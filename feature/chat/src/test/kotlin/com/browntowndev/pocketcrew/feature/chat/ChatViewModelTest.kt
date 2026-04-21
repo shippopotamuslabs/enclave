@@ -37,15 +37,16 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCas
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.TAVILY_WEB_SEARCH
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.pocketcrew.domain.usecase.chat.AccumulatedMessages
+import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MergeMessagesUseCase
-import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
-import com.browntowndev.pocketcrew.feature.inference.InferenceEventBus
+import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
+import com.browntowndev.pocketcrew.feature.inference.ActiveChatTurnStore
 import io.mockk.*
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -53,6 +54,8 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
@@ -60,7 +63,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -104,6 +106,7 @@ class ChatViewModelTest {
     private lateinit var toolExecutionEventPort: ToolExecutionEventPort
     private lateinit var loggingPort: LoggingPort
     private lateinit var errorHandler: ViewModelErrorHandler
+    private lateinit var activeChatTurnStore: ActiveChatTurnStore
 
     @BeforeEach
     fun setup() {
@@ -115,6 +118,7 @@ class ChatViewModelTest {
         cancelInferenceUseCase = mockk(relaxed = true)
         toolExecutionEventPort = mockk(relaxed = true)
         loggingPort = mockk(relaxed = true)
+        activeChatTurnStore = ActiveChatTurnStore()
         activeModelProvider = FakeActiveModelProvider()
         activeModelProvider.setConfiguration(
             ModelType.FAST,
@@ -179,7 +183,8 @@ class ChatViewModelTest {
             activeModelProvider = activeModelProvider,
             toolExecutionEventPort = toolExecutionEventPort,
             errorHandler = errorHandler,
-            loggingPort = loggingPort
+            loggingPort = loggingPort,
+            activeChatTurnSnapshotPort = activeChatTurnStore,
         )
     }
 
@@ -287,8 +292,8 @@ class ChatViewModelTest {
         )
         coEvery {
             chatUseCases.generateChatResponse(any(), any(), any(), any(), any(), any())
-        } returns flowOf(
-            AccumulatedMessages(
+        } returns flow {
+            val snapshot = AccumulatedMessages(
                 messages = mapOf(
                     assistantMessageId to createAssistantSnapshot(
                         id = assistantMessageId,
@@ -297,7 +302,9 @@ class ChatViewModelTest {
                     )
                 )
             )
-        )
+            activeChatTurnStore.publish(ActiveChatTurnKey(chatId, assistantMessageId), snapshot)
+            emit(snapshot)
+        }
 
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
         try {
@@ -353,8 +360,8 @@ class ChatViewModelTest {
         )
         coEvery {
             chatUseCases.generateChatResponse(any(), any(), any(), any(), any(), any())
-        } returns flowOf(
-            AccumulatedMessages(
+        } returns flow {
+            val snapshot = AccumulatedMessages(
                 messages = mapOf(
                     assistantMessageId to createAssistantSnapshot(
                         id = assistantMessageId,
@@ -363,7 +370,9 @@ class ChatViewModelTest {
                     )
                 )
             )
-        )
+            activeChatTurnStore.publish(ActiveChatTurnKey(chatId, assistantMessageId), snapshot)
+            emit(snapshot)
+        }
 
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
         try {
@@ -375,12 +384,11 @@ class ChatViewModelTest {
             advanceTimeBy(100)
             runCurrent()
 
-            // Simulate DB emitting COMPLETE — in the old (broken) behavior the
-            // non-debounced prune observer would clear _inFlightMessages before
-            // the combine saw the DB emission, producing a gap frame.
-            // With the fix, the prune is triggered inside the combine after it
-            // has already incorporated the COMPLETE DB message, so the assistant
-            // message is never absent.
+            // Simulate DB emitting COMPLETE. In the old behavior the active
+            // snapshot could clear before the combine saw the DB emission,
+            // producing a gap frame. With the fix, handoff acknowledgment happens
+            // after the COMPLETE DB message is already incorporated, so the
+            // assistant message is never absent.
             dbMessages.value = listOf(
                 createAssistantMessage(
                     id = assistantMessageId,
@@ -410,55 +418,6 @@ class ChatViewModelTest {
         } finally {
             collectJob.cancel()
         }
-    }
-
-    @Test
-    fun `pruneCompletedInFlightMessages removes only database confirmed complete ids`() {
-        val completeId = MessageId("complete")
-        val generatingId = MessageId("generating")
-        val missingId = MessageId("missing")
-        val current = mapOf(
-            completeId to createAssistantSnapshot(completeId, "complete", MessageState.GENERATING),
-            generatingId to createAssistantSnapshot(generatingId, "generating", MessageState.GENERATING),
-            missingId to createAssistantSnapshot(missingId, "missing", MessageState.GENERATING),
-        )
-
-        val result = pruneCompletedInFlightMessages(
-            current = current,
-            dbMessages = listOf(
-                createAssistantMessage(completeId, "complete", MessageState.COMPLETE),
-                createAssistantMessage(generatingId, "generating", MessageState.GENERATING),
-            ),
-        )
-
-        assertFalse(result.containsKey(completeId))
-        assertTrue(result.containsKey(generatingId))
-        assertTrue(result.containsKey(missingId))
-    }
-
-    @Test
-    fun `pruneCompletedInFlightMessages retains entries until database message is complete`() {
-        val assistantMessageId = MessageId("assistant")
-        val current = mapOf(
-            assistantMessageId to createAssistantSnapshot(
-                id = assistantMessageId,
-                content = "streaming answer",
-                state = MessageState.GENERATING,
-            )
-        )
-
-        val result = pruneCompletedInFlightMessages(
-            current = current,
-            dbMessages = listOf(
-                createAssistantMessage(
-                    id = assistantMessageId,
-                    content = "",
-                    state = MessageState.PROCESSING,
-                )
-            ),
-        )
-
-        assertEquals(current, result)
     }
 
     // ========================================================================
@@ -717,7 +676,8 @@ class ChatViewModelTest {
             activeModelProvider = activeModelProvider,
             toolExecutionEventPort = toolExecutionEventPort,
             errorHandler = errorHandler,
-            loggingPort = loggingPort
+            loggingPort = loggingPort,
+            activeChatTurnSnapshotPort = activeChatTurnStore,
         )
 
         // Give init and observeToolEvents a chance to subscribe
@@ -751,7 +711,7 @@ class ChatViewModelTest {
             }
             
             assertNotNull(stateWithBanner.activeToolCallBanner)
-            assertEquals("Searching with Tavily", stateWithBanner.activeToolCallBanner?.label)
+            assertEquals("Searching with Tavily", stateWithBanner.activeToolCallBanner.label)
 
             // 3. Emit Finished Event
             val finishEvent = ToolExecutionEvent.Finished(
@@ -773,7 +733,7 @@ class ChatViewModelTest {
             // Now the banner should be dismissed
             var finalState = awaitItem()
             while (finalState.activeToolCallBanner != null) {
-                 finalState = awaitItem()
+                finalState = awaitItem()
             }
             assertNull(finalState.activeToolCallBanner)
         }
@@ -781,7 +741,7 @@ class ChatViewModelTest {
 
     @Test
     fun `stopGeneration cancels inference and clears tool banner`() = runTest {
-        // Given - set up some in-flight messages and tool banner state
+        // Given - set up active tool banner state
         val eventFlow = kotlinx.coroutines.flow.MutableSharedFlow<ToolExecutionEvent>()
         every { toolExecutionEventPort.events } returns eventFlow
 
@@ -800,7 +760,8 @@ class ChatViewModelTest {
             activeModelProvider = activeModelProvider,
             toolExecutionEventPort = toolExecutionEventPort,
             errorHandler = errorHandler,
-            loggingPort = loggingPort
+            loggingPort = loggingPort,
+            activeChatTurnSnapshotPort = activeChatTurnStore,
         )
 
         runCurrent()
@@ -821,7 +782,6 @@ class ChatViewModelTest {
     fun `uiState reattaches to active background inference snapshot after ViewModel recreation`() = runTest {
         val chatId = ChatId("chat")
         val assistantMessageId = MessageId("assistant")
-        val eventBus = InferenceEventBus()
         val dbMessages = MutableStateFlow(
             listOf(
                 createAssistantMessage(
@@ -832,8 +792,8 @@ class ChatViewModelTest {
             )
         )
         coEvery { chatUseCases.getChat(chatId) } returns dbMessages
-        eventBus.emitChatSnapshot(
-            key = InferenceEventBus.ChatRequestKey(chatId, assistantMessageId),
+        activeChatTurnStore.publish(
+            key = ActiveChatTurnKey(chatId, assistantMessageId),
             snapshot = AccumulatedMessages(
                 messages = mapOf(
                     assistantMessageId to createAssistantSnapshot(
@@ -857,7 +817,7 @@ class ChatViewModelTest {
             toolExecutionEventPort = toolExecutionEventPort,
             errorHandler = errorHandler,
             loggingPort = loggingPort,
-            inferenceEventBus = eventBus,
+            activeChatTurnSnapshotPort = activeChatTurnStore,
         )
 
         val collectJob = backgroundScope.launch { recreatedViewModel.uiState.collect { } }
@@ -872,6 +832,244 @@ class ChatViewModelTest {
         } finally {
             collectJob.cancel()
         }
+    }
+
+    @Test
+    fun `stale shorter snapshot cannot replace longer current snapshot`() = runTest {
+        val chatId = ChatId("chat")
+        val assistantMessageId = MessageId("assistant")
+        val key = ActiveChatTurnKey(chatId, assistantMessageId)
+        val dbMessages = MutableStateFlow(
+            listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "partial",
+                    state = MessageState.GENERATING,
+                )
+            )
+        )
+        coEvery { chatUseCases.getChat(chatId) } returns dbMessages
+        chatViewModel = createViewModel(SavedStateHandle(mapOf("chatId" to chatId.value)))
+
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        try {
+            runCurrent()
+
+            activeChatTurnStore.publish(
+                key = key,
+                snapshot = AccumulatedMessages(
+                    messages = mapOf(
+                        assistantMessageId to createAssistantSnapshot(
+                            id = assistantMessageId,
+                            content = "longer streaming answer",
+                            state = MessageState.GENERATING,
+                        )
+                    )
+                ),
+            )
+            runCurrent()
+            activeChatTurnStore.publish(
+                key = key,
+                snapshot = AccumulatedMessages(
+                    messages = mapOf(
+                        assistantMessageId to createAssistantSnapshot(
+                            id = assistantMessageId,
+                            content = "short",
+                            state = MessageState.GENERATING,
+                        )
+                    )
+                ),
+            )
+            runCurrent()
+
+            assertEquals("longer streaming answer", chatViewModel.uiState.value.messages.single().content.text)
+        } finally {
+            collectJob.cancel()
+        }
+    }
+
+    @Test
+    fun `requested turn takes precedence over older incomplete database assistant`() = runTest {
+        val chatId = ChatId("chat")
+        val staleAssistantMessageId = MessageId("stale-assistant")
+        val newUserMessageId = MessageId("new-user")
+        val newAssistantMessageId = MessageId("new-assistant")
+        val dbMessages = MutableStateFlow(
+            listOf(
+                createAssistantMessage(
+                    id = staleAssistantMessageId,
+                    content = "stale incomplete answer",
+                    state = MessageState.GENERATING,
+                )
+            )
+        )
+
+        coEvery { chatUseCases.getChat(chatId) } returns dbMessages
+        coEvery { chatUseCases.processPrompt(any()) } returns CreateUserMessageUseCase.PromptResult(
+            userMessageId = newUserMessageId,
+            assistantMessageId = newAssistantMessageId,
+            chatId = chatId,
+        )
+        coEvery {
+            chatUseCases.generateChatResponse(any(), any(), any(), any(), any(), any())
+        } returns flow {
+            val snapshot = AccumulatedMessages(
+                messages = mapOf(
+                    newAssistantMessageId to createAssistantSnapshot(
+                        id = newAssistantMessageId,
+                        content = "new streaming answer",
+                        state = MessageState.GENERATING,
+                    )
+                )
+            )
+            activeChatTurnStore.publish(ActiveChatTurnKey(chatId, newAssistantMessageId), snapshot)
+            emit(snapshot)
+        }
+
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        try {
+            runCurrent()
+
+            chatViewModel.onInputChange("new prompt")
+            chatViewModel.onSendMessage()
+            runCurrent()
+            advanceTimeBy(100)
+            runCurrent()
+
+            assertTrue(
+                chatViewModel.uiState.value.messages.any { message ->
+                    message.id == newAssistantMessageId &&
+                        message.content.text == "new streaming answer"
+                },
+                "The explicitly requested turn should be observed even when Room still has an older incomplete assistant.",
+            )
+        } finally {
+            collectJob.cancel()
+        }
+    }
+
+    @Test
+    fun `no flicker handoff keeps assistant message present when Room completes`() = runTest {
+        val chatId = ChatId("chat")
+        val assistantMessageId = MessageId("assistant")
+        val key = ActiveChatTurnKey(chatId, assistantMessageId)
+        val dbMessages = MutableStateFlow(
+            listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "partial",
+                    state = MessageState.GENERATING,
+                )
+            )
+        )
+        coEvery { chatUseCases.getChat(chatId) } returns dbMessages
+        chatViewModel = createViewModel(SavedStateHandle(mapOf("chatId" to chatId.value)))
+        val observedStates = mutableListOf<ChatUiState>()
+
+        val collectJob = backgroundScope.launch {
+            chatViewModel.uiState.collect { state -> observedStates.add(state) }
+        }
+        try {
+            runCurrent()
+            activeChatTurnStore.publish(
+                key = key,
+                snapshot = AccumulatedMessages(
+                    messages = mapOf(
+                        assistantMessageId to createAssistantSnapshot(
+                            id = assistantMessageId,
+                            content = "streaming answer",
+                            state = MessageState.GENERATING,
+                        )
+                    )
+                ),
+            )
+            runCurrent()
+
+            dbMessages.value = listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "final answer",
+                    state = MessageState.COMPLETE,
+                )
+            )
+            runCurrent()
+            runCurrent()
+
+            val statesAfterAssistantAppears = observedStates.dropWhile { state ->
+                state.messages.none { message -> message.id == assistantMessageId }
+            }
+            assertTrue(statesAfterAssistantAppears.isNotEmpty())
+            assertTrue(
+                statesAfterAssistantAppears.all { state ->
+                    state.messages.any { message -> message.id == assistantMessageId }
+                },
+                "Assistant message must not disappear during active snapshot to Room handoff.",
+            )
+            assertEquals("final answer", chatViewModel.uiState.value.messages.single().content.text)
+            assertNull(activeChatTurnStore.observe(key).first())
+        } finally {
+            collectJob.cancel()
+        }
+    }
+
+    @Test
+    fun `stopGeneration clears active store entry`() = runTest {
+        val chatId = ChatId("chat")
+        val assistantMessageId = MessageId("assistant")
+        val key = ActiveChatTurnKey(chatId, assistantMessageId)
+        val dbMessages = MutableStateFlow(
+            listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "partial",
+                    state = MessageState.GENERATING,
+                )
+            )
+        )
+        coEvery { chatUseCases.getChat(chatId) } returns dbMessages
+        chatViewModel = createViewModel(SavedStateHandle(mapOf("chatId" to chatId.value)))
+        activeChatTurnStore.publish(
+            key = key,
+            snapshot = AccumulatedMessages(
+                messages = mapOf(
+                    assistantMessageId to createAssistantSnapshot(
+                        id = assistantMessageId,
+                        content = "streaming answer",
+                        state = MessageState.GENERATING,
+                    )
+                )
+            ),
+        )
+
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        try {
+            runCurrent()
+            chatViewModel.stopGeneration()
+            runCurrent()
+
+            assertNull(activeChatTurnStore.observe(key).first())
+        } finally {
+            collectJob.cancel()
+        }
+    }
+
+    private fun createViewModel(
+        savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    ): ChatViewModel {
+        return ChatViewModel(
+            settingsUseCases = settingsUseCases,
+            chatUseCases = chatUseCases,
+            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+            savedStateHandle = savedStateHandle,
+            cancelInferenceUseCase = cancelInferenceUseCase,
+            inferenceLockManager = inferenceLockManager,
+            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            activeModelProvider = activeModelProvider,
+            toolExecutionEventPort = toolExecutionEventPort,
+            errorHandler = errorHandler,
+            loggingPort = loggingPort,
+            activeChatTurnSnapshotPort = activeChatTurnStore,
+        )
     }
 
     private fun createAssistantSnapshot(
