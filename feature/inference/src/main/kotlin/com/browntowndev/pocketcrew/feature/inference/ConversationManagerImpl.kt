@@ -47,6 +47,7 @@ import androidx.annotation.VisibleForTesting
 import java.lang.reflect.InvocationTargetException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -138,7 +139,7 @@ class ConversationManagerImpl @Inject constructor(
         return java.io.File(modelsDir, filename).absolutePath
     }
 
-    private val mutex = kotlinx.coroutines.sync.Mutex()
+    private val mutex = Mutex()
 
     @Volatile
     private var isCurrentGenerationCancelled: Boolean = false
@@ -186,7 +187,7 @@ class ConversationManagerImpl @Inject constructor(
                 ?: throw IllegalStateException("No registered asset for config ${activeConfig.id}. Download a model first.")
 
             val modelPath = getModelPath(asset.metadata.localFileName)
-            val resolvedThinkingEnabled = false // LiteRT currently doesn't support reasoning budget
+            val resolvedThinkingEnabled = activeConfig.thinkingEnabled ?: false
             val resolvedSystemPrompt = options?.systemPrompt ?: activeConfig.systemPrompt ?: defaultSystemPrompt
             val chatId = options?.chatId
             val userMessageId = options?.userMessageId
@@ -385,7 +386,7 @@ class ConversationManagerImpl @Inject constructor(
                 "getConversation decision: modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled, systemPrompt=${resolvedSystemPrompt.take(120)}, samplerConfig=$targetSamplerConfig, engineRecreated=$engineChanged, conversationRecreated=$conversationRecreated, memory=${memorySnapshot()}"
             )
             
-            return@withLock conversationPort!!
+            return@withContext conversationPort!!
         }
     }
 

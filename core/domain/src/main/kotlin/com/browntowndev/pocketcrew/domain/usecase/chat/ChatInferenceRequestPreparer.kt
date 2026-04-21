@@ -12,7 +12,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import kotlinx.coroutines.flow.first
 
-internal class ChatInferenceRequestPreparer(
+class ChatInferenceRequestPreparer(
     private val activeModelProvider: ActiveModelProviderPort,
     private val settingsRepository: SettingsRepository,
     private val messageRepository: MessageRepository,
@@ -141,7 +141,7 @@ internal class ChatInferenceRequestPreparer(
     }
 }
 
-internal data class PreparedChatInferenceRequest(
+data class PreparedChatInferenceRequest(
     val prompt: String,
     val options: GenerationOptions,
 )

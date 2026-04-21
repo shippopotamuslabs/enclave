@@ -2,6 +2,7 @@
 
 package com.browntowndev.pocketcrew.presentation
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -29,6 +30,7 @@ fun PocketCrewApp(
     initialRoute: String = Routes.MODEL_DOWNLOAD,
     modelsResult: DownloadModelsResult?,
     errorMessage: String? = null,
+    navigationIntent: Intent? = null,
 ) {
     val themeUiState by viewModel.themeUiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -47,6 +49,12 @@ fun PocketCrewApp(
     ) {
         val navController = rememberNavController()
         val scope = rememberCoroutineScope()
+
+        LaunchedEffect(navController, navigationIntent) {
+            if (navigationIntent?.action == Intent.ACTION_VIEW && navigationIntent.data != null) {
+                navController.handleDeepLink(navigationIntent)
+            }
+        }
 
         Box(Modifier.fillMaxSize()) {
             PocketCrewNavGraph(

@@ -19,6 +19,7 @@ interface SettingsPreferencesUseCases {
     val updateAlwaysUseVisionModel: UpdateAlwaysUseVisionModelUseCase
     val saveTavilyApiKey: SaveTavilyApiKeyUseCase
     val clearTavilyApiKey: ClearTavilyApiKeyUseCase
+    val updateBackgroundInferenceEnabled: UpdateBackgroundInferenceEnabledUseCase
 }
 
 interface SettingsLocalModelUseCases {

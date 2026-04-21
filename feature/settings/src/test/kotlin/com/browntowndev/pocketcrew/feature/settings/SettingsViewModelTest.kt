@@ -42,6 +42,7 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SaveApiPresetUseCase
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.usecase.settings.SaveApiProviderDraftUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SaveTavilyApiKeyUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateBackgroundInferenceEnabledUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SaveLocalModelPresetUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsApiProviderUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCasesImpl
@@ -97,6 +98,7 @@ class SettingsViewModelTest {
     private val updateSearchEnabledUseCase = mockk<UpdateSearchEnabledUseCase>(relaxed = true)
     private val saveTavilyApiKeyUseCase = mockk<SaveTavilyApiKeyUseCase>(relaxed = true)
     private val clearTavilyApiKeyUseCase = mockk<ClearTavilyApiKeyUseCase>(relaxed = true)
+    private val updateBackgroundInferenceEnabledUseCase = mockk<UpdateBackgroundInferenceEnabledUseCase>(relaxed = true)
     private val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
     private val saveLocalModelConfigurationUseCase = mockk<SaveLocalModelConfigurationUseCase>(relaxed = true)
     private val deleteLocalModelConfigurationUseCase = mockk<DeleteLocalModelConfigurationUseCase>(relaxed = true)
@@ -1050,6 +1052,7 @@ class SettingsViewModelTest {
             updateSearchEnabled = updateSearchEnabledUseCase,
             saveTavilyApiKey = saveTavilyApiKeyUseCase,
             clearTavilyApiKey = clearTavilyApiKeyUseCase,
+            updateBackgroundInferenceEnabled = updateBackgroundInferenceEnabledUseCase,
         )
         val localModelAssetUiMapper = LocalModelAssetUiMapper()
         val apiModelAssetUiMapper = ApiModelAssetUiMapper()

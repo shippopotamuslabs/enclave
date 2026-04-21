@@ -45,6 +45,7 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MergeMessagesUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MessageSnapshot
+import com.browntowndev.pocketcrew.feature.inference.InferenceEventBus
 import io.mockk.*
 import java.io.IOException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -213,7 +214,7 @@ class ChatViewModelTest {
             assistantMessageId = MessageId("assistant"),
             chatId = ChatId("chat"),
         )
-        coEvery { chatUseCases.generateChatResponse(any(), any(), any(), any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
+        coEvery { chatUseCases.generateChatResponse(any(), any(), any(), any(), any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
 
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
         try {
@@ -243,6 +244,35 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `onSendMessage defaults to background inference routing`() = runTest {
+        val settingsFlow = MutableStateFlow(SettingsData())
+        every { settingsUseCases.getSettings() } returns settingsFlow
+        coEvery { chatUseCases.processPrompt(any()) } returns CreateUserMessageUseCase.PromptResult(
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            chatId = ChatId("chat"),
+        )
+        coEvery {
+            chatUseCases.generateChatResponse(any(), any(), any(), any(), any(), any())
+        } returns kotlinx.coroutines.flow.emptyFlow()
+
+        chatViewModel.onInputChange("hello")
+        chatViewModel.onSendMessage()
+        advanceUntilIdle()
+
+        coVerify {
+            chatUseCases.generateChatResponse(
+                prompt = "hello",
+                userMessageId = MessageId("user"),
+                assistantMessageId = MessageId("assistant"),
+                chatId = ChatId("chat"),
+                mode = any(),
+                backgroundInferenceEnabled = true,
+            )
+        }
+    }
+
+    @Test
     fun `onSendMessage keeps in-flight response visible until database confirms complete`() = runTest {
         val chatId = ChatId("chat")
         val userMessageId = MessageId("user")
@@ -256,7 +286,7 @@ class ChatViewModelTest {
             chatId = chatId,
         )
         coEvery {
-            chatUseCases.generateChatResponse(any(), any(), any(), any(), any())
+            chatUseCases.generateChatResponse(any(), any(), any(), any(), any(), any())
         } returns flowOf(
             AccumulatedMessages(
                 messages = mapOf(
@@ -302,6 +332,80 @@ class ChatViewModelTest {
                     message.id == assistantMessageId && message.content.text == "final answer"
                 },
                 "Persisted COMPLETE assistant response should replace the in-flight response.",
+            )
+        } finally {
+            collectJob.cancel()
+        }
+    }
+
+    @Test
+    fun `no flicker gap when in-flight transitions to database complete`() = runTest {
+        val chatId = ChatId("chat")
+        val userMessageId = MessageId("user")
+        val assistantMessageId = MessageId("assistant")
+        val dbMessages = MutableStateFlow<List<Message>>(emptyList())
+
+        coEvery { chatUseCases.getChat(chatId) } returns dbMessages
+        coEvery { chatUseCases.processPrompt(any()) } returns CreateUserMessageUseCase.PromptResult(
+            userMessageId = userMessageId,
+            assistantMessageId = assistantMessageId,
+            chatId = chatId,
+        )
+        coEvery {
+            chatUseCases.generateChatResponse(any(), any(), any(), any(), any(), any())
+        } returns flowOf(
+            AccumulatedMessages(
+                messages = mapOf(
+                    assistantMessageId to createAssistantSnapshot(
+                        id = assistantMessageId,
+                        content = "streaming answer",
+                        state = MessageState.GENERATING,
+                    )
+                )
+            )
+        )
+
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        try {
+            runCurrent()
+
+            chatViewModel.onInputChange("hello")
+            chatViewModel.onSendMessage()
+            runCurrent()
+            advanceTimeBy(100)
+            runCurrent()
+
+            // Simulate DB emitting COMPLETE — in the old (broken) behavior the
+            // non-debounced prune observer would clear _inFlightMessages before
+            // the combine saw the DB emission, producing a gap frame.
+            // With the fix, the prune is triggered inside the combine after it
+            // has already incorporated the COMPLETE DB message, so the assistant
+            // message is never absent.
+            dbMessages.value = listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "final answer",
+                    state = MessageState.COMPLETE,
+                )
+            )
+
+            // Process the DB emission immediately — no debounce delay
+            runCurrent()
+            // After the combine emits with the COMPLETE DB message, the async
+            // prune launches and triggers a second combine emission. Process it.
+            runCurrent()
+            advanceTimeBy(50)
+            runCurrent()
+
+            // At every point the assistant message must have been present
+            val state = chatViewModel.uiState.value
+            assertTrue(
+                state.messages.any { it.id == assistantMessageId },
+                "Assistant message must never disappear during in-flight → DB transition.",
+            )
+            assertTrue(
+                state.messages.any { it.id == assistantMessageId && it.content.text == "final answer" },
+                "Assistant message must show the persisted content after DB confirms COMPLETE.",
             )
         } finally {
             collectJob.cancel()
@@ -620,7 +724,7 @@ class ChatViewModelTest {
         runCurrent()
 
         chatViewModel.uiState.test {
-            // Give the debounce(50) in ChatViewModel.uiState a chance to fire
+            // Allow initial state emission to propagate
             advanceTimeBy(100)
             runCurrent()
             
@@ -711,6 +815,63 @@ class ChatViewModelTest {
         // Tool banner should be null (either cleared or never set)
         val stateAfterStop = chatViewModel.uiState.value
         assertNull(stateAfterStop.activeToolCallBanner, "Tool banner should be null after stopGeneration")
+    }
+
+    @Test
+    fun `uiState reattaches to active background inference snapshot after ViewModel recreation`() = runTest {
+        val chatId = ChatId("chat")
+        val assistantMessageId = MessageId("assistant")
+        val eventBus = InferenceEventBus()
+        val dbMessages = MutableStateFlow(
+            listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "partial before background",
+                    state = MessageState.GENERATING,
+                )
+            )
+        )
+        coEvery { chatUseCases.getChat(chatId) } returns dbMessages
+        eventBus.emitChatSnapshot(
+            key = InferenceEventBus.ChatRequestKey(chatId, assistantMessageId),
+            snapshot = AccumulatedMessages(
+                messages = mapOf(
+                    assistantMessageId to createAssistantSnapshot(
+                        id = assistantMessageId,
+                        content = "partial before background plus text streamed while away",
+                        state = MessageState.GENERATING,
+                    )
+                )
+            ),
+        )
+
+        val recreatedViewModel = ChatViewModel(
+            settingsUseCases = settingsUseCases,
+            chatUseCases = chatUseCases,
+            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+            savedStateHandle = SavedStateHandle(mapOf("chatId" to chatId.value)),
+            cancelInferenceUseCase = cancelInferenceUseCase,
+            inferenceLockManager = inferenceLockManager,
+            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            activeModelProvider = activeModelProvider,
+            toolExecutionEventPort = toolExecutionEventPort,
+            errorHandler = errorHandler,
+            loggingPort = loggingPort,
+            inferenceEventBus = eventBus,
+        )
+
+        val collectJob = backgroundScope.launch { recreatedViewModel.uiState.collect { } }
+        try {
+            runCurrent()
+            advanceTimeBy(100)
+            runCurrent()
+
+            val state = recreatedViewModel.uiState.value
+            assertEquals("partial before background plus text streamed while away", state.messages.single().content.text)
+            assertTrue(state.isGenerating)
+        } finally {
+            collectJob.cancel()
+        }
     }
 
     private fun createAssistantSnapshot(

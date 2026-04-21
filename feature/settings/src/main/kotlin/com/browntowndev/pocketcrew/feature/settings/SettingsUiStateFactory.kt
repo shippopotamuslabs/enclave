@@ -158,6 +158,7 @@ class SettingsUiStateFactory @Inject constructor(
                 hapticPress = persistedSettings.hapticPress,
                 hapticResponse = persistedSettings.hapticResponse,
                 alwaysUseVisionModel = persistedSettings.alwaysUseVisionModel,
+                backgroundInferenceEnabled = persistedSettings.backgroundInferenceEnabled,
                 isLocalModelsSheetOpen = localModelsState.isSheetOpen,
                 isApiProvidersSheetOpen = apiState.isSheetOpen,
                 isDataControlsSheetOpen = sheetVisibility.dataControls,

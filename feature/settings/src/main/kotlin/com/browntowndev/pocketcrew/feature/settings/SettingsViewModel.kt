@@ -228,6 +228,12 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun onBackgroundInferenceChange(enabled: Boolean) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update background inference setting", "Failed to update setting")) {
+            preferencesUseCases.updateBackgroundInferenceEnabled(enabled)
+        }
+    }
+
     fun onShowCustomizationSheet(show: Boolean) {
         _sheetVisibility.update { it.copy(customization = show) }
     }

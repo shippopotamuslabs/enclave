@@ -36,6 +36,8 @@ class FakeSettingsRepository : SettingsRepository {
     private var lastSearchEnabledValue: Boolean? = null
     private var updateAlwaysUseVisionModelCallCount = 0
     private var lastAlwaysUseVisionModelValue: Boolean? = null
+    private var updateBackgroundInferenceEnabledCallCount = 0
+    private var lastBackgroundInferenceEnabledValue: Boolean? = null
     private var saveTavilyApiKeyCallCount = 0
     private var lastSavedTavilyApiKey: String? = null
     private var clearTavilyApiKeyCallCount = 0
@@ -50,6 +52,7 @@ class FakeSettingsRepository : SettingsRepository {
     var shouldThrowOnUpdateAllowMemories = false
     var shouldThrowOnUpdateSearchEnabled = false
     var shouldThrowOnUpdateAlwaysUseVisionModel = false
+    var shouldThrowOnUpdateBackgroundInferenceEnabled = false
     var shouldThrowOnSaveTavilyApiKey = false
     var shouldThrowOnClearTavilyApiKey = false
 
@@ -114,6 +117,13 @@ class FakeSettingsRepository : SettingsRepository {
         updateAlwaysUseVisionModelCallCount++
         lastAlwaysUseVisionModelValue = enabled
         _settingsFlow.value = _settingsFlow.value.copy(alwaysUseVisionModel = enabled)
+    }
+
+    override suspend fun updateBackgroundInferenceEnabled(enabled: Boolean) {
+        if (shouldThrowOnUpdateBackgroundInferenceEnabled) throw RuntimeException("Simulated error")
+        updateBackgroundInferenceEnabledCallCount++
+        lastBackgroundInferenceEnabledValue = enabled
+        _settingsFlow.value = _settingsFlow.value.copy(backgroundInferenceEnabled = enabled)
     }
 
     override suspend fun saveTavilyApiKey(apiKey: String) {
@@ -194,6 +204,13 @@ class FakeSettingsRepository : SettingsRepository {
         }
     }
 
+    fun verifyUpdateBackgroundInferenceEnabledCalled(times: Int, enabled: Boolean? = null) {
+        assertEquals(times, updateBackgroundInferenceEnabledCallCount)
+        if (enabled != null) {
+            assertEquals(enabled, lastBackgroundInferenceEnabledValue)
+        }
+    }
+
     fun verifySaveTavilyApiKeyCalled(times: Int, apiKey: String? = null) {
         assertEquals(times, saveTavilyApiKeyCallCount)
         if (apiKey != null) {
@@ -215,6 +232,7 @@ class FakeSettingsRepository : SettingsRepository {
         updateAllowMemoriesCallCount = 0
         updateSearchEnabledCallCount = 0
         updateAlwaysUseVisionModelCallCount = 0
+        updateBackgroundInferenceEnabledCallCount = 0
         saveTavilyApiKeyCallCount = 0
         clearTavilyApiKeyCallCount = 0
     }

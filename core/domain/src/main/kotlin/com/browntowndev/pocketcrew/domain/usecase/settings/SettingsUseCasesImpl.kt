@@ -20,6 +20,7 @@ class SettingsPreferencesUseCasesImpl @Inject constructor(
     override val updateAlwaysUseVisionModel: UpdateAlwaysUseVisionModelUseCase,
     override val saveTavilyApiKey: SaveTavilyApiKeyUseCase,
     override val clearTavilyApiKey: ClearTavilyApiKeyUseCase,
+    override val updateBackgroundInferenceEnabled: UpdateBackgroundInferenceEnabledUseCase,
 ) : SettingsPreferencesUseCases
 
 class SettingsLocalModelUseCasesImpl @Inject constructor(

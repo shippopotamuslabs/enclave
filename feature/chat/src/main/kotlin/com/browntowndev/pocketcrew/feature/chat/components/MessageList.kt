@@ -60,14 +60,13 @@ import com.browntowndev.pocketcrew.feature.chat.fakeLongMessages
 
 @Composable
 fun MessageList(
+    modifier: Modifier = Modifier,
     messages: List<ChatMessage>,
     hasActiveIndicator: Boolean,
-    isGenerating: Boolean = false,
     activeToolCallBanner: ToolCallBannerUi? = null,
     activeIndicatorMessageId: MessageId? = null,
     isPreview: Boolean = false,
     onEditMessage: (String) -> Unit = { _: String -> },
-    modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
 
@@ -76,16 +75,17 @@ fun MessageList(
     val latestUserMessageId = if (latestUserMessageIndex != -1) messages[latestUserMessageIndex].id else null
 
     // Tracking for auto-scroll logic
-
+    val chatId = messages.firstOrNull()?.chatId
     var lastScrolledUserMessageId by remember { mutableStateOf<MessageId?>(null) }
-    var isInitialLoadDone by remember { mutableStateOf(false) }
+    var initialLoadChatId by remember { mutableStateOf<ChatId?>(null) }
 
-    // 1. Initial Load: Scroll to the last item once
-    LaunchedEffect(messages.isNotEmpty()) {
-        if (!isInitialLoadDone && messages.isNotEmpty()) {
+    // 1. Initial Load: Scroll to the last item once per chat
+    LaunchedEffect(chatId, messages.isNotEmpty()) {
+        if (chatId != null && initialLoadChatId != chatId && messages.isNotEmpty()) {
             val lastIndex = if (latestUserMessageIndex != -1) latestUserMessageIndex else messages.lastIndex
             listState.scrollToItem(lastIndex)
-            isInitialLoadDone = true
+            initialLoadChatId = chatId
+            lastScrolledUserMessageId = latestUserMessageId
         }
     }
 
@@ -93,7 +93,7 @@ fun MessageList(
     LaunchedEffect(latestUserMessageId) {
         if (latestUserMessageId != null &&
             latestUserMessageId != lastScrolledUserMessageId &&
-            isInitialLoadDone) {
+            initialLoadChatId == chatId) {
 
             listState.animateScrollToItem(latestUserMessageIndex)
             lastScrolledUserMessageId = latestUserMessageId
@@ -132,7 +132,7 @@ fun MessageList(
                 //    scrolling here pins the user message at the top. The rest of the column
                 //    is just empty space if the content is shorter than the viewport.
                 if (latestUserMessageIndex != -1) {
-                    item(key = "active_interaction") {
+                    item(key = "active_interaction_$latestUserMessageId") {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -415,7 +415,7 @@ private fun formatThinkingDuration(seconds: Int): String = when {
 @Composable
 private fun PreviewMessageListEmpty() {
     PocketCrewTheme {
-        MessageList(emptyList(), hasActiveIndicator = false, isPreview =  true)
+        MessageList(messages = emptyList(), hasActiveIndicator = false, isPreview =  true)
     }
 }
 
@@ -423,7 +423,7 @@ private fun PreviewMessageListEmpty() {
 @Composable
 private fun PreviewMessageListLong() {
     PocketCrewTheme(darkTheme = true) {
-        MessageList(fakeLongMessages, hasActiveIndicator = true, isPreview =  true)
+        MessageList(messages = fakeLongMessages, hasActiveIndicator = true, isPreview =  true)
     }
 }
 

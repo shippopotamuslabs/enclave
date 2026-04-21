@@ -49,9 +49,9 @@ class ConversationImplTest {
         val options = GenerationOptions(reasoningBudget = 1024)
         val mockMessage = mockk<Message>(relaxed = true)
         val contextSlot = slot<Map<String, Any>>()
-        
-        every { 
-            mockLiteRtConversation.sendMessageAsync(any<Message>(), capture(contextSlot)) 
+
+        every {
+            mockLiteRtConversation.sendMessageAsync(any<Message>(), capture(contextSlot))
         } returns flowOf(mockMessage)
 
         // When
@@ -67,15 +67,32 @@ class ConversationImplTest {
         val options = GenerationOptions(reasoningBudget = 0)
         val mockMessage = mockk<Message>(relaxed = true)
         val contextSlot = slot<Map<String, Any>>()
-        
-        every { 
-            mockLiteRtConversation.sendMessageAsync(any<Message>(), capture(contextSlot)) 
+
+        every {
+            mockLiteRtConversation.sendMessageAsync(any<Message>(), capture(contextSlot))
         } returns flowOf(mockMessage)
 
         // When
         conversationImpl.sendMessageAsync("Hello", options).toList()
 
         // Then
+        assertTrue(contextSlot.captured.isEmpty())
+    }
+
+    @Test
+    fun `sendMessageAsync passes empty map when options is null`() = runTest {
+        // Given — null options means no GenerationOptions provided at all
+        val mockMessage = mockk<Message>(relaxed = true)
+        val contextSlot = slot<Map<String, Any>>()
+        
+        every { 
+            mockLiteRtConversation.sendMessageAsync(any<Message>(), capture(contextSlot)) 
+        } returns flowOf(mockMessage)
+
+        // When
+        conversationImpl.sendMessageAsync("Hello", null).toList()
+
+        // Then — no enable_thinking key should be present
         assertTrue(contextSlot.captured.isEmpty())
     }
 

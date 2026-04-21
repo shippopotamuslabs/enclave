@@ -33,6 +33,7 @@ class SettingsRepositoryImpl @Inject constructor(
         private val SEARCH_ENABLED_KEY = booleanPreferencesKey("settings_search_enabled")
         private val ALWAYS_USE_VISION_MODEL_KEY = booleanPreferencesKey("settings_always_use_vision_model")
         private val TAVILY_KEY_PRESENT_KEY = booleanPreferencesKey("settings_tavily_key_present")
+        private val BACKGROUND_INFERENCE_ENABLED_KEY = booleanPreferencesKey("settings_background_inference_enabled")
     }
 
     override val settingsFlow: Flow<SettingsData> = dataStore.data.map { preferences ->
@@ -60,6 +61,7 @@ class SettingsRepositoryImpl @Inject constructor(
             alwaysUseVisionModel = preferences[ALWAYS_USE_VISION_MODEL_KEY] ?: false,
             tavilyKeyPresent = preferences[TAVILY_KEY_PRESENT_KEY]
                 ?: apiKeyManager.has(ApiKeyManager.TAVILY_SEARCH_ALIAS),
+            backgroundInferenceEnabled = preferences[BACKGROUND_INFERENCE_ENABLED_KEY] ?: true,
         )
     }
 
@@ -129,6 +131,12 @@ class SettingsRepositoryImpl @Inject constructor(
         apiKeyManager.delete(ApiKeyManager.TAVILY_SEARCH_ALIAS)
         dataStore.edit { preferences ->
             preferences[TAVILY_KEY_PRESENT_KEY] = false
+        }
+    }
+
+    override suspend fun updateBackgroundInferenceEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[BACKGROUND_INFERENCE_ENABLED_KEY] = enabled
         }
     }
 }

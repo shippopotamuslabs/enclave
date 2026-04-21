@@ -18,6 +18,7 @@ data class SettingsData(
     val searchEnabled: Boolean = false,
     val alwaysUseVisionModel: Boolean = false,
     val tavilyKeyPresent: Boolean = false,
+    val backgroundInferenceEnabled: Boolean = true,
 )
 
 /**
@@ -41,4 +42,5 @@ interface SettingsRepository {
     suspend fun updateAlwaysUseVisionModel(enabled: Boolean)
     suspend fun saveTavilyApiKey(apiKey: String)
     suspend fun clearTavilyApiKey()
+    suspend fun updateBackgroundInferenceEnabled(enabled: Boolean)
 }

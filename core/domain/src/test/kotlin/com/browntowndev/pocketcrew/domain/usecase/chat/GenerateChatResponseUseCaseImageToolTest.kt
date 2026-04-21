@@ -80,6 +80,7 @@ class GenerateChatResponseUseCaseImageToolTest {
             assistantMessageId = MessageId("2"),
             chatId = ChatId("chat"),
             mode = Mode.FAST,
+            backgroundInferenceEnabled = false,
         ).toList()
 
         assertEquals(listOf(ModelType.FAST), inferenceFactory.resolvedTypes)
@@ -128,6 +129,7 @@ class GenerateChatResponseUseCaseImageToolTest {
             assistantMessageId = MessageId("3"),
             chatId = ChatId("chat"),
             mode = Mode.FAST,
+            backgroundInferenceEnabled = false,
         ).toList()
 
         assertEquals(listOf("file:///tmp/image.jpg"), fastService.getSentOptions().single().imageUris)
@@ -171,6 +173,7 @@ class GenerateChatResponseUseCaseImageToolTest {
             assistantMessageId = MessageId("2"),
             chatId = ChatId("chat"),
             mode = Mode.CREW,
+            backgroundInferenceEnabled = false,
         ).toList()
 
         assertTrue(promptSlot.captured.contains("attached_image_inspect"))
@@ -214,6 +217,7 @@ class GenerateChatResponseUseCaseImageToolTest {
             assistantMessageId = MessageId("2"),
             chatId = ChatId("chat"),
             mode = Mode.FAST,
+            backgroundInferenceEnabled = false,
         ).toList()
 
         val options = fastService.getSentOptions().single()
@@ -261,6 +265,7 @@ class GenerateChatResponseUseCaseImageToolTest {
             assistantMessageId = MessageId("2"),
             chatId = ChatId("chat"),
             mode = Mode.FAST,
+            backgroundInferenceEnabled = false,
         ).toList()
 
         val options = fastService.getSentOptions().single()
@@ -337,6 +342,7 @@ class GenerateChatResponseUseCaseImageToolTest {
             assistantMessageId = MessageId("2"),
             chatId = ChatId("chat"),
             mode = Mode.FAST,
+            backgroundInferenceEnabled = false,
         ).toList()
 
         val persisted = contentSlot.captured
@@ -399,6 +405,7 @@ class GenerateChatResponseUseCaseImageToolTest {
             assistantMessageId = MessageId("2"),
             chatId = ChatId("chat"),
             mode = Mode.FAST,
+            backgroundInferenceEnabled = false,
         ).toList()
 
         assertTrue(fastService.getHistory().single().content.contains("A cracked pipe joint under the sink."))
@@ -413,6 +420,14 @@ class GenerateChatResponseUseCaseImageToolTest {
         pipelineExecutor: PipelineExecutorPort = mockPipelineExecutor(),
         chatRepository: ChatRepository = mockk(relaxed = true),
     ): GenerateChatResponseUseCase {
+        val directExecutor = DirectChatInferenceExecutor(
+            inferenceFactory = inferenceFactory,
+            activeModelProvider = activeModelProvider,
+            messageRepository = messageRepository,
+            settingsRepository = settingsRepository,
+            searchToolPromptComposer = SearchToolPromptComposer(),
+            loggingPort = mockk<LoggingPort>(relaxed = true),
+        )
         return GenerateChatResponseUseCase(
             inferenceFactory = inferenceFactory,
             pipelineExecutor = pipelineExecutor,
@@ -427,6 +442,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 override fun add(url: String) {}
                 override fun clear() {}
             },
+            chatInferenceExecutor = directExecutor,
         )
     }
 

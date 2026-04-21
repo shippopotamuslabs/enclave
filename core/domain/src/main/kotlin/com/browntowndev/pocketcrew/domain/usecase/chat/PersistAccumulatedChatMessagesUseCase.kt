@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
-import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 
 internal class PersistAccumulatedChatMessagesUseCase(
@@ -25,11 +24,7 @@ internal class PersistAccumulatedChatMessagesUseCase(
                 thinkingDuration = accumulator.thinkingDurationSeconds.toInt(),
                 thinkingRaw = accumulator.thinkingRaw.toString().ifBlank { null },
                 content = sanitizePersistedContent(accumulator.content.toString()),
-                messageState = if (accumulator.isComplete) {
-                    MessageState.COMPLETE
-                } else {
-                    MessageState.PROCESSING
-                },
+                messageState = accumulator.currentState,
                 pipelineStep = getPipelineStepForModelType(accumulator.modelType),
                 tavilySources = accumulator.tavilySources.toList(),
             )
