@@ -96,7 +96,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                     if (extractedUrls.isNotEmpty()) {
                         accumulatorManager.markSourcesExtracted(extractedUrls.toList())
                     }
-                    if (state.isTerminal()) {
+                    if (state.isTerminal) {
                         terminalSeen = true
                     }
                     emit(accumulatorManager.reduce(state))
@@ -229,15 +229,6 @@ class GenerateChatResponseUseCase @Inject constructor(
         terminalSeen: Boolean,
     ): Boolean {
         return backgroundInferenceEnabled && mode != Mode.CREW && !terminalSeen
-    }
-
-    private fun MessageGenerationState.isTerminal(): Boolean {
-        return when (this) {
-            is MessageGenerationState.Finished,
-            is MessageGenerationState.Failed,
-            is MessageGenerationState.Blocked -> true
-            else -> false
-        }
     }
 
     private companion object {

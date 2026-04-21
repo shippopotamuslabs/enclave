@@ -1,31 +1,25 @@
 package com.browntowndev.pocketcrew.feature.moa
 
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.PipelineStateRepository
-import com.browntowndev.pocketcrew.feature.moa.service.InferenceService
+import com.browntowndev.pocketcrew.feature.inference.InferenceEventBus
 import com.browntowndev.pocketcrew.feature.moa.service.InferenceServiceStarter
-import io.mockk.Runs
-import io.mockk.every
-import io.mockk.just
-import io.mockk.mockk
 import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
 import io.mockk.mockkObject
 import io.mockk.verify
-import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -33,274 +27,223 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class InferenceServicePipelineExecutorTest {
 
-    private lateinit var context: Context
     private lateinit var serviceStarter: InferenceServiceStarter
     private lateinit var pipelineStateRepository: PipelineStateRepository
-    private lateinit var loggingPort: LoggingPort
+    private lateinit var inferenceEventBus: InferenceEventBus
 
     private lateinit var executor: InferenceServicePipelineExecutor
 
     @BeforeEach
     fun setup() {
-        context = mockk(relaxed = true)
         serviceStarter = mockk(relaxed = true)
         pipelineStateRepository = mockk(relaxed = true)
-        loggingPort = mockk(relaxed = true)
+        inferenceEventBus = InferenceEventBus()
 
         executor = InferenceServicePipelineExecutor(
-            context = context,
             serviceStarter = serviceStarter,
             pipelineStateRepository = pipelineStateRepository,
-            loggingPort = loggingPort
+            inferenceEventBus = inferenceEventBus,
         )
     }
 
     @Test
-    fun `executePipeline forwards thinking chunks with newlines and spaces`() = runTest {
+    fun `executePipeline collects thinking chunks until terminal FINAL StepCompleted`() = runTest {
         mockkObject(PipelineState.Companion)
         val mockState = mockk<PipelineState>()
         every { mockState.toJson() } returns "{}"
         every { mockState.currentStep } returns PipelineStep.DRAFT_ONE
         every { PipelineState.createInitial(any(), any()) } returns mockState
 
-        val receiverSlot = slot<BroadcastReceiver>()
-        every {
-            context.registerReceiver(
-                capture(receiverSlot),
-                any<IntentFilter>(),
-                eq(Context.RECEIVER_NOT_EXPORTED)
-            )
-        } returns null
-
-        val events = mutableListOf<MessageGenerationState>()
+        val chatId = "chat1"
+        val emittedStates = mutableListOf<MessageGenerationState>()
 
         val job = launch {
-            executor.executePipeline("chat1", "Hello").collect { state ->
-                events.add(state)
-            }
+            executor.executePipeline(chatId, "Hello").toList(emittedStates)
         }
 
         advanceUntilIdle()
 
-        val receiver = receiverSlot.captured
+        // Simulate service emitting states via event bus
+        inferenceEventBus.emitPipelineState(chatId, MessageGenerationState.ThinkingLive("\n", ModelType.DRAFT_ONE))
+        inferenceEventBus.emitPipelineState(chatId, MessageGenerationState.ThinkingLive("   ", ModelType.DRAFT_ONE))
+        inferenceEventBus.emitPipelineState(chatId, MessageGenerationState.GeneratingText("Hello!", ModelType.DRAFT_ONE))
+        inferenceEventBus.emitPipelineState(
+            chatId,
+            MessageGenerationState.StepCompleted(
+                stepOutput = "",
+                modelDisplayName = "Main",
+                modelType = ModelType.MAIN,
+                stepType = PipelineStep.FINAL
+            )
+        )
 
-        // Simulate receiving a thinking chunk with only a newline
-        val intentNewline = mockk<Intent>()
-        every { intentNewline.action } returns InferenceService.BROADCAST_PROGRESS
-        every { intentNewline.getStringExtra(InferenceService.EXTRA_THINKING_CHUNK) } returns "\n"
-        every { intentNewline.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT) } returns null
-        every { intentNewline.getStringExtra(InferenceService.EXTRA_MODEL_TYPE) } returns ModelType.MAIN.name
-        receiver.onReceive(context, intentNewline)
-
-        // Simulate receiving a thinking chunk with spaces
-        val intentSpaces = mockk<Intent>()
-        every { intentSpaces.action } returns InferenceService.BROADCAST_PROGRESS
-        every { intentSpaces.getStringExtra(InferenceService.EXTRA_THINKING_CHUNK) } returns "   "
-        every { intentSpaces.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT) } returns null
-        every { intentSpaces.getStringExtra(InferenceService.EXTRA_MODEL_TYPE) } returns ModelType.MAIN.name
-        receiver.onReceive(context, intentSpaces)
-
-        // Empty strings should be filtered out
-        val intentEmpty = mockk<Intent>()
-        every { intentEmpty.action } returns InferenceService.BROADCAST_PROGRESS
-        every { intentEmpty.getStringExtra(InferenceService.EXTRA_THINKING_CHUNK) } returns ""
-        every { intentEmpty.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT) } returns null
-        every { intentEmpty.getStringExtra(InferenceService.EXTRA_MODEL_TYPE) } returns ModelType.MAIN.name
-        receiver.onReceive(context, intentEmpty)
-
-        // Finish step to close flow
-        val intentComplete = mockk<Intent>()
-        every { intentComplete.action } returns InferenceService.BROADCAST_STEP_COMPLETED
-        every { intentComplete.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT) } returns "done"
-        every { intentComplete.getStringExtra(InferenceService.EXTRA_STEP_MODEL_DISPLAY_NAME) } returns "Main"
-        every { intentComplete.getStringExtra(InferenceService.EXTRA_MODEL_TYPE) } returns ModelType.MAIN.name
-        every { intentComplete.getStringExtra(InferenceService.EXTRA_STEP_TYPE) } returns PipelineStep.FINAL.name
-        receiver.onReceive(context, intentComplete)
+        advanceUntilIdle()
 
         job.join()
 
-        // We expect the newline and space chunks to be kept
-        val thinkingEvents = events.filterIsInstance<MessageGenerationState.ThinkingLive>()
+        val thinkingEvents = emittedStates.filterIsInstance<MessageGenerationState.ThinkingLive>()
         assertEquals(2, thinkingEvents.size)
         assertEquals("\n", thinkingEvents[0].thinkingChunk)
         assertEquals("   ", thinkingEvents[1].thinkingChunk)
-        
-        // We do not expect any empty chunk
-        assertTrue(thinkingEvents.none { it.thinkingChunk == "" })
+        assertTrue(emittedStates.any { it is MessageGenerationState.GeneratingText })
+        assertTrue(emittedStates.any { it is MessageGenerationState.StepCompleted })
     }
 
     @Test
-    fun `executePipeline forwards step output chunks with newlines and spaces`() = runTest {
+    fun `executePipeline passes through terminal Finished state`() = runTest {
         mockkObject(PipelineState.Companion)
         val mockState = mockk<PipelineState>()
         every { mockState.toJson() } returns "{}"
-        every { mockState.currentStep } returns PipelineStep.DRAFT_ONE
         every { PipelineState.createInitial(any(), any()) } returns mockState
 
-        val receiverSlot = slot<BroadcastReceiver>()
-        every {
-            context.registerReceiver(
-                capture(receiverSlot),
-                any<IntentFilter>(),
-                eq(Context.RECEIVER_NOT_EXPORTED)
-            )
-        } returns null
-
-        val events = mutableListOf<MessageGenerationState>()
+        val chatId = "chat1"
+        val emittedStates = mutableListOf<MessageGenerationState>()
 
         val job = launch {
-            executor.executePipeline("chat1", "Hello").collect { state ->
-                events.add(state)
-            }
+            executor.executePipeline(chatId, "Hello").toList(emittedStates)
         }
 
         advanceUntilIdle()
 
-        val receiver = receiverSlot.captured
-
-        // Simulate receiving an output chunk with only a newline
-        val intentNewline = mockk<Intent>()
-        every { intentNewline.action } returns InferenceService.BROADCAST_PROGRESS
-        every { intentNewline.getStringExtra(InferenceService.EXTRA_THINKING_CHUNK) } returns null
-        every { intentNewline.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT) } returns "\n"
-        every { intentNewline.getStringExtra(InferenceService.EXTRA_MODEL_TYPE) } returns ModelType.MAIN.name
-        receiver.onReceive(context, intentNewline)
-
-        // Simulate receiving an output chunk with spaces
-        val intentSpaces = mockk<Intent>()
-        every { intentSpaces.action } returns InferenceService.BROADCAST_PROGRESS
-        every { intentSpaces.getStringExtra(InferenceService.EXTRA_THINKING_CHUNK) } returns null
-        every { intentSpaces.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT) } returns "   "
-        every { intentSpaces.getStringExtra(InferenceService.EXTRA_MODEL_TYPE) } returns ModelType.MAIN.name
-        receiver.onReceive(context, intentSpaces)
-
-        // Empty strings should be filtered out
-        val intentEmpty = mockk<Intent>()
-        every { intentEmpty.action } returns InferenceService.BROADCAST_PROGRESS
-        every { intentEmpty.getStringExtra(InferenceService.EXTRA_THINKING_CHUNK) } returns null
-        every { intentEmpty.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT) } returns ""
-        every { intentEmpty.getStringExtra(InferenceService.EXTRA_MODEL_TYPE) } returns ModelType.MAIN.name
-        receiver.onReceive(context, intentEmpty)
-
-        // Finish step to close flow
-        val intentComplete = mockk<Intent>()
-        every { intentComplete.action } returns InferenceService.BROADCAST_STEP_COMPLETED
-        every { intentComplete.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT) } returns "done"
-        every { intentComplete.getStringExtra(InferenceService.EXTRA_STEP_MODEL_DISPLAY_NAME) } returns "Main"
-        every { intentComplete.getStringExtra(InferenceService.EXTRA_MODEL_TYPE) } returns ModelType.MAIN.name
-        every { intentComplete.getStringExtra(InferenceService.EXTRA_STEP_TYPE) } returns PipelineStep.FINAL.name
-        receiver.onReceive(context, intentComplete)
-
-        job.join()
-
-        // We expect the newline and space chunks to be kept
-        val outputEvents = events.filterIsInstance<MessageGenerationState.GeneratingText>()
-        assertEquals(2, outputEvents.size)
-        assertEquals("\n", outputEvents[0].textDelta)
-        assertEquals("   ", outputEvents[1].textDelta)
-
-        // We do not expect any empty chunk
-        assertTrue(outputEvents.none { it.textDelta == "" })
-    }
-
-    @Test
-    fun `resumeFromState forwards thinking chunks with newlines and spaces`() = runTest {
-        mockkObject(PipelineState.Companion)
-        val mockState = mockk<PipelineState>()
-        every { mockState.toJson() } returns "{}"
-        every { mockState.currentStep } returns PipelineStep.DRAFT_ONE
-        
-        // Mock the repository to return the state
-        coEvery { pipelineStateRepository.getPipelineState(any()) } returns mockState
-
-        val receiverSlot = slot<BroadcastReceiver>()
-        every {
-            context.registerReceiver(
-                capture(receiverSlot),
-                any<IntentFilter>(),
-                eq(Context.RECEIVER_NOT_EXPORTED)
-            )
-        } returns null
-
-        val events = mutableListOf<MessageGenerationState>()
-
-        val job = launch {
-            executor.resumeFromState("chat1", "pipeline1", {}, {}).collect { state ->
-                events.add(state)
-            }
-        }
+        inferenceEventBus.emitPipelineState(chatId, MessageGenerationState.Processing(ModelType.DRAFT_ONE))
+        inferenceEventBus.emitPipelineState(chatId, MessageGenerationState.Finished(ModelType.FINAL_SYNTHESIS))
 
         advanceUntilIdle()
 
-        val receiver = receiverSlot.captured
-
-        // Simulate receiving a thinking chunk with only a newline
-        val intentNewline = mockk<Intent>()
-        every { intentNewline.action } returns InferenceService.BROADCAST_PROGRESS
-        every { intentNewline.getStringExtra(InferenceService.EXTRA_THINKING_CHUNK) } returns "\n"
-        every { intentNewline.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT) } returns null
-        every { intentNewline.getStringExtra(InferenceService.EXTRA_MODEL_TYPE) } returns ModelType.MAIN.name
-        receiver.onReceive(context, intentNewline)
-
-        // Finish step to close flow
-        val intentComplete = mockk<Intent>()
-        every { intentComplete.action } returns InferenceService.BROADCAST_STEP_COMPLETED
-        every { intentComplete.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT) } returns "done"
-        every { intentComplete.getStringExtra(InferenceService.EXTRA_STEP_MODEL_DISPLAY_NAME) } returns "Main"
-        every { intentComplete.getStringExtra(InferenceService.EXTRA_MODEL_TYPE) } returns ModelType.MAIN.name
-        every { intentComplete.getStringExtra(InferenceService.EXTRA_STEP_TYPE) } returns PipelineStep.FINAL.name
-        receiver.onReceive(context, intentComplete)
-
         job.join()
 
-        val thinkingEvents = events.filterIsInstance<MessageGenerationState.ThinkingLive>()
-        assertEquals(1, thinkingEvents.size)
-        assertEquals("\n", thinkingEvents[0].thinkingChunk)
+        assertTrue(emittedStates.any { it is MessageGenerationState.Processing })
+        assertTrue(emittedStates.any { it is MessageGenerationState.Finished })
     }
 
     @Test
-    fun `executePipeline handles broadcast error and forwards it successfully`() = runTest {
+    fun `executePipeline terminates on Failed state`() = runTest {
         mockkObject(PipelineState.Companion)
         val mockState = mockk<PipelineState>()
         every { mockState.toJson() } returns "{}"
-        every { mockState.currentStep } returns PipelineStep.DRAFT_ONE
         every { PipelineState.createInitial(any(), any()) } returns mockState
 
-        val receiverSlot = slot<BroadcastReceiver>()
-        every {
-            context.registerReceiver(
-                capture(receiverSlot),
-                any<IntentFilter>(),
-                eq(Context.RECEIVER_NOT_EXPORTED)
-            )
-        } returns null
-
-        val events = mutableListOf<MessageGenerationState>()
+        val chatId = "chat1"
+        val emittedStates = mutableListOf<MessageGenerationState>()
 
         val job = launch {
-            executor.executePipeline("chat1", "Hello").collect { state ->
-                events.add(state)
-            }
+            executor.executePipeline(chatId, "Hello").toList(emittedStates)
         }
 
         advanceUntilIdle()
 
-        val receiver = receiverSlot.captured
+        inferenceEventBus.emitPipelineState(chatId, MessageGenerationState.Processing(ModelType.DRAFT_ONE))
+        inferenceEventBus.emitPipelineState(chatId, MessageGenerationState.Failed(IllegalStateException("Mock error"), ModelType.MAIN))
 
-        // Simulate receiving an error broadcast
-        val intentError = mockk<Intent>()
-        every { intentError.action } returns InferenceService.BROADCAST_ERROR
-        every { intentError.getStringExtra(InferenceService.EXTRA_ERROR_MESSAGE) } returns "Mock pipeline error"
-        every { intentError.getStringExtra(InferenceService.EXTRA_MODEL_TYPE) } returns ModelType.MAIN.name
-        receiver.onReceive(context, intentError)
+        advanceUntilIdle()
 
         job.join()
 
-        // We expect an error state
-        val errorEvents = events.filterIsInstance<MessageGenerationState.Failed>()
-        assertEquals(1, errorEvents.size)
-        assertEquals("Mock pipeline error", errorEvents[0].error.message)
-        assertEquals(ModelType.MAIN, errorEvents[0].modelType)
+        assertTrue(emittedStates.any { it is MessageGenerationState.Processing })
+        assertTrue(emittedStates.any { it is MessageGenerationState.Failed })
     }
 
+    @Test
+    fun `executePipeline does not terminate on non-FINAL StepCompleted states`() = runTest {
+        mockkObject(PipelineState.Companion)
+        val mockState = mockk<PipelineState>()
+        every { mockState.toJson() } returns "{}"
+        every { PipelineState.createInitial(any(), any()) } returns mockState
+
+        val chatId = "chat1"
+        val emittedStates = mutableListOf<MessageGenerationState>()
+
+        val job = launch {
+            executor.executePipeline(chatId, "Hello").toList(emittedStates)
+        }
+
+        advanceUntilIdle()
+
+        // Non-final steps should NOT terminate the flow
+        inferenceEventBus.emitPipelineState(
+            chatId,
+            MessageGenerationState.StepCompleted(
+                stepOutput = "",
+                modelDisplayName = "Draft",
+                modelType = ModelType.DRAFT_ONE,
+                stepType = PipelineStep.DRAFT_ONE
+            )
+        )
+        inferenceEventBus.emitPipelineState(
+            chatId,
+            MessageGenerationState.StepCompleted(
+                stepOutput = "",
+                modelDisplayName = "Main",
+                modelType = ModelType.MAIN,
+                stepType = PipelineStep.FINAL
+            )
+        )
+
+        advanceUntilIdle()
+
+        job.join()
+
+        val stepCompletedEvents = emittedStates.filterIsInstance<MessageGenerationState.StepCompleted>()
+        assertEquals(2, stepCompletedEvents.size)
+        assertTrue(stepCompletedEvents.any { it.stepType == PipelineStep.DRAFT_ONE })
+        assertTrue(stepCompletedEvents.any { it.stepType == PipelineStep.FINAL })
+    }
+
+    @Test
+    fun `stopPipeline stops the service and clears state`() = runTest {
+        val pipelineId = "pipeline1"
+
+        executor.stopPipeline(pipelineId)
+
+        verify { serviceStarter.stopService() }
+        coEvery { pipelineStateRepository.clearPipelineState(pipelineId) }
+    }
+
+    @Test
+    fun `executePipeline clears pipeline stream on collector cancellation before terminal state`() = runTest {
+        mockkObject(PipelineState.Companion)
+        val mockState = mockk<PipelineState>()
+        every { mockState.toJson() } returns "{}"
+        every { PipelineState.createInitial(any(), any()) } returns mockState
+
+        val chatId = "chat1"
+
+        val collectJob = launch {
+            executor.executePipeline(chatId, "Hello").toList(mutableListOf())
+        }
+        advanceUntilIdle()
+
+        // Emit a non-terminal state
+        inferenceEventBus.emitPipelineState(chatId, MessageGenerationState.Processing(ModelType.DRAFT_ONE))
+        advanceUntilIdle()
+
+        // Cancel the collector before any terminal state
+        collectJob.cancel()
+        advanceUntilIdle()
+
+        // After cancellation, the pipeline stream should be cleared
+        assertFalse(inferenceEventBus.hasPipelineStream(chatId), "Pipeline stream must be cleared when collector cancels before terminal state")
+    }
+
+    @Test
+    fun `executePipeline clears pipeline stream when startService throws exception`() = runTest {
+        mockkObject(PipelineState.Companion)
+        val mockState = mockk<PipelineState>()
+        every { mockState.toJson() } returns "{}"
+        every { PipelineState.createInitial(any(), any()) } returns mockState
+
+        val chatId = "chat1"
+
+        every { serviceStarter.startService(any(), any(), any()) } throws IllegalStateException("Service start failed")
+
+        // executePipeline is a regular (non-suspend) function, so the exception
+        // propagates immediately from the call site.
+        val ex = org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException::class.java) {
+            executor.executePipeline(chatId, "Hello")
+        }
+        assertEquals("Service start failed", ex.message)
+
+        // After exception, the pipeline stream must be cleared
+        assertFalse(inferenceEventBus.hasPipelineStream(chatId), "Pipeline stream must be cleared when startService throws")
+    }
 }

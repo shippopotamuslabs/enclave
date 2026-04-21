@@ -1,7 +1,5 @@
 package com.browntowndev.pocketcrew.feature.moa.service
 
-import android.app.PendingIntent
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -43,7 +41,7 @@ class InferenceServiceStarter @Inject constructor(
     /**
      * Creates an intent to stop the inference service.
      *
-     * @return Intent ready for startService() or sendBroadcast()
+     * @return Intent ready for startService()
      */
     fun createStopIntent(): Intent {
         return Intent(context, InferenceService::class.java).apply {

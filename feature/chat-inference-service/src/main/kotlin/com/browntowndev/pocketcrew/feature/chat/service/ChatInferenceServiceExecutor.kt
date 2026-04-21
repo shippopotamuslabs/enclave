@@ -78,7 +78,7 @@ class ChatInferenceServiceExecutor @Inject constructor(
                             "state received chat=${chatId.value} assistantMessageId=${assistantMessageId.value} state=${state::class.simpleName}",
                         )
                         emit(state)
-                        val terminal = state.isTerminal()
+                        val terminal = state.isTerminal
                         if (terminal) {
                             terminalSeen = true
                             loggingPort.info(
@@ -99,13 +99,11 @@ class ChatInferenceServiceExecutor @Inject constructor(
                 loggingPort.error(TAG, "Failed to start or collect ChatInferenceService for chat $chatId", e)
                 emit(MessageGenerationState.Failed(e, modelType))
             } finally {
-                if (terminalSeen) {
-                    loggingPort.debug(
-                        TAG,
-                        "clearing request stream chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
-                    )
-                    inferenceEventBus.clearChatRequest(requestKey)
-                }
+                loggingPort.debug(
+                    TAG,
+                    "clearing request stream chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
+                )
+                inferenceEventBus.clearChatRequest(requestKey)
             }
         }
     }
@@ -114,12 +112,5 @@ class ChatInferenceServiceExecutor @Inject constructor(
         serviceStarter.stopInference()
     }
 
-    private fun MessageGenerationState.isTerminal(): Boolean {
-        return when (this) {
-            is MessageGenerationState.Finished,
-            is MessageGenerationState.Failed,
-            is MessageGenerationState.Blocked -> true
-            else -> false
-        }
-    }
+
 }
