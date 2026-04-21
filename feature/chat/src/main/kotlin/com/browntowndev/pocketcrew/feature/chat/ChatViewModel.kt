@@ -728,12 +728,7 @@ class ChatViewModel @Inject constructor(
 
         return when (selectedMode) {
             ChatModeUi.FAST, ChatModeUi.THINKING -> {
-                if (settings.alwaysUseVisionModel && !apiVisionConfigured) {
-                    PhotoAttachmentPolicy(
-                        isEnabled = false,
-                        disabledReason = "Always Use Vision Model requires a configured API vision model.",
-                    )
-                } else if (activeVisionCapable || apiVisionConfigured) {
+                if (activeVisionCapable || apiVisionConfigured) {
                     PhotoAttachmentPolicy(isEnabled = true)
                 } else {
                     PhotoAttachmentPolicy(

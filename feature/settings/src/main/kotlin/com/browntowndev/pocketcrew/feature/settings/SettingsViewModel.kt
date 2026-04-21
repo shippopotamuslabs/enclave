@@ -217,14 +217,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onHapticResponseChange(enabled: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update haptic response setting", "Failed to update setting")) {
+        viewModelScope.launch {
             preferencesUseCases.updateHapticResponse(enabled)
-        }
-    }
-
-    fun onAlwaysUseVisionModelChange(enabled: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update vision routing setting", "Failed to update setting")) {
-            preferencesUseCases.updateAlwaysUseVisionModel(enabled)
         }
     }
 
@@ -950,9 +944,9 @@ class SettingsViewModel @Inject constructor(
 
     private fun ApiModelAssetUi?.matchesDiscoveryScope(other: ApiModelAssetUi?): Boolean {
         if (this == null || other == null) return false
-        if (provider != other.provider) return false
-        if (baseUrl.normalizedBaseUrl() != other.baseUrl.normalizedBaseUrl()) return false
-        val currentAlias = credentialAlias.takeIf(String::isNotBlank)
+        if (this.provider != other.provider) return false
+        if (this.baseUrl.normalizedBaseUrl() != other.baseUrl.normalizedBaseUrl()) return false
+        val currentAlias = this.credentialAlias.takeIf(String::isNotBlank)
         val nextAlias = other.credentialAlias.takeIf(String::isNotBlank)
         return currentAlias == null || nextAlias == null || currentAlias == nextAlias
     }

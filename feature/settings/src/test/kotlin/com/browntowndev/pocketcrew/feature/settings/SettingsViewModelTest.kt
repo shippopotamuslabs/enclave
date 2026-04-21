@@ -53,7 +53,6 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.ClearTavilyApiKeyUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateAllowMemoriesUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateAlwaysUseVisionModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomPromptTextUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateCustomizationEnabledUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.UpdateHapticPressUseCase
@@ -94,7 +93,6 @@ class SettingsViewModelTest {
     private val updateSelectedPromptOptionUseCase = mockk<UpdateSelectedPromptOptionUseCase>(relaxed = true)
     private val updateCustomPromptTextUseCase = mockk<UpdateCustomPromptTextUseCase>(relaxed = true)
     private val updateAllowMemoriesUseCase = mockk<UpdateAllowMemoriesUseCase>(relaxed = true)
-    private val updateAlwaysUseVisionModelUseCase = mockk<UpdateAlwaysUseVisionModelUseCase>(relaxed = true)
     private val updateSearchEnabledUseCase = mockk<UpdateSearchEnabledUseCase>(relaxed = true)
     private val saveTavilyApiKeyUseCase = mockk<SaveTavilyApiKeyUseCase>(relaxed = true)
     private val clearTavilyApiKeyUseCase = mockk<ClearTavilyApiKeyUseCase>(relaxed = true)
@@ -852,16 +850,6 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `always use vision model delegates to preferences use case`() = runTest {
-        val viewModel = createViewModel()
-
-        viewModel.onAlwaysUseVisionModelChange(true)
-        runCurrent()
-
-        coVerify { updateAlwaysUseVisionModelUseCase(true) }
-    }
-
-    @Test
     fun `onShowVisionSettingsSheet updates state`() = runTest {
         val viewModel = createViewModel()
 
@@ -1048,7 +1036,6 @@ class SettingsViewModelTest {
             updateSelectedPromptOption = updateSelectedPromptOptionUseCase,
             updateCustomPromptText = updateCustomPromptTextUseCase,
             updateAllowMemories = updateAllowMemoriesUseCase,
-            updateAlwaysUseVisionModel = updateAlwaysUseVisionModelUseCase,
             updateSearchEnabled = updateSearchEnabledUseCase,
             saveTavilyApiKey = saveTavilyApiKeyUseCase,
             clearTavilyApiKey = clearTavilyApiKeyUseCase,

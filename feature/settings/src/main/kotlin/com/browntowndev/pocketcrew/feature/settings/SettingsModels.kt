@@ -43,7 +43,6 @@ data class SettingsHomeUiState(
     val theme: AppTheme = AppTheme.SYSTEM,
     val hapticPress: Boolean = true,
     val hapticResponse: Boolean = true,
-    val alwaysUseVisionModel: Boolean = false,
     val backgroundInferenceEnabled: Boolean = true,
     val isLocalModelsSheetOpen: Boolean = false,
     val isApiProvidersSheetOpen: Boolean = false,

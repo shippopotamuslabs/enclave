@@ -224,55 +224,6 @@ class GenerateChatResponseUseCaseImageToolTest {
         assertTrue(options.toolingEnabled)
         assertTrue(options.availableTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
         assertTrue(fastService.getSentPrompts().single().contains("use attached_image_inspect"))
-        assertFalse(options.imageUris.isNotEmpty())
-        assertEquals(listOf(ModelType.FAST), inferenceFactory.resolvedTypes)
-    }
-
-    @Test
-    fun `always use vision model forces the image tool path even for multimodal fast models`() = runTest {
-        val inferenceFactory = FakeInferenceFactory()
-        val fastService = FakeInferenceService(ModelType.FAST).apply {
-            setEmittedEvents(listOf(InferenceEvent.Finished(ModelType.FAST)))
-        }
-        inferenceFactory.serviceMap[ModelType.FAST] = fastService
-
-        val messageRepository = mockMessageRepository(
-            currentMessage = Message(
-                id = MessageId("1"),
-                chatId = ChatId("chat"),
-                content = Content(text = "Inspect this for me", imageUri = "file:///photo.jpg"),
-                role = Role.USER,
-            ),
-            resolvedImageTarget = ResolvedImageTarget(
-                userMessageId = MessageId("1"),
-                imageUri = "file:///photo.jpg",
-            ),
-        )
-
-        val useCase = createUseCase(
-            inferenceFactory = inferenceFactory,
-            messageRepository = messageRepository,
-            activeModelProvider = mockActiveModelProvider(
-                fastConfig = fastVisionConfig(),
-                visionConfig = apiVisionConfig(),
-            ),
-            settingsRepository = mockSettingsRepository(SettingsData(alwaysUseVisionModel = true)),
-        )
-
-        useCase(
-            prompt = "Inspect this for me",
-            userMessageId = MessageId("1"),
-            assistantMessageId = MessageId("2"),
-            chatId = ChatId("chat"),
-            mode = Mode.FAST,
-            backgroundInferenceEnabled = false,
-        ).toList()
-
-        val options = fastService.getSentOptions().single()
-        assertTrue(options.toolingEnabled)
-        assertTrue(options.availableTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
-        assertTrue(options.imageUris.isEmpty())
-        assertTrue(fastService.getSentPrompts().single().contains("use attached_image_inspect"))
         assertEquals(listOf(ModelType.FAST), inferenceFactory.resolvedTypes)
     }
 

@@ -35,19 +35,15 @@ class ChatInferenceRequestPreparer(
         val apiVisionConfigured = visionConfig?.isLocal == false && visionConfig.isMultimodal
         val hasImageContext = resolvedImageTarget != null
         val imageHandling = when {
-            hasImageContext &&
-                activeVisionCapable &&
-                !settings.alwaysUseVisionModel -> ChatImageHandling.DIRECT
-            hasImageContext &&
-                apiVisionConfigured &&
-                (settings.alwaysUseVisionModel || !activeVisionCapable) -> ChatImageHandling.TOOL
+            hasImageContext && activeVisionCapable -> ChatImageHandling.DIRECT
+            hasImageContext && apiVisionConfigured && !activeVisionCapable -> ChatImageHandling.TOOL
             else -> ChatImageHandling.NONE
         }
         val reasoningBudget = if (config?.isLocal == true && config.thinkingEnabled) 2048 else 0
 
         loggingPort.debug(
             TAG,
-            "generateWithService config modelType=$modelType configName=${config?.name} isLocal=${config?.isLocal} searchEnabled=$searchEnabled imageHandling=$imageHandling activeVisionCapable=$activeVisionCapable apiVisionConfigured=$apiVisionConfigured alwaysUseVisionModel=${settings.alwaysUseVisionModel} thinkingEnabled=${config?.thinkingEnabled} reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget",
+            "generateWithService config modelType=$modelType configName=${config?.name} isLocal=${config?.isLocal} searchEnabled=$searchEnabled imageHandling=$imageHandling activeVisionCapable=$activeVisionCapable apiVisionConfigured=$apiVisionConfigured thinkingEnabled=${config?.thinkingEnabled} reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget",
         )
         if (config?.isLocal == true) {
             logLocalPrompt(prompt, modelType)
