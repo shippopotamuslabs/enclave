@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -232,6 +233,116 @@ class ChatInferenceServiceExecutorTest {
         assertEquals(2, results.size)
         assertEquals("Current", (results[0] as MessageGenerationState.GeneratingText).textDelta)
         assertTrue(results[1] is MessageGenerationState.Finished)
+    }
+
+    @Test
+    fun `execute clears stream on service start exception`() = runTest {
+        every {
+            serviceStarter.startService(any(), any(), any(), any(), any(), any())
+        } throws IllegalStateException("foreground service start not allowed")
+
+        val results = mutableListOf<MessageGenerationState>()
+        val collectJob = launch {
+            executor.execute(
+                prompt = "hello",
+                userMessageId = MessageId("u1"),
+                assistantMessageId = assistantMessageId,
+                chatId = chatId,
+                userHasImage = false,
+                modelType = ModelType.FAST,
+                backgroundInferenceEnabled = true,
+            ).toList(results)
+        }
+
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(collectJob.isCompleted)
+        assertEquals(1, results.size)
+        assertTrue(results.single() is MessageGenerationState.Failed)
+        assertFalse(inferenceEventBus.hasChatRequest(requestKey), "Stream must be cleared after exception")
+    }
+
+    @Test
+    fun `execute clears stream on generic service start exception`() = runTest {
+        every {
+            serviceStarter.startService(any(), any(), any(), any(), any(), any())
+        } throws IllegalStateException("boom")
+
+        val results = mutableListOf<MessageGenerationState>()
+        val collectJob = launch {
+            executor.execute(
+                prompt = "hello",
+                userMessageId = MessageId("u1"),
+                assistantMessageId = assistantMessageId,
+                chatId = chatId,
+                userHasImage = false,
+                modelType = ModelType.FAST,
+                backgroundInferenceEnabled = true,
+            ).toList(results)
+        }
+
+        testScheduler.advanceUntilIdle()
+
+        assertTrue(collectJob.isCompleted)
+        assertEquals(1, results.size)
+        assertTrue(results.single() is MessageGenerationState.Failed)
+        assertFalse(inferenceEventBus.hasChatRequest(requestKey), "Stream must be cleared after exception")
+    }
+
+    @Test
+    fun `execute clears stream on collector cancellation before terminal state`() = runTest {
+        val results = mutableListOf<MessageGenerationState>()
+        val collectJob = launch {
+            executor.execute(
+                prompt = "hello",
+                userMessageId = MessageId("u1"),
+                assistantMessageId = assistantMessageId,
+                chatId = chatId,
+                userHasImage = false,
+                modelType = ModelType.FAST,
+                backgroundInferenceEnabled = true,
+            ).toList(results)
+        }
+
+        testScheduler.advanceUntilIdle()
+
+        // Emit non-terminal states only
+        inferenceEventBus.emitChatState(requestKey, MessageGenerationState.Processing(ModelType.FAST))
+
+        testScheduler.advanceUntilIdle()
+
+        // Cancel collector before terminal state
+        collectJob.cancel()
+        testScheduler.advanceUntilIdle()
+
+        assertFalse(inferenceEventBus.hasChatRequest(requestKey), "Stream must be cleared after collector cancellation")
+    }
+
+    @Test
+    fun `execute ignores backgroundInferenceEnabled parameter`() = runTest {
+        every {
+            serviceStarter.startService(any(), any(), any(), any(), any(), any())
+        } answers {
+            inferenceEventBus.tryEmitChatState(requestKey, MessageGenerationState.Finished(ModelType.FAST))
+            Unit
+        }
+
+        val collectJob = launch {
+            executor.execute(
+                prompt = "hello",
+                userMessageId = MessageId("u1"),
+                assistantMessageId = assistantMessageId,
+                chatId = chatId,
+                userHasImage = false,
+                modelType = ModelType.FAST,
+                backgroundInferenceEnabled = false, // Irrelevant for service executor
+            ).collect {}
+        }
+
+        testScheduler.advanceUntilIdle()
+
+        verify { serviceStarter.startService(any(), any(), any(), any(), any(), any()) }
+        collectJob.cancel()
     }
 
     @Test

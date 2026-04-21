@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -84,5 +85,60 @@ class InferenceEventBusTest {
         val result = bus.observeChatSnapshot(key).first()
 
         assertEquals(snapshot, result)
+    }
+
+    // --- Pipeline stream tests ---
+
+    @Test
+    fun `hasPipelineStream returns false when no stream opened`() {
+        assertFalse(bus.hasPipelineStream("no-such-chat"))
+    }
+
+    @Test
+    fun `hasPipelineStream returns true after openPipelineRequest`() {
+        bus.openPipelineRequest("chat1")
+        assertTrue(bus.hasPipelineStream("chat1"))
+    }
+
+    @Test
+    fun `hasPipelineStream returns false after clearPipelineRequest`() {
+        bus.openPipelineRequest("chat1")
+        bus.clearPipelineRequest("chat1")
+        assertFalse(bus.hasPipelineStream("chat1"))
+    }
+
+    @Test
+    fun `hasChatRequest returns false when no stream opened`() {
+        assertFalse(bus.hasChatRequest(key))
+    }
+
+    @Test
+    fun `hasChatRequest returns true after openChatRequest`() {
+        bus.openChatRequest(key)
+        assertTrue(bus.hasChatRequest(key))
+    }
+
+    @Test
+    fun `hasChatRequest returns false after clearChatRequest`() {
+        bus.openChatRequest(key)
+        bus.clearChatRequest(key)
+        assertFalse(bus.hasChatRequest(key))
+    }
+
+    @Test
+    fun `hasChatRequest returns true when collector cancels before terminal state`() = runTest {
+        val collectJob = launch {
+            bus.openChatRequest(key).toList(mutableListOf())
+        }
+        testScheduler.advanceUntilIdle()
+
+        bus.emitChatState(key, MessageGenerationState.GeneratingText("non-terminal", ModelType.FAST))
+        testScheduler.advanceUntilIdle()
+
+        collectJob.cancel()
+        testScheduler.advanceUntilIdle()
+
+        // Assert: key should be cleared when collector cancels
+        assertFalse(bus.hasChatRequest(key), "Key must be cleared when collector cancels before terminal state")
     }
 }

@@ -11,6 +11,7 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.onCompletion
 
 @Singleton
 class InferenceEventBus @Inject constructor() {
@@ -22,11 +23,19 @@ class InferenceEventBus @Inject constructor() {
     private val chatStreams = ConcurrentHashMap<ChatRequestKey, MutableSharedFlow<MessageGenerationState>>()
     private val chatSnapshots = ConcurrentHashMap<ChatRequestKey, MutableSharedFlow<AccumulatedMessages>>()
 
+    // Pipeline streams (Crew/MOA multi-step inference)
+    private val pipelineStreams = ConcurrentHashMap<String, MutableSharedFlow<MessageGenerationState>>()
+
     fun openChatRequest(key: ChatRequestKey): Flow<MessageGenerationState> {
         val stream = newChatStream()
         chatStreams[key] = stream
         chatSnapshots.remove(key)
-        return stream.asSharedFlow()
+        return stream.asSharedFlow().onCompletion {
+            if (chatStreams[key] === stream) {
+                chatStreams.remove(key)
+                chatSnapshots.remove(key)
+            }
+        }
     }
 
     fun observeChatRequest(key: ChatRequestKey): Flow<MessageGenerationState> {
@@ -58,12 +67,44 @@ class InferenceEventBus @Inject constructor() {
         chatSnapshots.remove(key)
     }
 
+    fun openPipelineRequest(chatId: String): Flow<MessageGenerationState> {
+        val stream = newChatStream()
+        pipelineStreams[chatId] = stream
+        return stream.asSharedFlow().onCompletion {
+            if (pipelineStreams[chatId] === stream) {
+                pipelineStreams.remove(chatId)
+            }
+        }
+    }
+
+    suspend fun emitPipelineState(chatId: String, state: MessageGenerationState) {
+        pipelineStreamFor(chatId).emit(state)
+    }
+
+    fun tryEmitPipelineState(chatId: String, state: MessageGenerationState): Boolean {
+        return pipelineStreamFor(chatId).tryEmit(state)
+    }
+
+    fun clearPipelineRequest(chatId: String) {
+        pipelineStreams.remove(chatId)
+    }
+
+    /** Returns `true` if a pipeline stream exists for the given [chatId]. Test-only. */
+    fun hasPipelineStream(chatId: String): Boolean = pipelineStreams.containsKey(chatId)
+
+    /** Returns `true` if a chat stream exists for the given [key]. Test-only. */
+    fun hasChatRequest(key: ChatRequestKey): Boolean = chatStreams.containsKey(key)
+
     private fun streamFor(key: ChatRequestKey): MutableSharedFlow<MessageGenerationState> {
         return chatStreams.computeIfAbsent(key) { newChatStream() }
     }
 
     private fun snapshotStreamFor(key: ChatRequestKey): MutableSharedFlow<AccumulatedMessages> {
         return chatSnapshots.computeIfAbsent(key) { newSnapshotStream() }
+    }
+
+    private fun pipelineStreamFor(chatId: String): MutableSharedFlow<MessageGenerationState> {
+        return pipelineStreams.computeIfAbsent(chatId) { newChatStream() }
     }
 
     private fun newChatStream(): MutableSharedFlow<MessageGenerationState> {

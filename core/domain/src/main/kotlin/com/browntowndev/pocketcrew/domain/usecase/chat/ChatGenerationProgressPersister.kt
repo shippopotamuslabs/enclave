@@ -59,7 +59,7 @@ class ChatGenerationProgressSession internal constructor(
             persistAccumulatedMessages()
             lastPersistedAt = now
         }
-        if (state.isTerminal()) {
+        if (state.isTerminal) {
             extractedUrlTracker.clear()
         }
         return accumulatedMessages
@@ -95,18 +95,10 @@ class ChatGenerationProgressSession internal constructor(
         now: Long,
     ): Boolean {
         val previousPersistAt = lastPersistedAt
-        return state.isTerminal() ||
+        return state.isTerminal ||
             previousPersistAt == null ||
             partialPersistIntervalMs <= 0L ||
             now - previousPersistAt >= partialPersistIntervalMs
     }
 
-    private fun MessageGenerationState.isTerminal(): Boolean {
-        return when (this) {
-            is MessageGenerationState.Finished,
-            is MessageGenerationState.Failed,
-            is MessageGenerationState.Blocked -> true
-            else -> false
-        }
-    }
 }

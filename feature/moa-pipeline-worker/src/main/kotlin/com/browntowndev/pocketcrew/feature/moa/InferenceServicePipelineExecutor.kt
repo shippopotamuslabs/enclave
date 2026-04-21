@@ -1,24 +1,20 @@
 package com.browntowndev.pocketcrew.feature.moa
 
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineState
-import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.PipelineStateRepository
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.feature.moa.service.InferenceService
+import com.browntowndev.pocketcrew.domain.model.chat.isPipelineTerminal
+import com.browntowndev.pocketcrew.feature.inference.InferenceEventBus
 import com.browntowndev.pocketcrew.feature.moa.service.InferenceServiceStarter
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.transformWhile
 
 /**
  * Implementation of PipelineExecutorPort that uses InferenceService (custom foreground Service)
@@ -27,13 +23,15 @@ import javax.inject.Singleton
  * This replaces the WorkManager-based approach which used dataSync foreground type
  * that has a 6-hour quota limit on Android 15+. The new approach uses specialUse
  * foreground type which has no quota limits.
+ *
+ * Pipeline progress is communicated via [InferenceEventBus] using per-chatId
+ * streams. This avoids the IPC overhead of sending broadcast Intents for every token.
  */
 @Singleton
 class InferenceServicePipelineExecutor @Inject constructor(
-    @param:ApplicationContext private val context: Context,
     private val serviceStarter: InferenceServiceStarter,
     private val pipelineStateRepository: PipelineStateRepository,
-    private val loggingPort: LoggingPort
+    private val inferenceEventBus: InferenceEventBus,
 ) : PipelineExecutorPort {
 
     companion object {
@@ -43,94 +41,34 @@ class InferenceServicePipelineExecutor @Inject constructor(
     override fun executePipeline(
         chatId: String,
         userMessage: String,
-    ): Flow<MessageGenerationState> = callbackFlow {
+    ): Flow<MessageGenerationState> {
         val initialState = PipelineState.createInitial(chatId, userMessage)
         val stateJson = initialState.toJson()
 
-        // Create broadcast receiver for progress updates
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                intent ?: return
+        // Open the stream BEFORE starting the service to prevent a race condition:
+        // if the service starts first, it may emit to a stream the executor hasn't
+        // subscribed to yet, causing those emissions to be lost or orphaned.
+        val stateFlow = inferenceEventBus.openPipelineRequest(chatId)
 
-                when (intent.action) {
-                    InferenceService.BROADCAST_STEP_STARTED -> {
-                        val modelTypeName = intent.getStringExtra(InferenceService.EXTRA_MODEL_TYPE)
-                        val modelType = modelTypeName?.let {
-                            try {
-                                ModelType.valueOf(it)
-                            } catch (e: Exception) {
-                                loggingPort.error(TAG, "Invalid model type: $modelTypeName")
-                                ModelType.MAIN
-                            }
-                        } ?: ModelType.MAIN
-                        trySend(MessageGenerationState.Processing(modelType))
-                    }
-                    InferenceService.BROADCAST_PROGRESS -> {
-                        handleProgressIntent(intent) { state ->
-                            trySend(state)
-                        }
-                    }
-                    InferenceService.BROADCAST_STEP_COMPLETED -> {
-                        handleStepCompletedIntent(intent) { state ->
-                            trySend(state)
-                            // Close flow after FINAL StepCompleted is processed (with thinking data)
-                            val stepTypeName = intent.getStringExtra(InferenceService.EXTRA_STEP_TYPE)
-                            if (stepTypeName == PipelineStep.FINAL.name) {
-                                close()
-                            }
-                        }
-                    }
-                    InferenceService.BROADCAST_ERROR -> {
-                        val error = intent.getStringExtra(InferenceService.EXTRA_ERROR_MESSAGE)
-                            ?: "Unknown error"
-                        val modelTypeName = intent.getStringExtra(InferenceService.EXTRA_MODEL_TYPE)
-                        val modelType = modelTypeName?.let {
-                            try {
-                                ModelType.valueOf(it)
-                            } catch (e: Exception) {
-                                ModelType.MAIN
-                            }
-                        } ?: ModelType.MAIN
-                        trySend(MessageGenerationState.Failed(IllegalStateException(error), modelType))
-                        close()
-                    }
-                }
-            }
-        }
-
-        // Register receiver
-        val filter = IntentFilter().apply {
-            addAction(InferenceService.BROADCAST_PROGRESS)
-            addAction(InferenceService.BROADCAST_ERROR)
-            addAction(InferenceService.BROADCAST_STEP_COMPLETED)
-            addAction(InferenceService.BROADCAST_STEP_STARTED)
-        }
-        context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
-
-        // Start the service
         try {
             serviceStarter.startService(chatId, userMessage, stateJson)
-        } catch (e: Exception) {
-            trySend(MessageGenerationState.Failed(e, ModelType.DRAFT_ONE))
-            close()
-            return@callbackFlow
+        } catch (ex: Exception) {
+            inferenceEventBus.clearPipelineRequest(chatId)
+            throw ex
         }
 
-        // Wait for completion or cancellation
-        awaitClose {
-            context.unregisterReceiver(receiver)
+        return flow {
+            emitAll(stateFlow.transformWhile { state ->
+                emit(state)
+                !state.isPipelineTerminal
+            })
+        }.onCompletion {
+            inferenceEventBus.clearPipelineRequest(chatId)
         }
     }
 
     override suspend fun stopPipeline(pipelineId: String) {
-        // Send stop broadcast to InferenceService
-        val stopIntent = Intent(InferenceService.ACTION_STOP).apply {
-            setPackage(context.packageName)
-            putExtra(InferenceService.EXTRA_CHAT_ID, pipelineId)
-        }
-        context.sendBroadcast(stopIntent)
-        
-        // Clear saved state
+        serviceStarter.stopService()
         pipelineStateRepository.clearPipelineState(pipelineId)
     }
 
@@ -139,142 +77,45 @@ class InferenceServicePipelineExecutor @Inject constructor(
         pipelineId: String,
         onComplete: () -> Unit,
         onError: (Throwable) -> Unit
-    ): Flow<MessageGenerationState> = callbackFlow {
-        // Retrieve saved state
+    ): Flow<MessageGenerationState> {
         val savedState = pipelineStateRepository.getPipelineState(chatId)
-        
+
         if (savedState == null) {
-            trySend(MessageGenerationState.Failed(
-                IllegalStateException("No saved pipeline state found for resume"),
-                ModelType.MAIN
-            ))
-            close()
-            return@callbackFlow
-        }
-
-        // Create broadcast receiver for progress updates
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context?, intent: Intent?) {
-                intent ?: return
-
-                when (intent.action) {
-                    InferenceService.BROADCAST_PROGRESS -> {
-                        handleProgressIntent(intent) { state ->
-                            trySend(state)
-                        }
-                    }
-                    InferenceService.BROADCAST_ERROR -> {
-                        val error = intent.getStringExtra(InferenceService.EXTRA_ERROR_MESSAGE)
-                            ?: "Unknown error"
-                        trySend(MessageGenerationState.Failed(IllegalStateException(error), ModelType.MAIN))
-                        close()
-                    }
-                    InferenceService.BROADCAST_STEP_COMPLETED -> {
-                        handleStepCompletedIntent(intent) { state ->
-                            trySend(state)
-                            // Close flow after FINAL StepCompleted is processed
-                            val stepTypeName = intent.getStringExtra(InferenceService.EXTRA_STEP_TYPE)
-                            if (stepTypeName == PipelineStep.FINAL.name) {
-                                close()
-                            }
-                        }
-                    }
-                    InferenceService.BROADCAST_STEP_STARTED -> {
-                        val modelTypeName = intent.getStringExtra(InferenceService.EXTRA_MODEL_TYPE)
-                        val modelType = modelTypeName?.let {
-                            try {
-                                ModelType.valueOf(it)
-                            } catch (e: Exception) {
-                                ModelType.MAIN
-                            }
-                        } ?: ModelType.MAIN
-                        trySend(MessageGenerationState.Processing(modelType))
-                    }
-                }
+            val error = IllegalStateException("No saved pipeline state found for resume")
+            onError(error)
+            return flow {
+                emit(
+                    MessageGenerationState.Failed(
+                        error,
+                        ModelType.MAIN
+                    )
+                )
             }
         }
 
-        // Register receiver
-        val filter = IntentFilter().apply {
-            addAction(InferenceService.BROADCAST_PROGRESS)
-            addAction(InferenceService.BROADCAST_ERROR)
-            addAction(InferenceService.BROADCAST_STEP_COMPLETED)
-            addAction(InferenceService.BROADCAST_STEP_STARTED)
-        }
-        context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        val stateJson = savedState.toJson()
 
-        // Start the service with resume intent
+        // Open the stream BEFORE starting the service (same race-condition fix as executePipeline).
+        val stateFlow = inferenceEventBus.openPipelineRequest(chatId)
+
         try {
-            serviceStarter.startServiceResume(chatId, savedState.toJson())
-        } catch (e: Exception) {
-            onError(e)
-            trySend(MessageGenerationState.Failed(e, ModelType.MAIN))
-            close()
-            return@callbackFlow
+            serviceStarter.startServiceResume(chatId, stateJson)
+        } catch (ex: Exception) {
+            inferenceEventBus.clearPipelineRequest(chatId)
+            throw ex
         }
 
-        // Wait for completion or cancellation
-        awaitClose {
-            context.unregisterReceiver(receiver)
+        return flow {
+            emitAll(stateFlow.transformWhile { state ->
+                emit(state)
+                val terminal = state.isPipelineTerminal
+                if (terminal) {
+                    onComplete()
+                }
+                !terminal
+            })
+        }.onCompletion {
+            inferenceEventBus.clearPipelineRequest(chatId)
         }
-    }
-
-    private fun handleProgressIntent(
-        intent: Intent,
-        send: (MessageGenerationState) -> Unit
-    ) {
-        val thinkingChunk = intent.getStringExtra(InferenceService.EXTRA_THINKING_CHUNK)
-        val stepOutput = intent.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT)
-        val modelTypeName = intent.getStringExtra(InferenceService.EXTRA_MODEL_TYPE)
-        val modelType = modelTypeName?.let {
-            try {
-                ModelType.valueOf(it)
-            } catch (e: Exception) {
-                ModelType.MAIN
-            }
-        } ?: ModelType.MAIN
-
-        if (!thinkingChunk.isNullOrEmpty()) {
-            send(MessageGenerationState.ThinkingLive(thinkingChunk, modelType))
-        }
-        else if (!stepOutput.isNullOrEmpty()) {
-            send(MessageGenerationState.GeneratingText(stepOutput, modelType))
-        }
-    }
-
-    private fun handleStepCompletedIntent(
-        intent: Intent,
-        send: (MessageGenerationState) -> Unit
-    ) {
-        val stepOutput = intent.getStringExtra(InferenceService.EXTRA_STEP_OUTPUT) ?: ""
-        val modelDisplayName = intent.getStringExtra(InferenceService.EXTRA_STEP_MODEL_DISPLAY_NAME) ?: ""
-        val modelTypeName = intent.getStringExtra(InferenceService.EXTRA_MODEL_TYPE)
-        val modelType = modelTypeName?.let {
-            try {
-                ModelType.valueOf(it)
-            } catch (e: Exception) {
-                ModelType.MAIN
-            }
-        } ?: ModelType.MAIN
-
-        val stepTypeName = intent.getStringExtra(InferenceService.EXTRA_STEP_TYPE)
-        val stepType = stepTypeName?.let {
-            try {
-                PipelineStep.valueOf(it)
-            } catch (e: Exception) {
-                loggingPort.error(TAG, "Invalid step type: $stepTypeName")
-                PipelineStep.DRAFT_ONE
-            }
-        } ?: PipelineStep.DRAFT_ONE
-
-        // Emit StepCompleted state - stepName is derived from stepType
-        send(
-            MessageGenerationState.StepCompleted(
-                stepOutput = stepOutput,
-                modelDisplayName = modelDisplayName,
-                modelType = modelType,
-                stepType = stepType
-            )
-        )
     }
 }
