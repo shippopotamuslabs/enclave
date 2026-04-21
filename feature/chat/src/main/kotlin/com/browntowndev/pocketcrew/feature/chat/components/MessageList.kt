@@ -21,22 +21,29 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -56,6 +63,8 @@ import com.browntowndev.pocketcrew.feature.chat.MessageRole
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.feature.chat.ThinkingDataUi
 import com.browntowndev.pocketcrew.feature.chat.fakeLongMessages
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 
 @Composable
@@ -106,6 +115,41 @@ fun MessageList(
         BoxWithConstraints(modifier = modifier.fillMaxSize()) {
             val viewportHeight = maxHeight
 
+            // Total item count for scroll-to-bottom targeting
+            val totalItems = if (latestUserMessageIndex != -1)
+                (if (latestUserMessageIndex > 0) latestUserMessageIndex else 0) + 1
+            else messages.size
+
+            // The last LazyColumn item index (the active_interaction column or the last history item).
+            // The FAB should only be visible when this last item is NOT yet the first visible item —
+            // i.e. the user has scrolled up into history. If the user is scrolling *within* the
+            // active_interaction item (which is heightIn(min = viewportHeight) tall), canScrollForward
+            // would still be true, incorrectly showing the FAB. Using firstVisibleItemIndex avoids that.
+            val lastLazyItemIndex = totalItems - 1
+
+            // FAB is logically visible when not at bottom; auto-hides 3s after scrolling stops
+            var fabVisible by remember { mutableStateOf(false) }
+            LaunchedEffect(listState) {
+                snapshotFlow {
+                    listState.isScrollInProgress to
+                        (listState.firstVisibleItemIndex < lastLazyItemIndex)
+                }.collect { (isScrolling, isAboveLastItem) ->
+                    if (isScrolling) {
+                        // Show immediately only when the user has scrolled above the active item
+                        fabVisible = isAboveLastItem
+                    } else {
+                        if (!isAboveLastItem) {
+                            // User is on the last item — hide immediately
+                            fabVisible = false
+                        } else {
+                            // Still above the last item — keep visible for 3 more seconds then hide
+                            delay(3_000)
+                            fabVisible = false
+                        }
+                    }
+                }
+            }
+
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
@@ -152,6 +196,54 @@ fun MessageList(
                     }
                 }
             }
+
+            // Scroll-to-bottom FAB — floats above the InputBar at the bottom-right
+            val coroutineScope = rememberCoroutineScope()
+            ScrollToBottomFab(
+                visible = fabVisible,
+                onClick = {
+                    val lastIndex = totalItems - 1
+                    if (lastIndex >= 0) {
+                        coroutineScope.launch { listState.animateScrollToItem(lastIndex) }
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 12.dp, bottom = 12.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Circular FAB that fades in when the user has scrolled above the bottom,
+ * and triggers a smooth scroll to the last item when tapped.
+ */
+@Composable
+private fun ScrollToBottomFab(
+    visible: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(durationMillis = 300),
+        label = "scrollToBottomAlpha"
+    )
+
+    // Keep the composable in the tree while fading out so the animation completes
+    if (alpha > 0f || visible) {
+        SmallFloatingActionButton(
+            onClick = onClick,
+            modifier = modifier.graphicsLayer { this.alpha = alpha },
+            shape = CircleShape,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = "Scroll to bottom",
+            )
         }
     }
 }
