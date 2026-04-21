@@ -62,7 +62,6 @@ fun SettingsScreen(
     onThemeChange: (AppTheme) -> Unit,
     onHapticPressChange: (Boolean) -> Unit,
     onHapticResponseChange: (Boolean) -> Unit,
-    onAlwaysUseVisionModelChange: (Boolean) -> Unit,
     onBackgroundInferenceChange: (Boolean) -> Unit,
     onShowCustomizationSheet: (Boolean) -> Unit,
     onShowDataControlsSheet: (Boolean) -> Unit,
@@ -232,7 +231,6 @@ fun SettingsScreen(
             VisionSettingsBottomSheet(
                 uiState = uiState,
                 onDismiss = { onShowVisionSettingsSheet(false) },
-                onAlwaysUseVisionModelChange = onAlwaysUseVisionModelChange,
                 onSetDefaultModel = onSetDefaultModel
             )
         }
@@ -425,7 +423,6 @@ fun PreviewSettingsScreen() {
             onThemeChange = {},
             onHapticPressChange = {},
             onHapticResponseChange = {},
-            onAlwaysUseVisionModelChange = {},
             onBackgroundInferenceChange = {},
             onShowCustomizationSheet = {},
             onShowDataControlsSheet = {},
