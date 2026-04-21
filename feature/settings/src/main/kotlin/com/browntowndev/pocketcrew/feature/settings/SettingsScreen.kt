@@ -63,6 +63,7 @@ fun SettingsScreen(
     onHapticPressChange: (Boolean) -> Unit,
     onHapticResponseChange: (Boolean) -> Unit,
     onAlwaysUseVisionModelChange: (Boolean) -> Unit,
+    onBackgroundInferenceChange: (Boolean) -> Unit,
     onShowCustomizationSheet: (Boolean) -> Unit,
     onShowDataControlsSheet: (Boolean) -> Unit,
     onShowMemoriesSheet: (Boolean) -> Unit,
@@ -135,6 +136,14 @@ fun SettingsScreen(
                     icon = Icons.Default.Vibration,
                     checked = uiState.home.hapticResponse,
                     onCheckedChange = onHapticResponseChange
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsToggle(
+                    title = "Background Inference",
+                    subtitle = "Allow chat generation to continue when the app is in the background",
+                    icon = Icons.Default.Cloud,
+                    checked = uiState.home.backgroundInferenceEnabled,
+                    onCheckedChange = onBackgroundInferenceChange
                 )
             }
 
@@ -417,6 +426,7 @@ fun PreviewSettingsScreen() {
             onHapticPressChange = {},
             onHapticResponseChange = {},
             onAlwaysUseVisionModelChange = {},
+            onBackgroundInferenceChange = {},
             onShowCustomizationSheet = {},
             onShowDataControlsSheet = {},
             onShowMemoriesSheet = {},

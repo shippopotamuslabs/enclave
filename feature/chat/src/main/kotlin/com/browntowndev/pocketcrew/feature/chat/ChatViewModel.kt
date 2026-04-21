@@ -28,6 +28,7 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
+import com.browntowndev.pocketcrew.feature.inference.InferenceEventBus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -43,11 +44,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
+
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.mapLatest
@@ -74,6 +78,7 @@ class ChatViewModel @Inject constructor(
     private val toolExecutionEventPort: ToolExecutionEventPort,
     private val errorHandler: ViewModelErrorHandler,
     private val loggingPort: LoggingPort,
+    private val inferenceEventBus: InferenceEventBus = InferenceEventBus(),
 ) : ViewModel() {
 
     companion object {
@@ -127,8 +132,11 @@ class ChatViewModel @Inject constructor(
     private var inferenceJob: Job? = null
     private var inFlightCompletionFallbackJob: Job? = null
 
-    private val dbMessagesFlow = _currentChatId.flatMapLatest { chatId: ChatId? ->
-        val id: ChatId? = chatId ?: initialChatId
+    private val activeChatIdFlow = _currentChatId
+        .map { chatId -> chatId ?: initialChatId }
+        .distinctUntilChanged()
+
+    private val dbMessagesFlow = activeChatIdFlow.flatMapLatest { id: ChatId? ->
         if (id == null) {
             flowOf(emptyList())
         } else {
@@ -148,7 +156,36 @@ class ChatViewModel @Inject constructor(
 
         // Observe tool execution events to show transient UI banners
         observeToolEvents()
-        observeCompletedInFlightMessages()
+        observeActiveBackgroundInference()
+    }
+
+    private fun observeActiveBackgroundInference() {
+        combine(
+            activeChatIdFlow,
+            dbMessagesFlow,
+        ) { chatId, messages ->
+            val assistantMessageId = messages
+                .lastOrNull { message ->
+                    message.role == Role.ASSISTANT && message.messageState != MessageState.COMPLETE
+                }
+                ?.id
+            if (chatId != null && assistantMessageId != null) {
+                InferenceEventBus.ChatRequestKey(chatId, assistantMessageId)
+            } else {
+                null
+            }
+        }.distinctUntilChanged()
+            .flatMapLatest { requestKey ->
+                if (requestKey == null) {
+                    emptyFlow()
+                } else {
+                    inferenceEventBus.observeChatSnapshot(requestKey)
+                }
+            }
+            .onEach { accumulatedMessages ->
+                _inFlightMessages.update { current -> current + accumulatedMessages.messages }
+            }
+            .launchIn(viewModelScope)
     }
 
     /**
@@ -253,7 +290,7 @@ class ChatViewModel @Inject constructor(
     val uiState: StateFlow<ChatUiState> = combine(
         uiInputsWithPolicyFlow,
         inferenceLockManager.isInferenceBlocked,
-        dbMessagesFlow.debounce(50),
+        dbMessagesFlow,
         _inFlightMessages,
         _activeToolCallBanner
     ) {
@@ -323,6 +360,13 @@ class ChatViewModel @Inject constructor(
                 chatMessage
             }
 
+        // Prune in-flight messages that are now confirmed by the database,
+        // ensuring the DB message is already present in this same emission
+        // before the in-flight entry is removed. This eliminates the flicker
+        // that occurred when the non-debounced prune observer removed in-flight
+        // entries before the combine had received the corresponding DB data.
+        pruneInFlightMessagesAsync(messages, inFlight)
+
         ChatUiState(
             messages = chatMessages,
             inputText = inputText,
@@ -337,7 +381,8 @@ class ChatViewModel @Inject constructor(
             isGenerating = isGenerating,
             hasActiveIndicator = hasActiveIndicator,
             activeIndicatorMessageId = activeIndicatorMessageId,
-            activeToolCallBanner = activeBanner
+            activeToolCallBanner = activeBanner,
+            backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -345,18 +390,41 @@ class ChatViewModel @Inject constructor(
         initialValue = ChatUiState()
     )
 
-    private fun observeCompletedInFlightMessages() {
-        dbMessagesFlow.onEach { messages ->
-            pruneInFlightMessagesConfirmedByDatabase(messages)
-        }.launchIn(viewModelScope)
-    }
+    /**
+     * Prunes in-flight messages whose IDs are now confirmed as COMPLETE in the database.
+     *
+     * Called from inside the [uiState] combine so that the prune only happens after
+     * the COMPLETE DB message is already part of the current emission — eliminating
+     * the flicker gap that occurred when the old observeCompletedInFlightMessages()
+     * pruned on a non-debounced DB flow before the combine had received the data.
+     *
+     * Uses an async launch to avoid mutating _inFlightMessages inside the combine
+     * lambda, which would trigger a re-emission loop. The launched coroutine posts
+     * the update after the current combine emission has been delivered.
+     */
+    private fun pruneInFlightMessagesAsync(
+        dbMessages: List<Message>,
+        currentInFlight: Map<MessageId, MessageSnapshot>,
+    ) {
+        if (currentInFlight.isEmpty()) return
 
-    private fun pruneInFlightMessagesConfirmedByDatabase(messages: List<Message>) {
-        _inFlightMessages.update { current ->
-            pruneCompletedInFlightMessages(current, messages)
-        }
-        if (_inFlightMessages.value.isEmpty()) {
-            cancelInFlightCompletionFallback()
+        val completedDbIds = dbMessages.asSequence()
+            .filter { it.messageState == MessageState.COMPLETE }
+            .map { it.id }
+            .toSet()
+
+        if (completedDbIds.isEmpty()) return
+
+        val idsToPrune = currentInFlight.keys.filter { it in completedDbIds }
+        if (idsToPrune.isEmpty()) return
+
+        viewModelScope.launch {
+            _inFlightMessages.update { current ->
+                current.filterKeys { it !in completedDbIds }
+            }
+            if (_inFlightMessages.value.isEmpty()) {
+                cancelInFlightCompletionFallback()
+            }
         }
     }
 
@@ -580,7 +648,8 @@ class ChatViewModel @Inject constructor(
                     userMessageId = promptResult.userMessageId,
                     assistantMessageId = promptResult.assistantMessageId,
                     chatId = promptResult.chatId,
-                    mode = _selectedMode.value.toDomain()
+                    mode = _selectedMode.value.toDomain(),
+                    backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
                 ).onEach { state ->
                     // Merge new messages with existing in-flight messages
                     // In-flight messages override database messages for same messageId
