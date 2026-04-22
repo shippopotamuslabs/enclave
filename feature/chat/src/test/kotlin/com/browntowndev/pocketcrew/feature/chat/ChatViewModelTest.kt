@@ -902,7 +902,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `stale shorter snapshot cannot replace longer current snapshot`() = runTest {
+    fun `stale shorter snapshot replaces longer current snapshot`() = runTest {
         val chatId = ChatId("chat")
         val assistantMessageId = MessageId("assistant")
         val key = ActiveChatTurnKey(chatId, assistantMessageId)
@@ -949,7 +949,7 @@ class ChatViewModelTest {
             )
             runCurrent()
 
-            assertEquals("longer streaming answer", chatViewModel.uiState.value.messages.single().content.text)
+            assertEquals("short", chatViewModel.uiState.value.messages.single().content.text)
         } finally {
             collectJob.cancel()
         }
