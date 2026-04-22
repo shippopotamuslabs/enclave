@@ -217,14 +217,14 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onHapticResponseChange(enabled: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update haptic response setting", "Failed to update setting")) {
+        viewModelScope.launch {
             preferencesUseCases.updateHapticResponse(enabled)
         }
     }
 
-    fun onAlwaysUseVisionModelChange(enabled: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update vision routing setting", "Failed to update setting")) {
-            preferencesUseCases.updateAlwaysUseVisionModel(enabled)
+    fun onBackgroundInferenceChange(enabled: Boolean) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update background inference setting", "Failed to update setting")) {
+            preferencesUseCases.updateBackgroundInferenceEnabled(enabled)
         }
     }
 
@@ -425,7 +425,7 @@ class SettingsViewModel @Inject constructor(
                 discoveredApiModelScope = null,
                 isDiscoveringApiModels = false,
                 modelSearchQuery = "",
-                modelProviderFilter = null,
+                modelProviderFilters = emptySet(),
                 modelSortOption = ModelSortOption.A_TO_Z,
             )
         }
@@ -446,7 +446,7 @@ class SettingsViewModel @Inject constructor(
                 discoveredApiModelScope = null,
                 isDiscoveringApiModels = false,
                 modelSearchQuery = "",
-                modelProviderFilter = null,
+                modelProviderFilters = emptySet(),
                 modelSortOption = ModelSortOption.A_TO_Z,
             )
         }
@@ -491,11 +491,12 @@ class SettingsViewModel @Inject constructor(
                 discoveredApiModelScope = if (keepDiscoveredModels) state.discoveredApiModelScope else null,
                 isDiscoveringApiModels = false,
                 modelSearchQuery = "",
-                modelProviderFilter = null,
+                modelProviderFilters = emptySet(),
                 modelSortOption = ModelSortOption.A_TO_Z,
             )
         }
         maybeFetchSelectedXaiModelMetadata(asset)
+        maybeFetchModelsOnReEntry(asset)
     }
 
     fun onSelectApiModelConfig(config: ApiModelConfigUi?) {
@@ -676,8 +677,20 @@ class SettingsViewModel @Inject constructor(
         _apiState.update { it.copy(modelSearchQuery = query) }
     }
 
-    fun onUpdateModelProviderFilter(provider: String?) {
-        _apiState.update { it.copy(modelProviderFilter = provider) }
+    fun onToggleModelProviderFilter(provider: String) {
+        _apiState.update { state -> 
+            val currentFilters = state.modelProviderFilters
+            val newFilters = if (currentFilters.contains(provider)) {
+                currentFilters - provider
+            } else {
+                currentFilters + provider
+            }
+            state.copy(modelProviderFilters = newFilters)
+        }
+    }
+
+    fun onClearModelProviderFilters() {
+        _apiState.update { it.copy(modelProviderFilters = emptySet()) }
     }
 
     fun onUpdateModelSortOption(option: ModelSortOption) {
@@ -834,8 +847,17 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Silently fills in missing [contextWindowTokens] for the selected xAI model when the full
+     * model list is already loaded. This is xAI-specific because xAI returns per-model context
+     * window data via the models endpoint. Only runs if [discoveredApiModels] is non-empty (the
+     * re-entry / no-models case is handled by [maybeFetchModelsOnReEntry]).
+     */
     private fun maybeFetchSelectedXaiModelMetadata(asset: ApiModelAssetUi?) {
         if (asset?.provider != ApiProvider.XAI || asset.modelId.isBlank()) return
+        // Only fill the metadata gap — if models aren't loaded yet, maybeFetchModelsOnReEntry
+        // handles that to avoid a concurrent double-fetch.
+        if (_apiState.value.discoveredApiModels.isEmpty()) return
         if (_apiState.value.discoveredModelFor(asset)?.contextWindowTokens != null) return
 
         val credentialAlias = resolveCredentialAlias(asset)
@@ -861,6 +883,47 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Auto-fetches the model list on re-entry to the configure screen for any provider that has
+     * persisted credentials (stored alias or a live key already typed). Handles all providers
+     * uniformly, including xAI — the no-models case is not xAI-specific.
+     */
+    private fun maybeFetchModelsOnReEntry(asset: ApiModelAssetUi?) {
+        if (asset == null) return
+        val state = _apiState.value
+        // Skip if models are already present for this scope, or a fetch is already in progress.
+        if (state.discoveredApiModels.isNotEmpty()) return
+        if (state.isDiscoveringApiModels) return
+
+        // Resolve a credential: prefer a live key being typed, then stored alias on the asset.
+        val credentialAlias = resolveCredentialAlias(asset)
+        if (_currentApiKey.value.isBlank() && credentialAlias == null) return
+
+        _apiState.update { it.copy(isDiscoveringApiModels = true) }
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch provider models on re-entry", "Failed to fetch models")) {
+            try {
+                val result = apiProviderUseCases.discoverApiModels(
+                    ApiModelDiscoveryRequest(
+                        provider = asset.provider,
+                        currentApiKey = _currentApiKey.value,
+                        credentialAlias = credentialAlias,
+                        baseUrl = asset.baseUrl,
+                        selectedModelId = asset.modelId.takeIf(String::isNotBlank),
+                    )
+                )
+                _apiState.update { s ->
+                    s.copy(
+                        discoveredApiModels = result.models,
+                        discoveredApiModelScope = result.scope,
+                        assetDraft = s.normalizeVisionCapability(s.assetDraft, result.models),
+                    )
+                }
+            } finally {
+                _apiState.update { it.copy(isDiscoveringApiModels = false) }
+            }
+        }
+    }
+
     private fun resolveCredentialAlias(asset: ApiModelAssetUi): String? = _apiState.value.selectedReusableApiCredentialAlias
         ?.takeIf { it.isNotBlank() }
         ?: asset.credentialAlias.takeIf { it.isNotBlank() }
@@ -881,9 +944,9 @@ class SettingsViewModel @Inject constructor(
 
     private fun ApiModelAssetUi?.matchesDiscoveryScope(other: ApiModelAssetUi?): Boolean {
         if (this == null || other == null) return false
-        if (provider != other.provider) return false
-        if (baseUrl.normalizedBaseUrl() != other.baseUrl.normalizedBaseUrl()) return false
-        val currentAlias = credentialAlias.takeIf(String::isNotBlank)
+        if (this.provider != other.provider) return false
+        if (this.baseUrl.normalizedBaseUrl() != other.baseUrl.normalizedBaseUrl()) return false
+        val currentAlias = this.credentialAlias.takeIf(String::isNotBlank)
         val nextAlias = other.credentialAlias.takeIf(String::isNotBlank)
         return currentAlias == null || nextAlias == null || currentAlias == nextAlias
     }

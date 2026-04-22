@@ -113,7 +113,7 @@ class ApiDiscoveryUiFilter @Inject constructor() {
     fun filter(
         models: List<DiscoveredApiModelUi>,
         query: String,
-        providerFilter: String?,
+        providerFilters: Set<String>,
         sortOption: ModelSortOption,
     ): List<DiscoveredApiModelUi> = models
         .filter { model ->
@@ -125,7 +125,7 @@ class ApiDiscoveryUiFilter @Inject constructor() {
             }
         }
         .filter { model ->
-            providerFilter == null || model.providerName == providerFilter
+            providerFilters.isEmpty() || providerFilters.contains(model.providerName)
         }
         .sortedWith { a, b ->
             when (sortOption) {

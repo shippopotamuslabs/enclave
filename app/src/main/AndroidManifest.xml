@@ -31,6 +31,16 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="chat"
+                    android:scheme="pocketcrew" />
+            </intent-filter>
         </activity>
 
         <!-- Custom Inference Service with specialUse foreground type -->

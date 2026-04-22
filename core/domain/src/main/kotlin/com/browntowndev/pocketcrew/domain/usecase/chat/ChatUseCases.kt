@@ -47,8 +47,9 @@ interface ChatUseCases {
         userMessageId: MessageId,
         assistantMessageId: MessageId,
         chatId: ChatId,
-        mode: Mode
-    ) = generateChatResponseUseCase(prompt, userMessageId, assistantMessageId, chatId, mode)
+        mode: Mode,
+        backgroundInferenceEnabled: Boolean,
+    ) = generateChatResponseUseCase(prompt, userMessageId, assistantMessageId, chatId, mode, backgroundInferenceEnabled)
 
     /**
      * Gets the chat messages for the given chat ID.

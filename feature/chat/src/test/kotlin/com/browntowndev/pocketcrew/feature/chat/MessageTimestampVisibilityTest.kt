@@ -17,6 +17,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCa
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
+import com.browntowndev.pocketcrew.feature.inference.ActiveChatTurnStore
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -44,7 +45,8 @@ class MessageTimestampVisibilityTest {
             cancelInferenceUseCase = mockk(relaxed = true),
             toolExecutionEventPort = mockk(relaxed = true),
             errorHandler = mockk(relaxed = true),
-            loggingPort = mockk(relaxed = true)
+            loggingPort = mockk(relaxed = true),
+            activeChatTurnSnapshotPort = ActiveChatTurnStore(),
         )
     }
 

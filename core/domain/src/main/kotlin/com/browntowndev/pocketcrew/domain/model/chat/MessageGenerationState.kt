@@ -9,6 +9,23 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
  * AccumulatedMessages is the primary emission for UI updates.
  */
 sealed interface MessageGenerationState {
+
+    /**
+     * Returns `true` if this state represents a terminal event that signals
+     * the end of the generation stream. [Finished], [Failed], and [Blocked]
+     * are terminal; all other states (including [StepCompleted]) are not.
+     *
+     * Pipeline consumers that also treat [StepCompleted] with a terminal
+     * [PipelineStep] as a completion signal should use a local extension
+     * that adds pipeline-specific terminal logic on top of this property.
+     */
+    val isTerminal: Boolean
+        get() = when (this) {
+            is Finished -> true
+            is Failed -> true
+            is Blocked -> true
+            else -> false
+        }
     data class EngineLoading(val modelType: ModelType) : MessageGenerationState
     data class Processing(val modelType: ModelType) : MessageGenerationState
     data class ThinkingLive(val thinkingChunk: String, val modelType: ModelType) : MessageGenerationState
@@ -27,3 +44,12 @@ sealed interface MessageGenerationState {
         val stepType: PipelineStep
     ) : MessageGenerationState
 }
+
+/**
+ * Pipeline-specific terminal check: treats [MessageGenerationState.StepCompleted] with
+ * [PipelineStep.FINAL] as terminal, in addition to the base [MessageGenerationState.isTerminal]
+ * states ([Finished], [Failed], [Blocked]).
+ */
+val MessageGenerationState.isPipelineTerminal: Boolean
+    get() = isTerminal ||
+        (this is MessageGenerationState.StepCompleted && stepType == PipelineStep.FINAL)

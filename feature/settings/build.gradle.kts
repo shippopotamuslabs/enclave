@@ -73,8 +73,13 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(project(":core:testing"))
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     // JUnit 5 Engine for test discovery
+    testRuntimeOnly(libs.junit.vintage.engine)
     testRuntimeOnly("org.junit.platform:junit-platform-engine")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

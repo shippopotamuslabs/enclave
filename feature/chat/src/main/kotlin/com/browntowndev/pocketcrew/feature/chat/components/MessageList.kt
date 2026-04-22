@@ -21,22 +21,29 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -56,18 +63,19 @@ import com.browntowndev.pocketcrew.feature.chat.MessageRole
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.feature.chat.ThinkingDataUi
 import com.browntowndev.pocketcrew.feature.chat.fakeLongMessages
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 
 @Composable
 fun MessageList(
+    modifier: Modifier = Modifier,
     messages: List<ChatMessage>,
     hasActiveIndicator: Boolean,
-    isGenerating: Boolean = false,
     activeToolCallBanner: ToolCallBannerUi? = null,
     activeIndicatorMessageId: MessageId? = null,
     isPreview: Boolean = false,
     onEditMessage: (String) -> Unit = { _: String -> },
-    modifier: Modifier = Modifier,
 ) {
     val listState = rememberLazyListState()
 
@@ -76,16 +84,17 @@ fun MessageList(
     val latestUserMessageId = if (latestUserMessageIndex != -1) messages[latestUserMessageIndex].id else null
 
     // Tracking for auto-scroll logic
-
+    val chatId = messages.firstOrNull()?.chatId
     var lastScrolledUserMessageId by remember { mutableStateOf<MessageId?>(null) }
-    var isInitialLoadDone by remember { mutableStateOf(false) }
+    var initialLoadChatId by remember { mutableStateOf<ChatId?>(null) }
 
-    // 1. Initial Load: Scroll to the last item once
-    LaunchedEffect(messages.isNotEmpty()) {
-        if (!isInitialLoadDone && messages.isNotEmpty()) {
+    // 1. Initial Load: Scroll to the last item once per chat
+    LaunchedEffect(chatId, messages.isNotEmpty()) {
+        if (chatId != null && initialLoadChatId != chatId && messages.isNotEmpty()) {
             val lastIndex = if (latestUserMessageIndex != -1) latestUserMessageIndex else messages.lastIndex
             listState.scrollToItem(lastIndex)
-            isInitialLoadDone = true
+            initialLoadChatId = chatId
+            lastScrolledUserMessageId = latestUserMessageId
         }
     }
 
@@ -93,7 +102,7 @@ fun MessageList(
     LaunchedEffect(latestUserMessageId) {
         if (latestUserMessageId != null &&
             latestUserMessageId != lastScrolledUserMessageId &&
-            isInitialLoadDone) {
+            initialLoadChatId == chatId) {
 
             listState.animateScrollToItem(latestUserMessageIndex)
             lastScrolledUserMessageId = latestUserMessageId
@@ -105,6 +114,41 @@ fun MessageList(
     } else {
         BoxWithConstraints(modifier = modifier.fillMaxSize()) {
             val viewportHeight = maxHeight
+
+            // Total item count for scroll-to-bottom targeting
+            val totalItems = if (latestUserMessageIndex != -1)
+                (if (latestUserMessageIndex > 0) latestUserMessageIndex else 0) + 1
+            else messages.size
+
+            // The last LazyColumn item index (the active_interaction column or the last history item).
+            // The FAB should only be visible when this last item is NOT yet the first visible item —
+            // i.e. the user has scrolled up into history. If the user is scrolling *within* the
+            // active_interaction item (which is heightIn(min = viewportHeight) tall), canScrollForward
+            // would still be true, incorrectly showing the FAB. Using firstVisibleItemIndex avoids that.
+            val lastLazyItemIndex = totalItems - 1
+
+            // FAB is logically visible when not at bottom; auto-hides 3s after scrolling stops
+            var fabVisible by remember { mutableStateOf(false) }
+            LaunchedEffect(listState) {
+                snapshotFlow {
+                    listState.isScrollInProgress to
+                        (listState.firstVisibleItemIndex < lastLazyItemIndex)
+                }.collect { (isScrolling, isAboveLastItem) ->
+                    if (isScrolling) {
+                        // Show immediately only when the user has scrolled above the active item
+                        fabVisible = isAboveLastItem
+                    } else {
+                        if (!isAboveLastItem) {
+                            // User is on the last item — hide immediately
+                            fabVisible = false
+                        } else {
+                            // Still above the last item — keep visible for 3 more seconds then hide
+                            delay(3_000)
+                            fabVisible = false
+                        }
+                    }
+                }
+            }
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -132,7 +176,7 @@ fun MessageList(
                 //    scrolling here pins the user message at the top. The rest of the column
                 //    is just empty space if the content is shorter than the viewport.
                 if (latestUserMessageIndex != -1) {
-                    item(key = "active_interaction") {
+                    item(key = "active_interaction_$latestUserMessageId") {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -152,6 +196,54 @@ fun MessageList(
                     }
                 }
             }
+
+            // Scroll-to-bottom FAB — floats above the InputBar at the bottom-right
+            val coroutineScope = rememberCoroutineScope()
+            ScrollToBottomFab(
+                visible = fabVisible,
+                onClick = {
+                    val lastIndex = totalItems - 1
+                    if (lastIndex >= 0) {
+                        coroutineScope.launch { listState.animateScrollToItem(lastIndex) }
+                    }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 12.dp, bottom = 12.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Circular FAB that fades in when the user has scrolled above the bottom,
+ * and triggers a smooth scroll to the last item when tapped.
+ */
+@Composable
+private fun ScrollToBottomFab(
+    visible: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val alpha by animateFloatAsState(
+        targetValue = if (visible) 1f else 0f,
+        animationSpec = tween(durationMillis = 300),
+        label = "scrollToBottomAlpha"
+    )
+
+    // Keep the composable in the tree while fading out so the animation completes
+    if (alpha > 0f || visible) {
+        SmallFloatingActionButton(
+            onClick = onClick,
+            modifier = modifier.graphicsLayer { this.alpha = alpha },
+            shape = CircleShape,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+        ) {
+            Icon(
+                imageVector = Icons.Default.KeyboardArrowDown,
+                contentDescription = "Scroll to bottom",
+            )
         }
     }
 }
@@ -415,7 +507,7 @@ private fun formatThinkingDuration(seconds: Int): String = when {
 @Composable
 private fun PreviewMessageListEmpty() {
     PocketCrewTheme {
-        MessageList(emptyList(), hasActiveIndicator = false, isPreview =  true)
+        MessageList(messages = emptyList(), hasActiveIndicator = false, isPreview =  true)
     }
 }
 
@@ -423,7 +515,7 @@ private fun PreviewMessageListEmpty() {
 @Composable
 private fun PreviewMessageListLong() {
     PocketCrewTheme(darkTheme = true) {
-        MessageList(fakeLongMessages, hasActiveIndicator = true, isPreview =  true)
+        MessageList(messages = fakeLongMessages, hasActiveIndicator = true, isPreview =  true)
     }
 }
 

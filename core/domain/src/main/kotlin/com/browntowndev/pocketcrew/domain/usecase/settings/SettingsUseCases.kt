@@ -16,9 +16,9 @@ interface SettingsPreferencesUseCases {
     val updateCustomPromptText: UpdateCustomPromptTextUseCase
     val updateAllowMemories: UpdateAllowMemoriesUseCase
     val updateSearchEnabled: UpdateSearchEnabledUseCase
-    val updateAlwaysUseVisionModel: UpdateAlwaysUseVisionModelUseCase
     val saveTavilyApiKey: SaveTavilyApiKeyUseCase
     val clearTavilyApiKey: ClearTavilyApiKeyUseCase
+    val updateBackgroundInferenceEnabled: UpdateBackgroundInferenceEnabledUseCase
 }
 
 interface SettingsLocalModelUseCases {
