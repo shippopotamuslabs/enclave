@@ -54,8 +54,10 @@ class ModelFileScanner @Inject constructor(
      * @param expectedModels Map of model types to assets expected from remote config (from cache)
      */
     override suspend fun scanAndCreateDirIfNotExist(
-        expectedModels: Map<ModelType, LocalModelAsset>
+        expectedModels: Map<ModelType, LocalModelAsset>,
+        utilityAssets: List<LocalModelAsset>,
     ): ModelScanResult = withContext(Dispatchers.IO) {
+        val expectedAssets = expectedModels.values + utilityAssets
         val modelsDir = File(context.getExternalFilesDir(null), ModelConfig.MODELS_DIR)
 
         if (!modelsDir.exists()) {
@@ -63,7 +65,7 @@ class ModelFileScanner @Inject constructor(
             if (!created && !modelsDir.exists()) {
                 Log.e(TAG, "Failed to create models directory")
                 return@withContext ModelScanResult(
-                    missingModels = expectedModels.values.toList(),
+                    missingModels = expectedAssets.toList(),
                     partialDownloads = emptyMap(),
                     allValid = false,
                     directoryError = true
@@ -75,8 +77,8 @@ class ModelFileScanner @Inject constructor(
         val partialDownloads = mutableMapOf<String, Long>()
         val invalidModels = mutableListOf<LocalModelAsset>()
 
-        // Iterate over expected models (what we want to have)
-        for ((_, expectedAsset) in expectedModels) {
+        // Iterate over expected assets (what we want to have)
+        for (expectedAsset in expectedAssets) {
             var assetMissing = false
             var assetInvalid = false
             expectedAsset.metadata.requiredArtifacts().forEach { artifact ->

@@ -78,7 +78,12 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         if (result.modelsToDownload.isEmpty()) {
             stateManager.updateStatus(DownloadStatus.READY)
         } else {
-            val initResult = initializeFileProgress(scan, result.allModels, _downloadState.value.currentDownloads)
+            val initResult = initializeFileProgress(
+                scanResult = scan,
+                allModels = result.allModels,
+                existingDownloads = _downloadState.value.currentDownloads,
+                utilityAssets = result.utilityAssets,
+            )
             stateManager.applyProgressInit(initResult)
             stateManager.updateStatus(DownloadStatus.IDLE)
         }
@@ -115,7 +120,12 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         if (!deviceEnvironmentRepository.hasRequiredStorage(15L * 1024 * 1024 * 1024)) {
             val errorMsg = "Insufficient storage space. Need at least 15 GB free."
             logger.info(TAG, "Validation failed - $errorMsg")
-            val initResult = initializeFileProgress(scan, modelsResult.allModels, _downloadState.value.currentDownloads)
+            val initResult = initializeFileProgress(
+                scanResult = scan,
+                allModels = modelsResult.allModels,
+                existingDownloads = _downloadState.value.currentDownloads,
+                utilityAssets = modelsResult.utilityAssets,
+            )
             stateManager.applyProgressInit(initResult)
             stateManager.updateState { copy(status = DownloadStatus.ERROR, errorMessage = errorMsg) }
             return false
@@ -124,13 +134,18 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         logger.info(TAG, "Starting downloads for ${modelsToDownload.size} models (wifiOnly=$wifiOnly)")
         speedTracker.clearAll()
 
-        val initResult = initializeFileProgress(scan, modelsResult.allModels, _downloadState.value.currentDownloads)
+        val initResult = initializeFileProgress(
+            scanResult = scan,
+            allModels = modelsResult.allModels,
+            existingDownloads = _downloadState.value.currentDownloads,
+            utilityAssets = modelsResult.utilityAssets,
+        )
         stateManager.applyProgressInit(initResult)
 
-        val modelsToEnqueue = modelsResult.allModels.filter { (_, asset) ->
+        val assetsToEnqueue = (modelsResult.allModels.values + modelsResult.utilityAssets).filter { asset ->
             modelsToDownload.any { candidate -> candidate.matchesPhysicalAsset(asset) }
         }
-        val fileSpecs = modelsToEnqueue.values
+        val fileSpecs = assetsToEnqueue
             .distinctBy { it.metadata.sha256 }
             .map { asset ->
                 DownloadFileSpec(
@@ -141,6 +156,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
                     huggingFaceModelName = asset.metadata.huggingFaceModelName,
                     source = asset.metadata.source.name,
                     modelFileFormat = asset.metadata.modelFileFormat.name,
+                    utilityType = asset.metadata.utilityType?.name,
                     mmprojRemoteFileName = asset.metadata.mmprojRemoteFileName,
                     mmprojLocalFileName = asset.metadata.mmprojLocalFileName,
                     mmprojSha256 = asset.metadata.mmprojSha256,
@@ -158,9 +174,10 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
 
         logger.info(
             TAG,
-            "Enqueuing ${modelsToEnqueue.size} model slots for ${fileSpecs.size} physical downloads: ${
-                modelsToEnqueue.entries.joinToString { (modelType, asset) ->
-                    "$modelType -> ${asset.configurations.firstOrNull()?.displayName ?: asset.metadata.localFileName}"
+            "Enqueuing ${assetsToEnqueue.size} assets for ${fileSpecs.size} physical downloads: ${
+                assetsToEnqueue.joinToString { asset ->
+                    val label = asset.configurations.firstOrNull()?.displayName ?: asset.metadata.localFileName
+                    asset.metadata.utilityType?.let { "${it.name} -> $label" } ?: label
                 }
             }"
         )

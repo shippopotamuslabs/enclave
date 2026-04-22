@@ -383,7 +383,9 @@ fun InputBar(
                 }
 
                 // Send / Stop
-                val isListening = speechState is SpeechState.Listening || speechState is SpeechState.PartialText
+                val isListening = speechState is SpeechState.ModelLoading ||
+                    speechState is SpeechState.Listening ||
+                    speechState is SpeechState.PartialText
                 val hasSendableContent = (textFieldValue.text.isNotBlank() || selectedImageUri != null) && !isListening
                 val isSendDisabled = (isGenerating || isGlobalInferenceBlocked) && !isGenerating
                 

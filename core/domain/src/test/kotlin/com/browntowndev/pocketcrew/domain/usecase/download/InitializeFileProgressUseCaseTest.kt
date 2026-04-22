@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.config.UtilityType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
@@ -208,6 +209,46 @@ class InitializeFileProgressUseCaseTest {
         assertEquals(1, result.fileProgressList.size)
         assertTrue(result.fileProgressList.first().modelTypes.contains(ModelType.MAIN))
         assertTrue(result.fileProgressList.first().modelTypes.contains(ModelType.FAST))
+    }
+
+    @Test
+    fun invoke_tracksUtilityAssetsWithoutModelTypes() {
+        val utilityAsset = createLocalModelAsset(
+            modelType = ModelType.MAIN,
+            localFileName = "ggml-base.en.bin",
+            sha256 = "whisper-sha",
+            sizeInBytes = 147_964_211L,
+        ).copy(
+            metadata = LocalModelMetadata(
+                id = LocalModelId("utility"),
+                huggingFaceModelName = "ggerganov/whisper.cpp",
+                remoteFileName = "ggml-base.en.bin",
+                localFileName = "ggml-base.en.bin",
+                sha256 = "whisper-sha",
+                sizeInBytes = 147_964_211L,
+                modelFileFormat = ModelFileFormat.BIN,
+                utilityType = UtilityType.WHISPER,
+            ),
+            configurations = emptyList(),
+        )
+        val scanResult = ModelScanResult(
+            missingModels = listOf(utilityAsset),
+            partialDownloads = emptyMap(),
+            allValid = false,
+            directoryError = false,
+        )
+
+        val result = useCase(
+            scanResult = scanResult,
+            allModels = emptyMap(),
+            utilityAssets = listOf(utilityAsset),
+        )
+
+        assertEquals(1, result.fileProgressList.size)
+        assertEquals("ggml-base.en.bin", result.fileProgressList.first().filename)
+        assertTrue(result.fileProgressList.first().modelTypes.isEmpty())
+        assertEquals(1, result.modelsTotal)
+        assertEquals(0, result.modelsComplete)
     }
 
     private fun createLocalModelAsset(

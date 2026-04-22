@@ -7,5 +7,5 @@ class ChatUseCasesImpl @Inject constructor(
     override val generateChatResponseUseCase: GenerateChatResponseUseCase,
     override val getChatUseCase: GetChatUseCase,
     override val mergeMessagesUseCase: MergeMessagesUseCase,
-    override val transcribeSpeechUseCase: TranscribeSpeechUseCase
+    override val listenToSpeechUseCase: ListenToSpeechUseCase,
 ) : ChatUseCases

@@ -12,6 +12,7 @@ data class LocalModelMetadata(
     val sizeInBytes: Long,
     val modelFileFormat: ModelFileFormat,
     val source: DownloadSource = DownloadSource.HUGGING_FACE,
+    val utilityType: UtilityType? = null,
     val isMultimodal: Boolean = false,
     val mmprojRemoteFileName: String? = null,
     val mmprojLocalFileName: String? = null,
