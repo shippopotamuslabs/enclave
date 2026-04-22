@@ -76,17 +76,19 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
     }
 
     @Test
-    fun `background inference does not publish accumulated snapshots from use case`() = runTest {
+    fun `background service start without a state stream does not duplicate persistence or publish snapshots from use case`() = runTest {
         val userMessageId = MessageId("user")
         val assistantMessageId = MessageId("assistant")
         val chatId = ChatId("chat")
         val activeChatTurnSnapshotPort = RecordingActiveChatTurnSnapshotPort()
-        val chatInferenceExecutor = completedFastExecutor("background chunk")
+        val chatRepository = mockk<ChatRepository>(relaxed = true)
+        val chatInferenceExecutor = emptyBackgroundExecutor()
         val useCase = createUseCase(
             userMessageId = userMessageId,
             chatId = chatId,
             chatInferenceExecutor = chatInferenceExecutor,
             activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
+            chatRepository = chatRepository,
         )
 
         useCase(
@@ -99,6 +101,78 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
         ).toList()
 
         assertTrue(activeChatTurnSnapshotPort.published.isEmpty())
+        coVerify(exactly = 0) {
+            chatRepository.persistAllMessageData(
+                messageId = assistantMessageId,
+                modelType = any(),
+                thinkingStartTime = any(),
+                thinkingEndTime = any(),
+                thinkingDuration = any(),
+                thinkingRaw = any(),
+                content = any(),
+                messageState = any(),
+                pipelineStep = any(),
+                tavilySources = any(),
+            )
+        }
+    }
+
+    @Test
+    fun `background service start failure persists the terminal error`() = runTest {
+        val userMessageId = MessageId("user")
+        val assistantMessageId = MessageId("assistant")
+        val chatId = ChatId("chat")
+        val chatRepository = mockk<ChatRepository>(relaxed = true)
+        val chatInferenceExecutor = mockk<ChatInferenceExecutorPort> {
+            every { stop() } returns Unit
+            every {
+                execute(
+                    prompt = any(),
+                    userMessageId = any(),
+                    assistantMessageId = any(),
+                    chatId = any(),
+                    userHasImage = any(),
+                    modelType = any(),
+                    backgroundInferenceEnabled = any(),
+                )
+            } returns flowOf(
+                MessageGenerationState.Failed(
+                    IllegalStateException("service start failed"),
+                    ModelType.FAST,
+                ),
+            )
+        }
+        val useCase = createUseCase(
+            userMessageId = userMessageId,
+            chatId = chatId,
+            chatInferenceExecutor = chatInferenceExecutor,
+            activeChatTurnSnapshotPort = RecordingActiveChatTurnSnapshotPort(),
+            chatRepository = chatRepository,
+        )
+
+        useCase(
+            prompt = "hello",
+            userMessageId = userMessageId,
+            assistantMessageId = assistantMessageId,
+            chatId = chatId,
+            mode = Mode.FAST,
+            backgroundInferenceEnabled = true,
+        ).toList()
+
+        coVerify(exactly = 1) {
+            chatRepository.persistAllMessageData(
+                messageId = assistantMessageId,
+                modelType = ModelType.FAST,
+                thinkingStartTime = any(),
+                thinkingEndTime = any(),
+                thinkingDuration = any(),
+                thinkingRaw = null,
+                content = match { it.contains("Error: service start failed") },
+                messageState = MessageState.COMPLETE,
+                pipelineStep = any(),
+                tavilySources = any(),
+            )
+        }
     }
 
     @Test
@@ -211,6 +285,23 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                 emit(MessageGenerationState.GeneratingText(text, ModelType.FAST))
                 emit(MessageGenerationState.Finished(ModelType.FAST))
             }
+        }
+    }
+
+    private fun emptyBackgroundExecutor(): ChatInferenceExecutorPort {
+        return mockk {
+            every { stop() } returns Unit
+            every {
+                execute(
+                    prompt = any(),
+                    userMessageId = any(),
+                    assistantMessageId = any(),
+                    chatId = any(),
+                    userHasImage = any(),
+                    modelType = any(),
+                    backgroundInferenceEnabled = any(),
+                )
+            } returns emptyFlow()
         }
     }
 

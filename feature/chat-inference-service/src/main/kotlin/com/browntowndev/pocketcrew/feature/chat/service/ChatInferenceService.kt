@@ -33,7 +33,6 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ChatHistoryRehydrator
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatInferenceRequestPreparer
 import com.browntowndev.pocketcrew.domain.usecase.chat.SearchToolPromptComposer
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
-import com.browntowndev.pocketcrew.feature.inference.InferenceEventBus
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -87,9 +86,6 @@ class ChatInferenceService : Service() {
 
     @Inject
     lateinit var loggingPort: LoggingPort
-
-    @Inject
-    lateinit var inferenceEventBus: InferenceEventBus
 
     @Inject
     lateinit var activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort
@@ -317,22 +313,6 @@ class ChatInferenceService : Service() {
         activeChatTurnSnapshotPort.publish(
             key = ActiveChatTurnKey(chatId, assistantMessageId),
             snapshot = snapshot,
-        )
-        emitState(chatId, assistantMessageId, state)
-    }
-
-    private suspend fun emitState(
-        chatId: ChatId,
-        assistantMessageId: MessageId,
-        state: MessageGenerationState,
-    ) {
-        loggingPort.debug(
-            TAG,
-            "emitState chat=${chatId.value} assistantMessageId=${assistantMessageId.value} state=${state::class.simpleName}",
-        )
-        inferenceEventBus.emitChatState(
-            key = InferenceEventBus.ChatRequestKey(chatId, assistantMessageId),
-            state = state,
         )
     }
 

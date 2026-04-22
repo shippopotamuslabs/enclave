@@ -2,34 +2,29 @@ package com.browntowndev.pocketcrew.feature.chat.service
 
 import android.app.ForegroundServiceStartNotAllowedException
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
-import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ChatInferenceExecutorPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.feature.inference.InferenceEventBus
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.transformWhile
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Implementation of [ChatInferenceExecutorPort] that delegates to the Android
+ * Implementation of [ChatInferenceExecutorPort] that starts the Android
  * [ChatInferenceService] foreground service for background-safe execution.
  *
- * Starts the service via [ChatInferenceServiceStarter] and collects the resulting
- * state emissions from [ChatInferenceService]'s SharedFlow. Handles
- * [ForegroundServiceStartNotAllowedException] on Android 12+ by emitting a
- * [MessageGenerationState.Failed] so the UI can fall back to direct execution.
+ * Successful service start returns no state stream. The service owns live
+ * token publication and Room persistence. Only service-start failures emit a
+ * terminal [MessageGenerationState.Failed] so the caller can persist the error.
  */
 @Singleton
 class ChatInferenceServiceExecutor @Inject constructor(
     private val serviceStarter: ChatInferenceServiceStarter,
     private val loggingPort: LoggingPort,
-    private val inferenceEventBus: InferenceEventBus,
 ) : ChatInferenceExecutorPort {
 
     companion object {
@@ -46,18 +41,14 @@ class ChatInferenceServiceExecutor @Inject constructor(
         backgroundInferenceEnabled: Boolean, // Ignored — this executor IS the background path
     ): Flow<MessageGenerationState> {
         return flow {
-            val requestKey = InferenceEventBus.ChatRequestKey(chatId, assistantMessageId)
             loggingPort.info(
                 TAG,
                 "execute() requested chat=${chatId.value} assistantMessageId=${assistantMessageId.value} modelType=${modelType.name} backgroundInferenceEnabled=$backgroundInferenceEnabled",
             )
-            val stateFlow = inferenceEventBus.openChatRequest(requestKey)
-            var terminalSeen = false
-
             try {
                 loggingPort.debug(
                     TAG,
-                    "opening request stream chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
+                    "starting ChatInferenceService chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
                 )
                 serviceStarter.startService(
                     prompt = prompt,
@@ -69,41 +60,15 @@ class ChatInferenceServiceExecutor @Inject constructor(
                 )
                 loggingPort.info(
                     TAG,
-                    "service start returned chat=${chatId.value} assistantMessageId=${assistantMessageId.value}; collecting states",
-                )
-                emitAll(
-                    stateFlow.transformWhile { state ->
-                        loggingPort.debug(
-                            TAG,
-                            "state received chat=${chatId.value} assistantMessageId=${assistantMessageId.value} state=${state::class.simpleName}",
-                        )
-                        emit(state)
-                        val terminal = state.isTerminal
-                        if (terminal) {
-                            terminalSeen = true
-                            loggingPort.info(
-                                TAG,
-                                "terminal state received chat=${chatId.value} assistantMessageId=${assistantMessageId.value} state=${state::class.simpleName}",
-                            )
-                        }
-                        !terminal
-                    }
+                    "service start accepted chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
                 )
             } catch (e: ForegroundServiceStartNotAllowedException) {
-                terminalSeen = true
-                loggingPort.error(TAG, "ForegroundServiceStartNotAllowedException for chat $chatId", e)
+                loggingPort.error(TAG, "Foreground service start was rejected for chat=${chatId.value}", e)
                 emit(MessageGenerationState.Failed(e, modelType))
             } catch (e: Exception) {
                 if (e is CancellationException) throw e
-                terminalSeen = true
-                loggingPort.error(TAG, "Failed to start or collect ChatInferenceService for chat $chatId", e)
+                loggingPort.error(TAG, "Failed to start ChatInferenceService for chat=${chatId.value}", e)
                 emit(MessageGenerationState.Failed(e, modelType))
-            } finally {
-                loggingPort.debug(
-                    TAG,
-                    "clearing request stream chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
-                )
-                inferenceEventBus.clearChatRequest(requestKey)
             }
         }
     }
@@ -111,6 +76,4 @@ class ChatInferenceServiceExecutor @Inject constructor(
     override fun stop() {
         serviceStarter.stopInference()
     }
-
-
 }

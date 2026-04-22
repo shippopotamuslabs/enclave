@@ -168,7 +168,7 @@ class ChatViewModelTest {
 
         speechEvents = MutableSharedFlow(extraBufferCapacity = 8)
         listenToSpeechUseCase = mockk()
-        every { listenToSpeechUseCase.invoke(any()) } returns speechEvents
+        every { listenToSpeechUseCase.invoke(any(), any()) } returns speechEvents
         every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
 
         coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
@@ -228,33 +228,24 @@ class ChatViewModelTest {
 
     @Test
     fun `onMicClick starts listening when Idle`() = runTest {
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
         chatViewModel.onMicClick()
-        verify(exactly = 1) { listenToSpeechUseCase.invoke(any()) }
-    }
-
-    @Test
-    fun `onMicClick stops listening when Listening`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        chatViewModel.onMicClick()
-        speechEvents.emit(SpeechState.Listening)
-        runCurrent()
-        chatViewModel.onMicClick()
-        runCurrent()
-        assertEquals(SpeechState.Idle, chatViewModel.uiState.value.speechState)
+        coVerify(exactly = 1) { listenToSpeechUseCase.invoke(any(), any()) }
         collectJob.cancel()
     }
 
     @Test
-    fun `speechState PartialText updates inputText`() = runTest {
+    fun `onMicClick sets stop signal when Listening`() = runTest {
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        try {
-            chatViewModel.onMicClick()
-            speechEvents.emit(SpeechState.PartialText("Hello"))
-            runCurrent()
-            assertEquals("Hello", chatViewModel.uiState.value.inputText)
-        } finally {
-            collectJob.cancel()
-        }
+        chatViewModel.onMicClick()
+        speechEvents.emit(SpeechState.Listening(0f))
+        runCurrent()
+        chatViewModel.onMicClick()
+        runCurrent()
+        // Verify that the stop signal was sent. The actual state change to Idle will happen
+        // when the use case processes the signal and completes.
+        coVerify { listenToSpeechUseCase.invoke(any(), match { it.value }) }
+        collectJob.cancel()
     }
 
     @Test
@@ -265,6 +256,20 @@ class ChatViewModelTest {
             speechEvents.emit(SpeechState.FinalText("Hello world"))
             runCurrent()
             assertEquals("Hello world", chatViewModel.uiState.value.inputText)
+        } finally {
+            collectJob.cancel()
+        }
+    }
+
+    @Test
+    fun `speechState Error updates inputText`() = runTest {
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        try {
+            chatViewModel.onMicClick()
+            speechEvents.emit(SpeechState.Error("Some error"))
+            runCurrent()
+            // Error state should not clear input text
+            assertEquals("", chatViewModel.uiState.value.inputText)
         } finally {
             collectJob.cancel()
         }
@@ -1065,9 +1070,100 @@ class ChatViewModelTest {
                 "Assistant message must not disappear during active snapshot to Room handoff.",
             )
             assertEquals("final answer", chatViewModel.uiState.value.messages.single().content.text)
-            assertNull(activeChatTurnStore.observe(key).first())
+            assertNotNull(activeChatTurnStore.observe(key).first())
         } finally {
             collectJob.cancel()
+        }
+    }
+
+    @Test
+    fun `uiState keeps snapshot text until Room catches up and never emits an empty assistant body`() = runTest {
+        val chatId = ChatId("chat")
+        val assistantMessageId = MessageId("assistant")
+        val key = ActiveChatTurnKey(chatId, assistantMessageId)
+        val dbMessages = MutableStateFlow(
+            listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "partial",
+                    state = MessageState.GENERATING,
+                )
+            )
+        )
+        coEvery { chatUseCases.getChat(chatId) } returns dbMessages
+        chatViewModel = createViewModel(SavedStateHandle(mapOf("chatId" to chatId.value)))
+        activeChatTurnStore.publish(
+            key = key,
+            snapshot = AccumulatedMessages(
+                messages = mapOf(
+                    assistantMessageId to createAssistantSnapshot(
+                        id = assistantMessageId,
+                        content = "streaming answer",
+                        state = MessageState.COMPLETE,
+                    )
+                )
+            ),
+        )
+
+        chatViewModel.uiState.test {
+            runCurrent()
+            var state = awaitItem()
+            while (state.messages.none { it.id == assistantMessageId }) {
+                state = awaitItem()
+            }
+
+            val snapshotText = state.messages.single { it.id == assistantMessageId }.content.text
+            assertEquals("streaming answer", snapshotText)
+            assertTrue(snapshotText.isNotBlank())
+
+            dbMessages.value = listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "final answer with persisted suffix",
+                    state = MessageState.COMPLETE,
+                )
+            )
+            runCurrent()
+
+            var finalText = snapshotText
+            while (finalText != "final answer with persisted suffix") {
+                state = awaitItem()
+                val assistantMessage = state.messages.singleOrNull { it.id == assistantMessageId }
+                assertNotNull(assistantMessage)
+                finalText = requireNotNull(assistantMessage).content.text
+                assertTrue(finalText.isNotBlank())
+            }
+
+            assertEquals("final answer with persisted suffix", finalText)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `uiState renders completed Room message when no active snapshot is available`() = runTest {
+        val chatId = ChatId("chat")
+        val assistantMessageId = MessageId("assistant")
+        val dbMessages = MutableStateFlow(
+            listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "final answer",
+                    state = MessageState.COMPLETE,
+                )
+            )
+        )
+        coEvery { chatUseCases.getChat(chatId) } returns dbMessages
+        chatViewModel = createViewModel(SavedStateHandle(mapOf("chatId" to chatId.value)))
+
+        chatViewModel.uiState.test {
+            runCurrent()
+            var state = awaitItem()
+            while (state.messages.none { it.id == assistantMessageId }) {
+                state = awaitItem()
+            }
+
+            assertEquals("final answer", state.messages.single { it.id == assistantMessageId }.content.text)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
