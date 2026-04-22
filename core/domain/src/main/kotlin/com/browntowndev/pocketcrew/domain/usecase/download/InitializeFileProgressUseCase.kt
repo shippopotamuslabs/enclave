@@ -19,7 +19,8 @@ class InitializeFileProgressUseCase @Inject constructor() {
     operator fun invoke(
         scanResult: ModelScanResult,
         allModels: Map<ModelType, LocalModelAsset>,
-        existingDownloads: List<FileProgress> = emptyList()
+        existingDownloads: List<FileProgress> = emptyList(),
+        utilityAssets: List<LocalModelAsset> = emptyList(),
     ): FileProgressInitResult {
         val existingFailedFiles = existingDownloads
             .filter { it.status == FileStatus.FAILED }
@@ -29,7 +30,7 @@ class InitializeFileProgressUseCase @Inject constructor() {
         val partialDownloadAssets = scanResult.partialDownloads.keys
             .filter { filename -> missingAssets.none { filename == it.metadata.localFileName } }
             .mapNotNull { filename ->
-                allModels.values.find { filename == it.metadata.localFileName }
+                (allModels.values + utilityAssets).find { filename == it.metadata.localFileName }
             }
 
         val allAssetsToDownload = (missingAssets + partialDownloadAssets).distinctBy { it.metadata.sha256 }
@@ -65,8 +66,9 @@ class InitializeFileProgressUseCase @Inject constructor() {
             sha256ToModelTypes[asset.metadata.sha256] ?: emptyList()
         }.distinct()
         
-        val totalModels = allModels.size
-        val modelsMissing = allMissingModelTypes.size
+        val utilityModelsMissing = allAssetsToDownload.count { asset -> asset.metadata.utilityType != null }
+        val totalModels = allModels.size + utilityAssets.size
+        val modelsMissing = allMissingModelTypes.size + utilityModelsMissing
         val modelsComplete = totalModels - modelsMissing
         
         val totalBytes = fileProgressList.sumOf { it.totalBytes }

@@ -9,4 +9,6 @@ import kotlinx.serialization.Serializable
 enum class ModelFileFormat(val extension: String) {
     LITERTLM(".litertlm"),
     GGUF(".gguf"),
+    BIN(".bin"),
+    ONNX(".onnx"),
 }

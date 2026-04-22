@@ -148,4 +148,25 @@ class ModelDownloadWorkerTest {
         assertNotNull(result)
         assertEquals("HUGGING_FACE", result.source)
     }
+
+    @Test
+    fun `parseFileSpecFromJson parses utilityType`() {
+        val jsonStr = """
+            {
+                "remoteFileName": "ggml-base.en.bin",
+                "localFileName": "ggml-base.en.bin",
+                "sha256": "whisper-sha",
+                "sizeInBytes": 147964211,
+                "huggingFaceModelName": "ggerganov/whisper.cpp",
+                "source": "HUGGING_FACE",
+                "modelFileFormat": "BIN",
+                "utilityType": "WHISPER"
+            }
+        """.trimIndent()
+
+        val result = json.decodeFromString<DownloadFileSpec>(jsonStr)
+
+        assertEquals("BIN", result.modelFileFormat)
+        assertEquals("WHISPER", result.utilityType)
+    }
 }

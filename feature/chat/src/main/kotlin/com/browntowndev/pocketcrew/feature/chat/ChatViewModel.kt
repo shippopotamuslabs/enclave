@@ -44,6 +44,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -92,7 +93,8 @@ class ChatViewModel @Inject constructor(
     val initialChatId: ChatId?
         get() = savedStateHandle.get<String>("chatId")?.let { ChatId(it) }
 
-    val speechState: StateFlow<SpeechState> = chatUseCases.transcribeSpeechUseCase.speechState
+    private val _speechState = MutableStateFlow<SpeechState>(SpeechState.Idle)
+    val speechState: StateFlow<SpeechState> = _speechState.asStateFlow()
 
     // Mutable state for input text (not persisted, managed locally)
     private val _inputText = MutableStateFlow("")
@@ -127,6 +129,7 @@ class ChatViewModel @Inject constructor(
 
     // Job for tracking inference flow collection (for cancellation in onCleared)
     private var inferenceJob: Job? = null
+    private var speechJob: Job? = null
 
     private val _requestedTurnKey = MutableStateFlow<ActiveChatTurnKey?>(null)
     private val _acknowledgedTurnKeys = MutableStateFlow<Set<ActiveChatTurnKey>>(emptySet())
@@ -221,7 +224,7 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun observeSpeechResults() {
-        chatUseCases.transcribeSpeechUseCase.speechState
+        _speechState
             .onEach { state ->
                 when (state) {
                     is SpeechState.PartialText -> {
@@ -333,7 +336,7 @@ class ChatViewModel @Inject constructor(
         _inputText,
         _selectedMode,
         _selectedImageUri,
-        chatUseCases.transcribeSpeechUseCase.speechState,
+        _speechState,
     ) { settings: SettingsData, inputText: String, selectedMode: ChatModeUi, selectedImageUri: String?, speechState: SpeechState ->
         UiInputs(settings, inputText, selectedMode, selectedImageUri, speechState)
     }
@@ -610,7 +613,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun createNewChat() {
-        chatUseCases.transcribeSpeechUseCase.stopListening()
+        stopListening()
         activeTurnKeyFlow.value?.let { key ->
             viewModelScope.launch {
                 activeChatTurnSnapshotPort.clear(key)
@@ -694,12 +697,34 @@ class ChatViewModel @Inject constructor(
     }
 
     fun onMicClick() {
-        val currentState = chatUseCases.transcribeSpeechUseCase.speechState.value
-        if (currentState is SpeechState.Listening || currentState is SpeechState.PartialText) {
-            chatUseCases.transcribeSpeechUseCase.stopListening()
+        val currentState = _speechState.value
+        if (
+            currentState is SpeechState.ModelLoading ||
+            currentState is SpeechState.Listening ||
+            currentState is SpeechState.PartialText
+        ) {
+            stopListening()
         } else {
-            chatUseCases.transcribeSpeechUseCase.startListening(_inputText.value)
+            startListening()
         }
+    }
+
+    private fun startListening() {
+        speechJob?.cancel()
+        speechJob = chatUseCases.listenToSpeechUseCase(_inputText.value)
+            .onEach { state ->
+                _speechState.value = state
+            }
+            .catch { cause ->
+                _speechState.value = SpeechState.Error(cause.message ?: "Speech transcription failed.")
+            }
+            .launchIn(viewModelScope)
+    }
+
+    private fun stopListening() {
+        speechJob?.cancel()
+        speechJob = null
+        _speechState.value = SpeechState.Idle
     }
 
     /**
@@ -799,5 +824,6 @@ class ChatViewModel @Inject constructor(
         super.onCleared()
         // Cancel any ongoing inference flow
         inferenceJob?.cancel()
+        stopListening()
     }
 }

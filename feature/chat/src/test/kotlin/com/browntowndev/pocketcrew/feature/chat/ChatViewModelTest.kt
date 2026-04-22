@@ -44,8 +44,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MergeMessagesUseCase
-import com.browntowndev.pocketcrew.domain.usecase.chat.TranscribeSpeechUseCase
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.feature.inference.ActiveChatTurnStore
@@ -109,8 +109,8 @@ class ChatViewModelTest {
     private lateinit var loggingPort: LoggingPort
     private lateinit var errorHandler: ViewModelErrorHandler
     private lateinit var activeChatTurnStore: ActiveChatTurnStore
-    private lateinit var transcribeSpeechUseCase: TranscribeSpeechUseCase
-    private lateinit var speechStateFlow: MutableStateFlow<SpeechState>
+    private lateinit var listenToSpeechUseCase: ListenToSpeechUseCase
+    private lateinit var speechEvents: MutableSharedFlow<SpeechState>
 
     @BeforeEach
     fun setup() {
@@ -166,10 +166,10 @@ class ChatViewModelTest {
         // Stub coroutineExceptionHandler to return a real one to avoid ClassCastException with MockK
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
 
-        speechStateFlow = MutableStateFlow(SpeechState.Idle)
-        transcribeSpeechUseCase = mockk(relaxed = true)
-        every { transcribeSpeechUseCase.speechState } returns speechStateFlow
-        every { chatUseCases.transcribeSpeechUseCase } returns transcribeSpeechUseCase
+        speechEvents = MutableSharedFlow(extraBufferCapacity = 8)
+        listenToSpeechUseCase = mockk()
+        every { listenToSpeechUseCase.invoke(any()) } returns speechEvents
+        every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
 
         coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
         every { chatUseCases.mergeMessagesUseCase } returns MergeMessagesUseCase()
@@ -228,23 +228,28 @@ class ChatViewModelTest {
 
     @Test
     fun `onMicClick starts listening when Idle`() = runTest {
-        speechStateFlow.value = SpeechState.Idle
         chatViewModel.onMicClick()
-        verify(exactly = 1) { transcribeSpeechUseCase.startListening(any()) }
+        verify(exactly = 1) { listenToSpeechUseCase.invoke(any()) }
     }
 
     @Test
     fun `onMicClick stops listening when Listening`() = runTest {
-        speechStateFlow.value = SpeechState.Listening
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
         chatViewModel.onMicClick()
-        verify(exactly = 1) { transcribeSpeechUseCase.stopListening() }
+        speechEvents.emit(SpeechState.Listening)
+        runCurrent()
+        chatViewModel.onMicClick()
+        runCurrent()
+        assertEquals(SpeechState.Idle, chatViewModel.uiState.value.speechState)
+        collectJob.cancel()
     }
 
     @Test
     fun `speechState PartialText updates inputText`() = runTest {
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
         try {
-            speechStateFlow.value = SpeechState.PartialText("Hello")
+            chatViewModel.onMicClick()
+            speechEvents.emit(SpeechState.PartialText("Hello"))
             runCurrent()
             assertEquals("Hello", chatViewModel.uiState.value.inputText)
         } finally {
@@ -256,7 +261,8 @@ class ChatViewModelTest {
     fun `speechState FinalText updates inputText`() = runTest {
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
         try {
-            speechStateFlow.value = SpeechState.FinalText("Hello world")
+            chatViewModel.onMicClick()
+            speechEvents.emit(SpeechState.FinalText("Hello world"))
             runCurrent()
             assertEquals("Hello world", chatViewModel.uiState.value.inputText)
         } finally {

@@ -25,6 +25,7 @@ dependencyResolutionManagement {
 rootProject.name = "Pocket Crew"
 include(":app")
 include(":llama-android")
+include(":whisper-android")
 
 // Core modules
 include(":core:domain")

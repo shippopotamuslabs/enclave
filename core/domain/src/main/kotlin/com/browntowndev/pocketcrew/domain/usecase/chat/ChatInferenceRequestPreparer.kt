@@ -53,6 +53,9 @@ class ChatInferenceRequestPreparer(
             config?.isLocal == true -> when (config.localModelFormat) {
                 ModelFileFormat.LITERTLM -> ToolCallStrategy.LITE_RT_NATIVE
                 ModelFileFormat.GGUF -> ToolCallStrategy.JSON_XML_ENVELOPE
+                ModelFileFormat.BIN,
+                ModelFileFormat.ONNX,
+                -> ToolCallStrategy.JSON_XML_ENVELOPE
                 null -> ToolCallStrategy.JSON_XML_ENVELOPE
             }
             config?.isLocal == false -> ToolCallStrategy.SDK_NATIVE

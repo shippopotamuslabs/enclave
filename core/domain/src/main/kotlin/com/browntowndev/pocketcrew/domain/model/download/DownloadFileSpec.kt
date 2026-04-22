@@ -26,6 +26,7 @@ data class DownloadFileSpec(
     val huggingFaceModelName: String = "",
     val source: String = "HUGGING_FACE",
     val modelFileFormat: String = "LITERTLM",
+    val utilityType: String? = null,
     val mmprojRemoteFileName: String? = null,
     val mmprojLocalFileName: String? = null,
     val mmprojSha256: String? = null,

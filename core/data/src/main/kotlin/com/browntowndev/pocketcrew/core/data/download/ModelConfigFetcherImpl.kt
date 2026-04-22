@@ -88,12 +88,15 @@ class ModelConfigFetcherImpl @Inject constructor(
                 sizeInBytes = asset.sizeInBytes,
                 modelFileFormat = asset.modelFileFormat,
                 source = asset.source,
+                utilityType = asset.utilityType,
                 isMultimodal = asset.isMultimodal,
                 mmprojRemoteFileName = asset.mmprojFileName,
                 mmprojLocalFileName = asset.mmprojFileName,
                 mmprojSha256 = asset.mmprojSha256,
                 mmprojSizeInBytes = asset.mmprojSizeInBytes,
             )
+
+            validateAsset(asset)
 
             val configurations = asset.configurations.map { config ->
                 LocalModelConfiguration(
@@ -118,6 +121,19 @@ class ModelConfigFetcherImpl @Inject constructor(
                 metadata = metadata,
                 configurations = configurations
             )
+        }
+    }
+
+    private fun validateAsset(asset: RemoteModelAsset) {
+        if (asset.utilityType != null) {
+            require(asset.configurations.isEmpty()) {
+                "Utility asset ${asset.fileName} must not declare LLM configurations."
+            }
+            return
+        }
+
+        require(asset.configurations.isNotEmpty()) {
+            "Non-utility asset ${asset.fileName} must declare at least one configuration."
         }
     }
 }

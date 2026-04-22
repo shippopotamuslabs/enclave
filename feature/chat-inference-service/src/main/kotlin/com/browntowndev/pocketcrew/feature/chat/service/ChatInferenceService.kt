@@ -103,6 +103,7 @@ class ChatInferenceService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var currentJob: Job? = null
     private var currentChatId: ChatId? = null
+    private var isStopping = false
 
     override fun onCreate() {
         super.onCreate()
@@ -121,6 +122,7 @@ class ChatInferenceService : Service() {
         )
         when (intent?.action) {
             ACTION_START -> {
+                isStopping = false
                 val prompt = intent.getStringExtra(EXTRA_PROMPT) ?: ""
                 val userMessageId = MessageId(intent.getStringExtra(EXTRA_USER_MESSAGE_ID) ?: "")
                 val assistantMessageId = MessageId(intent.getStringExtra(EXTRA_ASSISTANT_MESSAGE_ID) ?: "")
@@ -136,9 +138,14 @@ class ChatInferenceService : Service() {
             }
             ACTION_STOP -> {
                 loggingPort.info(TAG, "ACTION_STOP received")
-                stopInference()
-                stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
-                stopSelf()
+                if (!isStopping) {
+                    isStopping = true
+                    stopInference()
+                    stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
+                    stopSelf()
+                } else {
+                    loggingPort.info(TAG, "Already stopping, ignoring ACTION_STOP")
+                }
             }
         }
         return START_NOT_STICKY

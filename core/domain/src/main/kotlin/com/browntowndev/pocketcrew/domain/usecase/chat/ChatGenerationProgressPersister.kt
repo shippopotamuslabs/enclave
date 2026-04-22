@@ -67,7 +67,7 @@ class ChatGenerationProgressSession internal constructor(
     }
 
     suspend fun flush(markIncompleteAsCancelled: Boolean) {
-        if (accumulatorManager.messages.isEmpty()) return
+        if (accumulatorManager.messages.isEmpty() && !markIncompleteAsCancelled) return
 
         markExtractedSources()
         if (markIncompleteAsCancelled) {

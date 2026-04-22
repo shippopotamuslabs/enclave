@@ -14,6 +14,7 @@ import com.browntowndev.pocketcrew.core.data.download.HashingService
 import com.browntowndev.pocketcrew.core.data.download.ModelConfigFetcherImpl
 import com.browntowndev.pocketcrew.core.data.download.ModelDownloadOrchestratorImpl
 import com.browntowndev.pocketcrew.core.data.download.ModelFileScanner
+import com.browntowndev.pocketcrew.core.data.download.UtilityModelFileResolver
 import com.browntowndev.pocketcrew.core.data.download.remote.HttpFileDownloader
 import com.browntowndev.pocketcrew.core.data.download.remote.DynamicModelUrlProvider
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
@@ -28,8 +29,10 @@ import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MIGRATION_1_2
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
+import com.browntowndev.pocketcrew.core.data.media.AndroidAudioCapture
+import com.browntowndev.pocketcrew.core.data.media.AndroidAudioRecordFactory
 import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
-import com.browntowndev.pocketcrew.core.data.media.AndroidSpeechRecognitionService
+import com.browntowndev.pocketcrew.core.data.media.AudioRecordFactory
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelCatalogRepositoryImpl
@@ -53,8 +56,8 @@ import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
+import com.browntowndev.pocketcrew.domain.port.media.AudioCapturePort
 import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
-import com.browntowndev.pocketcrew.domain.port.media.SpeechRecognitionPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
@@ -73,6 +76,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPo
 import com.browntowndev.pocketcrew.domain.port.repository.PipelineStateRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+import com.browntowndev.pocketcrew.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.pocketcrew.domain.qualifier.PipelineDataStore
 import com.browntowndev.pocketcrew.domain.util.Clock
 import com.browntowndev.pocketcrew.domain.util.SystemClock
@@ -209,7 +213,11 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindSpeechRecognitionPort(impl: AndroidSpeechRecognitionService): SpeechRecognitionPort
+    abstract fun bindAudioCapturePort(impl: AndroidAudioCapture): AudioCapturePort
+
+    @Binds
+    @Singleton
+    abstract fun bindAudioRecordFactory(impl: AndroidAudioRecordFactory): AudioRecordFactory
 
     @Binds
     @Singleton
@@ -246,6 +254,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindModelConfigFetcher(impl: ModelConfigFetcherImpl): ModelConfigFetcherPort
+
+    @Binds
+    @Singleton
+    abstract fun bindUtilityModelFileResolver(impl: UtilityModelFileResolver): UtilityModelFilePort
 
     @Binds
     @Singleton
