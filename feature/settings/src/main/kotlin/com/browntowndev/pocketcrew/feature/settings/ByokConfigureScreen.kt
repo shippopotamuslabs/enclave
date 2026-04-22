@@ -74,14 +74,13 @@ fun ByokConfigureRoute(
         onSelectReusableApiCredential = viewModel::onSelectReusableApiCredential,
         onFetchApiModels = viewModel::onFetchApiModels,
         onUpdateModelSearchQuery = viewModel::onUpdateModelSearchQuery,
-        onUpdateModelProviderFilter = viewModel::onUpdateModelProviderFilter,
+        onToggleModelProviderFilter = viewModel::onToggleModelProviderFilter,
+        onClearModelProviderFilters = viewModel::onClearModelProviderFilters,
         onUpdateModelSortOption = viewModel::onUpdateModelSortOption,
         onSaveApiCredentials = {
-            viewModel.onSaveApiCredentials(onSuccess = { _, configUi ->
-                if (configUi == null) {
-                    viewModel.onBackToByokList()
-                    onNavigateBack()
-                }
+            viewModel.onSaveApiCredentials(onSuccess = { _, _ ->
+                viewModel.onBackToByokList()
+                onNavigateBack()
             })
         },
         onSaveApiModelConfig = {
@@ -117,7 +116,8 @@ fun ByokConfigureScreen(
     onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
     onFetchApiModels: () -> Unit,
     onUpdateModelSearchQuery: (String) -> Unit,
-    onUpdateModelProviderFilter: (String?) -> Unit,
+    onToggleModelProviderFilter: (String) -> Unit,
+    onClearModelProviderFilters: () -> Unit,
     onUpdateModelSortOption: (ModelSortOption) -> Unit,
     onSaveApiCredentials: () -> Unit,
     onSaveApiModelConfig: () -> Unit,
@@ -263,14 +263,15 @@ fun ByokConfigureScreen(
                     },
                     isFetchingModels = uiState.apiProviderEditor.discovery.isLoading,
                     searchQuery = uiState.apiProviderEditor.discovery.searchQuery,
-                    providerFilter = uiState.apiProviderEditor.discovery.providerFilter,
+                    providerFilters = uiState.apiProviderEditor.discovery.providerFilters,
                     sortOption = uiState.apiProviderEditor.discovery.sortOption,
                     onAssetChange = onApiModelAssetFieldChange,
                     onApiKeyChange = onApiKeyChange,
                     onSelectReusableCredential = onSelectReusableApiCredential,
                     onFetchModels = onFetchApiModels,
                     onUpdateSearchQuery = onUpdateModelSearchQuery,
-                    onUpdateProviderFilter = onUpdateModelProviderFilter,
+                    onToggleProviderFilter = onToggleModelProviderFilter,
+                    onClearProviderFilters = onClearModelProviderFilters,
                     onUpdateSortOption = onUpdateModelSortOption
                 )
             }

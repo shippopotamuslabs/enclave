@@ -29,7 +29,7 @@ fun SettingsRoute(
         onThemeChange = viewModel::onThemeChange,
         onHapticPressChange = viewModel::onHapticPressChange,
         onHapticResponseChange = viewModel::onHapticResponseChange,
-        onAlwaysUseVisionModelChange = viewModel::onAlwaysUseVisionModelChange,
+        onBackgroundInferenceChange = viewModel::onBackgroundInferenceChange,
         onShowCustomizationSheet = viewModel::onShowCustomizationSheet,
         onShowDataControlsSheet = viewModel::onShowDataControlsSheet,
         onShowMemoriesSheet = viewModel::onShowMemoriesSheet,

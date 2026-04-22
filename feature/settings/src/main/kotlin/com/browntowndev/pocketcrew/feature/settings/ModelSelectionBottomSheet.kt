@@ -9,11 +9,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.ListItem
@@ -22,6 +30,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -37,10 +47,11 @@ fun ModelSelectionBottomSheet(
     availableModels: List<DiscoveredApiModelUi>,
     filteredModels: List<DiscoveredApiModelUi>,
     searchQuery: String,
-    providerFilter: String?,
+    providerFilters: Set<String>,
     sortOption: ModelSortOption,
     onUpdateSearchQuery: (String) -> Unit,
-    onUpdateProviderFilter: (String?) -> Unit,
+    onToggleProviderFilter: (String) -> Unit,
+    onClearProviderFilters: () -> Unit,
     onUpdateSortOption: (ModelSortOption) -> Unit,
     onModelSelected: (String) -> Unit,
     onDismissRequest: () -> Unit
@@ -55,10 +66,11 @@ fun ModelSelectionBottomSheet(
             availableModels = availableModels,
             filteredModels = filteredModels,
             searchQuery = searchQuery,
-            providerFilter = providerFilter,
+            providerFilters = providerFilters,
             sortOption = sortOption,
             onUpdateSearchQuery = onUpdateSearchQuery,
-            onUpdateProviderFilter = onUpdateProviderFilter,
+            onToggleProviderFilter = onToggleProviderFilter,
+            onClearProviderFilters = onClearProviderFilters,
             onUpdateSortOption = onUpdateSortOption,
             onModelSelected = onModelSelected,
             onDismissRequest = onDismissRequest
@@ -71,157 +83,274 @@ fun ModelSelectionContent(
     availableModels: List<DiscoveredApiModelUi>,
     filteredModels: List<DiscoveredApiModelUi>,
     searchQuery: String,
-    providerFilter: String?,
+    providerFilters: Set<String>,
     sortOption: ModelSortOption,
     onUpdateSearchQuery: (String) -> Unit,
-    onUpdateProviderFilter: (String?) -> Unit,
+    onToggleProviderFilter: (String) -> Unit,
+    onClearProviderFilters: () -> Unit,
     onUpdateSortOption: (ModelSortOption) -> Unit,
     onModelSelected: (String) -> Unit,
     onDismissRequest: () -> Unit
 ) {
+    var isProviderFiltering by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .fillMaxHeight(0.9f)
             .padding(horizontal = 20.dp)
             .padding(bottom = 32.dp)
     ) {
+        val providers = androidx.compose.runtime.remember(availableModels) {
+            availableModels.mapNotNull { it.providerName }.distinct().sorted()
+        }
+        val filteredProviders = androidx.compose.runtime.remember(providers, searchQuery, isProviderFiltering) {
+            if (isProviderFiltering) {
+                providers.filter { it.contains(searchQuery, ignoreCase = true) }
+            } else {
+                emptyList()
+            }
+        }
+
         // Header
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onUpdateSearchQuery,
-            label = { Text("Search models") },
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            singleLine = true
-        )
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (isProviderFiltering) {
+                androidx.compose.material3.IconButton(onClick = { 
+                    onUpdateSearchQuery("")
+                    isProviderFiltering = false 
+                }) {
+                    androidx.compose.material3.Icon(
+                        Icons.Default.ArrowBack, 
+                        contentDescription = "Back to models"
+                    )
+                }
+            } else {
+                androidx.compose.material3.FilledTonalIconButton(
+                    onClick = {
+                        onUpdateSearchQuery("")
+                        isProviderFiltering = true
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    androidx.compose.material3.Icon(
+                        Icons.Default.FilterList, 
+                        contentDescription = "Filter by provider"
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onUpdateSearchQuery,
+                label = { Text(if (isProviderFiltering) "Search providers" else "Search models") },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true,
+                trailingIcon = if (searchQuery.isNotEmpty()) {
+                    {
+                        androidx.compose.material3.IconButton(onClick = { onUpdateSearchQuery("") }) {
+                            androidx.compose.material3.Icon(
+                                Icons.Default.Close, 
+                                contentDescription = "Clear search"
+                            )
+                        }
+                    }
+                } else null
+            )
+        }
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        val providers = availableModels.mapNotNull { it.providerName }.distinct().sorted()
-        if (providers.size > 1) {
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                item {
-                    FilterChip(
-                        selected = providerFilter == null,
-                        onClick = { onUpdateProviderFilter(null) },
-                        label = { Text("All") }
-                    )
-                }
-                items(providers.size) { index ->
-                    val provider = providers[index]
-                    FilterChip(
-                        selected = providerFilter == provider,
-                        onClick = { onUpdateProviderFilter(provider) },
-                        label = { Text(provider) }
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-        
-        val hasCreated = availableModels.any { it.created != null }
-        val hasPrice = availableModels.any { it.promptPrice != null || it.completionPrice != null }
-        
-        if (hasCreated || hasPrice) {
+        if (!isProviderFiltering) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
             ) {
-                FilterChip(
-                    selected = sortOption == ModelSortOption.A_TO_Z,
-                    onClick = { onUpdateSortOption(ModelSortOption.A_TO_Z) },
-                    label = { Text("A-Z") }
-                )
-                if (hasCreated) {
+        
+                val hasCreated = availableModels.any { it.created != null }
+                val hasPrice = availableModels.any { it.promptPrice != null || it.completionPrice != null }
+                
+                if (hasCreated || hasPrice) {
                     FilterChip(
-                        selected = sortOption == ModelSortOption.NEWEST,
-                        onClick = { onUpdateSortOption(ModelSortOption.NEWEST) },
-                        label = { Text("Newest") }
+                        selected = sortOption == ModelSortOption.A_TO_Z,
+                        onClick = { onUpdateSortOption(ModelSortOption.A_TO_Z) },
+                        label = { Text("A-Z") }
                     )
+                    if (hasCreated) {
+                        FilterChip(
+                            selected = sortOption == ModelSortOption.NEWEST,
+                            onClick = { onUpdateSortOption(ModelSortOption.NEWEST) },
+                            label = { Text("Newest") }
+                        )
+                    }
+                    if (hasPrice) {
+                        FilterChip(
+                            selected = sortOption == ModelSortOption.PRICE_LOW_TO_HIGH,
+                            onClick = { onUpdateSortOption(ModelSortOption.PRICE_LOW_TO_HIGH) },
+                            label = { Text("Price") }
+                        )
+                    }
                 }
-                if (hasPrice) {
-                    FilterChip(
-                        selected = sortOption == ModelSortOption.PRICE_LOW_TO_HIGH,
-                        onClick = { onUpdateSortOption(ModelSortOption.PRICE_LOW_TO_HIGH) },
-                        label = { Text("Price") }
-                    )
+            }
+            if (providerFilters.isNotEmpty()) {
+                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                androidx.compose.foundation.layout.FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    providerFilters.forEach { provider ->
+                        androidx.compose.material3.InputChip(
+                            selected = true,
+                            onClick = { onToggleProviderFilter(provider) },
+                            label = { Text(provider) },
+                            trailingIcon = {
+                                androidx.compose.material3.Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove filter",
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        )
+                    }
+                    if (providerFilters.size > 1) {
+                        Text(
+                            text = "Clear All",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier
+                                .align(androidx.compose.ui.Alignment.CenterVertically)
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable { onClearProviderFilters() }
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
+        } else {
+            Text(
+                text = "Select Providers",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
         }
         
-        val showCustomModel = searchQuery.isNotBlank() && filteredModels.none { it.modelId == searchQuery }
-        val totalItems = (if (showCustomModel) 1 else 0) + filteredModels.size
+        val showCustomModel = !isProviderFiltering && searchQuery.isNotBlank() && filteredModels.none { it.modelId == searchQuery }
+        val totalItems = if (isProviderFiltering) {
+            filteredProviders.size
+        } else {
+            (if (showCustomModel) 1 else 0) + filteredModels.size
+        }
 
         LazyColumn(
             modifier = Modifier.weight(1f, fill = false),
             verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            if (showCustomModel) {
-                item {
-                    val shape = if (totalItems == 1) {
-                        RoundedCornerShape(16.dp)
+            if (isProviderFiltering) {
+                items(filteredProviders.size) { index ->
+                    val provider = filteredProviders[index]
+                    val isSelected = providerFilters.contains(provider)
+                    val shape = when {
+                        totalItems == 1 -> RoundedCornerShape(16.dp)
+                        index == 0 -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                        index == totalItems - 1 -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
+                        else -> RectangleShape
+                    }
+                    val borderModifier = if (isSelected) {
+                        Modifier.border(1.dp, MaterialTheme.colorScheme.primary, shape)
                     } else {
-                        RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                        Modifier
                     }
                     ListItem(
-                        headlineContent = { Text("Use custom model: $searchQuery") },
+                        headlineContent = { Text(provider) },
+                        modifier = Modifier
+                            .clip(shape)
+                            .then(borderModifier)
+                            .clickable {
+                                onToggleProviderFilter(provider)
+                            },
+                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        trailingContent = {
+                            if (isSelected) {
+                                androidx.compose.material3.Icon(
+                                    Icons.Default.CheckCircle, 
+                                    contentDescription = "Selected", 
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    )
+                }
+            } else {
+                if (showCustomModel) {
+                    item {
+                        val shape = if (totalItems == 1) {
+                            RoundedCornerShape(16.dp)
+                        } else {
+                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                        }
+                        ListItem(
+                            headlineContent = { Text("Use custom model: $searchQuery") },
+                            modifier = Modifier
+                                .clip(shape)
+                                .clickable {
+                                    onModelSelected(searchQuery)
+                                    onDismissRequest()
+                                },
+                            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        )
+                    }
+                }
+                
+                items(filteredModels.size) { index ->
+                    val model = filteredModels[index]
+                    val absoluteIndex = (if (showCustomModel) 1 else 0) + index
+                    val shape = when {
+                        totalItems == 1 -> RoundedCornerShape(16.dp)
+                        absoluteIndex == 0 -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+                        absoluteIndex == totalItems - 1 -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
+                        else -> RectangleShape
+                    }
+
+                    ListItem(
                         modifier = Modifier
                             .clip(shape)
                             .clickable {
-                                onModelSelected(searchQuery)
+                                onModelSelected(model.modelId)
                                 onDismissRequest()
                             },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        headlineContent = { Text(model.name ?: model.modelId) },
+                        supportingContent = {
+                            Column {
+                                if (model.name != null) {
+                                    Text(model.modelId)
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (model.contextWindowTokens != null) {
+                                        Text("Ctx: ${model.contextWindowTokens / 1000}k")
+                                    }
+                                    model.promptPrice
+                                        ?.formatUsdPerMillion()
+                                        ?.let { formattedPrice ->
+                                            Text("In: $$formattedPrice/1M")
+                                        }
+                                    model.completionPrice
+                                        ?.formatUsdPerMillion()
+                                        ?.let { formattedPrice ->
+                                            Text("Out: $$formattedPrice/1M")
+                                        }
+                                }
+                            }
+                        },
                     )
                 }
-            }
-            
-            items(filteredModels.size) { index ->
-                val model = filteredModels[index]
-                val absoluteIndex = (if (showCustomModel) 1 else 0) + index
-                val shape = when {
-                    totalItems == 1 -> RoundedCornerShape(16.dp)
-                    absoluteIndex == 0 -> RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
-                    absoluteIndex == totalItems - 1 -> RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
-                    else -> RectangleShape
-                }
-
-                ListItem(
-                    modifier = Modifier
-                        .clip(shape)
-                        .clickable {
-                            onModelSelected(model.modelId)
-                            onDismissRequest()
-                        },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    headlineContent = { Text(model.name ?: model.modelId) },
-                    supportingContent = {
-                        Column {
-                            if (model.name != null) {
-                                Text(model.modelId)
-                            }
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                if (model.contextWindowTokens != null) {
-                                    Text("Ctx: ${model.contextWindowTokens / 1000}k")
-                                }
-                                model.promptPrice
-                                    ?.formatUsdPerMillion()
-                                    ?.let { formattedPrice ->
-                                        Text("In: $$formattedPrice/1M")
-                                    }
-                                model.completionPrice
-                                    ?.formatUsdPerMillion()
-                                    ?.let { formattedPrice ->
-                                        Text("Out: $$formattedPrice/1M")
-                                    }
-                            }
-                        }
-                    },
-                )
             }
         }
     }
@@ -274,10 +403,11 @@ fun PreviewModelSelectionBottomSheet() {
             availableModels = mockModels,
             filteredModels = mockModels,
             searchQuery = "",
-            providerFilter = null,
+            providerFilters = emptySet(),
             sortOption = ModelSortOption.A_TO_Z,
             onUpdateSearchQuery = {},
-            onUpdateProviderFilter = {},
+            onToggleProviderFilter = {},
+            onClearProviderFilters = {},
             onUpdateSortOption = {},
             onModelSelected = {},
             onDismissRequest = {}
@@ -313,10 +443,11 @@ fun PreviewModelSelectionBottomSheetSearching() {
             availableModels = mockModels,
             filteredModels = emptyList(),
             searchQuery = "custom-model-id",
-            providerFilter = null,
+            providerFilters = emptySet(),
             sortOption = ModelSortOption.A_TO_Z,
             onUpdateSearchQuery = {},
-            onUpdateProviderFilter = {},
+            onToggleProviderFilter = {},
+            onClearProviderFilters = {},
             onUpdateSortOption = {},
             onModelSelected = {},
             onDismissRequest = {}
@@ -353,10 +484,11 @@ fun PreviewModelSelectionBottomSheetFiltered() {
             availableModels = mockModels,
             filteredModels = mockModels,
             searchQuery = "",
-            providerFilter = "OpenAI",
+            providerFilters = setOf("OpenAI"),
             sortOption = ModelSortOption.PRICE_LOW_TO_HIGH,
             onUpdateSearchQuery = {},
-            onUpdateProviderFilter = {},
+            onToggleProviderFilter = {},
+            onClearProviderFilters = {},
             onUpdateSortOption = {},
             onModelSelected = {},
             onDismissRequest = {}

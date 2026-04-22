@@ -16,7 +16,7 @@ import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.TokenCounter
 
-internal class ChatHistoryRehydrator(
+class ChatHistoryRehydrator(
     private val messageRepository: MessageRepository,
     private val loggingPort: LoggingPort,
     private val tokenCounter: TokenCounter = JTokkitTokenCounter,

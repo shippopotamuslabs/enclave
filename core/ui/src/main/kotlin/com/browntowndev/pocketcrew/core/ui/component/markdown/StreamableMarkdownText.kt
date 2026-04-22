@@ -17,6 +17,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import com.browntowndev.pocketcrew.core.ui.theme.LlmBodyTextStyle
 import com.browntowndev.pocketcrew.core.ui.theme.darkMarkdownTheme
 import com.hrm.markdown.renderer.Markdown
 import kotlinx.coroutines.delay
@@ -59,12 +60,17 @@ fun StreamableMarkdownText(
     if (markdown.isEmpty()) return // Prevents spinner from showing when text is empty
 
     // Debounce / throttle logic for streaming text
-    var displayedText by remember { mutableStateOf(if (isStreaming) "" else markdown) }
     val targetText by rememberUpdatedState(markdown)
+    var displayedText by remember { mutableStateOf(if (isStreaming) "" else markdown) }
+
+    // When streaming stops, immediately sync displayedText to prevent
+    // the typewriter animation from freezing with stale partial content.
+    if (!isStreaming && displayedText != targetText) {
+        displayedText = targetText
+    }
 
     LaunchedEffect(isStreaming) {
         if (!isStreaming) {
-            displayedText = targetText
             return@LaunchedEffect
         }
 
@@ -99,7 +105,7 @@ fun StreamableMarkdownText(
         }
     }
 
-    val textToRender = if (isStreaming) displayedText else targetText
+    val textToRender = displayedText
 
     // In preview mode, use SimpleMarkdownText to avoid library initialization issues
     if (isPreview) {
@@ -138,7 +144,7 @@ fun SimpleMarkdownText(
     }
     Text(
         text = annotatedString,
-        style = MaterialTheme.typography.bodyMedium.copy(
+        style = LlmBodyTextStyle.copy(
             color = MaterialTheme.colorScheme.onBackground
         ),
         modifier = modifier,

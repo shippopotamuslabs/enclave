@@ -11,6 +11,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.navigation.navDeepLink
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.feature.chat.ChatRoute
 import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
@@ -64,6 +65,12 @@ fun PocketCrewNavGraph(
                         type = NavType.StringType
                         nullable = true
                         defaultValue = null
+                    },
+                ),
+            deepLinks =
+                listOf(
+                    navDeepLink {
+                        uriPattern = Routes.CHAT_DEEP_LINK_PATTERN
                     },
                 ),
             enterTransition = {

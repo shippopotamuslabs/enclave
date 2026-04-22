@@ -43,7 +43,7 @@ data class SettingsHomeUiState(
     val theme: AppTheme = AppTheme.SYSTEM,
     val hapticPress: Boolean = true,
     val hapticResponse: Boolean = true,
-    val alwaysUseVisionModel: Boolean = false,
+    val backgroundInferenceEnabled: Boolean = true,
     val isLocalModelsSheetOpen: Boolean = false,
     val isApiProvidersSheetOpen: Boolean = false,
     val isDataControlsSheetOpen: Boolean = false,
@@ -105,7 +105,7 @@ data class ApiModelDiscoveryUiState(
     val filteredModels: List<DiscoveredApiModelUi> = emptyList(),
     val isLoading: Boolean = false,
     val searchQuery: String = "",
-    val providerFilter: String? = null,
+    val providerFilters: Set<String> = emptySet(),
     val sortOption: ModelSortOption = ModelSortOption.A_TO_Z,
 )
 

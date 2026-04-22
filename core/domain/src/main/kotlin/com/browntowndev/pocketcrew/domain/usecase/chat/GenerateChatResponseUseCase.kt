@@ -1,14 +1,15 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.pocketcrew.domain.port.inference.ChatInferenceExecutorPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
-import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
-import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
-import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -16,7 +17,6 @@ import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 
 import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
-import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.withContext
 import java.util.concurrent.CancellationException
 
@@ -38,27 +39,15 @@ import java.util.concurrent.CancellationException
  * 4. Uses buffer(64) for backpressure handling.
  */
 class GenerateChatResponseUseCase @Inject constructor(
-    private val inferenceFactory: InferenceFactoryPort,
     private val pipelineExecutor: PipelineExecutorPort,
     private val chatRepository: ChatRepository,
     private val messageRepository: MessageRepository,
     private val loggingPort: LoggingPort,
     private val activeModelProvider: ActiveModelProviderPort,
-    private val settingsRepository: SettingsRepository,
-    private val searchToolPromptComposer: SearchToolPromptComposer,
     private val extractedUrlTracker: ExtractedUrlTrackerPort,
+    private val chatInferenceExecutor: ChatInferenceExecutorPort,
+    private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort = NoOpActiveChatTurnSnapshotPort,
 ) {
-    private val historyRehydrator = ChatHistoryRehydrator(
-        messageRepository = messageRepository,
-        loggingPort = loggingPort,
-    )
-    private val inferenceRequestPreparer = ChatInferenceRequestPreparer(
-        activeModelProvider = activeModelProvider,
-        settingsRepository = settingsRepository,
-        messageRepository = messageRepository,
-        searchToolPromptComposer = searchToolPromptComposer,
-        loggingPort = loggingPort,
-    )
     private val persistAccumulatedMessages = PersistAccumulatedChatMessagesUseCase(chatRepository, extractedUrlTracker.urls)
 
     operator fun invoke(
@@ -67,6 +56,7 @@ class GenerateChatResponseUseCase @Inject constructor(
         assistantMessageId: MessageId,
         chatId: ChatId,
         mode: Mode,
+        backgroundInferenceEnabled: Boolean,
     ): Flow<AccumulatedMessages> {
         return flow {
             val userMessage = messageRepository.getMessageById(userMessageId)
@@ -79,6 +69,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                 assistantMessageId = assistantMessageId,
                 chatId = chatId,
                 userHasImage = userMessage.content.imageUri != null,
+                backgroundInferenceEnabled = backgroundInferenceEnabled,
             )
             val accumulatorManager = ChatGenerationAccumulatorManager(
                 mode = mode,
@@ -87,6 +78,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                 defaultAssistantMessageId = assistantMessageId,
                 chatRepository = chatRepository,
             )
+            var terminalSeen = false
 
             // Observe extraction events so the accumulator marks sources as extracted
             // in real time, ensuring the UI shows the “read” indicator during generation
@@ -102,14 +94,34 @@ class GenerateChatResponseUseCase @Inject constructor(
                     if (extractedUrls.isNotEmpty()) {
                         accumulatorManager.markSourcesExtracted(extractedUrls.toList())
                     }
-                    emit(accumulatorManager.reduce(state))
+                    if (state.isTerminal) {
+                        terminalSeen = true
+                    }
+                    val accumulatedMessages = accumulatorManager.reduce(state)
+                    if (!backgroundInferenceEnabled) {
+                        activeChatTurnSnapshotPort.publish(
+                            key = ActiveChatTurnKey(
+                                chatId = chatId,
+                                assistantMessageId = assistantMessageId,
+                            ),
+                            snapshot = accumulatedMessages,
+                        )
+                    }
+                    emit(accumulatedMessages)
                 }
             } finally {
                 try {
                     withContext(NonCancellable + Dispatchers.IO) {
-                        accumulatorManager.markIncompleteAsCancelled()
-                        persistAccumulatedMessages(accumulatorManager)
-                        extractedUrlTracker.clear()
+                        if (!shouldSkipFinalPersistenceForBackgroundCancellation(
+                                mode = mode,
+                                backgroundInferenceEnabled = backgroundInferenceEnabled,
+                                terminalSeen = terminalSeen,
+                            )
+                        ) {
+                            accumulatorManager.markIncompleteAsCancelled()
+                            persistAccumulatedMessages(accumulatorManager)
+                            extractedUrlTracker.clear()
+                        }
                     }
                 } catch (e: Exception) {
                     loggingPort.error(TAG, "Failed to persist messages", e)
@@ -125,6 +137,7 @@ class GenerateChatResponseUseCase @Inject constructor(
         assistantMessageId: MessageId,
         chatId: ChatId,
         userHasImage: Boolean,
+        backgroundInferenceEnabled: Boolean,
     ): Flow<MessageGenerationState> = when (mode) {
         Mode.FAST -> executeSingleModelMode(
             prompt = prompt,
@@ -133,6 +146,7 @@ class GenerateChatResponseUseCase @Inject constructor(
             chatId = chatId,
             userHasImage = userHasImage,
             modelType = ModelType.FAST,
+            backgroundInferenceEnabled = backgroundInferenceEnabled,
         )
 
         Mode.THINKING -> executeSingleModelMode(
@@ -142,6 +156,7 @@ class GenerateChatResponseUseCase @Inject constructor(
             chatId = chatId,
             userHasImage = userHasImage,
             modelType = ModelType.THINKING,
+            backgroundInferenceEnabled = backgroundInferenceEnabled,
         )
 
         Mode.CREW -> executeCrewMode(
@@ -158,34 +173,17 @@ class GenerateChatResponseUseCase @Inject constructor(
         chatId: ChatId,
         userHasImage: Boolean,
         modelType: ModelType,
-    ): Flow<MessageGenerationState> = flow {
-        try {
-            if (userHasImage) {
-                emit(MessageGenerationState.Processing(modelType))
-            }
-            inferenceFactory.withInferenceService(modelType) { service ->
-                emitAll(
-                    generateWithService(
-                        prompt = prompt,
-                        userMessageId = userMessageId,
-                        assistantMessageId = assistantMessageId,
-                        chatId = chatId,
-                        service = service,
-                        modelType = modelType,
-                    )
-                )
-            }
-        } catch (e: InferenceBusyException) {
-            emitBusyState(modelType)
-        } catch (e: IllegalStateException) {
-            emit(MessageGenerationState.Failed(e, modelType))
-        } catch (e: java.io.IOException) {
-            emit(MessageGenerationState.Failed(e, modelType))
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            loggingPort.error(TAG, "Unexpected error in $modelType mode", e)
-            emit(MessageGenerationState.Failed(error = e, modelType = modelType))
-        }
+        backgroundInferenceEnabled: Boolean,
+    ): Flow<MessageGenerationState> {
+        return chatInferenceExecutor.execute(
+            prompt = prompt,
+            userMessageId = userMessageId,
+            assistantMessageId = assistantMessageId,
+            chatId = chatId,
+            userHasImage = userHasImage,
+            modelType = modelType,
+            backgroundInferenceEnabled = backgroundInferenceEnabled,
+        )
     }
 
     private fun executeCrewMode(
@@ -229,101 +227,40 @@ class GenerateChatResponseUseCase @Inject constructor(
         }
     }
 
-    private suspend fun kotlinx.coroutines.flow.FlowCollector<MessageGenerationState>.emitBusyState(
-        modelType: ModelType,
-    ) {
-        emit(
-            MessageGenerationState.Failed(
-                error = InferenceBusyException(),
-                modelType = modelType,
-            )
-        )
+    private suspend fun kotlinx.coroutines.flow.FlowCollector<MessageGenerationState>.emitBusyState(modelType: ModelType) {
+        emit(MessageGenerationState.Failed(InferenceBusyException(), modelType))
     }
 
-    private fun generateWithService(
-        prompt: String,
-        userMessageId: MessageId,
-        assistantMessageId: MessageId,
-        chatId: ChatId,
-        service: LlmInferencePort,
-        modelType: ModelType,
-    ): Flow<MessageGenerationState> = flow {
-        val config = activeModelProvider.getActiveConfiguration(modelType)
-        val preparedRequest = inferenceRequestPreparer(
-            prompt = prompt,
-            chatId = chatId,
-            userMessageId = userMessageId,
-            assistantMessageId = assistantMessageId,
-            modelType = modelType,
-        )
-
-        try {
-            historyRehydrator(
-                chatId = chatId,
-                userMessageId = userMessageId,
-                assistantMessageId = assistantMessageId,
-                service = service,
-                contextWindowTokens = config?.contextWindow ?: 4096,
-                shouldSummarize = config?.isLocal != true,
-                currentPrompt = preparedRequest.prompt,
-                options = preparedRequest.options,
-            )
-        } catch (e: Exception) {
-            loggingPort.debug(TAG, "Failed to rehydrate history: ${e.message}")
-        }
-
-        service.sendPrompt(
-            preparedRequest.prompt,
-            preparedRequest.options,
-            closeConversation = false,
-        ).collect { event ->
-            when (event) {
-                is InferenceEvent.EngineLoading -> {
-                    emit(MessageGenerationState.EngineLoading(event.modelType))
-                }
-
-                is InferenceEvent.Processing -> {
-                    emit(MessageGenerationState.Processing(event.modelType))
-                }
-
-                is InferenceEvent.Thinking -> {
-                    emit(MessageGenerationState.ThinkingLive(event.chunk, modelType))
-                }
-
-                is InferenceEvent.PartialResponse -> {
-                    emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
-                }
-
-                is InferenceEvent.TavilyResults -> {
-                    emit(MessageGenerationState.TavilySourcesAttached(event.sources, event.modelType))
-                }
-
-                is InferenceEvent.Finished -> {
-                    emit(MessageGenerationState.Finished(event.modelType))
-                }
-
-                is InferenceEvent.SafetyBlocked -> {
-                    loggingPort.warning(
-                        TAG,
-                        "InferenceEvent.SafetyBlocked modelType=${event.modelType} reason=${event.reason}",
-                    )
-                    emit(MessageGenerationState.Blocked(event.reason, event.modelType))
-                }
-
-                is InferenceEvent.Error -> {
-                    loggingPort.error(
-                        TAG,
-                        "InferenceEvent.Error modelType=${event.modelType} message=${event.cause.message}",
-                        event.cause,
-                    )
-                    emit(MessageGenerationState.Failed(event.cause, event.modelType))
-                }
-            }
-        }
-    }.flowOn(Dispatchers.Default)
+    private fun shouldSkipFinalPersistenceForBackgroundCancellation(
+        mode: Mode,
+        backgroundInferenceEnabled: Boolean,
+        terminalSeen: Boolean,
+    ): Boolean {
+        return backgroundInferenceEnabled && mode != Mode.CREW && !terminalSeen
+    }
 
     private companion object {
         private const val TAG = "GenerateChatResponse"
         private const val FLOW_BUFFER_SIZE = 64
     }
+}
+
+private object NoOpActiveChatTurnSnapshotPort : ActiveChatTurnSnapshotPort {
+    override fun observe(key: ActiveChatTurnKey): Flow<AccumulatedMessages?> {
+        return flowOf(null)
+    }
+
+    override suspend fun publish(
+        key: ActiveChatTurnKey,
+        snapshot: AccumulatedMessages,
+    ) = Unit
+
+    override suspend fun markSourcesExtracted(
+        key: ActiveChatTurnKey,
+        urls: List<String>,
+    ) = Unit
+
+    override suspend fun acknowledgeHandoff(key: ActiveChatTurnKey) = Unit
+
+    override suspend fun clear(key: ActiveChatTurnKey) = Unit
 }

@@ -32,7 +32,7 @@ identityDoctypesJvm = "202411.1"
 foundation = "1.10.6"
 robolectricVersion = "4.16.1"
 androidxTestCoreVersion = "1.7.0"
-markdown = "1.1.2"
+markdown = "1.2.3"
 turbineVersion = "1.2.1"
 firebaseCrashlyticsVersion = "20.0.5"
 googleServicesVersion = "4.4.4"
@@ -57,6 +57,7 @@ androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "j
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeKtx" }
+androidx-lifecycle-process = { group = "androidx.lifecycle", name = "lifecycle-process", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
@@ -79,6 +80,7 @@ hilt-work = { group = "androidx.hilt", name = "hilt-work", version.ref = "hiltWo
 hilt-work-compiler = { group = "androidx.hilt", name = "hilt-compiler", version.ref = "hiltWorkVersion" }
 navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text", version.ref = "uiText" }
+androidx-compose-ui-text-google-fonts = { group = "androidx.compose.ui", name = "ui-text-google-fonts", version.ref = "uiText" }
 androidx-compose-animation = { group = "androidx.compose.animation", name = "animation", version.ref = "animation" }
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastorePreferences" }
 junit-jupiter = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "junitJupiterVersion" }

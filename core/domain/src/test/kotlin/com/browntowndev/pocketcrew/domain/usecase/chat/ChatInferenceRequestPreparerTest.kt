@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -196,7 +197,7 @@ class ChatInferenceRequestPreparerTest {
             modelType = ModelType.FAST,
         )
 
-        assertTrue(request.options.systemPrompt?.contains("<tool_call>") == true)
+        assertTrue(request.options.systemPrompt?.contains("ActionResult") == true)
         assertTrue(request.options.systemPrompt?.contains("tavily_web_search") == true)
     }
 
@@ -323,4 +324,90 @@ class ChatInferenceRequestPreparerTest {
         thinkingEnabled = false,
         isMultimodal = true,
     )
+
+    private fun litertThinkingConfig(): ActiveModelConfiguration = fastTextConfig().copy(
+        id = LocalModelConfigurationId("litert-thinking"),
+        name = "LiteRT Thinking",
+        thinkingEnabled = true,
+        localModelFormat = ModelFileFormat.LITERTLM,
+    )
+
+    private fun ggufThinkingConfig(): ActiveModelConfiguration = fastTextConfig().copy(
+        id = LocalModelConfigurationId("gguf-thinking"),
+        name = "GGUF Thinking",
+        thinkingEnabled = true,
+        localModelFormat = ModelFileFormat.GGUF,
+    )
+
+    @Test
+    fun `LiteRT local model with thinkingEnabled true derives reasoningBudget 2048`() = runTest {
+        val preparer = ChatInferenceRequestPreparer(
+            activeModelProvider = mockActiveModelProvider(
+                fastConfig = litertThinkingConfig(),
+                visionConfig = null,
+            ),
+            settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
+            messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            searchToolPromptComposer = SearchToolPromptComposer(),
+            loggingPort = mockk(relaxed = true),
+        )
+
+        val request = preparer(
+            prompt = "Think step by step",
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            modelType = ModelType.FAST,
+        )
+
+        assertEquals(2048, request.options.reasoningBudget)
+    }
+
+    @Test
+    fun `GGUF local model with thinkingEnabled true derives reasoningBudget 2048`() = runTest {
+        val preparer = ChatInferenceRequestPreparer(
+            activeModelProvider = mockActiveModelProvider(
+                fastConfig = ggufThinkingConfig(),
+                visionConfig = null,
+            ),
+            settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
+            messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            searchToolPromptComposer = SearchToolPromptComposer(),
+            loggingPort = mockk(relaxed = true),
+        )
+
+        val request = preparer(
+            prompt = "Reason carefully",
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            modelType = ModelType.FAST,
+        )
+
+        assertEquals(2048, request.options.reasoningBudget)
+    }
+
+    @Test
+    fun `local model with thinkingEnabled false derives reasoningBudget 0`() = runTest {
+        val preparer = ChatInferenceRequestPreparer(
+            activeModelProvider = mockActiveModelProvider(
+                fastConfig = fastTextConfig(), // thinkingEnabled = false
+                visionConfig = null,
+            ),
+            settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
+            messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            searchToolPromptComposer = SearchToolPromptComposer(),
+            loggingPort = mockk(relaxed = true),
+        )
+
+        val request = preparer(
+            prompt = "Quick answer",
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            modelType = ModelType.FAST,
+        )
+
+        assertEquals(0, request.options.reasoningBudget)
+    }
 }

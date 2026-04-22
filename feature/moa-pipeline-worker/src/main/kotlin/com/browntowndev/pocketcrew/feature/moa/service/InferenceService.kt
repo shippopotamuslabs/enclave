@@ -9,10 +9,10 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.inference.DraftOneModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.DraftTwoModelEngine
 import com.browntowndev.pocketcrew.domain.model.inference.FinalSynthesizerModelEngine
@@ -26,6 +26,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.feature.inference.InferenceEventBus
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -44,7 +45,7 @@ import javax.inject.Inject
  * This service:
  * 1. Runs as a foreground service for the entire pipeline (persistent notification)
  * 2. Executes all 4 steps: DRAFT_ONE -> DRAFT_TWO -> SYNTHESIS -> FINAL
- * 3. Emits progress via LocalBroadcastManager for real-time UI updates
+ * 3. Emits progress via [InferenceEventBus] for real-time UI updates
  * 4. Handles cancellation via notification action
  */
 @AndroidEntryPoint
@@ -53,30 +54,11 @@ class InferenceService : Service() {
     companion object {
         const val TAG = "InferenceService"
         const val ACTION_START = "com.browntowndev.pocketcrew.inference.ACTION_START"
-        const val ACTION_STOP = "com.browntowndev.pocketcrew.inference.ACTION_STOP"
         const val ACTION_RESUME = "com.browntowndev.pocketcrew.inference.ACTION_RESUME"
+        const val ACTION_STOP = "com.browntowndev.pocketcrew.inference.ACTION_STOP"
         const val EXTRA_CHAT_ID = "chat_id"
         const val EXTRA_USER_MESSAGE = "user_message"
         const val EXTRA_STATE_JSON = "state_json"
-
-        // Broadcast actions for progress updates
-        const val BROADCAST_PROGRESS = "com.browntowndev.pocketcrew.inference.BROADCAST_PROGRESS"
-        const val BROADCAST_ERROR = "com.browntowndev.pocketcrew.inference.BROADCAST_ERROR"
-        const val BROADCAST_STEP_COMPLETED = "com.browntowndev.pocketcrew.inference.BROADCAST_STEP_COMPLETED"
-        const val BROADCAST_STEP_STARTED = "com.browntowndev.pocketcrew.inference.BROADCAST_STEP_STARTED"
-
-        // Intent extras for broadcasts
-        const val EXTRA_THINKING_CHUNK = "thinking_chunk"
-        const val EXTRA_THINKING_STEP = "thinking_step"
-        const val EXTRA_STEP_OUTPUT = "step_output"
-        const val EXTRA_MODEL_TYPE = "model_type"
-        const val EXTRA_FINAL_RESPONSE = "final_response"
-        const val EXTRA_ERROR_MESSAGE = "error_message"
-
-        // Step completion extras
-        const val EXTRA_STEP_NAME = "step_name"
-        const val EXTRA_STEP_MODEL_DISPLAY_NAME = "step_model_display_name"
-        const val EXTRA_STEP_TYPE = "step_type"
     }
 
     @Inject
@@ -91,8 +73,12 @@ class InferenceService : Service() {
     @Inject
     lateinit var activeModelProvider: ActiveModelProviderPort
 
+    @Inject
+    lateinit var inferenceEventBus: InferenceEventBus
+
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var currentJob: Job? = null
+    private var currentChatId: String? = null
     private var isRunning = false
 
     // Notification channel IDs
@@ -141,7 +127,6 @@ class InferenceService : Service() {
             cancelPendingIntent = cancelIntent
         )
 
-        // Start foreground with specialUse type
         startForeground(
             notificationId,
             notification,
@@ -149,6 +134,7 @@ class InferenceService : Service() {
         )
 
         isRunning = true
+        currentChatId = chatId
 
         // Parse state or create initial
         val state = try {
@@ -165,11 +151,17 @@ class InferenceService : Service() {
                 executePipeline(chatId, userMessage, state)
             } catch (e: CancellationException) {
                 logger.info(TAG, "Pipeline cancelled for chat: $chatId")
-                broadcastProgress(EXTRA_THINKING_STEP, "Cancelled")
             } catch (e: Exception) {
                 logger.error(TAG, "Pipeline error for chat $chatId: ${e.message}", e)
-                broadcastError(e.message ?: "Unknown error")
+                inferenceEventBus.emitPipelineState(
+                    chatId,
+                    MessageGenerationState.Failed(
+                        IllegalStateException(e.message ?: "Unknown error"),
+                        getModelTypeForStep(state.currentStep)
+                    )
+                )
             } finally {
+                inferenceEventBus.clearPipelineRequest(chatId)
                 isRunning = false
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -216,18 +208,14 @@ class InferenceService : Service() {
             cancelPendingIntent = cancelIntent
         )
 
-        // Start foreground with specialUse type
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                notificationId,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(notificationId, notification)
-        }
+        startForeground(
+            notificationId,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+        )
 
         isRunning = true
+        currentChatId = chatId
 
         // Execute pipeline from saved state
         currentJob = serviceScope.launch {
@@ -236,11 +224,17 @@ class InferenceService : Service() {
                 executePipeline(chatId, savedState.userMessage, savedState)
             } catch (e: CancellationException) {
                 logger.info(TAG, "Pipeline cancelled for chat: $chatId")
-                broadcastProgress(EXTRA_THINKING_STEP, "Cancelled")
             } catch (e: Exception) {
                 logger.error(TAG, "Pipeline error for chat $chatId: ${e.message}", e)
-                broadcastError(e.message ?: "Unknown error")
+                inferenceEventBus.emitPipelineState(
+                    chatId,
+                    MessageGenerationState.Failed(
+                        IllegalStateException(e.message ?: "Unknown error"),
+                        getModelTypeForStep(savedState.currentStep)
+                    )
+                )
             } finally {
+                inferenceEventBus.clearPipelineRequest(chatId)
                 isRunning = false
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
@@ -250,6 +244,11 @@ class InferenceService : Service() {
 
     override fun onDestroy() {
         currentJob?.cancel()
+        // Clear the pipeline stream so InferenceEventBus doesn't retain an orphaned entry.
+        // The executor's onCompletion block also clears as a safety net, but onDestroy
+        // covers the case where the service is killed without the coroutine's finally
+        // block running first.
+        currentChatId?.let { inferenceEventBus.clearPipelineRequest(it) }
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -272,9 +271,12 @@ class InferenceService : Service() {
             val prompt = buildPromptForStep(currentState)
             val modelType = getModelTypeForStep(currentStep)
 
-            // Broadcast step started BEFORE model begins generation
+            // Emit step started BEFORE model begins generation
             // This ensures ProcessingIndicator appears immediately in UI
-            broadcastStepStarted(modelType)
+            inferenceEventBus.emitPipelineState(
+                chatId,
+                MessageGenerationState.Processing(modelType)
+            )
 
             val maxTokensOverride = calculateMaxTokensForStep(currentStep)
             val result = executeStepForPipeline(chatId, prompt, currentStep, maxTokensOverride)
@@ -284,15 +286,15 @@ class InferenceService : Service() {
             // Store output
             currentState = currentState.withStepOutput(currentStep, result.output)
 
-            // Broadcast step completion SECOND for ALL steps (including non-FINAL)
-            // This must come AFTER broadcastComplete so that StepCompleted sets responseState to PROCESSING
-            // after GeneratingText has been processed
-            // Note: thinkingDurationSeconds is calculated in PipelineExecutor from actual timing
-            broadcastStepCompleted(
-                stepName = currentStep.displayName(),
-                modelDisplayName = getModelDisplayNameForStep(currentStep),
-                modelType = getModelTypeForStep(currentStep),
-                stepType = currentStep
+            // Emit step completion SECOND for ALL steps (including non-FINAL)
+            inferenceEventBus.emitPipelineState(
+                chatId,
+                MessageGenerationState.StepCompleted(
+                    stepOutput = "",
+                    modelDisplayName = getModelDisplayNameForStep(currentStep),
+                    modelType = getModelTypeForStep(currentStep),
+                    stepType = currentStep
+                )
             )
 
             // Check if this was the final step
@@ -356,11 +358,17 @@ class InferenceService : Service() {
                     is InferenceEvent.EngineLoading -> Unit
                     is InferenceEvent.Processing -> Unit
                     is InferenceEvent.Thinking -> {
-                        broadcastProgress(EXTRA_THINKING_CHUNK, event.chunk, getModelTypeForStep(step).name)
+                        inferenceEventBus.tryEmitPipelineState(
+                            chatId,
+                            MessageGenerationState.ThinkingLive(event.chunk, getModelTypeForStep(step))
+                        )
                     }
                     is InferenceEvent.PartialResponse -> {
                         output += event.chunk
-                        broadcastProgress(EXTRA_STEP_OUTPUT, event.chunk, getModelTypeForStep(step).name)
+                        inferenceEventBus.tryEmitPipelineState(
+                            chatId,
+                            MessageGenerationState.GeneratingText(event.chunk, getModelTypeForStep(step))
+                        )
                     }
                     is InferenceEvent.TavilyResults -> Unit
                     is InferenceEvent.Finished -> {                        // Ignore. StepCompleted signifies completion for pipeline steps & is detected by flow finishing
@@ -376,64 +384,6 @@ class InferenceService : Service() {
         }
 
         return StepResult(output = output)
-    }
-
-    /**
-     * Broadcasts progress to UI via LocalBroadcastManager.
-     */
-    private fun broadcastProgress(extraKey: String, value: String, modelType: String? = null) {
-        val intent = Intent(BROADCAST_PROGRESS).apply {
-            putExtra(extraKey, value)
-            modelType?.let { putExtra(EXTRA_MODEL_TYPE, it) }
-            setPackage(packageName)
-        }
-        sendBroadcast(intent)
-    }
-
-    /**
-     * Broadcasts step completion for Crew mode progress display.
-     * @param stepName Name of the step
-     * @param modelDisplayName Name of the model used for this step
-     * @param modelType Type of the model used for this step
-     * @param stepType Type of the step
-     */
-    private fun broadcastStepCompleted(
-        stepName: String,
-        modelDisplayName: String,
-        modelType: ModelType,
-        stepType: PipelineStep
-    ) {
-        val intent = Intent(BROADCAST_STEP_COMPLETED).apply {
-            putExtra(EXTRA_STEP_NAME, stepName)
-            putExtra(EXTRA_STEP_MODEL_DISPLAY_NAME, modelDisplayName)
-            putExtra(EXTRA_MODEL_TYPE, modelType.name)
-            putExtra(EXTRA_STEP_TYPE, stepType.name)
-            setPackage(packageName)
-        }
-        sendBroadcast(intent)
-    }
-
-    /**
-     * Broadcasts that a new pipeline step has started.
-     * Called BEFORE model.sendPrompt() to show ProcessingIndicator immediately.
-     */
-    private fun broadcastStepStarted(modelType: ModelType) {
-        val intent = Intent(BROADCAST_STEP_STARTED).apply {
-            putExtra(EXTRA_MODEL_TYPE, modelType.name)
-            setPackage(packageName)
-        }
-        sendBroadcast(intent)
-    }
-
-    /**
-     * Broadcasts error to UI.
-     */
-    private fun broadcastError(errorMessage: String) {
-        val intent = Intent(BROADCAST_ERROR).apply {
-            putExtra(EXTRA_ERROR_MESSAGE, errorMessage)
-            setPackage(packageName)
-        }
-        sendBroadcast(intent)
     }
 
     /**

@@ -48,7 +48,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 fun VisionSettingsBottomSheet(
     uiState: SettingsUiState,
     onDismiss: () -> Unit,
-    onAlwaysUseVisionModelChange: (Boolean) -> Unit,
     onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -86,30 +85,6 @@ fun VisionSettingsBottomSheet(
                             .padding(16.dp),
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
-
-                    ListItem(
-                        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        leadingContent = {
-                            Icon(imageVector = Icons.Default.Cloud, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                        },
-                        headlineContent = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Always Use API Vision Model")
-                                Spacer(Modifier.width(8.dp))
-                                PersistentTooltip(
-                                    description = "Route image inspection through the configured API vision model, even when the active Fast or Thinking model can see images."
-                                )
-                            }
-                        },
-                        trailingContent = {
-                            Switch(
-                                checked = uiState.home.alwaysUseVisionModel,
-                                onCheckedChange = onAlwaysUseVisionModelChange
-                            )
-                        }
-                    )
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp, horizontal = 16.dp))
 
                     val currentVisionModel = uiState.assignments.assignments.find { it.modelType == ModelType.VISION }
                     

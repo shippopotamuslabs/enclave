@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,9 +38,11 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.SystemPromptTemplates
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -50,6 +53,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+
+/** Model format string constant for GGUF models handled by llama.cpp. */
+internal const val MODEL_FORMAT_GGUF = "GGUF"
+
+/** Model format string constant for LiteRT models handled by the LiteRT engine. */
+internal const val MODEL_FORMAT_LITERT = "LiteRT"
 
 @Composable
 fun LocalModelConfigureRoute(
@@ -65,6 +74,7 @@ fun LocalModelConfigureRoute(
 
     LocalModelConfigureScreen(
         uiState = uiState,
+        modelFormat = uiState.localModelEditor.selectedAsset?.format ?: MODEL_FORMAT_GGUF,
         onNavigateBack = handleBack,
         onConfigChange = viewModel::onLocalModelConfigFieldChange,
         onSave = {
@@ -80,13 +90,20 @@ fun LocalModelConfigureRoute(
 @Composable
 fun LocalModelConfigureScreen(
     uiState: SettingsUiState,
+    modelFormat: String,
     onNavigateBack: () -> Unit,
     onConfigChange: (LocalModelConfigUi) -> Unit,
     onSave: () -> Unit
 ) {
     val config = uiState.localModelEditor.configDraft ?: LocalModelConfigUi()
+    // LiteRT SamplerConfig only supports temperature, topP, topK — not maxTokens, minP, or repetitionPenalty.
+    val isGgufFormat = modelFormat == MODEL_FORMAT_GGUF
     var showSystemPromptSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val isSaveEnabled = !config.isSystemPreset &&
+            config.displayName.isNotBlank() &&
+            config.contextWindow.isNotBlank()
 
     Scaffold(
         topBar = {
@@ -98,6 +115,33 @@ fun LocalModelConfigureScreen(
                     }
                 }
             )
+        },
+        bottomBar = {
+            if (!config.isSystemPreset) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 20.dp),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Button(
+                        onClick = onSave,
+                        enabled = isSaveEnabled,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp)
+                            .testTag("SaveButton"),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            text = "Save Preset",
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
     ) { padding ->
         Column(
@@ -228,24 +272,45 @@ fun LocalModelConfigureScreen(
 
             ConfigurationHeader("Context")
 
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                OutlinedTextField(
-                    value = config.maxTokens,
-                    onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
-                    label = { 
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Max Tokens")
-                            Spacer(modifier = Modifier.width(4.dp))
-                            PersistentTooltip(description = "Maximum number of tokens the model can generate in a single response.")
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next),
-                    readOnly = config.isSystemPreset,
-                    enabled = !config.isSystemPreset
-                )
+            // Max Tokens is only supported by llama.cpp (GGUF). LiteRT's SamplerConfig
+            // has no output token limit — the engine generates until natural stop.
+            if (isGgufFormat) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    OutlinedTextField(
+                        value = config.maxTokens,
+                        onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
+                        label = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Max Tokens")
+                                Spacer(modifier = Modifier.width(4.dp))
+                                PersistentTooltip(description = "Maximum number of tokens the model can generate in a single response.")
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next),
+                        readOnly = config.isSystemPreset,
+                        enabled = !config.isSystemPreset
+                    )
 
+                    OutlinedTextField(
+                        value = config.contextWindow,
+                        onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
+                        label = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Context Window")
+                                Spacer(modifier = Modifier.width(4.dp))
+                                PersistentTooltip(description = "Total tokens (input + output) the model can process at once.")
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next),
+                        readOnly = config.isSystemPreset,
+                        enabled = !config.isSystemPreset
+                    )
+                }
+            } else {
                 OutlinedTextField(
                     value = config.contextWindow,
                     onValueChange = { onConfigChange(config.copy(contextWindow = it)) },
@@ -256,7 +321,7 @@ fun LocalModelConfigureScreen(
                             PersistentTooltip(description = "Total tokens (input + output) the model can process at once.")
                         }
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = androidx.compose.ui.text.input.ImeAction.Next),
                     readOnly = config.isSystemPreset,
@@ -301,23 +366,27 @@ fun LocalModelConfigureScreen(
                 enabled = !config.isSystemPreset
             )
 
-            TuningSlider(
-                label = "Min P",
-                description = "Limits the next token choice to tokens with probability at least P times the probability of the most likely token.",
-                value = config.minP.toFloat(),
-                range = 0f..1f,
-                onValueChange = { onConfigChange(config.copy(minP = it.toDouble())) },
-                enabled = !config.isSystemPreset
-            )
+            // Min P and Repetition Penalty are only supported by llama.cpp (GGUF).
+            // LiteRT's SamplerConfig does not expose these sampling parameters.
+            if (isGgufFormat) {
+                TuningSlider(
+                    label = "Min P",
+                    description = "Limits the next token choice to tokens with probability at least P times the probability of the most likely token.",
+                    value = config.minP.toFloat(),
+                    range = 0f..1f,
+                    onValueChange = { onConfigChange(config.copy(minP = it.toDouble())) },
+                    enabled = !config.isSystemPreset
+                )
 
-            TuningSlider(
-                label = "Repetition Penalty",
-                description = "Penalizes tokens that have already appeared, discouraging the model from repeating itself.",
-                value = config.repetitionPenalty.toFloat(),
-                range = 0f..2f,
-                onValueChange = { onConfigChange(config.copy(repetitionPenalty = it.toDouble())) },
-                enabled = !config.isSystemPreset
-            )
+                TuningSlider(
+                    label = "Repetition Penalty",
+                    description = "Penalizes tokens that have already appeared, discouraging the model from repeating itself.",
+                    value = config.repetitionPenalty.toFloat(),
+                    range = 0f..2f,
+                    onValueChange = { onConfigChange(config.copy(repetitionPenalty = it.toDouble())) },
+                    enabled = !config.isSystemPreset
+                )
+            }
 
             Row(
                 modifier = Modifier
@@ -345,18 +414,6 @@ fun LocalModelConfigureScreen(
                 )
             }
 
-            if (!config.isSystemPreset) {
-                Button(
-                    onClick = onSave,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Text("Save Preset", fontWeight = FontWeight.Bold, modifier = Modifier.padding(vertical = 8.dp))
-                }
-            }
-            
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -372,6 +429,7 @@ fun PreviewLocalModelConfigureScreenEditable() {
                     configDraft = MockSettingsData.localModels[0].configurations[0].copy(isSystemPreset = false)
                 )
             ),
+            modelFormat = MODEL_FORMAT_GGUF,
             onNavigateBack = {},
             onConfigChange = {},
             onSave = {}
@@ -389,6 +447,7 @@ fun PreviewLocalModelConfigureScreenSystem() {
                     configDraft = MockSettingsData.localModels[0].configurations[0].copy(isSystemPreset = true)
                 )
             ),
+            modelFormat = MODEL_FORMAT_GGUF,
             onNavigateBack = {},
             onConfigChange = {},
             onSave = {}

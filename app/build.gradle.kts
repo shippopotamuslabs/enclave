@@ -138,6 +138,7 @@ dependencies {
     implementation(project(":feature:download"))
     implementation(project(":feature:chat"))
     implementation(project(":feature:moa-pipeline-worker"))
+    implementation(project(":feature:chat-inference-service"))
     implementation(project(":feature:inference"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
