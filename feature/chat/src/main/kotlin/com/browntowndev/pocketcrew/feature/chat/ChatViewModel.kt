@@ -96,6 +96,10 @@ class ChatViewModel @Inject constructor(
     private val _speechState = MutableStateFlow<SpeechState>(SpeechState.Idle)
     val speechState: StateFlow<SpeechState> = _speechState.asStateFlow()
 
+    private val _stopSpeechSignal = MutableStateFlow(false)
+
+    private val _isGenerating = MutableStateFlow(false)
+
     // Mutable state for input text (not persisted, managed locally)
     private val _inputText = MutableStateFlow("")
 
@@ -133,7 +137,6 @@ class ChatViewModel @Inject constructor(
 
     private val _requestedTurnKey = MutableStateFlow<ActiveChatTurnKey?>(null)
     private val _acknowledgedTurnKeys = MutableStateFlow<Set<ActiveChatTurnKey>>(emptySet())
-    private val handoffAcknowledgementsInFlight = mutableSetOf<ActiveChatTurnKey>()
 
     private val activeChatIdFlow = _currentChatId
         .map { chatId -> chatId ?: initialChatId }
@@ -227,9 +230,6 @@ class ChatViewModel @Inject constructor(
         _speechState
             .onEach { state ->
                 when (state) {
-                    is SpeechState.PartialText -> {
-                        _inputText.value = state.text
-                    }
                     is SpeechState.FinalText -> {
                         _inputText.value = state.text
                     }
@@ -372,15 +372,18 @@ class ChatViewModel @Inject constructor(
         val projectedMessages = projectChatMessages(
             dbMessages = messages,
             activeSnapshot = activeTurnSnapshotState.snapshot,
-            chatId = activeTurnSnapshotState.key?.chatId ?: _currentChatId.value ?: initialChatId,
-            mergeMessagesUseCase = chatUseCases.mergeMessagesUseCase,
+            activeKey = activeTurnSnapshotState.key,
         )
-        
+        acknowledgeProjectedHandoffIfNeeded(
+            activeKey = activeTurnSnapshotState.key,
+            handoffReady = projectedMessages.handoffReady,
+        )
+
         // Sort chronologically and map domain messages to UI messages
         var isGenerating = false
         var hasActiveIndicator = false
         var activeIndicatorMessageId: MessageId? = null
-        val chatMessages: List<ChatMessage> = projectedMessages
+        val chatMessages: List<ChatMessage> = projectedMessages.messages
             .map { message: Message ->
                 val chatMessage = mapToChatMessage(message)
                 val state = chatMessage.indicatorState
@@ -397,10 +400,6 @@ class ChatViewModel @Inject constructor(
                 }
                 chatMessage
             }
-
-        // This stays inside state projection so Room COMPLETE is visible before
-        // the active snapshot is cleared; a sibling collector can race this path.
-        acknowledgeHandoffIfNeeded(messages, activeTurnSnapshotState)
 
         ChatUiState(
             messages = chatMessages,
@@ -426,34 +425,16 @@ class ChatViewModel @Inject constructor(
         initialValue = ChatUiState()
     )
 
-    private fun acknowledgeHandoffIfNeeded(
-        dbMessages: List<Message>,
-        activeTurnSnapshotState: ActiveTurnSnapshotState,
+    private fun acknowledgeProjectedHandoffIfNeeded(
+        activeKey: ActiveChatTurnKey?,
+        handoffReady: Boolean,
     ) {
-        val key = activeTurnSnapshotState.key ?: return
-        val activeSnapshot = activeTurnSnapshotState.snapshot ?: return
+        if (activeKey == null || !handoffReady) return
+        if (activeKey in _acknowledgedTurnKeys.value) return
 
-        val completedDbIds = dbMessages.asSequence()
-            .filter { it.messageState == MessageState.COMPLETE }
-            .map { it.id }
-            .toSet()
-
-        if (completedDbIds.isEmpty()) return
-
-        val shouldAcknowledge = activeSnapshot.messages.keys.any { id -> id in completedDbIds }
-        if (!shouldAcknowledge) return
-        if (!handoffAcknowledgementsInFlight.add(key)) return
-
-        viewModelScope.launch {
-            try {
-                activeChatTurnSnapshotPort.acknowledgeHandoff(key)
-                _acknowledgedTurnKeys.update { keys -> keys + key }
-                if (_requestedTurnKey.value == key) {
-                    _requestedTurnKey.update { null }
-                }
-            } finally {
-                handoffAcknowledgementsInFlight.remove(key)
-            }
+        _acknowledgedTurnKeys.update { keys -> keys + activeKey }
+        if (_requestedTurnKey.value == activeKey) {
+            _requestedTurnKey.update { null }
         }
     }
 
@@ -606,7 +587,6 @@ class ChatViewModel @Inject constructor(
                 activeChatTurnSnapshotPort.clear(key)
                 _requestedTurnKey.update { current -> if (current == key) null else current }
                 _acknowledgedTurnKeys.update { keys -> keys + key }
-                handoffAcknowledgementsInFlight.remove(key)
             }
         }
         _activeToolCallBanner.value = null
@@ -618,7 +598,6 @@ class ChatViewModel @Inject constructor(
             viewModelScope.launch {
                 activeChatTurnSnapshotPort.clear(key)
                 _acknowledgedTurnKeys.update { keys -> keys + key }
-                handoffAcknowledgementsInFlight.remove(key)
             }
         }
         _currentChatId.value = null
@@ -700,18 +679,18 @@ class ChatViewModel @Inject constructor(
         val currentState = _speechState.value
         if (
             currentState is SpeechState.ModelLoading ||
-            currentState is SpeechState.Listening ||
-            currentState is SpeechState.PartialText
+            currentState is SpeechState.Listening
         ) {
-            stopListening()
+            _stopSpeechSignal.value = true
         } else {
             startListening()
         }
     }
 
     private fun startListening() {
+        _stopSpeechSignal.value = false
         speechJob?.cancel()
-        speechJob = chatUseCases.listenToSpeechUseCase(_inputText.value)
+        speechJob = chatUseCases.listenToSpeechUseCase(_inputText.value, _stopSpeechSignal.asStateFlow())
             .onEach { state ->
                 _speechState.value = state
             }

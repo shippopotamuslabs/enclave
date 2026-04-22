@@ -11,7 +11,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.launch
 
 class ListenToSpeechUseCase @Inject constructor(
@@ -20,16 +22,18 @@ class ListenToSpeechUseCase @Inject constructor(
     private val utilityModelFilePort: UtilityModelFilePort,
     private val clock: Clock,
 ) {
-    operator fun invoke(initialText: String = ""): Flow<SpeechState> = channelFlow {
+    operator fun invoke(
+        initialText: String = "",
+        stopSignal: StateFlow<Boolean>
+    ): Flow<SpeechState> = channelFlow {
         send(SpeechState.ModelLoading)
 
         var initialized = false
-        var partialJob: Job? = null
         val utteranceBuffer = mutableListOf<Float>()
         var speechActive = false
         var lastSpeechMs = 0L
-        var lastInferenceMs = 0L
-        var lastPartialText = ""
+        val startTimeMs = clock.currentTimeMillis()
+        var loopActive = true
 
         try {
             val modelPath = utilityModelFilePort.resolveUtilityModelPath(UtilityType.WHISPER)
@@ -37,56 +41,38 @@ class ListenToSpeechUseCase @Inject constructor(
 
             whisperInferencePort.initialize(modelPath)
             initialized = true
-            send(SpeechState.Listening)
+            send(SpeechState.Listening(0f, clock.currentTimeMillis()))
 
-            audioCapturePort.audioChunks().collect { chunk ->
-                val now = clock.currentTimeMillis()
-                val hasSpeech = chunk.hasSpeechEnergy()
+            audioCapturePort.audioChunks()
+                .takeWhile { loopActive && !stopSignal.value }
+                .collect { chunk ->
+                    val now = clock.currentTimeMillis()
+                    val energy = chunk.calculateEnergy()
+                    
+                    send(SpeechState.Listening(energy.rms, now))
 
-                if (hasSpeech) {
-                    if (!speechActive) {
-                        utteranceBuffer.clear()
-                        lastPartialText = ""
-                        lastInferenceMs = now
-                        send(SpeechState.Listening)
+                    if (energy.hasSpeech) {
+                        speechActive = true
+                        lastSpeechMs = now
                     }
-                    speechActive = true
-                    lastSpeechMs = now
+
+                    if (speechActive) {
+                        utteranceBuffer.append(chunk)
+
+                        if (lastSpeechMs > 0L && now - lastSpeechMs > SILENCE_FINALIZATION_MS) {
+                            loopActive = false
+                        }
+                    } else if (now - startTimeMs > SILENCE_FINALIZATION_MS) {
+                        loopActive = false
+                    }
                 }
 
-                if (speechActive) {
-                    utteranceBuffer.append(chunk)
-
-                    if (now - lastInferenceMs >= PARTIAL_TRANSCRIPTION_INTERVAL_MS &&
-                        partialJob?.isActive != true
-                    ) {
-                        val snapshot = utteranceBuffer.toFloatArray()
-                        lastInferenceMs = now
-                        partialJob = launch {
-                            val transcript = whisperInferencePort.transcribe(snapshot).trim()
-                            if (transcript.isNotBlank() && transcript != lastPartialText) {
-                                lastPartialText = transcript
-                                send(SpeechState.PartialText(transcript.withInitialText(initialText)))
-                            }
-                        }
-                    }
-
-                    if (lastSpeechMs > 0L && now - lastSpeechMs > SILENCE_FINALIZATION_MS) {
-                        partialJob?.cancelAndJoin()
-                        partialJob = null
-
-                        val finalTranscript = whisperInferencePort.transcribe(utteranceBuffer.toFloatArray()).trim()
-                        if (finalTranscript.isNotBlank()) {
-                            send(SpeechState.FinalText(finalTranscript.withInitialText(initialText)))
-                        }
-
-                        utteranceBuffer.clear()
-                        speechActive = false
-                        lastSpeechMs = 0L
-                        lastInferenceMs = 0L
-                        lastPartialText = ""
-                        send(SpeechState.Listening)
-                    }
+            // Perform final transcription on the entire buffer
+            if (utteranceBuffer.isNotEmpty()) {
+                send(SpeechState.Transcribing)
+                val finalTranscript = whisperInferencePort.transcribe(utteranceBuffer.toFloatArray()).trim()
+                if (finalTranscript.isNotBlank()) {
+                    send(SpeechState.FinalText(finalTranscript.withInitialText(initialText)))
                 }
             }
         } catch (e: CancellationException) {
@@ -94,7 +80,6 @@ class ListenToSpeechUseCase @Inject constructor(
         } catch (e: Exception) {
             send(SpeechState.Error(e.message ?: "Speech transcription failed."))
         } finally {
-            partialJob?.cancelAndJoin()
             if (initialized) {
                 whisperInferencePort.close()
             }
@@ -102,8 +87,8 @@ class ListenToSpeechUseCase @Inject constructor(
         }
     }
 
-    private fun FloatArray.hasSpeechEnergy(): Boolean {
-        if (isEmpty()) return false
+    private fun FloatArray.calculateEnergy(): AudioEnergy {
+        if (isEmpty()) return AudioEnergy(false, 0f)
 
         var absoluteSum = 0.0
         var squareSum = 0.0
@@ -115,8 +100,12 @@ class ListenToSpeechUseCase @Inject constructor(
 
         val averageAmplitude = absoluteSum / size
         val rootMeanSquare = kotlin.math.sqrt(squareSum / size)
-        return averageAmplitude >= SPEECH_AMPLITUDE_THRESHOLD || rootMeanSquare >= SPEECH_RMS_THRESHOLD
+        val hasSpeech = averageAmplitude >= SPEECH_AMPLITUDE_THRESHOLD || rootMeanSquare >= SPEECH_RMS_THRESHOLD
+        
+        return AudioEnergy(hasSpeech, rootMeanSquare.toFloat())
     }
+
+    private data class AudioEnergy(val hasSpeech: Boolean, val rms: Float)
 
     private fun MutableList<Float>.append(samples: FloatArray) {
         for (sample in samples) {
@@ -133,8 +122,7 @@ class ListenToSpeechUseCase @Inject constructor(
     }
 
     private companion object {
-        const val PARTIAL_TRANSCRIPTION_INTERVAL_MS = 1_000L
-        const val SILENCE_FINALIZATION_MS = 1_500L
+        const val SILENCE_FINALIZATION_MS = 10_000L
         const val SPEECH_AMPLITUDE_THRESHOLD = 0.015
         const val SPEECH_RMS_THRESHOLD = 0.02
     }

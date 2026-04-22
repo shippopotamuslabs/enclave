@@ -68,7 +68,7 @@ class ChatViewModelNavigationTest {
         loggingPort = mockk(relaxed = true)
 
         val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>(relaxed = true)
-        every { listenToSpeechUseCase.invoke(any()) } returns MutableSharedFlow()
+        every { listenToSpeechUseCase.invoke(any(), any()) } returns MutableSharedFlow()
         every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
 
         coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())

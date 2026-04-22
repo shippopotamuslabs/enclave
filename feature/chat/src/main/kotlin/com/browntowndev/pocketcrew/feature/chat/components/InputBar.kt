@@ -1,10 +1,11 @@
 package com.browntowndev.pocketcrew.feature.chat.components
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -34,6 +36,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.IconButton
@@ -52,6 +55,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
@@ -76,6 +82,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -146,66 +153,66 @@ fun InputBar(
     // Always use Enter key - send button handles sending, prevents accidental sends during thinking
     val imeAction = ImeAction.Default
 
+    val isRecordingPhase = speechState is SpeechState.ModelLoading ||
+        speechState is SpeechState.Listening ||
+        speechState is SpeechState.Transcribing
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .then(if (isExpanded) Modifier.fillMaxHeight(0.9f) else Modifier.heightIn(min = 56.dp))
-            .animateContentSize()
-            .then(if (!isExpanded) Modifier.clickable { focusRequester.requestFocus() } else Modifier),
+            .then(if (!isExpanded && !isRecordingPhase) Modifier.clickable { focusRequester.requestFocus() } else Modifier),
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         tonalElevation = 2.dp
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .then(if (isExpanded) Modifier.fillMaxHeight() else Modifier)
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = when {
-                isExpanded -> Arrangement.SpaceBetween
-                else -> Arrangement.spacedBy(6.dp)
-            }
-        ) {
-            if (selectedImageUri != null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(92.dp)
-                ) {
-                    AsyncImage(
-                        model = selectedImageUri,
-                        contentDescription = "Selected image preview",
+        Box(modifier = Modifier.navigationBarsPadding()) {
+            val isListening = speechState is SpeechState.ModelLoading || speechState is SpeechState.Listening
+            val hasSendableContent = (textFieldValue.text.isNotBlank() || selectedImageUri != null) && !isListening
+            val isSendDisabled = (isGenerating || isGlobalInferenceBlocked) && !isGenerating
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (isExpanded) Modifier.fillMaxHeight() else Modifier)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = when {
+                    isExpanded -> Arrangement.SpaceBetween
+                    else -> Arrangement.spacedBy(6.dp)
+                }
+            ) {
+                // Image preview (Animated visibility to avoid shifts)
+                AnimatedVisibility(visible = selectedImageUri != null && !isRecordingPhase) {
+                    Box(
                         modifier = Modifier
-                            .size(92.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                    )
-                    IconButton(
-                        onClick = onClearAttachment,
-                        modifier = Modifier.align(Alignment.TopEnd)
+                            .fillMaxWidth()
+                            .height(92.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Remove selected image",
-                            tint = MaterialTheme.colorScheme.onSurface,
+                        AsyncImage(
+                            model = selectedImageUri,
+                            contentDescription = "Selected image preview",
+                            modifier = Modifier
+                                .size(92.dp)
+                                .clip(RoundedCornerShape(16.dp))
                         )
+                        IconButton(
+                            onClick = onClearAttachment,
+                            modifier = Modifier.align(Alignment.TopEnd)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Remove selected image",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                            )
+                        }
                     }
                 }
-            }
 
-            // Expanded: use a Box wrapper that fills remaining space and handles clicks
-            if (isExpanded) {
+                // Text field / Waveform area
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null
-                        ) {
-                            focusManager.clearFocus()
-                            focusRequester.requestFocus()
-                        }
+                        .then(if (isExpanded) Modifier.weight(1f) else Modifier)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -232,14 +239,60 @@ fun InputBar(
                             ),
                             decorationBox = { innerTextField ->
                                 Box(modifier = Modifier.padding(start = 16.dp, top = 10.dp)) {
-                                    if (textFieldValue.text.isEmpty()) {
-                                        Text(
-                                            text = "Prompt the Pocket Crew",
-                                            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                                    if (textFieldValue.text.isEmpty() || isRecordingPhase) {
+                                        val stateKey = when (speechState) {
+                                            is SpeechState.ModelLoading -> "loading"
+                                            is SpeechState.Transcribing -> "transcribing"
+                                            is SpeechState.Listening -> "listening"
+                                            else -> "idle"
+                                        }
+                                        AnimatedContent(
+                                            targetState = stateKey,
+                                            transitionSpec = { fadeIn() togetherWith fadeOut() },
+                                            label = "PlaceholderTransition"
+                                        ) { target ->
+                                            when (target) {
+                                                "loading" -> {
+                                                    Text(
+                                                        text = "Preparing microphone...",
+                                                        style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                                "transcribing" -> {
+                                                    ShimmerText(
+                                                        text = "Transcribing...",
+                                                        baseColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        highlightColor = MaterialTheme.colorScheme.primary,
+                                                        style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp)
+                                                    )
+                                                }
+                                                "listening" -> {
+                                                    if (speechState is SpeechState.Listening) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .height(50.dp)
+                                                                .fillMaxWidth()
+                                                                .padding(end = 48.dp),
+                                                            contentAlignment = Alignment.CenterStart
+                                                        ) {
+                                                            SoundWave(state = speechState)
+                                                        }
+                                                    }
+                                                }
+                                                else -> {
+                                                    Text(
+                                                        text = "Prompt the Pocket Crew",
+                                                        style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
-                                    innerTextField()
+                                    if (!isRecordingPhase) {
+                                        innerTextField()
+                                    }
                                 }
                             },
                             modifier = Modifier
@@ -247,241 +300,257 @@ fun InputBar(
                                 .focusRequester(focusRequester)
                         )
 
-                        // Collapse icon
-                        IconButton(onClick = {
-                            isExpanded = !isExpanded
-                        }) {
-                            Icon(
-                                painter = painterResource(R.drawable.collapse_content),
-                                contentDescription = "Collapse input",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        // Collapse / Expand icon
+                        if (!isRecordingPhase) {
+                            if (isExpanded) {
+                                IconButton(onClick = {
+                                    isExpanded = !isExpanded
+                                }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.collapse_content),
+                                        contentDescription = "Collapse input",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            } else if (showExpandIcon) {
+                                IconButton(onClick = {
+                                    isExpanded = !isExpanded
+                                }) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.expand_content),
+                                        contentDescription = "Expand input",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            } else {
+                                Spacer(Modifier.width(48.dp))
+                            }
                         }
                     }
                 }
-            } else {
-                // Collapsed: simple Row layout
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    // Text field
-                    BasicTextField(
-                        value = textFieldValue,
-                        onValueChange = { newValue ->
-                            textFieldValue = newValue
-                            onInputChange(newValue.text)
-                        },
-                        textStyle = TextStyle(
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontFamily = FontFamily.SansSerif,
-                            fontSize = 16.sp,
-                            lineHeight = 22.sp
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        maxLines = maxLines,
-                        keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Sentences,
-                            imeAction = imeAction
-                        ),
-                        decorationBox = { innerTextField ->
-                            Box(modifier = Modifier.padding(start = 16.dp, top = 10.dp)) {
-                                if (textFieldValue.text.isEmpty()) {
-                                    Text(
-                                        text = "Prompt the Pocket Crew",
-                                        style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                innerTextField()
-                            }
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(focusRequester)
-                    )
 
-                    // Expand icon (if applicable)
-                    if (showExpandIcon) {
-                        IconButton(onClick = {
-                            isExpanded = !isExpanded
-                        }) {
+                // ── Fixed bottom action row ──
+                AnimatedVisibility(visible = !isRecordingPhase) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        // Attachment (left-aligned)
+                        IconButton(
+                            onClick = onAttach,
+                            enabled = isPhotoAttachmentEnabled,
+                        ) {
                             Icon(
-                                painter = painterResource(R.drawable.expand_content),
-                                contentDescription = "Expand input",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                painter = painterResource(R.drawable.attach_file),
+                                contentDescription = "Attach file",
+                                tint = if (isPhotoAttachmentEnabled) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+                                }
                             )
                         }
-                    } else {
+
+                        Spacer(Modifier.weight(1f))
+
+                        // ChatModeUi selector
+                        ExposedDropdownMenuBox(
+                            expanded = modeExpanded,
+                            onExpandedChange = { modeExpanded = it }
+                        ) {
+                            IconButton(
+                                onClick = { /* Toggle handled via onExpandedChange */ },
+                                modifier = Modifier.menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                            ) {
+                                Icon(
+                                    painter = painterResource(selectedMode.iconRes),
+                                    contentDescription = selectedMode.getDisplayName(context),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            ExposedDropdownMenu(
+                                expanded = modeExpanded,
+                                onDismissRequest = { modeExpanded = false },
+                                modifier = Modifier.width(200.dp)
+                            ) {
+                                ChatModeUi.entries.forEach { mode ->
+                                    DropdownMenuItem(
+                                        text = { Text(mode.getDisplayName(context)) },
+                                        onClick = {
+                                            onModeChange(mode)
+                                            modeExpanded = false
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(mode.iconRes),
+                                                contentDescription = null
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        // Space for the unified action button
                         Spacer(Modifier.width(48.dp))
                     }
                 }
+
+                if (!isRecordingPhase && !isPhotoAttachmentEnabled && !photoAttachmentDisabledReason.isNullOrBlank()) {
+                    Text(
+                        text = photoAttachmentDisabledReason,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 16.dp, top = 2.dp)
+                    )
+                }
             }
 
-            // ── Fixed bottom action row ──
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            // Unified Action Button Overlay
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // Attachment (left-aligned)
-                IconButton(
-                    onClick = onAttach,
-                    enabled = isPhotoAttachmentEnabled,
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.attach_file),
-                        contentDescription = "Attach file",
-                        tint = if (isPhotoAttachmentEnabled) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
-                        }
+                if (isRecordingPhase && speechState is SpeechState.Transcribing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(56.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeWidth = 2.dp
                     )
                 }
 
-                Spacer(Modifier.weight(1f))
-
-                // ChatModeUi selector
-                ExposedDropdownMenuBox(
-                    expanded = modeExpanded,
-                    onExpandedChange = { modeExpanded = it }
-                ) {
-                    // IconButton is here because it visually mimics the icon being clicked
-                    IconButton(
-                        onClick = { /* Toggle handled via onExpandedChange */ },
-                        modifier = Modifier.menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                    ) {
-
-                        Icon(
-                            painter = painterResource(selectedMode.iconRes),
-                            contentDescription = selectedMode.getDisplayName(context),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    ExposedDropdownMenu(
-                        expanded = modeExpanded,
-                        onDismissRequest = { modeExpanded = false },
-                        modifier = Modifier.width(200.dp)
-                    ) {
-                        ChatModeUi.entries.forEach { mode ->
-                            DropdownMenuItem(
-                                text = { Text(mode.getDisplayName(context)) },
-                                onClick = {
-                                    onModeChange(mode)
-                                    modeExpanded = false
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(mode.iconRes),
-                                        contentDescription = null
-                                    )
+                AnimatedContent(
+                    targetState = hasSendableContent && !isGenerating && !isRecordingPhase,
+                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    label = "SendMicTransition"
+                ) { isSending ->
+                    if (isSending) {
+                        IconButton(
+                            onClick = {
+                                if (hasSendableContent && !isSendDisabled) {
+                                    val textToSend = textFieldValue.text
+                                    onSend(textToSend)
+                                    textFieldValue = TextFieldValue("")
+                                    onInputChange("")
+                                    isExpanded = false
+                                    focusManager.clearFocus()
+                                }
+                            },
+                            enabled = !isSendDisabled
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send message",
+                                tint = if (isSendDisabled) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                } else {
+                                    MaterialTheme.colorScheme.primary
                                 }
                             )
                         }
-                    }
-                }
+                    } else {
+                        val containerColor = when {
+                            isGenerating -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f)
+                            speechState is SpeechState.Transcribing -> MaterialTheme.colorScheme.surfaceVariant
+                            isRecordingPhase -> MaterialTheme.colorScheme.errorContainer
+                            else -> MaterialTheme.colorScheme.surfaceVariant
+                        }
 
-                // Send / Stop
-                val isListening = speechState is SpeechState.ModelLoading ||
-                    speechState is SpeechState.Listening ||
-                    speechState is SpeechState.PartialText
-                val hasSendableContent = (textFieldValue.text.isNotBlank() || selectedImageUri != null) && !isListening
-                val isSendDisabled = (isGenerating || isGlobalInferenceBlocked) && !isGenerating
-                
-                if (isGenerating) {
-                    FilledIconButton(
-                        onClick = onStopGenerating,
-                        shape = CircleShape,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f),
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = "Stop generating",
-                        )
-                    }
-                } else {
-                    AnimatedContent(
-                        targetState = hasSendableContent,
-                        transitionSpec = {
-                            fadeIn() togetherWith fadeOut()
-                        },
-                        label = "SendMicTransition"
-                    ) { isSending ->
-                        if (isSending) {
-                            IconButton(
-                                onClick = {
-                                    if (hasSendableContent && !isSendDisabled) {
-                                        val textToSend = textFieldValue.text
-                                        onSend(textToSend) // Send FIRST while inputText still has value
-                                        textFieldValue = TextFieldValue("") // Clear locally
-                                        onInputChange("") // Clear parent state
-                                        isExpanded = false
-                                        focusManager.clearFocus()
-                                    }
-                                },
-                                enabled = !isSendDisabled
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Send,
-                                    contentDescription = "Send message",
-                                    tint = if (isSendDisabled) {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    } else {
-                                        MaterialTheme.colorScheme.primary
-                                    }
-                                )
-                            }
-                        } else {
-                            IconButton(
-                                onClick = {
+                        val contentColor = when {
+                            isGenerating -> MaterialTheme.colorScheme.error
+                            speechState is SpeechState.Transcribing -> MaterialTheme.colorScheme.onSurfaceVariant
+                            isRecordingPhase -> MaterialTheme.colorScheme.onErrorContainer
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+
+                        val icon = if (isGenerating || isRecordingPhase) Icons.Default.Stop else Icons.Default.Mic
+                        val description = when {
+                            isGenerating -> "Stop generating"
+                            isRecordingPhase -> "Stop recording"
+                            else -> "Speech to text"
+                        }
+
+                        FilledIconButton(
+                            onClick = {
+                                if (isGenerating) {
+                                    onStopGenerating()
+                                } else if (isRecordingPhase) {
+                                    onMicClick()
+                                } else {
                                     val hasPermission = ContextCompat.checkSelfPermission(
                                         context,
                                         Manifest.permission.RECORD_AUDIO
                                     ) == PackageManager.PERMISSION_GRANTED
 
                                     if (hasPermission) {
+                                        focusManager.clearFocus()
                                         onMicClick()
                                     } else {
                                         permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                                     }
-                                },
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isListening) {
-                                            MaterialTheme.colorScheme.primaryContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceVariant
-                                        }
-                                    )
-                            ) {
-                                Icon(
-                                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
-                                    contentDescription = if (isListening) "Stop recording" else "Speech to text",
-                                    tint = if (isListening) {
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                )
-                            }
+                                }
+                            },
+                            enabled = speechState !is SpeechState.Transcribing,
+                            shape = CircleShape,
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = containerColor,
+                                contentColor = contentColor,
+                                disabledContainerColor = containerColor,
+                                disabledContentColor = contentColor
+                            )
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = description
+                            )
                         }
                     }
                 }
             }
+        }
+    }
+}
 
-            if (!isPhotoAttachmentEnabled && !photoAttachmentDisabledReason.isNullOrBlank()) {
-                Text(
-                    text = photoAttachmentDisabledReason,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 16.dp, top = 2.dp)
-                )
-            }
+@Composable
+private fun SoundWave(state: SpeechState.Listening, modifier: Modifier = Modifier) {
+    var volumes by remember { mutableStateOf(listOf<Float>()) }
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val silenceColor = MaterialTheme.colorScheme.surfaceVariant
+
+    LaunchedEffect(state) {
+        // Amplify the RMS (which is usually around 0.01 - 0.1) for visual effect.
+        // 8x multiplier (decreased from 15x) so louder sound is required to max out.
+        val amplified = (state.volume * 8f).coerceIn(0f, 1f)
+        // Add twice per update to double horizontal scrolling speed
+        volumes = (volumes + listOf(amplified, amplified)).takeLast(100)
+    }
+
+    Canvas(
+        modifier = modifier.fillMaxSize()
+    ) {
+        val barWidth = 4.dp.toPx()
+        val spacing = 3.dp.toPx()
+        val maxBars = (size.width / (barWidth + spacing)).toInt()
+
+        val displayVolumes = volumes.takeLast(maxBars)
+
+        // Calculate startX so bars fill from the right
+        val startX = size.width - displayVolumes.size * (barWidth + spacing)
+
+        displayVolumes.forEachIndexed { index, vol ->
+            val h = (vol * size.height).coerceIn(4.dp.toPx(), size.height)
+            val x = startX + index * (barWidth + spacing)
+            val y = (size.height - h) / 2f
+
+            drawRoundRect(
+                color = if (vol <= 0.01f) silenceColor else primaryColor,
+                topLeft = Offset(x, y),
+                size = Size(barWidth, h),
+                cornerRadius = CornerRadius(barWidth / 2, barWidth / 2)
+            )
         }
     }
 }

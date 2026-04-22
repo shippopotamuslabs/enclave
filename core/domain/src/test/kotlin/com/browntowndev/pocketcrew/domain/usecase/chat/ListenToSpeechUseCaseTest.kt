@@ -8,8 +8,10 @@ import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.pocketcrew.domain.util.Clock
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
@@ -24,7 +26,7 @@ class ListenToSpeechUseCaseTest {
             utilityModelFile = FakeUtilityModelFile(path = null),
         )
 
-        useCase().test {
+        useCase(stopSignal = MutableStateFlow(false)).test {
             assertEquals(SpeechState.ModelLoading, awaitItem())
             assertEquals(SpeechState.Error("Whisper model is not downloaded."), awaitItem())
             assertEquals(SpeechState.Idle, awaitItem())
@@ -33,17 +35,17 @@ class ListenToSpeechUseCaseTest {
     }
 
     @Test
-    fun invoke_speechThenSilence_emitsPartialAndFinalText() = runTest {
+    fun invoke_speechThenSilence_emitsFinalText() = runTest {
         val clock = FakeClock()
         val whisper = FakeWhisperInference(
-            transcripts = ArrayDeque(listOf("partial words", "final words")),
+            transcripts = ArrayDeque(listOf("final words")),
         )
         val useCase = createUseCase(
             audioCapture = FakeAudioCapture(
                 chunks = listOf(
                     TimedChunk(timeMs = 0L, samples = speechChunk()),
                     TimedChunk(timeMs = 1_000L, samples = speechChunk()),
-                    TimedChunk(timeMs = 2_601L, samples = silenceChunk()),
+                    TimedChunk(timeMs = 11_001L, samples = silenceChunk()),
                 ),
                 clock = clock,
             ),
@@ -51,35 +53,34 @@ class ListenToSpeechUseCaseTest {
             clock = clock,
         )
 
-        useCase(initialText = "Existing").test {
+        useCase(initialText = "Existing", stopSignal = MutableStateFlow(false)).test {
             assertEquals(SpeechState.ModelLoading, awaitItem())
-            assertEquals(SpeechState.Listening, awaitItem())
-            assertEquals(SpeechState.Listening, awaitItem())
-            assertEquals(SpeechState.PartialText("Existing partial words"), awaitItem())
+            assertIs<SpeechState.Listening>(awaitItem()) // Initial
+            assertIs<SpeechState.Listening>(awaitItem()) // Chunk 1
+            assertIs<SpeechState.Listening>(awaitItem()) // Chunk 2
+            assertIs<SpeechState.Listening>(awaitItem()) // Chunk 3 (silence)
+            assertEquals(SpeechState.Transcribing, awaitItem())
             assertEquals(SpeechState.FinalText("Existing final words"), awaitItem())
-            assertEquals(SpeechState.Listening, awaitItem())
             assertEquals(SpeechState.Idle, awaitItem())
             awaitComplete()
         }
         assertEquals(listOf("/models/ggml-base.en.bin"), whisper.initializedPaths)
-        assertEquals(2, whisper.transcribeCalls)
+        assertEquals(1, whisper.transcribeCalls)
         assertEquals(1, whisper.closeCalls)
     }
 
     @Test
-    fun invoke_partialTranscriptionInFlight_doesNotStartOverlappingInference() = runTest {
+    fun invoke_stopSignalSet_emitsFinalText() = runTest {
         val clock = FakeClock()
-        val partialStarted = CompletableDeferred<Unit>()
         val whisper = FakeWhisperInference(
-            transcripts = ArrayDeque(listOf("partial words")),
-            suspendFirstTranscription = partialStarted,
+            transcripts = ArrayDeque(listOf("final words")),
         )
+        val stopSignal = MutableStateFlow(false)
         val useCase = createUseCase(
             audioCapture = FakeAudioCapture(
                 chunks = listOf(
                     TimedChunk(timeMs = 0L, samples = speechChunk()),
                     TimedChunk(timeMs = 1_000L, samples = speechChunk()),
-                    TimedChunk(timeMs = 2_000L, samples = speechChunk()),
                 ),
                 clock = clock,
             ),
@@ -87,16 +88,18 @@ class ListenToSpeechUseCaseTest {
             clock = clock,
         )
 
-        useCase().test {
+        useCase(initialText = "Existing", stopSignal = stopSignal).test {
             assertEquals(SpeechState.ModelLoading, awaitItem())
-            assertEquals(SpeechState.Listening, awaitItem())
-            assertEquals(SpeechState.Listening, awaitItem())
-            partialStarted.await()
+            assertIs<SpeechState.Listening>(awaitItem()) // Initial
+            assertIs<SpeechState.Listening>(awaitItem()) // Chunk 1
+            assertIs<SpeechState.Listening>(awaitItem()) // Chunk 2
+            stopSignal.value = true
+            assertEquals(SpeechState.Transcribing, awaitItem())
+            assertEquals(SpeechState.FinalText("Existing final words"), awaitItem())
             assertEquals(SpeechState.Idle, awaitItem())
             awaitComplete()
         }
         assertEquals(1, whisper.transcribeCalls)
-        assertEquals(1, whisper.closeCalls)
     }
 
     private fun createUseCase(
