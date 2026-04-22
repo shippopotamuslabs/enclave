@@ -35,17 +35,17 @@ class ActiveChatTurnStoreTest {
     }
 
     @Test
-    fun `shorter nonterminal snapshot does not replace longer current snapshot`() = runTest {
+    fun `publish replaces current snapshot without content heuristics`() = runTest {
         val store = ActiveChatTurnStore()
 
         store.publish(key, accumulated("longer answer"))
         store.publish(key, accumulated("short"))
 
-        assertEquals("longer answer", store.snapshotValue(key)?.messages?.get(MessageId("assistant"))?.content)
+        assertEquals("short", store.snapshotValue(key)?.messages?.get(MessageId("assistant"))?.content)
     }
 
     @Test
-    fun `terminal snapshot marks complete without regressing accumulated content`() = runTest {
+    fun `terminal publish replaces current snapshot without hybridizing content and state`() = runTest {
         val store = ActiveChatTurnStore()
 
         store.publish(key, accumulated("longer partial answer", MessageState.GENERATING))
@@ -53,18 +53,32 @@ class ActiveChatTurnStoreTest {
 
         val snapshot = store.snapshotValue(key)?.messages?.get(MessageId("assistant"))
 
-        assertEquals("longer partial answer", snapshot?.content)
+        assertEquals("short", snapshot?.content)
         assertEquals(MessageState.COMPLETE, snapshot?.messageState)
     }
 
     @Test
-    fun `same length non-prefix snapshot does not replace current snapshot`() = runTest {
+    fun `richer snapshot after premature complete replaces truncated complete content`() = runTest {
+        val store = ActiveChatTurnStore()
+
+        store.publish(key, accumulated("want de", MessageState.GENERATING))
+        store.publish(key, accumulated("want de", MessageState.COMPLETE))
+        store.publish(key, accumulated("want deets on grok-3 benchmarks", MessageState.COMPLETE))
+
+        val snapshot = store.snapshotValue(key)?.messages?.get(MessageId("assistant"))
+
+        assertEquals("want deets on grok-3 benchmarks", snapshot?.content)
+        assertEquals(MessageState.COMPLETE, snapshot?.messageState)
+    }
+
+    @Test
+    fun `same length non-prefix snapshot replaces current snapshot`() = runTest {
         val store = ActiveChatTurnStore()
 
         store.publish(key, accumulated("abcde"))
         store.publish(key, accumulated("vwxyz"))
 
-        assertEquals("abcde", store.snapshotValue(key)?.messages?.get(MessageId("assistant"))?.content)
+        assertEquals("vwxyz", store.snapshotValue(key)?.messages?.get(MessageId("assistant"))?.content)
     }
 
     @Test
@@ -87,7 +101,7 @@ class ActiveChatTurnStoreTest {
     }
 
     @Test
-    fun `markSourcesExtracted updates extracted flags without regressing content`() = runTest {
+    fun `markSourcesExtracted updates active snapshot explicitly`() = runTest {
         val store = ActiveChatTurnStore()
         val source = TavilySource(
             messageId = MessageId("assistant"),

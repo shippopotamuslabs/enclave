@@ -145,13 +145,17 @@ class ConversationManagerImpl @Inject constructor(
     private var isCurrentGenerationCancelled: Boolean = false
 
     override fun cancelCurrentGeneration() {
-        Log.d(TAG, "Current generation marked as cancelled. Native tools will be aborted.")
+        if (conversationPort != null || engine != null) {
+            Log.d(TAG, "Current generation marked as cancelled. Native tools will be aborted.")
+        }
         isCurrentGenerationCancelled = true
     }
 
     override fun cancelProcess() {
-        Log.d(TAG, "Cancelling LiteRT conversation process")
-        conversationPort?.cancelProcess()
+        if (conversationPort != null) {
+            Log.d(TAG, "Cancelling LiteRT conversation process")
+            conversationPort?.cancelProcess()
+        }
     }
 
     /**

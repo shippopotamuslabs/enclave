@@ -15,9 +15,11 @@ interface ModelFileScannerPort {
      * Validates expected models against physical files on disk (existence and size).
      *
      * @param expectedModels Map of model types to assets expected from remote config (from cache)
+     * @param utilityAssets Utility assets that are not assigned to model slots
      */
     suspend fun scanAndCreateDirIfNotExist(
-        expectedModels: Map<ModelType, LocalModelAsset> = emptyMap()
+        expectedModels: Map<ModelType, LocalModelAsset> = emptyMap(),
+        utilityAssets: List<LocalModelAsset> = emptyList(),
     ): ModelScanResult
 
     /**

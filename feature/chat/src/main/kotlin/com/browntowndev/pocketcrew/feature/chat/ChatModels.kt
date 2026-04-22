@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.feature.chat
 import android.content.Context
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.feature.chat.R
 
 import androidx.annotation.DrawableRes
@@ -54,6 +55,7 @@ data class ChatMessage(
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
     val inputText: String = "",
+    val speechState: SpeechState = SpeechState.Idle,
     val selectedImageUri: String? = null,
     val isPhotoAttachmentEnabled: Boolean = false,
     val photoAttachmentDisabledReason: String? = null,

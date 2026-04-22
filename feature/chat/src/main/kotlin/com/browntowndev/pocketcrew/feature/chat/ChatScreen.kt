@@ -34,6 +34,7 @@ fun ChatScreen(
     onImageSelected: (String?) -> Unit,
     onClearImage: () -> Unit,
     onShieldTap: () -> Unit,
+    onMicClick: () -> Unit,
 ) {
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -83,6 +84,7 @@ fun ChatScreen(
             InputBar(
                 modifier = Modifier.fillMaxWidth(),
                 inputText = uiState.inputText,
+                speechState = uiState.speechState,
                 selectedImageUri = uiState.selectedImageUri,
                 isPhotoAttachmentEnabled = uiState.isPhotoAttachmentEnabled,
                 photoAttachmentDisabledReason = uiState.photoAttachmentDisabledReason,
@@ -99,6 +101,7 @@ fun ChatScreen(
                     )
                 },
                 onClearAttachment = onClearImage,
+                onMicClick = onMicClick,
             )
         }
     }
@@ -122,6 +125,7 @@ private fun PreviewChatScreenLight() {
             onImageSelected = {},
             onClearImage = {},
             onShieldTap = {},
+            onMicClick = {},
         )
     }
 }
@@ -161,6 +165,7 @@ private fun PreviewChatScreenWithMessages() {
             onImageSelected = {},
             onClearImage = {},
             onShieldTap = {},
+            onMicClick = {},
         )
     }
 }
@@ -183,6 +188,7 @@ private fun PreviewChatScreenThinking() {
             onImageSelected = {},
             onClearImage = {},
             onShieldTap = {},
+            onMicClick = {},
         )
     }
 }
@@ -205,6 +211,7 @@ private fun PreviewChatScreenShield() {
             onImageSelected = {},
             onClearImage = {},
             onShieldTap = {},
+            onMicClick = {},
         )
     }
 }
@@ -227,6 +234,7 @@ private fun PreviewChatScreenExpandedInput() {
             onImageSelected = {},
             onClearImage = {},
             onShieldTap = {},
+            onMicClick = {},
         )
     }
 }

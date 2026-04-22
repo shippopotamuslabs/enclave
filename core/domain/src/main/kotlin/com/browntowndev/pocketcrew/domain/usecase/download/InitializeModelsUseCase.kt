@@ -89,10 +89,15 @@ class InitializeModelsUseCase @Inject constructor(
 
         // Build slot-to-asset map from defaultAssignments
         val slotAssignments = mutableMapOf<ModelType, LocalModelAsset>()
+        val utilityAssets = mutableListOf<LocalModelAsset>()
         for (asset in remoteAssets) {
-            for (config in asset.configurations) {
-                for (modelType in config.defaultAssignments) {
-                    slotAssignments[modelType] = asset
+            if (asset.metadata.utilityType != null) {
+                utilityAssets += asset
+            } else {
+                for (config in asset.configurations) {
+                    for (modelType in config.defaultAssignments) {
+                        slotAssignments[modelType] = asset
+                    }
                 }
             }
         }
@@ -112,10 +117,14 @@ class InitializeModelsUseCase @Inject constructor(
         val filteredSlotAssignments = slotAssignments.filter { (_, asset) ->
             asset.metadata.sha256 !in softDeletedShaSet
         }
+        val filteredUtilityAssets = utilityAssets.filter { asset ->
+            asset.metadata.sha256 !in softDeletedShaSet
+        }
 
         // Check if models are ready using CheckModelsUseCase
         val modelsResult = checkModelsUseCase(
-            expectedModels = filteredSlotAssignments
+            expectedModels = filteredSlotAssignments,
+            utilityAssets = filteredUtilityAssets,
         )
 
         // Include soft-deleted models in availableToRedownload ONLY if they are still on remote.

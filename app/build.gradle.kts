@@ -130,6 +130,7 @@ dependencies {
     // Using custom llama-android (llama.cpp with KleidiAI)
     // Native libraries are built automatically via build-kleidiai.sh
     implementation(project(":llama-android"))
+    implementation(project(":whisper-android"))
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
     implementation(project(":core:ui"))

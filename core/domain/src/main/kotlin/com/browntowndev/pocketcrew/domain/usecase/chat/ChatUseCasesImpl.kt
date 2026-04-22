@@ -6,5 +6,6 @@ class ChatUseCasesImpl @Inject constructor(
     override val processPromptUseCase: CreateUserMessageUseCase,
     override val generateChatResponseUseCase: GenerateChatResponseUseCase,
     override val getChatUseCase: GetChatUseCase,
-    override val mergeMessagesUseCase: MergeMessagesUseCase
+    override val mergeMessagesUseCase: MergeMessagesUseCase,
+    override val listenToSpeechUseCase: ListenToSpeechUseCase,
 ) : ChatUseCases

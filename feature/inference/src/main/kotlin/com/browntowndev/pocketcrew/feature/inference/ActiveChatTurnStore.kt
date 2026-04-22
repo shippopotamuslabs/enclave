@@ -2,8 +2,6 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
-import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import java.util.concurrent.ConcurrentHashMap
@@ -37,12 +35,7 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
     ) {
         val entry = entryFor(key)
         entry.mutex.withLock {
-            entry.flow.update { current ->
-                mergeAccumulatedMessages(
-                    current = current,
-                    incoming = snapshot,
-                )
-            }
+            entry.flow.update { snapshot }
             if (entry.flow.value.isTerminalSnapshot()) {
                 scheduleTerminalCleanup(key, entry)
             } else {
@@ -127,83 +120,6 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
     private companion object {
         private const val TERMINAL_CLEANUP_DELAY_MS = 5 * 60 * 1000L
     }
-}
-
-private fun mergeAccumulatedMessages(
-    current: AccumulatedMessages?,
-    incoming: AccumulatedMessages,
-): AccumulatedMessages {
-    if (current == null) return incoming
-
-    val mergedMessages = current.messages.toMutableMap()
-    incoming.messages.forEach { (messageId, incomingSnapshot) ->
-        val currentSnapshot = mergedMessages[messageId]
-        mergedMessages[messageId] = if (currentSnapshot == null) {
-            incomingSnapshot
-        } else {
-            mergeSnapshot(
-                current = currentSnapshot,
-                incoming = incomingSnapshot,
-            )
-        }
-    }
-
-    return AccumulatedMessages(messages = mergedMessages)
-}
-
-private fun mergeSnapshot(
-    current: MessageSnapshot,
-    incoming: MessageSnapshot,
-): MessageSnapshot {
-    val mergedSources = mergeSources(
-        current = current.tavilySources,
-        incoming = incoming.tavilySources,
-    )
-
-    if (current.messageState == MessageState.COMPLETE) {
-        return current.copy(tavilySources = mergedSources)
-    }
-
-    if (!incoming.extendsTextFrom(current)) {
-        return if (incoming.messageState == MessageState.COMPLETE) {
-            current.copy(
-                isComplete = true,
-                messageState = MessageState.COMPLETE,
-                thinkingDurationSeconds = maxOf(
-                    current.thinkingDurationSeconds,
-                    incoming.thinkingDurationSeconds,
-                ),
-                thinkingEndTime = incoming.thinkingEndTime.takeIf { endTime -> endTime != 0L }
-                    ?: current.thinkingEndTime,
-                tavilySources = mergedSources,
-            )
-        } else {
-            current.copy(tavilySources = mergedSources)
-        }
-    }
-
-    return incoming.copy(tavilySources = mergedSources)
-}
-
-private fun MessageSnapshot.extendsTextFrom(current: MessageSnapshot): Boolean {
-    return content.startsWith(current.content) &&
-        thinkingRaw.startsWith(current.thinkingRaw)
-}
-
-private fun mergeSources(
-    current: List<TavilySource>,
-    incoming: List<TavilySource>,
-): List<TavilySource> {
-    val currentByUrl = current.associateBy { source -> source.url }
-    val incomingUrls = incoming.mapTo(mutableSetOf()) { source -> source.url }
-    val mergedIncoming = incoming.map { source ->
-        if (currentByUrl[source.url]?.extracted == true && !source.extracted) {
-            source.copy(extracted = true)
-        } else {
-            source
-        }
-    }
-    return mergedIncoming + current.filter { source -> source.url !in incomingUrls }
 }
 
 private fun AccumulatedMessages?.isTerminalSnapshot(): Boolean {

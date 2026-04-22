@@ -34,5 +34,6 @@ fun ChatRoute(
                 onShowSnackbar("Procedural harm blocked – $reason", null)
             }
         },
+        onMicClick = viewModel::onMicClick,
     )
 }

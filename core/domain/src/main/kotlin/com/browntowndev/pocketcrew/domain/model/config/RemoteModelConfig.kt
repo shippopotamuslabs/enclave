@@ -16,6 +16,7 @@ import kotlinx.serialization.Serializable
  * @property sizeInBytes Exact file size in bytes for validation
  * @property modelFileFormat The file format of the model (LITERTLM, GGUF, or TASK)
  * @property source The source to download the model from (HF, R2)
+ * @property utilityType Utility model kind for zero-configuration support assets
  * @property isMultimodal Whether this model is capable of image understanding (multimodal input)
  * @property mmprojFileName Remote filename of the multimodal projector file (llama.cpp only)
  * @property mmprojSha256 SHA256 of the multimodal projector file
@@ -30,11 +31,12 @@ data class RemoteModelAsset(
     val sizeInBytes: Long = 0L,
     val modelFileFormat: ModelFileFormat = ModelFileFormat.LITERTLM,
     val source: DownloadSource = DownloadSource.HUGGING_FACE,
+    val utilityType: UtilityType? = null,
     val isMultimodal: Boolean = false,
     val mmprojFileName: String? = null,
     val mmprojSha256: String? = null,
     val mmprojSizeInBytes: Long? = null,
-    val configurations: List<RemoteModelConfiguration>,
+    val configurations: List<RemoteModelConfiguration> = emptyList(),
 )
 
 /**

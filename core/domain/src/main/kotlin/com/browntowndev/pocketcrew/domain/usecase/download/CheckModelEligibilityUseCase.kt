@@ -28,11 +28,14 @@ class CheckModelEligibilityUseCase @Inject constructor(
      */
     fun check(
         newModels: Map<ModelType, LocalModelAsset>,
-        scanResult: ModelScanResult
+        utilityAssets: List<LocalModelAsset> = emptyList(),
+        scanResult: ModelScanResult,
     ): List<LocalModelAsset> {
+        val expectedAssets = newModels.values + utilityAssets
+
         // Also include partial downloads (incomplete .tmp files from failed downloads)
         val partialDownloadAssets = scanResult.partialDownloads.keys.mapNotNull { filename ->
-            newModels.values.find { it.metadata.localFileName == filename }
+            expectedAssets.find { it.metadata.localFileName == filename }
         }
         logger.debug(TAG, "Partial downloads: $partialDownloadAssets")
 
