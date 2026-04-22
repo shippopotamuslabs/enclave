@@ -390,7 +390,7 @@ class ChatViewModelTest {
             dbMessages.value = listOf(
                 createAssistantMessage(
                     id = assistantMessageId,
-                    content = "final answer",
+                    content = "streaming answer plus persisted suffix",
                     state = MessageState.COMPLETE,
                 )
             )
@@ -400,7 +400,8 @@ class ChatViewModelTest {
 
             assertTrue(
                 chatViewModel.uiState.value.messages.any { message ->
-                    message.id == assistantMessageId && message.content.text == "final answer"
+                    message.id == assistantMessageId &&
+                        message.content.text == "streaming answer plus persisted suffix"
                 },
                 "Persisted COMPLETE assistant response should replace the in-flight response.",
             )
@@ -456,7 +457,7 @@ class ChatViewModelTest {
             dbMessages.value = listOf(
                 createAssistantMessage(
                     id = assistantMessageId,
-                    content = "final answer",
+                    content = "streaming answer plus persisted suffix",
                     state = MessageState.COMPLETE,
                 )
             )
@@ -476,7 +477,9 @@ class ChatViewModelTest {
                 "Assistant message must never disappear during in-flight → DB transition.",
             )
             assertTrue(
-                state.messages.any { it.id == assistantMessageId && it.content.text == "final answer" },
+                state.messages.any {
+                    it.id == assistantMessageId && it.content.text == "streaming answer plus persisted suffix"
+                },
                 "Assistant message must show the persisted content after DB confirms COMPLETE.",
             )
         } finally {
@@ -1052,7 +1055,7 @@ class ChatViewModelTest {
             dbMessages.value = listOf(
                 createAssistantMessage(
                     id = assistantMessageId,
-                    content = "final answer",
+                    content = "streaming answer plus persisted suffix",
                     state = MessageState.COMPLETE,
                 )
             )
@@ -1069,73 +1072,13 @@ class ChatViewModelTest {
                 },
                 "Assistant message must not disappear during active snapshot to Room handoff.",
             )
-            assertEquals("final answer", chatViewModel.uiState.value.messages.single().content.text)
+            assertEquals(
+                "streaming answer plus persisted suffix",
+                chatViewModel.uiState.value.messages.single().content.text,
+            )
             assertNotNull(activeChatTurnStore.observe(key).first())
         } finally {
             collectJob.cancel()
-        }
-    }
-
-    @Test
-    fun `uiState keeps snapshot text until Room catches up and never emits an empty assistant body`() = runTest {
-        val chatId = ChatId("chat")
-        val assistantMessageId = MessageId("assistant")
-        val key = ActiveChatTurnKey(chatId, assistantMessageId)
-        val dbMessages = MutableStateFlow(
-            listOf(
-                createAssistantMessage(
-                    id = assistantMessageId,
-                    content = "partial",
-                    state = MessageState.GENERATING,
-                )
-            )
-        )
-        coEvery { chatUseCases.getChat(chatId) } returns dbMessages
-        chatViewModel = createViewModel(SavedStateHandle(mapOf("chatId" to chatId.value)))
-        activeChatTurnStore.publish(
-            key = key,
-            snapshot = AccumulatedMessages(
-                messages = mapOf(
-                    assistantMessageId to createAssistantSnapshot(
-                        id = assistantMessageId,
-                        content = "streaming answer",
-                        state = MessageState.COMPLETE,
-                    )
-                )
-            ),
-        )
-
-        chatViewModel.uiState.test {
-            runCurrent()
-            var state = awaitItem()
-            while (state.messages.none { it.id == assistantMessageId }) {
-                state = awaitItem()
-            }
-
-            val snapshotText = state.messages.single { it.id == assistantMessageId }.content.text
-            assertEquals("streaming answer", snapshotText)
-            assertTrue(snapshotText.isNotBlank())
-
-            dbMessages.value = listOf(
-                createAssistantMessage(
-                    id = assistantMessageId,
-                    content = "final answer with persisted suffix",
-                    state = MessageState.COMPLETE,
-                )
-            )
-            runCurrent()
-
-            var finalText = snapshotText
-            while (finalText != "final answer with persisted suffix") {
-                state = awaitItem()
-                val assistantMessage = state.messages.singleOrNull { it.id == assistantMessageId }
-                assertNotNull(assistantMessage)
-                finalText = requireNotNull(assistantMessage).content.text
-                assertTrue(finalText.isNotBlank())
-            }
-
-            assertEquals("final answer with persisted suffix", finalText)
-            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -1156,7 +1099,7 @@ class ChatViewModelTest {
         chatViewModel = createViewModel(SavedStateHandle(mapOf("chatId" to chatId.value)))
 
         chatViewModel.uiState.test {
-            runCurrent()
+            advanceUntilIdle()
             var state = awaitItem()
             while (state.messages.none { it.id == assistantMessageId }) {
                 state = awaitItem()

@@ -8,7 +8,6 @@ import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
-import com.browntowndev.pocketcrew.domain.util.Clock
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -20,44 +19,23 @@ import org.junit.jupiter.api.Test
 class ChatGenerationProgressPersisterTest {
 
     @Test
-    fun `applyState persists latest accumulated partial content on interval`() = runTest {
-        val clock = FakeClock()
+    fun `applyState does not persist partial progress before terminal state`() = runTest {
         val chatRepository = mockChatRepository()
-        val contentSlot = slot<String>()
-        val stateSlot = slot<MessageState>()
-        coEvery {
-            chatRepository.persistAllMessageData(
-                messageId = any(),
-                modelType = any(),
-                thinkingStartTime = any(),
-                thinkingEndTime = any(),
-                thinkingDuration = any(),
-                thinkingRaw = any(),
-                content = capture(contentSlot),
-                messageState = capture(stateSlot),
-                pipelineStep = any(),
-                tavilySources = any(),
-            )
-        } returns Unit
         val session = ChatGenerationProgressPersister(
             chatRepository = chatRepository,
             extractedUrlTracker = FakeExtractedUrlTracker(),
-            clock = clock,
         ).startSession(
             mode = Mode.FAST,
             chatId = ChatId("chat"),
             userMessageId = MessageId("user"),
             assistantMessageId = MessageId("assistant"),
-            partialPersistIntervalMs = 500L,
         )
 
         session.applyState(MessageGenerationState.GeneratingText("hello", ModelType.FAST))
-        clock.advanceBy(100L)
         session.applyState(MessageGenerationState.GeneratingText(" world", ModelType.FAST))
-        clock.advanceBy(500L)
         session.applyState(MessageGenerationState.GeneratingText("!", ModelType.FAST))
 
-        coVerify(exactly = 2) {
+        coVerify(exactly = 0) {
             chatRepository.persistAllMessageData(
                 messageId = MessageId("assistant"),
                 modelType = any(),
@@ -71,8 +49,6 @@ class ChatGenerationProgressPersisterTest {
                 tavilySources = any(),
             )
         }
-        assertEquals("hello world!", contentSlot.captured)
-        assertEquals(MessageState.GENERATING, stateSlot.captured)
     }
 
     @Test
@@ -97,13 +73,11 @@ class ChatGenerationProgressPersisterTest {
         val session = ChatGenerationProgressPersister(
             chatRepository = chatRepository,
             extractedUrlTracker = FakeExtractedUrlTracker(),
-            clock = FakeClock(),
         ).startSession(
             mode = Mode.FAST,
             chatId = ChatId("chat"),
             userMessageId = MessageId("user"),
             assistantMessageId = MessageId("assistant"),
-            partialPersistIntervalMs = Long.MAX_VALUE,
         )
 
         session.applyState(MessageGenerationState.GeneratingText("final answer", ModelType.FAST))
@@ -113,17 +87,71 @@ class ChatGenerationProgressPersisterTest {
         assertEquals(MessageState.COMPLETE, stateSlot.captured)
     }
 
-    private fun mockChatRepository(): ChatRepository = mockk(relaxed = true)
+    @Test
+    fun `flush with cancelled partial progress does not persist truncated content`() = runTest {
+        val chatRepository = mockChatRepository()
+        val session = ChatGenerationProgressPersister(
+            chatRepository = chatRepository,
+            extractedUrlTracker = FakeExtractedUrlTracker(),
+        ).startSession(
+            mode = Mode.FAST,
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+        )
 
-    private class FakeClock : Clock {
-        private var now: Long = 0L
+        session.applyState(MessageGenerationState.GeneratingText("truncated", ModelType.FAST))
+        session.flush(markIncompleteAsCancelled = true)
 
-        override fun currentTimeMillis(): Long = now
-
-        fun advanceBy(millis: Long) {
-            now += millis
+        coVerify(exactly = 0) {
+            chatRepository.persistAllMessageData(
+                messageId = MessageId("assistant"),
+                modelType = any(),
+                thinkingStartTime = any(),
+                thinkingEndTime = any(),
+                thinkingDuration = any(),
+                thinkingRaw = any(),
+                content = any(),
+                messageState = any(),
+                pipelineStep = any(),
+                tavilySources = any(),
+            )
         }
     }
+
+    @Test
+    fun `flush without cancellation does not persist incomplete progress`() = runTest {
+        val chatRepository = mockChatRepository()
+        val session = ChatGenerationProgressPersister(
+            chatRepository = chatRepository,
+            extractedUrlTracker = FakeExtractedUrlTracker(),
+        ).startSession(
+            mode = Mode.FAST,
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+        )
+
+        session.applyState(MessageGenerationState.GeneratingText("still streaming", ModelType.FAST))
+        session.flush(markIncompleteAsCancelled = false)
+
+        coVerify(exactly = 0) {
+            chatRepository.persistAllMessageData(
+                messageId = MessageId("assistant"),
+                modelType = any(),
+                thinkingStartTime = any(),
+                thinkingEndTime = any(),
+                thinkingDuration = any(),
+                thinkingRaw = any(),
+                content = any(),
+                messageState = any(),
+                pipelineStep = any(),
+                tavilySources = any(),
+            )
+        }
+    }
+
+    private fun mockChatRepository(): ChatRepository = mockk(relaxed = true)
 
     private class FakeExtractedUrlTracker : ExtractedUrlTrackerPort {
         override val urls: Set<String> = emptySet()

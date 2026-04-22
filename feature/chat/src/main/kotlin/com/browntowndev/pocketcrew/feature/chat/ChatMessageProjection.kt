@@ -31,8 +31,7 @@ internal fun projectChatMessages(
     dbMessagesMap.forEach { (id, dbMessage) ->
         val activeMessage = activeMessagesMap[id]
         projectedMessages[id] = when {
-            activeMessage == null -> dbMessage
-            dbMessage.shouldPreferSnapshot(activeMessage) -> activeMessage.toMessage(
+            activeMessage != null && dbMessage.messageState != MessageState.COMPLETE -> activeMessage.toMessage(
                 chatId = chatId,
                 createdAt = dbMessage.createdAt,
             )
@@ -54,8 +53,8 @@ internal fun projectChatMessages(
         handoffReady = activeSnapshot != null &&
             activeKey != null &&
             activeMessagesMap.isNotEmpty() &&
-            activeMessagesMap.all { (messageId, snapshot) ->
-                dbMessagesMap[messageId]?.canRetireSnapshot(snapshot) == true
+            activeMessagesMap.keys.all { messageId ->
+                dbMessagesMap[messageId]?.messageState == MessageState.COMPLETE
             },
     )
 }
@@ -78,20 +77,4 @@ private fun MessageSnapshot.toMessage(
         modelType = modelType,
         tavilySources = tavilySources,
     )
-}
-
-private fun Message.shouldPreferSnapshot(snapshot: MessageSnapshot): Boolean {
-    return !canRetireSnapshot(snapshot)
-}
-
-private fun Message.canRetireSnapshot(snapshot: MessageSnapshot): Boolean {
-    if (messageState != MessageState.COMPLETE) return false
-    if (!snapshot.isComplete && snapshot.messageState != MessageState.COMPLETE) return false
-
-    val dbText = content.text
-    val snapshotText = snapshot.content
-    if (dbText.length < snapshotText.length) return false
-    if (!dbText.startsWith(snapshotText)) return false
-
-    return true
 }
