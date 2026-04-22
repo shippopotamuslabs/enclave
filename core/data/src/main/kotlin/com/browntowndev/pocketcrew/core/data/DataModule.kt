@@ -29,6 +29,7 @@ import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MIGRATION_1_2
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
+import com.browntowndev.pocketcrew.core.data.media.AndroidSpeechRecognitionService
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelCatalogRepositoryImpl
@@ -53,6 +54,7 @@ import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
+import com.browntowndev.pocketcrew.domain.port.media.SpeechRecognitionPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
@@ -204,6 +206,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindImageAttachmentStorage(impl: CachedImageAttachmentStorage): ImageAttachmentStoragePort
+
+    @Binds
+    @Singleton
+    abstract fun bindSpeechRecognitionPort(impl: AndroidSpeechRecognitionService): SpeechRecognitionPort
 
     @Binds
     @Singleton
