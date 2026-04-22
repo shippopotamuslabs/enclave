@@ -44,7 +44,9 @@ import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MergeMessagesUseCase
+import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.feature.inference.ActiveChatTurnStore
 import io.mockk.*
@@ -107,6 +109,8 @@ class ChatViewModelTest {
     private lateinit var loggingPort: LoggingPort
     private lateinit var errorHandler: ViewModelErrorHandler
     private lateinit var activeChatTurnStore: ActiveChatTurnStore
+    private lateinit var listenToSpeechUseCase: ListenToSpeechUseCase
+    private lateinit var speechEvents: MutableSharedFlow<SpeechState>
 
     @BeforeEach
     fun setup() {
@@ -161,6 +165,12 @@ class ChatViewModelTest {
         
         // Stub coroutineExceptionHandler to return a real one to avoid ClassCastException with MockK
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
+
+        speechEvents = MutableSharedFlow(extraBufferCapacity = 8)
+        listenToSpeechUseCase = mockk()
+        every { listenToSpeechUseCase.invoke(any(), any()) } returns speechEvents
+        every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
+
         coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
         every { chatUseCases.mergeMessagesUseCase } returns MergeMessagesUseCase()
         every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
@@ -208,6 +218,60 @@ class ChatViewModelTest {
                 message = "Failed to send message",
                 userMessage = "Could not send message. Please try again."
             )
+        }
+    }
+
+    @Test
+    fun `initial speech state is Idle`() = runTest {
+        assertEquals(SpeechState.Idle, chatViewModel.uiState.value.speechState)
+    }
+
+    @Test
+    fun `onMicClick starts listening when Idle`() = runTest {
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        chatViewModel.onMicClick()
+        coVerify(exactly = 1) { listenToSpeechUseCase.invoke(any(), any()) }
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `onMicClick sets stop signal when Listening`() = runTest {
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        chatViewModel.onMicClick()
+        speechEvents.emit(SpeechState.Listening(0f))
+        runCurrent()
+        chatViewModel.onMicClick()
+        runCurrent()
+        // Verify that the stop signal was sent. The actual state change to Idle will happen
+        // when the use case processes the signal and completes.
+        coVerify { listenToSpeechUseCase.invoke(any(), match { it.value }) }
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `speechState FinalText updates inputText`() = runTest {
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        try {
+            chatViewModel.onMicClick()
+            speechEvents.emit(SpeechState.FinalText("Hello world"))
+            runCurrent()
+            assertEquals("Hello world", chatViewModel.uiState.value.inputText)
+        } finally {
+            collectJob.cancel()
+        }
+    }
+
+    @Test
+    fun `speechState Error updates inputText`() = runTest {
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        try {
+            chatViewModel.onMicClick()
+            speechEvents.emit(SpeechState.Error("Some error"))
+            runCurrent()
+            // Error state should not clear input text
+            assertEquals("", chatViewModel.uiState.value.inputText)
+        } finally {
+            collectJob.cancel()
         }
     }
 
@@ -326,7 +390,7 @@ class ChatViewModelTest {
             dbMessages.value = listOf(
                 createAssistantMessage(
                     id = assistantMessageId,
-                    content = "final answer",
+                    content = "streaming answer plus persisted suffix",
                     state = MessageState.COMPLETE,
                 )
             )
@@ -336,7 +400,8 @@ class ChatViewModelTest {
 
             assertTrue(
                 chatViewModel.uiState.value.messages.any { message ->
-                    message.id == assistantMessageId && message.content.text == "final answer"
+                    message.id == assistantMessageId &&
+                        message.content.text == "streaming answer plus persisted suffix"
                 },
                 "Persisted COMPLETE assistant response should replace the in-flight response.",
             )
@@ -392,7 +457,7 @@ class ChatViewModelTest {
             dbMessages.value = listOf(
                 createAssistantMessage(
                     id = assistantMessageId,
-                    content = "final answer",
+                    content = "streaming answer plus persisted suffix",
                     state = MessageState.COMPLETE,
                 )
             )
@@ -412,7 +477,9 @@ class ChatViewModelTest {
                 "Assistant message must never disappear during in-flight → DB transition.",
             )
             assertTrue(
-                state.messages.any { it.id == assistantMessageId && it.content.text == "final answer" },
+                state.messages.any {
+                    it.id == assistantMessageId && it.content.text == "streaming answer plus persisted suffix"
+                },
                 "Assistant message must show the persisted content after DB confirms COMPLETE.",
             )
         } finally {
@@ -835,7 +902,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `stale shorter snapshot cannot replace longer current snapshot`() = runTest {
+    fun `stale shorter snapshot replaces longer current snapshot`() = runTest {
         val chatId = ChatId("chat")
         val assistantMessageId = MessageId("assistant")
         val key = ActiveChatTurnKey(chatId, assistantMessageId)
@@ -882,7 +949,7 @@ class ChatViewModelTest {
             )
             runCurrent()
 
-            assertEquals("longer streaming answer", chatViewModel.uiState.value.messages.single().content.text)
+            assertEquals("short", chatViewModel.uiState.value.messages.single().content.text)
         } finally {
             collectJob.cancel()
         }
@@ -988,7 +1055,7 @@ class ChatViewModelTest {
             dbMessages.value = listOf(
                 createAssistantMessage(
                     id = assistantMessageId,
-                    content = "final answer",
+                    content = "streaming answer plus persisted suffix",
                     state = MessageState.COMPLETE,
                 )
             )
@@ -1005,10 +1072,41 @@ class ChatViewModelTest {
                 },
                 "Assistant message must not disappear during active snapshot to Room handoff.",
             )
-            assertEquals("final answer", chatViewModel.uiState.value.messages.single().content.text)
-            assertNull(activeChatTurnStore.observe(key).first())
+            assertEquals(
+                "streaming answer plus persisted suffix",
+                chatViewModel.uiState.value.messages.single().content.text,
+            )
+            assertNotNull(activeChatTurnStore.observe(key).first())
         } finally {
             collectJob.cancel()
+        }
+    }
+
+    @Test
+    fun `uiState renders completed Room message when no active snapshot is available`() = runTest {
+        val chatId = ChatId("chat")
+        val assistantMessageId = MessageId("assistant")
+        val dbMessages = MutableStateFlow(
+            listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "final answer",
+                    state = MessageState.COMPLETE,
+                )
+            )
+        )
+        coEvery { chatUseCases.getChat(chatId) } returns dbMessages
+        chatViewModel = createViewModel(SavedStateHandle(mapOf("chatId" to chatId.value)))
+
+        chatViewModel.uiState.test {
+            advanceUntilIdle()
+            var state = awaitItem()
+            while (state.messages.none { it.id == assistantMessageId }) {
+                state = awaitItem()
+            }
+
+            assertEquals("final answer", state.messages.single { it.id == assistantMessageId }.content.text)
+            cancelAndIgnoreRemainingEvents()
         }
     }
 

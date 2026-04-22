@@ -123,6 +123,17 @@
           "defaultAssignments": ["final_synthesis"]
         }
       ]
+    },
+    {
+      "huggingFaceModelName": "ggerganov/whisper.cpp",
+      "fileName": "ggml-base.en.bin",
+      "sha256": "a03779c86df3323075f5e796cb2ce5029f00ec8869eee3fdfb897afe36c6d002",
+      "sizeInBytes": 147964211,
+      "modelFileFormat": "BIN",
+      "source": "HF",
+      "utilityType": "whisper",
+      "isMultimodal": false,
+      "configurations": []
     }
   ]
 }

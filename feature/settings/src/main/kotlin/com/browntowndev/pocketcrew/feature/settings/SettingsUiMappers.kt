@@ -58,6 +58,8 @@ private object LocalModelAssetConstants {
     val dashGgufRegex = Regex("-GGUF$", RegexOption.IGNORE_CASE)
     val dotGgufRegex = Regex("\\.gguf$", RegexOption.IGNORE_CASE)
     val dotLitertlmRegex = Regex("\\.litertlm$", RegexOption.IGNORE_CASE)
+    val dotBinRegex = Regex("\\.bin$", RegexOption.IGNORE_CASE)
+    val dotOnnxRegex = Regex("\\.onnx$", RegexOption.IGNORE_CASE)
 }
 
 class LocalModelAssetUiMapper @Inject constructor() {
@@ -70,12 +72,16 @@ class LocalModelAssetUiMapper @Inject constructor() {
         val format = when (asset.metadata.modelFileFormat) {
             ModelFileFormat.GGUF -> "GGUF"
             ModelFileFormat.LITERTLM -> "LiteRT"
+            ModelFileFormat.BIN -> "BIN"
+            ModelFileFormat.ONNX -> "ONNX"
         }
 
         val cleanName = modelNamePart
             .replace(LocalModelAssetConstants.dashGgufRegex, "")
             .replace(LocalModelAssetConstants.dotGgufRegex, "")
             .replace(LocalModelAssetConstants.dotLitertlmRegex, "")
+            .replace(LocalModelAssetConstants.dotBinRegex, "")
+            .replace(LocalModelAssetConstants.dotOnnxRegex, "")
             .replace("-", " ")
 
         return LocalModelAssetUi(

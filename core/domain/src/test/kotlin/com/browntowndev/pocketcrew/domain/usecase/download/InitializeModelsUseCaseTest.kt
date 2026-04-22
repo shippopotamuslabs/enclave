@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.config.UtilityType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
@@ -17,6 +18,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPo
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.SyncLocalModelRegistryUseCase
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -78,7 +80,7 @@ class InitializeModelsUseCaseTest {
             scanResult = ModelScanResult(emptyList(), emptyMap(), true),
             availableToRedownload = emptyList()
         )
-        coEvery { checkModelsUseCase(any()) } returns emptyResult
+        coEvery { checkModelsUseCase(any(), any()) } returns emptyResult
 
         // When
         val result = useCase()
@@ -86,6 +88,55 @@ class InitializeModelsUseCaseTest {
         // Then
         val reconciledAsset = result.availableToRedownload.find { it.metadata.sha256 == sha }
         assertEquals(DownloadSource.CLOUDFLARE_R2, reconciledAsset?.metadata?.source)
+    }
+
+    @Test
+    fun invoke_acceptsUtilityAssetsWithoutCreatingSlotAssignments() = runTest {
+        val assignedAsset = createMockAsset(
+            sha = "assigned-sha",
+            fileName = "assigned.gguf",
+            source = DownloadSource.HUGGING_FACE,
+        )
+        val utilityAsset = createMockAsset(
+            sha = "whisper-sha",
+            fileName = "ggml-base.en.bin",
+            source = DownloadSource.HUGGING_FACE,
+        ).copy(
+            metadata = LocalModelMetadata(
+                id = LocalModelId("utility"),
+                huggingFaceModelName = "ggerganov/whisper.cpp",
+                remoteFileName = "ggml-base.en.bin",
+                localFileName = "ggml-base.en.bin",
+                sha256 = "whisper-sha",
+                sizeInBytes = 147_964_211L,
+                modelFileFormat = ModelFileFormat.BIN,
+                source = DownloadSource.HUGGING_FACE,
+                utilityType = UtilityType.WHISPER,
+            ),
+            configurations = emptyList(),
+        )
+        coEvery { modelConfigFetcher.fetchRemoteConfig() } returns Result.success(listOf(assignedAsset, utilityAsset))
+        coEvery { localModelRepository.getSoftDeletedModels() } returns emptyList()
+
+        val resultWithUtility = DownloadModelsResult(
+            allModels = mapOf(ModelType.MAIN to assignedAsset),
+            utilityAssets = listOf(utilityAsset),
+            modelsToDownload = listOf(utilityAsset),
+            scanResult = ModelScanResult(listOf(utilityAsset), emptyMap(), false),
+        )
+        coEvery {
+            checkModelsUseCase(
+                expectedModels = mapOf(ModelType.MAIN to assignedAsset),
+                utilityAssets = listOf(utilityAsset),
+            )
+        } returns resultWithUtility
+
+        val result = useCase()
+
+        assertEquals(listOf(utilityAsset), result.utilityAssets)
+        coVerify(exactly = 0) {
+            syncLocalModelRegistryUseCase(any(), utilityAsset)
+        }
     }
 
     private fun createMockAsset(

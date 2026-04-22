@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
  */
 data class DownloadModelsResult(
     val allModels: Map<ModelType, LocalModelAsset>,
+    val utilityAssets: List<LocalModelAsset> = emptyList(),
     val modelsToDownload: List<LocalModelAsset>,
     val scanResult: ModelScanResult,
     /**

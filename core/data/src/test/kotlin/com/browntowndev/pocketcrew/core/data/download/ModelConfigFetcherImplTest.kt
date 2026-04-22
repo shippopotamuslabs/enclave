@@ -4,6 +4,7 @@ import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.RemoteModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.RemoteModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.UtilityType
 import com.browntowndev.pocketcrew.domain.model.download.DownloadSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -268,6 +269,60 @@ class ModelConfigFetcherImplTest {
     }
 
     @Test
+    fun toLocalModelAssets_acceptsUtilityAssetWithEmptyConfigurations() = runTest {
+        val remoteAssets = listOf(
+            RemoteModelAsset(
+                huggingFaceModelName = "ggerganov/whisper.cpp",
+                fileName = "ggml-base.en.bin",
+                sha256 = "whisper-sha",
+                sizeInBytes = 147_964_211L,
+                modelFileFormat = ModelFileFormat.BIN,
+                source = DownloadSource.HUGGING_FACE,
+                utilityType = UtilityType.WHISPER,
+                configurations = emptyList(),
+            ),
+        )
+
+        val modelAssets = fetcher.toLocalModelAssets(remoteAssets)
+
+        assertEquals(1, modelAssets.size)
+        assertEquals(UtilityType.WHISPER, modelAssets.first().metadata.utilityType)
+        assertEquals(ModelFileFormat.BIN, modelAssets.first().metadata.modelFileFormat)
+        assertTrue(modelAssets.first().configurations.isEmpty())
+    }
+
+    @Test
+    fun toLocalModelAssets_rejectsUtilityAssetWithConfigurations() = runTest {
+        val remoteAssets = listOf(
+            RemoteModelAsset(
+                huggingFaceModelName = "ggerganov/whisper.cpp",
+                fileName = "ggml-base.en.bin",
+                sha256 = "whisper-sha",
+                sizeInBytes = 147_964_211L,
+                modelFileFormat = ModelFileFormat.BIN,
+                utilityType = UtilityType.WHISPER,
+                configurations = listOf(
+                    RemoteModelConfiguration(
+                        configId = LocalModelConfigurationId("config-main-1"),
+                        displayName = "Invalid",
+                        systemPrompt = "Invalid",
+                        temperature = 0.7,
+                        topK = 40,
+                        topP = 0.95,
+                        repetitionPenalty = 1.1,
+                        maxTokens = 2048,
+                        contextWindow = 4096,
+                    ),
+                ),
+            ),
+        )
+
+        kotlin.test.assertFailsWith<IllegalArgumentException> {
+            fetcher.toLocalModelAssets(remoteAssets)
+        }
+    }
+
+    @Test
     fun fetchRemoteConfig_parsesAssetCentricJson() = runTest {
         // Given
         val json = """
@@ -377,6 +432,46 @@ class ModelConfigFetcherImplTest {
         assertTrue(result.isSuccess)
         val assets = result.getOrNull()!!
         assertEquals(DownloadSource.HUGGING_FACE, assets[0].metadata.source)
+    }
+
+    @Test
+    fun fetchRemoteConfig_parsesUtilityAsset() = runTest {
+        val json = """
+            {
+              "assets": [
+                {
+                  "huggingFaceModelName": "ggerganov/whisper.cpp",
+                  "fileName": "ggml-base.en.bin",
+                  "sha256": "whisper-sha",
+                  "sizeInBytes": 147964211,
+                  "modelFileFormat": "BIN",
+                  "source": "HF",
+                  "utilityType": "whisper",
+                  "configurations": []
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val mockCall = mockk<okhttp3.Call>()
+        val response = Response.Builder()
+            .request(mockk())
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body(json.toResponseBody())
+            .build()
+
+        every { mockOkHttpClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns response
+
+        val result = fetcher.fetchRemoteConfig()
+
+        assertTrue(result.isSuccess)
+        val asset = result.getOrNull()!!.first()
+        assertEquals(UtilityType.WHISPER, asset.metadata.utilityType)
+        assertEquals(ModelFileFormat.BIN, asset.metadata.modelFileFormat)
+        assertTrue(asset.configurations.isEmpty())
     }
 
     @Test

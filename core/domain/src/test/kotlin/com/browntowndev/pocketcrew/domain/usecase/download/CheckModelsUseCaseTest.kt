@@ -5,9 +5,9 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.config.UtilityType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -75,12 +75,13 @@ class CheckModelsUseCaseTest {
 
         coEvery {
             fileScanner.scanAndCreateDirIfNotExist(
-                expectedModels = any()
+                expectedModels = any(),
+                utilityAssets = any(),
             )
         } returns scanResult
 
         coEvery {
-            checkModelEligibilityUseCase.check(any(), any())
+            checkModelEligibilityUseCase.check(any(), any(), any())
         } returns emptyList()
 
         // When
@@ -105,12 +106,13 @@ class CheckModelsUseCaseTest {
 
         coEvery {
             fileScanner.scanAndCreateDirIfNotExist(
-                expectedModels = any()
+                expectedModels = any(),
+                utilityAssets = any(),
             )
         } returns scanResult
 
         coEvery {
-            checkModelEligibilityUseCase.check(any(), any())
+            checkModelEligibilityUseCase.check(any(), any(), any())
         } returns listOf(testAsset)
 
         // When
@@ -135,7 +137,8 @@ class CheckModelsUseCaseTest {
 
         coEvery {
             fileScanner.scanAndCreateDirIfNotExist(
-                expectedModels = any()
+                expectedModels = any(),
+                utilityAssets = any(),
             )
         } returns scanResultWithError
 
@@ -156,12 +159,13 @@ class CheckModelsUseCaseTest {
         // Given
         coEvery {
             fileScanner.scanAndCreateDirIfNotExist(
-                expectedModels = any()
+                expectedModels = any(),
+                utilityAssets = any(),
             )
         } returns emptyScanResult
 
         coEvery {
-            checkModelEligibilityUseCase.check(any(), any())
+            checkModelEligibilityUseCase.check(any(), any(), any())
         } returns listOf(testAsset)
 
         // When
@@ -176,12 +180,13 @@ class CheckModelsUseCaseTest {
         // Given
         coEvery {
             fileScanner.scanAndCreateDirIfNotExist(
-                expectedModels = any()
+                expectedModels = any(),
+                utilityAssets = any(),
             )
         } returns emptyScanResult
 
         coEvery {
-            checkModelEligibilityUseCase.check(any(), any())
+            checkModelEligibilityUseCase.check(any(), any(), any())
         } returns emptyList()
 
         // When
@@ -189,5 +194,42 @@ class CheckModelsUseCaseTest {
 
         // Then
         verify { logger.info(eq("CheckModelsUseCase"), eq("All 1 models are ready")) }
+    }
+
+    @Test
+    fun `utility assets are scanned and returned in result`() = runTest {
+        val utilityAsset = testAsset.copy(
+            metadata = testAsset.metadata.copy(
+                localFileName = "ggml-base.en.bin",
+                remoteFileName = "ggml-base.en.bin",
+                modelFileFormat = ModelFileFormat.BIN,
+                utilityType = UtilityType.WHISPER,
+            ),
+            configurations = emptyList(),
+        )
+        val scanResult = ModelScanResult(
+            missingModels = listOf(utilityAsset),
+            partialDownloads = emptyMap(),
+            invalidModels = emptyList(),
+            allValid = false,
+        )
+
+        coEvery {
+            fileScanner.scanAndCreateDirIfNotExist(
+                expectedModels = any(),
+                utilityAssets = any(),
+            )
+        } returns scanResult
+        coEvery {
+            checkModelEligibilityUseCase.check(any(), any(), any())
+        } returns listOf(utilityAsset)
+
+        val result = checkModelsUseCase(
+            expectedModels = mapOf(ModelType.FAST to testAsset),
+            utilityAssets = listOf(utilityAsset),
+        )
+
+        assertEquals(listOf(utilityAsset), result.utilityAssets)
+        assertEquals(listOf(utilityAsset), result.modelsToDownload)
     }
 }

@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.config.UtilityType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
@@ -94,8 +95,8 @@ class CheckModelEligibilityUseCaseTest {
         )
 
         val result = useCase.check(
-            mapOf(ModelType.MAIN to asset),
-            scanResult
+            newModels = mapOf(ModelType.MAIN to asset),
+            scanResult = scanResult,
         )
 
         assertTrue(result.isNotEmpty())
@@ -114,8 +115,8 @@ class CheckModelEligibilityUseCaseTest {
         )
 
         val result = useCase.check(
-            mapOf(ModelType.MAIN to asset),
-            scanResult
+            newModels = mapOf(ModelType.MAIN to asset),
+            scanResult = scanResult,
         )
 
         assertTrue(result.isEmpty())
@@ -140,8 +141,8 @@ class CheckModelEligibilityUseCaseTest {
         )
 
         val result = useCase.check(
-            mapOf(ModelType.MAIN to asset1, ModelType.VISION to asset2),
-            scanResult
+            newModels = mapOf(ModelType.MAIN to asset1, ModelType.VISION to asset2),
+            scanResult = scanResult,
         )
 
         assertEquals(2, result.size)
@@ -162,8 +163,8 @@ class CheckModelEligibilityUseCaseTest {
         )
 
         val result = useCase.check(
-            mapOf(ModelType.MAIN to asset),
-            scanResult
+            newModels = mapOf(ModelType.MAIN to asset),
+            scanResult = scanResult,
         )
 
         assertTrue(result.isEmpty())
@@ -184,8 +185,8 @@ class CheckModelEligibilityUseCaseTest {
         )
 
         val result = useCase.check(
-            mapOf(ModelType.MAIN to asset),
-            scanResult
+            newModels = mapOf(ModelType.MAIN to asset),
+            scanResult = scanResult,
         )
 
         assertTrue(result.any { it.metadata.sha256 == "abc123" })
@@ -207,8 +208,8 @@ class CheckModelEligibilityUseCaseTest {
         )
 
         val result = useCase.check(
-            mapOf(ModelType.MAIN to asset),
-            scanResult
+            newModels = mapOf(ModelType.MAIN to asset),
+            scanResult = scanResult,
         )
 
         assertTrue(result.any { it.metadata.sha256 == "abc123" })
@@ -241,12 +242,12 @@ class CheckModelEligibilityUseCaseTest {
         )
 
         val result = useCase.check(
-            mapOf(
+            newModels = mapOf(
                 ModelType.VISION to asset1,
                 ModelType.FAST to asset2,
                 ModelType.THINKING to asset3
             ),
-            scanResult
+            scanResult = scanResult,
         )
 
         assertEquals(3, result.size)
@@ -254,5 +255,33 @@ class CheckModelEligibilityUseCaseTest {
             setOf("Gemma 4 E4B (Vision)", "Gemma 4 E4B (Fast)", "Gemma 4 E4B (Thinking)"),
             result.map { it.configurations.first().displayName }.toSet()
         )
+    }
+
+    @Test
+    fun `check includes utility assets with partial downloads`() {
+        val baseAsset = createModelAsset(
+            sha256 = "whisper-sha",
+            modelFileFormat = ModelFileFormat.BIN,
+            localFileName = "ggml-base.en.bin",
+        )
+        val utilityAsset = baseAsset.copy(
+            metadata = baseAsset.metadata.copy(utilityType = UtilityType.WHISPER),
+            configurations = emptyList(),
+        )
+        val scanResult = ModelScanResult(
+            missingModels = emptyList(),
+            partialDownloads = mapOf("ggml-base.en.bin" to 50L),
+            invalidModels = emptyList(),
+            allValid = false,
+            directoryError = false,
+        )
+
+        val result = useCase.check(
+            newModels = emptyMap(),
+            utilityAssets = listOf(utilityAsset),
+            scanResult = scanResult,
+        )
+
+        assertEquals(listOf(utilityAsset), result)
     }
 }

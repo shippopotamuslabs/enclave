@@ -23,6 +23,11 @@ interface ChatUseCases {
     val getChatUseCase: GetChatUseCase
 
     /**
+     * Listens to local microphone audio and transcribes it on-device.
+     */
+    val listenToSpeechUseCase: ListenToSpeechUseCase
+
+    /**
      * Merges database messages with in-flight messages.
      */
     val mergeMessagesUseCase: MergeMessagesUseCase

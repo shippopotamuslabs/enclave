@@ -12,6 +12,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
@@ -43,6 +44,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -91,6 +93,13 @@ class ChatViewModel @Inject constructor(
     val initialChatId: ChatId?
         get() = savedStateHandle.get<String>("chatId")?.let { ChatId(it) }
 
+    private val _speechState = MutableStateFlow<SpeechState>(SpeechState.Idle)
+    val speechState: StateFlow<SpeechState> = _speechState.asStateFlow()
+
+    private val _stopSpeechSignal = MutableStateFlow(false)
+
+    private val _isGenerating = MutableStateFlow(false)
+
     // Mutable state for input text (not persisted, managed locally)
     private val _inputText = MutableStateFlow("")
 
@@ -124,10 +133,10 @@ class ChatViewModel @Inject constructor(
 
     // Job for tracking inference flow collection (for cancellation in onCleared)
     private var inferenceJob: Job? = null
+    private var speechJob: Job? = null
 
     private val _requestedTurnKey = MutableStateFlow<ActiveChatTurnKey?>(null)
     private val _acknowledgedTurnKeys = MutableStateFlow<Set<ActiveChatTurnKey>>(emptySet())
-    private val handoffAcknowledgementsInFlight = mutableSetOf<ActiveChatTurnKey>()
 
     private val activeChatIdFlow = _currentChatId
         .map { chatId -> chatId ?: initialChatId }
@@ -212,6 +221,31 @@ class ChatViewModel @Inject constructor(
 
         // Observe tool execution events to show transient UI banners
         observeToolEvents()
+
+        // Observe speech recognition results
+        observeSpeechResults()
+    }
+
+    private fun observeSpeechResults() {
+        _speechState
+            .onEach { state ->
+                when (state) {
+                    is SpeechState.FinalText -> {
+                        _inputText.value = state.text
+                    }
+                    is SpeechState.Error -> {
+                        loggingPort.error(TAG, "Speech recognition error: ${state.message}")
+                        errorHandler.handleError(
+                            tag = TAG,
+                            message = "Speech Recognition Failed",
+                            throwable = Exception(state.message),
+                            userMessage = state.message
+                        )
+                    }
+                    else -> {}
+                }
+            }
+            .launchIn(viewModelScope)
     }
 
     /**
@@ -302,8 +336,9 @@ class ChatViewModel @Inject constructor(
         _inputText,
         _selectedMode,
         _selectedImageUri,
-    ) { settings: SettingsData, inputText: String, selectedMode: ChatModeUi, selectedImageUri: String? ->
-        UiInputs(settings, inputText, selectedMode, selectedImageUri)
+        _speechState,
+    ) { settings: SettingsData, inputText: String, selectedMode: ChatModeUi, selectedImageUri: String?, speechState: SpeechState ->
+        UiInputs(settings, inputText, selectedMode, selectedImageUri, speechState)
     }
 
     private val uiInputsWithPolicyFlow = combine(
@@ -332,19 +367,23 @@ class ChatViewModel @Inject constructor(
         val settings: SettingsData = inputs.settings
         val inputText: String = inputs.inputText
         val selectedMode: ChatModeUi = inputs.selectedMode
+        val speechState: SpeechState = inputs.speechState
 
         val projectedMessages = projectChatMessages(
             dbMessages = messages,
             activeSnapshot = activeTurnSnapshotState.snapshot,
-            chatId = activeTurnSnapshotState.key?.chatId ?: _currentChatId.value ?: initialChatId,
-            mergeMessagesUseCase = chatUseCases.mergeMessagesUseCase,
+            activeKey = activeTurnSnapshotState.key,
         )
-        
+        acknowledgeProjectedHandoffIfNeeded(
+            activeKey = activeTurnSnapshotState.key,
+            handoffReady = projectedMessages.handoffReady,
+        )
+
         // Sort chronologically and map domain messages to UI messages
         var isGenerating = false
         var hasActiveIndicator = false
         var activeIndicatorMessageId: MessageId? = null
-        val chatMessages: List<ChatMessage> = projectedMessages
+        val chatMessages: List<ChatMessage> = projectedMessages.messages
             .map { message: Message ->
                 val chatMessage = mapToChatMessage(message)
                 val state = chatMessage.indicatorState
@@ -362,13 +401,10 @@ class ChatViewModel @Inject constructor(
                 chatMessage
             }
 
-        // This stays inside state projection so Room COMPLETE is visible before
-        // the active snapshot is cleared; a sibling collector can race this path.
-        acknowledgeHandoffIfNeeded(messages, activeTurnSnapshotState)
-
         ChatUiState(
             messages = chatMessages,
             inputText = inputText,
+            speechState = speechState,
             selectedImageUri = inputs.selectedImageUri,
             isPhotoAttachmentEnabled = attachmentPolicy.isEnabled,
             photoAttachmentDisabledReason = attachmentPolicy.disabledReason,
@@ -389,34 +425,16 @@ class ChatViewModel @Inject constructor(
         initialValue = ChatUiState()
     )
 
-    private fun acknowledgeHandoffIfNeeded(
-        dbMessages: List<Message>,
-        activeTurnSnapshotState: ActiveTurnSnapshotState,
+    private fun acknowledgeProjectedHandoffIfNeeded(
+        activeKey: ActiveChatTurnKey?,
+        handoffReady: Boolean,
     ) {
-        val key = activeTurnSnapshotState.key ?: return
-        val activeSnapshot = activeTurnSnapshotState.snapshot ?: return
+        if (activeKey == null || !handoffReady) return
+        if (activeKey in _acknowledgedTurnKeys.value) return
 
-        val completedDbIds = dbMessages.asSequence()
-            .filter { it.messageState == MessageState.COMPLETE }
-            .map { it.id }
-            .toSet()
-
-        if (completedDbIds.isEmpty()) return
-
-        val shouldAcknowledge = activeSnapshot.messages.keys.any { id -> id in completedDbIds }
-        if (!shouldAcknowledge) return
-        if (!handoffAcknowledgementsInFlight.add(key)) return
-
-        viewModelScope.launch {
-            try {
-                activeChatTurnSnapshotPort.acknowledgeHandoff(key)
-                _acknowledgedTurnKeys.update { keys -> keys + key }
-                if (_requestedTurnKey.value == key) {
-                    _requestedTurnKey.update { null }
-                }
-            } finally {
-                handoffAcknowledgementsInFlight.remove(key)
-            }
+        _acknowledgedTurnKeys.update { keys -> keys + activeKey }
+        if (_requestedTurnKey.value == activeKey) {
+            _requestedTurnKey.update { null }
         }
     }
 
@@ -569,18 +587,17 @@ class ChatViewModel @Inject constructor(
                 activeChatTurnSnapshotPort.clear(key)
                 _requestedTurnKey.update { current -> if (current == key) null else current }
                 _acknowledgedTurnKeys.update { keys -> keys + key }
-                handoffAcknowledgementsInFlight.remove(key)
             }
         }
         _activeToolCallBanner.value = null
     }
 
     fun createNewChat() {
+        stopListening()
         activeTurnKeyFlow.value?.let { key ->
             viewModelScope.launch {
                 activeChatTurnSnapshotPort.clear(key)
                 _acknowledgedTurnKeys.update { keys -> keys + key }
-                handoffAcknowledgementsInFlight.remove(key)
             }
         }
         _currentChatId.value = null
@@ -655,7 +672,38 @@ class ChatViewModel @Inject constructor(
     }
 
     fun onShieldTap() {
-        // Stub - was used for shield functionality
+        // Placeholder for future shield/security info interaction
+    }
+
+    fun onMicClick() {
+        val currentState = _speechState.value
+        if (
+            currentState is SpeechState.ModelLoading ||
+            currentState is SpeechState.Listening
+        ) {
+            _stopSpeechSignal.value = true
+        } else {
+            startListening()
+        }
+    }
+
+    private fun startListening() {
+        _stopSpeechSignal.value = false
+        speechJob?.cancel()
+        speechJob = chatUseCases.listenToSpeechUseCase(_inputText.value, _stopSpeechSignal.asStateFlow())
+            .onEach { state ->
+                _speechState.value = state
+            }
+            .catch { cause ->
+                _speechState.value = SpeechState.Error(cause.message ?: "Speech transcription failed.")
+            }
+            .launchIn(viewModelScope)
+    }
+
+    private fun stopListening() {
+        speechJob?.cancel()
+        speechJob = null
+        _speechState.value = SpeechState.Idle
     }
 
     /**
@@ -690,6 +738,7 @@ class ChatViewModel @Inject constructor(
         val inputText: String,
         val selectedMode: ChatModeUi,
         val selectedImageUri: String?,
+        val speechState: SpeechState,
     )
 
     private data class PhotoAttachmentPolicy(
@@ -754,5 +803,6 @@ class ChatViewModel @Inject constructor(
         super.onCleared()
         // Cancel any ongoing inference flow
         inferenceJob?.cancel()
+        stopListening()
     }
 }
