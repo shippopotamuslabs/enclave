@@ -12,6 +12,8 @@ import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.TranscribeSpeechUseCase
+import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
@@ -65,6 +67,10 @@ class ChatViewModelNavigationTest {
         cancelInferenceUseCase = mockk(relaxed = true)
         toolExecutionEventPort = mockk(relaxed = true)
         loggingPort = mockk(relaxed = true)
+
+        val transcribeSpeechUseCase = mockk<TranscribeSpeechUseCase>(relaxed = true)
+        every { transcribeSpeechUseCase.speechState } returns MutableStateFlow(SpeechState.Idle)
+        every { chatUseCases.transcribeSpeechUseCase } returns transcribeSpeechUseCase
 
         coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
         every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())

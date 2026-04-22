@@ -12,6 +12,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
@@ -90,6 +91,8 @@ class ChatViewModel @Inject constructor(
      */
     val initialChatId: ChatId?
         get() = savedStateHandle.get<String>("chatId")?.let { ChatId(it) }
+
+    val speechState: StateFlow<SpeechState> = chatUseCases.transcribeSpeechUseCase.speechState
 
     // Mutable state for input text (not persisted, managed locally)
     private val _inputText = MutableStateFlow("")
@@ -212,6 +215,34 @@ class ChatViewModel @Inject constructor(
 
         // Observe tool execution events to show transient UI banners
         observeToolEvents()
+
+        // Observe speech recognition results
+        observeSpeechResults()
+    }
+
+    private fun observeSpeechResults() {
+        chatUseCases.transcribeSpeechUseCase.speechState
+            .onEach { state ->
+                when (state) {
+                    is SpeechState.PartialText -> {
+                        _inputText.value = state.text
+                    }
+                    is SpeechState.FinalText -> {
+                        _inputText.value = state.text
+                    }
+                    is SpeechState.Error -> {
+                        loggingPort.error(TAG, "Speech recognition error: ${state.message}")
+                        errorHandler.handleError(
+                            tag = TAG,
+                            message = "Speech Recognition Failed",
+                            throwable = Exception(state.message),
+                            userMessage = state.message
+                        )
+                    }
+                    else -> {}
+                }
+            }
+            .launchIn(viewModelScope)
     }
 
     /**
@@ -302,8 +333,9 @@ class ChatViewModel @Inject constructor(
         _inputText,
         _selectedMode,
         _selectedImageUri,
-    ) { settings: SettingsData, inputText: String, selectedMode: ChatModeUi, selectedImageUri: String? ->
-        UiInputs(settings, inputText, selectedMode, selectedImageUri)
+        chatUseCases.transcribeSpeechUseCase.speechState,
+    ) { settings: SettingsData, inputText: String, selectedMode: ChatModeUi, selectedImageUri: String?, speechState: SpeechState ->
+        UiInputs(settings, inputText, selectedMode, selectedImageUri, speechState)
     }
 
     private val uiInputsWithPolicyFlow = combine(
@@ -332,6 +364,7 @@ class ChatViewModel @Inject constructor(
         val settings: SettingsData = inputs.settings
         val inputText: String = inputs.inputText
         val selectedMode: ChatModeUi = inputs.selectedMode
+        val speechState: SpeechState = inputs.speechState
 
         val projectedMessages = projectChatMessages(
             dbMessages = messages,
@@ -369,6 +402,7 @@ class ChatViewModel @Inject constructor(
         ChatUiState(
             messages = chatMessages,
             inputText = inputText,
+            speechState = speechState,
             selectedImageUri = inputs.selectedImageUri,
             isPhotoAttachmentEnabled = attachmentPolicy.isEnabled,
             photoAttachmentDisabledReason = attachmentPolicy.disabledReason,
@@ -576,6 +610,7 @@ class ChatViewModel @Inject constructor(
     }
 
     fun createNewChat() {
+        chatUseCases.transcribeSpeechUseCase.stopListening()
         activeTurnKeyFlow.value?.let { key ->
             viewModelScope.launch {
                 activeChatTurnSnapshotPort.clear(key)
@@ -655,7 +690,16 @@ class ChatViewModel @Inject constructor(
     }
 
     fun onShieldTap() {
-        // Stub - was used for shield functionality
+        // Placeholder for future shield/security info interaction
+    }
+
+    fun onMicClick() {
+        val currentState = chatUseCases.transcribeSpeechUseCase.speechState.value
+        if (currentState is SpeechState.Listening || currentState is SpeechState.PartialText) {
+            chatUseCases.transcribeSpeechUseCase.stopListening()
+        } else {
+            chatUseCases.transcribeSpeechUseCase.startListening(_inputText.value)
+        }
     }
 
     /**
@@ -690,6 +734,7 @@ class ChatViewModel @Inject constructor(
         val inputText: String,
         val selectedMode: ChatModeUi,
         val selectedImageUri: String?,
+        val speechState: SpeechState,
     )
 
     private data class PhotoAttachmentPolicy(

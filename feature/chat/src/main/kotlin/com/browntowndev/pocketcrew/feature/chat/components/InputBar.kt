@@ -1,6 +1,11 @@
 package com.browntowndev.pocketcrew.feature.chat.components
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +28,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,6 +56,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
@@ -61,12 +68,20 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
+import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.Manifest
+import android.content.pm.PackageManager
+import android.widget.Toast
+import androidx.core.content.ContextCompat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InputBar(
     inputText: String,
+    speechState: SpeechState,
     selectedImageUri: String?,
     isPhotoAttachmentEnabled: Boolean,
     photoAttachmentDisabledReason: String?,
@@ -79,6 +94,7 @@ fun InputBar(
     onStopGenerating: () -> Unit,
     onAttach: () -> Unit,
     onClearAttachment: () -> Unit,
+    onMicClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var modeExpanded by remember { mutableStateOf(false) }
@@ -87,11 +103,28 @@ fun InputBar(
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            onMicClick()
+        } else {
+            Toast.makeText(context, "Microphone permission is required for speech-to-text", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     var textFieldValue by remember { mutableStateOf(TextFieldValue(inputText)) }
 
     LaunchedEffect(inputText) {
         if (textFieldValue.text != inputText) {
-            textFieldValue = TextFieldValue(inputText)
+            textFieldValue = TextFieldValue(
+                text = inputText,
+                selection = TextRange(inputText.length)
+            )
+        }
+
+        if (inputText.isEmpty()) {
+            isExpanded = false
         }
     }
 
@@ -350,8 +383,10 @@ fun InputBar(
                 }
 
                 // Send / Stop
-                val hasSendableContent = textFieldValue.text.isNotBlank() || selectedImageUri != null
+                val isListening = speechState is SpeechState.Listening || speechState is SpeechState.PartialText
+                val hasSendableContent = (textFieldValue.text.isNotBlank() || selectedImageUri != null) && !isListening
                 val isSendDisabled = (isGenerating || isGlobalInferenceBlocked) && !isGenerating
+                
                 if (isGenerating) {
                     FilledIconButton(
                         onClick = onStopGenerating,
@@ -367,28 +402,72 @@ fun InputBar(
                         )
                     }
                 } else {
-                    IconButton(
-                        onClick = {
-                            if (hasSendableContent && !isSendDisabled) {
-                                val textToSend = textFieldValue.text
-                                onSend(textToSend) // Send FIRST while inputText still has value
-                                textFieldValue = TextFieldValue("") // Clear locally
-                                onInputChange("") // Clear parent state
-                                isExpanded = false
-                                focusManager.clearFocus()
-                            }
+                    AnimatedContent(
+                        targetState = hasSendableContent,
+                        transitionSpec = {
+                            fadeIn() togetherWith fadeOut()
                         },
-                        enabled = hasSendableContent && !isSendDisabled
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "Send message",
-                            tint = when {
-                                isSendDisabled -> MaterialTheme.colorScheme.onSurfaceVariant
-                                hasSendableContent -> MaterialTheme.colorScheme.primary
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        label = "SendMicTransition"
+                    ) { isSending ->
+                        if (isSending) {
+                            IconButton(
+                                onClick = {
+                                    if (hasSendableContent && !isSendDisabled) {
+                                        val textToSend = textFieldValue.text
+                                        onSend(textToSend) // Send FIRST while inputText still has value
+                                        textFieldValue = TextFieldValue("") // Clear locally
+                                        onInputChange("") // Clear parent state
+                                        isExpanded = false
+                                        focusManager.clearFocus()
+                                    }
+                                },
+                                enabled = !isSendDisabled
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = "Send message",
+                                    tint = if (isSendDisabled) {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    } else {
+                                        MaterialTheme.colorScheme.primary
+                                    }
+                                )
                             }
-                        )
+                        } else {
+                            IconButton(
+                                onClick = {
+                                    val hasPermission = ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.RECORD_AUDIO
+                                    ) == PackageManager.PERMISSION_GRANTED
+
+                                    if (hasPermission) {
+                                        onMicClick()
+                                    } else {
+                                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isListening) {
+                                            MaterialTheme.colorScheme.primaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.surfaceVariant
+                                        }
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = if (isListening) Icons.Default.Stop else Icons.Default.Mic,
+                                    contentDescription = if (isListening) "Stop recording" else "Speech to text",
+                                    tint = if (isListening) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -413,6 +492,7 @@ fun PreviewInputBar() {
     PocketCrewTheme {
         InputBar(
             inputText = "",
+            speechState = SpeechState.Idle,
             selectedImageUri = null,
             isPhotoAttachmentEnabled = true,
             photoAttachmentDisabledReason = null,
@@ -424,6 +504,7 @@ fun PreviewInputBar() {
             onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
+            onMicClick = {},
         )
     }
 }
@@ -438,6 +519,7 @@ fun PreviewInputBarExpanded() {
                 Line 2.
                 Line 3: showing collapse icon.
             """.trimIndent(),
+            speechState = SpeechState.Idle,
             selectedImageUri = null,
             isPhotoAttachmentEnabled = false,
             photoAttachmentDisabledReason = "Crew mode requires an API vision model.",
@@ -449,6 +531,7 @@ fun PreviewInputBarExpanded() {
             onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
+            onMicClick = {},
         )
     }
 }
@@ -459,6 +542,7 @@ fun PreviewInputBarSingleLine() {
     PocketCrewTheme {
         InputBar(
             inputText = "Single line message",
+            speechState = SpeechState.Idle,
             selectedImageUri = null,
             isPhotoAttachmentEnabled = true,
             photoAttachmentDisabledReason = null,
@@ -470,6 +554,7 @@ fun PreviewInputBarSingleLine() {
             onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
+            onMicClick = {},
         )
     }
 }
@@ -480,6 +565,7 @@ fun PreviewInputBarThinking() {
     PocketCrewTheme {
         InputBar(
             inputText = "Message while thinking",
+            speechState = SpeechState.Idle,
             selectedImageUri = null,
             isPhotoAttachmentEnabled = true,
             photoAttachmentDisabledReason = null,
@@ -491,6 +577,7 @@ fun PreviewInputBarThinking() {
             onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
+            onMicClick = {},
         )
     }
 }
@@ -501,6 +588,7 @@ fun PreviewInputBarThinkingMode() {
     PocketCrewTheme {
         InputBar(
             inputText = "Tell me about quantum physics",
+            speechState = SpeechState.Idle,
             selectedImageUri = null,
             isPhotoAttachmentEnabled = true,
             photoAttachmentDisabledReason = null,
@@ -512,6 +600,7 @@ fun PreviewInputBarThinkingMode() {
             onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
+            onMicClick = {},
         )
     }
 }
@@ -522,6 +611,7 @@ fun PreviewInputBarStopIndicator() {
     PocketCrewTheme {
         InputBar(
             inputText = "Generating response...",
+            speechState = SpeechState.Idle,
             selectedImageUri = null,
             isPhotoAttachmentEnabled = true,
             photoAttachmentDisabledReason = null,
@@ -533,6 +623,7 @@ fun PreviewInputBarStopIndicator() {
             onStopGenerating = {},
             onAttach = {},
             onClearAttachment = {},
+            onMicClick = {},
         )
     }
 }
