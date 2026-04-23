@@ -154,6 +154,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
                     sha256 = asset.metadata.sha256,
                     sizeInBytes = asset.metadata.sizeInBytes,
                     huggingFaceModelName = asset.metadata.huggingFaceModelName,
+                    huggingFacePath = asset.metadata.huggingFacePath,
                     source = asset.metadata.source.name,
                     modelFileFormat = asset.metadata.modelFileFormat.name,
                     utilityType = asset.metadata.utilityType?.name,

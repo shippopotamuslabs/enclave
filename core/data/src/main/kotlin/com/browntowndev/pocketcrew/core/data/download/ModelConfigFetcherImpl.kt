@@ -82,6 +82,7 @@ class ModelConfigFetcherImpl @Inject constructor(
             val metadata = LocalModelMetadata(
                 id = LocalModelId(""),
                 huggingFaceModelName = asset.huggingFaceModelName,
+                huggingFacePath = asset.huggingFacePath,
                 remoteFileName = asset.fileName,
                 localFileName = asset.fileName,
                 sha256 = asset.sha256,

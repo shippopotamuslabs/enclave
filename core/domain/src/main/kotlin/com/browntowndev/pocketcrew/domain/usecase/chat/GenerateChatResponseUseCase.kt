@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.inference.ChatInferenceExecutorPort
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
@@ -46,9 +47,15 @@ class GenerateChatResponseUseCase @Inject constructor(
     private val activeModelProvider: ActiveModelProviderPort,
     private val extractedUrlTracker: ExtractedUrlTrackerPort,
     private val chatInferenceExecutor: ChatInferenceExecutorPort,
+    private val embeddingEngine: EmbeddingEnginePort,
     private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort = NoOpActiveChatTurnSnapshotPort,
 ) {
-    private val persistAccumulatedMessages = PersistAccumulatedChatMessagesUseCase(chatRepository, extractedUrlTracker.urls)
+    private val persistAccumulatedMessages = PersistAccumulatedChatMessagesUseCase(
+        chatRepository = chatRepository,
+        messageRepository = messageRepository,
+        embeddingEngine = embeddingEngine,
+        extractedUrls = extractedUrlTracker.urls
+    )
 
     operator fun invoke(
         prompt: String,
@@ -120,6 +127,14 @@ class GenerateChatResponseUseCase @Inject constructor(
                         ) {
                             accumulatorManager.markIncompleteAsCancelled()
                             persistAccumulatedMessages(accumulatorManager)
+                            
+                            // Generate and save embedding for the user message
+                            val userMessage = messageRepository.getMessageById(userMessageId)
+                            if (userMessage != null && userMessage.content.text.isNotBlank()) {
+                                val embedding = embeddingEngine.getEmbedding(userMessage.content.text)
+                                messageRepository.saveEmbedding(userMessageId, embedding)
+                            }
+                            
                             extractedUrlTracker.clear()
                         }
                     }

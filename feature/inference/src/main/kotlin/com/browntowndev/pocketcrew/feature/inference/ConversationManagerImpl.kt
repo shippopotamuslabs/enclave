@@ -763,7 +763,7 @@ class ConversationManagerImpl @Inject constructor(
                 contextFullWarned = true
             }
 
-            if (decision.finalResult.contains("\"error\"")) {
+            if (decision.hasErrorPayload) {
                 loggingPort.error(
                     TAG,
                     "Native tool call returned error payload tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"} payload=${decision.finalResult.take(2000)}"

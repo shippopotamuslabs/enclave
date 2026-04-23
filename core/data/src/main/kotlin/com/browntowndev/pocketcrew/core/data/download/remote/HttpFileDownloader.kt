@@ -95,7 +95,7 @@ class HttpFileDownloader @Inject constructor(
             val contentRange = response.header("Content-Range")
             val contentRangeTotal = contentRange?.split("/")?.lastOrNull()?.toLongOrNull()
 
-            val actualTotalSize = contentRangeTotal ?: serverContentLength ?: throw Exception("No Content-Length or Content-Range found")
+            val actualTotalSize = contentRangeTotal ?: serverContentLength ?: config.expectedSizeBytes
             logger.info(TAG, "[SIZE] Server Content-Length: $serverContentLength bytes")
             logger.info(TAG, "[SIZE] Using $actualTotalSize bytes for progress")
 

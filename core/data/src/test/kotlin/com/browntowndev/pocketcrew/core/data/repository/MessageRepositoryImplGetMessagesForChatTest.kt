@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
+import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
@@ -22,6 +23,7 @@ class MessageRepositoryImplGetMessagesForChatTest {
     private lateinit var messageDao: MessageDao
     private lateinit var messageVisionAnalysisDao: MessageVisionAnalysisDao
     private lateinit var chatSummaryDao: ChatSummaryDao
+    private lateinit var embeddingDao: EmbeddingDao
     private lateinit var repository: MessageRepositoryImpl
 
     @BeforeEach
@@ -29,7 +31,8 @@ class MessageRepositoryImplGetMessagesForChatTest {
         messageDao = mockk(relaxed = true)
         messageVisionAnalysisDao = mockk(relaxed = true)
         chatSummaryDao = mockk(relaxed = true)
-        repository = MessageRepositoryImpl(messageDao, messageVisionAnalysisDao, chatSummaryDao)
+        embeddingDao = mockk(relaxed = true)
+        repository = MessageRepositoryImpl(messageDao, messageVisionAnalysisDao, chatSummaryDao, embeddingDao)
     }
 
     // ========== Basic Functionality Tests ==========

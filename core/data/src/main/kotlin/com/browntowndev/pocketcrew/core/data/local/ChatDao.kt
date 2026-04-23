@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -39,18 +40,12 @@ abstract class ChatDao {
     abstract suspend fun updateName(chatId: ChatId, newName: String): Int
 
     @Query("""
-        SELECT * FROM (
-            SELECT chat.* FROM chat
-            JOIN message ON chat.id = message.chat_id
-            JOIN message_search ON message.rowid = message_search.rowid
-            WHERE message_search MATCH :ftsQuery
-            
-            UNION
-            
-            SELECT * FROM chat
-            WHERE name LIKE '%' || :query || '%'
-        )
+        SELECT * FROM chat
+        WHERE id IN (
+            SELECT DISTINCT chat_id FROM message
+            WHERE id IN (:messageIds)
+        ) OR name LIKE '%' || :query || '%'
         ORDER BY pinned DESC, last_modified DESC
     """)
-    abstract fun searchChats(query: String, ftsQuery: String): Flow<List<ChatEntity>>
+    abstract fun searchChats(query: String, messageIds: List<MessageId>): Flow<List<ChatEntity>>
 }

@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import io.mockk.coEvery
@@ -27,15 +28,20 @@ class SearchChatToolExecutorTest {
 
     private lateinit var loggingPort: LoggingPort
     private lateinit var messageRepository: MessageRepository
+    private lateinit var embeddingEngine: EmbeddingEnginePort
     private lateinit var executor: SearchChatToolExecutor
+    private val embeddingVector = floatArrayOf(0.1f, 0.2f, 0.3f)
 
     @Before
     fun setup() {
         loggingPort = mockk(relaxed = true)
         messageRepository = mockk()
+        embeddingEngine = mockk()
+        coEvery { embeddingEngine.getEmbedding(any()) } returns embeddingVector
         executor = SearchChatToolExecutor(
             loggingPort = loggingPort,
             messageRepository = messageRepository,
+            embeddingEngine = embeddingEngine,
         )
     }
 
@@ -54,7 +60,7 @@ class SearchChatToolExecutorTest {
             Message(id = MessageId("m1"), chatId = ChatId("chat-1"), content = Content(text = "We need a database migration"), role = Role.USER, createdAt = 1000L),
             Message(id = MessageId("m2"), chatId = ChatId("chat-1"), content = Content(text = "The migration script is ready"), role = Role.ASSISTANT, createdAt = 2000L),
         )
-        coEvery { messageRepository.searchMessagesInChat(ChatId("chat-1"), "database migration") } returns messages
+        coEvery { messageRepository.searchMessagesInChat(ChatId("chat-1"), embeddingVector) } returns messages
 
         val result = executor.execute(baseRequest())
 
