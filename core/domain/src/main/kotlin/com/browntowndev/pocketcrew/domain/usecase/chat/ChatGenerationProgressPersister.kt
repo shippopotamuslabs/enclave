@@ -59,6 +59,8 @@ class ChatGenerationProgressSession internal constructor(
 
     suspend fun flush(markIncompleteAsCancelled: Boolean) {
         if (markIncompleteAsCancelled) {
+            accumulatorManager.markIncompleteAsCancelled()
+            persistAccumulatedMessages()
             extractedUrlTracker.clear()
             return
         }
