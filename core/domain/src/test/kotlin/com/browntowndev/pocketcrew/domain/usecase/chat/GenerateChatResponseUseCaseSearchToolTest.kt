@@ -14,6 +14,7 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
@@ -97,6 +98,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 messageRepository = messageRepository,
                 settingsRepository = settingsRepository,
             ),
+            embeddingEngine = mockk(relaxed = true),
         )
 
         useCase(
@@ -163,6 +165,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
                 messageRepository = messageRepository,
                 settingsRepository = settingsRepository,
             ),
+            embeddingEngine = mockk(relaxed = true),
         )
 
         useCase(

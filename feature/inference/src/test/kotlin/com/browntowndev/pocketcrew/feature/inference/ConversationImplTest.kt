@@ -3,7 +3,6 @@ package com.browntowndev.pocketcrew.feature.inference
 import android.content.Context
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationResponse
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation

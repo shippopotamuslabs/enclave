@@ -25,7 +25,7 @@ interface ToolParameters
 /**
  * Annotation to provide descriptions for tool parameters.
  */
-@Target(AnnotationTarget.PROPERTY, AnnotationTarget.FIELD)
+@Target(AnnotationTarget.PROPERTY, AnnotationTarget.FIELD, AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.RUNTIME)
 annotation class ToolParam(val description: String = "", val required: Boolean = true)
 

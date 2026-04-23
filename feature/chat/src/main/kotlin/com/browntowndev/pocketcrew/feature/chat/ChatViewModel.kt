@@ -381,6 +381,7 @@ class ChatViewModel @Inject constructor(
 
         // Sort chronologically and map domain messages to UI messages
         var isGenerating = false
+        var canStop = true
         var hasActiveIndicator = false
         var activeIndicatorMessageId: MessageId? = null
         val chatMessages: List<ChatMessage> = projectedMessages.messages
@@ -396,6 +397,9 @@ class ChatViewModel @Inject constructor(
                         state is IndicatorState.EngineLoading)
                     ) {
                         isGenerating = true
+                        if (state is IndicatorState.EngineLoading) {
+                            canStop = false
+                        }
                     }
                 }
                 chatMessage
@@ -414,6 +418,7 @@ class ChatViewModel @Inject constructor(
             hapticResponse = settings.hapticResponse,
             chatId = _currentChatId.value ?: initialChatId,
             isGenerating = isGenerating,
+            canStop = canStop,
             hasActiveIndicator = hasActiveIndicator,
             activeIndicatorMessageId = activeIndicatorMessageId,
             activeToolCallBanner = activeBanner,
@@ -580,6 +585,15 @@ class ChatViewModel @Inject constructor(
     }
 
     fun stopGeneration() {
+        val currentUiState = uiState.value
+        if (!currentUiState.isGenerating || !currentUiState.canStop) {
+            loggingPort.debug(
+                TAG,
+                "stopGeneration ignored isGenerating=${currentUiState.isGenerating} canStop=${currentUiState.canStop}",
+            )
+            return
+        }
+
         inferenceJob?.cancel()
         cancelInferenceUseCase()
         activeTurnKeyFlow.value?.let { key ->

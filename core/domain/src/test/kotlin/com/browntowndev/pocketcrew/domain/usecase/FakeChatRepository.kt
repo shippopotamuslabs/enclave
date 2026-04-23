@@ -165,7 +165,7 @@ class FakeChatRepository : ChatRepository {
         }
     }
 
-    override fun searchChats(query: String, ftsQuery: String): Flow<List<Chat>> {
+    override fun searchChats(query: String, messageIds: List<MessageId>): Flow<List<Chat>> {
         return _chatsFlow.map { list ->
             list.filter { it.name.contains(query, ignoreCase = true) }
         }

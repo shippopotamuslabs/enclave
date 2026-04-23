@@ -32,7 +32,6 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ChatGenerationProgressSes
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatHistoryRehydrator
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatInferenceRequestPreparer
 import com.browntowndev.pocketcrew.domain.usecase.chat.SearchToolPromptComposer
-import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -82,9 +81,6 @@ class ChatInferenceService : Service() {
     lateinit var searchToolPromptComposer: SearchToolPromptComposer
 
     @Inject
-    lateinit var cancelInferenceUseCase: CancelInferenceUseCase
-
-    @Inject
     lateinit var loggingPort: LoggingPort
 
     @Inject
@@ -99,7 +95,10 @@ class ChatInferenceService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var currentJob: Job? = null
     private var currentChatId: ChatId? = null
+    private var currentAssistantMessageId: MessageId? = null
+    private var currentSession: ChatGenerationProgressSession? = null
     private var isStopping = false
+    private var latestStartId: Int = -1
 
     override fun onCreate() {
         super.onCreate()
@@ -112,6 +111,7 @@ class ChatInferenceService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        latestStartId = startId
         loggingPort.info(
             TAG,
             "onStartCommand action=${intent?.action} flags=$flags startId=$startId hasIntent=${intent != null}",
@@ -137,8 +137,12 @@ class ChatInferenceService : Service() {
                 if (!isStopping) {
                     isStopping = true
                     stopInference()
-                    stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
-                    stopSelf()
+                    
+                    // If no job is active, stop immediately. Otherwise, the job's finally block will handle it.
+                    if (currentJob?.isActive != true) {
+                        stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
+                        stopSelf(latestStartId)
+                    }
                 } else {
                     loggingPort.info(TAG, "Already stopping, ignoring ACTION_STOP")
                 }
@@ -157,6 +161,7 @@ class ChatInferenceService : Service() {
     ) {
         currentJob?.cancel()
         currentChatId = chatId
+        currentAssistantMessageId = assistantMessageId
         loggingPort.info(
             TAG,
             "startInference chat=${chatId.value} assistantMessageId=${assistantMessageId.value} modelType=${modelType.name} userHasImage=$userHasImage",
@@ -171,6 +176,7 @@ class ChatInferenceService : Service() {
                 userMessageId = userMessageId,
                 assistantMessageId = assistantMessageId,
             )
+            currentSession = persistenceSession
             try {
                 loggingPort.debug(
                     TAG,
@@ -222,7 +228,7 @@ class ChatInferenceService : Service() {
                 )
             } finally {
                 stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
-                stopSelf()
+                stopSelf(latestStartId)
             }
         }
     }
@@ -317,8 +323,31 @@ class ChatInferenceService : Service() {
     }
 
     private fun stopInference() {
+        loggingPort.info(TAG, "stopInference requested")
         currentJob?.cancel()
-        cancelInferenceUseCase()
+        
+        val chatId = currentChatId
+        val assistantId = currentAssistantMessageId
+        val session = currentSession
+
+        serviceScope.launch(Dispatchers.IO) {
+            // Force persistence cleanup in a NonCancellable block
+            withContext(NonCancellable) {
+                session?.flush(markIncompleteAsCancelled = true)
+            }
+
+            if (chatId != null && assistantId != null) {
+                val key = ActiveChatTurnKey(chatId, assistantId)
+                activeChatTurnSnapshotPort.clear(key)
+                loggingPort.debug(TAG, "Snapshot cleared for cancelled turn chat=${chatId.value}")
+            }
+            
+            // Ensure service stops if this was the last action
+            if (currentJob == null || currentJob?.isActive == false) {
+                stopForeground(ChatInferenceNotificationPolicy.FOREGROUND_STOP_MODE)
+                stopSelf(latestStartId)
+            }
+        }
     }
 
     private fun ModelType.toSingleModelMode(): Mode {

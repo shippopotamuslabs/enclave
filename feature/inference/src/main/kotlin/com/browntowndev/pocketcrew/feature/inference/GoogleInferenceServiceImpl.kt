@@ -16,6 +16,7 @@ import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
+import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCall
 import com.google.genai.types.Part
@@ -66,6 +67,7 @@ class GoogleInferenceServiceImpl(
             }
         } catch (e: CancellationException) {
             loggingPort.debug(TAG, "sendPrompt cancelled provider=$PROVIDER model=$modelId")
+            emit(InferenceEvent.Finished(modelType))
             throw e
         } catch (e: Exception) {
             if (e is IllegalArgumentException || e is IllegalStateException) {
@@ -227,7 +229,7 @@ class GoogleInferenceServiceImpl(
                     if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
                         val assistantMessageId = options.assistantMessageId
                         if (assistantMessageId != null) {
-                            val sources = com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(assistantMessageId, resultJson)
+                            val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
                             if (sources.isNotEmpty()) {
                                 emitEvent(InferenceEvent.TavilyResults(sources, modelType))
                             }
@@ -241,6 +243,8 @@ class GoogleInferenceServiceImpl(
         } catch (e: IllegalArgumentException) {
             throw e
         } catch (e: IllegalStateException) {
+            throw e
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             throw IllegalStateException("Google tool execution failed before final response", e)
