@@ -90,6 +90,7 @@ fun ChatScreen(
                 photoAttachmentDisabledReason = uiState.photoAttachmentDisabledReason,
                 selectedMode = uiState.selectedMode,
                 isGenerating = uiState.isGenerating,
+                canStop = uiState.canStop,
                 isGlobalInferenceBlocked = uiState.isGlobalInferenceBlocked,
                 onInputChange = onInputChange,
                 onModeChange = onModeChange,

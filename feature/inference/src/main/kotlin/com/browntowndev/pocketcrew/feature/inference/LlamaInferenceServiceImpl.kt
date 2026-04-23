@@ -12,6 +12,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseC
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
@@ -26,6 +27,12 @@ import com.browntowndev.pocketcrew.domain.util.ChatHistoryCompressor
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
 import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
+import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
+import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
+import com.browntowndev.pocketcrew.feature.inference.llama.ChatRole
+import java.io.File
+import java.util.concurrent.CancellationException as JavaCancellationException
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -87,8 +94,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
     private fun getModelPath(filename: String): String {
         // Use getExternalFilesDir to match ModelFileScanner's directory choice
-        val modelsDir = java.io.File(context.getExternalFilesDir(null), "models")
-        return java.io.File(modelsDir, filename).absolutePath
+        val modelsDir = File(context.getExternalFilesDir(null), "models")
+        return File(modelsDir, filename).absolutePath
     }
 
     /**
@@ -144,7 +151,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             val mmprojPath = asset.metadata.mmprojLocalFileName?.let(::getModelPath)
             if (options.imageUris.isNotEmpty() &&
                 asset.metadata.isMultimodal &&
-                asset.metadata.modelFileFormat == com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat.GGUF &&
+                asset.metadata.modelFileFormat == ModelFileFormat.GGUF &&
                 mmprojPath.isNullOrBlank()
             ) {
                 throw IllegalStateException("Vision-capable GGUF model requires an mmproj companion file.")
@@ -191,6 +198,9 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 currentContextWindow = samplingConfig.contextWindow
                 currentSystemPrompt = systemPrompt
             } catch (e: Exception) {
+                if (e is CancellationException || e is JavaCancellationException) {
+                    throw e
+                }
                 // GPU initialization failed, try falling back to CPU
                 if (!hasTriedCpuFallback && samplingConfig.gpuLayers > 0) {
                     Log.w(TAG, "GPU initialization failed, falling back to CPU: ${e.message}")
@@ -359,6 +369,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 sessionManager.clearConversation()
             }
         } catch (e: CancellationException) {
+            loggingPort.debug(TAG, "sendPrompt cancelled targetModelType=$targetModelType")
+            send(InferenceEvent.Finished(targetModelType))
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Error during inference", e)
@@ -376,7 +388,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
                     if (uriString.startsWith("file://")) {
                         try {
                             val path = uriString.removePrefix("file://")
-                            val file = java.io.File(path)
+                            val file = File(path)
                             if (file.exists() && file.parentFile?.name == context.cacheDir.name) {
                                 file.delete()
                                 Log.d(TAG, "Cleaned up temp image: $path")
@@ -422,7 +434,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 } ?: emptyList()
             },
             onToolResultsMapped = { params, _, results ->
-                val tokenCounter = com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+                val tokenCounter = JTokkitTokenCounter
                 val modelId = currentSignature?.modelId?.value
                 val systemPromptTokens = ToolContextBudget.countSystemPromptTokens(currentSystemPrompt, modelId, tokenCounter)
                 val historyTokens = ToolContextBudget.countHistoryTokens(history, modelId, tokenCounter)
@@ -461,7 +473,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             onContextExceeded = { _, _ ->
                 // Llama uses local KV cache, so mid-loop rebuilding is not feasible.
                 // Estimate current pressure from the same inputs used by ToolContextBudget.
-                val tokenCounter = com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+                val tokenCounter = JTokkitTokenCounter
                 val modelId = currentSignature?.modelId?.value
                 val systemPromptTokens = ToolContextBudget.countSystemPromptTokens(currentSystemPrompt, modelId, tokenCounter)
                 val historyTokens = ToolContextBudget.countHistoryTokens(history, modelId, tokenCounter)
@@ -489,10 +501,10 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 }
             },
             onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
                     val assistantMessageId = options.assistantMessageId
                     if (assistantMessageId != null) {
-                        val sources = com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(assistantMessageId, resultJson)
+                        val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
                         if (sources.isNotEmpty()) {
                             emitEvent(InferenceEvent.TavilyResults(sources, targetModelType))
                         }

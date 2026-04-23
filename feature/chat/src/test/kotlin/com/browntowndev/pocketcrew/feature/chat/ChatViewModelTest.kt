@@ -814,6 +814,17 @@ class ChatViewModelTest {
 
         val testChatId = ChatId("test-chat-id")
         val testUserMessageId = MessageId("user-123")
+        val assistantMessageId = MessageId("assistant-123")
+        val dbMessages = MutableStateFlow(
+            listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "partial",
+                    state = MessageState.GENERATING,
+                )
+            )
+        )
+        coEvery { chatUseCases.getChat(testChatId) } returns dbMessages
 
         val savedStateHandle = SavedStateHandle(mapOf("chatId" to testChatId.value))
         chatViewModel = ChatViewModel(
@@ -831,18 +842,27 @@ class ChatViewModelTest {
             activeChatTurnSnapshotPort = activeChatTurnStore,
         )
 
-        runCurrent()
-        advanceTimeBy(100)
-        runCurrent()
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        try {
+            runCurrent()
+            advanceTimeBy(100)
+            runCurrent()
 
-        // When
-        chatViewModel.stopGeneration()
+            assertTrue(chatViewModel.uiState.value.isGenerating)
+            assertTrue(chatViewModel.uiState.value.canStop)
 
-        // Then - cancelInferenceUseCase should be called
-        verify { cancelInferenceUseCase() }
-        // Tool banner should be null (either cleared or never set)
-        val stateAfterStop = chatViewModel.uiState.value
-        assertNull(stateAfterStop.activeToolCallBanner, "Tool banner should be null after stopGeneration")
+            // When
+            chatViewModel.stopGeneration()
+            runCurrent()
+
+            // Then - cancelInferenceUseCase should be called
+            verify { cancelInferenceUseCase() }
+            // Tool banner should be null (either cleared or never set)
+            val stateAfterStop = chatViewModel.uiState.value
+            assertNull(stateAfterStop.activeToolCallBanner, "Tool banner should be null after stopGeneration")
+        } finally {
+            collectJob.cancel()
+        }
     }
 
     @Test
@@ -1146,6 +1166,53 @@ class ChatViewModelTest {
             runCurrent()
 
             assertNull(activeChatTurnStore.observe(key).first())
+        } finally {
+            collectJob.cancel()
+        }
+    }
+
+    @Test
+    fun `stopGeneration ignored while engine loading`() = runTest {
+        val chatId = ChatId("chat-loading")
+        val assistantMessageId = MessageId("assistant-loading")
+        val key = ActiveChatTurnKey(chatId, assistantMessageId)
+        val dbMessages = MutableStateFlow(
+            listOf(
+                createAssistantMessage(
+                    id = assistantMessageId,
+                    content = "",
+                    state = MessageState.ENGINE_LOADING,
+                )
+            )
+        )
+        coEvery { chatUseCases.getChat(chatId) } returns dbMessages
+        chatViewModel = createViewModel(SavedStateHandle(mapOf("chatId" to chatId.value)))
+        activeChatTurnStore.publish(
+            key = key,
+            snapshot = AccumulatedMessages(
+                messages = mapOf(
+                    assistantMessageId to createAssistantSnapshot(
+                        id = assistantMessageId,
+                        content = "",
+                        state = MessageState.ENGINE_LOADING,
+                    )
+                )
+            ),
+        )
+
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        try {
+            runCurrent()
+
+            val stateBeforeStop = chatViewModel.uiState.value
+            assertTrue(stateBeforeStop.isGenerating)
+            assertEquals(false, stateBeforeStop.canStop)
+
+            chatViewModel.stopGeneration()
+            runCurrent()
+
+            verify(exactly = 0) { cancelInferenceUseCase() }
+            assertNotNull(activeChatTurnStore.observe(key).first())
         } finally {
             collectJob.cancel()
         }

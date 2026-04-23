@@ -1,29 +1,27 @@
-package com.browntowndev.pocketcrew.domain.port.inference
+package com.browntowndev.pocketcrew.feature.inference
+
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 /**
- * Domain port for managing LLM conversation lifecycle.
+ * Internal interface for managing LLM conversation lifecycle within the inference module.
  * Encapsulates conversation lifecycle and ensures proper initialization.
- *
- * Each ConversationManager instance is bound to a specific Engine and must be
- * injected with the corresponding engine qualifier.
  */
-interface ConversationManagerPort {
+interface ConversationManager {
     /**
      * Returns the active conversation, initializing it if needed.
      * Thread-safe: concurrent calls will return the same conversation instance.
      *
      * @param modelType The type of model to get the configuration for.
      * @param options Per-request generation options (e.g., sampler overrides).
-     * @return The active ConversationPort instance
+     * @return The active LiteRtConversation instance
      */
     suspend fun getConversation(
         modelType: ModelType, 
         options: GenerationOptions? = null,
         onLoadingStarted: suspend () -> Unit = {}
-    ): ConversationPort
+    ): LiteRtConversation
 
     /**
      * Closes the current conversation and releases resources.
@@ -55,7 +53,7 @@ interface ConversationManagerPort {
     /**
      * Cancels the active LiteRT conversation's generation process.
      * This immediately signals the native C++ engine to stop producing tokens,
-     * causing the active [ConversationPort.sendMessageAsync] flow to terminate
+     * causing the active [LiteRtConversation.sendMessageAsync] flow to terminate
      * with a CancellationException via MessageCallback.onError.
      */
     fun cancelProcess()

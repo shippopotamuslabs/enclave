@@ -35,6 +35,14 @@ class FakeMessageRepository : MessageRepository {
         return id
     }
 
+    override suspend fun saveEmbedding(messageId: MessageId, embedding: FloatArray) {
+        // No-op for testing
+    }
+
+    override suspend fun searchSimilarMessages(queryVector: FloatArray, limit: Int): List<MessageId> {
+        return emptyList()
+    }
+
     override suspend fun getMessageById(id: MessageId): Message? {
         return getMessageByIdResult
     }
@@ -73,11 +81,11 @@ class FakeMessageRepository : MessageRepository {
         currentUserMessageId: MessageId,
     ): ResolvedImageTarget? = resolvedImageTarget
 
-    override suspend fun searchMessagesInChat(chatId: ChatId, query: String): List<Message> {
+    override suspend fun searchMessagesInChat(chatId: ChatId, queryVector: FloatArray, limit: Int): List<Message> {
         return emptyList()
     }
 
-    override suspend fun searchMessagesAcrossChats(queries: List<String>): List<Message> {
+    override suspend fun searchMessagesAcrossChats(queryVector: FloatArray, limit: Int): List<Message> {
         return emptyList()
     }
 

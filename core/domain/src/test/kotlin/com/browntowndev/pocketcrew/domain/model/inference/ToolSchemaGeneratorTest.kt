@@ -18,13 +18,13 @@ class ToolSchemaGeneratorTest {
 
     @Serializable
     data class ComplexParams(
-        @ToolParam(description = "A string field")
+        @property:ToolParam(description = "A string field")
         val stringField: String,
-        @ToolParam(description = "An int field", required = false)
+        @property:ToolParam(description = "An int field", required = false)
         val intField: Int = 42,
-        @ToolParam(description = "A list of strings")
+        @property:ToolParam(description = "A list of strings")
         val listField: List<String>,
-        @ToolParam(description = "An enum field")
+        @property:ToolParam(description = "An enum field")
         val enumField: TestEnum
     ) : ToolParameters
 

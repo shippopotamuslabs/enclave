@@ -15,6 +15,7 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
@@ -391,6 +392,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 override fun clear() {}
             },
             chatInferenceExecutor = directExecutor,
+            embeddingEngine = mockk(relaxed = true),
         )
     }
 

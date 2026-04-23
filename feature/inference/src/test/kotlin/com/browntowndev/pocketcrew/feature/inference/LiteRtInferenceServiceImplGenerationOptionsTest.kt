@@ -2,9 +2,7 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationResponse
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import io.mockk.MockKAnnotations
 import io.mockk.coEvery
@@ -27,9 +25,10 @@ import org.junit.jupiter.api.Test
  */
 class LiteRtInferenceServiceImplGenerationOptionsTest {
 
-    private lateinit var mockConversationManager: ConversationManagerPort
-    private lateinit var mockConversation: ConversationPort
+    private lateinit var mockConversationManager: ConversationManager
+    private lateinit var mockConversation: LiteRtConversation
     private lateinit var processThinkingTokens: ProcessThinkingTokensUseCase
+    private val toolExecutionEventPort = mockk<ToolExecutionEventPort>(relaxed = true)
 
     @BeforeEach
     fun setup() {

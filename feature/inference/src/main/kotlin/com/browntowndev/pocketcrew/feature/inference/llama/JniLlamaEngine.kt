@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
+import android.os.Build
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -119,12 +120,12 @@ class JniLlamaEngine @Inject constructor(
          * Check if device is known to have problematic (128-bit) SVE implementation.
          */
         private fun isKnownSveBlacklisted(): Pair<Boolean, String> {
-            val socModel = android.os.Build.SOC_MODEL.uppercase()
+            val socModel = Build.SOC_MODEL.uppercase()
             if (socModel == "GS301") {
                 return Pair(true, "Tensor G3 (GS301)")
             }
 
-            val device = android.os.Build.DEVICE.lowercase()
+            val device = Build.DEVICE.lowercase()
             val pixel8Family = setOf("shiba", "husky", "akita")
             if (device in pixel8Family) {
                 return Pair(true, "Pixel 8 family ($device)")

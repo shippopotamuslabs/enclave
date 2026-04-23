@@ -7,7 +7,9 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -46,11 +48,18 @@ class PersistAccumulatedChatMessagesUseCaseTest {
             defaultAssistantMessageId = MessageId("assistant"),
             chatRepository = chatRepository,
         )
-        val persistUseCase = PersistAccumulatedChatMessagesUseCase(chatRepository, emptySet())
+        val embeddingEngine = mockk<EmbeddingEnginePort>()
+        coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
+        val persistUseCase = PersistAccumulatedChatMessagesUseCase(
+            chatRepository = chatRepository,
+            messageRepository = mockk(relaxed = true),
+            embeddingEngine = embeddingEngine,
+            extractedUrls = emptySet(),
+        )
 
         manager.reduce(
             MessageGenerationState.GeneratingText(
-                """<tool_call>{"name":"tavily_web_search","arguments":{"query":"android"}}</tool_call>""",
+                """{"name":"tavily_web_search","arguments":{"query":"android"}}""",
                 ModelType.FAST,
             )
         )
@@ -83,6 +92,7 @@ class PersistAccumulatedChatMessagesUseCaseTest {
                 content = capture(contentSlot),
                 messageState = any(),
                 pipelineStep = any(),
+                tavilySources = any(),
             )
         } returns Unit
         val manager = ChatGenerationAccumulatorManager(
@@ -92,7 +102,14 @@ class PersistAccumulatedChatMessagesUseCaseTest {
             defaultAssistantMessageId = MessageId("assistant"),
             chatRepository = chatRepository,
         )
-        val persistUseCase = PersistAccumulatedChatMessagesUseCase(chatRepository, emptySet())
+        val embeddingEngine = mockk<EmbeddingEnginePort>()
+        coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
+        val persistUseCase = PersistAccumulatedChatMessagesUseCase(
+            chatRepository = chatRepository,
+            messageRepository = mockk(relaxed = true),
+            embeddingEngine = embeddingEngine,
+            extractedUrls = emptySet(),
+        )
 
         manager.reduce(
             MessageGenerationState.GeneratingText(
@@ -140,7 +157,15 @@ class PersistAccumulatedChatMessagesUseCaseTest {
         )
 
         manager.reduce(MessageGenerationState.Processing(ModelType.FAST))
-        PersistAccumulatedChatMessagesUseCase(chatRepository, emptySet())(manager)
+        val embeddingEngine = mockk<EmbeddingEnginePort>()
+        coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
+        val persistUseCase = PersistAccumulatedChatMessagesUseCase(
+            chatRepository = chatRepository,
+            messageRepository = mockk(relaxed = true),
+            embeddingEngine = embeddingEngine,
+            extractedUrls = emptySet(),
+        )
+        persistUseCase(manager)
 
         coVerify(exactly = 1) { chatRepository.persistAllMessageData(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()) }
         assertEquals(MessageState.PROCESSING, stateSlot.captured)
@@ -194,7 +219,14 @@ class PersistAccumulatedChatMessagesUseCaseTest {
         manager.reduce(MessageGenerationState.Finished(ModelType.FAST))
 
         val extractedUrls = setOf("https://example.com/page1")
-        val persistUseCase = PersistAccumulatedChatMessagesUseCase(chatRepository, extractedUrls)
+        val embeddingEngine = mockk<EmbeddingEnginePort>()
+        coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
+        val persistUseCase = PersistAccumulatedChatMessagesUseCase(
+            chatRepository = chatRepository,
+            messageRepository = mockk(relaxed = true),
+            embeddingEngine = embeddingEngine,
+            extractedUrls = extractedUrls,
+        )
         persistUseCase(manager)
 
         // The persisted sources should have extracted=true for URLs in extractedUrls
