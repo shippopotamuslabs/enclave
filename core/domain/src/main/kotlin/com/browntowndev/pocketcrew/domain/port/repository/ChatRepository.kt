@@ -196,13 +196,13 @@ interface ChatRepository {
     suspend fun renameChat(chatId: ChatId, newName: String)
 
     /**
-     * Searches chats by name or message content.
+     * Searches chats by name or message content similarity.
      *
-     * @param query The search query
-     * @param ftsQuery The sanitized FTS query
+     * @param query The search query string (used for chat name matching)
+     * @param messageIds The IDs of messages that matched the semantic search
      * @return Flow of matching chats
      */
-    fun searchChats(query: String, ftsQuery: String): Flow<List<Chat>>
+    fun searchChats(query: String, messageIds: List<MessageId>): Flow<List<Chat>>
 
     /**
      * Retrieves chats by their IDs.

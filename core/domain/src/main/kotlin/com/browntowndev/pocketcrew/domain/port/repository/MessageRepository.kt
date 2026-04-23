@@ -20,12 +20,28 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 interface MessageRepository {
     /**
      * Saves a message to the database.
-     * This also handles updating the FTS search index.
      *
      * @param message The message to save
      * @return The ID of the saved message
      */
     suspend fun saveMessage(message: Message): MessageId
+
+    /**
+     * Saves a vector embedding for a message.
+     *
+     * @param messageId The ID of the message
+     * @param embedding The vector embedding
+     */
+    suspend fun saveEmbedding(messageId: MessageId, embedding: FloatArray)
+
+    /**
+     * Searches for message IDs similar to the given vector.
+     *
+     * @param queryVector The query embedding
+     * @param limit The maximum number of results
+     * @return List of message IDs
+     */
+    suspend fun searchSimilarMessages(queryVector: FloatArray, limit: Int = 50): List<MessageId>
 
     /**
      * Retrieves a message by its ID.
@@ -74,27 +90,23 @@ interface MessageRepository {
     ): ResolvedImageTarget?
 
     /**
-     * Searches messages within a specific chat using full-text search.
-     * Used by the search_chat tool to provide "infinite memory"
-     * for details lost to context window summarization or FIFO eviction.
+     * Searches messages within a specific chat using vector similarity search.
      *
      * @param chatId The chat ID to search within.
-     * @param query The FTS-sanitized search query.
+     * @param queryVector The query embedding.
+     * @param limit The maximum number of results.
      * @return List of matching messages in chronological order.
      */
-    suspend fun searchMessagesInChat(chatId: ChatId, query: String): List<Message>
+    suspend fun searchMessagesInChat(chatId: ChatId, queryVector: FloatArray, limit: Int = 10): List<Message>
 
     /**
-     * Searches messages across all chats using full-text search.
-     * Used by the search_chat_history tool to find relevant messages
-     * from the user's past conversations.
+     * Searches messages across all chats using vector similarity search.
      *
-     * Multiple queries are OR'd together so any match is returned.
-     *
-     * @param queries The search queries to match against.
+     * @param queryVector The query embedding.
+     * @param limit The maximum number of results.
      * @return List of matching messages in chronological order, each with its chatId.
      */
-    suspend fun searchMessagesAcrossChats(queries: List<String>): List<Message>
+    suspend fun searchMessagesAcrossChats(queryVector: FloatArray, limit: Int = 50): List<Message>
 
     /**
      * Retrieves messages surrounding a specific message in its chat.

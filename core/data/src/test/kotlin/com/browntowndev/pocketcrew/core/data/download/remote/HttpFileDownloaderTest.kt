@@ -642,11 +642,12 @@ class HttpFileDownloaderTest {
     }
 
     @Test
-    fun downloadFile_throwsException_whenNoContentLengthHeader() = kotlinx.coroutines.test.runTest {
-        // Given: Server does not provide Content-Length header
+    fun downloadFile_succeedsUsingExpectedSize_whenNoContentLengthHeader() = kotlinx.coroutines.test.runTest {
+        // Given: Server does not provide Content-Length or Content-Range headers
         val testContent = "test content"
         val contentBytes = testContent.toByteArray(StandardCharsets.UTF_8)
         val testConfig = createTestConfig(testContent)
+        val progressUpdates = mutableListOf<Pair<Long, Long>>()
 
         val mockCall = mockk<okhttp3.Call>(relaxed = true)
         val mockResponse = mockk<Response>(relaxed = true)
@@ -661,19 +662,24 @@ class HttpFileDownloaderTest {
         every { mockResponse.header("Content-Range") } returns null // No Content-Range
         every { mockBody.byteStream() } returns contentBytes.inputStream()
 
-        // When/Then: Exception is thrown for missing Content-Length
-        try {
-            httpFileDownloader.downloadFile(
-                config = testConfig,
-                downloadUrl = "https://example.com/model.gguf",
-                targetDir = tempDir,
-                existingBytes = 0L,
-                progressCallback = null
-            )
-            throw AssertionError("Expected exception")
-        } catch (e: Exception) {
-            assertTrue(e.message?.contains("No Content-Length") == true)
-        }
+        // When: Download succeeds using the expected size from the model spec
+        val result = httpFileDownloader.downloadFile(
+            config = testConfig,
+            downloadUrl = "https://example.com/model.gguf",
+            targetDir = tempDir,
+            existingBytes = 0L,
+            progressCallback = object : FileDownloaderPort.ProgressCallback {
+                override fun onProgress(bytesDownloaded: Long, totalBytes: Long) {
+                    progressUpdates.add(Pair(bytesDownloaded, totalBytes))
+                }
+            }
+        )
+
+        // Then: File is created and progress reports the configured expected size
+        assertTrue(result.file.exists())
+        assertEquals(contentBytes.size.toLong(), result.bytesDownloaded)
+        assertEquals(testConfig.expectedSizeBytes, result.totalBytes)
+        assertTrue(progressUpdates.all { it.second == testConfig.expectedSizeBytes })
     }
 
     @Test

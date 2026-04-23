@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 data class LocalModelMetadata(
     val id: LocalModelId,
     val huggingFaceModelName: String,
+    val huggingFacePath: String? = null,
     val remoteFileName: String,
     val localFileName: String,
     val sha256: String,
@@ -25,6 +26,7 @@ data class LocalModelArtifact(
     val localFileName: String,
     val sha256: String,
     val sizeInBytes: Long,
+    val huggingFacePath: String? = null,
 )
 
 fun LocalModelMetadata.requiredArtifacts(): List<LocalModelArtifact> {
@@ -34,6 +36,7 @@ fun LocalModelMetadata.requiredArtifacts(): List<LocalModelArtifact> {
             localFileName = localFileName,
             sha256 = sha256,
             sizeInBytes = sizeInBytes,
+            huggingFacePath = huggingFacePath,
         )
     )
     if (

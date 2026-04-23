@@ -6,6 +6,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.work.WorkManager
 import com.browntowndev.pocketcrew.core.data.download.DownloadNotificationManager
 import com.browntowndev.pocketcrew.core.data.download.DownloadProgressTracker
@@ -15,68 +17,71 @@ import com.browntowndev.pocketcrew.core.data.download.ModelConfigFetcherImpl
 import com.browntowndev.pocketcrew.core.data.download.ModelDownloadOrchestratorImpl
 import com.browntowndev.pocketcrew.core.data.download.ModelFileScanner
 import com.browntowndev.pocketcrew.core.data.download.UtilityModelFileResolver
-import com.browntowndev.pocketcrew.core.data.download.remote.HttpFileDownloader
 import com.browntowndev.pocketcrew.core.data.download.remote.DynamicModelUrlProvider
+import com.browntowndev.pocketcrew.core.data.download.remote.HttpFileDownloader
+import com.browntowndev.pocketcrew.core.data.inference.MiniLMEmbeddingEngine
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
+import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
-import com.browntowndev.pocketcrew.core.data.local.MessageDao
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
-import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MIGRATION_1_2
+import com.browntowndev.pocketcrew.core.data.local.MessageDao
+import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
+import com.browntowndev.pocketcrew.core.data.local.SQLiteVecInstaller
+import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioCapture
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioRecordFactory
-import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.pocketcrew.core.data.media.AudioRecordFactory
+import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
-import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelCatalogRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
+import com.browntowndev.pocketcrew.core.data.repository.CompositeToolExecutor
 import com.browntowndev.pocketcrew.core.data.repository.DefaultModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.DeviceEnvironmentRepository
-
+import com.browntowndev.pocketcrew.core.data.repository.ExtractedUrlTracker
+import com.browntowndev.pocketcrew.core.data.repository.LocalModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.MessageRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ModelConfigProviderImpl
-import com.browntowndev.pocketcrew.core.data.repository.ExtractedUrlTracker
-import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
-import com.browntowndev.pocketcrew.core.data.repository.LocalModelRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.RoomTransactionProvider
-import com.browntowndev.pocketcrew.core.data.repository.CompositeToolExecutor
-import com.browntowndev.pocketcrew.core.data.repository.ToolExecutionEventBus
 import com.browntowndev.pocketcrew.core.data.repository.SettingsRepositoryImpl
+import com.browntowndev.pocketcrew.core.data.repository.ToolExecutionEventBus
+import com.browntowndev.pocketcrew.core.data.security.ApiKeyProviderImpl
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
-import com.browntowndev.pocketcrew.domain.port.media.AudioCapturePort
-import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
-import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.media.AudioCapturePort
+import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
-import com.browntowndev.pocketcrew.core.data.security.ApiKeyProviderImpl
-import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DeviceEnvironmentRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
-import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
-import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
+import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
+import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
+import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.PipelineStateRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import com.browntowndev.pocketcrew.domain.port.repository.UtilityModelFilePort
+import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.qualifier.PipelineDataStore
 import com.browntowndev.pocketcrew.domain.util.Clock
 import com.browntowndev.pocketcrew.domain.util.SystemClock
@@ -86,8 +91,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import javax.inject.Singleton
 import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
+import javax.inject.Singleton
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 private val Context.pipelineDataStore: DataStore<Preferences> by preferencesDataStore(name = "pipeline_state")
@@ -102,11 +108,19 @@ object DataModule {
         return Room.databaseBuilder(
             context,
             PocketCrewDatabase::class.java,
-            "pocket_crew_db"
+            "pocketcrew.db"
         )
-        .addMigrations(MIGRATION_1_2)
-        .fallbackToDestructiveMigration(dropAllTables = false)
-        .build()
+            .openHelperFactory(
+                SQLiteVecInstaller.createOpenHelperFactory(context),
+            )
+            .addCallback(object : RoomDatabase.Callback() {
+                override fun onOpen(db: SupportSQLiteDatabase) {
+                    super.onOpen(db)
+                    SQLiteVecInstaller.createEmbeddingTable(db)
+                }
+            })
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     @Provides
@@ -139,6 +153,9 @@ object DataModule {
 
     @Provides
     fun provideDefaultModelsDao(database: PocketCrewDatabase): DefaultModelsDao = database.defaultModelsDao()
+
+    @Provides
+    fun provideEmbeddingDao(database: PocketCrewDatabase): EmbeddingDao = database.embeddingDao()
 
     @Provides
     @Singleton
@@ -185,6 +202,10 @@ object DataModule {
     @Provides
     @Singleton
     fun provideModelUrlProvider(): ModelUrlProviderPort = DynamicModelUrlProvider()
+
+    @Provides
+    @Singleton
+    fun provideEmbeddingEngine(engine: MiniLMEmbeddingEngine): EmbeddingEnginePort = engine
 }
 
 @Module

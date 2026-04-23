@@ -10,7 +10,6 @@ import androidx.room.TypeConverters
         ChatEntity::class,
         MessageEntity::class,
         MessageVisionAnalysisEntity::class,
-        MessageSearch::class,
         LocalModelEntity::class,
         LocalModelConfigurationEntity::class,
         ApiCredentialsEntity::class,
@@ -19,7 +18,7 @@ import androidx.room.TypeConverters
         TavilySourceEntity::class,
         ChatSummaryEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = true
 )
 @TypeConverters(DateConverters::class, RoleConverters::class, ModelTypeConverters::class, MessageStateConverters::class, PipelineStepConverters::class, ApiProviderConverters::class, IdTypeConverters::class)
@@ -34,4 +33,5 @@ abstract class PocketCrewDatabase : RoomDatabase() {
     abstract fun apiCredentialsDao(): ApiCredentialsDao
     abstract fun apiModelConfigurationsDao(): ApiModelConfigurationsDao
     abstract fun defaultModelsDao(): DefaultModelsDao
+    abstract fun embeddingDao(): EmbeddingDao
 }
