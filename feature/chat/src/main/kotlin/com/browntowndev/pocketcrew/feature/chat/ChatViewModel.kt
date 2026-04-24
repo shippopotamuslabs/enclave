@@ -652,6 +652,7 @@ class ChatViewModel @Inject constructor(
 
                 // Update current chat ID to continue this conversation
                 _currentChatId.value = promptResult.chatId
+                savedStateHandle["chatId"] = promptResult.chatId.value
                 val turnKey = ActiveChatTurnKey(
                     chatId = promptResult.chatId,
                     assistantMessageId = promptResult.assistantMessageId,

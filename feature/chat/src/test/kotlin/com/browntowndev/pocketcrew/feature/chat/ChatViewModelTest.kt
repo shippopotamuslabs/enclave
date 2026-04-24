@@ -342,6 +342,28 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun `onSendMessage persists created chatId into SavedStateHandle`() = runTest {
+        val savedStateHandle = SavedStateHandle()
+        chatViewModel = createViewModel(savedStateHandle)
+        val chatId = ChatId("created-chat")
+        coEvery { chatUseCases.getChat(chatId) } returns MutableStateFlow(emptyList())
+        coEvery { chatUseCases.processPrompt(any()) } returns CreateUserMessageUseCase.PromptResult(
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            chatId = chatId,
+        )
+        coEvery {
+            chatUseCases.generateChatResponse(any(), any(), any(), any(), any(), any())
+        } returns kotlinx.coroutines.flow.emptyFlow()
+
+        chatViewModel.onInputChange("hello")
+        chatViewModel.onSendMessage()
+        advanceUntilIdle()
+
+        assertEquals(chatId.value, savedStateHandle.get<String>("chatId"))
+    }
+
+    @Test
     fun `onSendMessage keeps in-flight response visible until database confirms complete`() = runTest {
         val chatId = ChatId("chat")
         val userMessageId = MessageId("user")
