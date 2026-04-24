@@ -4,6 +4,7 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
@@ -46,29 +47,40 @@ fun StreamableMarkdownText(
 ) {
     if (markdown.isEmpty()) return // Prevents spinner from showing when text is empty
 
-    val textToRender = resolveMarkdownText(markdown)
+    val renderIdentity = markdownRenderIdentity(
+        markdown = markdown,
+        isStreaming = isStreaming,
+    )
 
     // In preview mode, use SimpleMarkdownText to avoid library initialization issues
     if (isPreview) {
         SimpleMarkdownText(
-            text = textToRender,
+            text = markdown,
             modifier = modifier,
         )
     } else {
-        SelectionContainer(modifier = modifier) {
-            Markdown(
-                markdown = textToRender,
-                modifier = Modifier,
-                isStreaming = isStreaming,
-                theme = darkMarkdownTheme(),
-                enableScroll = enableScroll,
-                onLinkClick = onLinkClick,
-            )
+        key(renderIdentity) {
+            SelectionContainer(modifier = modifier) {
+                Markdown(
+                    markdown = markdown,
+                    isStreaming = isStreaming,
+                    theme = darkMarkdownTheme(),
+                    enableScroll = enableScroll,
+                    onLinkClick = onLinkClick,
+                )
+            }
         }
     }
 }
 
-internal fun resolveMarkdownText(markdown: String): String = markdown
+internal fun markdownRenderIdentity(
+    markdown: String,
+    isStreaming: Boolean,
+): String {
+    if (isStreaming) return "streaming"
+
+    return "complete_${markdown.length}_${markdown.hashCode()}"
+}
 
 /**
  * Simple markdown rendering using AnnotatedString.
