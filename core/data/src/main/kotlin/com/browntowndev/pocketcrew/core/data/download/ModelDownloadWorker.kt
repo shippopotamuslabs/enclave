@@ -17,6 +17,7 @@ import com.browntowndev.pocketcrew.domain.model.download.totalArtifactSizeInByte
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.core.data.download.remote.DownloadSecurity
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.serialization.decodeFromString
@@ -243,7 +244,7 @@ class ModelDownloadWorker @AssistedInject constructor(
 
         // Check if all artifacts already exist
         val allArtifactsPresent = artifacts.all { artifact ->
-            val targetFile = File(targetDir, artifact.localFileName)
+            val targetFile = DownloadSecurity.resolveDownloadPaths(targetDir, artifact.localFileName).targetFile
             targetFile.exists() && targetFile.length() == artifact.sizeInBytes
         }
         if (allArtifactsPresent) {
@@ -287,13 +288,14 @@ class ModelDownloadWorker @AssistedInject constructor(
                     "[DOWNLOAD] Starting download: url=$downloadUrl, remoteFileName=${artifact.remoteFileName}, localFileName=${artifact.localFileName}"
                 )
 
-                val targetFile = File(targetDir, artifact.localFileName)
+                val paths = DownloadSecurity.resolveDownloadPaths(targetDir, artifact.localFileName)
+                val targetFile = paths.targetFile
                 if (targetFile.exists() && targetFile.length() == artifact.sizeInBytes) {
                     completedBytes += artifact.sizeInBytes
                     return@forEach
                 }
 
-                val tempFile = File(targetDir, "${artifact.localFileName}${ModelConfig.TEMP_EXTENSION}")
+                val tempFile = paths.tempFile
                 val existingBytes = if (tempFile.exists()) tempFile.length() else 0L
                 val downloadConfig = FileDownloaderPort.FileDownloadConfig(
                     filename = artifact.localFileName,

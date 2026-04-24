@@ -34,13 +34,18 @@ class UtilityModelFileResolver @Inject constructor(
         }
     }
 
+    private fun isSafeChildOf(child: File, parent: File): Boolean {
+        val childCanonical = child.canonicalPath
+        val parentCanonical = parent.canonicalPath + File.separator
+        return childCanonical.startsWith(parentCanonical)
+    }
+
     private fun safeFile(parentDir: File, filename: String): File {
         require(filename.isNotBlank()) { "Utility model filename must not be blank." }
 
         val safeName = File(filename).name
         val resolvedFile = File(parentDir, safeName)
-        val parentPath = parentDir.canonicalPath + File.separator
-        require(resolvedFile.canonicalPath.startsWith(parentPath)) {
+        require(isSafeChildOf(resolvedFile, parentDir)) {
             "Resolved utility model path escapes model directory."
         }
         return resolvedFile
