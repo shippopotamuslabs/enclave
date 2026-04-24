@@ -42,8 +42,6 @@ import com.google.ai.edge.litertlm.SamplerConfig as LiteRtSamplerConfig
 import com.google.ai.edge.litertlm.Tool
 import com.google.ai.edge.litertlm.ToolSet
 import com.google.ai.edge.litertlm.tool
-import com.google.android.gms.tasks.Tasks
-import com.google.android.gms.tflite.gpu.support.TfLiteGpu
 import java.io.File
 import java.lang.reflect.InvocationTargetException
 import java.util.concurrent.CopyOnWriteArrayList
@@ -889,16 +887,14 @@ class ConversationManagerImpl @Inject constructor(
         cacheDir: String?,
         isMultimodal: Boolean
     ) {
-        val useGpu = isGpuBackendAvailable()
-        val backendName = if (useGpu) "GPU" else "CPU"
-        val backend = if (useGpu) Backend.GPU() else Backend.CPU()
-        val visionBackend = if (isMultimodal && useGpu) Backend.GPU() else if (isMultimodal) Backend.CPU() else null
+        val backend = Backend.GPU()
+        val visionBackend = if (isMultimodal) Backend.GPU() else null
         var candidate: Engine? = null
 
         try {
             Log.d(
                 TAG,
-                "Initializing LiteRT text engine with $backendName backend, " +
+                "Initializing LiteRT text engine with GPU backend, " +
                     "contextWindow=$contextWindow memoryBeforeInit=${memorySnapshot()}"
             )
 
@@ -917,35 +913,24 @@ class ConversationManagerImpl @Inject constructor(
 
             Log.d(
                 TAG,
-                "LiteRT text engine initialized successfully with $backendName backend " +
+                "LiteRT text engine initialized successfully with GPU backend " +
                     "(isNpu=$activeBackendIsNpu) memoryAfterInit=${memorySnapshot()}"
             )
         } catch (t: Throwable) {
             if (t is CancellationException || t is JavaCancellationException) {
-                Log.i(TAG, "LiteRT $backendName engine initialization cancelled by user")
+                Log.i(TAG, "LiteRT GPU engine initialization cancelled by user")
                 try { candidate?.close() } catch (_: Throwable) {}
                 throw t
             }
-            Log.w(TAG, "LiteRT $backendName backend failed during initialize() memoryAfterFailure=${memorySnapshot()}", t)
+            Log.w(TAG, "LiteRT GPU backend failed during initialize() memoryAfterFailure=${memorySnapshot()}", t)
             try {
                 candidate?.close()
             } catch (_: Throwable) {
             }
             throw IllegalStateException(
-                "Failed to initialize LiteRT text engine with $backendName backend",
+                "Failed to initialize LiteRT text engine with GPU backend",
                 t
             )
-        }
-    }
-
-    private fun isGpuBackendAvailable(): Boolean {
-        return try {
-            val available = Tasks.await(TfLiteGpu.isGpuDelegateAvailable(context))
-            Log.d(TAG, "TfLiteGpu.isGpuDelegateAvailable returned $available")
-            available
-        } catch (t: Throwable) {
-            Log.w(TAG, "TfLiteGpu.isGpuDelegateAvailable failed; falling back to CPU", t)
-            false
         }
     }
 
@@ -1005,20 +990,19 @@ class ConversationManagerImpl @Inject constructor(
             // we must recreate the conversation to ensure context integrity.
             // We only need to close if a conversation is already active; otherwise,
             // getConversation will naturally create it with the correct history.
-            val isContinuation = this.history == messages || (
-                this.history.isNotEmpty() &&
-                messages.size >= this.history.size &&
-                messages.take(this.history.size) == this.history
+            val isContinuation = messages == history || (
+                messages.size >= history.size &&
+                messages.take(history.size) == history
             )
 
             if (!isContinuation && conversation != null) {
-                Log.d(TAG, "History discontinuity detected. Recreating conversation. (oldSize=${this.history.size}, newSize=${messages.size})")
+                Log.d(TAG, "History discontinuity detected. Recreating conversation. (oldSize=${history.size}, newSize=${messages.size})")
                 closeConversationLocked()
             } else if (isContinuation) {
-                Log.d(TAG, "History is a continuation. Reusing conversation. (oldSize=${this.history.size}, newSize=${messages.size})")
+                Log.d(TAG, "History is a continuation. Reusing conversation. (oldSize=${history.size}, newSize=${messages.size})")
             }
 
-            this.history = messages.toList<DomainChatMessage>()
+            history = messages.toList<DomainChatMessage>()
         }
     }
 
