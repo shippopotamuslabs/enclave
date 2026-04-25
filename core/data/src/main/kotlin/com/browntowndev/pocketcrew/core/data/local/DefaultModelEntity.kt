@@ -7,6 +7,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 @Entity(
@@ -23,11 +24,18 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
             parentColumns = ["id"],
             childColumns = ["api_config_id"],
             onDelete = ForeignKey.RESTRICT
+        ),
+        ForeignKey(
+            entity = TtsProviderEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["tts_provider_id"],
+            onDelete = ForeignKey.RESTRICT
         )
     ],
     indices = [
         Index(value = ["local_config_id"]),
-        Index(value = ["api_config_id"])
+        Index(value = ["api_config_id"]),
+        Index(value = ["tts_provider_id"])
     ]
 )
 data class DefaultModelEntity(
@@ -41,12 +49,16 @@ data class DefaultModelEntity(
     @ColumnInfo(name = "api_config_id")
     val apiConfigId: ApiModelConfigurationId? = null,
 
+    @ColumnInfo(name = "tts_provider_id")
+    val ttsProviderId: TtsProviderId? = null,
+
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis()
 ) {
     init {
-        require((localConfigId == null) xor (apiConfigId == null)) {
-            "Exactly one of localConfigId or apiConfigId must be non-null"
+        val nonNullCount = listOf(localConfigId, apiConfigId, ttsProviderId).count { it != null }
+        require(nonNullCount == 1) {
+            "Exactly one of localConfigId, apiConfigId, or ttsProviderId must be non-null"
         }
     }
 }
