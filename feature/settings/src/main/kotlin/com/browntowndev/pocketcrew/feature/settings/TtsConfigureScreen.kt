@@ -1,6 +1,8 @@
 package com.browntowndev.pocketcrew.feature.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,10 +19,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,6 +36,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -47,10 +53,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.TtsVoices
+
+private const val DEFAULT_GOOGLE_TTS_MODEL_ID = "gemini-3.1-flash-tts-preview"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +72,11 @@ fun TtsConfigureScreen(
     onApiKeyChange: (String) -> Unit,
     onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
     onSaveTtsProvider: () -> Unit,
+    onFetchApiModels: () -> Unit,
+    onUpdateModelSearchQuery: (String) -> Unit,
+    onToggleModelProviderFilter: (String) -> Unit,
+    onClearModelProviderFilters: () -> Unit,
+    onUpdateModelSortOption: (ModelSortOption) -> Unit,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val draft = uiState.ttsProviderEditor.assetDraft ?: TtsProviderAssetUi()
@@ -70,6 +85,7 @@ fun TtsConfigureScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var providerDropdownExpanded by remember { mutableStateOf(false) }
     var voiceDropdownExpanded by remember { mutableStateOf(false) }
+    var showModelSelectionSheet by remember { mutableStateOf(false) }
 
     val isSaveEnabled = draft.displayName.isNotBlank() &&
             draft.voiceName.isNotBlank() &&
@@ -221,6 +237,71 @@ fun TtsConfigureScreen(
                 shape = RoundedCornerShape(12.dp)
             )
 
+            if (draft.provider == ApiProvider.GOOGLE) {
+                val discovery = uiState.apiProviderEditor.discovery
+                val hasModels = discovery.models.isNotEmpty()
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(if (hasModels) Modifier.clickable { showModelSelectionSheet = true } else Modifier)
+                    ) {
+                        OutlinedTextField(
+                            value = draft.modelName ?: DEFAULT_GOOGLE_TTS_MODEL_ID,
+                            onValueChange = { onTtsAssetFieldChange(draft.copy(modelName = it)) },
+                            readOnly = hasModels,
+                            enabled = !hasModels,
+                            label = { Text("Model ID") },
+                            supportingText = {
+                                Text(
+                                    text = when {
+                                        discovery.isLoading -> "Fetching models..."
+                                        hasModels -> "${discovery.models.size} models discovered"
+                                        else -> "Discover models or enter a model ID manually"
+                                    }
+                                )
+                            },
+                            trailingIcon = if (hasModels) {
+                                {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = "Select model",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            } else {
+                                null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                disabledTrailingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                disabledSupportingTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
+                        )
+                    }
+
+                    TextButton(
+                        onClick = onFetchApiModels,
+                        enabled = !uiState.apiProviderEditor.discovery.isLoading && (apiKey.isNotBlank() || isKeySaved),
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        if (uiState.apiProviderEditor.discovery.isLoading) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                        } else {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        Text(if (hasModels) "Refresh Models" else "Discover Models")
+                    }
+                }
+            }
+
             // Base URL (for proxies)
             if (draft.provider == ApiProvider.OPENAI) {
                 OutlinedTextField(
@@ -268,5 +349,56 @@ fun TtsConfigureScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    if (showModelSelectionSheet) {
+        val discovery = uiState.apiProviderEditor.discovery
+        ModelSelectionBottomSheet(
+            availableModels = discovery.models,
+            filteredModels = discovery.filteredModels,
+            searchQuery = discovery.searchQuery,
+            providerFilters = discovery.providerFilters,
+            sortOption = discovery.sortOption,
+            onUpdateSearchQuery = onUpdateModelSearchQuery,
+            onToggleProviderFilter = onToggleModelProviderFilter,
+            onClearProviderFilters = onClearModelProviderFilters,
+            onUpdateSortOption = onUpdateModelSortOption,
+            onModelSelected = { selectedModelId ->
+                onTtsAssetFieldChange(draft.copy(modelName = selectedModelId))
+            },
+            onDismissRequest = { showModelSelectionSheet = false },
+        )
+    }
+}
+
+// ==================== PREVIEWS ====================
+
+@Preview(showBackground = true, name = "TTS Configure Screen")
+@Composable
+fun TtsConfigureScreenPreview() {
+    PocketCrewTheme {
+        TtsConfigureScreen(
+            uiState = MockSettingsData.baseUiState.copy(
+                ttsProviderEditor = TtsProviderEditorUiState(
+                    assetDraft = TtsProviderAssetUi(
+                        displayName = "My Google TTS",
+                        provider = ApiProvider.GOOGLE,
+                        voiceName = "Puck",
+                        modelName = "gemini-3.1-flash-tts-preview"
+                    )
+                )
+            ),
+            apiKey = "test-key",
+            onNavigateBack = {},
+            onTtsAssetFieldChange = {},
+            onApiKeyChange = {},
+            onSelectReusableApiCredential = {},
+            onSaveTtsProvider = {},
+            onFetchApiModels = {},
+            onUpdateModelSearchQuery = {},
+            onToggleModelProviderFilter = {},
+            onClearModelProviderFilters = {},
+            onUpdateModelSortOption = {},
+        )
     }
 }

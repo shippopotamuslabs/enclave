@@ -34,7 +34,8 @@ class AndroidAudioPlayer @Inject constructor(
         return suspendCancellableCoroutine { continuation ->
             try {
                 // Create a temporary file to store the audio bytes
-                val file = File(context.cacheDir, "tts_playback_${UUID.randomUUID()}.mp3")
+                val ext = detectAudioExtension(audioBytes)
+                val file = File(context.cacheDir, "tts_playback_${UUID.randomUUID()}$ext")
                 FileOutputStream(file).use { it.write(audioBytes) }
                 tempFile = file
 
@@ -88,6 +89,23 @@ class AndroidAudioPlayer @Inject constructor(
             }?.forEach { it.delete() }
         } catch (e: Exception) {
             logger.error("AndroidAudioPlayer", "Error during stale TTS file cleanup", e)
+        }
+    }
+
+    /**
+     * Detects the audio container format from the magic bytes at the start of [audioBytes]
+     * and returns an appropriate file extension (e.g. ".wav" or ".mp3").
+     */
+    private fun detectAudioExtension(audioBytes: ByteArray): String {
+        return if (audioBytes.size >= 4 &&
+            audioBytes[0] == 'R'.code.toByte() &&
+            audioBytes[1] == 'I'.code.toByte() &&
+            audioBytes[2] == 'F'.code.toByte() &&
+            audioBytes[3] == 'F'.code.toByte()
+        ) {
+            ".wav"
+        } else {
+            ".mp3"
         }
     }
 }

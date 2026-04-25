@@ -373,6 +373,11 @@ class SettingsViewModel @Inject constructor(
         _localModelsState.update { it.copy(configDraft = config ?: LocalModelConfigUi()) }
     }
 
+    fun onSelectTtsProviderAsset(asset: TtsProviderAssetUi?) {
+        _ttsState.update { it.copy(selectedAsset = asset, assetDraft = asset) }
+        resetModelDiscovery()
+    }
+
     fun onClearSelectedLocalModel() {
         _localModelsState.update { it.copy(selectedAsset = null, configDraft = null) }
     }
@@ -493,6 +498,7 @@ class SettingsViewModel @Inject constructor(
 
     fun onStartCreateTtsProviderAsset() {
         _currentApiKey.value = ""
+        resetModelDiscovery()
         _ttsState.update {
             it.copy(
                 selectedAsset = null,
@@ -507,7 +513,29 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onTtsAssetFieldChange(asset: TtsProviderAssetUi) {
-        _ttsState.update { it.copy(assetDraft = asset) }
+        val existingDraft = _ttsState.value.assetDraft
+        val discoveryScopeChanged =
+            existingDraft == null ||
+                existingDraft.provider != asset.provider ||
+                existingDraft.baseUrl.normalizedBaseUrl() != asset.baseUrl.normalizedBaseUrl()
+        if (discoveryScopeChanged) {
+            resetModelDiscovery()
+        }
+        _ttsState.update { state ->
+            state.copy(
+                assetDraft = asset,
+                selectedReusableApiCredentialAlias = if (existingDraft?.provider != asset.provider) {
+                    null
+                } else {
+                    state.selectedReusableApiCredentialAlias
+                },
+                selectedReusableApiCredentialName = if (existingDraft?.provider != asset.provider) {
+                    null
+                } else {
+                    state.selectedReusableApiCredentialName
+                },
+            )
+        }
     }
 
     fun onSelectReusableTtsApiCredential(id: ApiCredentialsId?) {
@@ -520,8 +548,9 @@ class SettingsViewModel @Inject constructor(
                     modelId = it.modelId,
                     credentialAlias = it.credentialAlias,
                 )
-            }
+        }
         _currentApiKey.value = ""
+        resetModelDiscovery()
         _ttsState.update {
             it.copy(
                 selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
@@ -542,6 +571,7 @@ class SettingsViewModel @Inject constructor(
                     displayName = draft.displayName,
                     provider = draft.provider,
                     voiceName = draft.voiceName,
+                    modelName = draft.modelName,
                     baseUrl = draft.baseUrl,
                     credentialAlias = reusedAlias ?: draft.credentialAlias.ifBlank {
                         "tts-${draft.provider.name.lowercase()}-${draft.voiceName.lowercase()}-${java.util.UUID.randomUUID().toString().take(8)}"
@@ -828,6 +858,37 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun onFetchTtsModels() {
+        val draft = _ttsState.value.assetDraft ?: _ttsState.value.selectedAsset ?: return
+        val credentialAlias = resolveTtsCredentialAlias(draft)
+        if (_currentApiKey.value.isBlank() && credentialAlias == null) return
+
+        _apiState.update { it.copy(isDiscoveringApiModels = true) }
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch TTS provider models", "Failed to fetch models")) {
+            try {
+                val result = apiProviderUseCases.discoverApiModels(
+                    ApiModelDiscoveryRequest(
+                        provider = draft.provider,
+                        currentApiKey = _currentApiKey.value,
+                        credentialAlias = credentialAlias,
+                        baseUrl = draft.baseUrl,
+                        selectedModelId = draft.modelName
+                            ?.takeIf(String::isNotBlank)
+                            ?.takeIf { it.isGoogleTtsModelCandidate() },
+                    )
+                )
+                _apiState.update { state ->
+                    state.copy(
+                        discoveredApiModels = result.models.filterGoogleTtsModels(),
+                        discoveredApiModelScope = result.scope,
+                    )
+                }
+            } finally {
+                _apiState.update { it.copy(isDiscoveringApiModels = false) }
+            }
+        }
+    }
+
     fun onAddCustomHeader() {
         _apiState.update { state ->
             val draft = state.presetDraft ?: return@update state
@@ -1040,6 +1101,23 @@ class SettingsViewModel @Inject constructor(
         ?.takeIf { it.isNotBlank() }
         ?: asset.credentialAlias.takeIf { it.isNotBlank() }
 
+    private fun resetModelDiscovery() {
+        _apiState.update {
+            it.copy(
+                discoveredApiModels = emptyList(),
+                discoveredApiModelScope = null,
+                isDiscoveringApiModels = false,
+                modelSearchQuery = "",
+                modelProviderFilters = emptySet(),
+                modelSortOption = ModelSortOption.A_TO_Z,
+            )
+        }
+    }
+
+    private fun resolveTtsCredentialAlias(asset: TtsProviderAssetUi): String? = _ttsState.value.selectedReusableApiCredentialAlias
+        ?.takeIf { it.isNotBlank() }
+        ?: asset.credentialAlias.takeIf { it.isNotBlank() }
+
     private fun ApiProvidersTransientState.discoveredModelFor(asset: ApiModelAssetUi?): DiscoveredApiModel? =
         discoveredApiModels.find { it.id == asset?.modelId }
 
@@ -1087,6 +1165,12 @@ class SettingsViewModel @Inject constructor(
         any { it.id == asset.modelId } -> this
         else -> listOf(DiscoveredApiModel(id = asset.modelId)) + this
     }
+
+    private fun List<DiscoveredApiModel>.filterGoogleTtsModels(): List<DiscoveredApiModel> =
+        filter { it.id.isGoogleTtsModelCandidate() }
+
+    private fun String.isGoogleTtsModelCandidate(): Boolean =
+        endsWith("-tts") || endsWith("-tts-preview")
 
     private fun PendingDeletionTarget.toDomain(): ModelDeletionTarget = when (this) {
         is PendingDeletionTarget.LocalModelAsset -> ModelDeletionTarget.LocalModelAsset(id)

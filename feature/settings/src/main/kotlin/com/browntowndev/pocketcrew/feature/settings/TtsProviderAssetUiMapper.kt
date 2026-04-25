@@ -9,6 +9,7 @@ class TtsProviderAssetUiMapper @Inject constructor() {
         displayName = asset.displayName,
         provider = asset.provider,
         voiceName = asset.voiceName,
+        modelName = asset.modelName,
         baseUrl = asset.baseUrl,
         credentialAlias = asset.credentialAlias,
     )

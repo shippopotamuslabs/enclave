@@ -138,6 +138,7 @@ data class TtsProviderDraft(
     val displayName: String,
     val provider: ApiProvider,
     val voiceName: String,
+    val modelName: String? = null,
     val baseUrl: String? = null,
     val credentialAlias: String,
     val apiKey: String,

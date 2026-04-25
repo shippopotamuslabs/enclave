@@ -73,6 +73,7 @@ fun SettingsRoute(
         onShowTtsProvidersSheet = viewModel::onShowTtsProvidersSheet,
         onNavigateToTtsConfigure = onNavigateToTtsConfigure,
         onStartCreateTtsProviderAsset = viewModel::onStartCreateTtsProviderAsset,
+        onSelectTtsProviderAsset = viewModel::onSelectTtsProviderAsset,
         onDeleteTtsProviderAsset = viewModel::onDeleteTtsProviderAsset,
         onNavigateToLocalModelConfigure = onNavigateToLocalModelConfigure,
         onSelectLocalModelAsset = viewModel::onSelectLocalModelAsset,

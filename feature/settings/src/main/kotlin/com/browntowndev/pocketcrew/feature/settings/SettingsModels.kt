@@ -187,6 +187,7 @@ data class TtsProviderAssetUi(
     val displayName: String = "",
     val provider: ApiProvider = ApiProvider.OPENAI,
     val voiceName: String = "",
+    val modelName: String? = null,
     val baseUrl: String? = null,
     val credentialAlias: String = ""
 )

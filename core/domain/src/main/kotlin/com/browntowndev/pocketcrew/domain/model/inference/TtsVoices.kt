@@ -24,12 +24,12 @@ object TtsVoices {
     )
 
     val googleVoices = listOf(
-        TtsVoice("en-US:en-US-Neural2-D", "US English (Neural2-D)"),
-        TtsVoice("en-US:en-US-Neural2-F", "US English (Neural2-F)"),
-        TtsVoice("en-GB:en-GB-Neural2-B", "UK English (Neural2-B)"),
-        TtsVoice("en-GB:en-GB-Neural2-C", "UK English (Neural2-C)"),
-        TtsVoice("en-AU:en-AU-Neural2-A", "AU English (Neural2-A)"),
-        TtsVoice("en-AU:en-AU-Neural2-B", "AU English (Neural2-B)")
+        TtsVoice("Puck", "Puck (Gemini)"),
+        TtsVoice("Kore", "Kore (Gemini)"),
+        TtsVoice("Charon", "Charon (Gemini)"),
+        TtsVoice("Aoede", "Aoede (Gemini)"),
+        TtsVoice("Fenrir", "Fenrir (Gemini)"),
+        TtsVoice("Zephyr", "Zephyr (Gemini)"),
     )
 
     fun getVoicesForProvider(provider: ApiProvider): List<TtsVoice> = when (provider) {
