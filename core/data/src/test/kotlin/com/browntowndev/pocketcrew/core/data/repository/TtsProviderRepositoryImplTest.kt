@@ -30,7 +30,7 @@ class TtsProviderRepositoryImplTest {
     @Test
     fun `getTtsProviders returns mapped domain models`() = runTest {
         val entities = listOf(
-            TtsProviderEntity("1", "OpenAI TTS", ApiProvider.OPENAI, "alloy", "https://api.openai.com", "alias-1")
+            TtsProviderEntity("1", "OpenAI TTS", ApiProvider.OPENAI, "alloy", null, "https://api.openai.com", "alias-1")
         )
         coEvery { ttsProviderDao.getTtsProviders() } returns flowOf(entities)
 
@@ -46,15 +46,15 @@ class TtsProviderRepositoryImplTest {
 
     @Test
     fun `saveTtsProvider inserts entity and saves API key`() = runTest {
-        val asset = TtsProviderAsset(TtsProviderId("1"), "xAI TTS", ApiProvider.XAI, "eve", "https://api.x.ai", "alias-x")
+        val asset = TtsProviderAsset(TtsProviderId("1"), "xAI TTS", ApiProvider.XAI, "eve", null, "https://api.x.ai", "alias-x")
         val apiKey = "sk-test"
-        coEvery { ttsProviderDao.insertTtsProvider(any()) } returns Unit
+        coEvery { ttsProviderDao.upsertTtsProvider(any()) } returns Unit
 
         val resultId = repository.saveTtsProvider(asset, apiKey)
 
         assertEquals("1", resultId.value)
         coVerify {
-            ttsProviderDao.insertTtsProvider(match { 
+            ttsProviderDao.upsertTtsProvider(match {
                 it.id == "1" && it.displayName == "xAI TTS" && it.provider == ApiProvider.XAI && it.baseUrl == "https://api.x.ai" && it.credentialAlias == "alias-x"
             })
             apiKeyManager.save("alias-x", apiKey)
@@ -63,7 +63,7 @@ class TtsProviderRepositoryImplTest {
 
     @Test
     fun `deleteTtsProvider deletes entity and removes API key`() = runTest {
-        val entity = TtsProviderEntity("1", "OpenAI TTS", ApiProvider.OPENAI, "alloy", "https://api.openai.com", "alias-1")
+        val entity = TtsProviderEntity("1", "OpenAI TTS", ApiProvider.OPENAI, "alloy", null, "https://api.openai.com", "alias-1")
         coEvery { ttsProviderDao.getTtsProvider("1") } returns entity
         coEvery { ttsProviderDao.deleteTtsProvider("1") } returns Unit
 

@@ -36,7 +36,7 @@ class XAiTtsService @Inject constructor(
         encodeDefaults = true
     }
 
-    override suspend fun synthesizeSpeech(text: String, voice: String): Result<ByteArray> = withContext(Dispatchers.IO) {
+    override suspend fun synthesizeSpeech(text: String, voice: String, modelId: String?): Result<ByteArray> = withContext(Dispatchers.IO) {
         runCatching {
             val requestBody = json.encodeToString(
                 TtsRequest.serializer(),

@@ -105,6 +105,7 @@ fun SettingsScreen(
     onShowTtsProvidersSheet: (Boolean) -> Unit,
     onNavigateToTtsConfigure: () -> Unit,
     onStartCreateTtsProviderAsset: () -> Unit,
+    onSelectTtsProviderAsset: (TtsProviderAssetUi?) -> Unit,
     onDeleteTtsProviderAsset: (TtsProviderId) -> Unit,
     onNavigateToLocalModelConfigure: () -> Unit,
     onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
@@ -289,6 +290,7 @@ fun SettingsScreen(
                 onDismiss = { onShowTtsProvidersSheet(false) },
                 onNavigateToTtsConfigure = onNavigateToTtsConfigure,
                 onStartCreateTtsProviderAsset = onStartCreateTtsProviderAsset,
+                onSelectTtsProviderAsset = onSelectTtsProviderAsset,
                 onDeleteTtsProviderAsset = onDeleteTtsProviderAsset,
                 onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
                 onDismissDeletionSafety = onDismissDeletionSafety
@@ -509,6 +511,7 @@ fun PreviewSettingsScreen() {
             onShowTtsProvidersSheet = {},
             onNavigateToTtsConfigure = {},
             onStartCreateTtsProviderAsset = {},
+            onSelectTtsProviderAsset = {},
             onDeleteTtsProviderAsset = {},
             onNavigateToLocalModelConfigure = {},
             onSelectLocalModelAsset = {},

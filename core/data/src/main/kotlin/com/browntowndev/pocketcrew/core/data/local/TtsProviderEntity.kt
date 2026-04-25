@@ -13,6 +13,7 @@ data class TtsProviderEntity(
     val displayName: String,
     val provider: ApiProvider,
     val voiceName: String,
+    val modelName: String? = null,
     val baseUrl: String? = null,
     val credentialAlias: String,
 )

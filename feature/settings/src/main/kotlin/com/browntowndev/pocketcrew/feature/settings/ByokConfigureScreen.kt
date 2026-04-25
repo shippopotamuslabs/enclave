@@ -70,6 +70,11 @@ fun TtsConfigureRoute(
                 onNavigateBack()
             })
         },
+        onFetchApiModels = viewModel::onFetchTtsModels,
+        onUpdateModelSearchQuery = viewModel::onUpdateModelSearchQuery,
+        onToggleModelProviderFilter = viewModel::onToggleModelProviderFilter,
+        onClearModelProviderFilters = viewModel::onClearModelProviderFilters,
+        onUpdateModelSortOption = viewModel::onUpdateModelSortOption,
         snackbarHostState = snackbarHostState
     )
 }

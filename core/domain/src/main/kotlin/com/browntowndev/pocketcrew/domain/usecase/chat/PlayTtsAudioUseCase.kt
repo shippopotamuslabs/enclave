@@ -30,8 +30,11 @@ class PlayTtsAudioUseCase @Inject constructor(
                 baseUrl = ttsAsset.baseUrl
             )
 
-            val audioBytes = ttsService.synthesizeSpeech(text = text, voice = ttsAsset.voiceName)
-                .getOrThrow()
+            val audioBytes = ttsService.synthesizeSpeech(
+                text = text,
+                voice = ttsAsset.voiceName,
+                modelId = ttsAsset.modelName
+            ).getOrThrow()
 
             audioPlayer.playAudio(audioBytes)
         }

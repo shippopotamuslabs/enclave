@@ -44,11 +44,12 @@ class TtsProviderRepositoryImpl @Inject constructor(
             displayName = asset.displayName,
             provider = asset.provider,
             voiceName = asset.voiceName,
+            modelName = asset.modelName,
             baseUrl = asset.baseUrl,
             credentialAlias = asset.credentialAlias,
         )
 
-        ttsProviderDao.insertTtsProvider(entity)
+        ttsProviderDao.upsertTtsProvider(entity)
 
         if (!apiKey.isNullOrBlank()) {
             apiKeyManager.save(asset.credentialAlias, apiKey)
@@ -70,6 +71,7 @@ class TtsProviderRepositoryImpl @Inject constructor(
         displayName = displayName,
         provider = provider,
         voiceName = voiceName,
+        modelName = modelName,
         baseUrl = baseUrl,
         credentialAlias = credentialAlias,
     )

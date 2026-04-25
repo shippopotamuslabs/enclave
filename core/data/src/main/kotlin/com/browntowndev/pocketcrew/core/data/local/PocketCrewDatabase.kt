@@ -19,7 +19,7 @@ import androidx.room.TypeConverters
         EmbeddingEntity::class,
         TtsProviderEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(ModelTypeConverters::class)
@@ -36,4 +36,12 @@ abstract class PocketCrewDatabase : RoomDatabase() {
     abstract fun messageVisionAnalysisDao(): MessageVisionAnalysisDao
     abstract fun embeddingDao(): EmbeddingDao
     abstract fun ttsProviderDao(): TtsProviderDao
+
+    companion object {
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE tts_providers ADD COLUMN modelName TEXT")
+            }
+        }
+    }
 }

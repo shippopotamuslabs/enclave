@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
@@ -17,10 +18,13 @@ import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAsset
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.*
 import io.mockk.every
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -156,5 +160,49 @@ class SettingsViewModelTest {
 
         assertEquals("Text-to-Speech", ttsAssignment.displayLabel)
         assertEquals("None Assigned", ttsAssignment.currentModelName)
+    }
+
+    @Test
+    fun `onFetchTtsModels discovers models from TTS draft`() = runTest {
+        coEvery { discoverApiModelsUseCase(any()) } returns ApiModelDiscoveryResult(
+            models = listOf(
+                DiscoveredApiModel(id = "gemini-2.5-flash-preview-tts"),
+                DiscoveredApiModel(id = "gemini-2.5-flash"),
+                DiscoveredApiModel(id = "gemini-3-pro-preview"),
+            ),
+            scope = ApiModelDiscoveryScope(
+                provider = ApiProvider.GOOGLE,
+                baseUrl = "",
+                credentialAlias = null,
+            ),
+        )
+
+        viewModel.onStartCreateTtsProviderAsset()
+        viewModel.onTtsAssetFieldChange(
+            TtsProviderAssetUi(
+                displayName = "Google TTS",
+                provider = ApiProvider.GOOGLE,
+                voiceName = "Puck",
+            )
+        )
+        viewModel.onApiKeyChange("google-key")
+
+        viewModel.onFetchTtsModels()
+        advanceUntilIdle()
+
+        coVerify {
+            discoverApiModelsUseCase(
+                match { request ->
+                    request.provider == ApiProvider.GOOGLE &&
+                        request.currentApiKey == "google-key" &&
+                        request.credentialAlias == null &&
+                        request.selectedModelId == null
+                }
+            )
+        }
+        assertEquals(
+            listOf("gemini-2.5-flash-preview-tts"),
+            viewModel.uiState.value.apiProviderEditor.discovery.models.map { it.modelId },
+        )
     }
 }

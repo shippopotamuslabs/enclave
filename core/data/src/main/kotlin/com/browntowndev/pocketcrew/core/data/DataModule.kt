@@ -117,6 +117,7 @@ object DataModule {
             .openHelperFactory(
                 SQLiteVecInstaller.createOpenHelperFactory(context),
             )
+            .addMigrations(PocketCrewDatabase.MIGRATION_1_2)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)

@@ -14,12 +14,13 @@ class OpenAiTtsService @Inject constructor(
     private val baseUrl: String?,
 ) : TtsServicePort {
 
-    override suspend fun synthesizeSpeech(text: String, voice: String): Result<ByteArray> = withContext(Dispatchers.IO) {
+    override suspend fun synthesizeSpeech(text: String, voice: String, modelId: String?): Result<ByteArray> = withContext(Dispatchers.IO) {
         runCatching {
             val client = clientProvider.getClient(apiKey = apiKey, baseUrl = baseUrl)
+            val resolvedModel = modelId?.let { SpeechModel.of(it) } ?: SpeechModel.TTS_1
             val params = SpeechCreateParams.builder()
                 .input(text)
-                .model(SpeechModel.TTS_1)
+                .model(resolvedModel)
                 .voice(SpeechCreateParams.Voice.ofString(voice))
                 .responseFormat(SpeechCreateParams.ResponseFormat.MP3)
                 .build()
