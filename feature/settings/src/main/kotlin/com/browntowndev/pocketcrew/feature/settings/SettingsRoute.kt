@@ -10,13 +10,13 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
-
 @Composable
 fun SettingsRoute(
     onCloseClick: () -> Unit,
     onNavigateToModelDownload: () -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
+    onNavigateToTtsConfigure: () -> Unit,
     onNavigateToLocalModelConfigure: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -31,25 +31,49 @@ fun SettingsRoute(
         onHapticResponseChange = viewModel::onHapticResponseChange,
         onBackgroundInferenceChange = viewModel::onBackgroundInferenceChange,
         onShowCustomizationSheet = viewModel::onShowCustomizationSheet,
+        onCustomizationEnabledChange = viewModel::onCustomizationEnabledChange,
+        onPromptOptionChange = viewModel::onPromptOptionChange,
+        onCustomPromptTextChange = viewModel::onCustomPromptTextChange,
+        onSaveCustomization = viewModel::onSaveCustomization,
         onShowDataControlsSheet = viewModel::onShowDataControlsSheet,
+        onAllowMemoriesChange = viewModel::onAllowMemoriesChange,
+        onDeleteAllConversations = viewModel::onDeleteAllConversations,
+        onDeleteAllMemories = viewModel::onDeleteAllMemories,
         onShowMemoriesSheet = viewModel::onShowMemoriesSheet,
+        onDeleteMemory = viewModel::onDeleteMemory,
         onOpenToS = {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://pocketcrew.ai/terms"))
             context.startActivity(intent)
         },
         onShowFeedbackSheet = viewModel::onShowFeedbackSheet,
+        onFeedbackTextChange = viewModel::onFeedbackTextChange,
+        onSubmitFeedback = viewModel::onSubmitFeedback,
         onShowVisionSettingsSheet = viewModel::onShowVisionSettingsSheet,
         onNavigateToModelConfigure = onNavigateToModelConfigure,
         onSetDefaultModel = viewModel::onSetDefaultModel,
-        onShowLocalModelsSheet = viewModel::onShowModelConfigSheet, // Reuse this state flag
+        onShowLocalModelsSheet = viewModel::onShowModelConfigSheet,
         onShowByokSheet = viewModel::onShowByokSheet,
         onNavigateToByokConfigure = onNavigateToByokConfigure,
         onStartCreateApiModelAsset = viewModel::onStartCreateApiModelAsset,
         onStartConfigureSearchSkill = viewModel::onStartConfigureSearchSkill,
+        onApiKeyChange = viewModel::onApiKeyChange,
+        onSearchEnabledChange = viewModel::onSearchEnabledChange,
+        onSearchApiKeyChange = viewModel::onTavilyApiKeyChange,
+        onClearSearchApiKey = viewModel::onClearTavilyApiKey,
+        onSelectReusableApiCredential = viewModel::onSelectReusableApiCredential,
+        onFetchApiModels = viewModel::onFetchApiModels,
+        onUpdateModelSearchQuery = viewModel::onUpdateModelSearchQuery,
+        onToggleModelProviderFilter = viewModel::onToggleModelProviderFilter,
+        onClearModelProviderFilters = viewModel::onClearModelProviderFilters,
+        onUpdateModelSortOption = viewModel::onUpdateModelSortOption,
         onSelectApiModelAsset = viewModel::onSelectApiModelAsset,
         onSelectApiModelConfig = viewModel::onSelectApiModelConfig,
         onDeleteApiModelAsset = viewModel::onDeleteApiModelAsset,
         onDeleteApiModelConfig = { id -> viewModel.onDeleteApiModelConfig(id, {}) },
+        onShowTtsProvidersSheet = viewModel::onShowTtsProvidersSheet,
+        onNavigateToTtsConfigure = onNavigateToTtsConfigure,
+        onStartCreateTtsProviderAsset = viewModel::onStartCreateTtsProviderAsset,
+        onDeleteTtsProviderAsset = viewModel::onDeleteTtsProviderAsset,
         onNavigateToLocalModelConfigure = onNavigateToLocalModelConfigure,
         onSelectLocalModelAsset = viewModel::onSelectLocalModelAsset,
         onSelectLocalModelConfig = viewModel::onSelectLocalModelConfig,

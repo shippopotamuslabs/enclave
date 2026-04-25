@@ -21,6 +21,7 @@ data class ResolvedAssignedModelSelection(
     val localConfig: LocalModelConfiguration? = null,
     val apiAsset: ApiModelAsset? = null,
     val apiConfig: ApiModelConfiguration? = null,
+    val ttsAsset: com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset? = null,
 )
 
 data class LocalModelPresetDraft(
@@ -130,4 +131,14 @@ data class ApiModelMetadataDefaults(
 data class SearchSkillSettingsDraft(
     val enabled: Boolean = false,
     val tavilyKeyPresent: Boolean = false,
+)
+
+data class TtsProviderDraft(
+    val id: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId = com.browntowndev.pocketcrew.domain.model.config.TtsProviderId(""),
+    val displayName: String,
+    val provider: ApiProvider,
+    val voiceName: String,
+    val baseUrl: String? = null,
+    val credentialAlias: String,
+    val apiKey: String,
 )

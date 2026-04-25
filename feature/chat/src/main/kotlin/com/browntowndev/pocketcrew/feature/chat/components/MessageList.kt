@@ -74,8 +74,10 @@ fun MessageList(
     hasActiveIndicator: Boolean,
     activeToolCallBanner: ToolCallBannerUi? = null,
     activeIndicatorMessageId: MessageId? = null,
+    hasTtsProviderAssigned: Boolean = false,
     isPreview: Boolean = false,
     onEditMessage: (String) -> Unit = { _: String -> },
+    onPlayAudio: (String) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
 
@@ -166,7 +168,9 @@ fun MessageList(
                         message = messages[index],
                         activeIndicatorMessageId = activeIndicatorMessageId,
                         activeToolCallBanner = activeToolCallBanner,
+                        hasTtsProviderAssigned = hasTtsProviderAssigned,
                         onEditMessage = onEditMessage,
+                        onPlayAudio = onPlayAudio,
                         isPreview = isPreview
                     )
                 }
@@ -188,7 +192,9 @@ fun MessageList(
                                     message = messages[i],
                                     activeIndicatorMessageId = activeIndicatorMessageId,
                                     activeToolCallBanner = activeToolCallBanner,
+                                    hasTtsProviderAssigned = hasTtsProviderAssigned,
                                     onEditMessage = onEditMessage,
+                                    onPlayAudio = onPlayAudio,
                                     isPreview = isPreview
                                 )
                             }
@@ -256,7 +262,9 @@ private fun MessageItem(
     message: ChatMessage,
     activeIndicatorMessageId: MessageId?,
     activeToolCallBanner: ToolCallBannerUi?,
+    hasTtsProviderAssigned: Boolean,
     onEditMessage: (String) -> Unit,
+    onPlayAudio: (String) -> Unit,
     isPreview: Boolean,
 ) {
     Column(
@@ -289,6 +297,8 @@ private fun MessageItem(
             AssistantResponse(
                 message = message,
                 isPreview = isPreview,
+                hasTtsProviderAssigned = hasTtsProviderAssigned,
+                onPlayAudio = onPlayAudio,
             )
         }
     }

@@ -17,11 +17,13 @@ import com.browntowndev.pocketcrew.feature.settings.ByokCustomHeadersRoute
 import com.browntowndev.pocketcrew.feature.settings.LocalModelConfigureRoute
 import com.browntowndev.pocketcrew.feature.settings.ModelConfigurationRoute
 import com.browntowndev.pocketcrew.feature.settings.SettingsRoute
+import com.browntowndev.pocketcrew.feature.settings.TtsConfigureRoute
 
 object SettingsDestination {
     const val GRAPH = "settings_graph"
     const val MAIN = "settings_main"
     const val BYOK_CONFIGURE = "byok_configure"
+    const val TTS_CONFIGURE = "tts_configure"
     const val LOCAL_MODEL_CONFIGURE = "local_model_configure"
     const val BYOK_CUSTOM_HEADERS = "byok_custom_headers"
     const val MODEL_CONFIGURE = "model_configure/{modelType}"
@@ -74,6 +76,9 @@ fun NavGraphBuilder.settingsGraph(
                 onNavigateToByokConfigure = {
                     navController.navigate(SettingsDestination.BYOK_CONFIGURE)
                 },
+                onNavigateToTtsConfigure = {
+                    navController.navigate(SettingsDestination.TTS_CONFIGURE)
+                },
                 onNavigateToLocalModelConfigure = {
                     navController.navigate(SettingsDestination.LOCAL_MODEL_CONFIGURE)
                 },
@@ -124,6 +129,42 @@ fun NavGraphBuilder.settingsGraph(
                 onNavigateToCustomHeaders = {
                     navController.navigate(SettingsDestination.BYOK_CUSTOM_HEADERS)
                 },
+                viewModel = hiltViewModel(parentEntry)
+            )
+        }
+
+        composable(
+            route = SettingsDestination.TTS_CONFIGURE,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(300),
+                )
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(300),
+                )
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(300),
+                )
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(300),
+                )
+            },
+        ) { backStackEntry ->
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(SettingsDestination.GRAPH)
+            }
+            TtsConfigureRoute(
+                onNavigateBack = { navController.popBackStack() },
                 viewModel = hiltViewModel(parentEntry)
             )
         }

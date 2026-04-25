@@ -13,6 +13,7 @@ class ResolveAssignedModelSelectionUseCase @Inject constructor(
     private val getDefaultModelsUseCase: GetDefaultModelsUseCase,
     private val getLocalModelAssetsUseCase: GetLocalModelAssetsUseCase,
     private val getApiModelAssetsUseCase: GetApiModelAssetsUseCase,
+    private val getTtsProvidersUseCase: GetTtsProvidersUseCase,
 ) {
     suspend operator fun invoke(modelType: ModelType): ResolvedAssignedModelSelection? {
         val assignment = getDefaultModelsUseCase()
@@ -39,6 +40,16 @@ class ResolveAssignedModelSelectionUseCase @Inject constructor(
             return ResolvedAssignedModelSelection(
                 apiAsset = asset,
                 apiConfig = asset.configurations.find { it.id == apiConfigId },
+            )
+        }
+
+        assignment.ttsProviderId?.let { ttsProviderId ->
+            val asset = getTtsProvidersUseCase()
+                .first()
+                .find { it.id == ttsProviderId }
+                ?: return null
+            return ResolvedAssignedModelSelection(
+                ttsAsset = asset,
             )
         }
 

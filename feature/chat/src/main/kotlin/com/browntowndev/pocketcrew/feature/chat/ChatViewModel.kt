@@ -29,6 +29,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Compani
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.usecase.chat.PlayTtsAudioUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -80,6 +81,7 @@ class ChatViewModel @Inject constructor(
     private val errorHandler: ViewModelErrorHandler,
     private val loggingPort: LoggingPort,
     private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
+    private val playTtsAudioUseCase: PlayTtsAudioUseCase,
 ) : ViewModel() {
 
     companion object {
@@ -129,6 +131,22 @@ class ChatViewModel @Inject constructor(
         settings to selectedMode
     }.mapLatest { (settings, selectedMode) ->
         resolvePhotoAttachmentPolicy(settings, selectedMode)
+    }
+    private val hasTtsProviderAssignedFlow = settingsUseCases.assignments.getDefaultModels()
+        .map { assignments ->
+            assignments.any { assignment ->
+                assignment.modelType == ModelType.TTS && assignment.ttsProviderId != null
+            }
+        }
+        .distinctUntilChanged()
+    private val chatActionStateFlow = combine(
+        _activeToolCallBanner,
+        hasTtsProviderAssignedFlow,
+    ) { activeToolCallBanner, hasTtsProviderAssigned ->
+        ChatActionState(
+            activeToolCallBanner = activeToolCallBanner,
+            hasTtsProviderAssigned = hasTtsProviderAssigned,
+        )
     }
 
     // Job for tracking inference flow collection (for cancellation in onCleared)
@@ -354,13 +372,13 @@ class ChatViewModel @Inject constructor(
         inferenceLockManager.isInferenceBlocked,
         dbMessagesFlow,
         activeTurnSnapshotFlow,
-        _activeToolCallBanner,
+        chatActionStateFlow,
     ) {
         inputsWithPolicy: UiInputsWithPolicy,
         isBlocked: Boolean,
         messages: List<Message>,
         activeTurnSnapshotState: ActiveTurnSnapshotState,
-        activeBanner: ToolCallBannerUi? ->
+        chatActionState: ChatActionState ->
 
         val inputs = inputsWithPolicy.inputs
         val attachmentPolicy = inputsWithPolicy.attachmentPolicy
@@ -421,8 +439,9 @@ class ChatViewModel @Inject constructor(
             canStop = canStop,
             hasActiveIndicator = hasActiveIndicator,
             activeIndicatorMessageId = activeIndicatorMessageId,
-            activeToolCallBanner = activeBanner,
+            activeToolCallBanner = chatActionState.activeToolCallBanner,
             backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
+            hasTtsProviderAssigned = chatActionState.hasTtsProviderAssigned,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -539,6 +558,13 @@ class ChatViewModel @Inject constructor(
 
     fun onEditMessage(message: String) {
         _inputText.value = message
+    }
+
+    fun onPlayTts(text: String) {
+        if (!uiState.value.hasTtsProviderAssigned) return
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to play TTS audio", "Failed to play audio")) {
+            playTtsAudioUseCase(text).getOrThrow()
+        }
     }
 
     fun onModeChange(mode: ChatModeUi) {
@@ -764,6 +790,11 @@ class ChatViewModel @Inject constructor(
     private data class UiInputsWithPolicy(
         val inputs: UiInputs,
         val attachmentPolicy: PhotoAttachmentPolicy,
+    )
+
+    private data class ChatActionState(
+        val activeToolCallBanner: ToolCallBannerUi?,
+        val hasTtsProviderAssigned: Boolean,
     )
 
     private data class ActiveTurnCandidate(

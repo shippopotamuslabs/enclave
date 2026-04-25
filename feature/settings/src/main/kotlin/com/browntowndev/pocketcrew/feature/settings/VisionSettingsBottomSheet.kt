@@ -41,6 +41,7 @@ import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,7 +49,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 fun VisionSettingsBottomSheet(
     uiState: SettingsUiState,
     onDismiss: () -> Unit,
-    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
+    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var isDrilledDown by remember { mutableStateOf(false) }
@@ -67,10 +68,11 @@ fun VisionSettingsBottomSheet(
                     slotLabel = "Vision",
                     localAssets = emptyList(), // Vision is API only usually
                     apiAssets = uiState.apiProvidersSheet.assets.filter { it.isMultimodal },
+                    ttsAssets = emptyList(),
                     onDismiss = onDismiss,
                     onBack = { isDrilledDown = false },
-                    onSelect = { localId, apiId ->
-                        onSetDefaultModel(ModelType.VISION, localId, apiId)
+                    onSelect = { localId, apiId, ttsId ->
+                        onSetDefaultModel(ModelType.VISION, localId, apiId, ttsId)
                         isDrilledDown = false
                     }
                 )

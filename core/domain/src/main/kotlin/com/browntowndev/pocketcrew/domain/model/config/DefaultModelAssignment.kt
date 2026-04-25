@@ -9,6 +9,7 @@ data class DefaultModelAssignment(
     val modelType: ModelType,
     val localConfigId: LocalModelConfigurationId? = null,
     val apiConfigId: ApiModelConfigurationId? = null,
+    val ttsProviderId: TtsProviderId? = null,
     // Resolved display data for the UI
     val displayName: String? = null,
     val presetName: String? = null,

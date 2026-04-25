@@ -48,10 +48,17 @@ class SettingsDeletionUseCasesImpl @Inject constructor(
     override val executeModelDeletionWithReassignment: ExecuteModelDeletionWithReassignmentUseCase,
 ) : SettingsDeletionUseCases
 
+class SettingsTtsUseCasesImpl @Inject constructor(
+    override val getTtsProviders: GetTtsProvidersUseCase,
+    override val saveTtsProvider: SaveTtsProviderUseCase,
+    override val deleteTtsProvider: DeleteTtsProviderUseCase,
+) : SettingsTtsUseCases
+
 class SettingsUseCasesImpl @Inject constructor(
     override val preferences: SettingsPreferencesUseCases,
     override val localModels: SettingsLocalModelUseCases,
     override val apiProviders: SettingsApiProviderUseCases,
     override val assignments: SettingsAssignmentUseCases,
     override val deletion: SettingsDeletionUseCases,
+    override val tts: SettingsTtsUseCases,
 ) : SettingsUseCases
