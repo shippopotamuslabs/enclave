@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.assertNull
 
 class ConversationManagerImplHistoryTest {
 
@@ -76,9 +77,30 @@ class ConversationManagerImplHistoryTest {
         }
     }
 
+    @Test
+    fun `setHistory closes native conversation when rehydrated history is still empty`() = runTest {
+        val mockLiteRtConversation = mockk<Conversation>(relaxed = true)
+        setPrivateField(manager, "conversation", mockLiteRtConversation)
+        setPrivateField(manager, "history", emptyList<ChatMessage>())
+
+        manager.setHistory(emptyList())
+
+        verify(exactly = 1) {
+            Log.d("ConversationManager", match { it.contains("Empty rehydrated history requires native conversation reset") })
+        }
+        verify(exactly = 1) { mockLiteRtConversation.close() }
+        assertNull(getPrivateField(manager, "conversation"))
+    }
+
     private fun setPrivateField(obj: Any, fieldName: String, value: Any?) {
         val field = obj.javaClass.getDeclaredField(fieldName)
         field.isAccessible = true
         field.set(obj, value)
+    }
+
+    private fun getPrivateField(obj: Any, fieldName: String): Any? {
+        val field = obj.javaClass.getDeclaredField(fieldName)
+        field.isAccessible = true
+        return field.get(obj)
     }
 }

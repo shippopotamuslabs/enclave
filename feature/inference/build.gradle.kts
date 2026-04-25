@@ -29,7 +29,6 @@ tasks.withType<Test>().configureEach {
 
 dependencies {
     implementation(project(":core:domain"))
-    implementation(project(":core:data"))
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)

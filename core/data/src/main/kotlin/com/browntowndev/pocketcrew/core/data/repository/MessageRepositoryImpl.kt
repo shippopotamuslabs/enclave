@@ -1,7 +1,10 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
+import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
+import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryEntity
+import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
@@ -10,6 +13,7 @@ import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -38,9 +42,12 @@ import javax.inject.Singleton
  */
 @Singleton
 class MessageRepositoryImpl @Inject constructor(
+    private val chatDao: ChatDao,
     private val messageDao: MessageDao,
     private val messageVisionAnalysisDao: MessageVisionAnalysisDao,
     private val chatSummaryDao: ChatSummaryDao,
+    private val defaultModelsDao: DefaultModelsDao,
+    private val apiModelConfigurationsDao: ApiModelConfigurationsDao,
     private val embeddingDao: EmbeddingDao,
 ) : MessageRepository {
 
@@ -64,8 +71,16 @@ class MessageRepositoryImpl @Inject constructor(
 
     override suspend fun saveEmbedding(messageId: MessageId, embedding: FloatArray) {
         val vectorBlob = floatArrayToByteArray(embedding)
-        val sql = "INSERT OR REPLACE INTO document_embeddings (id, vector) VALUES (?, ?)"
-        embeddingDao.insertEmbedding(SimpleSQLiteQuery(sql, arrayOf(messageId.value, vectorBlob)))
+        embeddingDao.replaceEmbedding(
+            deleteQuery = SimpleSQLiteQuery(
+                "DELETE FROM document_embeddings WHERE id = ?",
+                arrayOf(messageId.value),
+            ),
+            insertQuery = SimpleSQLiteQuery(
+                "INSERT INTO document_embeddings (id, vector) VALUES (?, ?)",
+                arrayOf(messageId.value, vectorBlob),
+            ),
+        )
     }
 
     override suspend fun searchSimilarMessages(queryVector: FloatArray, limit: Int): List<MessageId> {
@@ -172,26 +187,30 @@ class MessageRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getChatSummary(chatId: ChatId): ChatSummary? {
-        return chatSummaryDao.getSummaryForChatSync(chatId)?.let { entity ->
-            ChatSummary(
-                chatId = entity.chatId,
-                content = entity.content,
-                lastSummarizedMessageId = entity.lastSummarizedMessageId
-            )
-        }
+        return chatSummaryDao.getSummaryForChatSync(chatId)?.toDomain()
     }
 
     override suspend fun saveChatSummary(summary: ChatSummary) {
-        chatSummaryDao.insertOrUpdateSummary(
-            ChatSummaryEntity(
-                chatId = summary.chatId,
-                content = summary.content,
-                lastSummarizedMessageId = summary.lastSummarizedMessageId
-            )
-        )
+        chatSummaryDao.insertOrUpdateSummary(summary.toEntity())
     }
 
     override suspend fun deleteChatSummary(chatId: ChatId) {
         chatSummaryDao.deleteSummaryForChat(chatId)
     }
+}
+
+private fun ChatSummaryEntity.toDomain(): ChatSummary {
+    return ChatSummary(
+        chatId = this.chatId,
+        content = this.content,
+        lastSummarizedMessageId = this.lastSummarizedMessageId
+    )
+}
+
+private fun ChatSummary.toEntity(): ChatSummaryEntity {
+    return ChatSummaryEntity(
+        chatId = this.chatId,
+        content = this.content,
+        lastSummarizedMessageId = this.lastSummarizedMessageId
+    )
 }

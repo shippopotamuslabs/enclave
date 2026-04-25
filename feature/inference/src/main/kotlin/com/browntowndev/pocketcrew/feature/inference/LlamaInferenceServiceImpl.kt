@@ -23,7 +23,7 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
-import com.browntowndev.pocketcrew.domain.util.ChatHistoryCompressor
+
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
 import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
@@ -180,18 +180,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
                     )
                 )
 
-                val compressedHistory = ChatHistoryCompressor.compressHistory(
-                    history = history,
-                    systemPrompt = systemPrompt,
-                    contextWindowTokens = samplingConfig.contextWindow,
-                    bufferTokens = 1000
-                )
-
-                if (compressedHistory.size < history.size) {
-                    Log.d(TAG, "Compressed Llama history from ${history.size} to ${compressedHistory.size} messages to fit initial context window")
-                }
-
-                sessionManager.setHistory(compressedHistory)
+                // History arrives pre-compacted from ChatHistoryRehydrator; no FIFO trimming needed.
+                sessionManager.setHistory(history)
                 sessionManager.startNewConversation()
                 isInitialized = true
                 currentSignature = newSignature
@@ -215,18 +205,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
                         )
                     )
 
-                    val compressedHistory = ChatHistoryCompressor.compressHistory(
-                        history = history,
-                        systemPrompt = systemPrompt,
-                        contextWindowTokens = cpuConfig.contextWindow,
-                        bufferTokens = 1000
-                    )
-
-                    if (compressedHistory.size < history.size) {
-                        Log.d(TAG, "Compressed Llama history (CPU fallback) from ${history.size} to ${compressedHistory.size} messages to fit initial context window")
-                    }
-
-                    sessionManager.setHistory(compressedHistory)
+                    // History arrives pre-compacted from ChatHistoryRehydrator; no FIFO trimming needed.
+                    sessionManager.setHistory(history)
                     sessionManager.startNewConversation()
                     isInitialized = true
                     currentSignature = newSignature

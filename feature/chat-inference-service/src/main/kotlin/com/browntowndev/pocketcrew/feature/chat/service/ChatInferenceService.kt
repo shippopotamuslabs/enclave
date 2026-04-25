@@ -92,7 +92,8 @@ class ChatInferenceService : Service() {
     private lateinit var historyRehydrator: ChatHistoryRehydrator
     private lateinit var inferenceRequestPreparer: ChatInferenceRequestPreparer
 
-    private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private val job = SupervisorJob()
+    private val serviceScope = CoroutineScope(Dispatchers.Default + job)
     private var currentJob: Job? = null
     private var currentChatId: ChatId? = null
     private var currentAssistantMessageId: MessageId? = null
@@ -452,6 +453,6 @@ class ChatInferenceService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        serviceScope.cancel()
+        job.cancel()
     }
 }
