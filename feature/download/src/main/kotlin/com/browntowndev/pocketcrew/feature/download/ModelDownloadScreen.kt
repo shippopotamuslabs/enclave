@@ -143,7 +143,7 @@ fun ModelDownloadScreen(
         hasNotificationPermission = isGranted
         if (isGranted) {
             // Permission granted - trigger model check and download
-            viewModel.checkModels()
+            viewModel.schedulePendingDownloadCheck()
         } else {
             // Permission denied - check if we should show rationale
             val activity = context.findActivity()
@@ -189,7 +189,7 @@ fun ModelDownloadScreen(
             onDismiss = {
                 showRationale = false
                 // User dismissed - still try to download but notifications won't show
-                viewModel.checkModels()
+                viewModel.schedulePendingDownloadCheck()
             }
         )
     }
@@ -218,10 +218,10 @@ fun ModelDownloadScreen(
         ) {
             // Header
             DownloadHeader(
-                status = downloadState.status ?: DownloadStatus.IDLE,
-                progress = { downloadState.overallProgress ?: 0f },
-                modelsComplete = downloadState.modelsComplete ?: 0,
-                modelsTotal = downloadState.modelsTotal ?: 0,
+                status = downloadState.status,
+                progress = { downloadState.overallProgress },
+                modelsComplete = downloadState.modelsComplete,
+                modelsTotal = downloadState.modelsTotal,
                 speedMBs = downloadState.currentSpeedMBs,
                 eta = downloadState.estimatedTimeRemaining
             )
@@ -804,7 +804,6 @@ private fun NotificationPermissionRationaleDialog(
         }
     )
 }
-
 // ==================== PREVIEWS ====================
 
 private val fakeFilesAllDownloading = listOf(
