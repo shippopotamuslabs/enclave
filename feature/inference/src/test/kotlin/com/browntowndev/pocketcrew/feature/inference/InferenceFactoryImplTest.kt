@@ -1,10 +1,7 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import android.content.Context
-import com.browntowndev.pocketcrew.core.data.anthropic.AnthropicClientProvider
-import com.browntowndev.pocketcrew.core.data.google.GoogleGenAiClientProvider
-import com.browntowndev.pocketcrew.core.data.openai.OpenAiClientProvider
-import com.browntowndev.pocketcrew.core.data.repository.TavilySearchRepository
+import android.content.pm.ApplicationInfo
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
@@ -27,12 +24,10 @@ import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
-import com.browntowndev.pocketcrew.feature.inference.ConversationManager
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.anthropic.client.AnthropicClient
 import com.google.genai.Client
 import com.openai.client.OpenAIClient
-import android.content.pm.ApplicationInfo
 import java.io.File
 import io.mockk.coEvery
 import io.mockk.every
@@ -58,9 +53,9 @@ class InferenceFactoryImplTest {
     private val processThinkingTokens = mockk<ProcessThinkingTokensUseCase>(relaxed = true)
     private val llamaSessionManager = mockk<LlamaChatSessionManager>(relaxed = true)
     private val conversationProvider = providerOf(mockk<ConversationManager>(relaxed = true))
-    private val openAiClientProvider = mockk<OpenAiClientProvider>(relaxed = true)
-    private val anthropicClientProvider = mockk<AnthropicClientProvider>(relaxed = true)
-    private val googleGenAiClientProvider = mockk<GoogleGenAiClientProvider>()
+    private val openAiClientProvider = mockk<OpenAiClientProviderPort>(relaxed = true)
+    private val anthropicClientProvider = mockk<AnthropicClientProviderPort>(relaxed = true)
+    private val googleGenAiClientProvider = mockk<GoogleGenAiClientProviderPort>()
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val inferenceLockManager = mockk<InferenceLockManager>()
     private val toolExecutor = mockk<ToolExecutorPort>()

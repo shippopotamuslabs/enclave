@@ -28,7 +28,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPor
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
-import com.browntowndev.pocketcrew.domain.util.ChatHistoryCompressor
+
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Contents
@@ -224,7 +224,7 @@ class ConversationManagerImpl @Inject constructor(
                 ?: throw IllegalStateException("No registered asset for config ${activeConfig.id}. Download a model first.")
 
             val modelPath = getModelPath(asset.metadata.localFileName)
-            val resolvedThinkingEnabled = activeConfig.thinkingEnabled ?: false
+            val resolvedThinkingEnabled = activeConfig.thinkingEnabled
             val resolvedSystemPrompt = options?.systemPrompt ?: activeConfig.systemPrompt ?: defaultSystemPrompt
             val chatId = options?.chatId
             val userMessageId = options?.userMessageId
@@ -304,26 +304,10 @@ class ConversationManagerImpl @Inject constructor(
                 conversation?.close()
 
                 val contextWindow = activeConfig.contextWindow ?: 2048
-                // Reserve extra buffer for transient tool results already in the KV cache.
-                // This ensures compressHistory accounts for tool result tokens that will
-                // coexist in the context window alongside the compressed history.
-                val effectiveBufferTokens = 1000 + transientToolResultTokens
-                val compressedHistory = ChatHistoryCompressor.compressHistory(
-                    history = history,
-                    systemPrompt = resolvedSystemPrompt,
-                    contextWindowTokens = contextWindow,
-                    bufferTokens = effectiveBufferTokens,
-                    modelId = asset.metadata.localFileName,
-                    tokenCounter = JTokkitTokenCounter
-                )
-
-                if (compressedHistory.size < history.size) {
-                    Log.d(TAG, "Compressed LiteRT history from ${history.size} to ${compressedHistory.size} messages to fit context window")
-                }
-
+                // History arrives pre-compacted from ChatHistoryRehydrator; no FIFO trimming needed.
                 val conversationConfig = ConversationConfig(
                     systemInstruction = Contents.of(resolvedSystemPrompt),
-                    initialMessages = compressedHistory.map { domainMsg: DomainChatMessage ->
+                    initialMessages = history.map { domainMsg: DomainChatMessage ->
                         when (domainMsg.role) {
                             Role.USER -> LiteRtMessage.user(domainMsg.content)
                             Role.ASSISTANT -> LiteRtMessage.model(domainMsg.content)
@@ -992,10 +976,14 @@ class ConversationManagerImpl @Inject constructor(
             // getConversation will naturally create it with the correct history.
             val isContinuation = messages == history || (
                 messages.size >= history.size &&
-                messages.take(history.size) == history
+                    messages.take(history.size) == history
             )
+            val resetsNativeContextToEmpty = messages.isEmpty() && history.isEmpty() && conversation != null
 
-            if (!isContinuation && conversation != null) {
+            if (resetsNativeContextToEmpty) {
+                Log.d(TAG, "Empty rehydrated history requires native conversation reset. (oldSize=${history.size}, newSize=${messages.size})")
+                closeConversationLocked()
+            } else if (!isContinuation && conversation != null) {
                 Log.d(TAG, "History discontinuity detected. Recreating conversation. (oldSize=${history.size}, newSize=${messages.size})")
                 closeConversationLocked()
             } else if (isContinuation) {

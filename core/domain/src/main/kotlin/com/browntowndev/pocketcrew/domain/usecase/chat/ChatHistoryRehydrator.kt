@@ -22,6 +22,7 @@ class ChatHistoryRehydrator(
     private val tokenCounter: TokenCounter = JTokkitTokenCounter,
 ) {
     private val rollingSummarizer = RollingSummarizer(loggingPort, tokenCounter)
+
     suspend operator fun invoke(
         chatId: ChatId,
         userMessageId: MessageId,
@@ -73,6 +74,7 @@ class ChatHistoryRehydrator(
             options = options,
             tokenCounter = tokenCounter,
         )
+
         val estimatedPromptTokens = ContextWindowPlanner.estimatePromptTokens(
             history = chatMessages,
             systemPrompt = options.systemPrompt,
@@ -80,7 +82,7 @@ class ChatHistoryRehydrator(
             tokenCounter = tokenCounter,
         )
 
-        if (ContextWindowPlanner.shouldCompact(estimatedPromptTokens, budget)) {
+        if (estimatedPromptTokens > budget.usablePromptTokens) {
             loggingPort.info(
                 TAG,
                 "Context budget exceeded: estimatedTokens=$estimatedPromptTokens usablePromptTokens=${budget.usablePromptTokens} thresholdTokens=${budget.thresholdTokens} window=$contextWindowTokens"
@@ -152,16 +154,27 @@ class ChatHistoryRehydrator(
             }
         }
 
-        chatMessages = ChatHistoryCompressor.compressHistory(
+        val finalPromptTokens = ContextWindowPlanner.estimatePromptTokens(
             history = chatMessages,
-            systemPrompt = options.systemPrompt.orEmpty(),
+            systemPrompt = options.systemPrompt,
             currentPrompt = currentPrompt,
-            contextWindowTokens = contextWindowTokens,
-            bufferTokens = budget.reservedTokens,
             tokenCounter = tokenCounter,
         )
+
+        if (finalPromptTokens > budget.thresholdTokens) {
+            loggingPort.info(TAG, "Pruning history via FIFO")
+            chatMessages = ChatHistoryCompressor.compressHistory(
+                history = chatMessages,
+                systemPrompt = options.systemPrompt ?: "",
+                currentPrompt = currentPrompt,
+                contextWindowTokens = contextWindowTokens,
+                bufferTokens = budget.reservedTokens,
+                tokenCounter = tokenCounter,
+            )
+        }
+
         service.setHistory(chatMessages)
-        loggingPort.debug(
+        loggingPort.info(
             TAG,
             "Rehydrated ${chatMessages.size} messages (summary included: ${summary != null})",
         )

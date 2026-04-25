@@ -1,4 +1,5 @@
 package com.browntowndev.pocketcrew.domain.usecase
+
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
 import com.browntowndev.pocketcrew.domain.model.chat.Message
@@ -20,6 +21,9 @@ class FakeMessageRepository : MessageRepository {
     private val savedMessages = mutableListOf<Message>()
     private var getMessageByIdResult: Message? = null
     private var getMessagesForChatResult: List<Message> = emptyList()
+    private val messages = mutableMapOf<ChatId, MutableList<Message>>()
+    private val summaries = mutableMapOf<ChatId, ChatSummary>()
+    private val embeddings = mutableMapOf<MessageId, FloatArray>()
     private val visionAnalyses = mutableListOf<MessageVisionAnalysis>()
     private var nextMessageId = 1
 
@@ -36,7 +40,7 @@ class FakeMessageRepository : MessageRepository {
     }
 
     override suspend fun saveEmbedding(messageId: MessageId, embedding: FloatArray) {
-        // No-op for testing
+        embeddings[messageId] = embedding
     }
 
     override suspend fun searchSimilarMessages(queryVector: FloatArray, limit: Int): List<MessageId> {
@@ -58,16 +62,18 @@ class FakeMessageRepository : MessageRepository {
         analysisText: String,
         modelType: ModelType,
     ) {
-        visionAnalyses.removeAll { it.userMessageId == userMessageId && it.imageUri == imageUri }
-        visionAnalyses += MessageVisionAnalysis(
-            id = "${userMessageId.value}:$imageUri",
-            userMessageId = userMessageId,
-            imageUri = imageUri,
-            promptText = promptText,
-            analysisText = analysisText,
-            modelType = modelType,
-            createdAt = 0L,
-            updatedAt = 0L,
+        visionAnalyses.removeIf { it.userMessageId == userMessageId && it.imageUri == imageUri }
+        visionAnalyses.add(
+            MessageVisionAnalysis(
+                id = "${userMessageId.value}:$imageUri",
+                userMessageId = userMessageId,
+                imageUri = imageUri,
+                promptText = promptText,
+                analysisText = analysisText,
+                modelType = modelType,
+                createdAt = 0L,
+                updatedAt = 0L,
+            )
         )
     }
 
@@ -93,7 +99,7 @@ class FakeMessageRepository : MessageRepository {
         return emptyList()
     }
 
-    override suspend fun getChatSummary(chatId: ChatId): ChatSummary? = null
+    override suspend fun getChatSummary(chatId: ChatId): ChatSummary? = summaries[chatId]
 
     override suspend fun saveChatSummary(summary: ChatSummary) {
         // no-op for testing
