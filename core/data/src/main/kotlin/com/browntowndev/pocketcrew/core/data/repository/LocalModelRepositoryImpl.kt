@@ -11,6 +11,7 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
@@ -74,7 +75,6 @@ class LocalModelRepositoryImpl @Inject constructor(
     }
 
     override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId {
-        // Use existing configId if provided (from remote config), otherwise generate a new GUID
         val configId = if (config.id.value.isNotEmpty()) {
             config.id
         } else {
@@ -99,9 +99,18 @@ class LocalModelRepositoryImpl @Inject constructor(
         return configId
     }
 
+    override suspend fun getAssetById(id: LocalModelId): LocalModelAsset? {
+        return loadAsset(id)
+    }
+
+    override suspend fun getAssetByConfigId(configId: LocalModelConfigurationId): LocalModelAsset? {
+        return configsDao.getById(configId)?.let { loadAsset(it.localModelId) }
+    }
+
     override suspend fun saveLocalModelMetadata(metadata: LocalModelMetadata): LocalModelId {
+        val assignedId = if (metadata.id.value.isEmpty()) generateModelGuid() else metadata.id
         val entity = LocalModelEntity(
-            id = metadata.id,
+            id = assignedId,
             modelFileFormat = metadata.modelFileFormat,
             huggingFaceModelName = metadata.huggingFaceModelName,
             remoteFilename = metadata.remoteFileName,
@@ -143,78 +152,72 @@ class LocalModelRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getSoftDeletedModels(): List<LocalModelAsset> {
-        // Returns LOCALMODEL rows that have zero configurations.
-        // These are models that were downloaded but soft-deleted (configs hard-deleted).
         return modelsDao.getSoftDeletedModels().mapNotNull { loadAsset(it.id) }
-    }
-
-    override suspend fun getAssetById(id: LocalModelId): LocalModelAsset? {
-        return loadAsset(id)
-    }
-
-    override suspend fun getAssetByConfigId(configId: LocalModelConfigurationId): LocalModelAsset? {
-        val config = configsDao.getById(configId) ?: return null
-        return loadAsset(config.localModelId, preferredConfigId = configId)
-    }
-
-    private suspend fun loadAsset(localModelId: LocalModelId, preferredConfigId: LocalModelConfigurationId? = null): LocalModelAsset? {
-        val entity = modelsDao.getById(localModelId) ?: return null
-        val configs = configsDao.getAllForAsset(localModelId)
-        val orderedConfigEntities = if (preferredConfigId == null) {
-            configs
-        } else {
-            configs.sortedWith(
-                compareByDescending<LocalModelConfigurationEntity> { it.id == preferredConfigId }
-                    .thenBy { it.id.value }
-            )
-        }
-        return LocalModelAsset(
-            metadata = LocalModelMetadata(
-                id = entity.id,
-                huggingFaceModelName = entity.huggingFaceModelName,
-                remoteFileName = entity.remoteFilename,
-                localFileName = entity.localFilename,
-                sha256 = entity.sha256,
-                sizeInBytes = entity.sizeInBytes,
-                modelFileFormat = entity.modelFileFormat,
-                isMultimodal = entity.isMultimodal,
-                mmprojRemoteFileName = entity.mmprojRemoteFilename,
-                mmprojLocalFileName = entity.mmprojLocalFilename,
-                mmprojSha256 = entity.mmprojSha256,
-                mmprojSizeInBytes = entity.mmprojSizeInBytes,
-            ),
-            configurations = orderedConfigEntities.map { entityToConfiguration(it) }
-        )
-    }
-
-    private fun entityToConfiguration(entity: LocalModelConfigurationEntity): LocalModelConfiguration {
-        return LocalModelConfiguration(
-            id = entity.id,
-            localModelId = entity.localModelId,
-            displayName = entity.displayName,
-            temperature = entity.temperature,
-            topK = entity.topK,
-            topP = entity.topP,
-            minP = entity.minP,
-            repetitionPenalty = entity.repetitionPenalty,
-            maxTokens = entity.maxTokens,
-            contextWindow = entity.contextWindow,
-            thinkingEnabled = entity.thinkingEnabled,
-            systemPrompt = entity.systemPrompt ?: "",
-            isSystemPreset = entity.isSystemPreset
-        )
     }
 
     override suspend fun restoreSoftDeletedModel(
         id: LocalModelId,
         configurations: List<LocalModelConfiguration>
     ): LocalModelAsset {
-        transactionProvider.runInTransaction {
+        return transactionProvider.runInTransaction {
             configurations.forEach { config ->
-                upsertLocalConfiguration(config)
+                upsertLocalConfiguration(config.copy(localModelId = id))
             }
+            getAssetById(id) ?: throw IllegalStateException("Failed to load restored asset")
         }
-        return loadAsset(id) ?: throw IllegalStateException("Model not found after restoration")
     }
 
+    private suspend fun loadAsset(id: LocalModelId): LocalModelAsset? {
+        val model = modelsDao.getById(id) ?: return null
+        val configs = configsDao.getAllForAsset(id)
+        return LocalModelAsset(
+            metadata = entityToMetadata(model),
+            configurations = configs.map { entityToConfiguration(it) }
+        )
+    }
+
+    private fun entityToMetadata(entity: LocalModelEntity) = LocalModelMetadata(
+        id = entity.id,
+        modelFileFormat = entity.modelFileFormat,
+        huggingFaceModelName = entity.huggingFaceModelName,
+        remoteFileName = entity.remoteFilename,
+        localFileName = entity.localFilename,
+        sha256 = entity.sha256,
+        sizeInBytes = entity.sizeInBytes,
+        isMultimodal = entity.isMultimodal,
+        mmprojRemoteFileName = entity.mmprojRemoteFilename,
+        mmprojLocalFileName = entity.mmprojLocalFilename,
+        mmprojSha256 = entity.mmprojSha256,
+        mmprojSizeInBytes = entity.mmprojSizeInBytes,
+    )
+
+    private fun entityToConfiguration(entity: LocalModelConfigurationEntity) = LocalModelConfiguration(
+        id = entity.id,
+        localModelId = entity.localModelId,
+        displayName = entity.displayName,
+        temperature = entity.temperature,
+        topK = entity.topK,
+        topP = entity.topP,
+        minP = entity.minP,
+        repetitionPenalty = entity.repetitionPenalty,
+        maxTokens = entity.maxTokens,
+        contextWindow = entity.contextWindow,
+        thinkingEnabled = entity.thinkingEnabled,
+        systemPrompt = entity.systemPrompt ?: "",
+        isSystemPreset = entity.isSystemPreset
+    )
+
+    private fun entityToAssignment(entity: DefaultModelEntity) = DefaultModelAssignment(
+        modelType = entity.modelType,
+        localConfigId = entity.localConfigId,
+        apiConfigId = entity.apiConfigId,
+        ttsProviderId = entity.ttsProviderId,
+    )
+
+    private fun assignmentToEntity(assignment: DefaultModelAssignment) = DefaultModelEntity(
+        modelType = assignment.modelType,
+        localConfigId = assignment.localConfigId,
+        apiConfigId = assignment.apiConfigId,
+        ttsProviderId = assignment.ttsProviderId,
+    )
 }

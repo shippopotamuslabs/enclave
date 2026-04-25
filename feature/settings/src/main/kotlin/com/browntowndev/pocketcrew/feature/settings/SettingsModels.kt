@@ -34,6 +34,8 @@ data class SettingsUiState(
     val apiProvidersSheet: ApiProvidersSheetUiState = ApiProvidersSheetUiState(),
     val apiProviderEditor: ApiProviderEditorUiState = ApiProviderEditorUiState(),
     val searchSkillEditor: SearchSkillEditorUiState = SearchSkillEditorUiState(),
+    val ttsProvidersSheet: TtsProvidersSheetUiState = TtsProvidersSheetUiState(),
+    val ttsProviderEditor: TtsProviderEditorUiState = TtsProviderEditorUiState(),
     val assignments: ModelAssignmentsUiState = ModelAssignmentsUiState(),
     val deletion: DeletionFlowUiState = DeletionFlowUiState(),
 )
@@ -50,6 +52,7 @@ data class SettingsHomeUiState(
     val isMemoriesSheetOpen: Boolean = false,
     val isFeedbackSheetOpen: Boolean = false,
     val isVisionSettingsSheetOpen: Boolean = false,
+    val isTtsProvidersSheetOpen: Boolean = false,
 )
 
 @Immutable
@@ -97,6 +100,20 @@ data class ApiProvidersSheetUiState(
     val isVisible: Boolean = false,
     val assets: List<ApiModelAssetUi> = emptyList(),
     val selectedAsset: ApiModelAssetUi? = null,
+)
+
+@Immutable
+data class TtsProvidersSheetUiState(
+    val isVisible: Boolean = false,
+    val assets: List<TtsProviderAssetUi> = emptyList(),
+    val selectedAsset: TtsProviderAssetUi? = null,
+)
+
+@Immutable
+data class TtsProviderEditorUiState(
+    val isEditing: Boolean = false,
+    val assetDraft: TtsProviderAssetUi? = null,
+    val selectedReusableCredential: ReusableApiCredentialUi? = null,
 )
 
 @Immutable
@@ -162,6 +179,16 @@ data class ReassignmentOptionUi(
     val providerName: String? = null,
     val apiCredentialsId: ApiCredentialsId? = null,
     val localModelId: LocalModelId? = null
+)
+
+@Immutable
+data class TtsProviderAssetUi(
+    val id: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId = com.browntowndev.pocketcrew.domain.model.config.TtsProviderId(""),
+    val displayName: String = "",
+    val provider: ApiProvider = ApiProvider.OPENAI,
+    val voiceName: String = "",
+    val baseUrl: String? = null,
+    val credentialAlias: String = ""
 )
 
 @Immutable
@@ -278,6 +305,7 @@ internal val ModelType.displayLabel: String
         ModelType.FAST -> "Fast"
         ModelType.THINKING -> "Thinking"
         ModelType.VISION -> "Vision (API)"
+        ModelType.TTS -> "Text-to-Speech"
         ModelType.DRAFT_ONE -> "Draft 1"
         ModelType.DRAFT_TWO -> "Draft 2"
         ModelType.FINAL_SYNTHESIS -> "Final Refinement"
@@ -290,6 +318,7 @@ internal val ModelType.description: String
         ModelType.FAST -> "A lightweight, efficient model for quick, non-reasoning responses."
         ModelType.THINKING -> "A reasoning model with extended context for complex tasks."
         ModelType.VISION -> "A dedicated API vision model that acts as the chat's eyes for image inspection."
+        ModelType.TTS -> "Synthesize text responses into natural-sounding speech."
         ModelType.DRAFT_ONE -> "Generates the initial analytical draft for the Crew pipeline."
         ModelType.DRAFT_TWO -> "Produces a secondary creative draft for the Crew pipeline."
         ModelType.FINAL_SYNTHESIS -> "Polishes and refines the synthesized content for a professional final output."
@@ -393,6 +422,16 @@ object MockSettingsData {
         ),
         localModelsSheet = LocalModelsSheetUiState(models = localModels),
         apiProvidersSheet = ApiProvidersSheetUiState(assets = apiModels),
+        ttsProvidersSheet = TtsProvidersSheetUiState(
+            assets = listOf(
+                TtsProviderAssetUi(
+                    id = com.browntowndev.pocketcrew.domain.model.config.TtsProviderId("tts-1"),
+                    displayName = "Default OpenAI TTS",
+                    provider = ApiProvider.OPENAI,
+                    voiceName = "alloy"
+                )
+            )
+        ),
         assignments = ModelAssignmentsUiState(assignments = defaultAssignments),
     )
 }

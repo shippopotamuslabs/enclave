@@ -51,8 +51,10 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,22 +66,46 @@ fun SettingsScreen(
     onHapticResponseChange: (Boolean) -> Unit,
     onBackgroundInferenceChange: (Boolean) -> Unit,
     onShowCustomizationSheet: (Boolean) -> Unit,
+    onCustomizationEnabledChange: (Boolean) -> Unit,
+    onPromptOptionChange: (SystemPromptOption) -> Unit,
+    onCustomPromptTextChange: (String) -> Unit,
+    onSaveCustomization: () -> Unit,
     onShowDataControlsSheet: (Boolean) -> Unit,
+    onAllowMemoriesChange: (Boolean) -> Unit,
+    onDeleteAllConversations: () -> Unit,
+    onDeleteAllMemories: () -> Unit,
     onShowMemoriesSheet: (Boolean) -> Unit,
+    onDeleteMemory: (String) -> Unit,
     onOpenToS: () -> Unit,
     onShowFeedbackSheet: (Boolean) -> Unit,
+    onFeedbackTextChange: (String) -> Unit,
+    onSubmitFeedback: () -> Unit,
     onShowVisionSettingsSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
-    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
+    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?) -> Unit,
     onShowLocalModelsSheet: (Boolean) -> Unit,
     onShowByokSheet: (Boolean) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
     onStartCreateApiModelAsset: () -> Unit,
     onStartConfigureSearchSkill: () -> Unit,
+    onApiKeyChange: (String) -> Unit,
+    onSearchEnabledChange: (Boolean) -> Unit,
+    onSearchApiKeyChange: (String) -> Unit,
+    onClearSearchApiKey: () -> Unit,
+    onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
+    onFetchApiModels: () -> Unit,
+    onUpdateModelSearchQuery: (String) -> Unit,
+    onToggleModelProviderFilter: (String) -> Unit,
+    onClearModelProviderFilters: () -> Unit,
+    onUpdateModelSortOption: (ModelSortOption) -> Unit,
     onSelectApiModelAsset: (ApiModelAssetUi?) -> Unit,
     onSelectApiModelConfig: (ApiModelConfigUi?) -> Unit,
     onDeleteApiModelAsset: (ApiCredentialsId) -> Unit,
     onDeleteApiModelConfig: (ApiModelConfigurationId) -> Unit,
+    onShowTtsProvidersSheet: (Boolean) -> Unit,
+    onNavigateToTtsConfigure: () -> Unit,
+    onStartCreateTtsProviderAsset: () -> Unit,
+    onDeleteTtsProviderAsset: (TtsProviderId) -> Unit,
     onNavigateToLocalModelConfigure: () -> Unit,
     onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
@@ -168,6 +194,13 @@ fun SettingsScreen(
                     icon = Icons.Default.Cloud,
                     onClick = { onShowByokSheet(true) }
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsNavigationItem(
+                    title = "Text to Speech Providers",
+                    subtitle = "Manage TTS voices and API keys",
+                    icon = Icons.Default.Vibration, // Using Vibration for audio/haptic feel
+                    onClick = { onShowTtsProvidersSheet(true) }
+                )
             }
 
             item {
@@ -245,6 +278,18 @@ fun SettingsScreen(
                 onSelectApiModelConfig = onSelectApiModelConfig,
                 onDeleteApiModelAsset = onDeleteApiModelAsset,
                 onDeleteApiModelConfig = onDeleteApiModelConfig,
+                onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
+                onDismissDeletionSafety = onDismissDeletionSafety
+            )
+        }
+
+        if (uiState.home.isTtsProvidersSheetOpen) {
+            TtsProvidersBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowTtsProvidersSheet(false) },
+                onNavigateToTtsConfigure = onNavigateToTtsConfigure,
+                onStartCreateTtsProviderAsset = onStartCreateTtsProviderAsset,
+                onDeleteTtsProviderAsset = onDeleteTtsProviderAsset,
                 onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
                 onDismissDeletionSafety = onDismissDeletionSafety
             )
@@ -425,22 +470,46 @@ fun PreviewSettingsScreen() {
             onHapticResponseChange = {},
             onBackgroundInferenceChange = {},
             onShowCustomizationSheet = {},
+            onCustomizationEnabledChange = {},
+            onPromptOptionChange = {},
+            onCustomPromptTextChange = {},
+            onSaveCustomization = {},
             onShowDataControlsSheet = {},
+            onAllowMemoriesChange = {},
+            onDeleteAllConversations = {},
+            onDeleteAllMemories = {},
             onShowMemoriesSheet = {},
+            onDeleteMemory = {},
             onOpenToS = {},
             onShowFeedbackSheet = {},
+            onFeedbackTextChange = {},
+            onSubmitFeedback = {},
             onShowVisionSettingsSheet = {},
             onNavigateToModelConfigure = {},
-            onSetDefaultModel = { _, _, _ -> },
+            onSetDefaultModel = { _, _, _, _ -> },
             onShowLocalModelsSheet = {},
             onShowByokSheet = {},
             onNavigateToByokConfigure = {},
             onStartCreateApiModelAsset = {},
             onStartConfigureSearchSkill = {},
+            onApiKeyChange = {},
+            onSearchEnabledChange = {},
+            onSearchApiKeyChange = {},
+            onClearSearchApiKey = {},
+            onSelectReusableApiCredential = {},
+            onFetchApiModels = {},
+            onUpdateModelSearchQuery = {},
+            onToggleModelProviderFilter = {},
+            onClearModelProviderFilters = {},
+            onUpdateModelSortOption = {},
             onSelectApiModelAsset = {},
             onSelectApiModelConfig = {},
             onDeleteApiModelAsset = {},
             onDeleteApiModelConfig = {},
+            onShowTtsProvidersSheet = {},
+            onNavigateToTtsConfigure = {},
+            onStartCreateTtsProviderAsset = {},
+            onDeleteTtsProviderAsset = {},
             onNavigateToLocalModelConfigure = {},
             onSelectLocalModelAsset = {},
             onSelectLocalModelConfig = {},

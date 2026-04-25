@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.domain.usecase.byok
 
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
@@ -12,7 +13,8 @@ interface SetDefaultModelUseCase {
     suspend operator fun invoke(
         modelType: ModelType,
         localConfigId: LocalModelConfigurationId?,
-        apiConfigId: ApiModelConfigurationId?
+        apiConfigId: ApiModelConfigurationId?,
+        ttsProviderId: TtsProviderId? = null
     )
 }
 
@@ -25,6 +27,7 @@ class SetDefaultModelUseCaseImpl @Inject constructor(
         modelType: ModelType,
         localConfigId: LocalModelConfigurationId?,
         apiConfigId: ApiModelConfigurationId?,
+        ttsProviderId: TtsProviderId?,
     ) {
         if (modelType == ModelType.VISION) {
             require(localConfigId == null) {
@@ -39,6 +42,16 @@ class SetDefaultModelUseCaseImpl @Inject constructor(
                 "Vision slot requires a multimodal API model."
             }
         }
-        defaultModelRepository.setDefault(modelType, localConfigId, apiConfigId)
+
+        if (modelType == ModelType.TTS) {
+            require(localConfigId == null && apiConfigId == null) {
+                "TTS slot is TTS-only."
+            }
+            requireNotNull(ttsProviderId) {
+                "TTS slot requires a TTS provider assignment."
+            }
+        }
+
+        defaultModelRepository.setDefault(modelType, localConfigId, apiConfigId, ttsProviderId)
     }
 }

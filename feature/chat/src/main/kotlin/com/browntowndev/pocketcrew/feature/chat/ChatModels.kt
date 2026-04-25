@@ -71,6 +71,7 @@ data class ChatUiState(
     val activeToolCallBanner: ToolCallBannerUi? = null,
     val activeIndicatorMessageId: MessageId? = null,
     val backgroundInferenceEnabled: Boolean = true,
+    val hasTtsProviderAssigned: Boolean = false,
 )
 
 /**

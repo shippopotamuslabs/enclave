@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -55,6 +57,8 @@ fun AssistantResponse(
     modifier: Modifier = Modifier,
     message: ChatMessage,
     isPreview: Boolean = false,
+    hasTtsProviderAssigned: Boolean = false,
+    onPlayAudio: (String) -> Unit = {},
 ) {
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
@@ -158,6 +162,23 @@ fun AssistantResponse(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(16.dp),
                             )
+                        }
+
+                        if (hasTtsProviderAssigned) {
+                            // Speaker Button
+                            IconButton(
+                                onClick = { onPlayAudio(contentText) },
+                                modifier = Modifier
+                                    .offset(x = (-8).dp)
+                                    .size(32.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+                                    contentDescription = "Read aloud",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
                         }
 
                         // Sources Pill Button
@@ -325,6 +346,5 @@ private fun CompletedStepRow(
         }
     }
 }
-
 
 

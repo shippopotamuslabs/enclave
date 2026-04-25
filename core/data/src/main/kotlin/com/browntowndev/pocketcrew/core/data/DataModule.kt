@@ -28,13 +28,14 @@ import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
-import com.browntowndev.pocketcrew.core.data.local.MIGRATION_1_2
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.local.SQLiteVecInstaller
 import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
+import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioCapture
+import com.browntowndev.pocketcrew.core.data.media.AndroidAudioPlayer
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioRecordFactory
 import com.browntowndev.pocketcrew.core.data.media.AudioRecordFactory
 import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
@@ -53,6 +54,7 @@ import com.browntowndev.pocketcrew.core.data.repository.PipelineStateRepositoryI
 import com.browntowndev.pocketcrew.core.data.repository.RoomTransactionProvider
 import com.browntowndev.pocketcrew.core.data.repository.SettingsRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ToolExecutionEventBus
+import com.browntowndev.pocketcrew.core.data.repository.TtsProviderRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyProviderImpl
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
@@ -65,6 +67,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.media.AudioCapturePort
+import com.browntowndev.pocketcrew.domain.port.media.AudioPlayerPort
 import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
@@ -80,6 +83,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.PipelineStateRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
+import com.browntowndev.pocketcrew.domain.port.repository.TtsProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.UtilityModelFilePort
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.qualifier.PipelineDataStore
@@ -119,7 +123,6 @@ object DataModule {
                     SQLiteVecInstaller.createEmbeddingTable(db)
                 }
             })
-            .addMigrations(MIGRATION_1_2)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -144,19 +147,24 @@ object DataModule {
     fun provideLocalModelsDao(database: PocketCrewDatabase): LocalModelsDao = database.localModelsDao()
 
     @Provides
-    fun provideLocalModelConfigurationsDao(database: PocketCrewDatabase): LocalModelConfigurationsDao = database.localModelConfigurationsDao()
+    fun provideLocalModelConfigurationsDao(database: PocketCrewDatabase): LocalModelConfigurationsDao =
+        database.localModelConfigurationsDao()
+
+    @Provides
+    fun provideApiModelConfigurationsDao(database: PocketCrewDatabase): ApiModelConfigurationsDao =
+        database.apiModelConfigurationsDao()
 
     @Provides
     fun provideApiCredentialsDao(database: PocketCrewDatabase): ApiCredentialsDao = database.apiCredentialsDao()
-
-    @Provides
-    fun provideApiModelConfigurationsDao(database: PocketCrewDatabase): ApiModelConfigurationsDao = database.apiModelConfigurationsDao()
 
     @Provides
     fun provideDefaultModelsDao(database: PocketCrewDatabase): DefaultModelsDao = database.defaultModelsDao()
 
     @Provides
     fun provideEmbeddingDao(database: PocketCrewDatabase): EmbeddingDao = database.embeddingDao()
+
+    @Provides
+    fun provideTtsProviderDao(database: PocketCrewDatabase): TtsProviderDao = database.ttsProviderDao()
 
     @Provides
     @Singleton
@@ -235,7 +243,11 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindAudioCapturePort(impl: AndroidAudioCapture): AudioCapturePort
+    abstract fun bindAudioCapture(impl: AndroidAudioCapture): AudioCapturePort
+
+    @Binds
+    @Singleton
+    abstract fun bindAudioPlayer(impl: AndroidAudioPlayer): AudioPlayerPort
 
     @Binds
     @Singleton
@@ -292,6 +304,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindApiModelCatalogRepository(impl: ApiModelCatalogRepositoryImpl): ApiModelCatalogPort
+
+    @Binds
+    @Singleton
+    abstract fun bindTtsProviderRepository(impl: TtsProviderRepositoryImpl): TtsProviderRepositoryPort
 
     @Binds
     @Singleton

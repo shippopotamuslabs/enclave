@@ -40,6 +40,9 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
+
     // Inference native bindings
     implementation(project(":llama-android"))
 

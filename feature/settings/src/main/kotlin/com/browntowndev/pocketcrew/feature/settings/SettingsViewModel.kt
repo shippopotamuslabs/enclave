@@ -36,6 +36,7 @@ private data class PersistedSettingsBundle(
     val settings: com.browntowndev.pocketcrew.domain.port.repository.SettingsData,
     val localAssets: List<com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset>,
     val apiAssets: List<com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset>,
+    val ttsAssets: List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
     val defaultModels: List<com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment>,
 )
 
@@ -45,6 +46,7 @@ private data class TransientSettingsBundle(
     val feedbackText: String,
     val localModelsState: LocalModelsTransientState,
     val apiState: ApiProvidersTransientState,
+    val ttsState: TtsProvidersTransientState,
     val searchSkillState: SearchSkillTransientState,
     val assignmentState: AssignmentDialogTransientState,
     val deletionState: DeletionTransientState,
@@ -60,6 +62,7 @@ private data class SheetTransientBundle(
 private data class DialogTransientBundle(
     val searchSkillState: SearchSkillTransientState,
     val apiState: ApiProvidersTransientState,
+    val ttsState: TtsProvidersTransientState,
     val assignmentState: AssignmentDialogTransientState,
     val deletionState: DeletionTransientState,
 )
@@ -70,6 +73,7 @@ class SettingsViewModel @Inject constructor(
     private val settingsUiStateFactory: SettingsUiStateFactory,
     private val localModelAssetUiMapper: LocalModelAssetUiMapper,
     private val apiModelAssetUiMapper: ApiModelAssetUiMapper,
+    private val ttsProviderAssetUiMapper: TtsProviderAssetUiMapper,
     private val reassignmentOptionUiMapper: ReassignmentOptionUiMapper,
     private val errorHandler: ViewModelErrorHandler,
 ) : ViewModel() {
@@ -84,6 +88,7 @@ class SettingsViewModel @Inject constructor(
     private val _localModelsState = MutableStateFlow(LocalModelsTransientState())
     private val _apiState = MutableStateFlow(ApiProvidersTransientState())
     private val _searchSkillState = MutableStateFlow(SearchSkillTransientState())
+    private val _ttsState = MutableStateFlow(TtsProvidersTransientState())
     private val _assignmentState = MutableStateFlow(AssignmentDialogTransientState())
     private val _deletionState = MutableStateFlow(DeletionTransientState())
     private val _snackbarMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -97,21 +102,25 @@ class SettingsViewModel @Inject constructor(
     private val preferencesUseCases = settingsUseCases.preferences
     private val localModelUseCases = settingsUseCases.localModels
     private val apiProviderUseCases = settingsUseCases.apiProviders
+    private val ttsUseCases = settingsUseCases.tts
     private val assignmentUseCases = settingsUseCases.assignments
     private val deletionUseCases = settingsUseCases.deletion
 
     private val localModelAssetsFlow = localModelUseCases.getLocalModelAssets()
     private val apiModelAssetsFlow = apiProviderUseCases.getApiModelAssets()
+    private val ttsAssetsFlow = ttsUseCases.getTtsProviders()
     private val persistedSettingsBundle = combine(
         settingsUseCases.getSettings(),
         localModelAssetsFlow,
         apiModelAssetsFlow,
+        ttsAssetsFlow,
         assignmentUseCases.getDefaultModels(),
-    ) { settings, localAssets, apiAssets, defaultModels ->
+    ) { settings, localAssets, apiAssets, ttsAssets, defaultModels ->
         PersistedSettingsBundle(
             settings = settings,
             localAssets = localAssets,
             apiAssets = apiAssets,
+            ttsAssets = ttsAssets,
             defaultModels = defaultModels,
         )
     }
@@ -131,12 +140,14 @@ class SettingsViewModel @Inject constructor(
     private val transientDialogBundle = combine(
         _searchSkillState,
         _apiState,
+        _ttsState,
         _assignmentState,
         _deletionState,
-    ) { searchSkillState, apiState, assignmentState, deletionState ->
+    ) { searchSkillState, apiState, ttsState, assignmentState, deletionState ->
         DialogTransientBundle(
             searchSkillState = searchSkillState,
             apiState = apiState,
+            ttsState = ttsState,
             assignmentState = assignmentState,
             deletionState = deletionState,
         )
@@ -151,6 +162,7 @@ class SettingsViewModel @Inject constructor(
             feedbackText = sheetBundle.feedbackText,
             localModelsState = sheetBundle.localModelsState,
             apiState = dialogBundle.apiState,
+            ttsState = dialogBundle.ttsState,
             searchSkillState = dialogBundle.searchSkillState,
             assignmentState = dialogBundle.assignmentState,
             deletionState = dialogBundle.deletionState,
@@ -165,12 +177,14 @@ class SettingsViewModel @Inject constructor(
             persistedSettings = persisted.settings,
             localAssets = persisted.localAssets,
             apiAssets = persisted.apiAssets,
+            ttsAssets = persisted.ttsAssets,
             defaultModels = persisted.defaultModels,
             sheetVisibility = transient.sheetVisibility,
             memories = transient.memories,
             feedbackText = transient.feedbackText,
             localModelsState = transient.localModelsState,
             apiState = transient.apiState,
+            ttsState = transient.ttsState,
             searchSkillState = transient.searchSkillState,
             assignmentsState = transient.assignmentState,
             deletionState = transient.deletionState,
@@ -325,6 +339,14 @@ class SettingsViewModel @Inject constructor(
                 onSelectApiModelAsset(apiModelAssetUiMapper.map(it))
                 onSelectApiModelConfig(selection.apiConfig?.let(apiModelAssetUiMapper::mapConfig))
             }
+            selection.ttsAsset?.let {
+                _ttsState.update { state ->
+                    state.copy(
+                        selectedAsset = ttsProviderAssetUiMapper.map(it),
+                        isSheetOpen = true
+                    )
+                }
+            }
         }
     }
 
@@ -432,6 +454,23 @@ class SettingsViewModel @Inject constructor(
         _searchSkillState.value = SearchSkillTransientState()
     }
 
+    fun onShowTtsProvidersSheet(show: Boolean) {
+        if (!show) {
+            _ttsState.update { it.copy(isSheetOpen = false) }
+            return
+        }
+
+        _ttsState.update {
+            it.copy(
+                isSheetOpen = true,
+                selectedAsset = null,
+                assetDraft = null,
+                selectedReusableApiCredentialAlias = null,
+                selectedReusableApiCredentialName = null,
+            )
+        }
+    }
+
     fun onStartCreateApiModelAsset() {
         _currentApiKey.value = ""
         _searchSkillState.value = SearchSkillTransientState()
@@ -449,6 +488,68 @@ class SettingsViewModel @Inject constructor(
                 modelProviderFilters = emptySet(),
                 modelSortOption = ModelSortOption.A_TO_Z,
             )
+        }
+    }
+
+    fun onStartCreateTtsProviderAsset() {
+        _currentApiKey.value = ""
+        _ttsState.update {
+            it.copy(
+                selectedAsset = null,
+                assetDraft = TtsProviderAssetUi(
+                    displayName = "New TTS Provider",
+                    provider = ApiProvider.OPENAI,
+                ),
+                selectedReusableApiCredentialAlias = null,
+                selectedReusableApiCredentialName = null,
+            )
+        }
+    }
+
+    fun onTtsAssetFieldChange(asset: TtsProviderAssetUi) {
+        _ttsState.update { it.copy(assetDraft = asset) }
+    }
+
+    fun onSelectReusableTtsApiCredential(id: ApiCredentialsId?) {
+        val reusableCredential = uiState.value.apiProvidersSheet.assets
+            .find { it.credentialsId == id }
+            ?.let {
+                ReusableApiCredentialUi(
+                    credentialsId = it.credentialsId,
+                    displayName = it.displayName,
+                    modelId = it.modelId,
+                    credentialAlias = it.credentialAlias,
+                )
+            }
+        _currentApiKey.value = ""
+        _ttsState.update {
+            it.copy(
+                selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
+                selectedReusableApiCredentialName = reusableCredential?.displayName,
+            )
+        }
+    }
+
+    fun onSaveTtsProvider(onSuccess: () -> Unit) {
+        val draft = _ttsState.value.assetDraft ?: return
+        val reusedAlias = _ttsState.value.selectedReusableApiCredentialAlias
+        val apiKey = _currentApiKey.value.ifBlank { "" }
+
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save TTS provider", "Failed to save provider")) {
+            ttsUseCases.saveTtsProvider(
+                com.browntowndev.pocketcrew.domain.usecase.settings.TtsProviderDraft(
+                    id = draft.id,
+                    displayName = draft.displayName,
+                    provider = draft.provider,
+                    voiceName = draft.voiceName,
+                    baseUrl = draft.baseUrl,
+                    credentialAlias = reusedAlias ?: draft.credentialAlias.ifBlank {
+                        "tts-${draft.provider.name.lowercase()}-${draft.voiceName.lowercase()}-${java.util.UUID.randomUUID().toString().take(8)}"
+                    },
+                    apiKey = apiKey,
+                )
+            ).getOrThrow()
+            onSuccess()
         }
     }
 
@@ -773,6 +874,12 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
+    fun onDeleteTtsProviderAsset(id: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete TTS provider", "Failed to delete provider")) {
+            ttsUseCases.deleteTtsProvider(id)
+        }
+    }
+
     fun onBackToByokList() {
         _currentApiKey.value = ""
         _currentTavilyApiKey.value = ""
@@ -801,9 +908,14 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun onSetDefaultModel(modelType: ModelType, localConfigId: LocalModelConfigurationId?, apiConfigId: ApiModelConfigurationId?) {
+    fun onSetDefaultModel(
+        modelType: ModelType,
+        localConfigId: LocalModelConfigurationId?,
+        apiConfigId: ApiModelConfigurationId?,
+        ttsProviderId: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId? = null
+    ) {
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to set default model", "Failed to update default model")) {
-            assignmentUseCases.setDefaultModel(modelType, localConfigId, apiConfigId)
+            assignmentUseCases.setDefaultModel(modelType, localConfigId, apiConfigId, ttsProviderId)
             onShowAssignmentDialog(false, null)
         }
     }
