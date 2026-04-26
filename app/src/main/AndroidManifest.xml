@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
@@ -47,12 +48,22 @@
         <!-- Custom Inference Service with specialUse foreground type -->
         <!-- specialUse has no quota limits (unlike dataSync which has 6-hour limit on Android 15+) -->
         <service
-            android:name=".inference.service.InferenceService"
+            android:name=".feature.moa.service.InferenceService"
             android:foregroundServiceType="specialUse"
             android:exported="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="on-device AI inference for generating chat responses"/>
+        </service>
+
+        <!-- Media3 TTS playback service with mediaPlayback foreground type for Android 14+ -->
+        <service
+            android:name=".app.tts.TtsPlaybackService"
+            android:foregroundServiceType="mediaPlayback"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
         </service>
 
         <!-- WorkManager foreground service for Android 14+ (SDK 34+) - kept for WorkManager internal use -->

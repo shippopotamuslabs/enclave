@@ -34,8 +34,8 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MergeMessagesUseCase
-import com.browntowndev.pocketcrew.domain.usecase.chat.PlayStreamingTtsAudioUseCase
-import com.browntowndev.pocketcrew.domain.usecase.chat.StreamingPlaybackStatus
+import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
+import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackStatus
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
@@ -76,7 +76,7 @@ class ChatViewModelTest {
     private val errorHandler: ViewModelErrorHandler = mockk()
     private val loggingPort: LoggingPort = mockk(relaxed = true)
     private val activeChatTurnStore: ActiveChatTurnSnapshotPort = mockk(relaxed = true)
-    private val playStreamingTtsAudioUseCase: PlayStreamingTtsAudioUseCase = mockk(relaxed = true)
+    private val playbackController: TtsPlaybackControllerPort = mockk(relaxed = true)
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var defaultModelsFlow: MutableStateFlow<List<DefaultModelAssignment>>
 
@@ -142,7 +142,7 @@ class ChatViewModelTest {
             errorHandler = errorHandler,
             loggingPort = loggingPort,
             activeChatTurnSnapshotPort = activeChatTurnStore,
-            playStreamingTtsAudioUseCase = playStreamingTtsAudioUseCase,
+            playbackController = playbackController,
         )
     }
 
@@ -207,15 +207,15 @@ class ChatViewModelTest {
             ),
         )
         runCurrent()
-        every { playStreamingTtsAudioUseCase(text) } returns flowOf(
-            StreamingPlaybackStatus.Playing,
-            StreamingPlaybackStatus.Completed
+        every { playbackController.play(text) } returns flowOf(
+            TtsPlaybackStatus.Playing,
+            TtsPlaybackStatus.Completed
         )
 
         chatViewModel.onPlayTts(text)
         runCurrent()
 
-        verify { playStreamingTtsAudioUseCase(text) }
+        verify { playbackController.play(text) }
         collectJob.cancel()
     }
 
@@ -240,8 +240,8 @@ class ChatViewModelTest {
             ),
         )
         runCurrent()
-        every { playStreamingTtsAudioUseCase(text) } returns flow {
-            emit(StreamingPlaybackStatus.Playing)
+        every { playbackController.play(text) } returns flow {
+            emit(TtsPlaybackStatus.Playing)
             delay(10_000) // Keep flow alive so isPlayingTts stays true
         }
 
@@ -263,9 +263,9 @@ class ChatViewModelTest {
             ),
         )
         runCurrent()
-        every { playStreamingTtsAudioUseCase(text) } returns flowOf(
-            StreamingPlaybackStatus.Playing,
-            StreamingPlaybackStatus.Completed
+        every { playbackController.play(text) } returns flowOf(
+            TtsPlaybackStatus.Playing,
+            TtsPlaybackStatus.Completed
         )
 
         chatViewModel.onPlayTts(text)
@@ -273,8 +273,6 @@ class ChatViewModelTest {
 
         // After Completed, isPlayingTts should be false
         assertFalse(chatViewModel.uiState.value.isPlayingTts)
-        // And stop should be called to release resources
-        verify { playStreamingTtsAudioUseCase.stop() }
         collectJob.cancel()
     }
 
@@ -289,9 +287,9 @@ class ChatViewModelTest {
             ),
         )
         runCurrent()
-        every { playStreamingTtsAudioUseCase(text) } returns flowOf(
-            StreamingPlaybackStatus.Playing,
-            StreamingPlaybackStatus.Error("Connection failed")
+        every { playbackController.play(text) } returns flowOf(
+            TtsPlaybackStatus.Playing,
+            TtsPlaybackStatus.Error("Connection failed")
         )
 
         chatViewModel.onPlayTts(text)
@@ -299,8 +297,6 @@ class ChatViewModelTest {
 
         // After Error, isPlayingTts should be false
         assertFalse(chatViewModel.uiState.value.isPlayingTts)
-        // And stop should be called to release resources
-        verify { playStreamingTtsAudioUseCase.stop() }
         collectJob.cancel()
     }
 
@@ -318,7 +314,7 @@ class ChatViewModelTest {
 
         chatViewModel.onStopTts()
 
-        verify { playStreamingTtsAudioUseCase.stop() }
+        verify { playbackController.stop() }
         collectJob.cancel()
     }
 
@@ -334,13 +330,13 @@ class ChatViewModelTest {
             ),
         )
         runCurrent()
-        every { playStreamingTtsAudioUseCase(text1) } returns flowOf(
-            StreamingPlaybackStatus.Playing,
-            StreamingPlaybackStatus.Completed
+        every { playbackController.play(text1) } returns flowOf(
+            TtsPlaybackStatus.Playing,
+            TtsPlaybackStatus.Completed
         )
-        every { playStreamingTtsAudioUseCase(text2) } returns flowOf(
-            StreamingPlaybackStatus.Playing,
-            StreamingPlaybackStatus.Completed
+        every { playbackController.play(text2) } returns flowOf(
+            TtsPlaybackStatus.Playing,
+            TtsPlaybackStatus.Completed
         )
 
         chatViewModel.onPlayTts(text1)
@@ -348,8 +344,8 @@ class ChatViewModelTest {
         chatViewModel.onPlayTts(text2)
         runCurrent()
 
-        // stop() should be called at least once (from the cancel-before-start or from Completed)
-        verify(atLeast = 1) { playStreamingTtsAudioUseCase.stop() }
+        // stop() should be called at least once (from the cancel-before-start)
+        verify(atLeast = 1) { playbackController.stop() }
         collectJob.cancel()
     }
 
@@ -364,17 +360,16 @@ class ChatViewModelTest {
             ),
         )
         runCurrent()
-        every { playStreamingTtsAudioUseCase(text) } returns flowOf(
-            StreamingPlaybackStatus.Playing,
-            StreamingPlaybackStatus.Completed
+        every { playbackController.play(text) } returns flowOf(
+            TtsPlaybackStatus.Playing,
+            TtsPlaybackStatus.Completed
         )
 
         chatViewModel.onPlayTts(text)
         runCurrent()
 
-        // Verify only the streaming use case was called (no batch fallback)
-        verify { playStreamingTtsAudioUseCase(text) }
-        verify { playStreamingTtsAudioUseCase.stop() }
+        // Verify the playback controller was called
+        verify { playbackController.play(text) }
         collectJob.cancel()
     }
 
@@ -389,8 +384,8 @@ class ChatViewModelTest {
             ),
         )
         runCurrent()
-        every { playStreamingTtsAudioUseCase(text) } returns flow {
-            emit(StreamingPlaybackStatus.Playing)
+        every { playbackController.play(text) } returns flow {
+            emit(TtsPlaybackStatus.Playing)
             delay(10_000) // Keep alive
         }
 
@@ -401,7 +396,7 @@ class ChatViewModelTest {
         chatViewModel.onStopTts()
         runCurrent()
 
-        verify { playStreamingTtsAudioUseCase.stop() }
+        verify { playbackController.stop() }
         collectJob.cancel()
     }
 
@@ -414,8 +409,8 @@ class ChatViewModelTest {
         chatViewModel.onPlayTts("Hello")
         runCurrent()
 
-        // playStreamingTtsAudioUseCase should NOT be called
-        verify(exactly = 0) { playStreamingTtsAudioUseCase(any()) }
+        // playbackController.play should NOT be called
+        verify(exactly = 0) { playbackController.play(any()) }
         assertFalse(chatViewModel.uiState.value.isPlayingTts)
         collectJob.cancel()
     }
@@ -431,8 +426,8 @@ class ChatViewModelTest {
             ),
         )
         runCurrent()
-        every { playStreamingTtsAudioUseCase(text) } returns flowOf(
-            StreamingPlaybackStatus.Initializing
+        every { playbackController.play(text) } returns flowOf(
+            TtsPlaybackStatus.Initializing
         )
 
         chatViewModel.onPlayTts(text)

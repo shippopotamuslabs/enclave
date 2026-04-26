@@ -101,7 +101,7 @@ class ChatViewModelNavigationTest {
             loggingPort = loggingPort,
             activeChatTurnSnapshotPort = mockk(relaxed = true),
             
-            playStreamingTtsAudioUseCase = mockk(relaxed = true),
+            playbackController = mockk(relaxed = true),
             )
     }
 

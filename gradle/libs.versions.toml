@@ -44,6 +44,7 @@ anthropic = "2.27.0"
 googleGenai = "1.51.0"
 coil = "3.4.0"
 jtokkit = "1.1.0"
+media3 = "1.10.0"
 
 [libraries]
 jtokkit = { group = "com.knuddels", name = "jtokkit", version.ref = "jtokkit" }
@@ -103,6 +104,9 @@ markdown-parser = { module = "io.github.huarangmeng:markdown-parser", version.re
 markdown-renderer = { module = "io.github.huarangmeng:markdown-renderer", version.ref = "markdown" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbineVersion" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBomVersion" }
+media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
+media3-datasource = { group = "androidx.media3", name = "media3-datasource", version.ref = "media3" }
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics", version.ref = "firebaseCrashlyticsVersion" }
 openai-java = { group = "com.openai", name = "openai-java", version.ref = "openai" }
