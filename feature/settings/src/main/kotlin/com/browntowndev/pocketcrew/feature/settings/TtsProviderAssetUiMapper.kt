@@ -4,7 +4,7 @@ import com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset
 import javax.inject.Inject
 
 class TtsProviderAssetUiMapper @Inject constructor() {
-    fun map(asset: TtsProviderAsset): TtsProviderAssetUi = TtsProviderAssetUi(
+    fun map(asset: TtsProviderAsset, isDefault: Boolean): TtsProviderAssetUi = TtsProviderAssetUi(
         id = asset.id,
         displayName = asset.displayName,
         provider = asset.provider,
@@ -12,5 +12,6 @@ class TtsProviderAssetUiMapper @Inject constructor() {
         modelName = asset.modelName,
         baseUrl = asset.baseUrl,
         credentialAlias = asset.credentialAlias,
+        useAsDefault = isDefault,
     )
 }

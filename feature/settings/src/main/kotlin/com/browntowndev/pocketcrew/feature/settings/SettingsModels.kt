@@ -189,7 +189,8 @@ data class TtsProviderAssetUi(
     val voiceName: String = "",
     val modelName: String? = null,
     val baseUrl: String? = null,
-    val credentialAlias: String = ""
+    val credentialAlias: String = "",
+    val useAsDefault: Boolean = false
 )
 
 @Immutable

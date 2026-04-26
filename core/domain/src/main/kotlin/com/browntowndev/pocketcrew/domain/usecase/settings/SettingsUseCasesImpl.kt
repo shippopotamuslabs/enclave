@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
+import com.browntowndev.pocketcrew.domain.usecase.byok.ClearDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
@@ -40,6 +41,7 @@ class SettingsApiProviderUseCasesImpl @Inject constructor(
 class SettingsAssignmentUseCasesImpl @Inject constructor(
     override val getDefaultModels: GetDefaultModelsUseCase,
     override val setDefaultModel: SetDefaultModelUseCase,
+    override val clearDefaultModel: ClearDefaultModelUseCase,
     override val resolveAssignedModelSelection: ResolveAssignedModelSelectionUseCase,
 ) : SettingsAssignmentUseCases
 
