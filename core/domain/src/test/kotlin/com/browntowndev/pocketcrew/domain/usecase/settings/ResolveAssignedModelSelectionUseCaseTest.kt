@@ -124,7 +124,7 @@ class ResolveAssignedModelSelectionUseCaseTest {
             apiConfigId = null,
             ttsProviderId = ttsId,
         )
-        val ttsAsset = TtsProviderAsset(ttsId, "OpenAI", ApiProvider.OPENAI, "alloy", null, "alias")
+        val ttsAsset = TtsProviderAsset(ttsId, "OpenAI", ApiProvider.OPENAI, "alloy", null, null, "alias")
 
         every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
         every { getTtsProvidersUseCase() } returns flowOf(listOf(ttsAsset))

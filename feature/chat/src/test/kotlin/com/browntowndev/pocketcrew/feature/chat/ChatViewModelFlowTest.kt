@@ -95,7 +95,8 @@ class ChatViewModelFlowTest {
             toolExecutionEventPort = toolExecutionEventPort,
             loggingPort = loggingPort,
             activeChatTurnSnapshotPort = ActiveChatTurnStore(),
-            playTtsAudioUseCase = mockk(relaxed = true),
+            
+            playStreamingTtsAudioUseCase = mockk(relaxed = true),
         )
     }
 

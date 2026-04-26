@@ -33,7 +33,7 @@ class PlayTtsAudioUseCaseTest {
 
     @Test
     fun `invoke synthesizes and plays audio on success`() = runTest {
-        val ttsAsset = TtsProviderAsset(TtsProviderId("1"), "OpenAI", ApiProvider.OPENAI, "alloy", null, "alias-1")
+        val ttsAsset = TtsProviderAsset(TtsProviderId("1"), "OpenAI", ApiProvider.OPENAI, "alloy", null, null, "alias-1")
         val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
         val audioBytes = byteArrayOf(1, 2, 3)
         val ttsService: TtsServicePort = mockk()

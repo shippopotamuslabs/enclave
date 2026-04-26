@@ -29,7 +29,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Compani
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.pocketcrew.domain.usecase.chat.PlayTtsAudioUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.PlayStreamingTtsAudioUseCase
+
+import com.browntowndev.pocketcrew.domain.usecase.chat.StreamingPlaybackStatus
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -81,7 +83,7 @@ class ChatViewModel @Inject constructor(
     private val errorHandler: ViewModelErrorHandler,
     private val loggingPort: LoggingPort,
     private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
-    private val playTtsAudioUseCase: PlayTtsAudioUseCase,
+    private val playStreamingTtsAudioUseCase: PlayStreamingTtsAudioUseCase,
 ) : ViewModel() {
 
     companion object {
@@ -152,6 +154,12 @@ class ChatViewModel @Inject constructor(
     // Job for tracking inference flow collection (for cancellation in onCleared)
     private var inferenceJob: Job? = null
     private var speechJob: Job? = null
+
+    // Tracks the current streaming TTS job for cancellation
+    private var streamingTtsJob: Job? = null
+
+    // Mutable state for TTS playback status
+    private val _isPlayingTts = MutableStateFlow(false)
 
     private val _requestedTurnKey = MutableStateFlow<ActiveChatTurnKey?>(null)
     private val _acknowledgedTurnKeys = MutableStateFlow<Set<ActiveChatTurnKey>>(emptySet())
@@ -366,20 +374,29 @@ class ChatViewModel @Inject constructor(
         UiInputsWithPolicy(inputs, attachmentPolicy)
     }
 
+    private val ttsPlaybackFlow = combine(
+        chatActionStateFlow,
+        _isPlayingTts,
+    ) { chatActionState, isPlayingTts ->
+        chatActionState to isPlayingTts
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<ChatUiState> = combine(
         uiInputsWithPolicyFlow,
         inferenceLockManager.isInferenceBlocked,
         dbMessagesFlow,
         activeTurnSnapshotFlow,
-        chatActionStateFlow,
+        ttsPlaybackFlow,
     ) {
         inputsWithPolicy: UiInputsWithPolicy,
         isBlocked: Boolean,
         messages: List<Message>,
         activeTurnSnapshotState: ActiveTurnSnapshotState,
-        chatActionState: ChatActionState ->
+        ttsPlayback: Pair<ChatActionState, Boolean> ->
 
+        val chatActionState = ttsPlayback.first
+        val isPlayingTts = ttsPlayback.second
         val inputs = inputsWithPolicy.inputs
         val attachmentPolicy = inputsWithPolicy.attachmentPolicy
         val settings: SettingsData = inputs.settings
@@ -442,6 +459,7 @@ class ChatViewModel @Inject constructor(
             activeToolCallBanner = chatActionState.activeToolCallBanner,
             backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
             hasTtsProviderAssigned = chatActionState.hasTtsProviderAssigned,
+            isPlayingTts = isPlayingTts,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -562,9 +580,48 @@ class ChatViewModel @Inject constructor(
 
     fun onPlayTts(text: String) {
         if (!uiState.value.hasTtsProviderAssigned) return
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to play TTS audio", "Failed to play audio")) {
-            playTtsAudioUseCase(text).getOrThrow()
+
+        // Cancel any existing TTS playback and release resources
+        streamingTtsJob?.cancel()
+        streamingTtsJob = null
+        playStreamingTtsAudioUseCase.stop()
+
+        streamingTtsJob = viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(TAG, "Failed to play TTS audio", "Failed to play audio")
+        ) {
+            playStreamingTtsAudioUseCase(text)
+                .collect { status ->
+                    when (status) {
+                        is StreamingPlaybackStatus.Initializing -> {
+                            loggingPort.debug(TAG, "TTS streaming initializing")
+                        }
+                        is StreamingPlaybackStatus.Playing -> {
+                            _isPlayingTts.value = true
+                            loggingPort.debug(TAG, "TTS streaming playing")
+                        }
+                        is StreamingPlaybackStatus.Completed -> {
+                            _isPlayingTts.value = false
+                            streamingTtsJob = null
+                            // Release AudioTrack resources after playback completes
+                            playStreamingTtsAudioUseCase.stop()
+                            loggingPort.debug(TAG, "TTS streaming completed")
+                        }
+                        is StreamingPlaybackStatus.Error -> {
+                            _isPlayingTts.value = false
+                            streamingTtsJob = null
+                            playStreamingTtsAudioUseCase.stop()
+                            loggingPort.error(TAG, "TTS streaming failed: ${status.message}", status.cause)
+                        }
+                    }
+                }
         }
+    }
+
+    fun onStopTts() {
+        streamingTtsJob?.cancel()
+        streamingTtsJob = null
+        playStreamingTtsAudioUseCase.stop()
+        _isPlayingTts.value = false
     }
 
     fun onModeChange(mode: ChatModeUi) {
