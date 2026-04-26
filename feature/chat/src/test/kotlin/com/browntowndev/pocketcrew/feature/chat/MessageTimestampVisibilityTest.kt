@@ -61,7 +61,7 @@ class MessageTimestampVisibilityTest {
             loggingPort = mockk(relaxed = true),
             activeChatTurnSnapshotPort = ActiveChatTurnStore(),
             
-            playStreamingTtsAudioUseCase = mockk(relaxed = true),
+            playbackController = mockk(relaxed = true),
         )
     }
 
