@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
@@ -31,17 +32,22 @@ class SearchChatHistoryToolExecutorTest {
     private lateinit var loggingPort: LoggingPort
     private lateinit var messageRepository: MessageRepository
     private lateinit var chatRepository: ChatRepository
+    private lateinit var embeddingEngine: EmbeddingEnginePort
     private lateinit var executor: SearchChatHistoryToolExecutor
+    private val embeddingVector = floatArrayOf(0.1f, 0.2f, 0.3f)
 
     @Before
     fun setup() {
         loggingPort = mockk(relaxed = true)
         messageRepository = mockk()
         chatRepository = mockk(relaxed = true)
+        embeddingEngine = mockk()
+        coEvery { embeddingEngine.getEmbedding(any()) } returns embeddingVector
         executor = SearchChatHistoryToolExecutor(
             loggingPort = loggingPort,
             messageRepository = messageRepository,
             chatRepository = chatRepository,
+            embeddingEngine = embeddingEngine,
         )
     }
 
@@ -75,7 +81,7 @@ class SearchChatHistoryToolExecutorTest {
                 createdAt = 1700000001L,
             ),
         )
-        coEvery { messageRepository.searchMessagesAcrossChats(listOf("kotlin coroutines")) } returns messages
+        coEvery { messageRepository.searchMessagesAcrossChats(embeddingVector) } returns messages
         coEvery { messageRepository.getMessagesAround(ChatId("c1"), any(), 2, 2) } returns listOf(
             Message(id = MessageId("m0"), chatId = ChatId("c1"), content = Content(text = "prior msg"), role = Role.USER, createdAt = 1699999999L),
         )
@@ -127,7 +133,7 @@ class SearchChatHistoryToolExecutorTest {
         val messages = listOf(
             Message(id = MessageId("m1"), chatId = ChatId("c1"), content = Content(text = "cow moo"), role = Role.USER, createdAt = 1000L),
         )
-        coEvery { messageRepository.searchMessagesAcrossChats(listOf("cow", "cow photo", "moo")) } returns messages
+        coEvery { messageRepository.searchMessagesAcrossChats(embeddingVector) } returns messages
         coEvery { messageRepository.getMessagesAround(any(), any(), any(), any()) } returns emptyList()
         coEvery { chatRepository.getChatsByIds(any()) } returns mapOf(
             ChatId("c1") to Chat(id = ChatId("c1"), name = "Farm Chat", created = Date(1000L), lastModified = Date(2000L))
@@ -170,7 +176,7 @@ class SearchChatHistoryToolExecutorTest {
         val messages = listOf(
             Message(id = MessageId("m1"), chatId = ChatId("c1"), content = Content(text = "cow moo"), role = Role.USER, createdAt = 1000L),
         )
-        coEvery { messageRepository.searchMessagesAcrossChats(listOf("cow")) } returns messages
+        coEvery { messageRepository.searchMessagesAcrossChats(embeddingVector) } returns messages
         coEvery { messageRepository.getMessagesAround(any(), any(), any(), any()) } returns emptyList()
         coEvery { chatRepository.getChatsByIds(any()) } returns mapOf(
             ChatId("c1") to Chat(id = ChatId("c1"), name = "Farm Chat", created = Date(1000L), lastModified = Date(2000L))
@@ -190,7 +196,7 @@ class SearchChatHistoryToolExecutorTest {
         val messages = listOf(
             Message(id = MessageId("m1"), chatId = ChatId("c1"), content = Content(text = "cow"), role = Role.USER, createdAt = 1000L),
         )
-        coEvery { messageRepository.searchMessagesAcrossChats(listOf("cow", "moo")) } returns messages
+        coEvery { messageRepository.searchMessagesAcrossChats(embeddingVector) } returns messages
         coEvery { messageRepository.getMessagesAround(any(), any(), any(), any()) } returns emptyList()
         coEvery { chatRepository.getChatsByIds(any()) } returns mapOf(
             ChatId("c1") to Chat(id = ChatId("c1"), name = "Chat", created = Date(1000L), lastModified = Date(2000L))

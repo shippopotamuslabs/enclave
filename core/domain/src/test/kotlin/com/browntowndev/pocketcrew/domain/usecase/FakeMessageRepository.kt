@@ -1,4 +1,5 @@
 package com.browntowndev.pocketcrew.domain.usecase
+
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
 import com.browntowndev.pocketcrew.domain.model.chat.Message
@@ -20,6 +21,9 @@ class FakeMessageRepository : MessageRepository {
     private val savedMessages = mutableListOf<Message>()
     private var getMessageByIdResult: Message? = null
     private var getMessagesForChatResult: List<Message> = emptyList()
+    private val messages = mutableMapOf<ChatId, MutableList<Message>>()
+    private val summaries = mutableMapOf<ChatId, ChatSummary>()
+    private val embeddings = mutableMapOf<MessageId, FloatArray>()
     private val visionAnalyses = mutableListOf<MessageVisionAnalysis>()
     private var nextMessageId = 1
 
@@ -33,6 +37,14 @@ class FakeMessageRepository : MessageRepository {
         savedMessages.add(message)
         val id = MessageId((nextMessageId++).toString())
         return id
+    }
+
+    override suspend fun saveEmbedding(messageId: MessageId, embedding: FloatArray) {
+        embeddings[messageId] = embedding
+    }
+
+    override suspend fun searchSimilarMessages(queryVector: FloatArray, limit: Int): List<MessageId> {
+        return emptyList()
     }
 
     override suspend fun getMessageById(id: MessageId): Message? {
@@ -50,16 +62,18 @@ class FakeMessageRepository : MessageRepository {
         analysisText: String,
         modelType: ModelType,
     ) {
-        visionAnalyses.removeAll { it.userMessageId == userMessageId && it.imageUri == imageUri }
-        visionAnalyses += MessageVisionAnalysis(
-            id = "${userMessageId.value}:$imageUri",
-            userMessageId = userMessageId,
-            imageUri = imageUri,
-            promptText = promptText,
-            analysisText = analysisText,
-            modelType = modelType,
-            createdAt = 0L,
-            updatedAt = 0L,
+        visionAnalyses.removeIf { it.userMessageId == userMessageId && it.imageUri == imageUri }
+        visionAnalyses.add(
+            MessageVisionAnalysis(
+                id = "${userMessageId.value}:$imageUri",
+                userMessageId = userMessageId,
+                imageUri = imageUri,
+                promptText = promptText,
+                analysisText = analysisText,
+                modelType = modelType,
+                createdAt = 0L,
+                updatedAt = 0L,
+            )
         )
     }
 
@@ -73,11 +87,11 @@ class FakeMessageRepository : MessageRepository {
         currentUserMessageId: MessageId,
     ): ResolvedImageTarget? = resolvedImageTarget
 
-    override suspend fun searchMessagesInChat(chatId: ChatId, query: String): List<Message> {
+    override suspend fun searchMessagesInChat(chatId: ChatId, queryVector: FloatArray, limit: Int): List<Message> {
         return emptyList()
     }
 
-    override suspend fun searchMessagesAcrossChats(queries: List<String>): List<Message> {
+    override suspend fun searchMessagesAcrossChats(queryVector: FloatArray, limit: Int): List<Message> {
         return emptyList()
     }
 
@@ -85,7 +99,7 @@ class FakeMessageRepository : MessageRepository {
         return emptyList()
     }
 
-    override suspend fun getChatSummary(chatId: ChatId): ChatSummary? = null
+    override suspend fun getChatSummary(chatId: ChatId): ChatSummary? = summaries[chatId]
 
     override suspend fun saveChatSummary(summary: ChatSummary) {
         // no-op for testing

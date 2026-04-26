@@ -11,6 +11,7 @@ import kotlinx.serialization.Serializable
  * An asset can have multiple configurations (tuning presets) that share the same file.
  *
  * @property huggingFaceModelName HuggingFace model repo name (used for HF download URL)
+ * @property huggingFacePath HuggingFace model repo path (used for HF download URL)
  * @property fileName The filename on the remote server
  * @property sha256 SHA256 hash for integrity verification
  * @property sizeInBytes Exact file size in bytes for validation
@@ -26,6 +27,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class RemoteModelAsset(
     val huggingFaceModelName: String = "",
+    val huggingFacePath: String? = null,
     val fileName: String,
     val sha256: String,
     val sizeInBytes: Long = 0L,

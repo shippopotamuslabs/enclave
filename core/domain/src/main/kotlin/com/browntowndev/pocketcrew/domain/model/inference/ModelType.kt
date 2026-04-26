@@ -51,6 +51,12 @@ enum class ModelType(val apiValue: String) {
     FINAL_SYNTHESIS("final_synthesis"),
 
     /**
+     * Text-to-speech model for audio synthesis.
+     */
+    @SerialName("tts")
+    TTS("tts"),
+
+    /**
      * Used for models that are being re-downloaded but are not yet assigned to a role.
      */
     @SerialName("unassigned")
@@ -67,8 +73,25 @@ enum class ModelType(val apiValue: String) {
         FAST -> "Fast"
         THINKING -> "Thinking"
         FINAL_SYNTHESIS -> "Final Review"
+        TTS -> "Text-to-Speech"
         UNASSIGNED -> "Unassigned"
     }
+
+    /**
+     * Returns a human-readable description for this model role.
+     */
+    val description: String
+        get() = when (this) {
+            VISION -> "Understand and analyze images provided in your messages."
+            DRAFT_ONE -> "Quick initial drafting of responses."
+            DRAFT_TWO -> "Refining initial drafts for better quality."
+            MAIN -> "Produces the primary, high-quality chat response."
+            FAST -> "Immediate, non-thinking, responses for simple queries."
+            THINKING -> "Deep reasoning and logic for complex tasks."
+            FINAL_SYNTHESIS -> "Polishing and final synthesis of the response."
+            TTS -> "Synthesize text responses into natural-sounding speech."
+            UNASSIGNED -> "Models not yet assigned to a role."
+        }
 
     companion object {
         /**

@@ -14,6 +14,7 @@ import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiRespon
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
 import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseFunctionToolCall
 import com.openai.models.responses.ResponseInputItem
 
 class XaiInferenceServiceImpl(
@@ -123,7 +124,7 @@ class XaiInferenceServiceImpl(
             }
 
             inputItems += ResponseInputItem.ofFunctionCall(
-                com.openai.models.responses.ResponseFunctionToolCall.builder()
+                ResponseFunctionToolCall.builder()
                     .id(functionItemId)
                     .callId(callId)
                     .name(toolCall.toolName)

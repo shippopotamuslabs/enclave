@@ -13,6 +13,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
+import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
+import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackStatus
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
@@ -80,6 +82,7 @@ class ChatViewModel @Inject constructor(
     private val errorHandler: ViewModelErrorHandler,
     private val loggingPort: LoggingPort,
     private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
+    private val playbackController: TtsPlaybackControllerPort,
 ) : ViewModel() {
 
     companion object {
@@ -130,10 +133,32 @@ class ChatViewModel @Inject constructor(
     }.mapLatest { (settings, selectedMode) ->
         resolvePhotoAttachmentPolicy(settings, selectedMode)
     }
+    private val hasTtsProviderAssignedFlow = settingsUseCases.assignments.getDefaultModels()
+        .map { assignments ->
+            assignments.any { assignment ->
+                assignment.modelType == ModelType.TTS && assignment.ttsProviderId != null
+            }
+        }
+        .distinctUntilChanged()
+    private val chatActionStateFlow = combine(
+        _activeToolCallBanner,
+        hasTtsProviderAssignedFlow,
+    ) { activeToolCallBanner, hasTtsProviderAssigned ->
+        ChatActionState(
+            activeToolCallBanner = activeToolCallBanner,
+            hasTtsProviderAssigned = hasTtsProviderAssigned,
+        )
+    }
 
     // Job for tracking inference flow collection (for cancellation in onCleared)
     private var inferenceJob: Job? = null
     private var speechJob: Job? = null
+
+    // Tracks the current streaming TTS job for cancellation
+    private var streamingTtsJob: Job? = null
+
+    // Mutable state for TTS playback status (Media3-based)
+    private val _isPlayingTts = MutableStateFlow(false)
 
     private val _requestedTurnKey = MutableStateFlow<ActiveChatTurnKey?>(null)
     private val _acknowledgedTurnKeys = MutableStateFlow<Set<ActiveChatTurnKey>>(emptySet())
@@ -348,20 +373,29 @@ class ChatViewModel @Inject constructor(
         UiInputsWithPolicy(inputs, attachmentPolicy)
     }
 
+    private val ttsPlaybackFlow = combine(
+        chatActionStateFlow,
+        _isPlayingTts,
+    ) { chatActionState, isPlayingTts ->
+        chatActionState to isPlayingTts
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<ChatUiState> = combine(
         uiInputsWithPolicyFlow,
         inferenceLockManager.isInferenceBlocked,
         dbMessagesFlow,
         activeTurnSnapshotFlow,
-        _activeToolCallBanner,
+        ttsPlaybackFlow,
     ) {
         inputsWithPolicy: UiInputsWithPolicy,
         isBlocked: Boolean,
         messages: List<Message>,
         activeTurnSnapshotState: ActiveTurnSnapshotState,
-        activeBanner: ToolCallBannerUi? ->
+        ttsPlayback: Pair<ChatActionState, Boolean> ->
 
+        val chatActionState = ttsPlayback.first
+        val isPlayingTts = ttsPlayback.second
         val inputs = inputsWithPolicy.inputs
         val attachmentPolicy = inputsWithPolicy.attachmentPolicy
         val settings: SettingsData = inputs.settings
@@ -381,6 +415,7 @@ class ChatViewModel @Inject constructor(
 
         // Sort chronologically and map domain messages to UI messages
         var isGenerating = false
+        var canStop = true
         var hasActiveIndicator = false
         var activeIndicatorMessageId: MessageId? = null
         val chatMessages: List<ChatMessage> = projectedMessages.messages
@@ -396,6 +431,9 @@ class ChatViewModel @Inject constructor(
                         state is IndicatorState.EngineLoading)
                     ) {
                         isGenerating = true
+                        if (state is IndicatorState.EngineLoading) {
+                            canStop = false
+                        }
                     }
                 }
                 chatMessage
@@ -414,10 +452,13 @@ class ChatViewModel @Inject constructor(
             hapticResponse = settings.hapticResponse,
             chatId = _currentChatId.value ?: initialChatId,
             isGenerating = isGenerating,
+            canStop = canStop,
             hasActiveIndicator = hasActiveIndicator,
             activeIndicatorMessageId = activeIndicatorMessageId,
-            activeToolCallBanner = activeBanner,
+            activeToolCallBanner = chatActionState.activeToolCallBanner,
             backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
+            hasTtsProviderAssigned = chatActionState.hasTtsProviderAssigned,
+            isPlayingTts = isPlayingTts,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -536,6 +577,54 @@ class ChatViewModel @Inject constructor(
         _inputText.value = message
     }
 
+    fun onPlayTts(text: String) {
+        if (!uiState.value.hasTtsProviderAssigned) return
+
+        // Cancel any existing TTS playback
+        streamingTtsJob?.cancel()
+        streamingTtsJob = null
+        playbackController.stop()
+
+        streamingTtsJob = viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(TAG, "Failed to play TTS audio", "Failed to play audio")
+        ) {
+            playbackController.play(text)
+                .collect { status ->
+                    when (status) {
+                        is TtsPlaybackStatus.Initializing -> {
+                            loggingPort.debug(TAG, "TTS initializing")
+                        }
+                        is TtsPlaybackStatus.Playing -> {
+                            _isPlayingTts.value = true
+                            loggingPort.debug(TAG, "TTS playing")
+                        }
+                        is TtsPlaybackStatus.Completed -> {
+                            _isPlayingTts.value = false
+                            streamingTtsJob = null
+                            loggingPort.debug(TAG, "TTS completed")
+                        }
+                        is TtsPlaybackStatus.Error -> {
+                            _isPlayingTts.value = false
+                            streamingTtsJob = null
+                            loggingPort.error(TAG, "TTS failed: ${status.message}", status.cause)
+                        }
+                        is TtsPlaybackStatus.Stopped -> {
+                            _isPlayingTts.value = false
+                            streamingTtsJob = null
+                            loggingPort.debug(TAG, "TTS stopped")
+                        }
+                    }
+                }
+        }
+    }
+
+    fun onStopTts() {
+        streamingTtsJob?.cancel()
+        streamingTtsJob = null
+        playbackController.stop()
+        _isPlayingTts.value = false
+    }
+
     fun onModeChange(mode: ChatModeUi) {
         _selectedMode.value = mode
         viewModelScope.launch(
@@ -580,6 +669,15 @@ class ChatViewModel @Inject constructor(
     }
 
     fun stopGeneration() {
+        val currentUiState = uiState.value
+        if (!currentUiState.isGenerating || !currentUiState.canStop) {
+            loggingPort.debug(
+                TAG,
+                "stopGeneration ignored isGenerating=${currentUiState.isGenerating} canStop=${currentUiState.canStop}",
+            )
+            return
+        }
+
         inferenceJob?.cancel()
         cancelInferenceUseCase()
         activeTurnKeyFlow.value?.let { key ->
@@ -638,6 +736,7 @@ class ChatViewModel @Inject constructor(
 
                 // Update current chat ID to continue this conversation
                 _currentChatId.value = promptResult.chatId
+                savedStateHandle["chatId"] = promptResult.chatId.value
                 val turnKey = ActiveChatTurnKey(
                     chatId = promptResult.chatId,
                     assistantMessageId = promptResult.assistantMessageId,
@@ -749,6 +848,11 @@ class ChatViewModel @Inject constructor(
     private data class UiInputsWithPolicy(
         val inputs: UiInputs,
         val attachmentPolicy: PhotoAttachmentPolicy,
+    )
+
+    private data class ChatActionState(
+        val activeToolCallBanner: ToolCallBannerUi?,
+        val hasTtsProviderAssigned: Boolean,
     )
 
     private data class ActiveTurnCandidate(

@@ -200,6 +200,18 @@ class DownloadViewModel @AssistedInject constructor(
     }
 
     /**
+     * Called when a download check is requested but should wait for the app to be fully foregrounded.
+     */
+    fun schedulePendingDownloadCheck() {
+        Log.d(TAG, "Scheduling pending download check for when app is foregrounded")
+        hasPendingDownloadCheck = true
+        // If already foregrounded, execute immediately
+        if (isInForeground) {
+            onAppForegrounded()
+        }
+    }
+
+    /**
      * Start downloading models.
      * WorkManager handles ForegroundServiceStartNotAllowedException internally
      * by returning Result.retry(), so we no longer gate on foreground state.

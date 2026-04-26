@@ -10,6 +10,8 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUse
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCasesImpl
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsTtsUseCases
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsTtsUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCasesImpl
 import dagger.Binds
@@ -40,6 +42,10 @@ abstract class SettingsUseCasesModule {
     @Binds
     @Singleton
     abstract fun bindSettingsDeletionUseCases(impl: SettingsDeletionUseCasesImpl): SettingsDeletionUseCases
+
+    @Binds
+    @Singleton
+    abstract fun bindSettingsTtsUseCases(impl: SettingsTtsUseCasesImpl): SettingsTtsUseCases
 
     @Binds
     @Singleton

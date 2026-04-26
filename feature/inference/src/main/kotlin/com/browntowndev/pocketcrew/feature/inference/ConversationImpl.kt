@@ -4,8 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationResponse
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
@@ -19,7 +17,7 @@ import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 /**
- * Implementation of [ConversationPort] that wraps LiteRT's [Conversation].
+ * Implementation of [LiteRtConversation] that wraps LiteRT's [Conversation].
  * This adapter handles Message creation and Content parsing, providing a clean
  * domain-focused interface.
  *
@@ -28,7 +26,7 @@ import javax.inject.Inject
 class ConversationImpl @Inject constructor(
     private val context: Context,
     private val conversation: Conversation,
-) : ConversationPort {
+) : LiteRtConversation {
 
     companion object {
         private const val TAG = "ConversationImpl"

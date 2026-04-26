@@ -9,16 +9,21 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.feature.inference.ActiveChatTurnStore
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
@@ -34,8 +39,16 @@ class MessageTimestampVisibilityTest {
 
     @BeforeEach
     fun setup() {
+        val settingsUseCases = mockk<SettingsUseCases>()
+        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
+        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
+        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
+        every { settingsUseCases.assignments } returns assignmentUseCases
+        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
+        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
+
         viewModel = ChatViewModel(
-            settingsUseCases = mockk(relaxed = true),
+            settingsUseCases = settingsUseCases,
             chatUseCases = mockk(relaxed = true),
             stageImageAttachmentUseCase = mockk(relaxed = true),
             savedStateHandle = SavedStateHandle(),
@@ -47,6 +60,8 @@ class MessageTimestampVisibilityTest {
             errorHandler = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
             activeChatTurnSnapshotPort = ActiveChatTurnStore(),
+            
+            playbackController = mockk(relaxed = true),
         )
     }
 

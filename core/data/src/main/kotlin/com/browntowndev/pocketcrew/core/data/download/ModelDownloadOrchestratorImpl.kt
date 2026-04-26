@@ -78,12 +78,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         if (result.modelsToDownload.isEmpty()) {
             stateManager.updateStatus(DownloadStatus.READY)
         } else {
-            val initResult = initializeFileProgress(
-                scanResult = scan,
-                allModels = result.allModels,
-                existingDownloads = _downloadState.value.currentDownloads,
-                utilityAssets = result.utilityAssets,
-            )
+            val initResult = initializeFileProgress(scan, result.allModels, _downloadState.value.currentDownloads, result.utilityAssets)
             stateManager.applyProgressInit(initResult)
             stateManager.updateStatus(DownloadStatus.IDLE)
         }
@@ -120,12 +115,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         if (!deviceEnvironmentRepository.hasRequiredStorage(15L * 1024 * 1024 * 1024)) {
             val errorMsg = "Insufficient storage space. Need at least 15 GB free."
             logger.info(TAG, "Validation failed - $errorMsg")
-            val initResult = initializeFileProgress(
-                scanResult = scan,
-                allModels = modelsResult.allModels,
-                existingDownloads = _downloadState.value.currentDownloads,
-                utilityAssets = modelsResult.utilityAssets,
-            )
+            val initResult = initializeFileProgress(scan, modelsResult.allModels, _downloadState.value.currentDownloads, modelsResult.utilityAssets)
             stateManager.applyProgressInit(initResult)
             stateManager.updateState { copy(status = DownloadStatus.ERROR, errorMessage = errorMsg) }
             return false
@@ -134,12 +124,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         logger.info(TAG, "Starting downloads for ${modelsToDownload.size} models (wifiOnly=$wifiOnly)")
         speedTracker.clearAll()
 
-        val initResult = initializeFileProgress(
-            scanResult = scan,
-            allModels = modelsResult.allModels,
-            existingDownloads = _downloadState.value.currentDownloads,
-            utilityAssets = modelsResult.utilityAssets,
-        )
+        val initResult = initializeFileProgress(scan, modelsResult.allModels, _downloadState.value.currentDownloads, modelsResult.utilityAssets)
         stateManager.applyProgressInit(initResult)
 
         val assetsToEnqueue = (modelsResult.allModels.values + modelsResult.utilityAssets).filter { asset ->
@@ -154,6 +139,7 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
                     sha256 = asset.metadata.sha256,
                     sizeInBytes = asset.metadata.sizeInBytes,
                     huggingFaceModelName = asset.metadata.huggingFaceModelName,
+                    huggingFacePath = asset.metadata.huggingFacePath,
                     source = asset.metadata.source.name,
                     modelFileFormat = asset.metadata.modelFileFormat.name,
                     utilityType = asset.metadata.utilityType?.name,

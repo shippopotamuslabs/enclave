@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.SearchChatParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
@@ -35,6 +36,7 @@ private data class SearchChatResult(
 class SearchChatToolExecutor @Inject constructor(
     private val loggingPort: LoggingPort,
     private val messageRepository: MessageRepository,
+    private val embeddingEngine: EmbeddingEnginePort,
 ) : ToolExecutorPort {
 
     companion object {
@@ -65,7 +67,8 @@ class SearchChatToolExecutor @Inject constructor(
             "Executing search_chat provider=${request.provider} modelType=${request.modelType} chatId=$chatId query=$query"
         )
 
-        val messages = messageRepository.searchMessagesInChat(ChatId(chatId), query)
+        val queryVector = embeddingEngine.getEmbedding(query)
+        val messages = messageRepository.searchMessagesInChat(ChatId(chatId), queryVector)
 
         val resultJson = buildSearchChatResultJson(chatId, query, messages)
 

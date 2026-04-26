@@ -1,7 +1,11 @@
 package com.browntowndev.pocketcrew.core.data.repository
 
+import com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao
+import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryEntity
+import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
+import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisEntity
@@ -9,6 +13,7 @@ import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -17,7 +22,10 @@ import com.browntowndev.pocketcrew.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
+import androidx.sqlite.db.SimpleSQLiteQuery
 import kotlinx.coroutines.flow.first
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,13 +42,17 @@ import javax.inject.Singleton
  */
 @Singleton
 class MessageRepositoryImpl @Inject constructor(
+    private val chatDao: ChatDao,
     private val messageDao: MessageDao,
     private val messageVisionAnalysisDao: MessageVisionAnalysisDao,
     private val chatSummaryDao: ChatSummaryDao,
+    private val defaultModelsDao: DefaultModelsDao,
+    private val apiModelConfigurationsDao: ApiModelConfigurationsDao,
+    private val embeddingDao: EmbeddingDao,
 ) : MessageRepository {
 
     /**
-     * Saves a message to the database, including the FTS search index.
+     * Saves a message to the database.
      * Uses the DAO's transaction-capable method to ensure atomicity of
      * both the message and search index writes.
      *
@@ -53,8 +65,35 @@ class MessageRepositoryImpl @Inject constructor(
      */
     override suspend fun saveMessage(message: Message): MessageId {
         val entity = message.toEntity()
-        messageDao.insertMessageWithSearch(entity)
+        messageDao.insert(entity)
         return entity.id
+    }
+
+    override suspend fun saveEmbedding(messageId: MessageId, embedding: FloatArray) {
+        val vectorBlob = floatArrayToByteArray(embedding)
+        embeddingDao.replaceEmbedding(
+            deleteQuery = SimpleSQLiteQuery(
+                "DELETE FROM document_embeddings WHERE id = ?",
+                arrayOf(messageId.value),
+            ),
+            insertQuery = SimpleSQLiteQuery(
+                "INSERT INTO document_embeddings (id, vector) VALUES (?, ?)",
+                arrayOf(messageId.value, vectorBlob),
+            ),
+        )
+    }
+
+    override suspend fun searchSimilarMessages(queryVector: FloatArray, limit: Int): List<MessageId> {
+        val queryBlob = floatArrayToByteArray(queryVector)
+        val sql = "SELECT id FROM document_embeddings WHERE vector MATCH ? ORDER BY distance LIMIT ?"
+        return embeddingDao.searchSimilarMessages(SimpleSQLiteQuery(sql, arrayOf(queryBlob, limit)))
+            .map { MessageId(it) }
+    }
+
+    private fun floatArrayToByteArray(floatArray: FloatArray): ByteArray {
+        val buffer = ByteBuffer.allocate(floatArray.size * 4).order(ByteOrder.LITTLE_ENDIAN)
+        for (f in floatArray) buffer.putFloat(f)
+        return buffer.array()
     }
 
     /**
@@ -131,16 +170,14 @@ class MessageRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun searchMessagesInChat(chatId: ChatId, query: String): List<Message> {
-        val sanitized = FtsSanitizer.sanitize(query)
-        if (sanitized.isBlank()) return emptyList()
-        return messageDao.searchMessagesByChatId(chatId, sanitized).map { it.toDomain() }
+    override suspend fun searchMessagesInChat(chatId: ChatId, queryVector: FloatArray, limit: Int): List<Message> {
+        val messageIds = searchSimilarMessages(queryVector, 100)
+        return messageDao.getMessagesForChat(chatId, messageIds).map { it.toDomain() }
     }
 
-    override suspend fun searchMessagesAcrossChats(queries: List<String>): List<Message> {
-        val sanitized = FtsSanitizer.sanitizeOrQuery(queries)
-        if (sanitized.isBlank()) return emptyList()
-        return messageDao.searchMessages(sanitized).first().map { it.toDomain() }
+    override suspend fun searchMessagesAcrossChats(queryVector: FloatArray, limit: Int): List<Message> {
+        val messageIds = searchSimilarMessages(queryVector, limit)
+        return messageDao.getMessages(messageIds).first().map { it.toDomain() }
     }
 
     override suspend fun getMessagesAround(chatId: ChatId, timestamp: Long, before: Int, after: Int): List<Message> {
@@ -150,26 +187,30 @@ class MessageRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getChatSummary(chatId: ChatId): ChatSummary? {
-        return chatSummaryDao.getSummaryForChatSync(chatId)?.let { entity ->
-            ChatSummary(
-                chatId = entity.chatId,
-                content = entity.content,
-                lastSummarizedMessageId = entity.lastSummarizedMessageId
-            )
-        }
+        return chatSummaryDao.getSummaryForChatSync(chatId)?.toDomain()
     }
 
     override suspend fun saveChatSummary(summary: ChatSummary) {
-        chatSummaryDao.insertOrUpdateSummary(
-            ChatSummaryEntity(
-                chatId = summary.chatId,
-                content = summary.content,
-                lastSummarizedMessageId = summary.lastSummarizedMessageId
-            )
-        )
+        chatSummaryDao.insertOrUpdateSummary(summary.toEntity())
     }
 
     override suspend fun deleteChatSummary(chatId: ChatId) {
         chatSummaryDao.deleteSummaryForChat(chatId)
     }
+}
+
+private fun ChatSummaryEntity.toDomain(): ChatSummary {
+    return ChatSummary(
+        chatId = this.chatId,
+        content = this.content,
+        lastSummarizedMessageId = this.lastSummarizedMessageId
+    )
+}
+
+private fun ChatSummary.toEntity(): ChatSummaryEntity {
+    return ChatSummaryEntity(
+        chatId = this.chatId,
+        content = this.content,
+        lastSummarizedMessageId = this.lastSummarizedMessageId
+    )
 }

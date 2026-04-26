@@ -60,6 +60,7 @@ private object LocalModelAssetConstants {
     val dotLitertlmRegex = Regex("\\.litertlm$", RegexOption.IGNORE_CASE)
     val dotBinRegex = Regex("\\.bin$", RegexOption.IGNORE_CASE)
     val dotOnnxRegex = Regex("\\.onnx$", RegexOption.IGNORE_CASE)
+    val dotTxtRegex = Regex("\\.txt$", RegexOption.IGNORE_CASE)
 }
 
 class LocalModelAssetUiMapper @Inject constructor() {
@@ -71,9 +72,10 @@ class LocalModelAssetUiMapper @Inject constructor() {
 
         val format = when (asset.metadata.modelFileFormat) {
             ModelFileFormat.GGUF -> "GGUF"
-            ModelFileFormat.LITERTLM -> "LiteRT"
+            ModelFileFormat.LITERTLM, ModelFileFormat.LITERT_ALIAS -> "LiteRT"
             ModelFileFormat.BIN -> "BIN"
             ModelFileFormat.ONNX -> "ONNX"
+            ModelFileFormat.TXT -> "TXT"
         }
 
         val cleanName = modelNamePart
@@ -82,6 +84,7 @@ class LocalModelAssetUiMapper @Inject constructor() {
             .replace(LocalModelAssetConstants.dotLitertlmRegex, "")
             .replace(LocalModelAssetConstants.dotBinRegex, "")
             .replace(LocalModelAssetConstants.dotOnnxRegex, "")
+            .replace(LocalModelAssetConstants.dotTxtRegex, "")
             .replace("-", " ")
 
         return LocalModelAssetUi(
@@ -197,8 +200,13 @@ class ReassignmentOptionUiMapper @Inject constructor() {
 
 internal fun DefaultModelAssignment.toUi(isMultimodal: Boolean = false): DefaultModelAssignmentUi = DefaultModelAssignmentUi(
     modelType = modelType,
-    source = if (apiConfigId != null) ModelSource.API else ModelSource.ON_DEVICE,
-    currentModelName = displayName ?: "Unknown",
+    source = when {
+        apiConfigId != null -> ModelSource.API
+        localConfigId != null -> ModelSource.ON_DEVICE
+        ttsProviderId != null -> ModelSource.API // TTS is also API-based for now
+        else -> ModelSource.API
+    },
+    currentModelName = displayName ?: "None Assigned",
     displayLabel = modelType.displayLabel,
     providerName = providerName,
     presetName = presetName,

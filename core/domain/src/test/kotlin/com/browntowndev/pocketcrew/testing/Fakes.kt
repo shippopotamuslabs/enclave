@@ -373,8 +373,13 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
 
     override fun observeDefaults(): Flow<List<DefaultModelAssignment>> = _defaults
 
-    override suspend fun setDefault(modelType: ModelType, localConfigId: LocalModelConfigurationId?, apiConfigId: ApiModelConfigurationId?) {
-        val assignment = DefaultModelAssignment(modelType, localConfigId, apiConfigId)
+    override suspend fun setDefault(
+        modelType: ModelType,
+        localConfigId: LocalModelConfigurationId?,
+        apiConfigId: ApiModelConfigurationId?,
+        ttsProviderId: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId?
+    ) {
+        val assignment = DefaultModelAssignment(modelType, localConfigId, apiConfigId, ttsProviderId)
         _defaults.value = _defaults.value.filter { it.modelType != modelType } + assignment
     }
 

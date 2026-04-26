@@ -1,10 +1,7 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import android.content.Context
-import com.browntowndev.pocketcrew.core.data.anthropic.AnthropicClientProvider
-import com.browntowndev.pocketcrew.core.data.google.GoogleGenAiClientProvider
-import com.browntowndev.pocketcrew.core.data.openai.OpenAiClientProvider
-import com.browntowndev.pocketcrew.core.data.repository.TavilySearchRepository
+import android.content.pm.ApplicationInfo
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
@@ -15,14 +12,14 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
+import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
-import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
@@ -31,7 +28,6 @@ import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManag
 import com.anthropic.client.AnthropicClient
 import com.google.genai.Client
 import com.openai.client.OpenAIClient
-import android.content.pm.ApplicationInfo
 import java.io.File
 import io.mockk.coEvery
 import io.mockk.every
@@ -55,11 +51,11 @@ class InferenceFactoryImplTest {
     private val apiModelRepository = mockk<ApiModelRepositoryPort>()
     private val apiKeyProvider = mockk<ApiKeyProviderPort>()
     private val processThinkingTokens = mockk<ProcessThinkingTokensUseCase>(relaxed = true)
-    private val llamaProvider = providerOf(mockk<LlamaChatSessionManager>(relaxed = true))
-    private val conversationProvider = providerOf(mockk<ConversationManagerPort>(relaxed = true))
-    private val openAiClientProvider = mockk<OpenAiClientProvider>()
-    private val anthropicClientProvider = mockk<AnthropicClientProvider>()
-    private val googleGenAiClientProvider = mockk<GoogleGenAiClientProvider>()
+    private val llamaSessionManager = mockk<LlamaChatSessionManager>(relaxed = true)
+    private val conversationProvider = providerOf(mockk<ConversationManager>(relaxed = true))
+    private val openAiClientProvider = mockk<OpenAiClientProviderPort>(relaxed = true)
+    private val anthropicClientProvider = mockk<AnthropicClientProviderPort>(relaxed = true)
+    private val googleGenAiClientProvider = mockk<GoogleGenAiClientProviderPort>()
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val inferenceLockManager = mockk<InferenceLockManager>()
     private val toolExecutor = mockk<ToolExecutorPort>()
@@ -93,7 +89,7 @@ class InferenceFactoryImplTest {
             apiModelRepository = apiModelRepository,
             apiKeyProvider = apiKeyProvider,
             processThinkingTokens = processThinkingTokens,
-            llamaChatSessionManagerProvider = llamaProvider,
+            llamaChatSessionManagerProvider = providerOf(llamaSessionManager),
             conversationManagerProvider = conversationProvider,
             openAiClientProvider = openAiClientProvider,
             anthropicClientProvider = anthropicClientProvider,

@@ -13,6 +13,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.inference.ChatInferenceExecutorPort
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.PipelineExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
@@ -214,6 +215,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
             activeModelProvider = mockk<ActiveModelProviderPort>(),
             extractedUrlTracker = noOpExtractedUrlTracker(),
             chatInferenceExecutor = chatInferenceExecutor,
+            embeddingEngine = mockk(relaxed = true),
         )
 
         useCase(
@@ -264,6 +266,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
             activeModelProvider = mockk<ActiveModelProviderPort>(),
             extractedUrlTracker = noOpExtractedUrlTracker(),
             chatInferenceExecutor = chatInferenceExecutor,
+            embeddingEngine = mockk(relaxed = true),
             activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
         )
     }

@@ -16,7 +16,9 @@ import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
 import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
+import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
 import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiResponseStreamHandler
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamState
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
@@ -77,6 +79,7 @@ abstract class BaseOpenAiSdkInferenceService(
             }
         } catch (e: CancellationException) {
             loggingPort.debug(tag, "sendPrompt cancelled provider=$provider model=$modelId")
+            emit(InferenceEvent.Finished(modelType))
             throw e
         } catch (e: Exception) {
             if (e is IllegalArgumentException || e is IllegalStateException) {
@@ -271,10 +274,10 @@ abstract class BaseOpenAiSdkInferenceService(
                 )
             },
             onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
                     val assistantMessageId = options.assistantMessageId
                     if (assistantMessageId != null) {
-                        val sources = com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(assistantMessageId, resultJson)
+                        val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
                         if (sources.isNotEmpty()) {
                             emitEvent(InferenceEvent.TavilyResults(sources, modelType))
                         }

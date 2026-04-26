@@ -208,9 +208,8 @@ class ChatRepositoryImpl @Inject constructor(
         }
     }
 
-    override fun searchChats(query: String, ftsQuery: String): Flow<List<Chat>> {
-        val sanitizedFts = FtsSanitizer.sanitize(ftsQuery)
-        return chatDao.searchChats(query, sanitizedFts).map { entities ->
+    override fun searchChats(query: String, messageIds: List<MessageId>): Flow<List<Chat>> {
+        return chatDao.searchChats(query, messageIds).map { entities ->
             entities.map { it.toDomain() }
         }
     }

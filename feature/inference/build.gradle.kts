@@ -29,7 +29,6 @@ tasks.withType<Test>().configureEach {
 
 dependencies {
     implementation(project(":core:domain"))
-    implementation(project(":core:data"))
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
@@ -41,12 +40,14 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
+
     // Inference native bindings
     implementation(project(":llama-android"))
 
     // LiteRT
     implementation(libs.litertlm.android)
-    implementation(libs.tflite.gpu)
     implementation(libs.firebase.crashlytics)
 
     // OpenAI
@@ -61,6 +62,7 @@ dependencies {
     testImplementation(libs.kotlin.test.junit5)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
     testImplementation(libs.robolectric)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
