@@ -488,7 +488,15 @@ fun InputBar(
                                         onStopGenerating()
                                     }
                                 } else {
-                                    onMicClick()
+                                    if (isRecordingPhase) {
+                                        onMicClick()
+                                    } else {
+                                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                                            onMicClick()
+                                        } else {
+                                            permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                        }
+                                    }
                                 }
                             },
                             enabled = stopEnabled || micEnabled,
