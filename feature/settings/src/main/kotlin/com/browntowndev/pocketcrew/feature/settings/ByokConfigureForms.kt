@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Refresh
@@ -318,13 +319,13 @@ fun ModelSelectionField(
                     Text("Loading models\u2026")
                 } else {
                     Icon(
-                        imageVector = Icons.Default.Refresh,
+                        imageVector = if (hasModels) Icons.Default.Refresh else Icons.Default.AutoAwesome,
                         contentDescription = null,
                         modifier = Modifier
                             .padding(end = 4.dp)
                             .size(16.dp)
                     )
-                    Text(if (!hasModels) "Load Models" else "Refresh Models")
+                    Text(if (!hasModels) "Discover Models" else "Refresh Models")
                 }
             }
         }
@@ -573,7 +574,6 @@ fun CredentialsConfigurationForm(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-
 @Composable
 fun SystemPromptConfiguration(
     config: ApiModelConfigUi,
