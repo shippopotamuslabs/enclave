@@ -39,19 +39,33 @@ class AndroidAudioPlayer @Inject constructor(
                 FileOutputStream(file).use { it.write(audioBytes) }
                 tempFile = file
 
-                mediaPlayer = MediaPlayer().apply {
+                val player = MediaPlayer()
+                mediaPlayer = player
+
+                player.apply {
                     setDataSource(context, Uri.fromFile(file))
                     prepareAsync()
                     setOnPreparedListener {
-                        start()
+                        it.start()
                     }
                     setOnCompletionListener {
                         continuation.resume(Unit)
-                        stop()
+                        // Release on completion to free resources immediately.
+                        // Use runCatching since MediaPlayer state transitions may throw.
+                        runCatching { it.stop() }
+                        runCatching { it.release() }
+                        // Null out the reference to prevent double-release
+                        synchronized(this@AndroidAudioPlayer) { mediaPlayer = null }
+                        tempFile?.delete()
+                        tempFile = null
                     }
-                    setOnErrorListener { _, what, extra ->
+                    setOnErrorListener { mp, _, _ ->
                         continuation.resume(Unit)
-                        stop()
+                        runCatching { mp.stop() }
+                        runCatching { mp.release() }
+                        synchronized(this@AndroidAudioPlayer) { mediaPlayer = null }
+                        tempFile?.delete()
+                        tempFile = null
                         true
                     }
                 }
@@ -68,11 +82,9 @@ class AndroidAudioPlayer @Inject constructor(
 
     override fun stop() {
         try {
-            mediaPlayer?.let {
-                if (it.isPlaying) {
-                    it.stop()
-                }
-                it.release()
+            mediaPlayer?.let { mp ->
+                runCatching { if (mp.isPlaying) mp.stop() }
+                runCatching { mp.release() }
             }
             mediaPlayer = null
             tempFile?.delete()

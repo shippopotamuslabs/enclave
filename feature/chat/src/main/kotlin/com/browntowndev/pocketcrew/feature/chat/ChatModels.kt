@@ -72,6 +72,7 @@ data class ChatUiState(
     val activeIndicatorMessageId: MessageId? = null,
     val backgroundInferenceEnabled: Boolean = true,
     val hasTtsProviderAssigned: Boolean = false,
+    val isPlayingTts: Boolean = false,
 )
 
 /**

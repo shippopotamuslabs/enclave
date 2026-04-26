@@ -34,7 +34,8 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ListenToSpeechUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.MergeMessagesUseCase
-import com.browntowndev.pocketcrew.domain.usecase.chat.PlayTtsAudioUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.PlayStreamingTtsAudioUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.StreamingPlaybackStatus
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
@@ -44,9 +45,11 @@ import java.io.IOException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
@@ -73,7 +76,7 @@ class ChatViewModelTest {
     private val errorHandler: ViewModelErrorHandler = mockk()
     private val loggingPort: LoggingPort = mockk(relaxed = true)
     private val activeChatTurnStore: ActiveChatTurnSnapshotPort = mockk(relaxed = true)
-    private val playTtsAudioUseCase: PlayTtsAudioUseCase = mockk(relaxed = true)
+    private val playStreamingTtsAudioUseCase: PlayStreamingTtsAudioUseCase = mockk(relaxed = true)
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var defaultModelsFlow: MutableStateFlow<List<DefaultModelAssignment>>
 
@@ -139,7 +142,7 @@ class ChatViewModelTest {
             errorHandler = errorHandler,
             loggingPort = loggingPort,
             activeChatTurnSnapshotPort = activeChatTurnStore,
-            playTtsAudioUseCase = playTtsAudioUseCase,
+            playStreamingTtsAudioUseCase = playStreamingTtsAudioUseCase,
         )
     }
 
@@ -194,7 +197,7 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun `onPlayTts launches use case`() = runTest {
+    fun `onPlayTts launches streaming use case`() = runTest {
         val text = "Hello"
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
         defaultModelsFlow.value = listOf(
@@ -204,12 +207,15 @@ class ChatViewModelTest {
             ),
         )
         runCurrent()
-        coEvery { playTtsAudioUseCase(text) } returns Result.success(Unit)
+        every { playStreamingTtsAudioUseCase(text) } returns flowOf(
+            StreamingPlaybackStatus.Playing,
+            StreamingPlaybackStatus.Completed
+        )
 
         chatViewModel.onPlayTts(text)
         runCurrent()
 
-        coVerify { playTtsAudioUseCase(text) }
+        verify { playStreamingTtsAudioUseCase(text) }
         collectJob.cancel()
     }
 
@@ -220,7 +226,220 @@ class ChatViewModelTest {
 
         chatViewModel.onPlayTts("Hello")
 
-        coVerify(exactly = 0) { playTtsAudioUseCase(any()) }
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `onPlayTts sets isPlayingTts to true when Playing status received`() = runTest {
+        val text = "Hello"
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        defaultModelsFlow.value = listOf(
+            DefaultModelAssignment(
+                modelType = ModelType.TTS,
+                ttsProviderId = TtsProviderId("tts-provider"),
+            ),
+        )
+        runCurrent()
+        every { playStreamingTtsAudioUseCase(text) } returns flow {
+            emit(StreamingPlaybackStatus.Playing)
+            delay(10_000) // Keep flow alive so isPlayingTts stays true
+        }
+
+        chatViewModel.onPlayTts(text)
+        runCurrent()
+
+        assertTrue(chatViewModel.uiState.value.isPlayingTts)
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `onPlayTts sets isPlayingTts to false when Completed status received`() = runTest {
+        val text = "Hello"
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        defaultModelsFlow.value = listOf(
+            DefaultModelAssignment(
+                modelType = ModelType.TTS,
+                ttsProviderId = TtsProviderId("tts-provider"),
+            ),
+        )
+        runCurrent()
+        every { playStreamingTtsAudioUseCase(text) } returns flowOf(
+            StreamingPlaybackStatus.Playing,
+            StreamingPlaybackStatus.Completed
+        )
+
+        chatViewModel.onPlayTts(text)
+        runCurrent()
+
+        // After Completed, isPlayingTts should be false
+        assertFalse(chatViewModel.uiState.value.isPlayingTts)
+        // And stop should be called to release resources
+        verify { playStreamingTtsAudioUseCase.stop() }
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `onPlayTts sets isPlayingTts to false when Error status received`() = runTest {
+        val text = "Hello"
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        defaultModelsFlow.value = listOf(
+            DefaultModelAssignment(
+                modelType = ModelType.TTS,
+                ttsProviderId = TtsProviderId("tts-provider"),
+            ),
+        )
+        runCurrent()
+        every { playStreamingTtsAudioUseCase(text) } returns flowOf(
+            StreamingPlaybackStatus.Playing,
+            StreamingPlaybackStatus.Error("Connection failed")
+        )
+
+        chatViewModel.onPlayTts(text)
+        runCurrent()
+
+        // After Error, isPlayingTts should be false
+        assertFalse(chatViewModel.uiState.value.isPlayingTts)
+        // And stop should be called to release resources
+        verify { playStreamingTtsAudioUseCase.stop() }
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `onStopTts cancels streaming job and stops use case`() = runTest {
+        val text = "Hello"
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        defaultModelsFlow.value = listOf(
+            DefaultModelAssignment(
+                modelType = ModelType.TTS,
+                ttsProviderId = TtsProviderId("tts-provider"),
+            ),
+        )
+        runCurrent()
+
+        chatViewModel.onStopTts()
+
+        verify { playStreamingTtsAudioUseCase.stop() }
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `onPlayTts cancels previous streaming job before starting new one`() = runTest {
+        val text1 = "Hello"
+        val text2 = "Goodbye"
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        defaultModelsFlow.value = listOf(
+            DefaultModelAssignment(
+                modelType = ModelType.TTS,
+                ttsProviderId = TtsProviderId("tts-provider"),
+            ),
+        )
+        runCurrent()
+        every { playStreamingTtsAudioUseCase(text1) } returns flowOf(
+            StreamingPlaybackStatus.Playing,
+            StreamingPlaybackStatus.Completed
+        )
+        every { playStreamingTtsAudioUseCase(text2) } returns flowOf(
+            StreamingPlaybackStatus.Playing,
+            StreamingPlaybackStatus.Completed
+        )
+
+        chatViewModel.onPlayTts(text1)
+        runCurrent()
+        chatViewModel.onPlayTts(text2)
+        runCurrent()
+
+        // stop() should be called at least once (from the cancel-before-start or from Completed)
+        verify(atLeast = 1) { playStreamingTtsAudioUseCase.stop() }
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `onPlayTts does not call batch use case - streaming only`() = runTest {
+        val text = "Hello"
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        defaultModelsFlow.value = listOf(
+            DefaultModelAssignment(
+                modelType = ModelType.TTS,
+                ttsProviderId = TtsProviderId("tts-provider"),
+            ),
+        )
+        runCurrent()
+        every { playStreamingTtsAudioUseCase(text) } returns flowOf(
+            StreamingPlaybackStatus.Playing,
+            StreamingPlaybackStatus.Completed
+        )
+
+        chatViewModel.onPlayTts(text)
+        runCurrent()
+
+        // Verify only the streaming use case was called (no batch fallback)
+        verify { playStreamingTtsAudioUseCase(text) }
+        verify { playStreamingTtsAudioUseCase.stop() }
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `onStopTts stops streaming and cancels job`() = runTest {
+        val text = "Hello"
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        defaultModelsFlow.value = listOf(
+            DefaultModelAssignment(
+                modelType = ModelType.TTS,
+                ttsProviderId = TtsProviderId("tts-provider"),
+            ),
+        )
+        runCurrent()
+        every { playStreamingTtsAudioUseCase(text) } returns flow {
+            emit(StreamingPlaybackStatus.Playing)
+            delay(10_000) // Keep alive
+        }
+
+        chatViewModel.onPlayTts(text)
+        runCurrent()
+        assertTrue(chatViewModel.uiState.value.isPlayingTts)
+
+        chatViewModel.onStopTts()
+        runCurrent()
+
+        verify { playStreamingTtsAudioUseCase.stop() }
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `onPlayTts when no TTS provider assigned does nothing`() = runTest {
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        // No TTS provider assigned - defaultModelsFlow is empty
+        runCurrent()
+
+        chatViewModel.onPlayTts("Hello")
+        runCurrent()
+
+        // playStreamingTtsAudioUseCase should NOT be called
+        verify(exactly = 0) { playStreamingTtsAudioUseCase(any()) }
+        assertFalse(chatViewModel.uiState.value.isPlayingTts)
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `onPlayTts with Initializing status does not set isPlayingTts`() = runTest {
+        val text = "Hello"
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        defaultModelsFlow.value = listOf(
+            DefaultModelAssignment(
+                modelType = ModelType.TTS,
+                ttsProviderId = TtsProviderId("tts-provider"),
+            ),
+        )
+        runCurrent()
+        every { playStreamingTtsAudioUseCase(text) } returns flowOf(
+            StreamingPlaybackStatus.Initializing
+        )
+
+        chatViewModel.onPlayTts(text)
+        runCurrent()
+
+        // Initializing should NOT set isPlayingTts to true
+        assertFalse(chatViewModel.uiState.value.isPlayingTts)
         collectJob.cancel()
     }
 }
