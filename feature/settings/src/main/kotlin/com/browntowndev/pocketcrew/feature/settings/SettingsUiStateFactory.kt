@@ -114,7 +114,10 @@ class SettingsUiStateFactory @Inject constructor(
             }
         }
 
-        val ttsModels = ttsAssets.map(ttsProviderAssetUiMapper::map)
+        val defaultTtsProviderId = defaultModels.find { it.modelType == ModelType.TTS }?.ttsProviderId
+        val ttsModels = ttsAssets.map { asset ->
+            ttsProviderAssetUiMapper.map(asset, isDefault = asset.id == defaultTtsProviderId)
+        }
         val refreshedSelectedTtsAsset = ttsState.selectedAsset?.let { selected ->
             if (selected.id.value.isEmpty()) {
                 selected

@@ -11,6 +11,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.usecase.byok.ClearDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
@@ -60,6 +61,7 @@ class SettingsViewModelTest {
     private val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
     private val setDefaultModelUseCase = mockk<SetDefaultModelUseCase>(relaxed = true)
     private val resolveAssignedModelSelectionUseCase = mockk<ResolveAssignedModelSelectionUseCase>(relaxed = true)
+    private val clearDefaultModelUseCase = mockk<ClearDefaultModelUseCase>(relaxed = true)
     private val prepareModelDeletionUseCase = mockk<PrepareModelDeletionUseCase>(relaxed = true)
     private val executeModelDeletionWithReassignmentUseCase = mockk<ExecuteModelDeletionWithReassignmentUseCase>(relaxed = true)
 
@@ -116,6 +118,7 @@ class SettingsViewModelTest {
             assignments = SettingsAssignmentUseCasesImpl(
                 getDefaultModels = getDefaultModelsUseCase,
                 setDefaultModel = setDefaultModelUseCase,
+                clearDefaultModel = clearDefaultModelUseCase,
                 resolveAssignedModelSelection = resolveAssignedModelSelectionUseCase,
             ),
             deletion = SettingsDeletionUseCasesImpl(
@@ -204,5 +207,77 @@ class SettingsViewModelTest {
             listOf("gemini-2.5-flash-preview-tts"),
             viewModel.uiState.value.apiProviderEditor.discovery.models.map { it.modelId },
         )
+    }
+
+    @Test
+    fun `onSaveTtsProvider sets default model when useAsDefault is true`() = runTest {
+        val ttsId = com.browntowndev.pocketcrew.domain.model.config.TtsProviderId("new-tts-id")
+        coEvery { saveTtsProviderUseCase(any()) } returns Result.success(ttsId)
+
+        viewModel.onStartCreateTtsProviderAsset()
+        viewModel.onTtsAssetFieldChange(
+            TtsProviderAssetUi(
+                displayName = "Google TTS",
+                provider = ApiProvider.GOOGLE,
+                voiceName = "Puck",
+                useAsDefault = true
+            )
+        )
+
+        viewModel.onSaveTtsProvider(onSuccess = {})
+        advanceUntilIdle()
+
+        coVerify {
+            saveTtsProviderUseCase(match { it.displayName == "Google TTS" })
+            setDefaultModelUseCase(
+                modelType = ModelType.TTS,
+                localConfigId = null,
+                apiConfigId = null,
+                ttsProviderId = ttsId
+            )
+        }
+    }
+
+    @Test
+    fun `onTtsAssetFieldChange sets default immediately for existing provider`() = runTest {
+        val ttsId = com.browntowndev.pocketcrew.domain.model.config.TtsProviderId("existing-tts-id")
+        val existingAsset = TtsProviderAssetUi(
+            id = ttsId,
+            displayName = "Existing TTS",
+            useAsDefault = false
+        )
+
+        viewModel.onSelectTtsProviderAsset(existingAsset)
+        
+        viewModel.onTtsAssetFieldChange(existingAsset.copy(useAsDefault = true))
+        advanceUntilIdle()
+
+        coVerify {
+            setDefaultModelUseCase(
+                modelType = ModelType.TTS,
+                localConfigId = null,
+                apiConfigId = null,
+                ttsProviderId = ttsId
+            )
+        }
+    }
+
+    @Test
+    fun `onTtsAssetFieldChange clears default immediately for existing provider`() = runTest {
+        val ttsId = com.browntowndev.pocketcrew.domain.model.config.TtsProviderId("existing-tts-id")
+        val existingAsset = TtsProviderAssetUi(
+            id = ttsId,
+            displayName = "Existing TTS",
+            useAsDefault = true
+        )
+
+        viewModel.onSelectTtsProviderAsset(existingAsset)
+        
+        viewModel.onTtsAssetFieldChange(existingAsset.copy(useAsDefault = false))
+        advanceUntilIdle()
+
+        coVerify {
+            clearDefaultModelUseCase(ModelType.TTS)
+        }
     }
 }

@@ -342,7 +342,7 @@ class SettingsViewModel @Inject constructor(
             selection.ttsAsset?.let {
                 _ttsState.update { state ->
                     state.copy(
-                        selectedAsset = ttsProviderAssetUiMapper.map(it),
+                        selectedAsset = ttsProviderAssetUiMapper.map(it, isDefault = true),
                         isSheetOpen = true
                     )
                 }
@@ -521,6 +521,22 @@ class SettingsViewModel @Inject constructor(
         if (discoveryScopeChanged) {
             resetModelDiscovery()
         }
+
+        if (asset.id.value.isNotEmpty() && asset.useAsDefault != existingDraft?.useAsDefault) {
+            viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update default model", "Failed to update default model")) {
+                if (asset.useAsDefault) {
+                    assignmentUseCases.setDefaultModel(
+                        modelType = ModelType.TTS,
+                        localConfigId = null,
+                        apiConfigId = null,
+                        ttsProviderId = asset.id
+                    )
+                } else {
+                    assignmentUseCases.clearDefaultModel(ModelType.TTS)
+                }
+            }
+        }
+
         _ttsState.update { state ->
             state.copy(
                 assetDraft = asset,
@@ -565,7 +581,7 @@ class SettingsViewModel @Inject constructor(
         val apiKey = _currentApiKey.value.ifBlank { "" }
 
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save TTS provider", "Failed to save provider")) {
-            ttsUseCases.saveTtsProvider(
+            val ttsId = ttsUseCases.saveTtsProvider(
                 com.browntowndev.pocketcrew.domain.usecase.settings.TtsProviderDraft(
                     id = draft.id,
                     displayName = draft.displayName,
@@ -579,6 +595,16 @@ class SettingsViewModel @Inject constructor(
                     apiKey = apiKey,
                 )
             ).getOrThrow()
+
+            if (draft.useAsDefault) {
+                assignmentUseCases.setDefaultModel(
+                    modelType = ModelType.TTS,
+                    localConfigId = null,
+                    apiConfigId = null,
+                    ttsProviderId = ttsId
+                )
+            }
+
             onSuccess()
         }
     }
