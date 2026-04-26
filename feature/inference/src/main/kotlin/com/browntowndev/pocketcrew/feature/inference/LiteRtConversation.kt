@@ -1,15 +1,15 @@
-package com.browntowndev.pocketcrew.domain.port.inference
+package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Domain abstraction for conversation-based LLM inference.
- * This port defines the interface for sending messages and receiving streaming responses.
+ * Internal abstraction for conversation-based LLM inference within the inference module.
+ * This interface defines the contract for sending messages and receiving streaming responses.
  *
- * Implementations (in the inference layer) will wrap LiteRT-LM or other inference runtimes.
+ * Implementations wrap LiteRT-LM or other inference runtimes.
  */
-interface ConversationPort {
+interface LiteRtConversation {
     /**
      * Sends a message to the LLM and returns a flow of response segments.
      * @param message The message to send to the LLM.

@@ -9,7 +9,13 @@ enum class UtilityType(val apiValue: String) {
     WHISPER("whisper"),
 
     @SerialName("onnx")
-    ONNX("onnx");
+    ONNX("onnx"),
+
+    @SerialName("onnx_model")
+    ONNX_MODEL("onnx_model"),
+
+    @SerialName("onnx_vocab")
+    ONNX_VOCAB("onnx_vocab");
 
     companion object {
         fun fromApiValue(value: String?): UtilityType? {

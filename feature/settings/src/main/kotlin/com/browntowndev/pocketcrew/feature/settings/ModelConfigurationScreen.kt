@@ -62,6 +62,7 @@ import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSh
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 @Composable
@@ -85,7 +86,7 @@ fun ModelConfigurationRoute(
 fun ModelConfigurationScreen(
     uiState: SettingsUiState,
     onNavigateBack: () -> Unit,
-    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
+    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?) -> Unit,
     onShowAssignmentDialog: (Boolean, ModelType?) -> Unit
 ) {
     Scaffold(
@@ -109,6 +110,7 @@ fun ModelConfigurationScreen(
         ) {
             val generalChatTypes = listOf(ModelType.FAST, ModelType.THINKING)
             val crewModeTypes = listOf(ModelType.DRAFT_ONE, ModelType.DRAFT_TWO, ModelType.MAIN, ModelType.FINAL_SYNTHESIS)
+            val audioTypes = listOf(ModelType.TTS)
 
             item {
                 DefaultAssignmentsCard(
@@ -124,6 +126,13 @@ fun ModelConfigurationScreen(
                     onEditAssignment = { onShowAssignmentDialog(true, it) }
                 )
             }
+            item {
+                DefaultAssignmentsCard(
+                    title = "Voice & Audio",
+                    assignments = uiState.assignments.assignments.filter { it.modelType in audioTypes },
+                    onEditAssignment = { onShowAssignmentDialog(true, it) }
+                )
+            }
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }
 
@@ -134,20 +143,23 @@ fun ModelConfigurationScreen(
                 ?.displayLabel ?: assignmentSlot.name
             
             val isVisionSlot = assignmentSlot == ModelType.VISION
-            val localAssets = if (isVisionSlot) emptyList() else uiState.localModelsSheet.models
-            val apiAssets = if (isVisionSlot) {
-                uiState.apiProvidersSheet.assets.filter { it.isMultimodal }
-            } else {
-                uiState.apiProvidersSheet.assets
+            val isTtsSlot = assignmentSlot == ModelType.TTS
+            val localAssets = if (isVisionSlot || isTtsSlot) emptyList() else uiState.localModelsSheet.models
+            val apiAssets = when {
+                isVisionSlot -> uiState.apiProvidersSheet.assets.filter { it.isMultimodal }
+                isTtsSlot -> emptyList()
+                else -> uiState.apiProvidersSheet.assets
             }
+            val ttsAssets = if (isTtsSlot) uiState.ttsProvidersSheet.assets else emptyList()
 
             AssignmentSelectionBottomSheet(
                 slotLabel = slotLabel,
                 localAssets = localAssets,
                 apiAssets = apiAssets,
+                ttsAssets = ttsAssets,
                 onDismiss = { onShowAssignmentDialog(false, null) },
-                onSelect = { localId, apiId -> 
-                    onSetDefaultModel(assignmentSlot, localId, apiId)
+                onSelect = { localId, apiId, ttsId ->
+                    onSetDefaultModel(assignmentSlot, localId, apiId, ttsId)
                 }
             )
         }
@@ -247,8 +259,9 @@ fun AssignmentSelectionBottomSheet(
     slotLabel: String,
     localAssets: List<LocalModelAssetUi>,
     apiAssets: List<ApiModelAssetUi>,
+    ttsAssets: List<TtsProviderAssetUi>,
     onDismiss: () -> Unit,
-    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?) -> Unit
+    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?, ttsId: TtsProviderId?) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -263,6 +276,7 @@ fun AssignmentSelectionBottomSheet(
             slotLabel = slotLabel,
             localAssets = localAssets,
             apiAssets = apiAssets,
+            ttsAssets = ttsAssets,
             onDismiss = onDismiss,
             onSelect = onSelect
         )
@@ -282,18 +296,22 @@ fun AssignmentSelectionContent(
     slotLabel: String,
     localAssets: List<LocalModelAssetUi>,
     apiAssets: List<ApiModelAssetUi>,
+    ttsAssets: List<TtsProviderAssetUi>,
     onDismiss: () -> Unit,
     onBack: (() -> Unit)? = null,
-    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?) -> Unit
+    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?, ttsId: TtsProviderId?) -> Unit
 ) {
     var selectedLocalId by remember { mutableStateOf<LocalModelConfigurationId?>(null) }
     var selectedApiId by remember { mutableStateOf<ApiModelConfigurationId?>(null) }
+    var selectedTtsId by remember { mutableStateOf<TtsProviderId?>(null) }
     val hasLocalTab = localAssets.isNotEmpty()
     val hasApiTab = apiAssets.isNotEmpty()
-    var selectedTabIndex by remember(hasLocalTab, hasApiTab) { mutableIntStateOf(0) }
+    val hasTtsTab = ttsAssets.isNotEmpty()
+    var selectedTabIndex by remember(hasLocalTab, hasApiTab, hasTtsTab) { mutableIntStateOf(0) }
     val tabs = buildList {
         if (hasLocalTab) add("Local Models")
         if (hasApiTab) add("API Models")
+        if (hasTtsTab) add("TTS Providers")
     }
     var viewState by remember { mutableStateOf<AssignmentSelectionView>(AssignmentSelectionView.AssetList) }
 
@@ -435,13 +453,15 @@ fun AssignmentSelectionContent(
 
                         AnimatedContent(
                             targetState = when {
-                                hasLocalTab && hasApiTab -> selectedTabIndex
+                                hasLocalTab && (hasApiTab || hasTtsTab) -> selectedTabIndex
                                 hasLocalTab -> 0
-                                else -> 1
+                                hasApiTab || hasTtsTab -> selectedTabIndex
+                                else -> 0
                             },
                             label = "AssignmentSelectionTabTransition",
                             modifier = Modifier.fillMaxWidth()
                         ) { tabIndex ->
+                            val currentTabTitle = tabs.getOrNull(tabIndex)
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -449,40 +469,55 @@ fun AssignmentSelectionContent(
                                     .padding(top = 16.dp, bottom = 16.dp),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                if (tabIndex == 0 && hasLocalTab) {
-                                    items(localAssets, key = { "local_${it.metadataId.value}" }) { asset ->
-                                        AssignmentAssetCard(
-                                            title = asset.friendlyName,
-                                            subtitle = "${asset.providerName} • ${asset.format}",
-                                            presetCount = asset.configurations.size,
-                                            isMultimodal = asset.isMultimodal,
-                                            isSelected = asset.configurations.any { it.id == selectedLocalId },
-                                            onClick = { viewState = AssignmentSelectionView.LocalConfigList(asset) }
-                                        )
+                                when (currentTabTitle) {
+                                    "Local Models" -> {
+                                        items(localAssets, key = { "local_${it.metadataId.value}" }) { asset ->
+                                            AssignmentAssetCard(
+                                                title = asset.friendlyName,
+                                                subtitle = "${asset.providerName} • ${asset.format}",
+                                                presetCount = asset.configurations.size,
+                                                isMultimodal = asset.isMultimodal,
+                                                isSelected = asset.configurations.any { it.id == selectedLocalId },
+                                                onClick = { viewState = AssignmentSelectionView.LocalConfigList(asset) }
+                                            )
+                                        }
                                     }
-                                } else if ((tabIndex == 1 && hasApiTab) || (!hasLocalTab && hasApiTab)) {
-                                    items(apiAssets, key = { "api_${it.credentialsId.value}" }) { asset ->
-                                        AssignmentAssetCard(
-                                            title = asset.displayName,
-                                            subtitle = "${asset.provider.displayName} • ${asset.modelId}",
-                                            presetCount = asset.configurations.size,
-                                            isMultimodal = asset.isMultimodal,
-                                            isSelected = asset.configurations.any { it.id == selectedApiId },
-                                            onClick = { viewState = AssignmentSelectionView.ApiConfigList(asset) }
-                                        )
+                                    "API Models" -> {
+                                        items(apiAssets, key = { "api_${it.credentialsId.value}" }) { asset ->
+                                            AssignmentAssetCard(
+                                                title = asset.displayName,
+                                                subtitle = "${asset.provider.displayName} • ${asset.modelId}",
+                                                presetCount = asset.configurations.size,
+                                                isMultimodal = asset.isMultimodal,
+                                                isSelected = asset.configurations.any { it.id == selectedApiId },
+                                                onClick = { viewState = AssignmentSelectionView.ApiConfigList(asset) }
+                                            )
+                                        }
                                     }
-                                } else {
-                                    item {
-                                        Text(
-                                            text = if (hasLocalTab) {
-                                                "No local models available."
-                                            } else {
-                                                "No API providers configured."
-                                            },
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(vertical = 16.dp)
-                                        )
+                                    "TTS Providers" -> {
+                                        items(ttsAssets, key = { "tts_${it.id.value}" }) { asset ->
+                                            AssignmentAssetCard(
+                                                title = asset.displayName,
+                                                subtitle = "${asset.provider.displayName} • ${asset.voiceName}",
+                                                presetCount = 1,
+                                                isSelected = selectedTtsId == asset.id,
+                                                onClick = {
+                                                    selectedTtsId = asset.id
+                                                    selectedLocalId = null
+                                                    selectedApiId = null
+                                                }
+                                            )
+                                        }
+                                    }
+                                    else -> {
+                                        item {
+                                            Text(
+                                                text = "No options available.",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(vertical = 16.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -548,8 +583,8 @@ fun AssignmentSelectionContent(
                 Text("Cancel")
             }
             Button(
-                onClick = { onSelect(selectedLocalId, selectedApiId) },
-                enabled = selectedLocalId != null || selectedApiId != null,
+                onClick = { onSelect(selectedLocalId, selectedApiId, selectedTtsId) },
+                enabled = selectedLocalId != null || selectedApiId != null || selectedTtsId != null,
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -717,7 +752,7 @@ fun PreviewModelConfigurationScreen() {
         ModelConfigurationScreen(
             uiState = MockSettingsData.baseUiState,
             onNavigateBack = {},
-            onSetDefaultModel = { _, _, _ -> },
+            onSetDefaultModel = { _, _, _, _ -> },
             onShowAssignmentDialog = { _, _ -> }
         )
     }
@@ -746,8 +781,9 @@ fun PreviewAssignmentSelectionContent() {
             slotLabel = "Main",
             localAssets = MockSettingsData.localModels,
             apiAssets = MockSettingsData.apiModels,
+            ttsAssets = emptyList(),
             onDismiss = {},
-            onSelect = { _, _ -> }
+            onSelect = { _, _, _ -> }
         )
     }
 }

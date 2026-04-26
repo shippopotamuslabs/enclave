@@ -7,6 +7,9 @@ import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
@@ -25,6 +28,7 @@ class ResolveAssignedModelSelectionUseCaseTest {
     private lateinit var getDefaultModelsUseCase: GetDefaultModelsUseCase
     private lateinit var getLocalModelAssetsUseCase: GetLocalModelAssetsUseCase
     private lateinit var getApiModelAssetsUseCase: GetApiModelAssetsUseCase
+    private lateinit var getTtsProvidersUseCase: GetTtsProvidersUseCase
     private lateinit var useCase: ResolveAssignedModelSelectionUseCase
 
     @BeforeEach
@@ -32,10 +36,12 @@ class ResolveAssignedModelSelectionUseCaseTest {
         getDefaultModelsUseCase = mockk()
         getLocalModelAssetsUseCase = mockk()
         getApiModelAssetsUseCase = mockk()
+        getTtsProvidersUseCase = mockk()
         useCase = ResolveAssignedModelSelectionUseCase(
             getDefaultModelsUseCase,
             getLocalModelAssetsUseCase,
             getApiModelAssetsUseCase,
+            getTtsProvidersUseCase,
         )
     }
 
@@ -49,11 +55,12 @@ class ResolveAssignedModelSelectionUseCaseTest {
     }
 
     @Test
-    fun `returns null if both local and api config ids are null`() = runTest {
+    fun `returns null if all config ids are null`() = runTest {
         val assignment = DefaultModelAssignment(
             modelType = ModelType.MAIN,
             localConfigId = null,
             apiConfigId = null,
+            ttsProviderId = null,
         )
         every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
 
@@ -86,23 +93,6 @@ class ResolveAssignedModelSelectionUseCaseTest {
     }
 
     @Test
-    fun `returns null if localConfigId specified but not found in any local asset`() = runTest {
-        val localConfigId = LocalModelConfigurationId("local-config-1")
-        val assignment = DefaultModelAssignment(
-            modelType = ModelType.MAIN,
-            localConfigId = localConfigId,
-            apiConfigId = null,
-        )
-
-        every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
-        every { getLocalModelAssetsUseCase() } returns flowOf(emptyList())
-
-        val result = useCase(ModelType.MAIN)
-
-        assertNull(result)
-    }
-
-    @Test
     fun `returns api asset and config if apiConfigId matches an existing asset`() = runTest {
         val apiConfigId = ApiModelConfigurationId("api-config-1")
         val assignment = DefaultModelAssignment(
@@ -126,19 +116,21 @@ class ResolveAssignedModelSelectionUseCaseTest {
     }
 
     @Test
-    fun `returns null if apiConfigId specified but not found in any api asset`() = runTest {
-        val apiConfigId = ApiModelConfigurationId("api-config-1")
+    fun `returns tts asset if ttsProviderId matches an existing asset`() = runTest {
+        val ttsId = TtsProviderId("tts-1")
         val assignment = DefaultModelAssignment(
-            modelType = ModelType.MAIN,
+            modelType = ModelType.TTS,
             localConfigId = null,
-            apiConfigId = apiConfigId,
+            apiConfigId = null,
+            ttsProviderId = ttsId,
         )
+        val ttsAsset = TtsProviderAsset(ttsId, "OpenAI", ApiProvider.OPENAI, "alloy", null, null, "alias")
 
         every { getDefaultModelsUseCase() } returns flowOf(listOf(assignment))
-        every { getApiModelAssetsUseCase() } returns flowOf(emptyList())
+        every { getTtsProvidersUseCase() } returns flowOf(listOf(ttsAsset))
 
-        val result = useCase(ModelType.MAIN)
+        val result = useCase(ModelType.TTS)
 
-        assertNull(result)
+        assertEquals(ResolvedAssignedModelSelection(ttsAsset = ttsAsset), result)
     }
 }

@@ -41,6 +41,12 @@ ksp {
 dependencies {
     implementation(project(":core:domain"))
 
+    // ONNX Runtime
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
+
+    // SQLite Android wrapper to bypass load_extension restrictions
+    implementation("com.github.requery:sqlite-android:3.45.0")
+
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
 

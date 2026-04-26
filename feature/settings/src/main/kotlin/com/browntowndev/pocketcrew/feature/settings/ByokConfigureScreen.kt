@@ -38,6 +38,48 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.collect
 
 @Composable
+fun TtsConfigureRoute(
+    onNavigateBack: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val apiKey by viewModel.currentApiKey.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(viewModel) {
+        viewModel.snackbarMessages.collect { message ->
+            snackbarHostState.showSnackbar(message)
+        }
+    }
+
+    val handleBack: () -> Unit = {
+        viewModel.onBackToByokList()
+        onNavigateBack()
+    }
+
+    TtsConfigureScreen(
+        uiState = uiState,
+        apiKey = apiKey,
+        onNavigateBack = handleBack,
+        onTtsAssetFieldChange = viewModel::onTtsAssetFieldChange,
+        onApiKeyChange = viewModel::onApiKeyChange,
+        onSelectReusableApiCredential = viewModel::onSelectReusableTtsApiCredential,
+        onSaveTtsProvider = {
+            viewModel.onSaveTtsProvider(onSuccess = {
+                viewModel.onBackToByokList()
+                onNavigateBack()
+            })
+        },
+        onFetchApiModels = viewModel::onFetchTtsModels,
+        onUpdateModelSearchQuery = viewModel::onUpdateModelSearchQuery,
+        onToggleModelProviderFilter = viewModel::onToggleModelProviderFilter,
+        onClearModelProviderFilters = viewModel::onClearModelProviderFilters,
+        onUpdateModelSortOption = viewModel::onUpdateModelSortOption,
+        snackbarHostState = snackbarHostState
+    )
+}
+
+@Composable
 fun ByokConfigureRoute(
     onNavigateBack: () -> Unit,
     onNavigateToCustomHeaders: () -> Unit,
@@ -78,9 +120,11 @@ fun ByokConfigureRoute(
         onClearModelProviderFilters = viewModel::onClearModelProviderFilters,
         onUpdateModelSortOption = viewModel::onUpdateModelSortOption,
         onSaveApiCredentials = {
-            viewModel.onSaveApiCredentials(onSuccess = { _, _ ->
-                viewModel.onBackToByokList()
-                onNavigateBack()
+            viewModel.onSaveApiCredentials(onSuccess = { _, createdPreset ->
+                if (createdPreset == null) {
+                    viewModel.onBackToByokList()
+                    onNavigateBack()
+                }
             })
         },
         onSaveApiModelConfig = {

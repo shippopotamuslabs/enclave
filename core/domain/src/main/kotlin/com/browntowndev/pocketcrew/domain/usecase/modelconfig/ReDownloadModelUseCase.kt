@@ -47,6 +47,7 @@ class ReDownloadModelUseCase @Inject constructor(
             sha256 = existingAsset.metadata.sha256,
             sizeInBytes = existingAsset.metadata.sizeInBytes,
             huggingFaceModelName = existingAsset.metadata.huggingFaceModelName,
+            huggingFacePath = existingAsset.metadata.huggingFacePath,
             source = existingAsset.metadata.source.name,
             modelFileFormat = existingAsset.metadata.modelFileFormat.name,
             mmprojRemoteFileName = existingAsset.metadata.mmprojRemoteFileName,

@@ -2,19 +2,16 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
-import com.browntowndev.pocketcrew.core.data.anthropic.AnthropicClientProvider
-import com.browntowndev.pocketcrew.core.data.google.GoogleGenAiClientProvider
-import com.browntowndev.pocketcrew.core.data.openai.OpenAiClientProvider
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
-import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
@@ -23,6 +20,8 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrat
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
+import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration
+import com.browntowndev.pocketcrew.domain.model.config.ApiCredentials
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import android.content.Context
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -48,19 +47,20 @@ class InferenceFactoryImpl @Inject constructor(
     private val apiKeyProvider: ApiKeyProviderPort,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
     private val llamaChatSessionManagerProvider: Provider<LlamaChatSessionManager>,
-    private val conversationManagerProvider: Provider<ConversationManagerPort>,
-    private val openAiClientProvider: OpenAiClientProvider,
-    private val anthropicClientProvider: AnthropicClientProvider,
-    private val googleGenAiClientProvider: GoogleGenAiClientProvider,
+    private val conversationManagerProvider: Provider<ConversationManager>,
+    private val openAiClientProvider: OpenAiClientProviderPort,
+    private val anthropicClientProvider: AnthropicClientProviderPort,
+    private val googleGenAiClientProvider: GoogleGenAiClientProviderPort,
     private val loggingPort: LoggingPort,
     private val orchestrator: LlmToolingOrchestrator,
     private val inferenceLockManager: InferenceLockManager,
     private val toolExecutorProvider: Provider<ToolExecutorPort>,
-    private val toolExecutionEventPort: com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort,
+    private val toolExecutionEventPort: ToolExecutionEventPort,
 ) : InferenceFactoryPort {
 
     companion object {
         private const val TAG = "InferenceFactory"
+        private const val GEMINI_API_VERSION = "v1alpha"
     }
 
     private sealed interface ServiceIdentity {
@@ -161,7 +161,7 @@ class InferenceFactoryImpl @Inject constructor(
             val requestedIdentity = createApiIdentity(
                 modelType = modelType,
                 apiConfig = apiConfig,
-                apiCreds = apiCreds,
+                apiCredentials = apiCreds,
                 apiKey = apiKey,
                 requestHeaders = requestHeaders,
                 resolvedBaseUrl = resolvedBaseUrl
@@ -268,7 +268,7 @@ class InferenceFactoryImpl @Inject constructor(
                 val requestedIdentity = createApiIdentity(
                     modelType = modelType,
                     apiConfig = apiConfig,
-                    apiCreds = apiCreds,
+                    apiCredentials = apiCreds,
                     apiKey = apiKey,
                     requestHeaders = requestHeaders,
                     resolvedBaseUrl = resolvedBaseUrl
@@ -464,17 +464,17 @@ class InferenceFactoryImpl @Inject constructor(
 
     private fun createApiIdentity(
         modelType: ModelType,
-        apiConfig: com.browntowndev.pocketcrew.domain.model.config.ApiModelConfiguration,
-        apiCreds: com.browntowndev.pocketcrew.domain.model.config.ApiCredentials,
+        apiConfig: ApiModelConfiguration,
+        apiCredentials: ApiCredentials,
         apiKey: String,
         requestHeaders: Map<String, String>,
         resolvedBaseUrl: String?
     ): ServiceIdentity.Api = ServiceIdentity.Api(
         modelType = modelType,
         configId = apiConfig.id,
-        credentialsId = apiCreds.id,
-        provider = apiCreds.provider,
-        modelId = apiCreds.modelId,
+        credentialsId = apiCredentials.id,
+        provider = apiCredentials.provider,
+        modelId = apiCredentials.modelId,
         baseUrl = resolvedBaseUrl,
         reasoningEffort = apiConfig.reasoningEffort?.wireValue,
         openRouterRouting = OpenRouterRoutingIdentity(
@@ -484,8 +484,8 @@ class InferenceFactoryImpl @Inject constructor(
             dataCollectionPolicy = apiConfig.openRouterRouting.dataCollectionPolicy.wireValue,
             zeroDataRetention = apiConfig.openRouterRouting.zeroDataRetention
         ),
-        googleApiVersion = if (apiCreds.provider == ApiProvider.GOOGLE) {
-            GoogleGenAiClientProvider.GEMINI_API_VERSION
+        googleApiVersion = if (apiCredentials.provider == ApiProvider.GOOGLE) {
+            GEMINI_API_VERSION
         } else {
             null
         },

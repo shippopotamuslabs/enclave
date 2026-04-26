@@ -40,12 +40,17 @@ class DynamicModelUrlProvider @Inject constructor() : ModelUrlProviderPort {
                 val (owner, repo) = DownloadSecurity.requireHuggingFaceRepoId(spec.huggingFaceModelName)
                 val fileName = DownloadSecurity.requireSafeFileName(spec.remoteFileName, "remoteFileName")
 
-                HF_BASE_URL.newBuilder()
+                val builder = HF_BASE_URL.newBuilder()
                     .addPathSegment(owner)
                     .addPathSegment(repo)
                     .addPathSegment("resolve")
                     .addPathSegment("main")
-                    .addPathSegment(fileName)
+
+                spec.huggingFacePath?.takeIf { it.isNotBlank() }?.let { path ->
+                    path.split('/').forEach { builder.addPathSegment(it) }
+                }
+
+                builder.addPathSegment(fileName)
                     .build()
                     .toString()
             }

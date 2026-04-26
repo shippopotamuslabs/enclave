@@ -154,7 +154,7 @@ class WorkProgressParser @Inject constructor(
                 Log.w(TAG, "No existing FileProgress found for SHA256: ${parsed.sha256}. UI roles may be missing.")
                 parsed
             }
-        }
+        }.sortedBy { it.filename }
         val etaString = if (etaSeconds > 0) formatEta(etaSeconds) else null
 
         return DownloadProgressUpdate(

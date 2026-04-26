@@ -1,20 +1,49 @@
 package com.browntowndev.pocketcrew.core.ui.component.markdown
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Test
 
 class StreamableMarkdownTextTest {
     @Test
-    fun `resolveMarkdownText returns markdown unchanged while streaming`() {
-        val rendered = resolveMarkdownText("incoming text")
+    fun `markdownRenderIdentity stays stable while streaming content changes`() {
+        val partial = markdownRenderIdentity(
+            markdown = "partial response",
+            isStreaming = true,
+        )
+        val complete = markdownRenderIdentity(
+            markdown = "partial response with final text",
+            isStreaming = true,
+        )
 
-        assertEquals("incoming text", rendered)
+        assertEquals(partial, complete)
     }
 
     @Test
-    fun `resolveMarkdownText returns final markdown unchanged`() {
-        val rendered = resolveMarkdownText("full final text")
+    fun `markdownRenderIdentity changes when streaming state changes`() {
+        val streaming = markdownRenderIdentity(
+            markdown = "final response",
+            isStreaming = true,
+        )
+        val complete = markdownRenderIdentity(
+            markdown = "final response",
+            isStreaming = false,
+        )
 
-        assertEquals("full final text", rendered)
+        assertNotEquals(streaming, complete)
+    }
+
+    @Test
+    fun `markdownRenderIdentity changes when complete markdown content changes`() {
+        val firstComplete = markdownRenderIdentity(
+            markdown = "first final response",
+            isStreaming = false,
+        )
+        val secondComplete = markdownRenderIdentity(
+            markdown = "second final response",
+            isStreaming = false,
+        )
+
+        assertNotEquals(firstComplete, secondComplete)
     }
 }

@@ -1,7 +1,7 @@
 [versions]
 agp = "9.2.0"
 detekt = "1.23.8"
-animation = "1.10.6"
+animation = "1.11.0"
 coreKtx = "1.18.0"
 datastorePreferences = "1.2.1"
 junit = "4.13.2"
@@ -13,38 +13,38 @@ coroutinesTestVersion = "1.10.2"
 espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.13.0"
-kotlin = "2.3.20"
-composeBom = "2026.03.01"
-litertlm = "0.10.0"
-playServicesTfliteGpu = "16.4.0"
+kotlin = "2.3.21"
+composeBom = "2026.04.01"
+litertlm = "0.10.2"
 hilt = "2.59.2"
 ksp = "2.3.6"
 ktlintVersion = "14.2.0"
 hiltNavCompose = "1.3.0"
 hiltWorkVersion = "1.3.0"
-navigationCompose = "2.9.7"
-uiText = "1.10.6"
+navigationCompose = "2.9.8"
+uiText = "1.11.0"
 okhttpVersion = "5.3.2"
 roomVersion = "2.8.4"
 androidx-core-splashscreen = "1.2.0"
 workVersion = "2.11.2"
 identityDoctypesJvm = "202411.1"
-foundation = "1.10.6"
+foundation = "1.11.0"
 robolectricVersion = "4.16.1"
 androidxTestCoreVersion = "1.7.0"
-markdown = "1.2.3"
+markdown = "1.2.4"
 turbineVersion = "1.2.1"
 firebaseCrashlyticsVersion = "20.0.5"
 googleServicesVersion = "4.4.4"
 firebaseCrashlyticsPluginVersion = "3.0.7"
 firebaseBomVersion = "34.12.0"
 
-kotlinx-serialization = "1.9.0"
-openai = "4.31.0"
-anthropic = "2.24.0"
-googleGenai = "1.47.0"
+kotlinx-serialization = "1.11.0"
+openai = "4.32.0"
+anthropic = "2.27.0"
+googleGenai = "1.51.0"
 coil = "3.4.0"
 jtokkit = "1.1.0"
+media3 = "1.10.0"
 
 [libraries]
 jtokkit = { group = "com.knuddels", name = "jtokkit", version.ref = "jtokkit" }
@@ -71,7 +71,6 @@ androidx-compose-material-icons-core = { group = "androidx.compose.material", na
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
 litertlm-android = { group = "com.google.ai.edge.litertlm", name = "litertlm-android", version.ref = "litertlm" }
-tflite-gpu = { group = "com.google.android.gms", name = "play-services-tflite-gpu", version.ref = "playServicesTfliteGpu" }
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
 hilt-android-testing = { group = "com.google.dagger", name = "hilt-android-testing", version.ref = "hilt" }
 hilt-compiler = { group = "com.google.dagger", name = "hilt-compiler", version.ref = "hilt" }
@@ -105,6 +104,9 @@ markdown-parser = { module = "io.github.huarangmeng:markdown-parser", version.re
 markdown-renderer = { module = "io.github.huarangmeng:markdown-renderer", version.ref = "markdown" }
 turbine = { group = "app.cash.turbine", name = "turbine", version.ref = "turbineVersion" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBomVersion" }
+media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
+media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
+media3-datasource = { group = "androidx.media3", name = "media3-datasource", version.ref = "media3" }
 firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics", version.ref = "firebaseCrashlyticsVersion" }
 openai-java = { group = "com.openai", name = "openai-java", version.ref = "openai" }

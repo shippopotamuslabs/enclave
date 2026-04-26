@@ -5,12 +5,16 @@ import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
+import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import javax.inject.Inject
 
 class ChatGenerationProgressPersister @Inject constructor(
     private val chatRepository: ChatRepository,
+    private val messageRepository: MessageRepository,
+    private val embeddingEngine: EmbeddingEnginePort,
     private val extractedUrlTracker: ExtractedUrlTrackerPort,
 ) {
     fun startSession(
@@ -29,6 +33,8 @@ class ChatGenerationProgressPersister @Inject constructor(
         return ChatGenerationProgressSession(
             accumulatorManager = accumulatorManager,
             chatRepository = chatRepository,
+            messageRepository = messageRepository,
+            embeddingEngine = embeddingEngine,
             extractedUrlTracker = extractedUrlTracker,
         )
     }
@@ -37,6 +43,8 @@ class ChatGenerationProgressPersister @Inject constructor(
 class ChatGenerationProgressSession internal constructor(
     private val accumulatorManager: ChatGenerationAccumulatorManager,
     private val chatRepository: ChatRepository,
+    private val messageRepository: MessageRepository,
+    private val embeddingEngine: EmbeddingEnginePort,
     private val extractedUrlTracker: ExtractedUrlTrackerPort,
 ) {
     suspend fun applyState(state: MessageGenerationState): AccumulatedMessages {
@@ -51,6 +59,8 @@ class ChatGenerationProgressSession internal constructor(
 
     suspend fun flush(markIncompleteAsCancelled: Boolean) {
         if (markIncompleteAsCancelled) {
+            accumulatorManager.markIncompleteAsCancelled()
+            persistAccumulatedMessages()
             extractedUrlTracker.clear()
             return
         }
@@ -66,6 +76,8 @@ class ChatGenerationProgressSession internal constructor(
     private suspend fun persistAccumulatedMessages() {
         PersistAccumulatedChatMessagesUseCase(
             chatRepository = chatRepository,
+            messageRepository = messageRepository,
+            embeddingEngine = embeddingEngine,
             extractedUrls = extractedUrlTracker.urls,
         )(accumulatorManager)
     }

@@ -134,6 +134,28 @@
       "utilityType": "whisper",
       "isMultimodal": false,
       "configurations": []
+    },
+    {
+      "huggingFaceModelName": "sentence-transformers/all-MiniLM-L6-v2",
+      "huggingFacePath": "onnx",
+      "fileName": "model.onnx",
+      "sha256": "6fd5d72fe4589f189f8ebc006442dbb529bb7ce38f8082112682524616046452",
+      "sizeInBytes": 90405214,
+      "source": "HF",
+      "utilityType": "onnx_model",
+      "isMultimodal": false,
+      "configurations": []
+    },
+    {
+      "huggingFaceModelName": "sentence-transformers/all-MiniLM-L6-v2",
+      "huggingFacePath": null,
+      "fileName": "vocab.txt",
+      "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3",
+      "sizeInBytes": 231508,
+      "source": "HF",
+      "utilityType": "onnx_vocab",
+      "isMultimodal": false,
+      "configurations": []
     }
   ]
 }

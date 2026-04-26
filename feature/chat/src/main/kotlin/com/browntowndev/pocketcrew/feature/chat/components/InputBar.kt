@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
+import com.browntowndev.pocketcrew.feature.chat.ThinkingDataUi
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -94,6 +95,7 @@ fun InputBar(
     photoAttachmentDisabledReason: String?,
     selectedMode: ChatModeUi,
     isGenerating: Boolean,
+    canStop: Boolean,
     isGlobalInferenceBlocked: Boolean = false,
     onInputChange: (String) -> Unit,
     onModeChange: (ChatModeUi) -> Unit,
@@ -452,7 +454,9 @@ fun InputBar(
                             )
                         }
                     } else {
+                        val stopDisabledWhileLoading = isGenerating && !canStop
                         val containerColor = when {
+                            stopDisabledWhileLoading -> MaterialTheme.colorScheme.surfaceVariant
                             isGenerating -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.12f)
                             speechState is SpeechState.Transcribing -> MaterialTheme.colorScheme.surfaceVariant
                             isRecordingPhase -> MaterialTheme.colorScheme.errorContainer
@@ -460,6 +464,7 @@ fun InputBar(
                         }
 
                         val contentColor = when {
+                            stopDisabledWhileLoading -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
                             isGenerating -> MaterialTheme.colorScheme.error
                             speechState is SpeechState.Transcribing -> MaterialTheme.colorScheme.onSurfaceVariant
                             isRecordingPhase -> MaterialTheme.colorScheme.onErrorContainer
@@ -467,39 +472,32 @@ fun InputBar(
                         }
 
                         val icon = if (isGenerating || isRecordingPhase) Icons.Default.Stop else Icons.Default.Mic
+                        val stopEnabled = (isGenerating && canStop) || isRecordingPhase
+                        val micEnabled = !isGenerating && !isRecordingPhase && !isGlobalInferenceBlocked
                         val description = when {
-                            isGenerating -> "Stop generating"
+                            stopDisabledWhileLoading -> "Stop unavailable while engine loads"
+                            isGenerating -> "Stop generation"
                             isRecordingPhase -> "Stop recording"
-                            else -> "Speech to text"
+                            else -> "Voice input"
                         }
 
-                        FilledIconButton(
+                        IconButton(
                             onClick = {
                                 if (isGenerating) {
-                                    onStopGenerating()
-                                } else if (isRecordingPhase) {
-                                    onMicClick()
-                                } else {
-                                    val hasPermission = ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.RECORD_AUDIO
-                                    ) == PackageManager.PERMISSION_GRANTED
-
-                                    if (hasPermission) {
-                                        focusManager.clearFocus()
-                                        onMicClick()
-                                    } else {
-                                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    if (canStop) {
+                                        onStopGenerating()
                                     }
+                                } else {
+                                    onMicClick()
                                 }
                             },
-                            enabled = speechState !is SpeechState.Transcribing,
+                            enabled = stopEnabled || micEnabled,
                             shape = CircleShape,
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = containerColor,
                                 contentColor = contentColor,
                                 disabledContainerColor = containerColor,
-                                disabledContentColor = contentColor
+                                disabledContentColor = contentColor,
                             )
                         ) {
                             Icon(
@@ -569,6 +567,7 @@ fun PreviewInputBar() {
             photoAttachmentDisabledReason = null,
             selectedMode = ChatModeUi.FAST,
             isGenerating = false,
+            canStop = true,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
@@ -582,43 +581,65 @@ fun PreviewInputBar() {
 
 @Preview
 @Composable
-fun PreviewInputBarExpanded() {
+fun PreviewInputBarWithText() {
     PocketCrewTheme {
         InputBar(
-            inputText = """
-                Line 1 of expanded input.
-                Line 2.
-                Line 3: showing collapse icon.
-            """.trimIndent(),
-            speechState = SpeechState.Idle,
-            selectedImageUri = null,
-            isPhotoAttachmentEnabled = false,
-            photoAttachmentDisabledReason = "Crew mode requires an API vision model.",
-            selectedMode = ChatModeUi.CREW,
-            isGenerating = false,
-            onInputChange = {},
-            onModeChange = {},
-            onSend = {},
-            onStopGenerating = {},
-            onAttach = {},
-            onClearAttachment = {},
-            onMicClick = {},
-        )
-    }
-}
-
-@Preview
-@Composable
-fun PreviewInputBarSingleLine() {
-    PocketCrewTheme {
-        InputBar(
-            inputText = "Single line message",
+            inputText = "This is a long input text that should expand the field as it gets longer...",
             speechState = SpeechState.Idle,
             selectedImageUri = null,
             isPhotoAttachmentEnabled = true,
             photoAttachmentDisabledReason = null,
             selectedMode = ChatModeUi.FAST,
             isGenerating = false,
+            canStop = true,
+            onInputChange = {},
+            onModeChange = {},
+            onSend = {},
+            onStopGenerating = {},
+            onAttach = {},
+            onClearAttachment = {},
+            onMicClick = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+fun PreviewInputBarWithAttachment() {
+    PocketCrewTheme {
+        InputBar(
+            inputText = "Check out this image",
+            speechState = SpeechState.Idle,
+            selectedImageUri = "file:///dummy/path.jpg",
+            isPhotoAttachmentEnabled = true,
+            photoAttachmentDisabledReason = null,
+            selectedMode = ChatModeUi.FAST,
+            isGenerating = false,
+            canStop = true,
+            onInputChange = {},
+            onModeChange = {},
+            onSend = {},
+            onStopGenerating = {},
+            onAttach = {},
+            onClearAttachment = {},
+            onMicClick = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+fun PreviewInputBarAttachmentDisabled() {
+    PocketCrewTheme {
+        InputBar(
+            inputText = "",
+            speechState = SpeechState.Idle,
+            selectedImageUri = null,
+            isPhotoAttachmentEnabled = false,
+            photoAttachmentDisabledReason = "Local models do not support vision",
+            selectedMode = ChatModeUi.FAST,
+            isGenerating = false,
+            canStop = true,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
@@ -642,6 +663,7 @@ fun PreviewInputBarThinking() {
             photoAttachmentDisabledReason = null,
             selectedMode = ChatModeUi.FAST,
             isGenerating = true,
+            canStop = true,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
@@ -665,6 +687,7 @@ fun PreviewInputBarThinkingMode() {
             photoAttachmentDisabledReason = null,
             selectedMode = ChatModeUi.THINKING,
             isGenerating = false,
+            canStop = true,
             onInputChange = {},
             onModeChange = {},
             onSend = {},
@@ -688,6 +711,31 @@ fun PreviewInputBarStopIndicator() {
             photoAttachmentDisabledReason = null,
             selectedMode = ChatModeUi.FAST,
             isGenerating = true,
+            canStop = true,
+            onInputChange = {},
+            onModeChange = {},
+            onSend = {},
+            onStopGenerating = {},
+            onAttach = {},
+            onClearAttachment = {},
+            onMicClick = {},
+        )
+    }
+}
+
+@Preview
+@Composable
+fun PreviewInputBarEngineLoadingStopDisabled() {
+    PocketCrewTheme {
+        InputBar(
+            inputText = "Loading model...",
+            speechState = SpeechState.Idle,
+            selectedImageUri = null,
+            isPhotoAttachmentEnabled = true,
+            photoAttachmentDisabledReason = null,
+            selectedMode = ChatModeUi.FAST,
+            isGenerating = true,
+            canStop = false,
             onInputChange = {},
             onModeChange = {},
             onSend = {},

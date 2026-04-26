@@ -4,7 +4,6 @@ import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
@@ -13,6 +12,7 @@ import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
 import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
@@ -20,10 +20,11 @@ import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
+import java.util.concurrent.CancellationException as JavaCancellationException
 import javax.inject.Inject
 
 class LiteRtInferenceServiceImpl @Inject constructor(
-    private val conversationManager: ConversationManagerPort,
+    private val conversationManager: ConversationManager,
     private val processThinkingTokens: ProcessThinkingTokensUseCase,
     private val toolExecutionEventPort: ToolExecutionEventPort,
     private val modelType: ModelType,
@@ -118,13 +119,18 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                 }
 
                 send(InferenceEvent.Finished(targetModelType))
-            } catch (e: java.util.concurrent.CancellationException) {
+            } catch (e: JavaCancellationException) {
                 // LiteRT cancelProcess() signals cancellation through this exception type.
                 // Emit Finished so the UI transitions out of generating state cleanly.
-                Log.i(TAG, "Inference cancelled by user for modelType=$targetModelType")
+                Log.i(TAG, "LiteRT native inference cancelled by user for modelType=$targetModelType")
+                conversationManager.cancelProcess()
                 send(InferenceEvent.Finished(targetModelType))
-            } catch (e: kotlinx.coroutines.CancellationException) {
+            } catch (e: CancellationException) {
                 // Coroutine cancellation (e.g. inferenceJob.cancel()) — propagate normally
+                // but emit Finished first so UI transitions out of generating state cleanly.
+                Log.i(TAG, "LiteRT inference job cancelled for modelType=$targetModelType")
+                conversationManager.cancelProcess()
+                send(InferenceEvent.Finished(targetModelType))
                 throw e
             } catch (e: Exception) {
                 if (retryOnFail) {

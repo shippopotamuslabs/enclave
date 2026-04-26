@@ -66,10 +66,13 @@ data class ChatUiState(
     val hapticResponse: Boolean = false,
     val chatId: ChatId? = null,
     val isGenerating: Boolean = false,
+    val canStop: Boolean = true,
     val hasActiveIndicator: Boolean = false,
     val activeToolCallBanner: ToolCallBannerUi? = null,
     val activeIndicatorMessageId: MessageId? = null,
     val backgroundInferenceEnabled: Boolean = true,
+    val hasTtsProviderAssigned: Boolean = false,
+    val isPlayingTts: Boolean = false,
 )
 
 /**

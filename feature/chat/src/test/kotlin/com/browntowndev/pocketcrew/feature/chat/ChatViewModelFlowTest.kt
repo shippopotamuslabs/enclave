@@ -6,10 +6,12 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
@@ -68,6 +70,11 @@ class ChatViewModelFlowTest {
 
         coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
         every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
+        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
+        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
+        every { settingsUseCases.assignments } returns assignmentUseCases
+        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
+        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
         every { toolExecutionEventPort.events } returns MutableSharedFlow()
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
@@ -88,6 +95,8 @@ class ChatViewModelFlowTest {
             toolExecutionEventPort = toolExecutionEventPort,
             loggingPort = loggingPort,
             activeChatTurnSnapshotPort = ActiveChatTurnStore(),
+            
+            playbackController = mockk(relaxed = true),
         )
     }
 

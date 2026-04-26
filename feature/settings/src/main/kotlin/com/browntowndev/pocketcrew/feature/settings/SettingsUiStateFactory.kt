@@ -7,6 +7,8 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApiModelDiscoveryScope
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
@@ -47,6 +49,14 @@ internal data class SearchSkillTransientState(
     val enabled: Boolean? = null,
 )
 
+internal data class TtsProvidersTransientState(
+    val isSheetOpen: Boolean = false,
+    val selectedAsset: TtsProviderAssetUi? = null,
+    val assetDraft: TtsProviderAssetUi? = null,
+    val selectedReusableApiCredentialAlias: String? = null,
+    val selectedReusableApiCredentialName: String? = null,
+)
+
 internal data class AssignmentDialogTransientState(
     val isOpen: Boolean = false,
     val editingSlot: com.browntowndev.pocketcrew.domain.model.inference.ModelType? = null,
@@ -62,6 +72,7 @@ internal data class DeletionTransientState(
 class SettingsUiStateFactory @Inject constructor(
     private val localModelAssetUiMapper: LocalModelAssetUiMapper,
     private val apiModelAssetUiMapper: ApiModelAssetUiMapper,
+    private val ttsProviderAssetUiMapper: TtsProviderAssetUiMapper,
     private val apiDiscoveryUiFilter: ApiDiscoveryUiFilter,
     private val applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
 ) {
@@ -69,12 +80,14 @@ class SettingsUiStateFactory @Inject constructor(
         persistedSettings: SettingsData,
         localAssets: List<LocalModelAsset>,
         apiAssets: List<ApiModelAsset>,
+        ttsAssets: List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
         defaultModels: List<DefaultModelAssignment>,
         sheetVisibility: SheetVisibilityState,
         memories: List<StoredMemory>,
         feedbackText: String,
         localModelsState: LocalModelsTransientState,
         apiState: ApiProvidersTransientState,
+        ttsState: TtsProvidersTransientState,
         searchSkillState: SearchSkillTransientState,
         assignmentsState: AssignmentDialogTransientState,
         deletionState: DeletionTransientState,
@@ -101,6 +114,18 @@ class SettingsUiStateFactory @Inject constructor(
             }
         }
 
+        val defaultTtsProviderId = defaultModels.find { it.modelType == ModelType.TTS }?.ttsProviderId
+        val ttsModels = ttsAssets.map { asset ->
+            ttsProviderAssetUiMapper.map(asset, isDefault = asset.id == defaultTtsProviderId)
+        }
+        val refreshedSelectedTtsAsset = ttsState.selectedAsset?.let { selected ->
+            if (selected.id.value.isEmpty()) {
+                selected
+            } else {
+                ttsModels.find { it.id == selected.id } ?: selected
+            }
+        }
+
         val activeApiAsset = apiState.assetDraft ?: refreshedSelectedApiAsset
         val parameterSupport = activeApiAsset?.let {
             applyApiModelMetadataDefaultsUseCase.parameterSupport(
@@ -121,6 +146,21 @@ class SettingsUiStateFactory @Inject constructor(
                     )
                 }
         }
+
+        val selectedTtsReusableCredential = ttsState.selectedReusableApiCredentialAlias?.let { alias ->
+            apiAssets
+                .find { it.credentials.credentialAlias == alias }
+                ?.let(apiModelAssetUiMapper::mapReusable)
+                ?: ttsState.selectedReusableApiCredentialName?.let { displayName ->
+                    ReusableApiCredentialUi(
+                        credentialsId = ApiCredentialsId(""),
+                        displayName = displayName,
+                        modelId = "",
+                        credentialAlias = alias,
+                    )
+                }
+        }
+
         val selectedDiscoveredModel = apiState.discoveredApiModels.find { it.id == activeApiAsset?.modelId }
         val normalizedPresetDraft = apiState.presetDraft?.let { draft ->
             val parentCredentialsId = when {
@@ -152,6 +192,12 @@ class SettingsUiStateFactory @Inject constructor(
             sortOption = apiState.modelSortOption,
         )
 
+        val assignmentRows = buildVisibleAssignments(
+            defaultModels = defaultModels,
+            localModels = localModels,
+            apiModels = apiModels,
+        )
+
         return SettingsUiState(
             home = SettingsHomeUiState(
                 theme = persistedSettings.theme,
@@ -164,6 +210,7 @@ class SettingsUiStateFactory @Inject constructor(
                 isMemoriesSheetOpen = sheetVisibility.memories,
                 isFeedbackSheetOpen = sheetVisibility.feedback,
                 isVisionSettingsSheetOpen = sheetVisibility.visionSettings,
+                isTtsProvidersSheetOpen = ttsState.isSheetOpen,
             ),
             customization = CustomizationUiState(
                 isSheetOpen = sheetVisibility.customization,
@@ -212,28 +259,23 @@ class SettingsUiStateFactory @Inject constructor(
                     sortOption = apiState.modelSortOption,
                 ),
             ),
+            ttsProvidersSheet = TtsProvidersSheetUiState(
+                isVisible = ttsState.isSheetOpen,
+                assets = ttsModels,
+                selectedAsset = refreshedSelectedTtsAsset,
+            ),
+            ttsProviderEditor = TtsProviderEditorUiState(
+                isEditing = ttsState.selectedAsset != null || ttsState.assetDraft != null,
+                assetDraft = ttsState.assetDraft,
+                selectedReusableCredential = selectedTtsReusableCredential,
+            ),
             searchSkillEditor = SearchSkillEditorUiState(
                 isEditing = searchSkillState.isEditing,
                 enabled = searchSkillState.enabled ?: persistedSettings.searchEnabled,
                 tavilyKeyPresent = persistedSettings.tavilyKeyPresent,
             ),
             assignments = ModelAssignmentsUiState(
-                assignments = defaultModels.map { assignment ->
-                    val isMultimodal = when {
-                        assignment.apiConfigId != null -> {
-                            apiModels.any { asset ->
-                                asset.isMultimodal && asset.configurations.any { it.id == assignment.apiConfigId }
-                            }
-                        }
-                        assignment.localConfigId != null -> {
-                            localModels.any { asset ->
-                                asset.isMultimodal && asset.configurations.any { it.id == assignment.localConfigId }
-                            }
-                        }
-                        else -> false
-                    }
-                    assignment.toUi(isMultimodal)
-                },
+                assignments = assignmentRows,
                 isDialogOpen = assignmentsState.isOpen,
                 editingSlot = assignmentsState.editingSlot,
             ),
@@ -243,6 +285,68 @@ class SettingsUiStateFactory @Inject constructor(
                 modelTypesNeedingReassignment = deletionState.modelTypesNeedingReassignment,
                 reassignmentOptions = deletionState.reassignmentOptions,
             ),
+        )
+    }
+
+    private fun buildVisibleAssignments(
+        defaultModels: List<DefaultModelAssignment>,
+        localModels: List<LocalModelAssetUi>,
+        apiModels: List<ApiModelAssetUi>,
+    ): List<DefaultModelAssignmentUi> {
+        val byModelType = defaultModels.associateBy { it.modelType }
+        return VISIBLE_MODEL_ASSIGNMENT_TYPES.map { modelType ->
+            byModelType[modelType]
+                ?.let { assignment ->
+                    assignment.toUi(
+                        isMultimodal = isMultimodalAssignment(
+                            assignment = assignment,
+                            localModels = localModels,
+                            apiModels = apiModels,
+                        ),
+                    )
+                }
+                ?: emptyAssignment(modelType)
+        }
+    }
+
+    private fun isMultimodalAssignment(
+        assignment: DefaultModelAssignment,
+        localModels: List<LocalModelAssetUi>,
+        apiModels: List<ApiModelAssetUi>,
+    ): Boolean {
+        return when {
+            assignment.apiConfigId != null -> {
+                apiModels.any { asset ->
+                    asset.isMultimodal && asset.configurations.any { it.id == assignment.apiConfigId }
+                }
+            }
+            assignment.localConfigId != null -> {
+                localModels.any { asset ->
+                    asset.isMultimodal && asset.configurations.any { it.id == assignment.localConfigId }
+                }
+            }
+            else -> false
+        }
+    }
+
+    private fun emptyAssignment(modelType: ModelType): DefaultModelAssignmentUi {
+        return DefaultModelAssignmentUi(
+            modelType = modelType,
+            source = ModelSource.API,
+            currentModelName = "None Assigned",
+            displayLabel = modelType.displayLabel,
+        )
+    }
+
+    private companion object {
+        val VISIBLE_MODEL_ASSIGNMENT_TYPES = listOf(
+            ModelType.FAST,
+            ModelType.THINKING,
+            ModelType.DRAFT_ONE,
+            ModelType.DRAFT_TWO,
+            ModelType.MAIN,
+            ModelType.FINAL_SYNTHESIS,
+            ModelType.TTS,
         )
     }
 }

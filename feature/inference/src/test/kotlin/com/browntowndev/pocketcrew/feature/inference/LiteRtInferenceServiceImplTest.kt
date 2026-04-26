@@ -4,12 +4,10 @@ import android.util.Log
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationResponse
-import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
+import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import io.mockk.MockKAnnotations
@@ -40,11 +38,11 @@ import org.junit.jupiter.api.Assertions.assertTrue
 
 class LiteRtInferenceServiceImplTest {
 
-    private lateinit var mockConversationManager: ConversationManagerPort
-    private lateinit var mockConversation: ConversationPort
-    private lateinit var mockToolExecutionEventPort: com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
-    private lateinit var eventFlow: MutableSharedFlow<com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent>
+    private lateinit var mockConversationManager: ConversationManager
+    private lateinit var mockConversation: LiteRtConversation
     private lateinit var processThinkingTokens: ProcessThinkingTokensUseCase
+    private val toolExecutionEventPort = mockk<ToolExecutionEventPort>(relaxed = true)
+    private lateinit var eventFlow: MutableSharedFlow<com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent>
     private lateinit var service: LiteRtInferenceServiceImpl
 
     @BeforeEach
@@ -57,12 +55,11 @@ class LiteRtInferenceServiceImplTest {
 
         mockConversationManager = mockk(relaxed = true)
         mockConversation = mockk(relaxed = true)
-        mockToolExecutionEventPort = mockk(relaxed = true)
-        eventFlow = MutableSharedFlow()
-        every { mockToolExecutionEventPort.events } returns eventFlow
         processThinkingTokens = ProcessThinkingTokensUseCase()
+        eventFlow = MutableSharedFlow()
+        every { toolExecutionEventPort.events } returns eventFlow
 
-        service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, mockToolExecutionEventPort, ModelType.FAST)
+        service = LiteRtInferenceServiceImpl(mockConversationManager, processThinkingTokens, toolExecutionEventPort, ModelType.FAST)
 
         coEvery { mockConversationManager.getConversation(any(), any(), any()) } returns mockConversation
     }

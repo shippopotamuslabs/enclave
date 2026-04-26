@@ -6,12 +6,15 @@ import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 internal data class LocalToolResultDecision(
     val finalResult: String,
     val shouldTrackTransientToolResult: Boolean,
     val contextFull: Boolean,
     val totalTokens: Int,
+    val hasErrorPayload: Boolean,
 )
 
 internal object LocalToolResultPolicy {
@@ -40,6 +43,7 @@ internal object LocalToolResultPolicy {
             tokenCounter = tokenCounter,
             modelId = modelId,
         )
+        val hasErrorPayload = resultJson.hasTopLevelErrorField()
 
         val evaluation = ToolContextBudget.evaluate(
             contextWindowTokens = contextWindowTokens,
@@ -59,9 +63,10 @@ internal object LocalToolResultPolicy {
 
         return LocalToolResultDecision(
             finalResult = finalResult,
-            shouldTrackTransientToolResult = !resultJson.contains("\"error\""),
+            shouldTrackTransientToolResult = !hasErrorPayload,
             contextFull = evaluation.contextFull,
             totalTokens = evaluation.totalTokens,
+            hasErrorPayload = hasErrorPayload,
         )
     }
 
@@ -72,4 +77,11 @@ internal object LocalToolResultPolicy {
         value
             .replace("\\", "\\\\")
             .replace("\"", "\\\"")
+
+    private fun String.hasTopLevelErrorField(): Boolean =
+        runCatching {
+            Json.parseToJsonElement(this).jsonObject.containsKey("error")
+        }.getOrElse {
+            false
+        }
 }

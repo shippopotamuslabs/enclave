@@ -1,12 +1,12 @@
 package com.browntowndev.pocketcrew.app
 
 import android.content.Context
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.pocketcrew.feature.inference.ConversationManager
 import com.browntowndev.pocketcrew.feature.inference.ConversationManagerImpl
 import com.browntowndev.pocketcrew.feature.inference.InferenceFactoryImpl
 import dagger.Binds
@@ -39,7 +39,7 @@ abstract class EngineModule {
             activeModelProvider: ActiveModelProviderPort,
             loggingPort: LoggingPort,
             toolExecutor: ToolExecutorPort,
-        ): ConversationManagerPort =
+        ): ConversationManager =
             ConversationManagerImpl(
                 context = context,
                 localModelRepository = localModelRepository,

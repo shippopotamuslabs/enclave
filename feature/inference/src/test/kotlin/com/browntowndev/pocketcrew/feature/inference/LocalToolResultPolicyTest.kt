@@ -30,6 +30,22 @@ class LocalToolResultPolicyTest {
         )
         assertTrue(decision.contextFull)
         assertFalse(decision.shouldTrackTransientToolResult)
+        assertTrue(decision.hasErrorPayload)
+    }
+
+    @Test
+    fun `evaluate does not treat error string value as error payload`() {
+        val decision = LocalToolResultPolicy.evaluate(
+            rawResultJson = """{"chat_id":"chat-1","query":"error","total_results":0,"returned_results":0,"messages":[]}""",
+            contextWindowTokens = 8_000,
+            currentSystemPrompt = "You can search chats.",
+            history = listOf(ChatMessage(Role.USER, "search this chat for error")),
+            transientToolResultTokens = 0,
+            modelId = null,
+        )
+
+        assertFalse(decision.hasErrorPayload)
+        assertTrue(decision.shouldTrackTransientToolResult)
     }
 
     @Test

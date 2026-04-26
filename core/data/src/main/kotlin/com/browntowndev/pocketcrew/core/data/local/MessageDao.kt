@@ -14,30 +14,22 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
 @Dao
 abstract class MessageDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    abstract suspend fun insertMessage(messageEntity: MessageEntity): Long
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    abstract suspend fun insertMessageSearch(messageSearch: MessageSearch): Long
-
     @Query("SELECT * FROM message WHERE id = :id")
     abstract suspend fun getMessageById(id: MessageId): MessageEntity?
 
     @Query("""
-        SELECT message.* FROM message
-        JOIN message_search ON message.rowid = message_search.rowid
-        WHERE message_search MATCH :query
+        SELECT * FROM message
+        WHERE id IN (:ids)
     """)
-    abstract fun searchMessages(query: String): Flow<List<MessageEntity>>
+    abstract fun getMessages(ids: List<MessageId>): Flow<List<MessageEntity>>
 
     @Query("""
-        SELECT message.* FROM message
-        JOIN message_search ON message.rowid = message_search.rowid
-        WHERE message_search MATCH :query
-        AND message.chat_id = :chatId
-        ORDER BY message.created_at IS NULL, message.created_at ASC
+        SELECT * FROM message
+        WHERE id IN (:ids)
+        AND chat_id = :chatId
+        ORDER BY created_at IS NULL, created_at ASC
     """)
-    abstract suspend fun searchMessagesByChatId(chatId: ChatId, query: String): List<MessageEntity>
+    abstract suspend fun getMessagesForChat(chatId: ChatId, ids: List<MessageId>): List<MessageEntity>
 
     @Query("SELECT * FROM message ORDER BY created_at IS NULL, created_at ASC")
     abstract fun getAllMessages(): Flow<List<MessageEntity>>
@@ -105,10 +97,6 @@ abstract class MessageDao {
 
     @Query("UPDATE message SET pipeline_step = :pipelineStep WHERE id = :messageId")
     abstract suspend fun updateMessagePipelineStep(messageId: MessageId, pipelineStep: PipelineStep?)
-
-    open suspend fun insertMessageWithSearch(messageEntity: MessageEntity): Long {
-        return insertMessage(messageEntity)
-    }
 
     /**
      * Persists all message data atomically in a single transaction.

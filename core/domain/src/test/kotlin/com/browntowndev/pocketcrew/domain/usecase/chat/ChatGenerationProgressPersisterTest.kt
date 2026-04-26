@@ -6,8 +6,10 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
+import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -21,8 +23,12 @@ class ChatGenerationProgressPersisterTest {
     @Test
     fun `applyState does not persist partial progress before terminal state`() = runTest {
         val chatRepository = mockChatRepository()
+        val embeddingEngine = mockk<EmbeddingEnginePort>()
+        coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
         val session = ChatGenerationProgressPersister(
             chatRepository = chatRepository,
+            messageRepository = mockk(relaxed = true),
+            embeddingEngine = embeddingEngine,
             extractedUrlTracker = FakeExtractedUrlTracker(),
         ).startSession(
             mode = Mode.FAST,
@@ -39,9 +45,9 @@ class ChatGenerationProgressPersisterTest {
             chatRepository.persistAllMessageData(
                 messageId = MessageId("assistant"),
                 modelType = any(),
-                thinkingStartTime = any(),
-                thinkingEndTime = any(),
-                thinkingDuration = any(),
+                thinkingStartTime = any<Long>(),
+                thinkingEndTime = any<Long>(),
+                thinkingDuration = any<Int>(),
                 thinkingRaw = any(),
                 content = any(),
                 messageState = any(),
@@ -60,9 +66,9 @@ class ChatGenerationProgressPersisterTest {
             chatRepository.persistAllMessageData(
                 messageId = any(),
                 modelType = any(),
-                thinkingStartTime = any(),
-                thinkingEndTime = any(),
-                thinkingDuration = any(),
+                thinkingStartTime = any<Long>(),
+                thinkingEndTime = any<Long>(),
+                thinkingDuration = any<Int>(),
                 thinkingRaw = any(),
                 content = capture(contentSlot),
                 messageState = capture(stateSlot),
@@ -70,8 +76,12 @@ class ChatGenerationProgressPersisterTest {
                 tavilySources = any(),
             )
         } returns Unit
+        val embeddingEngine = mockk<EmbeddingEnginePort>()
+        coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
         val session = ChatGenerationProgressPersister(
             chatRepository = chatRepository,
+            messageRepository = mockk(relaxed = true),
+            embeddingEngine = embeddingEngine,
             extractedUrlTracker = FakeExtractedUrlTracker(),
         ).startSession(
             mode = Mode.FAST,
@@ -90,8 +100,12 @@ class ChatGenerationProgressPersisterTest {
     @Test
     fun `flush with cancelled partial progress does not persist truncated content`() = runTest {
         val chatRepository = mockChatRepository()
+        val embeddingEngine = mockk<EmbeddingEnginePort>()
+        coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
         val session = ChatGenerationProgressPersister(
             chatRepository = chatRepository,
+            messageRepository = mockk(relaxed = true),
+            embeddingEngine = embeddingEngine,
             extractedUrlTracker = FakeExtractedUrlTracker(),
         ).startSession(
             mode = Mode.FAST,
@@ -103,13 +117,13 @@ class ChatGenerationProgressPersisterTest {
         session.applyState(MessageGenerationState.GeneratingText("truncated", ModelType.FAST))
         session.flush(markIncompleteAsCancelled = true)
 
-        coVerify(exactly = 0) {
+        coVerify(exactly = 1) {
             chatRepository.persistAllMessageData(
                 messageId = MessageId("assistant"),
                 modelType = any(),
-                thinkingStartTime = any(),
-                thinkingEndTime = any(),
-                thinkingDuration = any(),
+                thinkingStartTime = any<Long>(),
+                thinkingEndTime = any<Long>(),
+                thinkingDuration = any<Int>(),
                 thinkingRaw = any(),
                 content = any(),
                 messageState = any(),
@@ -122,8 +136,12 @@ class ChatGenerationProgressPersisterTest {
     @Test
     fun `flush without cancellation does not persist incomplete progress`() = runTest {
         val chatRepository = mockChatRepository()
+        val embeddingEngine = mockk<EmbeddingEnginePort>()
+        coEvery { embeddingEngine.getEmbedding(any()) } returns floatArrayOf(0.1f)
         val session = ChatGenerationProgressPersister(
             chatRepository = chatRepository,
+            messageRepository = mockk(relaxed = true),
+            embeddingEngine = embeddingEngine,
             extractedUrlTracker = FakeExtractedUrlTracker(),
         ).startSession(
             mode = Mode.FAST,
@@ -139,9 +157,9 @@ class ChatGenerationProgressPersisterTest {
             chatRepository.persistAllMessageData(
                 messageId = MessageId("assistant"),
                 modelType = any(),
-                thinkingStartTime = any(),
-                thinkingEndTime = any(),
-                thinkingDuration = any(),
+                thinkingStartTime = any<Long>(),
+                thinkingEndTime = any<Long>(),
+                thinkingDuration = any<Int>(),
                 thinkingRaw = any(),
                 content = any(),
                 messageState = any(),

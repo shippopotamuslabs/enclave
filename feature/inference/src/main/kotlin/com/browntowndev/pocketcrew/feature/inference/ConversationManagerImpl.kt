@@ -1,60 +1,67 @@
 package com.browntowndev.pocketcrew.feature.inference
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import android.os.Debug
 import android.util.Log
-import com.google.android.gms.tasks.Tasks
-import com.google.android.gms.tflite.gpu.support.TfLiteGpu
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.SamplerConfig
 import com.browntowndev.pocketcrew.domain.model.inference.AttachedImageInspectParams
 import com.browntowndev.pocketcrew.domain.model.inference.ExtractDepth
 import com.browntowndev.pocketcrew.domain.model.inference.ExtractFormat
-import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.GetMessageContextParams
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.SearchChatHistoryParams
 import com.browntowndev.pocketcrew.domain.model.inference.SearchChatParams
 import com.browntowndev.pocketcrew.domain.model.inference.TavilyExtractParams
 import com.browntowndev.pocketcrew.domain.model.inference.TavilyWebSearchParams
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationManagerPort
-import com.browntowndev.pocketcrew.domain.port.inference.ConversationPort
-import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
-import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.model.inference.ToolParam
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
-import com.browntowndev.pocketcrew.domain.util.ChatHistoryCompressor
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMessage
+import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
-import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
-import com.google.ai.edge.litertlm.Message
-import com.google.ai.edge.litertlm.SamplerConfig
+import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+import com.google.ai.edge.litertlm.Message as LiteRtMessage
+import com.google.ai.edge.litertlm.SamplerConfig as LiteRtSamplerConfig
 import com.google.ai.edge.litertlm.Tool
-import com.google.ai.edge.litertlm.ToolParam
 import com.google.ai.edge.litertlm.ToolSet
 import com.google.ai.edge.litertlm.tool
-import androidx.annotation.VisibleForTesting
+import java.io.File
 import java.lang.reflect.InvocationTargetException
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CancellationException as JavaCancellationException
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 
 /**
- * Implementation of [ConversationManagerPort] that manages LiteRT conversation lifecycle.
+ * Implementation of [ConversationManager] that manages LiteRT conversation lifecycle.
  * Resolves the model and configuration lazily and recreates resources when the 
  * model or configuration changes.
  *
@@ -68,7 +75,7 @@ class ConversationManagerImpl @Inject constructor(
     private val activeModelProvider: ActiveModelProviderPort,
     private val loggingPort: LoggingPort,
     private val toolExecutor: ToolExecutorPort,
-) : ConversationManagerPort {
+) : ConversationManager {
 
     private val defaultSystemPrompt = """
             # CRITICAL RULE — EVERY RESPONSE:
@@ -105,9 +112,9 @@ class ConversationManagerImpl @Inject constructor(
     @Volatile
     private var conversation: Conversation? = null
 
-    // Cache the ConversationPort wrapper to return the same instance on repeated calls
+    // Cache the LiteRtConversation wrapper to return the same instance on repeated calls
     @Volatile
-    private var conversationPort: ConversationPort? = null
+    private var conversationPort: LiteRtConversation? = null
 
     // Cached history to seed new conversations
     @Volatile
@@ -135,8 +142,8 @@ class ConversationManagerImpl @Inject constructor(
 
     private fun getModelPath(filename: String): String {
         // Use getExternalFilesDir to match ModelFileScanner's directory choice
-        val modelsDir = java.io.File(context.getExternalFilesDir(null), "models")
-        return java.io.File(modelsDir, filename).absolutePath
+        val modelsDir = File(context.getExternalFilesDir(null), "models")
+        return File(modelsDir, filename).absolutePath
     }
 
     private val mutex = Mutex()
@@ -144,17 +151,21 @@ class ConversationManagerImpl @Inject constructor(
     @Volatile
     private var isCurrentGenerationCancelled: Boolean = false
 
+    private val cancellationEpoch = AtomicInteger(0)
+
     override fun cancelCurrentGeneration() {
-        if (conversationPort != null || engine != null) {
-            Log.d(TAG, "Current generation marked as cancelled. Native tools will be aborted.")
-        }
+        Log.d(TAG, "cancelCurrentGeneration called")
         isCurrentGenerationCancelled = true
     }
 
     override fun cancelProcess() {
-        if (conversationPort != null) {
-            Log.d(TAG, "Cancelling LiteRT conversation process")
-            conversationPort?.cancelProcess()
+        Log.i(TAG, "cancelProcess requested - resetting manager state")
+        isCurrentGenerationCancelled = true
+        cancellationEpoch.incrementAndGet()
+
+        conversationPort?.let { port ->
+            Log.d(TAG, "Triggering native cancelProcess on active port")
+            port.cancelProcess()
         }
     }
 
@@ -164,17 +175,39 @@ class ConversationManagerImpl @Inject constructor(
      *
      * @param modelType The type of model to get the configuration for.
      * @param options Per-request generation options (e.g., sampler overrides).
-     * @return The active ConversationPort instance wrapping the LiteRT Conversation
+     * @return The active LiteRtConversation instance wrapping the LiteRT Conversation
      * @throws IllegalStateException if no model is registered for this model type
      */
     override suspend fun getConversation(
         modelType: ModelType, 
         options: GenerationOptions?,
         onLoadingStarted: suspend () -> Unit
-    ): ConversationPort = withContext(Dispatchers.IO) {
+    ): LiteRtConversation = withContext(Dispatchers.IO) {
         isCurrentGenerationCancelled = false
+        val requestCancellationEpoch = cancellationEpoch.get()
         // Lock to avoid concurrent initializations and ensure consistent state
         mutex.withLock {
+            suspend fun throwIfCancellationRequested(reason: String): Nothing {
+                Log.w(
+                    TAG,
+                    "getConversation cancelled reason=$reason isActive=${currentCoroutineContext().isActive} " +
+                        "isCancelled=$isCurrentGenerationCancelled requestEpoch=$requestCancellationEpoch " +
+                        "currentEpoch=${cancellationEpoch.get()}",
+                )
+                throw CancellationException(reason)
+            }
+
+            suspend fun ensureRequestActive(reason: String) {
+                if (
+                    !currentCoroutineContext().isActive ||
+                    isCurrentGenerationCancelled ||
+                    cancellationEpoch.get() != requestCancellationEpoch
+                ) {
+                    throwIfCancellationRequested(reason)
+                }
+            }
+
+            ensureRequestActive("Request cancelled before initialization")
             val activeConfig = activeModelProvider.getActiveConfiguration(modelType)
                 ?: throw IllegalStateException("No active configuration for $modelType")
 
@@ -191,7 +224,7 @@ class ConversationManagerImpl @Inject constructor(
                 ?: throw IllegalStateException("No registered asset for config ${activeConfig.id}. Download a model first.")
 
             val modelPath = getModelPath(asset.metadata.localFileName)
-            val resolvedThinkingEnabled = activeConfig.thinkingEnabled ?: false
+            val resolvedThinkingEnabled = activeConfig.thinkingEnabled
             val resolvedSystemPrompt = options?.systemPrompt ?: activeConfig.systemPrompt ?: defaultSystemPrompt
             val chatId = options?.chatId
             val userMessageId = options?.userMessageId
@@ -228,13 +261,14 @@ class ConversationManagerImpl @Inject constructor(
             val conversationRecreated = engineChanged || conversationChanged
 
             if (engineChanged) {
+                ensureRequestActive("Cancelled before engine creation")
                 onLoadingStarted()
                 Log.d(
                     TAG,
                     "Recreating LiteRT engine for modelType=$modelType, modelPath=$modelPath memory=${memorySnapshot()}"
                 )
                 closeEngineLocked()
-                currentModelPath = modelPath
+                // currentModelPath = modelPath // Moved to after successful initialization
                 hasTransientToolResults = false
                 transientToolResultTokens = 0
                 contextFullWarned = false
@@ -255,41 +289,38 @@ class ConversationManagerImpl @Inject constructor(
             }
 
             ensureEngineInitializedLocked(modelPath, activeConfig.contextWindow ?: 2048, asset.metadata.isMultimodal)
+            if (
+                !currentCoroutineContext().isActive ||
+                isCurrentGenerationCancelled ||
+                cancellationEpoch.get() != requestCancellationEpoch
+            ) {
+                Log.w(TAG, "getConversation cancelled after engine initialization - closing engine before returning")
+                closeEngineLocked()
+                throw CancellationException("Cancelled after engine initialization")
+            }
             val eng = engine ?: throw IllegalStateException("Engine not initialized")
 
             if (conversation == null || conversation?.isAlive != true) {
                 conversation?.close()
 
                 val contextWindow = activeConfig.contextWindow ?: 2048
-                // Reserve extra buffer for transient tool results already in the KV cache.
-                // This ensures compressHistory accounts for tool result tokens that will
-                // coexist in the context window alongside the compressed history.
-                val effectiveBufferTokens = 1000 + transientToolResultTokens
-                val compressedHistory = ChatHistoryCompressor.compressHistory(
-                    history = history,
-                    systemPrompt = resolvedSystemPrompt,
-                    contextWindowTokens = contextWindow,
-                    bufferTokens = effectiveBufferTokens,
-                    modelId = asset.metadata.localFileName,
-                    tokenCounter = com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
-                )
-
-                if (compressedHistory.size < history.size) {
-                    Log.d(TAG, "Compressed LiteRT history from ${history.size} to ${compressedHistory.size} messages to fit context window")
-                }
-
+                // History arrives pre-compacted from ChatHistoryRehydrator; no FIFO trimming needed.
                 val conversationConfig = ConversationConfig(
                     systemInstruction = Contents.of(resolvedSystemPrompt),
-                    initialMessages = compressedHistory.map { domainMsg ->
+                    initialMessages = history.map { domainMsg: DomainChatMessage ->
                         when (domainMsg.role) {
-                            Role.USER -> Message.user(domainMsg.content)
-                            Role.ASSISTANT -> Message.model(domainMsg.content)
-                            Role.SYSTEM -> Message.system(domainMsg.content)
+                            Role.USER -> LiteRtMessage.user(domainMsg.content)
+                            Role.ASSISTANT -> LiteRtMessage.model(domainMsg.content)
+                            Role.SYSTEM -> LiteRtMessage.system(domainMsg.content)
                         }
                     },
                     // NPU backends don't support custom sampler configs.
                     // Passing one causes redundant CPU-side sampling allocation.
-                    samplerConfig = if (activeBackendIsNpu) null else targetSamplerConfig,
+                    samplerConfig = if (activeBackendIsNpu) null else LiteRtSamplerConfig(
+                        temperature = targetSamplerConfig.temperature,
+                        topP = targetSamplerConfig.topP,
+                        topK = targetSamplerConfig.topK,
+                    ),
                     automaticToolCalling = true,
                     tools = buildList {
                         if (hasSearchTool) {
@@ -359,6 +390,8 @@ class ConversationManagerImpl @Inject constructor(
                     }
                 )
 
+                ensureRequestActive("Cancelled during conversation setup")
+
                 Log.d(
                     TAG,
                     "Creating LiteRT conversation for modelType=$modelType historySize=${history.size} hasSearchTool=$hasSearchTool memoryBeforeCreate=${memorySnapshot()}"
@@ -368,6 +401,16 @@ class ConversationManagerImpl @Inject constructor(
                     TAG,
                     "LiteRT conversation created for modelType=$modelType memoryAfterCreate=${memorySnapshot()}"
                 )
+            }
+
+            if (
+                !currentCoroutineContext().isActive ||
+                isCurrentGenerationCancelled ||
+                cancellationEpoch.get() != requestCancellationEpoch
+            ) {
+                Log.w(TAG, "getConversation cancelled after conversation creation - cleaning up")
+                closeConversationLocked()
+                throw CancellationException("Cancelled immediately after conversation setup")
             }
 
             val liteRtConversation = conversation ?: throw IllegalStateException("Conversation not initialized")
@@ -384,6 +427,7 @@ class ConversationManagerImpl @Inject constructor(
             currentSystemPrompt = resolvedSystemPrompt
             currentContextWindow = activeConfig.contextWindow ?: 2048
             currentSamplerConfig = targetSamplerConfig
+            currentModelPath = modelPath // Set only after full success
 
             Log.d(
                 TAG,
@@ -420,7 +464,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     val request = ToolCallRequest(
                         toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
-                        argumentsJson = ToolDefinition.TAVILY_WEB_SEARCH.encodeArguments(TavilyWebSearchParams(query)),
+                        argumentsJson = ToolDefinition.TAVILY_WEB_SEARCH.encodeArguments<TavilyWebSearchParams>(TavilyWebSearchParams(query)),
                         provider = "LITERT",
                         modelType = modelType,
                         chatId = chatId,
@@ -432,7 +476,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     executeToolSafely(request)
                 }
-            } catch (e: java.util.concurrent.CancellationException) {
+            } catch (e: JavaCancellationException) {
                 throw e
             } catch (t: Throwable) {
                 val rootCause = t.rootCause()
@@ -477,7 +521,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     val request = ToolCallRequest(
                         toolName = ToolDefinition.TAVILY_EXTRACT.name,
-                        argumentsJson = ToolDefinition.TAVILY_EXTRACT.encodeArguments(params),
+                        argumentsJson = ToolDefinition.TAVILY_EXTRACT.encodeArguments<TavilyExtractParams>(params),
                         provider = "LITERT",
                         modelType = modelType,
                         chatId = chatId,
@@ -489,7 +533,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     executeToolSafely(request)
                 }
-            } catch (e: java.util.concurrent.CancellationException) {
+            } catch (e: JavaCancellationException) {
                 throw e
             } catch (t: Throwable) {
                 val rootCause = t.rootCause()
@@ -526,7 +570,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     val request = ToolCallRequest(
                         toolName = ToolDefinition.ATTACHED_IMAGE_INSPECT.name,
-                        argumentsJson = ToolDefinition.ATTACHED_IMAGE_INSPECT.encodeArguments(AttachedImageInspectParams(question)),
+                        argumentsJson = ToolDefinition.ATTACHED_IMAGE_INSPECT.encodeArguments<AttachedImageInspectParams>(AttachedImageInspectParams(question)),
                         provider = "LITERT",
                         modelType = modelType,
                         chatId = chatId,
@@ -538,7 +582,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     executeToolSafely(request)
                 }
-            } catch (e: java.util.concurrent.CancellationException) {
+            } catch (e: JavaCancellationException) {
                 throw e
             } catch (t: Throwable) {
                 val rootCause = t.rootCause()
@@ -579,7 +623,7 @@ class ConversationManagerImpl @Inject constructor(
                         
                     val request = ToolCallRequest(
                         toolName = ToolDefinition.SEARCH_CHAT_HISTORY.name,
-                        argumentsJson = ToolDefinition.SEARCH_CHAT_HISTORY.encodeArguments(SearchChatHistoryParams(queries = queryList)),
+                        argumentsJson = ToolDefinition.SEARCH_CHAT_HISTORY.encodeArguments<SearchChatHistoryParams>(SearchChatHistoryParams(queries = queryList)),
                         provider = "LITERT",
                         modelType = modelType,
                         chatId = chatId,
@@ -591,7 +635,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     executeToolSafely(request)
                 }
-            } catch (e: java.util.concurrent.CancellationException) {
+            } catch (e: JavaCancellationException) {
                 throw e
             } catch (t: Throwable) {
                 val rootCause = t.rootCause()
@@ -628,7 +672,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     val request = ToolCallRequest(
                         toolName = ToolDefinition.SEARCH_CHAT.name,
-                        argumentsJson = ToolDefinition.SEARCH_CHAT.encodeArguments(SearchChatParams(chat_id, query)),
+                        argumentsJson = ToolDefinition.SEARCH_CHAT.encodeArguments<SearchChatParams>(SearchChatParams(chat_id = chat_id, query = query)),
                         provider = "LITERT",
                         modelType = modelType,
                         chatId = chatId,
@@ -640,7 +684,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     executeToolSafely(request)
                 }
-            } catch (e: java.util.concurrent.CancellationException) {
+            } catch (e: JavaCancellationException) {
                 throw e
             } catch (t: Throwable) {
                 val rootCause = t.rootCause()
@@ -676,9 +720,10 @@ class ConversationManagerImpl @Inject constructor(
                         TAG,
                         "Entered native tool coroutine tool=${ToolDefinition.GET_MESSAGE_CONTEXT.name} modelType=$modelType messageId=$message_id"
                     )
+                    val params = GetMessageContextParams(message_id, before, after)
                     val request = ToolCallRequest(
                         toolName = ToolDefinition.GET_MESSAGE_CONTEXT.name,
-                        argumentsJson = ToolDefinition.GET_MESSAGE_CONTEXT.encodeArguments(GetMessageContextParams(message_id, before, after)),
+                        argumentsJson = ToolDefinition.GET_MESSAGE_CONTEXT.encodeArguments<GetMessageContextParams>(params),
                         provider = "LITERT",
                         modelType = modelType,
                         chatId = chatId,
@@ -690,7 +735,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     executeToolSafely(request)
                 }
-            } catch (e: java.util.concurrent.CancellationException) {
+            } catch (e: JavaCancellationException) {
                 throw e
             } catch (t: Throwable) {
                 val rootCause = t.rootCause()
@@ -706,8 +751,8 @@ class ConversationManagerImpl @Inject constructor(
 
     private suspend fun executeToolSafely(request: ToolCallRequest): String {
         if (isCurrentGenerationCancelled) {
-            loggingPort.warning(TAG, "Tool execution aborted: generation was cancelled.")
-            throw java.util.concurrent.CancellationException("Generation was cancelled")
+            loggingPort.warning(TAG, "Tool execution aborted: generation was cancelled")
+            throw CancellationException("Generation was cancelled")
         }
 
         // Return a compact error payload instead of throwing across the native boundary.
@@ -749,7 +794,7 @@ class ConversationManagerImpl @Inject constructor(
             if (decision.shouldTrackTransientToolResult) {
                 hasTransientToolResults = true
                 // Track actual token count of tool result (plus a small buffer for the tool call request)
-                transientToolResultTokens += com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter.countTokens(
+                transientToolResultTokens += JTokkitTokenCounter.countTokens(
                     decision.finalResult,
                     modelId,
                 ) + 30
@@ -763,14 +808,14 @@ class ConversationManagerImpl @Inject constructor(
                 contextFullWarned = true
             }
 
-            if (decision.finalResult.contains("\"error\"")) {
+            if (decision.hasErrorPayload) {
                 loggingPort.error(
                     TAG,
                     "Native tool call returned error payload tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"} payload=${decision.finalResult.take(2000)}"
                 )
             }
             decision.finalResult
-        } catch (e: java.util.concurrent.CancellationException) {
+        } catch (e: CancellationException) {
             throw e
         } catch (t: Throwable) {
             val rootCause = t.rootCause()
@@ -826,16 +871,14 @@ class ConversationManagerImpl @Inject constructor(
         cacheDir: String?,
         isMultimodal: Boolean
     ) {
-        val useGpu = isGpuBackendAvailable()
-        val backendName = if (useGpu) "GPU" else "CPU"
-        val backend = if (useGpu) Backend.GPU() else Backend.CPU()
-        val visionBackend = if (isMultimodal && useGpu) Backend.GPU() else if (isMultimodal) Backend.CPU() else null
+        val backend = Backend.GPU()
+        val visionBackend = if (isMultimodal) Backend.GPU() else null
         var candidate: Engine? = null
 
         try {
             Log.d(
                 TAG,
-                "Initializing LiteRT text engine with $backendName backend, " +
+                "Initializing LiteRT text engine with GPU backend, " +
                     "contextWindow=$contextWindow memoryBeforeInit=${memorySnapshot()}"
             )
 
@@ -854,30 +897,24 @@ class ConversationManagerImpl @Inject constructor(
 
             Log.d(
                 TAG,
-                "LiteRT text engine initialized successfully with $backendName backend " +
+                "LiteRT text engine initialized successfully with GPU backend " +
                     "(isNpu=$activeBackendIsNpu) memoryAfterInit=${memorySnapshot()}"
             )
         } catch (t: Throwable) {
-            Log.w(TAG, "LiteRT $backendName backend failed during initialize() memoryAfterFailure=${memorySnapshot()}", t)
+            if (t is CancellationException || t is JavaCancellationException) {
+                Log.i(TAG, "LiteRT GPU engine initialization cancelled by user")
+                try { candidate?.close() } catch (_: Throwable) {}
+                throw t
+            }
+            Log.w(TAG, "LiteRT GPU backend failed during initialize() memoryAfterFailure=${memorySnapshot()}", t)
             try {
                 candidate?.close()
             } catch (_: Throwable) {
             }
             throw IllegalStateException(
-                "Failed to initialize LiteRT text engine with $backendName backend",
+                "Failed to initialize LiteRT text engine with GPU backend",
                 t
             )
-        }
-    }
-
-    private fun isGpuBackendAvailable(): Boolean {
-        return try {
-            val available = Tasks.await(TfLiteGpu.isGpuDelegateAvailable(context))
-            Log.d(TAG, "TfLiteGpu.isGpuDelegateAvailable returned $available")
-            available
-        } catch (t: Throwable) {
-            Log.w(TAG, "TfLiteGpu.isGpuDelegateAvailable failed; falling back to CPU", t)
-            false
         }
     }
 
@@ -919,9 +956,12 @@ class ConversationManagerImpl @Inject constructor(
 
     private fun closeConversationLocked() {
         Log.d(TAG, "Closing LiteRT conversation memoryBeforeClose=${memorySnapshot()}")
+
         conversation?.close()
         conversation = null
         conversationPort = null
+        currentSignature = null
+        hasTransientToolResults = false
         transientToolResultTokens = 0
         contextFullWarned = false
         Log.d(TAG, "Closed LiteRT conversation memoryAfterClose=${memorySnapshot()}")
@@ -934,20 +974,23 @@ class ConversationManagerImpl @Inject constructor(
             // we must recreate the conversation to ensure context integrity.
             // We only need to close if a conversation is already active; otherwise,
             // getConversation will naturally create it with the correct history.
-            val isContinuation = this.history == messages || (
-                this.history.isNotEmpty() &&
-                messages.size >= this.history.size &&
-                messages.take(this.history.size) == this.history
+            val isContinuation = messages == history || (
+                messages.size >= history.size &&
+                    messages.take(history.size) == history
             )
+            val resetsNativeContextToEmpty = messages.isEmpty() && history.isEmpty() && conversation != null
 
-            if (!isContinuation && conversation != null) {
-                Log.d(TAG, "History discontinuity detected. Recreating conversation. (oldSize=${this.history.size}, newSize=${messages.size})")
+            if (resetsNativeContextToEmpty) {
+                Log.d(TAG, "Empty rehydrated history requires native conversation reset. (oldSize=${history.size}, newSize=${messages.size})")
+                closeConversationLocked()
+            } else if (!isContinuation && conversation != null) {
+                Log.d(TAG, "History discontinuity detected. Recreating conversation. (oldSize=${history.size}, newSize=${messages.size})")
                 closeConversationLocked()
             } else if (isContinuation) {
-                Log.d(TAG, "History is a continuation. Reusing conversation. (oldSize=${this.history.size}, newSize=${messages.size})")
+                Log.d(TAG, "History is a continuation. Reusing conversation. (oldSize=${history.size}, newSize=${messages.size})")
             }
 
-            this.history = messages.toList()
+            history = messages.toList<DomainChatMessage>()
         }
     }
 

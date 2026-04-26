@@ -24,6 +24,7 @@ data class DownloadFileSpec(
     val sha256: String,
     val sizeInBytes: Long,
     val huggingFaceModelName: String = "",
+    val huggingFacePath: String? = null,
     val source: String = "HUGGING_FACE",
     val modelFileFormat: String = "LITERTLM",
     val utilityType: String? = null,
@@ -42,6 +43,7 @@ data class DownloadArtifact(
     val localFileName: String,
     val sha256: String,
     val sizeInBytes: Long,
+    val huggingFacePath: String? = null,
 )
 
 /**
@@ -55,6 +57,7 @@ fun DownloadFileSpec.requiredArtifacts(): List<DownloadArtifact> {
             localFileName = localFileName,
             sha256 = sha256,
             sizeInBytes = sizeInBytes,
+            huggingFacePath = huggingFacePath,
         )
     )
     if (

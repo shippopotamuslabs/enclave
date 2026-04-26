@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -17,35 +18,42 @@ import org.junit.jupiter.api.Test
 class SearchCurrentChatUseCaseTest {
 
     private lateinit var messageRepository: MessageRepository
+    private lateinit var embeddingEngine: EmbeddingEnginePort
     private lateinit var useCase: SearchCurrentChatUseCase
 
     @BeforeEach
     fun setup() {
         messageRepository = mockk()
-        useCase = SearchCurrentChatUseCase(messageRepository)
+        embeddingEngine = mockk()
+        useCase = SearchCurrentChatUseCase(messageRepository, embeddingEngine)
     }
 
     @Test
     fun `invoke delegates to messageRepository searchMessagesInChat`() = runTest {
         val chatId = ChatId("chat-1")
         val query = "test query"
+        val queryVector = floatArrayOf(0.1f, 0.2f)
         val messages = listOf(
             Message(id = MessageId("m1"), chatId = chatId, content = Content(text = "test content"), role = Role.USER),
         )
-        coEvery { messageRepository.searchMessagesInChat(chatId, query) } returns messages
+        coEvery { embeddingEngine.getEmbedding(query) } returns queryVector
+        coEvery { messageRepository.searchMessagesInChat(chatId, queryVector) } returns messages
 
         val result = useCase(chatId, query)
 
         assertEquals(messages, result)
-        coVerify { messageRepository.searchMessagesInChat(chatId, query) }
+        coVerify { messageRepository.searchMessagesInChat(chatId, queryVector) }
     }
 
     @Test
     fun `invoke returns empty list when no messages match`() = runTest {
         val chatId = ChatId("chat-2")
-        coEvery { messageRepository.searchMessagesInChat(chatId, "nonexistent") } returns emptyList()
+        val query = "nonexistent"
+        val queryVector = floatArrayOf(0.3f, 0.4f)
+        coEvery { embeddingEngine.getEmbedding(query) } returns queryVector
+        coEvery { messageRepository.searchMessagesInChat(chatId, queryVector) } returns emptyList()
 
-        val result = useCase(chatId, "nonexistent")
+        val result = useCase(chatId, query)
 
         assertEquals(emptyList<Message>(), result)
     }

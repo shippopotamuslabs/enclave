@@ -20,6 +20,8 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCa
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
+import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.pocketcrew.feature.inference.ActiveChatTurnStore
 import io.mockk.coEvery
 import io.mockk.every
@@ -73,6 +75,11 @@ class ChatViewModelNavigationTest {
 
         coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
         every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
+        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
+        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
+        every { settingsUseCases.assignments } returns assignmentUseCases
+        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
+        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
         every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
         every { toolExecutionEventPort.events } returns MutableSharedFlow()
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
@@ -92,8 +99,10 @@ class ChatViewModelNavigationTest {
             errorHandler = errorHandler,
             toolExecutionEventPort = toolExecutionEventPort,
             loggingPort = loggingPort,
-            activeChatTurnSnapshotPort = ActiveChatTurnStore(),
-        )
+            activeChatTurnSnapshotPort = mockk(relaxed = true),
+            
+            playbackController = mockk(relaxed = true),
+            )
     }
 
     @Test

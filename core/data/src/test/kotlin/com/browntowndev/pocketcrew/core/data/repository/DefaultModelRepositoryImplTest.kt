@@ -10,16 +10,18 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelEntity
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
+import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
+import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import io.mockk.coEvery
 import io.mockk.mockk
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -34,6 +36,7 @@ class DefaultModelRepositoryImplTest {
     private val localModelsDao = mockk<LocalModelsDao>()
     private val apiConfigsDao = mockk<ApiModelConfigurationsDao>()
     private val apiCredentialsDao = mockk<ApiCredentialsDao>()
+    private val ttsProviderDao = mockk<TtsProviderDao>()
 
     @BeforeEach
     fun setup() {
@@ -42,7 +45,8 @@ class DefaultModelRepositoryImplTest {
             localModelConfigurationsDao = localConfigsDao,
             localModelsDao = localModelsDao,
             apiModelConfigurationsDao = apiConfigsDao,
-            apiCredentialsDao = apiCredentialsDao
+            apiCredentialsDao = apiCredentialsDao,
+            ttsProviderDao = ttsProviderDao
         )
     }
 
@@ -74,8 +78,9 @@ class DefaultModelRepositoryImplTest {
 
         assertEquals(configId, result?.localConfigId)
         assertNull(result?.apiConfigId)
-        assertEquals("Precise", result?.displayName)
-        assertEquals("qwen", result?.providerName) // Using huggingFaceModelName as provider for local models
+        assertEquals("qwen", result?.displayName)
+        assertEquals("Local", result?.providerName)
+        assertEquals("Precise", result?.presetName)
     }
 
     @Test
@@ -94,7 +99,7 @@ class DefaultModelRepositoryImplTest {
         )
         coEvery { apiCredentialsDao.getById(credId) } returns ApiCredentialsEntity(
             id = credId,
-            displayName = "GPT-4o",
+            displayName = "OpenAI Primary",
             provider = ApiProvider.OPENAI,
             modelId = "gpt-4o",
             credentialAlias = "key1",
@@ -105,7 +110,31 @@ class DefaultModelRepositoryImplTest {
 
         assertEquals(configId, result?.apiConfigId)
         assertNull(result?.localConfigId)
-        assertEquals("Default", result?.displayName)
+        assertEquals("OpenAI Primary", result?.displayName)
         assertEquals("OpenAI", result?.providerName)
+        assertEquals("Default", result?.presetName)
+    }
+
+    @Test
+    fun `get default with resolved display data for TTS model`() = runTest {
+        val ttsId = TtsProviderId("tts-1")
+        coEvery { defaultModelsDao.getDefault(ModelType.TTS) } returns DefaultModelEntity(
+            modelType = ModelType.TTS,
+            ttsProviderId = ttsId
+        )
+        coEvery { ttsProviderDao.getTtsProvider(ttsId.value) } returns TtsProviderEntity(
+            id = ttsId.value,
+            displayName = "My Grok TTS",
+            provider = ApiProvider.XAI,
+            voiceName = "eve",
+            credentialAlias = "xai-key"
+        )
+
+        val result = repo.getDefault(ModelType.TTS)
+
+        assertEquals(ttsId, result?.ttsProviderId)
+        assertEquals("My Grok TTS", result?.displayName)
+        assertEquals("xAI", result?.providerName)
+        assertEquals("eve", result?.presetName)
     }
 }

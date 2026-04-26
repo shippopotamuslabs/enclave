@@ -51,10 +51,11 @@ class ChatInferenceRequestPreparer(
 
         val strategy = when {
             config?.isLocal == true -> when (config.localModelFormat) {
-                ModelFileFormat.LITERTLM -> ToolCallStrategy.LITE_RT_NATIVE
+                ModelFileFormat.LITERTLM, ModelFileFormat.LITERT_ALIAS -> ToolCallStrategy.LITE_RT_NATIVE
                 ModelFileFormat.GGUF -> ToolCallStrategy.JSON_XML_ENVELOPE
                 ModelFileFormat.BIN,
                 ModelFileFormat.ONNX,
+                ModelFileFormat.TXT,
                 -> ToolCallStrategy.JSON_XML_ENVELOPE
                 null -> ToolCallStrategy.JSON_XML_ENVELOPE
             }

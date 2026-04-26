@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
+import com.browntowndev.pocketcrew.domain.usecase.byok.ClearDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
@@ -40,6 +41,7 @@ class SettingsApiProviderUseCasesImpl @Inject constructor(
 class SettingsAssignmentUseCasesImpl @Inject constructor(
     override val getDefaultModels: GetDefaultModelsUseCase,
     override val setDefaultModel: SetDefaultModelUseCase,
+    override val clearDefaultModel: ClearDefaultModelUseCase,
     override val resolveAssignedModelSelection: ResolveAssignedModelSelectionUseCase,
 ) : SettingsAssignmentUseCases
 
@@ -48,10 +50,17 @@ class SettingsDeletionUseCasesImpl @Inject constructor(
     override val executeModelDeletionWithReassignment: ExecuteModelDeletionWithReassignmentUseCase,
 ) : SettingsDeletionUseCases
 
+class SettingsTtsUseCasesImpl @Inject constructor(
+    override val getTtsProviders: GetTtsProvidersUseCase,
+    override val saveTtsProvider: SaveTtsProviderUseCase,
+    override val deleteTtsProvider: DeleteTtsProviderUseCase,
+) : SettingsTtsUseCases
+
 class SettingsUseCasesImpl @Inject constructor(
     override val preferences: SettingsPreferencesUseCases,
     override val localModels: SettingsLocalModelUseCases,
     override val apiProviders: SettingsApiProviderUseCases,
     override val assignments: SettingsAssignmentUseCases,
     override val deletion: SettingsDeletionUseCases,
+    override val tts: SettingsTtsUseCases,
 ) : SettingsUseCases

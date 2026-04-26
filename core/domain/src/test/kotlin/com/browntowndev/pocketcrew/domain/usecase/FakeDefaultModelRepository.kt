@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.usecase
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import kotlinx.coroutines.flow.Flow
@@ -14,8 +15,6 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
 
     private val _defaults = MutableStateFlow<Map<ModelType, DefaultModelAssignment>>(emptyMap())
 
-    var lastSetCall: Triple<ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?>? = null
-
     override suspend fun getDefault(modelType: ModelType): DefaultModelAssignment? {
         return _defaults.value[modelType]
     }
@@ -24,13 +23,18 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
         return _defaults.asStateFlow().map { it.values.toList() }
     }
 
-    override suspend fun setDefault(modelType: ModelType, localConfigId: LocalModelConfigurationId?, apiConfigId: ApiModelConfigurationId?) {
-        lastSetCall = Triple(modelType, localConfigId, apiConfigId)
+    override suspend fun setDefault(
+        modelType: ModelType,
+        localConfigId: LocalModelConfigurationId?,
+        apiConfigId: ApiModelConfigurationId?,
+        ttsProviderId: TtsProviderId?
+    ) {
         val current = _defaults.value.toMutableMap()
         current[modelType] = DefaultModelAssignment(
             modelType = modelType,
             localConfigId = localConfigId,
-            apiConfigId = apiConfigId
+            apiConfigId = apiConfigId,
+            ttsProviderId = ttsProviderId
         )
         _defaults.value = current
     }

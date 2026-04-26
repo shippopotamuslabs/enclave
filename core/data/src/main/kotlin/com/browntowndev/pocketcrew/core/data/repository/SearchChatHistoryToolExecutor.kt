@@ -2,10 +2,12 @@ package com.browntowndev.pocketcrew.core.data.repository
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.inference.SearchChatHistoryParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
@@ -40,6 +42,7 @@ class SearchChatHistoryToolExecutor @Inject constructor(
     private val loggingPort: LoggingPort,
     private val messageRepository: MessageRepository,
     private val chatRepository: ChatRepository,
+    private val embeddingEngine: EmbeddingEnginePort,
 ) : ToolExecutorPort {
 
     companion object {
@@ -74,8 +77,13 @@ class SearchChatHistoryToolExecutor @Inject constructor(
             "Executing search_chat_history provider=${request.provider} modelType=${request.modelType} queries=$queries"
         )
 
-        // Find initial matches
-        val initialMatches = messageRepository.searchMessagesAcrossChats(queries)
+        // Find initial matches using semantic search for each query
+        val allMatches = mutableListOf<Message>()
+        for (query in queries) {
+            val queryVector = embeddingEngine.getEmbedding(query)
+            allMatches.addAll(messageRepository.searchMessagesAcrossChats(queryVector))
+        }
+        val initialMatches = allMatches.distinctBy { it.id }
         val totalMatchCount = initialMatches.size
 
         // For each match, get surrounding context
