@@ -23,6 +23,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
+import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceFactory
 import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceService
 import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
@@ -57,6 +58,13 @@ class GenerateChatResponseUseCaseSearchToolTest {
         activeModelProvider = activeModelProvider,
         messageRepository = messageRepository,
         settingsRepository = settingsRepository,
+        memoriesRepository = mockk(relaxed = true) {
+            coEvery { getCoreMemories() } returns emptyList()
+            coEvery { searchMemories(any(), any()) } returns emptyList()
+        },
+        embeddingEnginePort = mockk(relaxed = true) {
+            coEvery { getEmbedding(any()) } returns floatArrayOf()
+        },
         searchToolPromptComposer = SearchToolPromptComposer(),
         loggingPort = mockk(relaxed = true),
     )

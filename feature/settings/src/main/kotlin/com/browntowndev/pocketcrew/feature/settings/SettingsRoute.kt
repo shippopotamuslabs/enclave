@@ -40,6 +40,11 @@ fun SettingsRoute(
         onDeleteAllConversations = viewModel::onDeleteAllConversations,
         onDeleteAllMemories = viewModel::onDeleteAllMemories,
         onShowMemoriesSheet = viewModel::onShowMemoriesSheet,
+        onAddMemory = viewModel::onAddMemory,
+        onEditMemory = viewModel::onEditMemory,
+        onUpdateMemoryDraft = viewModel::onUpdateMemoryDraft,
+        onSaveMemory = viewModel::onSaveMemory,
+        onCancelMemoryEdit = viewModel::onCancelMemoryEdit,
         onDeleteMemory = viewModel::onDeleteMemory,
         onOpenToS = {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://pocketcrew.ai/terms"))

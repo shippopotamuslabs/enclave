@@ -41,6 +41,18 @@ internal object SQLiteVecInstaller {
         )
     }
 
+    fun createMemoryEmbeddingTable(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE VIRTUAL TABLE IF NOT EXISTS memory_embeddings
+            USING vec0(
+                id TEXT PRIMARY KEY,
+                vector float[384]
+            )
+            """.trimIndent(),
+        )
+    }
+
     internal fun sqliteVecExtensionPath(context: Context): String {
         val nativeLibrary = File(context.applicationInfo.nativeLibraryDir, SQLITE_VEC_LIBRARY_FILE_NAME)
         if (nativeLibrary.exists()) {

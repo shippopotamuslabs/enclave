@@ -53,6 +53,7 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 
@@ -75,6 +76,11 @@ fun SettingsScreen(
     onDeleteAllConversations: () -> Unit,
     onDeleteAllMemories: () -> Unit,
     onShowMemoriesSheet: (Boolean) -> Unit,
+    onAddMemory: () -> Unit,
+    onEditMemory: (StoredMemory) -> Unit,
+    onUpdateMemoryDraft: (String, MemoryCategory) -> Unit,
+    onSaveMemory: () -> Unit,
+    onCancelMemoryEdit: () -> Unit,
     onDeleteMemory: (String) -> Unit,
     onOpenToS: () -> Unit,
     onShowFeedbackSheet: (Boolean) -> Unit,
@@ -297,6 +303,19 @@ fun SettingsScreen(
             )
         }
 
+        if (uiState.home.isMemoriesSheetOpen) {
+            MemoriesBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowMemoriesSheet(false) },
+                onAddMemory = onAddMemory,
+                onEditMemory = onEditMemory,
+                onUpdateMemoryDraft = onUpdateMemoryDraft,
+                onSaveMemory = onSaveMemory,
+                onCancelMemoryEdit = onCancelMemoryEdit,
+                onDeleteMemory = onDeleteMemory
+            )
+        }
+
         if (uiState.home.isLocalModelsSheetOpen) {
             LocalModelsBottomSheet(
                 uiState = uiState,
@@ -481,6 +500,11 @@ fun PreviewSettingsScreen() {
             onDeleteAllConversations = {},
             onDeleteAllMemories = {},
             onShowMemoriesSheet = {},
+            onAddMemory = {},
+            onEditMemory = { _ -> },
+            onUpdateMemoryDraft = { _, _ -> },
+            onSaveMemory = {},
+            onCancelMemoryEdit = {},
             onDeleteMemory = {},
             onOpenToS = {},
             onShowFeedbackSheet = {},

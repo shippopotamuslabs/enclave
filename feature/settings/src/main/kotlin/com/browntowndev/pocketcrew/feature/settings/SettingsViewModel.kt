@@ -6,14 +6,22 @@ import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
+import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
+import com.browntowndev.pocketcrew.domain.usecase.settings.ApiProviderDraft
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApiModelDiscoveryRequest
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApiPresetDraft
-import com.browntowndev.pocketcrew.domain.usecase.settings.ApiProviderDraft
 import com.browntowndev.pocketcrew.domain.usecase.settings.ModelDeletionTarget
 import com.browntowndev.pocketcrew.domain.usecase.settings.PreparedModelDeletion
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.feature.settings.ApiModelConfigUi
+import com.browntowndev.pocketcrew.feature.settings.LocalModelAssetUiMapper
+import com.browntowndev.pocketcrew.feature.settings.ApiModelAssetUiMapper
+import com.browntowndev.pocketcrew.feature.settings.TtsProviderAssetUiMapper
+import com.browntowndev.pocketcrew.feature.settings.ReassignmentOptionUiMapper
+import com.browntowndev.pocketcrew.feature.settings.SettingsUiStateFactory
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
@@ -28,6 +36,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -50,6 +59,7 @@ private data class TransientSettingsBundle(
     val searchSkillState: SearchSkillTransientState,
     val assignmentState: AssignmentDialogTransientState,
     val deletionState: DeletionTransientState,
+    val memoriesState: MemoriesTransientState,
 )
 
 private data class SheetTransientBundle(
@@ -70,6 +80,7 @@ private data class DialogTransientBundle(
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     settingsUseCases: SettingsUseCases,
+    private val memoriesRepository: MemoriesRepository,
     private val settingsUiStateFactory: SettingsUiStateFactory,
     private val localModelAssetUiMapper: LocalModelAssetUiMapper,
     private val apiModelAssetUiMapper: ApiModelAssetUiMapper,
@@ -83,7 +94,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     private val _sheetVisibility = MutableStateFlow(SheetVisibilityState())
-    private val _memories = MutableStateFlow(emptyList<StoredMemory>())
+    private val _memoriesState = MutableStateFlow(MemoriesTransientState())
     private val _feedbackText = MutableStateFlow("")
     private val _localModelsState = MutableStateFlow(LocalModelsTransientState())
     private val _apiState = MutableStateFlow(ApiProvidersTransientState())
@@ -109,6 +120,9 @@ class SettingsViewModel @Inject constructor(
     private val localModelAssetsFlow = localModelUseCases.getLocalModelAssets()
     private val apiModelAssetsFlow = apiProviderUseCases.getApiModelAssets()
     private val ttsAssetsFlow = ttsUseCases.getTtsProviders()
+    private val memoriesFlow = memoriesRepository.getAllMemoriesFlow().map { memories ->
+        memories.map { StoredMemory(it.id, it.content, it.category) }
+    }
     private val persistedSettingsBundle = combine(
         settingsUseCases.getSettings(),
         localModelAssetsFlow,
@@ -124,48 +138,51 @@ class SettingsViewModel @Inject constructor(
             defaultModels = defaultModels,
         )
     }
-    private val transientSheetBundle = combine(
+    private val sheetAndMemoriesBundle = combine(
         _sheetVisibility,
-        _memories,
+        memoriesFlow,
         _feedbackText,
-        _localModelsState,
-    ) { sheetVisibility, memories, feedbackText, localModelsState ->
-        SheetTransientBundle(
-            sheetVisibility = sheetVisibility,
-            memories = memories,
-            feedbackText = feedbackText,
-            localModelsState = localModelsState,
-        )
+        _memoriesState
+    ) { sheetVisibility, memories, feedbackText, memoriesState ->
+        object {
+            val sheetVisibility = sheetVisibility
+            val memories = memories
+            val feedbackText = feedbackText
+            val memoriesState = memoriesState
+        }
     }
-    private val transientDialogBundle = combine(
-        _searchSkillState,
+
+    private val modelAndToolsBundle = combine(
+        _localModelsState,
         _apiState,
+        _searchSkillState,
         _ttsState,
+    ) { localModelsState, apiState, searchSkillState, ttsState ->
+        object {
+            val localModelsState = localModelsState
+            val apiState = apiState
+            val searchSkillState = searchSkillState
+            val ttsState = ttsState
+        }
+    }
+
+    private val transientSettingsBundle = combine(
+        sheetAndMemoriesBundle,
+        modelAndToolsBundle,
         _assignmentState,
-        _deletionState,
-    ) { searchSkillState, apiState, ttsState, assignmentState, deletionState ->
-        DialogTransientBundle(
-            searchSkillState = searchSkillState,
-            apiState = apiState,
-            ttsState = ttsState,
+        _deletionState
+    ) { smBundle, mtBundle, assignmentState, deletionState ->
+        TransientSettingsBundle(
+            sheetVisibility = smBundle.sheetVisibility,
+            memories = smBundle.memories,
+            feedbackText = smBundle.feedbackText,
+            localModelsState = mtBundle.localModelsState,
+            apiState = mtBundle.apiState,
+            ttsState = mtBundle.ttsState,
+            searchSkillState = mtBundle.searchSkillState,
             assignmentState = assignmentState,
             deletionState = deletionState,
-        )
-    }
-    private val transientSettingsBundle = combine(
-        transientSheetBundle,
-        transientDialogBundle,
-    ) { sheetBundle, dialogBundle ->
-        TransientSettingsBundle(
-            sheetVisibility = sheetBundle.sheetVisibility,
-            memories = sheetBundle.memories,
-            feedbackText = sheetBundle.feedbackText,
-            localModelsState = sheetBundle.localModelsState,
-            apiState = dialogBundle.apiState,
-            ttsState = dialogBundle.ttsState,
-            searchSkillState = dialogBundle.searchSkillState,
-            assignmentState = dialogBundle.assignmentState,
-            deletionState = dialogBundle.deletionState,
+            memoriesState = smBundle.memoriesState,
         )
     }
 
@@ -188,6 +205,7 @@ class SettingsViewModel @Inject constructor(
             searchSkillState = transient.searchSkillState,
             assignmentsState = transient.assignmentState,
             deletionState = transient.deletionState,
+            memoriesState = transient.memoriesState,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -272,6 +290,62 @@ class SettingsViewModel @Inject constructor(
         _sheetVisibility.update { it.copy(dataControls = show) }
     }
 
+    fun onShowMemoriesSheet(show: Boolean) {
+        _sheetVisibility.update { it.copy(memories = show) }
+        if (!show) {
+            _memoriesState.update { MemoriesTransientState() }
+        }
+    }
+
+    fun onAddMemory() {
+        _memoriesState.update {
+            it.copy(
+                memoryDraft = StoredMemory(category = MemoryCategory.PREFERENCES),
+                isEditing = true
+            )
+        }
+    }
+
+    fun onEditMemory(memory: StoredMemory) {
+        _memoriesState.update {
+            it.copy(
+                memoryDraft = memory,
+                isEditing = true
+            )
+        }
+    }
+
+    fun onUpdateMemoryDraft(text: String, category: MemoryCategory) {
+        _memoriesState.update {
+            it.copy(
+                memoryDraft = it.memoryDraft?.copy(text = text, category = category)
+                    ?: StoredMemory(text = text, category = category)
+            )
+        }
+    }
+
+    fun onSaveMemory() {
+        val draft = _memoriesState.value.memoryDraft ?: return
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save memory", "Failed to save memory")) {
+            if (draft.id.isEmpty()) {
+                memoriesRepository.insertMemory(draft.category, draft.text)
+            } else {
+                memoriesRepository.updateMemory(draft.id, draft.text, draft.category)
+            }
+            _memoriesState.update { MemoriesTransientState() }
+        }
+    }
+
+    fun onCancelMemoryEdit() {
+        _memoriesState.update { MemoriesTransientState() }
+    }
+
+    fun onDeleteMemory(memoryId: String) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete memory", "Failed to delete memory")) {
+            memoriesRepository.deleteMemory(memoryId)
+        }
+    }
+
     fun onAllowMemoriesChange(enabled: Boolean) {
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update memories setting", "Failed to update setting")) {
             preferencesUseCases.updateAllowMemories(enabled)
@@ -281,15 +355,13 @@ class SettingsViewModel @Inject constructor(
     fun onDeleteAllConversations() = Unit
 
     fun onDeleteAllMemories() {
-        _memories.value = emptyList()
-    }
-
-    fun onShowMemoriesSheet(show: Boolean) {
-        _sheetVisibility.update { it.copy(memories = show) }
-    }
-
-    fun onDeleteMemory(memoryId: String) {
-        _memories.update { memories -> memories.filterNot { it.id == memoryId } }
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete all memories", "Failed to delete all memories")) {
+            // Add a use case for this if needed, or loop delete
+            // For now, let's just use repository directly
+            uiState.value.memories.memories.forEach { 
+                memoriesRepository.deleteMemory(it.id)
+            }
+        }
     }
 
     fun onShowFeedbackSheet(show: Boolean) {
