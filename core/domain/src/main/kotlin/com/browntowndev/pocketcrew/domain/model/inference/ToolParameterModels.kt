@@ -60,3 +60,20 @@ data class GetMessageContextParams(
     @ToolParam(description = "Number of messages after the anchor message to return. Default 5.", required = false)
     val after: Int = 5
 ) : ToolParameters
+
+@Serializable
+enum class MemoryAction {
+    save, update, delete, search
+}
+
+@Serializable
+data class ManageMemoriesParams(
+    @ToolParam(description = "The action to perform: 'save', 'update', 'delete', or 'search'.")
+    val action: MemoryAction,
+    @ToolParam(description = "The content of the memory to save or update, or the search query.", required = false)
+    val content: String? = null,
+    @ToolParam(description = "The category of the memory (for 'save' only): 'CORE_IDENTITY', 'PREFERENCES', 'FACTS', 'PROJECT_CONTEXT'.", required = false)
+    val category: String? = null,
+    @ToolParam(description = "The ID of the memory (for 'update' or 'delete' only).", required = false)
+    val id: String? = null
+) : ToolParameters

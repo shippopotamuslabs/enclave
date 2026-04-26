@@ -10,9 +10,11 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
+import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -32,6 +34,8 @@ class DirectChatInferenceExecutor @Inject constructor(
     private val activeModelProvider: ActiveModelProviderPort,
     private val messageRepository: MessageRepository,
     private val settingsRepository: SettingsRepository,
+    private val memoriesRepository: MemoriesRepository,
+    private val embeddingEnginePort: EmbeddingEnginePort,
     private val searchToolPromptComposer: SearchToolPromptComposer,
     private val loggingPort: LoggingPort,
 ) : ChatInferenceExecutorPort {
@@ -44,6 +48,8 @@ class DirectChatInferenceExecutor @Inject constructor(
         activeModelProvider = activeModelProvider,
         settingsRepository = settingsRepository,
         messageRepository = messageRepository,
+        memoriesRepository = memoriesRepository,
+        embeddingEnginePort = embeddingEnginePort,
         searchToolPromptComposer = searchToolPromptComposer,
         loggingPort = loggingPort,
     )

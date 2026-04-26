@@ -6,11 +6,15 @@ import com.browntowndev.pocketcrew.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.memory.Memory
+import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
@@ -40,6 +44,8 @@ class ChatInferenceRequestPreparerTest {
                     imageUri = "file:///tmp/direct.jpg",
                 )
             ),
+            memoriesRepository = mockMemoriesRepository(),
+            embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
             loggingPort = mockk(relaxed = true),
         )
@@ -57,6 +63,7 @@ class ChatInferenceRequestPreparerTest {
         assertFalse(request.options.availableTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
         assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
         assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
+        assertTrue(request.options.availableTools.contains(ToolDefinition.MANAGE_MEMORIES))
         assertTrue(request.options.toolingEnabled)
         assertTrue(request.prompt.contains("The user attached an image."))
     }
@@ -75,6 +82,8 @@ class ChatInferenceRequestPreparerTest {
                     imageUri = "file:///tmp/tool.jpg",
                 )
             ),
+            memoriesRepository = mockMemoriesRepository(),
+            embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
             loggingPort = mockk(relaxed = true),
         )
@@ -105,6 +114,8 @@ class ChatInferenceRequestPreparerTest {
             ),
             settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
             messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            memoriesRepository = mockMemoriesRepository(),
+            embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
             loggingPort = mockk(relaxed = true),
         )
@@ -132,6 +143,8 @@ class ChatInferenceRequestPreparerTest {
             ),
             settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
             messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            memoriesRepository = mockMemoriesRepository(),
+            embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
             loggingPort = mockk(relaxed = true),
         )
@@ -157,6 +170,8 @@ class ChatInferenceRequestPreparerTest {
             ),
             settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
             messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            memoriesRepository = mockMemoriesRepository(),
+            embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
             loggingPort = mockk(relaxed = true),
         )
@@ -185,6 +200,8 @@ class ChatInferenceRequestPreparerTest {
             ),
             settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = true)),
             messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            memoriesRepository = mockMemoriesRepository(),
+            embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
             loggingPort = mockk(relaxed = true),
         )
@@ -210,6 +227,8 @@ class ChatInferenceRequestPreparerTest {
             ),
             settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
             messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            memoriesRepository = mockMemoriesRepository(),
+            embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
             loggingPort = mockk(relaxed = true),
         )
@@ -240,6 +259,8 @@ class ChatInferenceRequestPreparerTest {
             ),
             settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
             messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            memoriesRepository = mockMemoriesRepository(),
+            embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
             loggingPort = mockk(relaxed = true),
         )
@@ -253,6 +274,46 @@ class ChatInferenceRequestPreparerTest {
         )
 
         assertTrue(request.options.availableTools.contains(ToolDefinition.GET_MESSAGE_CONTEXT))
+    }
+
+    @Test
+    fun `injects core and retrieved memories into system prompt`() = runTest {
+        val coreMemories = listOf(
+            Memory(category = MemoryCategory.CORE_IDENTITY, content = "User is a developer."),
+            Memory(category = MemoryCategory.PREFERENCES, content = "User likes dark mode.")
+        )
+        val retrievedMemories = listOf(
+            Memory(category = MemoryCategory.FACTS, content = "User has a cat.")
+        )
+        val preparer = ChatInferenceRequestPreparer(
+            activeModelProvider = mockActiveModelProvider(
+                fastConfig = fastTextConfig(),
+                visionConfig = null,
+            ),
+            settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
+            messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            memoriesRepository = mockk {
+                coEvery { getCoreMemories() } returns coreMemories
+                coEvery { searchMemories(any(), any()) } returns retrievedMemories
+            },
+            embeddingEnginePort = mockEmbeddingEngine(),
+            searchToolPromptComposer = SearchToolPromptComposer(),
+            loggingPort = mockk(relaxed = true),
+        )
+
+        val request = preparer(
+            prompt = "Tell me about myself",
+            chatId = ChatId("chat"),
+            userMessageId = MessageId("user"),
+            assistantMessageId = MessageId("assistant"),
+            modelType = ModelType.FAST,
+        )
+
+        assertTrue(request.options.systemPrompt?.contains("User is a developer.") == true)
+        assertTrue(request.options.systemPrompt?.contains("User likes dark mode.") == true)
+        assertTrue(request.options.systemPrompt?.contains("User has a cat.") == true)
+        assertTrue(request.options.systemPrompt?.contains("# ABOUT THE USER:") == true)
+        assertTrue(request.options.systemPrompt?.contains("# RELEVANT FACTS & CONTEXT:") == true)
     }
 
     @Test
@@ -283,6 +344,15 @@ class ChatInferenceRequestPreparerTest {
         resolvedImageTarget: ResolvedImageTarget?,
     ): MessageRepository = mockk {
         coEvery { resolveLatestImageBearingUserMessage(any(), any()) } returns resolvedImageTarget
+    }
+
+    private fun mockMemoriesRepository(): MemoriesRepository = mockk {
+        coEvery { getCoreMemories() } returns emptyList()
+        coEvery { searchMemories(any(), any()) } returns emptyList()
+    }
+
+    private fun mockEmbeddingEngine(): EmbeddingEnginePort = mockk {
+        coEvery { getEmbedding(any()) } returns floatArrayOf(0.1f, 0.2f)
     }
 
     private fun fastTextConfig(): ActiveModelConfiguration = ActiveModelConfiguration(
@@ -348,6 +418,8 @@ class ChatInferenceRequestPreparerTest {
             ),
             settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
             messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            memoriesRepository = mockMemoriesRepository(),
+            embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
             loggingPort = mockk(relaxed = true),
         )
@@ -372,6 +444,8 @@ class ChatInferenceRequestPreparerTest {
             ),
             settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
             messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            memoriesRepository = mockMemoriesRepository(),
+            embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
             loggingPort = mockk(relaxed = true),
         )
@@ -396,6 +470,8 @@ class ChatInferenceRequestPreparerTest {
             ),
             settingsRepository = mockSettingsRepository(SettingsData(searchEnabled = false)),
             messageRepository = mockMessageRepository(resolvedImageTarget = null),
+            memoriesRepository = mockMemoriesRepository(),
+            embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
             loggingPort = mockk(relaxed = true),
         )

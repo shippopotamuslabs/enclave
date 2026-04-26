@@ -24,6 +24,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
+import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceFactory
 import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceService
 import io.mockk.coEvery
@@ -377,6 +378,13 @@ class GenerateChatResponseUseCaseImageToolTest {
             activeModelProvider = activeModelProvider,
             messageRepository = messageRepository,
             settingsRepository = settingsRepository,
+            memoriesRepository = mockk(relaxed = true) {
+                coEvery { getCoreMemories() } returns emptyList()
+                coEvery { searchMemories(any(), any()) } returns emptyList()
+            },
+            embeddingEnginePort = mockk(relaxed = true) {
+                coEvery { getEmbedding(any()) } returns floatArrayOf()
+            },
             searchToolPromptComposer = SearchToolPromptComposer(),
             loggingPort = mockk<LoggingPort>(relaxed = true),
         )

@@ -6,8 +6,10 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
 import kotlinx.coroutines.flow.first
@@ -16,6 +18,8 @@ class ChatInferenceRequestPreparer(
     private val activeModelProvider: ActiveModelProviderPort,
     private val settingsRepository: SettingsRepository,
     private val messageRepository: MessageRepository,
+    private val memoriesRepository: MemoriesRepository,
+    private val embeddingEnginePort: EmbeddingEnginePort,
     private val searchToolPromptComposer: SearchToolPromptComposer,
     private val loggingPort: LoggingPort,
 ) {
@@ -40,6 +44,14 @@ class ChatInferenceRequestPreparer(
             else -> ChatImageHandling.NONE
         }
         val reasoningBudget = if (config?.isLocal == true && config.thinkingEnabled) 2048 else 0
+
+        val coreMemories = memoriesRepository.getCoreMemories()
+        val retrievedMemories = if (prompt.isNotBlank()) {
+            val embedding = embeddingEnginePort.getEmbedding(prompt)
+            memoriesRepository.searchMemories(embedding)
+        } else {
+            emptyList()
+        }
 
         loggingPort.debug(
             TAG,
@@ -72,6 +84,8 @@ class ChatInferenceRequestPreparer(
                 includeMemoryTools = true,
                 currentChatId = chatId.value,
                 strategy = strategy,
+                coreMemories = coreMemories,
+                retrievedMemories = retrievedMemories,
             )
         } else {
             config?.systemPrompt
@@ -85,6 +99,7 @@ class ChatInferenceRequestPreparer(
             add(ToolDefinition.SEARCH_CHAT_HISTORY)
             add(ToolDefinition.SEARCH_CHAT)
             add(ToolDefinition.GET_MESSAGE_CONTEXT)
+            add(ToolDefinition.MANAGE_MEMORIES)
         }
 
         return PreparedChatInferenceRequest(

@@ -150,13 +150,20 @@ data class ToolDefinition(
             parametersClass = GetMessageContextParams::class,
         )
 
+        val MANAGE_MEMORIES = ToolDefinition(
+            name = "manage_memories",
+            description = "Manage the user's memories. Use this to save important information about the user (identity, preferences, ideologies, etc.) or project context that you should remember across all conversations. You can also update, delete, or search existing memories.",
+            parametersClass = ManageMemoriesParams::class,
+        )
+
         val ALL_TOOLS = listOf(
             TAVILY_WEB_SEARCH,
             TAVILY_EXTRACT,
             ATTACHED_IMAGE_INSPECT,
             SEARCH_CHAT_HISTORY,
             SEARCH_CHAT,
-            GET_MESSAGE_CONTEXT
+            GET_MESSAGE_CONTEXT,
+            MANAGE_MEMORIES
         )
 
         fun fromName(name: String): ToolDefinition? {

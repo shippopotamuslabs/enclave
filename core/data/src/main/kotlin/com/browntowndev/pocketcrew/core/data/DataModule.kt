@@ -28,6 +28,8 @@ import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
+import com.browntowndev.pocketcrew.core.data.local.MemoriesDao
+import com.browntowndev.pocketcrew.core.data.local.MemoriesEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
@@ -49,6 +51,7 @@ import com.browntowndev.pocketcrew.core.data.repository.DefaultModelRepositoryIm
 import com.browntowndev.pocketcrew.core.data.repository.DeviceEnvironmentRepository
 import com.browntowndev.pocketcrew.core.data.repository.ExtractedUrlTracker
 import com.browntowndev.pocketcrew.core.data.repository.LocalModelRepositoryImpl
+import com.browntowndev.pocketcrew.core.data.repository.MemoriesRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.MessageRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ModelConfigProviderImpl
 import com.browntowndev.pocketcrew.core.data.repository.PipelineStateRepositoryImpl
@@ -79,6 +82,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepository
 import com.browntowndev.pocketcrew.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
 import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
@@ -119,11 +123,12 @@ object DataModule {
             .openHelperFactory(
                 SQLiteVecInstaller.createOpenHelperFactory(context),
             )
-            .addMigrations(PocketCrewDatabase.MIGRATION_1_2)
+            .addMigrations(PocketCrewDatabase.MIGRATION_1_2, PocketCrewDatabase.MIGRATION_2_3)
             .addCallback(object : RoomDatabase.Callback() {
                 override fun onOpen(db: SupportSQLiteDatabase) {
                     super.onOpen(db)
                     SQLiteVecInstaller.createEmbeddingTable(db)
+                    SQLiteVecInstaller.createMemoryEmbeddingTable(db)
                 }
             })
             .fallbackToDestructiveMigration()
@@ -158,7 +163,12 @@ object DataModule {
         database.apiModelConfigurationsDao()
 
     @Provides
-    fun provideApiCredentialsDao(database: PocketCrewDatabase): ApiCredentialsDao = database.apiCredentialsDao()
+    fun provideMemoriesDao(database: PocketCrewDatabase): MemoriesDao =
+        database.memoriesDao()
+
+    @Provides
+    fun provideApiCredentialsDao(database: PocketCrewDatabase): ApiCredentialsDao =
+        database.apiCredentialsDao()
 
     @Provides
     fun provideDefaultModelsDao(database: PocketCrewDatabase): DefaultModelsDao = database.defaultModelsDao()
@@ -231,6 +241,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindMessageRepository(impl: MessageRepositoryImpl): MessageRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindMemoriesRepository(impl: MemoriesRepositoryImpl): MemoriesRepository
 
     @Binds
     @Singleton

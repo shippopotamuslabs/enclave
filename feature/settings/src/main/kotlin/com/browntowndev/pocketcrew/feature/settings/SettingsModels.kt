@@ -15,11 +15,15 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
+import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
+import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 
 @Immutable
 data class StoredMemory(
-    val id: String,
-    val text: String
+    val id: String = "",
+    val text: String = "",
+    val category: MemoryCategory = MemoryCategory.PREFERENCES
 )
 
 @Immutable
@@ -73,6 +77,8 @@ data class DataControlsUiState(
 data class MemoriesUiState(
     val isSheetOpen: Boolean = false,
     val memories: List<StoredMemory> = emptyList(),
+    val memoryDraft: StoredMemory? = null,
+    val isEditing: Boolean = false,
 )
 
 @Immutable

@@ -24,9 +24,11 @@ import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceFactoryPort
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
+import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatGenerationProgressPersister
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatGenerationProgressSession
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatHistoryRehydrator
@@ -78,6 +80,12 @@ class ChatInferenceService : Service() {
     lateinit var settingsRepository: SettingsRepository
 
     @Inject
+    lateinit var memoriesRepository: MemoriesRepository
+
+    @Inject
+    lateinit var embeddingEnginePort: EmbeddingEnginePort
+
+    @Inject
     lateinit var searchToolPromptComposer: SearchToolPromptComposer
 
     @Inject
@@ -107,7 +115,13 @@ class ChatInferenceService : Service() {
         createNotificationChannels()
         historyRehydrator = ChatHistoryRehydrator(messageRepository, loggingPort)
         inferenceRequestPreparer = ChatInferenceRequestPreparer(
-            activeModelProvider, settingsRepository, messageRepository, searchToolPromptComposer, loggingPort
+            activeModelProvider,
+            settingsRepository,
+            messageRepository,
+            memoriesRepository,
+            embeddingEnginePort,
+            searchToolPromptComposer,
+            loggingPort
         )
     }
 

@@ -44,6 +44,11 @@ internal data class ApiProvidersTransientState(
     val modelSortOption: ModelSortOption = ModelSortOption.A_TO_Z,
 )
 
+internal data class MemoriesTransientState(
+    val memoryDraft: StoredMemory? = null,
+    val isEditing: Boolean = false,
+)
+
 internal data class SearchSkillTransientState(
     val isEditing: Boolean = false,
     val enabled: Boolean? = null,
@@ -91,6 +96,7 @@ class SettingsUiStateFactory @Inject constructor(
         searchSkillState: SearchSkillTransientState,
         assignmentsState: AssignmentDialogTransientState,
         deletionState: DeletionTransientState,
+        memoriesState: MemoriesTransientState,
     ): SettingsUiState {
         val localModels = localAssets.map(localModelAssetUiMapper::map)
         val refreshedSelectedLocalAsset = localModelsState.selectedAsset?.let { selected ->
@@ -225,6 +231,8 @@ class SettingsUiStateFactory @Inject constructor(
             memories = MemoriesUiState(
                 isSheetOpen = sheetVisibility.memories,
                 memories = memories,
+                memoryDraft = memoriesState.memoryDraft,
+                isEditing = memoriesState.isEditing,
             ),
             feedback = FeedbackUiState(
                 isSheetOpen = sheetVisibility.feedback,
