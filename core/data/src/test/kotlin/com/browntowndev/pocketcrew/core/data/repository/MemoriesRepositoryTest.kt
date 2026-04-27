@@ -149,7 +149,6 @@ class MemoriesRepositoryTest {
         val sql = querySlot.captured.sql
         assert(sql.contains("SELECT m.* FROM memories m"))
         assert(sql.contains("JOIN memory_embeddings me ON m.id = me.id"))
-        assert(sql.contains("WHERE me.vector MATCH '[0.5,0.6]'"))
-        assert(sql.contains("LIMIT 3"))
+        assert(sql.contains("WHERE me.vector MATCH '[0.5,0.6]' AND k = 3"))
     }
 }
