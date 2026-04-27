@@ -70,9 +70,8 @@ class MemoriesRepositoryImpl @Inject constructor(
         val sql = """
             SELECT m.* FROM memories m
             JOIN memory_embeddings me ON m.id = me.id
-            WHERE me.vector MATCH '$vectorString'
+            WHERE me.vector MATCH '$vectorString' AND k = $limit
             ORDER BY distance
-            LIMIT $limit
         """.trimIndent()
         
         return memoriesDao.searchMemoriesRaw(SimpleSQLiteQuery(sql)).map { it.toDomain() }
