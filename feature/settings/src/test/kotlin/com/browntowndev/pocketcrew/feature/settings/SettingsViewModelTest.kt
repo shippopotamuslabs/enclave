@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.byok.ClearDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
@@ -69,6 +70,8 @@ class SettingsViewModelTest {
     private val saveTtsProviderUseCase = mockk<SaveTtsProviderUseCase>(relaxed = true)
     private val deleteTtsProviderUseCase = mockk<DeleteTtsProviderUseCase>(relaxed = true)
 
+    private val memoriesRepository = mockk<MemoriesRepository>()
+
     private val localModelAssetUiMapper = LocalModelAssetUiMapper()
     private val apiModelAssetUiMapper = ApiModelAssetUiMapper()
     private val ttsProviderAssetUiMapper = TtsProviderAssetUiMapper()
@@ -85,6 +88,7 @@ class SettingsViewModelTest {
         every { getApiModelAssetsUseCase() } returns MutableStateFlow(emptyList())
         every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
         every { getTtsProvidersUseCase() } returns MutableStateFlow(emptyList())
+        every { memoriesRepository.getAllMemoriesFlow() } returns MutableStateFlow(emptyList())
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
 
         val settingsUseCases = SettingsUseCasesImpl(
@@ -134,6 +138,7 @@ class SettingsViewModelTest {
 
         viewModel = SettingsViewModel(
             settingsUseCases = settingsUseCases,
+            memoriesRepository = memoriesRepository,
             settingsUiStateFactory = SettingsUiStateFactory(
                 localModelAssetUiMapper,
                 apiModelAssetUiMapper,

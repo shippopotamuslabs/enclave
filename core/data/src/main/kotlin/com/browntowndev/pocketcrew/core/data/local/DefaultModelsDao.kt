@@ -27,13 +27,18 @@ interface DefaultModelsDao {
             dm.tts_provider_id as ttsProviderId,
             tp.displayName as ttsAssetName,
             tp.provider as ttsProviderName,
-            tp.voiceName as ttsVoiceName
+            tp.voiceName as ttsVoiceName,
+            dm.media_provider_id as mediaProviderId,
+            mp.displayName as mediaAssetName,
+            mp.provider as mediaProviderName,
+            mp.capability as mediaCapability
         FROM default_models dm
         LEFT JOIN local_model_configurations lmc ON dm.local_config_id = lmc.id
         LEFT JOIN local_models lm ON lmc.local_model_id = lm.id
         LEFT JOIN api_model_configurations amc ON dm.api_config_id = amc.id
         LEFT JOIN api_credentials ac ON amc.api_credentials_id = ac.id
         LEFT JOIN tts_providers tp ON dm.tts_provider_id = tp.id
+        LEFT JOIN media_providers mp ON dm.media_provider_id = mp.id
     """)
     fun observeAllWithDetails(): Flow<List<DefaultModelAssignmentView>>
 

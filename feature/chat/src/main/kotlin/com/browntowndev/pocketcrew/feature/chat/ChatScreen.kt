@@ -51,12 +51,12 @@ fun ChatScreen(
                 isThinking = uiState.isGenerating,
             )
         },
-        contentWindowInsets = WindowInsets(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
                 .imePadding(),
         ) {
             // Message area — shrinks via weight(1f) when keyboard opens
@@ -83,7 +83,6 @@ fun ChatScreen(
                 }
             }
 
-            // InputBar — pinned above keyboard
             InputBar(
                 modifier = Modifier.fillMaxWidth(),
                 inputText = uiState.inputText,
@@ -101,7 +100,7 @@ fun ChatScreen(
                 onStopGenerating = onStopGenerating,
                 onAttach = {
                     imagePickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                     )
                 },
                 onClearAttachment = onClearImage,
@@ -111,127 +110,12 @@ fun ChatScreen(
     }
 }
 
-// ==================== PREVIEWS ====================
-
-@Preview
+@Preview(showBackground = true)
 @Composable
 private fun PreviewChatScreenLight() {
     PocketCrewTheme {
         ChatScreen(
             uiState = ChatUiState(),
-            onNavigateToHistory = {},
-            onNewChat = {},
-            onSendMessage = {},
-            onStopGenerating = {},
-            onModeChange = {},
-            onInputChange = {},
-            onEditMessage = {},
-            onPlayAudio = {},
-            onImageSelected = {},
-            onClearImage = {},
-            onShieldTap = {},
-            onMicClick = {},
-        )
-    }
-}
-
-@Preview
-@Composable
-private fun PreviewChatScreenDark() {
-    PocketCrewTheme(darkTheme = true) {
-        PreviewChatScreenLight()
-    }
-}
-
-@Preview
-@Composable
-private fun PreviewChatScreenDynamic() {
-    PocketCrewTheme(dynamicColor = true) {
-        PreviewChatScreenLight()
-    }
-}
-
-@Preview
-@Composable
-private fun PreviewChatScreenWithMessages() {
-    PocketCrewTheme {
-        ChatScreen(
-            uiState = ChatUiState(
-                messages = fakeLongMessages,
-                inputText = "Hello, how are you?",
-            ),
-            onNavigateToHistory = {},
-            onNewChat = {},
-            onSendMessage = {},
-            onStopGenerating = {},
-            onModeChange = {},
-            onInputChange = {},
-            onEditMessage = {},
-            onPlayAudio = {},
-            onImageSelected = {},
-            onClearImage = {},
-            onShieldTap = {},
-            onMicClick = {},
-        )
-    }
-}
-
-@Preview
-@Composable
-private fun PreviewChatScreenThinking() {
-    PocketCrewTheme {
-        ChatScreen(
-            uiState = ChatUiState(
-                messages = fakeLongMessages.takeLast(1),
-            ),
-            onNavigateToHistory = {},
-            onNewChat = {},
-            onSendMessage = {},
-            onStopGenerating = {},
-            onModeChange = {},
-            onInputChange = {},
-            onEditMessage = {},
-            onPlayAudio = {},
-            onImageSelected = {},
-            onClearImage = {},
-            onShieldTap = {},
-            onMicClick = {},
-        )
-    }
-}
-
-@Preview
-@Composable
-private fun PreviewChatScreenShield() {
-    PocketCrewTheme {
-        ChatScreen(
-            uiState = ChatUiState(
-                shieldReason = "Potential harm detected",
-            ),
-            onNavigateToHistory = {},
-            onNewChat = {},
-            onSendMessage = {},
-            onStopGenerating = {},
-            onModeChange = {},
-            onInputChange = {},
-            onEditMessage = {},
-            onPlayAudio = {},
-            onImageSelected = {},
-            onClearImage = {},
-            onShieldTap = {},
-            onMicClick = {},
-        )
-    }
-}
-
-@Preview
-@Composable
-private fun PreviewChatScreenExpandedInput() {
-    PocketCrewTheme {
-        ChatScreen(
-            uiState = ChatUiState(
-                inputText = "This is a long input text to test expanded state...",
-            ),
             onNavigateToHistory = {},
             onNewChat = {},
             onSendMessage = {},

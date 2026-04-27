@@ -7,6 +7,8 @@ object Routes {
     const val CHAT_WITH_ID = "chat?chatId={chatId}"
     const val CHAT_DEEP_LINK_PATTERN = ChatNotificationDeepLink.URI_PATTERN
     const val HISTORY = "history"
+    const val STUDIO = "studio"
+    const val STUDIO_DETAIL = "studio_detail?assetId={assetId}"
     const val SETTINGS_GRAPH = "settings_graph"
     const val SETTINGS_MAIN = "settings_main"
     const val MODEL_DOWNLOAD = "model_download"

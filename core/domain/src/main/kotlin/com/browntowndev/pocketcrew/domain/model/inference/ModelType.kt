@@ -57,6 +57,24 @@ enum class ModelType(val apiValue: String) {
     TTS("tts"),
 
     /**
+     * Image generation model.
+     */
+    @SerialName("image_generation")
+    IMAGE_GENERATION("image_generation"),
+
+    /**
+     * Video generation model.
+     */
+    @SerialName("video_generation")
+    VIDEO_GENERATION("video_generation"),
+
+    /**
+     * Music generation model.
+     */
+    @SerialName("music_generation")
+    MUSIC_GENERATION("music_generation"),
+
+    /**
      * Used for models that are being re-downloaded but are not yet assigned to a role.
      */
     @SerialName("unassigned")
@@ -74,6 +92,9 @@ enum class ModelType(val apiValue: String) {
         THINKING -> "Thinking"
         FINAL_SYNTHESIS -> "Final Review"
         TTS -> "Text-to-Speech"
+        IMAGE_GENERATION -> "Image Generation"
+        VIDEO_GENERATION -> "Video Generation"
+        MUSIC_GENERATION -> "Music Generation"
         UNASSIGNED -> "Unassigned"
     }
 
@@ -82,7 +103,7 @@ enum class ModelType(val apiValue: String) {
      */
     val description: String
         get() = when (this) {
-            VISION -> "Understand and analyze images provided in your messages."
+            VISION -> "Model that can analyze images for non-multimodal models."
             DRAFT_ONE -> "Quick initial drafting of responses."
             DRAFT_TWO -> "Refining initial drafts for better quality."
             MAIN -> "Produces the primary, high-quality chat response."
@@ -90,6 +111,9 @@ enum class ModelType(val apiValue: String) {
             THINKING -> "Deep reasoning and logic for complex tasks."
             FINAL_SYNTHESIS -> "Polishing and final synthesis of the response."
             TTS -> "Synthesize text responses into natural-sounding speech."
+            IMAGE_GENERATION -> "Generate images from text prompts."
+            VIDEO_GENERATION -> "Generate videos from text prompts."
+            MUSIC_GENERATION -> "Generate music from text prompts."
             UNASSIGNED -> "Models not yet assigned to a role."
         }
 

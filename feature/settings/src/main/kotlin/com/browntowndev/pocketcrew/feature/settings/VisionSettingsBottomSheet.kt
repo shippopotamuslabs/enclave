@@ -49,7 +49,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 fun VisionSettingsBottomSheet(
     uiState: SettingsUiState,
     onDismiss: () -> Unit,
-    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?) -> Unit,
+    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?, com.browntowndev.pocketcrew.domain.model.config.MediaProviderId?) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var isDrilledDown by remember { mutableStateOf(false) }
@@ -69,10 +69,11 @@ fun VisionSettingsBottomSheet(
                     localAssets = emptyList(), // Vision is API only usually
                     apiAssets = uiState.apiProvidersSheet.assets.filter { it.isMultimodal },
                     ttsAssets = emptyList(),
+                    mediaAssets = emptyList(),
                     onDismiss = onDismiss,
                     onBack = { isDrilledDown = false },
-                    onSelect = { localId, apiId, ttsId ->
-                        onSetDefaultModel(ModelType.VISION, localId, apiId, ttsId)
+                    onSelect = { localId, apiId, ttsId, mediaId ->
+                        onSetDefaultModel(ModelType.VISION, localId, apiId, ttsId, mediaId)
                         isDrilledDown = false
                     }
                 )

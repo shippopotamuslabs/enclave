@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,6 +51,7 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -88,7 +90,7 @@ fun SettingsScreen(
     onSubmitFeedback: () -> Unit,
     onShowVisionSettingsSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
-    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?) -> Unit,
+    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?, MediaProviderId?) -> Unit,
     onShowLocalModelsSheet: (Boolean) -> Unit,
     onShowByokSheet: (Boolean) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
@@ -113,6 +115,11 @@ fun SettingsScreen(
     onStartCreateTtsProviderAsset: () -> Unit,
     onSelectTtsProviderAsset: (TtsProviderAssetUi?) -> Unit,
     onDeleteTtsProviderAsset: (TtsProviderId) -> Unit,
+    onShowMediaProvidersSheet: (Boolean) -> Unit,
+    onNavigateToMediaConfigure: () -> Unit,
+    onStartCreateMediaProviderAsset: () -> Unit,
+    onSelectMediaProviderAsset: (MediaProviderAssetUi?) -> Unit,
+    onDeleteMediaProviderAsset: (MediaProviderId) -> Unit,
     onNavigateToLocalModelConfigure: () -> Unit,
     onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
@@ -207,6 +214,13 @@ fun SettingsScreen(
                     subtitle = "Manage TTS voices and API keys",
                     icon = Icons.Default.Vibration, // Using Vibration for audio/haptic feel
                     onClick = { onShowTtsProvidersSheet(true) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsNavigationItem(
+                    title = "Media Generation Providers",
+                    subtitle = "Manage Image and Video generation APIs",
+                    icon = Icons.Default.Palette,
+                    onClick = { onShowMediaProvidersSheet(true) }
                 )
             }
 
@@ -327,6 +341,17 @@ fun SettingsScreen(
                 onDeleteLocalModelConfig = onDeleteLocalModelConfig,
                 onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
                 onDismissDeletionSafety = onDismissDeletionSafety
+            )
+        }
+
+        if (uiState.home.isMediaProvidersSheetOpen) {
+            MediaProvidersBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowMediaProvidersSheet(false) },
+                onNavigateToMediaConfigure = onNavigateToMediaConfigure,
+                onStartCreateMediaProviderAsset = onStartCreateMediaProviderAsset,
+                onSelectMediaProviderAsset = onSelectMediaProviderAsset,
+                onDeleteMediaProviderAsset = onDeleteMediaProviderAsset
             )
         }
     }
@@ -512,7 +537,7 @@ fun PreviewSettingsScreen() {
             onSubmitFeedback = {},
             onShowVisionSettingsSheet = {},
             onNavigateToModelConfigure = {},
-            onSetDefaultModel = { _, _, _, _ -> },
+            onSetDefaultModel = { _, _, _, _, _ -> },
             onShowLocalModelsSheet = {},
             onShowByokSheet = {},
             onNavigateToByokConfigure = {},
@@ -537,6 +562,11 @@ fun PreviewSettingsScreen() {
             onStartCreateTtsProviderAsset = {},
             onSelectTtsProviderAsset = {},
             onDeleteTtsProviderAsset = {},
+            onShowMediaProvidersSheet = {},
+            onNavigateToMediaConfigure = {},
+            onStartCreateMediaProviderAsset = {},
+            onSelectMediaProviderAsset = {},
+            onDeleteMediaProviderAsset = {},
             onNavigateToLocalModelConfigure = {},
             onSelectLocalModelAsset = {},
             onSelectLocalModelConfig = {},
