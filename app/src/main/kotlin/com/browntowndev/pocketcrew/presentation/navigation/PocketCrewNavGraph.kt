@@ -6,6 +6,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -17,6 +19,9 @@ import com.browntowndev.pocketcrew.feature.chat.ChatRoute
 import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
 import com.browntowndev.pocketcrew.feature.history.HistoryRoute
 import com.browntowndev.pocketcrew.feature.settings.navigation.settingsGraph
+import com.browntowndev.pocketcrew.feature.studio.MultimodalViewModel
+import com.browntowndev.pocketcrew.feature.studio.StudioDetailScreen
+import com.browntowndev.pocketcrew.feature.studio.StudioScreen
 
 private const val ANIMATION_DURATION = 300
 
@@ -80,16 +85,32 @@ fun PocketCrewNavGraph(
                 )
             },
             exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val targetRoute = targetState.destination.route
+                if (targetRoute == Routes.STUDIO || targetRoute == Routes.STUDIO_DETAIL) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             popEnterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val initialRoute = initialState.destination.route
+                if (initialRoute == Routes.STUDIO || initialRoute == Routes.STUDIO_DETAIL) {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             popExitTransition = {
                 slideOutHorizontally(
@@ -144,8 +165,78 @@ fun PocketCrewNavGraph(
                         navController.navigate(Routes.CHAT)
                     }
                 },
+                onNavigateToStudio = { navController.navigate(Routes.STUDIO) },
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS_GRAPH) },
                 onShowSnackbar = onShowSnackbar,
+            )
+        }
+
+        composable(
+            route = Routes.STUDIO,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(ANIMATION_DURATION),
+                )
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(ANIMATION_DURATION),
+                )
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(ANIMATION_DURATION),
+                )
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(ANIMATION_DURATION),
+                )
+            },
+        ) {
+            val studioViewModel = hiltViewModel<MultimodalViewModel>()
+            StudioScreen(
+                viewModel = studioViewModel,
+                onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
+                onMediaClick = { asset ->
+                    navController.navigate(Routes.STUDIO_DETAIL.replace("{assetId}", asset.id))
+                },
+            )
+        }
+
+        composable(
+            route = Routes.STUDIO_DETAIL,
+            arguments = listOf(navArgument("assetId") { type = NavType.StringType }),
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(ANIMATION_DURATION),
+                )
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(ANIMATION_DURATION),
+                )
+            },
+        ) { backStackEntry ->
+            val assetId = backStackEntry.arguments?.getString("assetId") ?: ""
+            // Use the studio's backstack entry to share the ViewModel
+            val studioBackStackEntry =
+                remember(backStackEntry) {
+                    navController.getBackStackEntry(Routes.STUDIO)
+                }
+            val studioViewModel = hiltViewModel<MultimodalViewModel>(studioBackStackEntry)
+
+            StudioDetailScreen(
+                assetId = assetId,
+                onNavigateBack = { navController.popBackStack() },
+                onEditMedia = { asset -> studioViewModel.onEditMedia(asset) },
+                onAnimateMedia = { asset -> studioViewModel.onAnimateMedia(asset) },
             )
         }
 

@@ -62,6 +62,8 @@ import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSh
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
@@ -86,7 +88,7 @@ fun ModelConfigurationRoute(
 fun ModelConfigurationScreen(
     uiState: SettingsUiState,
     onNavigateBack: () -> Unit,
-    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?) -> Unit,
+    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?, MediaProviderId?) -> Unit,
     onShowAssignmentDialog: (Boolean, ModelType?) -> Unit
 ) {
     Scaffold(
@@ -111,6 +113,7 @@ fun ModelConfigurationScreen(
             val generalChatTypes = listOf(ModelType.FAST, ModelType.THINKING)
             val crewModeTypes = listOf(ModelType.DRAFT_ONE, ModelType.DRAFT_TWO, ModelType.MAIN, ModelType.FINAL_SYNTHESIS)
             val audioTypes = listOf(ModelType.TTS)
+            val studioMediaTypes = listOf(ModelType.IMAGE_GENERATION, ModelType.VIDEO_GENERATION)
 
             item {
                 DefaultAssignmentsCard(
@@ -133,6 +136,13 @@ fun ModelConfigurationScreen(
                     onEditAssignment = { onShowAssignmentDialog(true, it) }
                 )
             }
+            item {
+                DefaultAssignmentsCard(
+                    title = "Studio & Media",
+                    assignments = uiState.assignments.assignments.filter { it.modelType in studioMediaTypes },
+                    onEditAssignment = { onShowAssignmentDialog(true, it) }
+                )
+            }
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }
 
@@ -144,22 +154,37 @@ fun ModelConfigurationScreen(
             
             val isVisionSlot = assignmentSlot == ModelType.VISION
             val isTtsSlot = assignmentSlot == ModelType.TTS
-            val localAssets = if (isVisionSlot || isTtsSlot) emptyList() else uiState.localModelsSheet.models
+            val isMediaSlot = assignmentSlot in listOf(
+                ModelType.IMAGE_GENERATION,
+                ModelType.VIDEO_GENERATION,
+                ModelType.MUSIC_GENERATION
+            )
+            val localAssets = if (isVisionSlot || isTtsSlot || isMediaSlot) emptyList() else uiState.localModelsSheet.models
             val apiAssets = when {
                 isVisionSlot -> uiState.apiProvidersSheet.assets.filter { it.isMultimodal }
-                isTtsSlot -> emptyList()
+                isTtsSlot || isMediaSlot -> emptyList()
                 else -> uiState.apiProvidersSheet.assets
             }
             val ttsAssets = if (isTtsSlot) uiState.ttsProvidersSheet.assets else emptyList()
+            val mediaAssets = if (isMediaSlot) {
+                val capability = when (assignmentSlot) {
+                    ModelType.IMAGE_GENERATION -> MediaCapability.IMAGE
+                    ModelType.VIDEO_GENERATION -> MediaCapability.VIDEO
+                    ModelType.MUSIC_GENERATION -> MediaCapability.MUSIC
+                    else -> MediaCapability.IMAGE // Should not happen given studioMediaTypes check
+                }
+                uiState.mediaProvidersSheet.assets.filter { it.capability == capability }
+            } else emptyList()
 
             AssignmentSelectionBottomSheet(
                 slotLabel = slotLabel,
                 localAssets = localAssets,
                 apiAssets = apiAssets,
                 ttsAssets = ttsAssets,
+                mediaAssets = mediaAssets,
                 onDismiss = { onShowAssignmentDialog(false, null) },
-                onSelect = { localId, apiId, ttsId ->
-                    onSetDefaultModel(assignmentSlot, localId, apiId, ttsId)
+                onSelect = { localId, apiId, ttsId, mediaId ->
+                    onSetDefaultModel(assignmentSlot, localId, apiId, ttsId, mediaId)
                 }
             )
         }
@@ -260,8 +285,9 @@ fun AssignmentSelectionBottomSheet(
     localAssets: List<LocalModelAssetUi>,
     apiAssets: List<ApiModelAssetUi>,
     ttsAssets: List<TtsProviderAssetUi>,
+    mediaAssets: List<MediaProviderAssetUi>,
     onDismiss: () -> Unit,
-    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?, ttsId: TtsProviderId?) -> Unit
+    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?, ttsId: TtsProviderId?, mediaId: MediaProviderId?) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -277,6 +303,7 @@ fun AssignmentSelectionBottomSheet(
             localAssets = localAssets,
             apiAssets = apiAssets,
             ttsAssets = ttsAssets,
+            mediaAssets = mediaAssets,
             onDismiss = onDismiss,
             onSelect = onSelect
         )
@@ -297,21 +324,25 @@ fun AssignmentSelectionContent(
     localAssets: List<LocalModelAssetUi>,
     apiAssets: List<ApiModelAssetUi>,
     ttsAssets: List<TtsProviderAssetUi>,
+    mediaAssets: List<MediaProviderAssetUi>,
     onDismiss: () -> Unit,
     onBack: (() -> Unit)? = null,
-    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?, ttsId: TtsProviderId?) -> Unit
+    onSelect: (localId: LocalModelConfigurationId?, apiId: ApiModelConfigurationId?, ttsId: TtsProviderId?, mediaId: MediaProviderId?) -> Unit
 ) {
     var selectedLocalId by remember { mutableStateOf<LocalModelConfigurationId?>(null) }
     var selectedApiId by remember { mutableStateOf<ApiModelConfigurationId?>(null) }
     var selectedTtsId by remember { mutableStateOf<TtsProviderId?>(null) }
+    var selectedMediaId by remember { mutableStateOf<MediaProviderId?>(null) }
     val hasLocalTab = localAssets.isNotEmpty()
     val hasApiTab = apiAssets.isNotEmpty()
     val hasTtsTab = ttsAssets.isNotEmpty()
-    var selectedTabIndex by remember(hasLocalTab, hasApiTab, hasTtsTab) { mutableIntStateOf(0) }
+    val hasMediaTab = mediaAssets.isNotEmpty()
+    var selectedTabIndex by remember(hasLocalTab, hasApiTab, hasTtsTab, hasMediaTab) { mutableIntStateOf(0) }
     val tabs = buildList {
         if (hasLocalTab) add("Local Models")
         if (hasApiTab) add("API Models")
         if (hasTtsTab) add("TTS Providers")
+        if (hasMediaTab) add("Media Providers")
     }
     var viewState by remember { mutableStateOf<AssignmentSelectionView>(AssignmentSelectionView.AssetList) }
 
@@ -453,9 +484,9 @@ fun AssignmentSelectionContent(
 
                         AnimatedContent(
                             targetState = when {
-                                hasLocalTab && (hasApiTab || hasTtsTab) -> selectedTabIndex
+                                hasLocalTab && (hasApiTab || hasTtsTab || hasMediaTab) -> selectedTabIndex
                                 hasLocalTab -> 0
-                                hasApiTab || hasTtsTab -> selectedTabIndex
+                                hasApiTab || hasTtsTab || hasMediaTab -> selectedTabIndex
                                 else -> 0
                             },
                             label = "AssignmentSelectionTabTransition",
@@ -505,6 +536,23 @@ fun AssignmentSelectionContent(
                                                     selectedTtsId = asset.id
                                                     selectedLocalId = null
                                                     selectedApiId = null
+                                                    selectedMediaId = null
+                                                }
+                                            )
+                                        }
+                                    }
+                                    "Media Providers" -> {
+                                        items(mediaAssets, key = { "media_${it.id.value}" }) { asset ->
+                                            AssignmentAssetCard(
+                                                title = asset.displayName,
+                                                subtitle = "${asset.provider.displayName} • ${asset.modelName}",
+                                                presetCount = 1,
+                                                isSelected = selectedMediaId == asset.id,
+                                                onClick = {
+                                                    selectedMediaId = asset.id
+                                                    selectedLocalId = null
+                                                    selectedApiId = null
+                                                    selectedTtsId = null
                                                 }
                                             )
                                         }
@@ -583,8 +631,8 @@ fun AssignmentSelectionContent(
                 Text("Cancel")
             }
             Button(
-                onClick = { onSelect(selectedLocalId, selectedApiId, selectedTtsId) },
-                enabled = selectedLocalId != null || selectedApiId != null || selectedTtsId != null,
+                onClick = { onSelect(selectedLocalId, selectedApiId, selectedTtsId, selectedMediaId) },
+                enabled = selectedLocalId != null || selectedApiId != null || selectedTtsId != null || selectedMediaId != null,
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(16.dp)
             ) {
@@ -752,7 +800,7 @@ fun PreviewModelConfigurationScreen() {
         ModelConfigurationScreen(
             uiState = MockSettingsData.baseUiState,
             onNavigateBack = {},
-            onSetDefaultModel = { _, _, _, _ -> },
+            onSetDefaultModel = { _, _, _, _, _ -> },
             onShowAssignmentDialog = { _, _ -> }
         )
     }
@@ -782,8 +830,9 @@ fun PreviewAssignmentSelectionContent() {
             localAssets = MockSettingsData.localModels,
             apiAssets = MockSettingsData.apiModels,
             ttsAssets = emptyList(),
+            mediaAssets = emptyList(),
             onDismiss = {},
-            onSelect = { _, _, _ -> }
+            onSelect = { _, _, _, _ -> }
         )
     }
 }

@@ -7,9 +7,11 @@ import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
+import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
@@ -26,6 +28,7 @@ class DefaultModelRepositoryImpl @Inject constructor(
     private val apiModelConfigurationsDao: ApiModelConfigurationsDao,
     private val apiCredentialsDao: ApiCredentialsDao,
     private val ttsProviderDao: TtsProviderDao,
+    private val mediaProviderDao: MediaProviderDao,
 ) : DefaultModelRepositoryPort {
 
     override suspend fun getDefault(modelType: ModelType): DefaultModelAssignment? {
@@ -40,18 +43,21 @@ class DefaultModelRepositoryImpl @Inject constructor(
                     view.localConfigId != null -> view.localAssetName
                     view.apiConfigId != null -> view.apiAssetName
                     view.ttsProviderId != null -> view.ttsAssetName
+                    view.mediaProviderId != null -> view.mediaAssetName
                     else -> null
                 }
                 val presetName = when {
                     view.localConfigId != null -> view.localPresetName
                     view.apiConfigId != null -> view.apiPresetName
                     view.ttsProviderId != null -> view.ttsVoiceName
+                    view.mediaProviderId != null -> view.mediaCapability?.name
                     else -> null
                 }
                 val providerName = when {
                     view.localConfigId != null -> "Local"
                     view.apiConfigId != null -> view.apiProviderName?.displayName
                     view.ttsProviderId != null -> view.ttsProviderName?.displayName
+                    view.mediaProviderId != null -> view.mediaProviderName?.displayName
                     else -> null
                 }
 
@@ -60,6 +66,7 @@ class DefaultModelRepositoryImpl @Inject constructor(
                     localConfigId = view.localConfigId,
                     apiConfigId = view.apiConfigId,
                     ttsProviderId = view.ttsProviderId,
+                    mediaProviderId = view.mediaProviderId,
                     displayName = displayName,
                     presetName = presetName,
                     providerName = providerName
@@ -72,13 +79,15 @@ class DefaultModelRepositoryImpl @Inject constructor(
         modelType: ModelType,
         localConfigId: LocalModelConfigurationId?,
         apiConfigId: ApiModelConfigurationId?,
-        ttsProviderId: TtsProviderId?
+        ttsProviderId: TtsProviderId?,
+        mediaProviderId: MediaProviderId?
     ) {
         val entity = DefaultModelEntity(
             modelType = modelType,
             localConfigId = localConfigId,
             apiConfigId = apiConfigId,
-            ttsProviderId = ttsProviderId
+            ttsProviderId = ttsProviderId,
+            mediaProviderId = mediaProviderId
         )
         defaultModelsDao.upsert(entity)
     }
@@ -117,6 +126,13 @@ class DefaultModelRepositoryImpl @Inject constructor(
                 providerName = ttsProvider.provider.displayName
                 presetName = ttsProvider.voiceName
             }
+        } else if (entity.mediaProviderId != null) {
+            val mediaProvider = mediaProviderDao.getMediaProvider(entity.mediaProviderId.value)
+            if (mediaProvider != null) {
+                displayName = mediaProvider.displayName
+                providerName = mediaProvider.provider.displayName
+                presetName = mediaProvider.capability.name
+            }
         }
 
         return DefaultModelAssignment(
@@ -124,6 +140,7 @@ class DefaultModelRepositoryImpl @Inject constructor(
             localConfigId = entity.localConfigId,
             apiConfigId = entity.apiConfigId,
             ttsProviderId = entity.ttsProviderId,
+            mediaProviderId = entity.mediaProviderId,
             displayName = displayName,
             providerName = providerName,
             presetName = presetName

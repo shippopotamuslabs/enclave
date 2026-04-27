@@ -26,7 +26,10 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,6 +49,7 @@ private data class PersistedSettingsBundle(
     val localAssets: List<com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset>,
     val apiAssets: List<com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset>,
     val ttsAssets: List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
+    val mediaAssets: List<com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset>,
     val defaultModels: List<com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment>,
 )
 
@@ -56,6 +60,7 @@ private data class TransientSettingsBundle(
     val localModelsState: LocalModelsTransientState,
     val apiState: ApiProvidersTransientState,
     val ttsState: TtsProvidersTransientState,
+    val mediaState: MediaProvidersTransientState,
     val searchSkillState: SearchSkillTransientState,
     val assignmentState: AssignmentDialogTransientState,
     val deletionState: DeletionTransientState,
@@ -100,6 +105,7 @@ class SettingsViewModel @Inject constructor(
     private val _apiState = MutableStateFlow(ApiProvidersTransientState())
     private val _searchSkillState = MutableStateFlow(SearchSkillTransientState())
     private val _ttsState = MutableStateFlow(TtsProvidersTransientState())
+    private val _mediaState = MutableStateFlow(MediaProvidersTransientState())
     private val _assignmentState = MutableStateFlow(AssignmentDialogTransientState())
     private val _deletionState = MutableStateFlow(DeletionTransientState())
     private val _snackbarMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -114,27 +120,35 @@ class SettingsViewModel @Inject constructor(
     private val localModelUseCases = settingsUseCases.localModels
     private val apiProviderUseCases = settingsUseCases.apiProviders
     private val ttsUseCases = settingsUseCases.tts
+    private val mediaUseCases = settingsUseCases.media
     private val assignmentUseCases = settingsUseCases.assignments
     private val deletionUseCases = settingsUseCases.deletion
 
     private val localModelAssetsFlow = localModelUseCases.getLocalModelAssets()
     private val apiModelAssetsFlow = apiProviderUseCases.getApiModelAssets()
     private val ttsAssetsFlow = ttsUseCases.getTtsProviders()
+    private val mediaAssetsFlow = mediaUseCases.getMediaProviders()
     private val memoriesFlow = memoriesRepository.getAllMemoriesFlow().map { memories ->
         memories.map { StoredMemory(it.id, it.content, it.category) }
     }
+    // Combine(6) isn't available as a typed overload — nest to stay within the 5-flow limit.
+    private val ttsAndMediaBundle = combine(
+        ttsAssetsFlow,
+        mediaAssetsFlow,
+    ) { tts, media -> Pair(tts, media) }
     private val persistedSettingsBundle = combine(
         settingsUseCases.getSettings(),
         localModelAssetsFlow,
         apiModelAssetsFlow,
-        ttsAssetsFlow,
+        ttsAndMediaBundle,
         assignmentUseCases.getDefaultModels(),
-    ) { settings, localAssets, apiAssets, ttsAssets, defaultModels ->
+    ) { settings, localAssets, apiAssets, ttsAndMedia, defaultModels ->
         PersistedSettingsBundle(
             settings = settings,
             localAssets = localAssets,
             apiAssets = apiAssets,
-            ttsAssets = ttsAssets,
+            ttsAssets = ttsAndMedia.first,
+            mediaAssets = ttsAndMedia.second,
             defaultModels = defaultModels,
         )
     }
@@ -157,12 +171,14 @@ class SettingsViewModel @Inject constructor(
         _apiState,
         _searchSkillState,
         _ttsState,
-    ) { localModelsState, apiState, searchSkillState, ttsState ->
+        _mediaState,
+    ) { localModelsState, apiState, searchSkillState, ttsState, mediaState ->
         object {
             val localModelsState = localModelsState
             val apiState = apiState
             val searchSkillState = searchSkillState
             val ttsState = ttsState
+            val mediaState = mediaState
         }
     }
 
@@ -179,6 +195,7 @@ class SettingsViewModel @Inject constructor(
             localModelsState = mtBundle.localModelsState,
             apiState = mtBundle.apiState,
             ttsState = mtBundle.ttsState,
+            mediaState = mtBundle.mediaState,
             searchSkillState = mtBundle.searchSkillState,
             assignmentState = assignmentState,
             deletionState = deletionState,
@@ -195,6 +212,7 @@ class SettingsViewModel @Inject constructor(
             localAssets = persisted.localAssets,
             apiAssets = persisted.apiAssets,
             ttsAssets = persisted.ttsAssets,
+            mediaAssets = persisted.mediaAssets,
             defaultModels = persisted.defaultModels,
             sheetVisibility = transient.sheetVisibility,
             memories = transient.memories,
@@ -202,6 +220,7 @@ class SettingsViewModel @Inject constructor(
             localModelsState = transient.localModelsState,
             apiState = transient.apiState,
             ttsState = transient.ttsState,
+            mediaState = transient.mediaState,
             searchSkillState = transient.searchSkillState,
             assignmentsState = transient.assignmentState,
             deletionState = transient.deletionState,
@@ -681,6 +700,126 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun onShowMediaProvidersSheet(show: Boolean) {
+        if (show) {
+            _mediaState.update { it.copy(isSheetOpen = true) }
+        } else {
+            _mediaState.update { MediaProvidersTransientState() }
+        }
+    }
+
+    fun onStartCreateMediaProviderAsset() {
+        _currentApiKey.value = ""
+        _mediaState.update {
+            it.copy(
+                selectedAsset = null,
+                assetDraft = MediaProviderAssetUi(
+                    displayName = "New Media Provider",
+                    provider = ApiProvider.OPENAI,
+                ),
+                selectedReusableApiCredentialAlias = null,
+                selectedReusableApiCredentialName = null,
+            )
+        }
+    }
+
+    fun onSelectMediaProviderAsset(asset: MediaProviderAssetUi?) {
+        _mediaState.update { it.copy(selectedAsset = asset, assetDraft = asset) }
+    }
+
+    fun onMediaAssetFieldChange(asset: MediaProviderAssetUi) {
+        val existingDraft = _mediaState.value.assetDraft
+        
+        if (asset.id.value.isNotEmpty() && asset.useAsDefault != existingDraft?.useAsDefault) {
+            viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update default model", "Failed to update default model")) {
+                val modelType = when (asset.capability) {
+                    MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
+                    MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
+                    MediaCapability.MUSIC -> ModelType.MUSIC_GENERATION
+                }
+                assignmentUseCases.setDefaultModel(
+                    modelType = modelType,
+                    localConfigId = null,
+                    apiConfigId = null,
+                    mediaProviderId = asset.id
+                )
+            }
+        }
+
+        _mediaState.update { state ->
+            state.copy(
+                assetDraft = asset,
+                selectedReusableApiCredentialAlias = if (existingDraft?.provider != asset.provider) null else state.selectedReusableApiCredentialAlias,
+                selectedReusableApiCredentialName = if (existingDraft?.provider != asset.provider) null else state.selectedReusableApiCredentialName,
+            )
+        }
+    }
+
+    fun onSelectReusableMediaApiCredential(id: ApiCredentialsId?) {
+        val reusableCredential = uiState.value.apiProvidersSheet.assets
+            .find { it.credentialsId == id }
+            ?.let {
+                ReusableApiCredentialUi(
+                    credentialsId = it.credentialsId,
+                    displayName = it.displayName,
+                    modelId = it.modelId,
+                    credentialAlias = it.credentialAlias,
+                )
+            }
+        _currentApiKey.value = ""
+        _mediaState.update {
+            it.copy(
+                selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
+                selectedReusableApiCredentialName = reusableCredential?.displayName,
+            )
+        }
+    }
+
+    fun onSaveMediaProvider(onSuccess: () -> Unit) {
+        val draft = _mediaState.value.assetDraft ?: return
+        val reusedAlias = _mediaState.value.selectedReusableApiCredentialAlias
+        val apiKey = _currentApiKey.value.ifBlank { "" }
+
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save Media provider", "Failed to save provider")) {
+            val mediaId = mediaUseCases.saveMediaProvider(
+                com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset(
+                    id = draft.id,
+                    displayName = draft.displayName,
+                    provider = draft.provider,
+                    capability = draft.capability,
+                    modelName = draft.modelName,
+                    baseUrl = draft.baseUrl,
+                    credentialAlias = reusedAlias ?: draft.credentialAlias.ifBlank {
+                        "media-${draft.provider.name.lowercase()}-${draft.capability.name.lowercase()}-${java.util.UUID.randomUUID().toString().take(8)}"
+                    }
+                ),
+                apiKey = apiKey
+            )
+
+            if (draft.useAsDefault) {
+                val modelType = when (draft.capability) {
+                    MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
+                    MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
+                    MediaCapability.MUSIC -> ModelType.MUSIC_GENERATION
+                }
+                assignmentUseCases.setDefaultModel(
+                    modelType = modelType,
+                    localConfigId = null,
+                    apiConfigId = null,
+                    mediaProviderId = mediaId
+                )
+            }
+
+            onSuccess()
+        }
+    }
+
+    fun onDeleteMediaProviderAsset(id: MediaProviderId) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete Media provider", "Failed to delete provider")) {
+            mediaUseCases.deleteMediaProvider(id)
+        }
+    }
+
     fun onStartConfigureSearchSkill() {
         val persistedState = uiState.value.searchSkillEditor
         _currentTavilyApiKey.value = ""
@@ -1071,10 +1210,17 @@ class SettingsViewModel @Inject constructor(
         modelType: ModelType,
         localConfigId: LocalModelConfigurationId?,
         apiConfigId: ApiModelConfigurationId?,
-        ttsProviderId: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId? = null
+        ttsProviderId: TtsProviderId? = null,
+        mediaProviderId: MediaProviderId? = null,
     ) {
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to set default model", "Failed to update default model")) {
-            assignmentUseCases.setDefaultModel(modelType, localConfigId, apiConfigId, ttsProviderId)
+            assignmentUseCases.setDefaultModel(
+                modelType = modelType,
+                localConfigId = localConfigId,
+                apiConfigId = apiConfigId,
+                ttsProviderId = ttsProviderId,
+                mediaProviderId = mediaProviderId,
+            )
             onShowAssignmentDialog(false, null)
         }
     }

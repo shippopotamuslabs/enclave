@@ -19,8 +19,10 @@ import androidx.room.TypeConverters
         EmbeddingEntity::class,
         TtsProviderEntity::class,
         MemoriesEntity::class,
+        MediaProviderEntity::class,
+        StudioMediaEntity::class,
     ],
-    version = 3,
+    version = 1,
     exportSchema = false
 )
 @TypeConverters(ModelTypeConverters::class)
@@ -38,26 +40,6 @@ abstract class PocketCrewDatabase : RoomDatabase() {
     abstract fun embeddingDao(): EmbeddingDao
     abstract fun ttsProviderDao(): TtsProviderDao
     abstract fun memoriesDao(): MemoriesDao
-
-    companion object {
-        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE tts_providers ADD COLUMN modelName TEXT")
-            }
-        }
-
-        val MIGRATION_2_3 = object : androidx.room.migration.Migration(2, 3) {
-            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                db.execSQL("""
-                    CREATE TABLE IF NOT EXISTS memories (
-                        id TEXT PRIMARY KEY NOT NULL,
-                        category TEXT NOT NULL,
-                        content TEXT NOT NULL,
-                        created_at INTEGER NOT NULL,
-                        updated_at INTEGER NOT NULL
-                    )
-                """.trimIndent())
-            }
-        }
-    }
+    abstract fun mediaProviderDao(): MediaProviderDao
+    abstract fun studioMediaDao(): StudioMediaDao
 }

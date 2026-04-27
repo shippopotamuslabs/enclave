@@ -28,19 +28,19 @@ import com.browntowndev.pocketcrew.core.data.local.DefaultModelsDao
 import com.browntowndev.pocketcrew.core.data.local.EmbeddingDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
+import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesDao
-import com.browntowndev.pocketcrew.core.data.local.MemoriesEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.local.SQLiteVecInstaller
+import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioCapture
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioPlayer
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioRecordFactory
 import com.browntowndev.pocketcrew.core.data.media.AndroidStreamingAudioPlayer
-import com.browntowndev.pocketcrew.core.data.media.AudioRecordFactory
 import com.browntowndev.pocketcrew.core.data.media.CachedImageAttachmentStorage
 import com.browntowndev.pocketcrew.core.data.repository.ActiveModelProviderImpl
 import com.browntowndev.pocketcrew.core.data.repository.ApiModelCatalogRepositoryImpl
@@ -51,12 +51,14 @@ import com.browntowndev.pocketcrew.core.data.repository.DefaultModelRepositoryIm
 import com.browntowndev.pocketcrew.core.data.repository.DeviceEnvironmentRepository
 import com.browntowndev.pocketcrew.core.data.repository.ExtractedUrlTracker
 import com.browntowndev.pocketcrew.core.data.repository.LocalModelRepositoryImpl
+import com.browntowndev.pocketcrew.core.data.repository.MediaProviderRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.MemoriesRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.MessageRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ModelConfigProviderImpl
 import com.browntowndev.pocketcrew.core.data.repository.PipelineStateRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.RoomTransactionProvider
 import com.browntowndev.pocketcrew.core.data.repository.SettingsRepositoryImpl
+import com.browntowndev.pocketcrew.core.data.repository.StudioRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ToolExecutionEventBus
 import com.browntowndev.pocketcrew.core.data.repository.TtsProviderRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyProviderImpl
@@ -64,6 +66,7 @@ import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.HashingPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
+import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelFileScannerPort
 import com.browntowndev.pocketcrew.domain.port.download.ModelUrlProviderPort
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
@@ -72,8 +75,9 @@ import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.media.AudioCapturePort
 import com.browntowndev.pocketcrew.domain.port.media.AudioPlayerPort
-import com.browntowndev.pocketcrew.domain.port.media.StreamingAudioPlayerPort
+import com.browntowndev.pocketcrew.core.data.media.AudioRecordFactory
 import com.browntowndev.pocketcrew.domain.port.media.ImageAttachmentStoragePort
+import com.browntowndev.pocketcrew.domain.port.media.StreamingAudioPlayerPort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelCatalogPort
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
@@ -82,12 +86,13 @@ import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepository
 import com.browntowndev.pocketcrew.domain.port.repository.DeviceEnvironmentRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.ExtractedUrlTrackerPort
 import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
-import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
-import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigFetcherPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
+import com.browntowndev.pocketcrew.domain.port.repository.ModelConfigProvider
 import com.browntowndev.pocketcrew.domain.port.repository.PipelineStateRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
+import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import com.browntowndev.pocketcrew.domain.port.repository.TtsProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.UtilityModelFilePort
@@ -119,20 +124,7 @@ object DataModule {
             context,
             PocketCrewDatabase::class.java,
             "pocketcrew.db"
-        )
-            .openHelperFactory(
-                SQLiteVecInstaller.createOpenHelperFactory(context),
-            )
-            .addMigrations(PocketCrewDatabase.MIGRATION_1_2, PocketCrewDatabase.MIGRATION_2_3)
-            .addCallback(object : RoomDatabase.Callback() {
-                override fun onOpen(db: SupportSQLiteDatabase) {
-                    super.onOpen(db)
-                    SQLiteVecInstaller.createEmbeddingTable(db)
-                    SQLiteVecInstaller.createMemoryEmbeddingTable(db)
-                }
-            })
-            .fallbackToDestructiveMigration()
-            .build()
+        ).build()
     }
 
     @Provides
@@ -178,6 +170,12 @@ object DataModule {
 
     @Provides
     fun provideTtsProviderDao(database: PocketCrewDatabase): TtsProviderDao = database.ttsProviderDao()
+
+    @Provides
+    fun provideMediaProviderDao(database: PocketCrewDatabase): MediaProviderDao = database.mediaProviderDao()
+
+    @Provides
+    fun provideStudioMediaDao(database: PocketCrewDatabase): StudioMediaDao = database.studioMediaDao()
 
     @Provides
     @Singleton
@@ -329,6 +327,18 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindTtsProviderRepository(impl: TtsProviderRepositoryImpl): TtsProviderRepositoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindMediaProviderRepository(impl: MediaProviderRepositoryImpl): MediaProviderRepositoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindStudioRepository(impl: StudioRepositoryImpl): StudioRepositoryPort
+
+    @Binds
+    @Singleton
+    abstract fun bindMediaSaver(impl: com.browntowndev.pocketcrew.core.data.media.AndroidMediaSaver): com.browntowndev.pocketcrew.domain.port.media.MediaSaverPort
 
     @Binds
     @Singleton

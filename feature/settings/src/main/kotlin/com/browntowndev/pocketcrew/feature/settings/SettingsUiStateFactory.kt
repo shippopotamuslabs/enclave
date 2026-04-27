@@ -5,6 +5,8 @@ import com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
+import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
@@ -62,6 +64,14 @@ internal data class TtsProvidersTransientState(
     val selectedReusableApiCredentialName: String? = null,
 )
 
+internal data class MediaProvidersTransientState(
+    val isSheetOpen: Boolean = false,
+    val selectedAsset: MediaProviderAssetUi? = null,
+    val assetDraft: MediaProviderAssetUi? = null,
+    val selectedReusableApiCredentialAlias: String? = null,
+    val selectedReusableApiCredentialName: String? = null,
+)
+
 internal data class AssignmentDialogTransientState(
     val isOpen: Boolean = false,
     val editingSlot: com.browntowndev.pocketcrew.domain.model.inference.ModelType? = null,
@@ -78,6 +88,7 @@ class SettingsUiStateFactory @Inject constructor(
     private val localModelAssetUiMapper: LocalModelAssetUiMapper,
     private val apiModelAssetUiMapper: ApiModelAssetUiMapper,
     private val ttsProviderAssetUiMapper: TtsProviderAssetUiMapper,
+    private val mediaProviderAssetUiMapper: MediaProviderAssetUiMapper,
     private val apiDiscoveryUiFilter: ApiDiscoveryUiFilter,
     private val applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
 ) {
@@ -86,6 +97,7 @@ class SettingsUiStateFactory @Inject constructor(
         localAssets: List<LocalModelAsset>,
         apiAssets: List<ApiModelAsset>,
         ttsAssets: List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
+        mediaAssets: List<MediaProviderAsset>,
         defaultModels: List<DefaultModelAssignment>,
         sheetVisibility: SheetVisibilityState,
         memories: List<StoredMemory>,
@@ -93,6 +105,7 @@ class SettingsUiStateFactory @Inject constructor(
         localModelsState: LocalModelsTransientState,
         apiState: ApiProvidersTransientState,
         ttsState: TtsProvidersTransientState,
+        mediaState: MediaProvidersTransientState,
         searchSkillState: SearchSkillTransientState,
         assignmentsState: AssignmentDialogTransientState,
         deletionState: DeletionTransientState,
@@ -132,6 +145,25 @@ class SettingsUiStateFactory @Inject constructor(
             }
         }
 
+        val defaultImageProviderId = defaultModels.find { it.modelType == ModelType.IMAGE_GENERATION }?.mediaProviderId
+        val defaultVideoProviderId = defaultModels.find { it.modelType == ModelType.VIDEO_GENERATION }?.mediaProviderId
+        val defaultMusicProviderId = defaultModels.find { it.modelType == ModelType.MUSIC_GENERATION }?.mediaProviderId
+        val mediaModels = mediaAssets.map { asset ->
+            val isDefault = when (asset.capability) {
+                MediaCapability.IMAGE -> asset.id == defaultImageProviderId
+                MediaCapability.VIDEO -> asset.id == defaultVideoProviderId
+                MediaCapability.MUSIC -> asset.id == defaultMusicProviderId
+            }
+            mediaProviderAssetUiMapper.map(asset, isDefault = isDefault)
+        }
+        val refreshedSelectedMediaAsset = mediaState.selectedAsset?.let { selected ->
+            if (selected.id.value.isEmpty()) {
+                selected
+            } else {
+                mediaModels.find { it.id == selected.id } ?: selected
+            }
+        }
+
         val activeApiAsset = apiState.assetDraft ?: refreshedSelectedApiAsset
         val parameterSupport = activeApiAsset?.let {
             applyApiModelMetadataDefaultsUseCase.parameterSupport(
@@ -158,6 +190,20 @@ class SettingsUiStateFactory @Inject constructor(
                 .find { it.credentials.credentialAlias == alias }
                 ?.let(apiModelAssetUiMapper::mapReusable)
                 ?: ttsState.selectedReusableApiCredentialName?.let { displayName ->
+                    ReusableApiCredentialUi(
+                        credentialsId = ApiCredentialsId(""),
+                        displayName = displayName,
+                        modelId = "",
+                        credentialAlias = alias,
+                    )
+                }
+        }
+
+        val selectedMediaReusableCredential = mediaState.selectedReusableApiCredentialAlias?.let { alias ->
+            apiAssets
+                .find { it.credentials.credentialAlias == alias }
+                ?.let(apiModelAssetUiMapper::mapReusable)
+                ?: mediaState.selectedReusableApiCredentialName?.let { displayName ->
                     ReusableApiCredentialUi(
                         credentialsId = ApiCredentialsId(""),
                         displayName = displayName,
@@ -217,6 +263,7 @@ class SettingsUiStateFactory @Inject constructor(
                 isFeedbackSheetOpen = sheetVisibility.feedback,
                 isVisionSettingsSheetOpen = sheetVisibility.visionSettings,
                 isTtsProvidersSheetOpen = ttsState.isSheetOpen,
+                isMediaProvidersSheetOpen = mediaState.isSheetOpen,
             ),
             customization = CustomizationUiState(
                 isSheetOpen = sheetVisibility.customization,
@@ -276,6 +323,16 @@ class SettingsUiStateFactory @Inject constructor(
                 isEditing = ttsState.selectedAsset != null || ttsState.assetDraft != null,
                 assetDraft = ttsState.assetDraft,
                 selectedReusableCredential = selectedTtsReusableCredential,
+            ),
+            mediaProvidersSheet = MediaProvidersSheetUiState(
+                isVisible = mediaState.isSheetOpen,
+                assets = mediaModels,
+                selectedAsset = refreshedSelectedMediaAsset,
+            ),
+            mediaProviderEditor = MediaProviderEditorUiState(
+                isEditing = mediaState.selectedAsset != null || mediaState.assetDraft != null,
+                assetDraft = mediaState.assetDraft,
+                selectedReusableCredential = selectedMediaReusableCredential,
             ),
             searchSkillEditor = SearchSkillEditorUiState(
                 isEditing = searchSkillState.isEditing,
@@ -355,6 +412,8 @@ class SettingsUiStateFactory @Inject constructor(
             ModelType.MAIN,
             ModelType.FINAL_SYNTHESIS,
             ModelType.TTS,
+            ModelType.IMAGE_GENERATION,
+            ModelType.VIDEO_GENERATION,
         )
     }
 }

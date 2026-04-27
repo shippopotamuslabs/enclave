@@ -24,20 +24,23 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -64,9 +67,6 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.R as CoreR
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
-import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
-import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 private sealed interface HistoryOptionsState {
     data object Hidden : HistoryOptionsState
@@ -83,6 +83,7 @@ fun HistoryScreen(
     onBackClick: () -> Unit,
     onChatClick: (ChatId) -> Unit,
     onNewChatClick: () -> Unit,
+    onStudioClick: () -> Unit,
     onDeleteChat: (ChatId) -> Unit,
     onRenameChat: (ChatId, String) -> Unit,
     onPinChat: (ChatId) -> Unit,
@@ -94,7 +95,6 @@ fun HistoryScreen(
     val sheetState = rememberModalBottomSheetState()
 
     val colorScheme = MaterialTheme.colorScheme
-    // Bolt Optimization: Group conditional remember into a single block with keys to ensure proper positional memoization
     val shimmerColors = remember(colorScheme, uiState.isLoading) {
         if (uiState.isLoading) {
             val base = colorScheme.onSurface.copy(alpha = 0.05f)
@@ -132,11 +132,13 @@ fun HistoryScreen(
                 .padding(innerPadding)
         ) {
             item {
-                NewChatButton(
+                NavigationButtonGroup(
+                    onNewChatClick = onNewChatClick,
+                    onStudioClick = onStudioClick,
+                    onGalleryClick = {},
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(16.dp),
-                    onClick = onNewChatClick
+                        .padding(16.dp)
                 )
             }
 
@@ -236,6 +238,97 @@ fun HistoryScreen(
 }
 
 @Composable
+private fun NavigationButtonGroup(
+    onNewChatClick: () -> Unit,
+    onStudioClick: () -> Unit,
+    onGalleryClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 2.dp
+    ) {
+        Column {
+            // New Chat Button (Top)
+            NavigationButton(
+                text = "New Chat",
+                icon = painterResource(CoreR.drawable.edit_square),
+                onClick = onNewChatClick,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
+            )
+            
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            
+            // Studio Button (Middle)
+            NavigationButton(
+                text = "Studio",
+                icon = Icons.Default.AutoAwesome,
+                onClick = onStudioClick,
+                containerColor = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = RoundedCornerShape(0.dp)
+            )
+            
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            
+            // Gallery Button (Bottom)
+            NavigationButton(
+                text = "Gallery",
+                icon = Icons.Default.PhotoLibrary,
+                onClick = onGalleryClick,
+                containerColor = Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 28.dp, bottomEnd = 28.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun NavigationButton(
+    text: String,
+    icon: Any, // Can be Painter or ImageVector
+    onClick: () -> Unit,
+    containerColor: Color,
+    contentColor: Color,
+    shape: RoundedCornerShape
+) {
+    Button(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp),
+        shape = shape,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = containerColor,
+            contentColor = contentColor
+        ),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            when (icon) {
+                is Painter -> Icon(painter = icon, contentDescription = null, modifier = Modifier.size(24.dp))
+                is ImageVector -> Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(24.dp))
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 18.sp
+            )
+        }
+    }
+}
+
+@Composable
 fun DeleteConfirmationDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
@@ -278,7 +371,6 @@ fun DeleteConfirmationDialog(
     )
 }
 
-
 @Composable
 private fun SectionHeader(text: String) {
     Text(
@@ -287,40 +379,6 @@ private fun SectionHeader(text: String) {
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary
     )
-}
-
-@Composable
-private fun NewChatButton(
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        modifier = modifier.height(56.dp),
-        shape = RoundedCornerShape(28.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary
-        ),
-        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 10.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                painter = painterResource(CoreR.drawable.edit_square),
-                contentDescription = null,
-                modifier = Modifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = "New Chat",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 18.sp
-            )
-        }
-    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -537,84 +595,7 @@ private fun PreviewHistoryScreenLoading() {
             onBackClick = {},
             onChatClick = {},
             onNewChatClick = {},
-            onDeleteChat = {},
-            onRenameChat = { _, _ -> },
-            onPinChat = {},
-            onUnpinChat = {},
-            onSettingsClick = {},
-            onShowSnackbar = { _, _ -> }
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun PreviewHistoryScreenLight() {
-    PocketCrewTheme {
-        HistoryScreen(
-            uiState = HistoryUiState(
-                pinnedChats = listOf(HistoryChat(ChatId("1"), "Important Project", "10:30 AM", true)),
-                otherChats = listOf(
-                    HistoryChat(ChatId("2"), "Weekend Plans", "Yesterday", false),
-                    HistoryChat(ChatId("3"), "Recipe Ideas", "2 days ago", false)
-                )
-            ),
-            searchQuery = "",
-            onSearchQueryChange = {},
-            onBackClick = {},
-            onChatClick = {},
-            onNewChatClick = {},
-            onDeleteChat = {},
-            onRenameChat = { _, _ -> },
-            onPinChat = {},
-            onUnpinChat = {},
-            onSettingsClick = {},
-            onShowSnackbar = { _, _ -> }
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun PreviewHistoryScreenDark() {
-    PocketCrewTheme(darkTheme = true) {
-        HistoryScreen(
-            uiState = HistoryUiState(
-                pinnedChats = listOf(HistoryChat(ChatId("1"), "Important Project", "10:30 AM", true)),
-                otherChats = listOf(
-                    HistoryChat(ChatId("2"), "Weekend Plans", "Yesterday", false),
-                    HistoryChat(ChatId("3"), "Recipe Ideas", "2 days ago", false)
-                )
-            ),
-            searchQuery = "",
-            onSearchQueryChange = {},
-            onBackClick = {},
-            onChatClick = {},
-            onNewChatClick = {},
-            onDeleteChat = {},
-            onRenameChat = { _, _ -> },
-            onPinChat = {},
-            onUnpinChat = {},
-            onSettingsClick = {},
-            onShowSnackbar = { _, _ -> }
-        )
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun PreviewHistoryScreenEmpty() {
-    PocketCrewTheme {
-        HistoryScreen(
-            uiState = HistoryUiState(
-                pinnedChats = emptyList(),
-                otherChats = emptyList()
-            ),
-            searchQuery = "",
-            onSearchQueryChange = {},
-            onBackClick = {},
-            onChatClick = {},
-            onNewChatClick = {},
+            onStudioClick = {},
             onDeleteChat = {},
             onRenameChat = { _, _ -> },
             onPinChat = {},

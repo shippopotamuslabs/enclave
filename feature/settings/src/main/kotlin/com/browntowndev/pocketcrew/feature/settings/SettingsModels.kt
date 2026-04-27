@@ -16,6 +16,8 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
+import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 
@@ -40,6 +42,8 @@ data class SettingsUiState(
     val searchSkillEditor: SearchSkillEditorUiState = SearchSkillEditorUiState(),
     val ttsProvidersSheet: TtsProvidersSheetUiState = TtsProvidersSheetUiState(),
     val ttsProviderEditor: TtsProviderEditorUiState = TtsProviderEditorUiState(),
+    val mediaProvidersSheet: MediaProvidersSheetUiState = MediaProvidersSheetUiState(),
+    val mediaProviderEditor: MediaProviderEditorUiState = MediaProviderEditorUiState(),
     val assignments: ModelAssignmentsUiState = ModelAssignmentsUiState(),
     val deletion: DeletionFlowUiState = DeletionFlowUiState(),
 )
@@ -57,6 +61,7 @@ data class SettingsHomeUiState(
     val isFeedbackSheetOpen: Boolean = false,
     val isVisionSettingsSheetOpen: Boolean = false,
     val isTtsProvidersSheetOpen: Boolean = false,
+    val isMediaProvidersSheetOpen: Boolean = false,
 )
 
 @Immutable
@@ -119,6 +124,20 @@ data class TtsProvidersSheetUiState(
 data class TtsProviderEditorUiState(
     val isEditing: Boolean = false,
     val assetDraft: TtsProviderAssetUi? = null,
+    val selectedReusableCredential: ReusableApiCredentialUi? = null,
+)
+
+@Immutable
+data class MediaProvidersSheetUiState(
+    val isVisible: Boolean = false,
+    val assets: List<MediaProviderAssetUi> = emptyList(),
+    val selectedAsset: MediaProviderAssetUi? = null,
+)
+
+@Immutable
+data class MediaProviderEditorUiState(
+    val isEditing: Boolean = false,
+    val assetDraft: MediaProviderAssetUi? = null,
     val selectedReusableCredential: ReusableApiCredentialUi? = null,
 )
 
@@ -194,6 +213,18 @@ data class TtsProviderAssetUi(
     val provider: ApiProvider = ApiProvider.OPENAI,
     val voiceName: String = "",
     val modelName: String? = null,
+    val baseUrl: String? = null,
+    val credentialAlias: String = "",
+    val useAsDefault: Boolean = false
+)
+
+@Immutable
+data class MediaProviderAssetUi(
+    val id: MediaProviderId = MediaProviderId(""),
+    val displayName: String = "",
+    val provider: ApiProvider = ApiProvider.OPENAI,
+    val capability: MediaCapability = MediaCapability.IMAGE,
+    val modelName: String = "",
     val baseUrl: String? = null,
     val credentialAlias: String = "",
     val useAsDefault: Boolean = false
@@ -314,6 +345,9 @@ internal val ModelType.displayLabel: String
         ModelType.THINKING -> "Thinking"
         ModelType.VISION -> "Vision (API)"
         ModelType.TTS -> "Text-to-Speech"
+        ModelType.IMAGE_GENERATION -> "Image Generation"
+        ModelType.VIDEO_GENERATION -> "Video Generation"
+        ModelType.MUSIC_GENERATION -> "Music Generation"
         ModelType.DRAFT_ONE -> "Draft 1"
         ModelType.DRAFT_TWO -> "Draft 2"
         ModelType.FINAL_SYNTHESIS -> "Final Refinement"
@@ -327,6 +361,9 @@ internal val ModelType.description: String
         ModelType.THINKING -> "A reasoning model with extended context for complex tasks."
         ModelType.VISION -> "A dedicated API vision model that acts as the chat's eyes for image inspection."
         ModelType.TTS -> "Synthesize text responses into natural-sounding speech."
+        ModelType.IMAGE_GENERATION -> "Generate images from text prompts."
+        ModelType.VIDEO_GENERATION -> "Generate videos from text prompts."
+        ModelType.MUSIC_GENERATION -> "Generate music from text prompts."
         ModelType.DRAFT_ONE -> "Generates the initial analytical draft for the Crew pipeline."
         ModelType.DRAFT_TWO -> "Produces a secondary creative draft for the Crew pipeline."
         ModelType.FINAL_SYNTHESIS -> "Polishes and refines the synthesized content for a professional final output."

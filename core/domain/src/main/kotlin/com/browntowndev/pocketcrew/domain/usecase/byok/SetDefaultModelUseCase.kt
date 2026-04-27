@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.domain.usecase.byok
 
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
@@ -14,7 +15,8 @@ interface SetDefaultModelUseCase {
         modelType: ModelType,
         localConfigId: LocalModelConfigurationId?,
         apiConfigId: ApiModelConfigurationId?,
-        ttsProviderId: TtsProviderId? = null
+        ttsProviderId: TtsProviderId? = null,
+        mediaProviderId: MediaProviderId? = null
     )
 }
 
@@ -28,6 +30,7 @@ class SetDefaultModelUseCaseImpl @Inject constructor(
         localConfigId: LocalModelConfigurationId?,
         apiConfigId: ApiModelConfigurationId?,
         ttsProviderId: TtsProviderId?,
+        mediaProviderId: MediaProviderId?
     ) {
         if (modelType == ModelType.VISION) {
             require(localConfigId == null) {
@@ -44,7 +47,7 @@ class SetDefaultModelUseCaseImpl @Inject constructor(
         }
 
         if (modelType == ModelType.TTS) {
-            require(localConfigId == null && apiConfigId == null) {
+            require(localConfigId == null && apiConfigId == null && mediaProviderId == null) {
                 "TTS slot is TTS-only."
             }
             requireNotNull(ttsProviderId) {
@@ -52,6 +55,15 @@ class SetDefaultModelUseCaseImpl @Inject constructor(
             }
         }
 
-        defaultModelRepository.setDefault(modelType, localConfigId, apiConfigId, ttsProviderId)
+        if (modelType == ModelType.IMAGE_GENERATION || modelType == ModelType.VIDEO_GENERATION || modelType == ModelType.MUSIC_GENERATION) {
+            require(localConfigId == null && apiConfigId == null && ttsProviderId == null) {
+                "Media generation slots are Media-only."
+            }
+            requireNotNull(mediaProviderId) {
+                "Media generation slot requires a media provider assignment."
+            }
+        }
+
+        defaultModelRepository.setDefault(modelType, localConfigId, apiConfigId, ttsProviderId, mediaProviderId)
     }
 }
