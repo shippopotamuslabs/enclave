@@ -34,14 +34,23 @@ data class MusicGenerationSettings(
 enum class AspectRatio(val ratio: String) {
     ONE_ONE("1:1"), THREE_FOUR("3:4"), FOUR_THREE("4:3"), 
     NINE_SIXTEEN("9:16"), SIXTEEN_NINE("16:9"), 
-    TWO_THREE("2:3"), THREE_TWO("3:2")
+    TWO_THREE("2:3"), THREE_TWO("3:2"),
+    TWENTY_ONE_NINE("21:9"), FIVE_FOUR("5:4")
 }
 
-enum class GenerationQuality { SPEED, QUALITY, HD, ULTRA }
+enum class GenerationQuality(val displayName: String) {
+    SPEED("Speed"),
+    QUALITY("Quality"),
+    HD("HD"),
+    ULTRA("Ultra")
+}
 
 data class ProviderCapabilities(
     val supportedAspectRatios: List<AspectRatio>,
-    val supportedQualities: List<GenerationQuality>,
+    val supportedImageQualities: List<GenerationQuality>,
+    val supportedVideoQualities: List<GenerationQuality>,
+    val supportedVideoResolutions: List<String>,
+    val supportedVideoDurations: List<Int>,
     val supportsReferenceImage: Boolean,
     val supportsVideo: Boolean,
     val supportsMusic: Boolean = false

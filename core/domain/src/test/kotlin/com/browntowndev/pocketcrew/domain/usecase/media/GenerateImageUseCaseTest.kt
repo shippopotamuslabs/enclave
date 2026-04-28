@@ -2,11 +2,12 @@ package com.browntowndev.pocketcrew.domain.usecase.media
 
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.media.AspectRatio
-import com.browntowndev.pocketcrew.domain.model.media.GenerationSettings
+import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.StudioTemplate
 import com.browntowndev.pocketcrew.domain.port.media.ImageGenerationPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderAsset
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -42,13 +43,13 @@ class GenerateImageUseCaseTest {
             promptSuffix = ", cute"
         )
         val prompt = "dragon"
-        val settings = GenerationSettings()
+        val settings = ImageGenerationSettings()
         val provider = mockk<MediaProviderAsset>()
         
         coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_GENERATION) } returns mockk {
-            coEvery { mediaProviderId } returns "provider-1"
+            coEvery { mediaProviderId } returns MediaProviderId("provider-1")
         }
-        coEvery { mediaProviderRepository.getMediaProvider("provider-1") } returns provider
+        coEvery { mediaProviderRepository.getMediaProvider(MediaProviderId("provider-1")) } returns provider
         coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(ByteArray(0))
 
         // When
@@ -74,7 +75,7 @@ class GenerateImageUseCaseTest {
         coEvery { defaultModelRepository.getDefault(ModelType.IMAGE_GENERATION) } returns null
 
         // When
-        val result = useCase("prompt", GenerationSettings())
+        val result = useCase("prompt", ImageGenerationSettings())
 
         // Then
         assertTrue(result.isFailure)

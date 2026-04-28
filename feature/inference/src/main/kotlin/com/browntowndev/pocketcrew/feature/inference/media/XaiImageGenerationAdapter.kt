@@ -41,6 +41,8 @@ class XaiImageGenerationAdapter @Inject constructor(
                         AspectRatio.FOUR_THREE -> "1024x768"
                         AspectRatio.TWO_THREE -> "683x1024"
                         AspectRatio.THREE_TWO -> "1024x683"
+                        AspectRatio.TWENTY_ONE_NINE -> "1792x768"
+                        AspectRatio.FIVE_FOUR -> "1280x1024"
                     }
                     size(ImageGenerateParams.Size.of(sizeStr))
                     

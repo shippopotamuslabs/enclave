@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -143,37 +144,39 @@ fun StudioScreen(
                                 )
                             }
                         }
-
-                        // 2. Integrated Media Switcher Pill
-                        MediaModeToggle(
-                            selectedType = uiState.mediaType,
-                            onTypeChange = viewModel::onMediaTypeChange,
-                            modifier = Modifier.padding(start = if (uiState.mediaType == MediaCapability.MUSIC) 16.dp else 0.dp)
-                        )
-
-                        // 3. Spacer to push settings to the right
-                        Spacer(modifier = Modifier.weight(1f))
-
-                        // 4. Settings Cog Icon
-                        IconButton(onClick = viewModel::onSettingsToggle) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Studio Options"
-                            )
-                        }
                     },
                     trailingAction = {
-                        val icon = if (uiState.isGenerating) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send
-                        val containerColor = if (uiState.isGenerating) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primary
-                        val contentColor = if (uiState.isGenerating) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimary
-                        
-                        StandardTrailingAction(
-                            icon = icon,
-                            onClick = { viewModel.generate() },
-                            containerColor = containerColor,
-                            contentColor = contentColor,
-                            enabled = uiState.prompt.isNotBlank() || uiState.isGenerating
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Media Mode / Studio Options Trigger
+                            val currentIcon = when (uiState.mediaType) {
+                                MediaCapability.IMAGE -> Icons.Default.Image
+                                MediaCapability.VIDEO -> Icons.Default.Movie
+                                MediaCapability.MUSIC -> Icons.Default.MusicNote
+                            }
+
+                            StandardTrailingAction(
+                                icon = currentIcon,
+                                onClick = viewModel::onSettingsToggle,
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                description = "Studio Options"
+                            )
+
+                            val icon = if (uiState.isGenerating) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send
+                            val containerColor = if (uiState.isGenerating) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primary
+                            val contentColor = if (uiState.isGenerating) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimary
+
+                            StandardTrailingAction(
+                                icon = icon,
+                                onClick = { viewModel.generate() },
+                                containerColor = containerColor,
+                                contentColor = contentColor,
+                                enabled = uiState.prompt.isNotBlank() || uiState.isGenerating
+                            )
+                        }
                     }
                 )
             }

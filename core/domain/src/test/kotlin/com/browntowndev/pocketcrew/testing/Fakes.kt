@@ -25,7 +25,9 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelMetadata
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.config.SlotResolvedLocalModel
+import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadProgressUpdate
 import com.browntowndev.pocketcrew.domain.model.download.DownloadState
@@ -377,9 +379,10 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
         modelType: ModelType,
         localConfigId: LocalModelConfigurationId?,
         apiConfigId: ApiModelConfigurationId?,
-        ttsProviderId: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId?
+        ttsProviderId: TtsProviderId?,
+        mediaProviderId: MediaProviderId?
     ) {
-        val assignment = DefaultModelAssignment(modelType, localConfigId, apiConfigId, ttsProviderId)
+        val assignment = DefaultModelAssignment(modelType, localConfigId, apiConfigId, ttsProviderId, mediaProviderId)
         _defaults.value = _defaults.value.filter { it.modelType != modelType } + assignment
     }
 
