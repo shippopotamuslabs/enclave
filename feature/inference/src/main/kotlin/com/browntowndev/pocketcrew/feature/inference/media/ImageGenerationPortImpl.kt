@@ -17,7 +17,7 @@ class ImageGenerationPortImpl @Inject constructor(
         prompt: String,
         provider: MediaProviderAsset,
         settings: GenerationSettings
-    ): Result<ByteArray> {
+    ): Result<List<ByteArray>> {
         val apiKey = apiKeyProvider.getApiKey(provider.credentialAlias)
             ?: return Result.failure(IllegalStateException("API key not found for alias: ${provider.credentialAlias}"))
 

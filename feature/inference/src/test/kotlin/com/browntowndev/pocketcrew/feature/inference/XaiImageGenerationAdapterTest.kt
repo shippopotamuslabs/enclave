@@ -5,6 +5,8 @@ import com.browntowndev.pocketcrew.domain.model.media.GenerationQuality
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.feature.inference.media.XaiImageGenerationAdapter
 import com.openai.client.OpenAIClient
+import com.openai.core.JsonValue
+import com.openai.errors.BadRequestException
 import com.openai.models.images.Image
 import com.openai.models.images.ImageGenerateParams
 import com.openai.models.images.ImagesResponse
@@ -40,15 +42,17 @@ class XaiImageGenerationAdapterTest {
             baseUrl = null,
             settings = ImageGenerationSettings(
                 aspectRatio = AspectRatio.SIXTEEN_NINE,
-                quality = GenerationQuality.HD,
+                quality = GenerationQuality.QUALITY,
+                generationCount = 3,
             ),
         )
 
         assertTrue(result.isSuccess)
-        assertArrayEquals("image".toByteArray(), result.getOrThrow())
+        assertArrayEquals("image".toByteArray(), result.getOrThrow().single())
         val params = paramsSlot.captured
         assertEquals("A serene Japanese garden", params.prompt())
         assertEquals("grok-imagine-image", params.model().orElseThrow().asString())
+        assertEquals(3L, params.n().orElseThrow())
         assertEquals(ImageGenerateParams.ResponseFormat.B64_JSON, params.responseFormat().orElseThrow())
         assertFalse(params.size().isPresent)
         assertEquals("16:9", params._additionalBodyProperties()["aspect_ratio"]?.convert(String::class.java))
@@ -79,11 +83,78 @@ class XaiImageGenerationAdapterTest {
         assertEquals("1k", paramsSlot.captured._additionalBodyProperties()["resolution"]?.convert(String::class.java))
     }
 
-    private fun successfulImageResponse(): ImagesResponse {
-        val encodedImage = Base64.getEncoder().encodeToString("image".toByteArray())
+    @Test
+    fun generateImage_decodesAllReturnedImages() = runTest {
+        every { clientProvider.getClient("key", "https://api.x.ai/v1") } returns client
+        every { client.images() } returns imageService
+        every { imageService.generate(any<ImageGenerateParams>()) } returns successfulImageResponse(
+            "first".toByteArray(),
+            "second".toByteArray(),
+        )
+
+        val result = adapter.generateImage(
+            prompt = "batch",
+            apiKey = "key",
+            modelId = "grok-imagine-image",
+            baseUrl = null,
+            settings = ImageGenerationSettings(generationCount = 2),
+        )
+
+        assertTrue(result.isSuccess)
+        assertArrayEquals("first".toByteArray(), result.getOrThrow()[0])
+        assertArrayEquals("second".toByteArray(), result.getOrThrow()[1])
+    }
+
+    @Test
+    fun generateImage_passedModerationFalse_returnsModerationFailure() = runTest {
+        every { clientProvider.getClient("key", "https://api.x.ai/v1") } returns client
+        every { client.images() } returns imageService
+        every { imageService.generate(any<ImageGenerateParams>()) } returns ImagesResponse.builder()
+            .created(0)
+            .putAdditionalProperty("passed_moderation", JsonValue.from(false))
+            .build()
+
+        val result = adapter.generateImage(
+            prompt = "rejected prompt",
+            apiKey = "key",
+            modelId = "grok-imagine-image",
+            baseUrl = null,
+            settings = ImageGenerationSettings(),
+        )
+
+        assertTrue(result.isFailure)
+        assertEquals("Prompt rejected due to moderation.", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun generateImage_badRequest_returnsModerationFailure() = runTest {
+        val badRequest = mockk<BadRequestException>()
+        every { badRequest.statusCode() } returns 400
+        every { clientProvider.getClient("key", "https://api.x.ai/v1") } returns client
+        every { client.images() } returns imageService
+        every { imageService.generate(any<ImageGenerateParams>()) } throws badRequest
+
+        val result = adapter.generateImage(
+            prompt = "rejected prompt",
+            apiKey = "key",
+            modelId = "grok-imagine-image",
+            baseUrl = null,
+            settings = ImageGenerationSettings(),
+        )
+
+        assertTrue(result.isFailure)
+        assertEquals("Prompt rejected due to moderation.", result.exceptionOrNull()?.message)
+    }
+
+    private fun successfulImageResponse(vararg images: ByteArray = arrayOf("image".toByteArray())): ImagesResponse {
         return ImagesResponse.builder()
             .created(0)
-            .addData(Image.builder().b64Json(encodedImage).build())
+            .also { responseBuilder ->
+                images.forEach { image ->
+                    val encodedImage = Base64.getEncoder().encodeToString(image)
+                    responseBuilder.addData(Image.builder().b64Json(encodedImage).build())
+                }
+            }
             .build()
     }
 }

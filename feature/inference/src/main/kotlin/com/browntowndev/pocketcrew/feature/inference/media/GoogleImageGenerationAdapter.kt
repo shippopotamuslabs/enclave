@@ -2,14 +2,18 @@ package com.browntowndev.pocketcrew.feature.inference.media
 
 import com.browntowndev.pocketcrew.domain.model.media.AspectRatio
 import com.browntowndev.pocketcrew.domain.model.media.GenerationSettings
+import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.VisualGenerationSettings
+import com.browntowndev.pocketcrew.domain.model.media.withClampedGenerationCount
 import com.browntowndev.pocketcrew.feature.inference.GoogleGenAiClientProviderPort
+import com.google.genai.Client
 import com.google.genai.types.GenerateImagesConfig
+import com.google.genai.types.GenerateImagesResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
-class GoogleImageGenerationAdapter @Inject constructor(
+open class GoogleImageGenerationAdapter @Inject constructor(
     private val clientProvider: GoogleGenAiClientProviderPort
 ) {
     suspend fun generateImage(
@@ -18,10 +22,14 @@ class GoogleImageGenerationAdapter @Inject constructor(
         modelId: String,
         baseUrl: String?,
         settings: GenerationSettings
-    ): Result<ByteArray> = withContext(Dispatchers.IO) {
+    ): Result<List<ByteArray>> = withContext(Dispatchers.IO) {
         runCatching {
             val visualSettings = settings as? VisualGenerationSettings
                 ?: throw IllegalArgumentException("Settings must be VisualGenerationSettings")
+            val generationCount = (settings as? ImageGenerationSettings)
+                ?.withClampedGenerationCount()
+                ?.generationCount
+                ?: 1
             val client = clientProvider.getClient(apiKey, baseUrl)
             val config = GenerateImagesConfig.builder().apply {
                 val ratio = when (visualSettings.aspectRatio) {
@@ -33,22 +41,26 @@ class GoogleImageGenerationAdapter @Inject constructor(
                     else -> "1:1"
                 }
                 aspectRatio(ratio)
+                numberOfImages(generationCount)
                 // Add quality/size if supported by the specific model
             }.build()
 
-            val response = client.models.generateImages(
-                modelId,
-                prompt,
-                config
-            )
-            val image = response.generatedImages().orElse(emptyList()).firstOrNull()
-                ?: throw IllegalStateException("No image generated")
-            
-            // Guessing the correct method to get bytes based on common patterns in these SDKs
-            val imageBytesObj = image.image().get()
-            // If it's a Blob or similar, it often has a data() or imageBytes() method
-            // Let's try to get it as a String if it's base64 or just cast it
-            imageBytesObj.imageBytes().get()
+            val response = generateImages(client, modelId, prompt, config)
+            val images = response.generatedImages().orElse(emptyList())
+                .mapNotNull { generatedImage ->
+                    generatedImage.image().orElse(null)?.imageBytes()?.orElse(null)
+                }
+            if (images.isEmpty()) {
+                throw IllegalStateException("No image generated")
+            }
+            images
         }
     }
+
+    protected open fun generateImages(
+        client: Client,
+        modelId: String,
+        prompt: String,
+        config: GenerateImagesConfig,
+    ): GenerateImagesResponse = client.models.generateImages(modelId, prompt, config)
 }

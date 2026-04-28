@@ -7,7 +7,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -202,8 +202,8 @@ fun PocketCrewNavGraph(
             StudioScreen(
                 viewModel = studioViewModel,
                 onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
-                onMediaClick = { asset ->
-                    navController.navigate(Routes.STUDIO_DETAIL.replace("{assetId}", asset.id))
+                onMediaClick = { assetId ->
+                    navController.navigate(Routes.STUDIO_DETAIL.replace("{assetId}", assetId))
                 },
                 onShowSnackbar = onShowSnackbar,
             )
@@ -236,8 +236,8 @@ fun PocketCrewNavGraph(
             StudioDetailScreen(
                 assetId = assetId,
                 onNavigateBack = { navController.popBackStack() },
-                onEditMedia = { asset -> studioViewModel.onEditMedia(asset) },
-                onAnimateMedia = { asset -> studioViewModel.onAnimateMedia(asset) },
+                onEditMedia = studioViewModel::onEditMedia,
+                onAnimateMedia = studioViewModel::onAnimateMedia,
             )
         }
 

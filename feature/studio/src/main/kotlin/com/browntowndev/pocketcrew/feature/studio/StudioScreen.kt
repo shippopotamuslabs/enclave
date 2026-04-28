@@ -2,11 +2,17 @@ package com.browntowndev.pocketcrew.feature.studio
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -15,10 +21,16 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
@@ -29,25 +41,40 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
-import com.browntowndev.pocketcrew.core.ui.component.MediaModeToggle
 import com.browntowndev.pocketcrew.core.ui.component.StandardTrailingAction
 import com.browntowndev.pocketcrew.core.ui.component.UniversalInputBar
+import com.browntowndev.pocketcrew.core.ui.theme.GoldVariant
+import com.browntowndev.pocketcrew.core.ui.theme.PeachAccent
+import com.browntowndev.pocketcrew.core.ui.theme.PurpleLightPrimary
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
-import com.browntowndev.pocketcrew.domain.model.media.VideoGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.VisualGenerationSettings
-import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
+import com.browntowndev.pocketcrew.feature.studio.components.PromptHeaderDivider
 import com.browntowndev.pocketcrew.feature.studio.components.StudioOptionsBottomSheet
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
-@OptIn(ExperimentalMaterial3Api::class)
+private const val GRID_COLUMNS = 2
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun StudioScreen(
     onNavigateToHistory: () -> Unit,
-    onMediaClick: (StudioMediaAsset) -> Unit,
+    onMediaClick: (String) -> Unit,
     onShowSnackbar: (String, String?) -> Unit,
     viewModel: MultimodalViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val hazeState = rememberHazeState()
+    val listState = rememberLazyListState()
+    val visibleGallery = remember(uiState.gallery) { uiState.gallery.asReversed() }
+    val groupedGallery = remember(visibleGallery) { visibleGallery.groupBy { it.prompt } }
+    val generationPlaceholderCount = (uiState.settings as? ImageGenerationSettings)
+        ?.generationCount
+        ?.coerceAtLeast(1)
+        ?: 1
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -59,6 +86,26 @@ fun StudioScreen(
             onShowSnackbar(it, null)
             viewModel.clearError()
         }
+    }
+
+    LaunchedEffect(listState, visibleGallery, uiState.mediaType, uiState.continualMode, uiState.prompt) {
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.index }.toSet() }
+            .map { visibleIndexes ->
+                val totalGalleryItemCount = visibleGallery.size
+                val triggerIndex = (totalGalleryItemCount - GRID_COLUMNS * 2).coerceAtLeast(0)
+                
+                if (visibleIndexes.any { it >= triggerIndex }) {
+                    visibleGallery.getOrNull(triggerIndex)?.id
+                } else {
+                    null
+                }
+            }
+            .distinctUntilChanged()
+            .collect { anchorAssetId ->
+                if (anchorAssetId != null) {
+                    viewModel.onGenerativeScrollThresholdVisible(anchorAssetId)
+                }
+            }
     }
 
     Scaffold(
@@ -88,20 +135,74 @@ fun StudioScreen(
                 .fillMaxSize()
                 .padding(top = padding.calculateTopPadding())
         ) {
-            // Main Content: Gallery Grid
+            // Main Content: Gallery List (Simulating Grid)
             Box(modifier = Modifier.weight(1f)) {
-                if (uiState.gallery.isEmpty()) {
+                if (uiState.gallery.isEmpty() && !uiState.isGenerating) {
                     EmptyStudioState()
                 } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        contentPadding = PaddingValues(16.dp, 16.dp, 16.dp, 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        items(uiState.gallery) { asset ->
-                            GalleryItem(asset, onMediaClick)
+                        groupedGallery.forEach { (prompt, mediaList) ->
+                            stickyHeader(key = prompt) {
+                                PromptHeaderDivider(
+                                    prompt = prompt,
+                                    hazeState = hazeState,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                )
+                            }
+                            
+                            val rows = mediaList.chunked(GRID_COLUMNS)
+                            items(
+                                items = rows,
+                                key = { row -> row.first().id }
+                            ) { rowItems ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .hazeSource(state = hazeState)
+                                ) {
+                                    rowItems.forEach { asset ->
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            GalleryItem(asset, onMediaClick)
+                                        }
+                                    }
+                                    if (rowItems.size < GRID_COLUMNS) {
+                                        repeat(GRID_COLUMNS - rowItems.size) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (uiState.isGenerating) {
+                            val placeholderCount = (uiState.settings as? ImageGenerationSettings)
+                                ?.generationCount
+                                ?.coerceAtLeast(1)
+                                ?: 1
+                            val placeholderRows = (0 until placeholderCount).chunked(GRID_COLUMNS)
+                            
+                            items(placeholderRows) { row ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .hazeSource(state = hazeState)
+                                ) {
+                                    row.forEach { _ ->
+                                        Box(modifier = Modifier.weight(1f)) {
+                                            GeneratingPlaceholderItem()
+                                        }
+                                    }
+                                    if (row.size < GRID_COLUMNS) {
+                                        repeat(GRID_COLUMNS - row.size) {
+                                            Spacer(modifier = Modifier.weight(1f))
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -173,16 +274,25 @@ fun StudioScreen(
                                 description = "Studio Options"
                             )
 
-                            val icon = if (uiState.isGenerating) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send
-                            val containerColor = if (uiState.isGenerating) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primary
-                            val contentColor = if (uiState.isGenerating) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimary
+                            val isStopAction = uiState.isGenerating || uiState.isContinualGenerationActive
+                            val icon = if (isStopAction) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send
+                            val containerColor = if (isStopAction) {
+                                MaterialTheme.colorScheme.errorContainer
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            }
+                            val contentColor = if (isStopAction) {
+                                MaterialTheme.colorScheme.onErrorContainer
+                            } else {
+                                MaterialTheme.colorScheme.onPrimary
+                            }
 
                             StandardTrailingAction(
                                 icon = icon,
                                 onClick = { viewModel.generate() },
                                 containerColor = containerColor,
                                 contentColor = contentColor,
-                                enabled = uiState.prompt.isNotBlank() || uiState.isGenerating
+                                enabled = uiState.prompt.isNotBlank() || isStopAction
                             )
                         }
                     }
@@ -205,12 +315,12 @@ fun StudioScreen(
 
 @Composable
 private fun GalleryItem(
-    asset: StudioMediaAsset,
-    onMediaClick: (StudioMediaAsset) -> Unit
+    asset: StudioMediaUi,
+    onMediaClick: (String) -> Unit
 ) {
     Card(
-        onClick = { onMediaClick(asset) },
-        shape = RoundedCornerShape(12.dp),
+        onClick = { onMediaClick(asset.id) },
+        shape = RectangleShape,
         modifier = Modifier
             .aspectRatio(1f)
             .fillMaxWidth()
@@ -232,7 +342,11 @@ private fun GalleryItem(
                     .align(Alignment.BottomEnd)
             ) {
                 Icon(
-                    imageVector = if (asset.mediaType == "IMAGE") Icons.Default.Image else Icons.Default.Videocam,
+                    imageVector = if (asset.mediaType == MediaCapability.IMAGE) {
+                        Icons.Default.Image
+                    } else {
+                        Icons.Default.Videocam
+                    },
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier
@@ -242,6 +356,59 @@ private fun GalleryItem(
             }
         }
     }
+}
+
+@Composable
+private fun GeneratingPlaceholderItem() {
+    val infiniteTransition = rememberInfiniteTransition(label = "studio_shimmer")
+    val progress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmer_progress"
+    )
+
+    val baseColor = MaterialTheme.colorScheme.surfaceVariant
+
+    Box(
+        modifier = Modifier
+            .aspectRatio(1f)
+            .fillMaxWidth()
+            .drawWithCache {
+                val brush = Brush.linearGradient(
+                    colors = listOf(
+                        baseColor,
+                        PeachAccent,
+                        GoldVariant,
+                        PurpleLightPrimary,
+                        baseColor
+                    ),
+                    start = Offset.Zero,
+                    end = Offset(size.width, size.height),
+                    tileMode = androidx.compose.ui.graphics.TileMode.Repeated
+                )
+
+                onDrawBehind {
+                    val currentProgress = progress
+                    val xOffset = currentProgress * size.width
+                    val yOffset = currentProgress * size.height
+
+                    withTransform({
+                        translate(left = xOffset, top = yOffset)
+                    }) {
+                        // Draw at -xOffset, -yOffset to ensure the rectangle covers the component's visible area
+                        drawRect(
+                            brush = brush,
+                            topLeft = Offset(x = -xOffset, y = -yOffset),
+                            size = size
+                        )
+                    }
+                }
+            }
+    )
 }
 
 @Composable

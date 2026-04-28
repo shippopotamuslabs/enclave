@@ -60,12 +60,14 @@ fun UniversalInputBar(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = backgroundColor,
+        color = Color.Transparent,
         shape = shape
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(shape)
+                .background(backgroundColor)
                 .navigationBarsPadding()
                 .then(if (isExpanded) Modifier.fillMaxHeight(0.9f) else Modifier.heightIn(min = 56.dp))
                 .padding(bottom = 12.dp, top = 12.dp, start = 16.dp, end = 16.dp)

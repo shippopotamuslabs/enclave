@@ -13,11 +13,11 @@ interface ImageGenerationPort {
      * @param prompt The text prompt describing the image to generate.
      * @param provider The media provider configuration to use.
      * @param settings The generation settings (aspect ratio, quality, etc.).
-     * @return A [Result] containing the raw image bytes on success.
+     * @return A [Result] containing the raw image bytes for each generated image on success.
      */
     suspend fun generateImage(
         prompt: String,
         provider: MediaProviderAsset,
         settings: GenerationSettings
-    ): Result<ByteArray>
+    ): Result<List<ByteArray>>
 }

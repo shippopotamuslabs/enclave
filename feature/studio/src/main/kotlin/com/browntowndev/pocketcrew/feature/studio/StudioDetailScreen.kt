@@ -21,10 +21,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
-import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.media.SaveMediaToGalleryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -35,7 +35,7 @@ import javax.inject.Inject
 
 sealed class StudioDetailUiState {
     object Loading : StudioDetailUiState()
-    data class Success(val asset: StudioMediaAsset) : StudioDetailUiState()
+    data class Success(val asset: StudioMediaUi) : StudioDetailUiState()
     data class Error(val message: String) : StudioDetailUiState()
 }
 
@@ -51,7 +51,7 @@ class StudioDetailViewModel @Inject constructor(
         viewModelScope.launch {
             val asset = studioRepository.getMediaById(id)
             _uiState.value = if (asset != null) {
-                StudioDetailUiState.Success(asset)
+                StudioDetailUiState.Success(asset.toUi())
             } else {
                 StudioDetailUiState.Error("Asset not found")
             }
@@ -65,10 +65,9 @@ class StudioDetailViewModel @Inject constructor(
         }
     }
 
-    fun saveToGallery(asset: StudioMediaAsset) {
+    fun saveToGallery(asset: StudioMediaUi) {
         viewModelScope.launch {
-            val mediaType = if (asset.mediaType == "IMAGE") MediaCapability.IMAGE else MediaCapability.VIDEO
-            saveMediaToGalleryUseCase(asset.localUri, mediaType)
+            saveMediaToGalleryUseCase(asset.localUri, asset.mediaType)
         }
     }
 }
@@ -78,11 +77,11 @@ class StudioDetailViewModel @Inject constructor(
 fun StudioDetailScreen(
     assetId: String,
     onNavigateBack: () -> Unit,
-    onEditMedia: (StudioMediaAsset) -> Unit,
-    onAnimateMedia: (StudioMediaAsset) -> Unit,
+    onEditMedia: (String) -> Unit,
+    onAnimateMedia: (String) -> Unit,
     viewModel: StudioDetailViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(assetId) {
         viewModel.loadAsset(assetId)
@@ -120,11 +119,11 @@ fun StudioDetailScreen(
                     DetailContent(
                         asset = state.asset,
                         onEdit = { 
-                            onEditMedia(state.asset)
+                            onEditMedia(state.asset.id)
                             onNavigateBack()
                         },
                         onAnimate = {
-                            onAnimateMedia(state.asset)
+                            onAnimateMedia(state.asset.id)
                             onNavigateBack()
                         },
                         onSave = { viewModel.saveToGallery(state.asset) },
@@ -140,7 +139,7 @@ fun StudioDetailScreen(
 
 @Composable
 private fun DetailContent(
-    asset: StudioMediaAsset,
+    asset: StudioMediaUi,
     onEdit: () -> Unit,
     onAnimate: () -> Unit,
     onSave: () -> Unit,
@@ -183,7 +182,7 @@ private fun DetailContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ActionItem(Icons.Default.Edit, "Edit", onEdit)
-                if (asset.mediaType == "IMAGE") {
+                if (asset.mediaType == MediaCapability.IMAGE) {
                     ActionItem(Icons.Default.Movie, "Animate", onAnimate)
                 }
                 ActionItem(Icons.Default.Download, "Save", onSave)
