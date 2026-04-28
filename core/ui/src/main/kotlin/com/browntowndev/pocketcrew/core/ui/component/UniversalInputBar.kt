@@ -119,7 +119,12 @@ fun UniversalInputBar(
             }
 
             if (trailingAction != null) {
-                Box(modifier = Modifier.align(Alignment.BottomEnd)) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .heightIn(min = 48.dp),
+                    contentAlignment = Alignment.Center
+                ) {
                     Row {
                         trailingAction()
                     }

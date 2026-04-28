@@ -11,6 +11,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -24,7 +25,8 @@ class MultimodalViewModel @Inject constructor(
     private val videoGenerationPort: VideoGenerationPort,
     private val studioRepository: StudioRepositoryPort,
     private val defaultModelRepository: DefaultModelRepositoryPort,
-    private val mediaProviderRepository: MediaProviderRepositoryPort
+    private val mediaProviderRepository: MediaProviderRepositoryPort,
+    private val getProviderCapabilitiesUseCase: GetProviderCapabilitiesUseCase
 ) : ViewModel() {
 
     private val _prompt = MutableStateFlow("")
@@ -70,30 +72,7 @@ class MultimodalViewModel @Inject constructor(
     }
 
     private val capabilitiesFlow = activeProviderFlow.map { provider ->
-        val providerId = provider?.id?.toString() ?: ""
-        when {
-            providerId.contains("openai", ignoreCase = true) -> ProviderCapabilities(
-                supportedAspectRatios = listOf(AspectRatio.ONE_ONE, AspectRatio.SIXTEEN_NINE, AspectRatio.NINE_SIXTEEN),
-                supportedQualities = listOf(GenerationQuality.SPEED, GenerationQuality.HD),
-                supportsReferenceImage = false,
-                supportsVideo = false,
-                supportsMusic = false
-            )
-            providerId.contains("google", ignoreCase = true) -> ProviderCapabilities(
-                supportedAspectRatios = listOf(AspectRatio.ONE_ONE, AspectRatio.THREE_FOUR, AspectRatio.FOUR_THREE, AspectRatio.NINE_SIXTEEN, AspectRatio.SIXTEEN_NINE),
-                supportedQualities = listOf(GenerationQuality.SPEED, GenerationQuality.ULTRA),
-                supportsReferenceImage = true,
-                supportsVideo = true,
-                supportsMusic = false
-            )
-            else -> ProviderCapabilities(
-                supportedAspectRatios = AspectRatio.entries.toList(),
-                supportedQualities = listOf(GenerationQuality.SPEED, GenerationQuality.QUALITY, GenerationQuality.HD),
-                supportsReferenceImage = true,
-                supportsVideo = true,
-                supportsMusic = true
-            )
-        }
+        getProviderCapabilitiesUseCase(provider?.id?.toString())
     }
 
     val uiState: StateFlow<StudioUiState> = combine(

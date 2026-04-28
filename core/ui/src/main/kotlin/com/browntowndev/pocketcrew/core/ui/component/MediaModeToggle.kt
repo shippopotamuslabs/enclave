@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -51,9 +52,8 @@ fun MediaModeToggle(
         ToggleItem("Music", Icons.Default.MusicNote, MediaCapability.MUSIC)
     )
 
-    val itemWidth = 80.dp
-    val padding = 4.dp
-    val gap = 4.dp
+    val padding = 0.dp
+    val gap = 0.dp
     
     val selectedIndex = when (selectedType) {
         MediaCapability.IMAGE -> 0
@@ -61,21 +61,23 @@ fun MediaModeToggle(
         MediaCapability.MUSIC -> 2
     }
     
-    // Indicator offset animation
-    val indicatorOffset by animateDpAsState(
-        targetValue = (itemWidth + gap) * selectedIndex,
-        animationSpec = tween(durationMillis = 300),
-        label = "indicatorOffset"
-    )
-
-    Box(
+    BoxWithConstraints(
         modifier = modifier
-            .height(40.dp)
-            .width((itemWidth * items.size) + (gap * (items.size - 1)) + (padding * 2))
+            .height(44.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(padding)
     ) {
+        val containerWidth = maxWidth
+        val itemWidth = (containerWidth - (gap * (items.size - 1))) / items.size
+
+        // Indicator offset animation
+        val indicatorOffset by animateDpAsState(
+            targetValue = (itemWidth + gap) * selectedIndex,
+            animationSpec = tween(durationMillis = 300),
+            label = "indicatorOffset"
+        )
+
         // Sliding Indicator
         Box(
             modifier = Modifier
@@ -86,7 +88,10 @@ fun MediaModeToggle(
                 .background(MaterialTheme.colorScheme.primary)
         )
 
-        Row(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            horizontalArrangement = Arrangement.spacedBy(gap)
+        ) {
             items.forEachIndexed { index, item ->
                 val isSelected = index == selectedIndex
                 val contentColor by animateColorAsState(
@@ -113,14 +118,14 @@ fun MediaModeToggle(
                         Icon(
                             imageVector = item.icon,
                             contentDescription = null,
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(18.dp),
                             tint = contentColor
                         )
                         Text(
                             text = item.label,
-                            style = MaterialTheme.typography.labelMedium.copy(
+                            style = MaterialTheme.typography.labelLarge.copy(
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 12.sp
+                                fontSize = 14.sp
                             ),
                             color = contentColor
                         )

@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.usecase
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
@@ -27,14 +28,16 @@ class FakeDefaultModelRepository : DefaultModelRepositoryPort {
         modelType: ModelType,
         localConfigId: LocalModelConfigurationId?,
         apiConfigId: ApiModelConfigurationId?,
-        ttsProviderId: TtsProviderId?
+        ttsProviderId: TtsProviderId?,
+        mediaProviderId: MediaProviderId?
     ) {
         val current = _defaults.value.toMutableMap()
         current[modelType] = DefaultModelAssignment(
             modelType = modelType,
             localConfigId = localConfigId,
             apiConfigId = apiConfigId,
-            ttsProviderId = ttsProviderId
+            ttsProviderId = ttsProviderId,
+            mediaProviderId = mediaProviderId
         )
         _defaults.value = current
     }

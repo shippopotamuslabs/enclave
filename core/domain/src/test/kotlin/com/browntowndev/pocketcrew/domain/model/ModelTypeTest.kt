@@ -20,12 +20,13 @@ class ModelTypeTest {
         assertEquals("TTS", ModelType.TTS.name)
         assertEquals("IMAGE_GENERATION", ModelType.IMAGE_GENERATION.name)
         assertEquals("VIDEO_GENERATION", ModelType.VIDEO_GENERATION.name)
+        assertEquals("MUSIC_GENERATION", ModelType.MUSIC_GENERATION.name)
         assertEquals("UNASSIGNED", ModelType.UNASSIGNED.name)
     }
 
     @Test
-    fun `ModelType has exactly 11 values`() {
-        assertEquals(11, ModelType.entries.size)
+    fun `ModelType has exactly 12 values`() {
+        assertEquals(12, ModelType.entries.size)
     }
 
     @Test
@@ -40,6 +41,7 @@ class ModelTypeTest {
         assertEquals(ModelType.TTS, ModelType.fromApiValue("tts"))
         assertEquals(ModelType.IMAGE_GENERATION, ModelType.fromApiValue("image_generation"))
         assertEquals(ModelType.VIDEO_GENERATION, ModelType.fromApiValue("video_generation"))
+        assertEquals(ModelType.MUSIC_GENERATION, ModelType.fromApiValue("music_generation"))
         assertEquals(ModelType.UNASSIGNED, ModelType.fromApiValue("unassigned"))
     }
 }
