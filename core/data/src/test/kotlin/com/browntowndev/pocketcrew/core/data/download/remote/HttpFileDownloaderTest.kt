@@ -22,6 +22,11 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 
 class HttpFileDownloaderTest {
@@ -950,5 +955,65 @@ class HttpFileDownloaderTest {
         val tagSlot = slot<String>()
         val messageSlot = slot<String>()
         every { mockLogger.info(capture(tagSlot), capture(messageSlot)) } returns Unit
+    }
+
+    @Test
+    fun downloadFile_respectsCancellation_duringDownload() = kotlinx.coroutines.test.runTest {
+        // Given: A mock response with a body that takes time to read
+        val testContent = "long test content"
+        val testConfig = createTestConfig(testContent)
+
+        val mockCall = mockk<okhttp3.Call>(relaxed = true)
+        val mockResponse = mockk<Response>(relaxed = true)
+        val mockBody = mockk<ResponseBody>(relaxed = true)
+
+        // Use a custom InputStream that blocks/waits to simulate a long download
+        val infiniteStream = object : InputStream() {
+            override fun read(): Int {
+                return 'x'.code
+            }
+            override fun read(b: ByteArray, off: Int, len: Int): Int {
+                // Simulate reading one byte then blocking
+                b[off] = 'x'.toByte()
+                // Sleep long enough to allow cancellation to be processed
+                // In a real scenario, read() would be blocking on I/O.
+                Thread.sleep(200)
+                return 1
+            }
+        }
+
+        every { mockClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns mockResponse
+        every { mockResponse.isSuccessful } returns true
+        every { mockResponse.code } returns 200
+        every { mockResponse.body } returns mockBody
+        every { mockResponse.header("Content-Length") } returns "1000"
+        every { mockBody.byteStream() } returns infiniteStream
+
+        // When: Download is started and then cancelled
+        val job = launch(Dispatchers.IO) {
+            try {
+                httpFileDownloader.downloadFile(
+                    config = testConfig,
+                    downloadUrl = "https://example.com/model.gguf",
+                    targetDir = tempDir,
+                    existingBytes = 0L,
+                    progressCallback = null
+                )
+            } catch (e: CancellationException) {
+                // Expected
+            }
+        }
+
+        delay(100)
+        job.cancelAndJoin()
+
+        // Then: The target file should not exist (it was never renamed from temp)
+        val targetFile = File(tempDir, "test-model.gguf")
+        assertFalse(targetFile.exists(), "Download should have been cancelled before completion")
+        
+        // Temp file should still exist as it was a partial download
+        val tempFile = File(tempDir, "test-model.gguf.tmp")
+        assertTrue(tempFile.exists(), "Temp file should be preserved for resume")
     }
 }
