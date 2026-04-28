@@ -205,6 +205,7 @@ fun PocketCrewNavGraph(
                 onMediaClick = { asset ->
                     navController.navigate(Routes.STUDIO_DETAIL.replace("{assetId}", asset.id))
                 },
+                onShowSnackbar = onShowSnackbar,
             )
         }
 

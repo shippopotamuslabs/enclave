@@ -1,9 +1,11 @@
 package com.browntowndev.pocketcrew.feature.inference.media
 
 import com.browntowndev.pocketcrew.domain.model.media.AspectRatio
+import com.browntowndev.pocketcrew.domain.model.media.GenerationQuality
 import com.browntowndev.pocketcrew.domain.model.media.GenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.VisualGenerationSettings
 import com.browntowndev.pocketcrew.feature.inference.OpenAiClientProviderPort
+import com.openai.core.JsonValue
 import com.openai.models.images.ImageGenerateParams
 import com.openai.models.images.ImageModel
 import kotlinx.coroutines.Dispatchers
@@ -30,25 +32,8 @@ class XaiImageGenerationAdapter @Inject constructor(
                 .model(ImageModel.of(modelId))
                 .prompt(prompt)
                 .responseFormat(ImageGenerateParams.ResponseFormat.B64_JSON)
-                .apply {
-                    // xAI supports more flexible aspect ratios than OpenAI DALL-E 3
-                    // Mapping to the strings supported by xAI/Flux
-                    val sizeStr = when (visualSettings.aspectRatio) {
-                        AspectRatio.ONE_ONE -> "1024x1024"
-                        AspectRatio.NINE_SIXTEEN -> "1024x1792"
-                        AspectRatio.SIXTEEN_NINE -> "1792x1024"
-                        AspectRatio.THREE_FOUR -> "768x1024"
-                        AspectRatio.FOUR_THREE -> "1024x768"
-                        AspectRatio.TWO_THREE -> "683x1024"
-                        AspectRatio.THREE_TWO -> "1024x683"
-                        AspectRatio.TWENTY_ONE_NINE -> "1792x768"
-                        AspectRatio.FIVE_FOUR -> "1280x1024"
-                    }
-                    size(ImageGenerateParams.Size.of(sizeStr))
-                    
-                    // quality currently a no-op in many xAI integrations but mapping standard/hd
-                    // to whatever the underlying model (Flux/Grok-2) might use if exposed.
-                }
+                .putAdditionalBodyProperty("aspect_ratio", JsonValue.from(visualSettings.aspectRatio.toXaiAspectRatio()))
+                .putAdditionalBodyProperty("resolution", JsonValue.from(visualSettings.quality.toXaiResolution()))
                 .build()
 
             val response = client.images().generate(params)
@@ -57,5 +42,18 @@ class XaiImageGenerationAdapter @Inject constructor(
             
             Base64.getDecoder().decode(b64)
         }
+    }
+
+    private fun AspectRatio.toXaiAspectRatio(): String = when (this) {
+        AspectRatio.TWENTY_ONE_NINE -> "20:9"
+        AspectRatio.FIVE_FOUR -> "4:3"
+        else -> ratio
+    }
+
+    private fun GenerationQuality.toXaiResolution(): String = when (this) {
+        GenerationQuality.SPEED -> "1k"
+        GenerationQuality.QUALITY,
+        GenerationQuality.HD,
+        GenerationQuality.ULTRA -> "2k"
     }
 }

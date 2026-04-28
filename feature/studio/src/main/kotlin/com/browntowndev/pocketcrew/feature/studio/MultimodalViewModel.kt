@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.media.*
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.media.ImageGenerationPort
 import com.browntowndev.pocketcrew.domain.port.media.VideoGenerationPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
@@ -26,7 +27,8 @@ class MultimodalViewModel @Inject constructor(
     private val studioRepository: StudioRepositoryPort,
     private val defaultModelRepository: DefaultModelRepositoryPort,
     private val mediaProviderRepository: MediaProviderRepositoryPort,
-    private val getProviderCapabilitiesUseCase: GetProviderCapabilitiesUseCase
+    private val getProviderCapabilitiesUseCase: GetProviderCapabilitiesUseCase,
+    private val logger: LoggingPort
 ) : ViewModel() {
 
     private val _prompt = MutableStateFlow("")
@@ -39,17 +41,17 @@ class MultimodalViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
 
     private val templates = listOf(
-        StudioTemplate("1", "Cyberpunk", "Neon lighting, futuristic city, cyberpunk style, ", " ultra detailed, 8k", "https://example.com/cyberpunk.jpg"),
-        StudioTemplate("2", "Oil Painting", "Oil painting of ", ", thick brushstrokes, canvas texture", "https://example.com/oil.jpg"),
-        StudioTemplate("3", "Anime", "Anime style illustration of ", ", vibrant colors, clean lines", "https://example.com/anime.jpg"),
-        StudioTemplate("4", "Cinematic", "Cinematic shot of ", ", dramatic lighting, shallow depth of field", "https://example.com/cinematic.jpg")
+        StudioTemplate("1", "Cyberpunk", "cyberpunk", "Neon lighting, futuristic city, cyberpunk style, ", " ultra detailed, 8k"),
+        StudioTemplate("2", "Oil Painting", "oil_painting", "Oil painting of ", ", thick brushstrokes, canvas texture"),
+        StudioTemplate("3", "Anime", "anime", "Anime style illustration of ", ", vibrant colors, clean lines"),
+        StudioTemplate("4", "Cinematic", "cinematic", "Cinematic shot of ", ", dramatic lighting, shallow depth of field")
     )
 
     private val musicTemplates = listOf(
-        StudioTemplate("m1", "Lo-Fi", "Lo-Fi hip hop beat, ", " relaxing, study", ""),
-        StudioTemplate("m2", "Techno", "High energy techno, ", " 130bpm, club", ""),
-        StudioTemplate("m3", "Orchestral", "Epic orchestral soundtrack, ", " cinematic, dramatic", ""),
-        StudioTemplate("m4", "Ambient", "Ambient electronic, ", " atmospheric, calm", "")
+        StudioTemplate("m1", "Lo-Fi", "", "Lo-Fi hip hop beat, ", " relaxing, study"),
+        StudioTemplate("m2", "Techno", "", "High energy techno, ", " 130bpm, club"),
+        StudioTemplate("m3", "Orchestral", "", "Epic orchestral soundtrack, ", " cinematic, dramatic"),
+        StudioTemplate("m4", "Ambient", "", "Ambient electronic, ", " atmospheric, calm")
     )
 
     private val activeModelFlow = combine(_mediaType, defaultModelRepository.observeDefaults()) { type, defaults ->
@@ -186,9 +188,12 @@ class MultimodalViewModel @Inject constructor(
     }
 
     fun generate() {
-        if (_isGenerating.value) return
+        if (_isGenerating.value) {
+            generationJob?.cancel()
+            _isGenerating.value = false
+            return
+        }
 
-        generationJob?.cancel()
         generationJob = viewModelScope.launch {
             _isGenerating.value = true
             _error.value = null
@@ -224,9 +229,11 @@ class MultimodalViewModel @Inject constructor(
                 result.onSuccess { bytes ->
                     studioRepository.saveMedia(bytes, _prompt.value, currentType.name)
                 }.onFailure { e ->
+                    logger.error(TAG, "Generation failed for ${currentType.name}", e)
                     _error.value = e.message ?: "${currentType.name} generation failed"
                 }
             } catch (e: Exception) {
+                logger.error(TAG, "Unexpected error during generation", e)
                 _error.value = e.message ?: "Generation failed"
             } finally {
                 _isGenerating.value = false
@@ -242,5 +249,9 @@ class MultimodalViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         generationJob?.cancel()
+    }
+
+    companion object {
+        private const val TAG = "MultimodalViewModel"
     }
 }
