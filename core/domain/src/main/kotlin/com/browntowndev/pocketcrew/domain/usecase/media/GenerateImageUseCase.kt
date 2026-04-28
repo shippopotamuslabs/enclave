@@ -18,7 +18,7 @@ class GenerateImageUseCase @Inject constructor(
     suspend operator fun invoke(
         prompt: String,
         settings: GenerationSettings
-    ): Result<ByteArray> {
+    ): Result<List<ByteArray>> {
         val assignment = defaultModelRepository.getDefault(ModelType.IMAGE_GENERATION)
         val providerId = assignment?.mediaProviderId 
             ?: return Result.failure(IllegalStateException("No image generation provider assigned"))

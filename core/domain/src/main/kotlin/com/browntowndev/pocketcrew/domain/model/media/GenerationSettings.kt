@@ -13,8 +13,20 @@ data class ImageGenerationSettings(
     override val aspectRatio: AspectRatio = AspectRatio.ONE_ONE,
     override val quality: GenerationQuality = GenerationQuality.SPEED,
     override val referenceImageUri: String? = null,
-    override val seed: String = ""
-) : VisualGenerationSettings
+    override val seed: String = "",
+    val generationCount: Int = 1,
+) : VisualGenerationSettings {
+    companion object {
+        const val MIN_GENERATION_COUNT = 1
+        const val MAX_GENERATION_COUNT = 10
+    }
+}
+
+fun ImageGenerationSettings.withClampedGenerationCount(): ImageGenerationSettings =
+    copy(generationCount = generationCount.coerceIn(
+        ImageGenerationSettings.MIN_GENERATION_COUNT,
+        ImageGenerationSettings.MAX_GENERATION_COUNT,
+    ))
 
 data class VideoGenerationSettings(
     override val aspectRatio: AspectRatio = AspectRatio.ONE_ONE,

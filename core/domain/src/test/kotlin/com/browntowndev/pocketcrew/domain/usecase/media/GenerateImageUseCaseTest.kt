@@ -50,7 +50,7 @@ class GenerateImageUseCaseTest {
             coEvery { mediaProviderId } returns MediaProviderId("provider-1")
         }
         coEvery { mediaProviderRepository.getMediaProvider(MediaProviderId("provider-1")) } returns provider
-        coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(ByteArray(0))
+        coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(listOf(ByteArray(0)))
 
         // When
         // In a real scenario, the prompt prefix/suffix concatenation might happen in the ViewModel 

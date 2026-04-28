@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.text)
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.haze)
     implementation(libs.coil.compose)
 
     // Navigation

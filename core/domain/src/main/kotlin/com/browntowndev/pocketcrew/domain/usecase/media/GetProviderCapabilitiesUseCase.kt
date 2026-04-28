@@ -44,7 +44,7 @@ class GetProviderCapabilitiesUseCase @Inject constructor() {
             )
             id.contains("xai") || id.contains("grok") -> ProviderCapabilities(
                 supportedAspectRatios = listOf(AspectRatio.ONE_ONE, AspectRatio.THREE_FOUR, AspectRatio.FOUR_THREE, AspectRatio.NINE_SIXTEEN, AspectRatio.SIXTEEN_NINE, AspectRatio.TWO_THREE, AspectRatio.THREE_TWO),
-                supportedImageQualities = listOf(GenerationQuality.QUALITY, GenerationQuality.HD),
+                supportedImageQualities = listOf(GenerationQuality.SPEED, GenerationQuality.QUALITY),
                 supportedVideoQualities = listOf(GenerationQuality.QUALITY),
                 supportedVideoResolutions = listOf("720p", "1080p"),
                 supportedVideoDurations = listOf(5),

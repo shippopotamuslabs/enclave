@@ -43,6 +43,7 @@ openai = "4.32.0"
 anthropic = "2.27.0"
 googleGenai = "1.51.0"
 coil = "3.4.0"
+haze = "1.7.2"
 jtokkit = "1.1.0"
 media3 = "1.10.0"
 
@@ -96,6 +97,7 @@ work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttpVersion" }
 okhttp-logging-interceptor = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttpVersion" }
 identity-doctypes-jvm = { group = "com.android.identity", name = "identity-doctypes-jvm", version.ref = "identityDoctypesJvm" }
+haze = { group = "dev.chrisbanes.haze", name = "haze", version.ref = "haze" }
 androidx-compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
 robolectric = { group = "org.robolectric", name = "robolectric", version.ref = "robolectricVersion" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "androidxTestCoreVersion" }
