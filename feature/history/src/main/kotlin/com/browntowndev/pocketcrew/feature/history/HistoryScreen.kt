@@ -261,7 +261,10 @@ private fun NavigationButtonGroup(
                 shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 0.dp, bottomEnd = 0.dp)
             )
             
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+            HorizontalDivider(
+                thickness = 2.dp,
+                color = MaterialTheme.colorScheme.background
+            )
             
             // Studio Button (Middle)
             NavigationButton(
@@ -273,8 +276,11 @@ private fun NavigationButtonGroup(
                 shape = RoundedCornerShape(0.dp)
             )
             
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-            
+            HorizontalDivider(
+                thickness = 2.dp,
+                color = MaterialTheme.colorScheme.background
+            )
+
             // Gallery Button (Bottom)
             NavigationButton(
                 text = "Gallery",

@@ -39,6 +39,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
+import com.browntowndev.pocketcrew.feature.studio.R
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.core.ui.component.MediaModeToggle
@@ -73,6 +74,16 @@ fun TemplateChip(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
+    val imageModel = remember(template.exampleUri) {
+        when (template.exampleUri) {
+            "cyberpunk" -> R.drawable.cyberpunk
+            "oil_painting" -> R.drawable.oil_painting
+            "anime" -> R.drawable.anime
+            "cinematic" -> R.drawable.cinematic
+            else -> template.exampleUri.takeIf { it.isNotEmpty() }
+        }
+    }
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
@@ -90,7 +101,7 @@ fun TemplateChip(
                 )
         ) {
             AsyncImage(
-                model = template.exampleUri,
+                model = imageModel,
                 contentDescription = template.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
@@ -115,19 +126,29 @@ fun TemplateChip(
 
 @Composable
 fun SettingRow(
-    label: String,
     modifier: Modifier = Modifier,
+    label: String,
+    subLabel: String = "",
     content: @Composable () -> Unit
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(64.dp)
+            .defaultMinSize(minHeight = 64.dp)
             .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = label, style = MaterialTheme.typography.titleMedium)
+        Column {
+            Text(text = label, style = MaterialTheme.typography.titleMedium)
+            if (subLabel.isNotEmpty()) {
+                Text(
+                    text = subLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         Box(contentAlignment = Alignment.CenterEnd) {
             content()
         }
@@ -277,7 +298,7 @@ fun StudioOptionsSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp)
+            .padding(start = 20.dp, end = 20.dp, top = 0.dp, bottom = 8.dp)
             .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -285,7 +306,7 @@ fun StudioOptionsSheetContent(
             text = "Studio Settings",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(vertical = 16.dp)
+            modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
         )
 
         // Master Synced Toggle - 75% width
@@ -299,6 +320,15 @@ fun StudioOptionsSheetContent(
 
         // Dynamic Content
         if (state.mediaType == MediaCapability.IMAGE || state.mediaType == MediaCapability.VIDEO) {
+            SectionHeader(text = "Visual Style Presets")
+            Spacer(modifier = Modifier.height(8.dp))
+            StudioTemplateRow(
+                templates = state.templates,
+                selectedTemplateId = state.selectedTemplateId,
+                onTemplateSelected = onTemplateSelected
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+
             SectionHeader(text = "General")
             Spacer(modifier = Modifier.height(8.dp))
             
@@ -311,7 +341,7 @@ fun StudioOptionsSheetContent(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Aspect ratio",
+                        text = "Aspect Ratio",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -413,7 +443,6 @@ fun StudioOptionsSheetContent(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(24.dp))
             }
 
             if (state.mediaType == MediaCapability.IMAGE) {
@@ -445,14 +474,14 @@ fun StudioOptionsSheetContent(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(5.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
 
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                         shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        SettingRow(label = "Continual Gen") {
+                        SettingRow(label = "Generative Scrolling", subLabel = "Generate new images as you scroll.") {
                             Switch(
                                 checked = state.continualMode,
                                 onCheckedChange = onContinualModeChange
@@ -460,16 +489,7 @@ fun StudioOptionsSheetContent(
                         }
                     }
                 }
-                Spacer(modifier = Modifier.height(24.dp))
             }
-
-            SectionHeader(text = "Visual Style Presets")
-            Spacer(modifier = Modifier.height(8.dp))
-            StudioTemplateRow(
-                templates = state.templates,
-                selectedTemplateId = state.selectedTemplateId,
-                onTemplateSelected = onTemplateSelected
-            )
         } else if (state.mediaType == MediaCapability.MUSIC) {
             SectionHeader(text = "Music Configuration")
             Spacer(modifier = Modifier.height(16.dp))
@@ -525,10 +545,10 @@ private fun SectionHeader(
     modifier: Modifier = Modifier
 ) {
     Text(
+        modifier = modifier.padding(start = 16.dp).fillMaxWidth(),
         text = text,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier.fillMaxWidth()
     )
 }
 
@@ -566,8 +586,8 @@ fun AspectRatioSelector(
             ) {
                 Box(
                     modifier = Modifier
-                        .height(32.dp)
-                        .width(32.dp * ratioValue.coerceAtLeast(0.5f).coerceAtMost(2f))
+                        .height(40.dp)
+                        .width(40.dp * ratioValue.coerceAtLeast(0.5f).coerceAtMost(2f))
                         .clip(RoundedCornerShape(6.dp))
                         .background(
                             color = if (isSelected) Color.White

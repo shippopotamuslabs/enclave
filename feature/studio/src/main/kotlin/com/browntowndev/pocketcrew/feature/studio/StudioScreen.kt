@@ -44,6 +44,7 @@ import com.browntowndev.pocketcrew.feature.studio.components.StudioOptionsBottom
 fun StudioScreen(
     onNavigateToHistory: () -> Unit,
     onMediaClick: (StudioMediaAsset) -> Unit,
+    onShowSnackbar: (String, String?) -> Unit,
     viewModel: MultimodalViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -51,6 +52,13 @@ fun StudioScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let { viewModel.onUpdateReferenceImage(it.toString()) }
+    }
+
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            onShowSnackbar(it, null)
+            viewModel.clearError()
+        }
     }
 
     Scaffold(
