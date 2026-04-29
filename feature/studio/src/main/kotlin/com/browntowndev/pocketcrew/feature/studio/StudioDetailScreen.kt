@@ -4,18 +4,18 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -23,7 +23,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import coil3.compose.AsyncImage
+import me.saket.telephoto.zoomable.coil3.ZoomableAsyncImage
+import me.saket.telephoto.zoomable.rememberZoomableImageState
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.media.SaveMediaToGalleryUseCase
@@ -35,7 +36,7 @@ import javax.inject.Inject
 
 sealed class StudioDetailUiState {
     object Loading : StudioDetailUiState()
-    data class Success(val asset: StudioMediaUi) : StudioDetailUiState()
+    data class Success(val assets: List<StudioMediaUi>, val initialIndex: Int) : StudioDetailUiState()
     data class Error(val message: String) : StudioDetailUiState()
 }
 
@@ -49,11 +50,14 @@ class StudioDetailViewModel @Inject constructor(
 
     fun loadAsset(id: String) {
         viewModelScope.launch {
-            val asset = studioRepository.getMediaById(id)
-            _uiState.value = if (asset != null) {
-                StudioDetailUiState.Success(asset.toUi())
-            } else {
-                StudioDetailUiState.Error("Asset not found")
+            studioRepository.observeAllMedia().collect { assets ->
+                val uiAssets = assets.map { it.toUi() }.reversed()
+                val initialIndex = uiAssets.indexOfFirst { it.id == id }.coerceAtLeast(0)
+                _uiState.value = if (uiAssets.isNotEmpty()) {
+                    StudioDetailUiState.Success(uiAssets, initialIndex)
+                } else {
+                    StudioDetailUiState.Error("Asset not found")
+                }
             }
         }
     }
@@ -89,49 +93,83 @@ fun StudioDetailScreen(
 
     Scaffold(
         containerColor = Color.Black,
-        topBar = {
-            TopAppBar(
-                title = { },
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack,
-                        modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
-                    ) {
-                        Icon(Icons.Default.Close, "Close", tint = Color.White)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    navigationIconContentColor = Color.White
-                )
-            )
-        }
+        topBar = { StudioDetailTopBar(onNavigateBack = onNavigateBack) }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize()) {
-            when (val state = uiState) {
-                is StudioDetailUiState.Loading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-                }
-                is StudioDetailUiState.Error -> {
-                    Text(state.message, color = Color.White, modifier = Modifier.align(Alignment.Center))
-                }
-                is StudioDetailUiState.Success -> {
-                    DetailContent(
-                        asset = state.asset,
-                        onEdit = { 
-                            onEditMedia(state.asset.id)
-                            onNavigateBack()
-                        },
-                        onAnimate = {
-                            onAnimateMedia(state.asset.id)
-                            onNavigateBack()
-                        },
-                        onSave = { viewModel.saveToGallery(state.asset) },
-                        onDelete = {
-                            viewModel.deleteAsset(state.asset.id, onNavigateBack)
-                        }
-                    )
-                }
+        StudioDetailStateContent(
+            uiState = uiState,
+            onEdit = { asset ->
+                onEditMedia(asset.id)
+                onNavigateBack()
+            },
+            onAnimate = { asset ->
+                onAnimateMedia(asset.id)
+                onNavigateBack()
+            },
+            onSave = viewModel::saveToGallery,
+            onDelete = { asset ->
+                viewModel.deleteAsset(asset.id, onNavigateBack)
+            },
+            modifier = Modifier.padding(padding)
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StudioDetailTopBar(
+    onNavigateBack: () -> Unit
+) {
+    TopAppBar(
+        title = { },
+        navigationIcon = {
+            IconButton(
+                onClick = onNavigateBack,
+                modifier = Modifier.background(Color.Black.copy(alpha = 0.3f), CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Close",
+                    tint = Color.White
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = Color.Transparent,
+            navigationIconContentColor = Color.White
+        )
+    )
+}
+
+@Composable
+private fun StudioDetailStateContent(
+    uiState: StudioDetailUiState,
+    onEdit: (StudioMediaUi) -> Unit,
+    onAnimate: (StudioMediaUi) -> Unit,
+    onSave: (StudioMediaUi) -> Unit,
+    onDelete: (StudioMediaUi) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier.fillMaxSize()) {
+        when (uiState) {
+            is StudioDetailUiState.Loading -> {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            }
+            is StudioDetailUiState.Error -> {
+                Text(
+                    text = uiState.message,
+                    color = Color.White,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+            is StudioDetailUiState.Success -> {
+                DetailContent(
+                    assets = uiState.assets,
+                    initialIndex = uiState.initialIndex,
+                    onEdit = onEdit,
+                    onAnimate = onAnimate,
+                    onSave = onSave,
+                    onDelete = onDelete
+                )
             }
         }
     }
@@ -139,71 +177,129 @@ fun StudioDetailScreen(
 
 @Composable
 private fun DetailContent(
-    asset: StudioMediaUi,
-    onEdit: () -> Unit,
-    onAnimate: () -> Unit,
-    onSave: () -> Unit,
-    onDelete: () -> Unit
+    assets: List<StudioMediaUi>,
+    initialIndex: Int,
+    onEdit: (StudioMediaUi) -> Unit,
+    onAnimate: (StudioMediaUi) -> Unit,
+    onSave: (StudioMediaUi) -> Unit,
+    onDelete: (StudioMediaUi) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Main Media
-        AsyncImage(
-            model = asset.localUri,
-            contentDescription = asset.prompt,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
-        )
+    val pagerState = rememberPagerState(
+        initialPage = initialIndex,
+        pageCount = { assets.size }
+    )
 
-        // Bottom Actions Overlay
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
-                    )
-                )
-                .padding(24.dp)
-        ) {
-            Text(
-                text = asset.prompt,
-                style = MaterialTheme.typography.bodyLarge,
-                color = Color.White,
-                maxLines = 3,
-                fontWeight = FontWeight.Medium
+    HorizontalPager(
+        state = pagerState,
+        modifier = modifier.fillMaxSize(),
+        beyondViewportPageCount = 1
+    ) { page ->
+        val asset = assets[page]
+        Box(modifier = Modifier.fillMaxSize()) {
+            DetailMedia(asset = asset)
+            DetailActionsOverlay(
+                asset = asset,
+                onEdit = { onEdit(asset) },
+                onAnimate = { onAnimate(asset) },
+                onSave = { onSave(asset) },
+                onDelete = { onDelete(asset) },
+                modifier = Modifier.align(Alignment.BottomCenter)
             )
-            
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                ActionItem(Icons.Default.Edit, "Edit", onEdit)
-                if (asset.mediaType == MediaCapability.IMAGE) {
-                    ActionItem(Icons.Default.Movie, "Animate", onAnimate)
-                }
-                ActionItem(Icons.Default.Download, "Save", onSave)
-                ActionItem(Icons.Default.Delete, "Delete", onDelete, isDestructive = true)
-            }
-            
-            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
 @Composable
+private fun DetailMedia(
+    asset: StudioMediaUi,
+    modifier: Modifier = Modifier
+) {
+    val state = rememberZoomableImageState()
+    ZoomableAsyncImage(
+        model = asset.localUri,
+        contentDescription = asset.prompt,
+        state = state,
+        modifier = modifier.fillMaxSize(),
+        contentScale = ContentScale.Fit
+    )
+}
+
+@Composable
+private fun DetailActionsOverlay(
+    asset: StudioMediaUi,
+    onEdit: () -> Unit,
+    onAnimate: () -> Unit,
+    onSave: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
+                )
+            )
+            .padding(24.dp)
+    ) {
+        Text(
+            text = asset.prompt,
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.White,
+            maxLines = 3,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        DetailActionRow(
+            mediaType = asset.mediaType,
+            onEdit = onEdit,
+            onAnimate = onAnimate,
+            onSave = onSave,
+            onDelete = onDelete
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+private fun DetailActionRow(
+    mediaType: MediaCapability,
+    onEdit: () -> Unit,
+    onAnimate: () -> Unit,
+    onSave: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ActionItem(Icons.Default.Edit, "Edit", onEdit)
+        if (mediaType == MediaCapability.IMAGE) {
+            ActionItem(Icons.Default.Movie, "Animate", onAnimate)
+        }
+        ActionItem(Icons.Default.Download, "Save", onSave)
+        ActionItem(Icons.Default.Delete, "Delete", onDelete, isDestructive = true)
+    }
+}
+
+@Composable
 private fun ActionItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     label: String,
     onClick: () -> Unit,
-    isDestructive: Boolean = false
+    isDestructive: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.clickable(onClick = onClick)
+        modifier = modifier.clickable(onClick = onClick)
     ) {
         Box(
             modifier = Modifier

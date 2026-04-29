@@ -1,15 +1,8 @@
 package com.browntowndev.pocketcrew.feature.studio.components
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,21 +25,18 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
-import com.browntowndev.pocketcrew.feature.studio.R
-import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.core.ui.component.MediaModeToggle
+import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.media.*
+import com.browntowndev.pocketcrew.feature.studio.R
 import com.browntowndev.pocketcrew.feature.studio.StudioUiState
 
 
@@ -54,9 +44,11 @@ import com.browntowndev.pocketcrew.feature.studio.StudioUiState
 fun StudioTemplateRow(
     templates: List<StudioTemplate>,
     selectedTemplateId: String?,
-    onTemplateSelected: (StudioTemplate) -> Unit
+    onTemplateSelected: (StudioTemplate) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     LazyRow(
+        modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(horizontal = 4.dp)
     ) {
@@ -74,7 +66,8 @@ fun StudioTemplateRow(
 fun TemplateChip(
     template: StudioTemplate,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val imageModel = remember(template.exampleUri) {
         when (template.exampleUri) {
@@ -88,7 +81,7 @@ fun TemplateChip(
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier
+        modifier = modifier
             .width(80.dp)
             .clickable(onClick = onClick)
     ) {
@@ -128,9 +121,9 @@ fun TemplateChip(
 
 @Composable
 fun SettingRow(
-    modifier: Modifier = Modifier,
     label: String,
     subLabel: String = "",
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
     Row(
@@ -161,9 +154,13 @@ fun SettingRow(
 fun ResolutionSelector(
     selected: String,
     options: List<String>,
-    onSelected: (String) -> Unit
+    onSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         options.forEach { res ->
             FilterChip(
                 selected = selected == res,
@@ -178,9 +175,13 @@ fun ResolutionSelector(
 fun DurationSelector(
     selected: Int,
     options: List<Int>,
-    onSelected: (Int) -> Unit
+    onSelected: (Int) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         options.forEach { duration ->
             FilterChip(
                 selected = selected == duration,
@@ -199,9 +200,11 @@ fun StudioOptionsBottomSheet(
     onUpdateSettings: (GenerationSettings) -> Unit,
     onContinualModeChange: (Boolean) -> Unit,
     onMediaTypeChange: (MediaCapability) -> Unit,
-    onTemplateSelected: (StudioTemplate) -> Unit
+    onTemplateSelected: (StudioTemplate) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     ModalBottomSheet(
+        modifier = modifier,
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -295,266 +298,442 @@ fun StudioOptionsSheetContent(
     onUpdateSettings: (GenerationSettings) -> Unit,
     onContinualModeChange: (Boolean) -> Unit,
     onMediaTypeChange: (MediaCapability) -> Unit,
-    onTemplateSelected: (StudioTemplate) -> Unit
+    onTemplateSelected: (StudioTemplate) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(start = 20.dp, end = 20.dp, top = 0.dp, bottom = 8.dp)
             .navigationBarsPadding(),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "Studio Settings",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
-        )
-
-        // Master Synced Toggle - 75% width
-        MediaModeToggle(
+        StudioOptionsHeader(
             selectedType = state.mediaType,
-            onTypeChange = onMediaTypeChange,
-            modifier = Modifier.fillMaxWidth(0.75f)
+            onMediaTypeChange = onMediaTypeChange
         )
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // Dynamic Content
-        if (state.mediaType == MediaCapability.IMAGE || state.mediaType == MediaCapability.VIDEO) {
-            SectionHeader(text = "Visual Style Presets")
-            Spacer(modifier = Modifier.height(8.dp))
-            StudioTemplateRow(
-                templates = state.templates,
-                selectedTemplateId = state.selectedTemplateId,
-                onTemplateSelected = onTemplateSelected
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-
-            SectionHeader(text = "General")
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "Aspect Ratio",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "For text-to-video and text-to-image generations",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    
-                    Spacer(modifier = Modifier.height(20.dp))
-                    
-                    state.capabilities?.let { caps ->
-                        val currentSettings = state.settings
-                        val currentRatio = when (currentSettings) {
-                            is ImageGenerationSettings -> currentSettings.aspectRatio
-                            is VideoGenerationSettings -> currentSettings.aspectRatio
-                            is MusicGenerationSettings -> AspectRatio.ONE_ONE
-                        }
-
-                        if (caps.supportedAspectRatios.isNotEmpty()) {
-                            AspectRatioSelector(
-                                selected = currentRatio,
-                                options = caps.supportedAspectRatios,
-                                onSelected = { ratio ->
-                                    val updated = when (currentSettings) {
-                                        is ImageGenerationSettings -> currentSettings.copy(aspectRatio = ratio)
-                                        is VideoGenerationSettings -> currentSettings.copy(aspectRatio = ratio)
-                                        is MusicGenerationSettings -> currentSettings
-                                    }
-                                    onUpdateSettings(updated)
-                                }
-                            )
-                        } else {
-                            Text(
-                                text = "No aspect ratios supported",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } ?: run {
-                        Text(
-                            text = "Loading capabilities...",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+        when (state.mediaType) {
+            MediaCapability.IMAGE,
+            MediaCapability.VIDEO -> {
+                VisualSettingsSection(
+                    state = state,
+                    onUpdateSettings = onUpdateSettings,
+                    onContinualModeChange = onContinualModeChange,
+                    onTemplateSelected = onTemplateSelected
+                )
             }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-
-            if (state.mediaType == MediaCapability.VIDEO) {
-                SectionHeader(text = "Video")
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                state.capabilities?.let { caps ->
-                    val videoSettings = state.settings as? VideoGenerationSettings ?: VideoGenerationSettings()
-                    
-                    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
-                        if (caps.supportedVideoDurations.isNotEmpty()) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                SettingRow(label = "Duration") {
-                                    PillSelector(
-                                        selected = "${videoSettings.videoDuration}s",
-                                        options = caps.supportedVideoDurations.map { "${it}s" },
-                                        onSelected = { durationStr ->
-                                            val duration = durationStr.dropLast(1).toIntOrNull() ?: videoSettings.videoDuration
-                                            onUpdateSettings(videoSettings.copy(videoDuration = duration))
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        if (caps.supportedVideoDurations.isNotEmpty() && caps.supportedVideoResolutions.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(5.dp))
-                        }
-
-                        if (caps.supportedVideoResolutions.isNotEmpty()) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                                shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                SettingRow(label = "Resolution") {
-                                    PillSelector(
-                                        selected = videoSettings.videoResolution,
-                                        options = caps.supportedVideoResolutions,
-                                        onSelected = { res ->
-                                            onUpdateSettings(videoSettings.copy(videoResolution = res))
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (state.mediaType == MediaCapability.IMAGE) {
-                SectionHeader(text = "Image")
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                state.capabilities?.let { caps ->
-                    val currentSettings = state.settings as? ImageGenerationSettings ?: ImageGenerationSettings()
-                    val currentQuality = currentSettings.quality
-                    
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 0.dp, bottomEnd = 0.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        SettingRow(label = "Image Gen Mode") {
-                            if (caps.supportedImageQualities.isNotEmpty()) {
-                                PillSelector(
-                                    selected = currentQuality.displayName,
-                                    options = caps.supportedImageQualities.map { it.displayName },
-                                    onSelected = { qualityDisplayName ->
-                                        val quality = caps.supportedImageQualities.first { it.displayName == qualityDisplayName }
-                                        onUpdateSettings(currentSettings.copy(quality = quality))
-                                    }
-                                )
-                            } else {
-                                Text("Default", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(2.dp))
-
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                        shape = RoundedCornerShape(0.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        SettingRow(label = "Generation Count") {
-                            GenerationCountPicker(
-                                count = currentSettings.generationCount,
-                                onCountChange = { newValue ->
-                                    onUpdateSettings(currentSettings.copy(generationCount = newValue))
-                                }
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(2.dp))
-
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                        shape = RoundedCornerShape(topStart = 0.dp, topEnd = 0.dp, bottomStart = 16.dp, bottomEnd = 16.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        SettingRow(label = "Generative Scrolling", subLabel = "Generate new images as you scroll.") {
-                            Switch(
-                                checked = state.continualMode,
-                                onCheckedChange = onContinualModeChange
-                            )
-                        }
-                    }
-                }
-            }
-        } else if (state.mediaType == MediaCapability.MUSIC) {
-            SectionHeader(text = "Music Configuration")
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            val musicSettings = state.settings as? MusicGenerationSettings ?: MusicGenerationSettings()
-            
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Duration", style = MaterialTheme.typography.titleMedium)
-                        Text("${musicSettings.duration}s", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    Slider(
-                        value = musicSettings.duration.toFloat(),
-                        onValueChange = { onUpdateSettings(musicSettings.copy(duration = it.toInt())) },
-                        valueRange = 5f..120f
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Tempo", style = MaterialTheme.typography.titleMedium)
-                        Text("${musicSettings.tempo} BPM", style = MaterialTheme.typography.bodyMedium)
-                    }
-                    Slider(
-                        value = musicSettings.tempo.toFloat(),
-                        onValueChange = { onUpdateSettings(musicSettings.copy(tempo = it.toInt())) },
-                        valueRange = 60f..200f
-                    )
-                }
+            MediaCapability.MUSIC -> {
+                MusicSettingsSection(
+                    settings = state.settings as? MusicGenerationSettings ?: MusicGenerationSettings(),
+                    onUpdateSettings = onUpdateSettings
+                )
             }
         }
 
         Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun StudioOptionsHeader(
+    selectedType: MediaCapability,
+    onMediaTypeChange: (MediaCapability) -> Unit
+) {
+    Text(
+        text = "Studio Settings",
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 8.dp, bottom = 16.dp)
+    )
+
+    MediaModeToggle(
+        selectedType = selectedType,
+        onTypeChange = onMediaTypeChange,
+        modifier = Modifier.fillMaxWidth(0.75f)
+    )
+}
+
+@Composable
+private fun VisualSettingsSection(
+    state: StudioUiState,
+    onUpdateSettings: (GenerationSettings) -> Unit,
+    onContinualModeChange: (Boolean) -> Unit,
+    onTemplateSelected: (StudioTemplate) -> Unit
+) {
+    VisualStylePresetsSection(
+        templates = state.templates,
+        selectedTemplateId = state.selectedTemplateId,
+        onTemplateSelected = onTemplateSelected
+    )
+
+    SectionHeader(text = "General")
+    Spacer(modifier = Modifier.height(8.dp))
+
+    AspectRatioSettingsCard(
+        settings = state.settings,
+        capabilities = state.capabilities,
+        onUpdateSettings = onUpdateSettings
+    )
+
+    Spacer(modifier = Modifier.height(24.dp))
+
+    when (state.mediaType) {
+        MediaCapability.VIDEO -> {
+            VideoSettingsSection(
+                settings = state.settings as? VideoGenerationSettings ?: VideoGenerationSettings(),
+                capabilities = state.capabilities,
+                onUpdateSettings = onUpdateSettings
+            )
+        }
+        MediaCapability.IMAGE -> {
+            ImageSettingsSection(
+                settings = state.settings as? ImageGenerationSettings ?: ImageGenerationSettings(),
+                capabilities = state.capabilities,
+                continualMode = state.continualMode,
+                onUpdateSettings = onUpdateSettings,
+                onContinualModeChange = onContinualModeChange
+            )
+        }
+        MediaCapability.MUSIC -> Unit
+    }
+}
+
+@Composable
+private fun VisualStylePresetsSection(
+    templates: List<StudioTemplate>,
+    selectedTemplateId: String?,
+    onTemplateSelected: (StudioTemplate) -> Unit
+) {
+    SectionHeader(text = "Visual Style Presets")
+    Spacer(modifier = Modifier.height(8.dp))
+    StudioTemplateRow(
+        templates = templates,
+        selectedTemplateId = selectedTemplateId,
+        onTemplateSelected = onTemplateSelected
+    )
+    Spacer(modifier = Modifier.height(24.dp))
+}
+
+@Composable
+private fun AspectRatioSettingsCard(
+    settings: GenerationSettings,
+    capabilities: ProviderCapabilities?,
+    onUpdateSettings: (GenerationSettings) -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = "Aspect Ratio",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = "For text-to-video and text-to-image generations",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            AspectRatioSettingsContent(
+                settings = settings,
+                capabilities = capabilities,
+                onUpdateSettings = onUpdateSettings
+            )
+        }
+    }
+}
+
+@Composable
+private fun AspectRatioSettingsContent(
+    settings: GenerationSettings,
+    capabilities: ProviderCapabilities?,
+    onUpdateSettings: (GenerationSettings) -> Unit
+) {
+    if (capabilities == null) {
+        Text(
+            text = "Loading capabilities...",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        return
+    }
+
+    if (capabilities.supportedAspectRatios.isEmpty()) {
+        Text(
+            text = "No aspect ratios supported",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        return
+    }
+
+    val currentRatio = when (settings) {
+        is ImageGenerationSettings -> settings.aspectRatio
+        is VideoGenerationSettings -> settings.aspectRatio
+        is MusicGenerationSettings -> AspectRatio.ONE_ONE
+    }
+
+    AspectRatioSelector(
+        selected = currentRatio,
+        options = capabilities.supportedAspectRatios,
+        onSelected = { ratio ->
+            val updated = when (settings) {
+                is ImageGenerationSettings -> settings.copy(aspectRatio = ratio)
+                is VideoGenerationSettings -> settings.copy(aspectRatio = ratio)
+                is MusicGenerationSettings -> settings
+            }
+            onUpdateSettings(updated)
+        }
+    )
+}
+
+@Composable
+private fun VideoSettingsSection(
+    settings: VideoGenerationSettings,
+    capabilities: ProviderCapabilities?,
+    onUpdateSettings: (GenerationSettings) -> Unit
+) {
+    SectionHeader(text = "Video")
+    Spacer(modifier = Modifier.height(8.dp))
+
+    capabilities?.let { caps ->
+        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+            if (caps.supportedVideoDurations.isNotEmpty()) {
+                SettingsCard(
+                    shape = RoundedCornerShape(
+                        topStart = 16.dp,
+                        topEnd = 16.dp,
+                        bottomStart = 0.dp,
+                        bottomEnd = 0.dp
+                    )
+                ) {
+                    SettingRow(label = "Duration") {
+                        PillSelector(
+                            selected = "${settings.videoDuration}s",
+                            options = caps.supportedVideoDurations.map { "${it}s" },
+                            onSelected = { durationStr ->
+                                val duration = durationStr.dropLast(1).toIntOrNull() ?: settings.videoDuration
+                                onUpdateSettings(settings.copy(videoDuration = duration))
+                            }
+                        )
+                    }
+                }
+            }
+
+            if (caps.supportedVideoDurations.isNotEmpty() && caps.supportedVideoResolutions.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(5.dp))
+            }
+
+            if (caps.supportedVideoResolutions.isNotEmpty()) {
+                SettingsCard(
+                    shape = RoundedCornerShape(
+                        topStart = 0.dp,
+                        topEnd = 0.dp,
+                        bottomStart = 16.dp,
+                        bottomEnd = 16.dp
+                    )
+                ) {
+                    SettingRow(label = "Resolution") {
+                        PillSelector(
+                            selected = settings.videoResolution,
+                            options = caps.supportedVideoResolutions,
+                            onSelected = { res ->
+                                onUpdateSettings(settings.copy(videoResolution = res))
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImageSettingsSection(
+    settings: ImageGenerationSettings,
+    capabilities: ProviderCapabilities?,
+    continualMode: Boolean,
+    onUpdateSettings: (GenerationSettings) -> Unit,
+    onContinualModeChange: (Boolean) -> Unit
+) {
+    SectionHeader(text = "Image")
+    Spacer(modifier = Modifier.height(8.dp))
+
+    capabilities?.let { caps ->
+        ImageQualityCard(
+            settings = settings,
+            capabilities = caps,
+            onUpdateSettings = onUpdateSettings
+        )
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        GenerationCountCard(
+            settings = settings,
+            onUpdateSettings = onUpdateSettings
+        )
+
+        Spacer(modifier = Modifier.height(2.dp))
+
+        ContinualModeCard(
+            continualMode = continualMode,
+            onContinualModeChange = onContinualModeChange
+        )
+    }
+}
+
+@Composable
+private fun ImageQualityCard(
+    settings: ImageGenerationSettings,
+    capabilities: ProviderCapabilities,
+    onUpdateSettings: (GenerationSettings) -> Unit
+) {
+    SettingsCard(
+        shape = RoundedCornerShape(
+            topStart = 16.dp,
+            topEnd = 16.dp,
+            bottomStart = 0.dp,
+            bottomEnd = 0.dp
+        )
+    ) {
+        SettingRow(label = "Image Gen Mode") {
+            if (capabilities.supportedImageQualities.isNotEmpty()) {
+                PillSelector(
+                    selected = settings.quality.displayName,
+                    options = capabilities.supportedImageQualities.map { it.displayName },
+                    onSelected = { qualityDisplayName ->
+                        val quality = capabilities.supportedImageQualities.first {
+                            it.displayName == qualityDisplayName
+                        }
+                        onUpdateSettings(settings.copy(quality = quality))
+                    }
+                )
+            } else {
+                Text("Default", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun GenerationCountCard(
+    settings: ImageGenerationSettings,
+    onUpdateSettings: (GenerationSettings) -> Unit
+) {
+    SettingsCard(shape = RoundedCornerShape(0.dp)) {
+        SettingRow(label = "Generation Count") {
+            GenerationCountPicker(
+                count = settings.generationCount,
+                onCountChange = { newValue ->
+                    onUpdateSettings(settings.copy(generationCount = newValue))
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ContinualModeCard(
+    continualMode: Boolean,
+    onContinualModeChange: (Boolean) -> Unit
+) {
+    SettingsCard(
+        shape = RoundedCornerShape(
+            topStart = 0.dp,
+            topEnd = 0.dp,
+            bottomStart = 16.dp,
+            bottomEnd = 16.dp
+        )
+    ) {
+        SettingRow(label = "Generative Scrolling", subLabel = "Generate new images as you scroll.") {
+            Switch(
+                checked = continualMode,
+                onCheckedChange = onContinualModeChange
+            )
+        }
+    }
+}
+
+@Composable
+private fun MusicSettingsSection(
+    settings: MusicGenerationSettings,
+    onUpdateSettings: (GenerationSettings) -> Unit
+) {
+    SectionHeader(text = "Music Configuration")
+    Spacer(modifier = Modifier.height(16.dp))
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            MusicSliderSetting(
+                label = "Duration",
+                valueText = "${settings.duration}s",
+                value = settings.duration.toFloat(),
+                valueRange = 5f..120f,
+                onValueChange = { onUpdateSettings(settings.copy(duration = it.toInt())) }
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            MusicSliderSetting(
+                label = "Tempo",
+                valueText = "${settings.tempo} BPM",
+                value = settings.tempo.toFloat(),
+                valueRange = 60f..200f,
+                onValueChange = { onUpdateSettings(settings.copy(tempo = it.toInt())) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun MusicSliderSetting(
+    label: String,
+    valueText: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, style = MaterialTheme.typography.titleMedium)
+        Text(valueText, style = MaterialTheme.typography.bodyMedium)
+    }
+    Slider(
+        value = value,
+        onValueChange = onValueChange,
+        valueRange = valueRange
+    )
+}
+
+@Composable
+private fun SettingsCard(
+    shape: RoundedCornerShape,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        shape = shape,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        content()
     }
 }
 
@@ -575,9 +754,11 @@ private fun SectionHeader(
 fun AspectRatioSelector(
     selected: AspectRatio,
     options: List<AspectRatio>,
-    onSelected: (AspectRatio) -> Unit
+    onSelected: (AspectRatio) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     LazyRow(
+        modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically

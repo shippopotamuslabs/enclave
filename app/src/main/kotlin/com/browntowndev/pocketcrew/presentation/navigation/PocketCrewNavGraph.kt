@@ -19,6 +19,7 @@ import com.browntowndev.pocketcrew.feature.chat.ChatRoute
 import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
 import com.browntowndev.pocketcrew.feature.history.HistoryRoute
 import com.browntowndev.pocketcrew.feature.settings.navigation.settingsGraph
+import com.browntowndev.pocketcrew.feature.studio.GalleryRoute
 import com.browntowndev.pocketcrew.feature.studio.MultimodalViewModel
 import com.browntowndev.pocketcrew.feature.studio.StudioDetailScreen
 import com.browntowndev.pocketcrew.feature.studio.StudioScreen
@@ -166,6 +167,7 @@ fun PocketCrewNavGraph(
                     }
                 },
                 onNavigateToStudio = { navController.navigate(Routes.STUDIO) },
+                onNavigateToGallery = { navController.navigate(Routes.GALLERY) },
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS_GRAPH) },
                 onShowSnackbar = onShowSnackbar,
             )
@@ -202,10 +204,43 @@ fun PocketCrewNavGraph(
             StudioScreen(
                 viewModel = studioViewModel,
                 onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
+                onNavigateToGallery = { navController.navigate(Routes.GALLERY) },
                 onMediaClick = { assetId ->
                     navController.navigate(Routes.STUDIO_DETAIL.replace("{assetId}", assetId))
                 },
                 onShowSnackbar = onShowSnackbar,
+            )
+        }
+
+        composable(
+            route = Routes.GALLERY,
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(ANIMATION_DURATION),
+                )
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { -it },
+                    animationSpec = tween(ANIMATION_DURATION),
+                )
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { -it },
+                    animationSpec = tween(ANIMATION_DURATION),
+                )
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(ANIMATION_DURATION),
+                )
+            },
+        ) {
+            GalleryRoute(
+                onNavigateBack = { navController.popBackStack() },
             )
         }
 
