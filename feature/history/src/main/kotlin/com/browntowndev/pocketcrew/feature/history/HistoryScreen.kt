@@ -84,6 +84,7 @@ fun HistoryScreen(
     onChatClick: (ChatId) -> Unit,
     onNewChatClick: () -> Unit,
     onStudioClick: () -> Unit,
+    onGalleryClick: () -> Unit,
     onDeleteChat: (ChatId) -> Unit,
     onRenameChat: (ChatId, String) -> Unit,
     onPinChat: (ChatId) -> Unit,
@@ -135,7 +136,7 @@ fun HistoryScreen(
                 NavigationButtonGroup(
                     onNewChatClick = onNewChatClick,
                     onStudioClick = onStudioClick,
-                    onGalleryClick = {},
+                    onGalleryClick = onGalleryClick,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(16.dp)
@@ -602,6 +603,7 @@ private fun PreviewHistoryScreenLoading() {
             onChatClick = {},
             onNewChatClick = {},
             onStudioClick = {},
+            onGalleryClick = {},
             onDeleteChat = {},
             onRenameChat = { _, _ -> },
             onPinChat = {},

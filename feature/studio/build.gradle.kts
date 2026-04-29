@@ -57,6 +57,7 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.haze)
     implementation(libs.coil.compose)
+    implementation(libs.telephoto.zoomable.image.coil3)
 
     // Navigation
     implementation(libs.navigation.compose)

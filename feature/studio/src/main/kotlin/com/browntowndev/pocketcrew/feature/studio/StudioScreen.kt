@@ -12,6 +12,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -21,7 +22,6 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -52,16 +52,31 @@ import com.browntowndev.pocketcrew.domain.model.media.VisualGenerationSettings
 import com.browntowndev.pocketcrew.feature.studio.components.PromptHeaderDivider
 import com.browntowndev.pocketcrew.feature.studio.components.StudioOptionsBottomSheet
 import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
 private const val GRID_COLUMNS = 2
+private const val GALLERY_HEADER_KEY_PREFIX = "studio_header_"
+private const val GALLERY_ROW_KEY_PREFIX = "studio_gallery_row_"
+private const val PLACEHOLDER_ROW_KEY_PREFIX = "studio_placeholder_row_"
+
+data class StudioGalleryGroup(
+    val prompt: String,
+    val items: List<StudioMediaUi>
+)
+
+data class StudioGalleryRow(
+    val mediaItems: List<StudioMediaUi>,
+    val placeholderCount: Int = 0,
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun StudioScreen(
     onNavigateToHistory: () -> Unit,
+    onNavigateToGallery: () -> Unit,
     onMediaClick: (String) -> Unit,
     onShowSnackbar: (String, String?) -> Unit,
     viewModel: MultimodalViewModel = hiltViewModel()
@@ -70,11 +85,35 @@ fun StudioScreen(
     val hazeState = rememberHazeState()
     val listState = rememberLazyListState()
     val visibleGallery = remember(uiState.gallery) { uiState.gallery.asReversed() }
-    val groupedGallery = remember(visibleGallery) { visibleGallery.groupBy { it.prompt } }
+    val groupedGallery = remember(visibleGallery) {
+        val groups = mutableListOf<StudioGalleryGroup>()
+        if (visibleGallery.isNotEmpty()) {
+            var currentPrompt = visibleGallery.first().prompt
+            var currentItems = mutableListOf<StudioMediaUi>()
+
+            for (item in visibleGallery) {
+                if (item.prompt == currentPrompt) {
+                    currentItems.add(item)
+                } else {
+                    groups.add(StudioGalleryGroup(currentPrompt, currentItems))
+                    currentPrompt = item.prompt
+                    currentItems = mutableListOf(item)
+                }
+            }
+            groups.add(StudioGalleryGroup(currentPrompt, currentItems))
+        }
+        groups
+    }
+    val galleryRowKeys = remember(groupedGallery) {
+        groupedGallery.flatMap { group ->
+            group.items.chunked(GRID_COLUMNS).map(::studioGalleryRowKey)
+        }
+    }
     val generationPlaceholderCount = (uiState.settings as? ImageGenerationSettings)
         ?.generationCount
         ?.coerceAtLeast(1)
         ?: 1
+    var scrollOnGenerationStart by remember { mutableStateOf(false) }
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
@@ -88,44 +127,49 @@ fun StudioScreen(
         }
     }
 
-    LaunchedEffect(listState, visibleGallery, uiState.mediaType, uiState.continualMode, uiState.prompt) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.map { it.index }.toSet() }
-            .map { visibleIndexes ->
-                val totalGalleryItemCount = visibleGallery.size
-                val triggerIndex = (totalGalleryItemCount - GRID_COLUMNS * 2).coerceAtLeast(0)
-                
-                if (visibleIndexes.any { it >= triggerIndex }) {
-                    visibleGallery.getOrNull(triggerIndex)?.id
+    LaunchedEffect(uiState.isGenerating) {
+        if (scrollOnGenerationStart && uiState.isGenerating) {
+            scrollOnGenerationStart = false
+            val lastIndex = listState.layoutInfo.totalItemsCount - 1
+            if (lastIndex >= 0) {
+                listState.animateScrollToItem(lastIndex)
+            }
+        }
+    }
+
+    val latestGallery by rememberUpdatedState(visibleGallery)
+    val latestGalleryRowKeys by rememberUpdatedState(galleryRowKeys)
+    LaunchedEffect(listState, uiState.mediaType, uiState.continualMode) {
+        snapshotFlow { listState.layoutInfo }
+            .map { layoutInfo ->
+                val visibleKeys = layoutInfo.visibleItemsInfo.map { it.key }
+                val isNearBottom = isGenerativeScrollThresholdVisible(
+                    galleryRowKeys = latestGalleryRowKeys,
+                    visibleItemKeys = visibleKeys,
+                )
+
+                if (isNearBottom && latestGallery.isNotEmpty()) {
+                    latestGallery.last().id to latestGallery.size
                 } else {
                     null
                 }
             }
             .distinctUntilChanged()
-            .collect { anchorAssetId ->
-                if (anchorAssetId != null) {
-                    viewModel.onGenerativeScrollThresholdVisible(anchorAssetId)
+            .collect { scrollTrigger ->
+                if (scrollTrigger != null) {
+                    viewModel.onGenerativeScrollThresholdVisible(
+                        anchorAssetId = scrollTrigger.first,
+                        gallerySize = scrollTrigger.second,
+                    )
                 }
             }
     }
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                navigationIcon = {
-                    IconButton(onClick = onNavigateToHistory) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Open history"
-                        )
-                    }
-                },
-                title = {
-                    Text(
-                        text = "Studio",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
+            StudioTopBar(
+                onNavigateToHistory = onNavigateToHistory,
+                onNavigateToGallery = onNavigateToGallery,
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -135,169 +179,33 @@ fun StudioScreen(
                 .fillMaxSize()
                 .padding(top = padding.calculateTopPadding())
         ) {
-            // Main Content: Gallery List (Simulating Grid)
-            Box(modifier = Modifier.weight(1f)) {
-                if (uiState.gallery.isEmpty() && !uiState.isGenerating) {
-                    EmptyStudioState()
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        groupedGallery.forEach { (prompt, mediaList) ->
-                            stickyHeader(key = prompt) {
-                                PromptHeaderDivider(
-                                    prompt = prompt,
-                                    hazeState = hazeState,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                )
-                            }
-                            
-                            val rows = mediaList.chunked(GRID_COLUMNS)
-                            items(
-                                items = rows,
-                                key = { row -> row.first().id }
-                            ) { rowItems ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .hazeSource(state = hazeState)
-                                ) {
-                                    rowItems.forEach { asset ->
-                                        Box(modifier = Modifier.weight(1f)) {
-                                            GalleryItem(asset, onMediaClick)
-                                        }
-                                    }
-                                    if (rowItems.size < GRID_COLUMNS) {
-                                        repeat(GRID_COLUMNS - rowItems.size) {
-                                            Spacer(modifier = Modifier.weight(1f))
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        
-                        if (uiState.isGenerating) {
-                            val placeholderCount = (uiState.settings as? ImageGenerationSettings)
-                                ?.generationCount
-                                ?.coerceAtLeast(1)
-                                ?: 1
-                            val placeholderRows = (0 until placeholderCount).chunked(GRID_COLUMNS)
-                            
-                            items(placeholderRows) { row ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .hazeSource(state = hazeState)
-                                ) {
-                                    row.forEach { _ ->
-                                        Box(modifier = Modifier.weight(1f)) {
-                                            GeneratingPlaceholderItem()
-                                        }
-                                    }
-                                    if (row.size < GRID_COLUMNS) {
-                                        repeat(GRID_COLUMNS - row.size) {
-                                            Spacer(modifier = Modifier.weight(1f))
-                                        }
-                                    }
-                                }
-                            }
-                        }
+            StudioGalleryPane(
+                groupedGallery = groupedGallery,
+                isGenerating = uiState.isGenerating,
+                activeGenerationPrompt = uiState.activeGenerationPrompt,
+                generationPlaceholderCount = generationPlaceholderCount,
+                hazeState = hazeState,
+                listState = listState,
+                onMediaClick = onMediaClick,
+                modifier = Modifier.weight(1f)
+            )
+
+            StudioInputDock(
+                prompt = uiState.prompt,
+                mediaType = uiState.mediaType,
+                hasReferenceImage = (uiState.settings as? VisualGenerationSettings)?.referenceImageUri != null,
+                isGenerating = uiState.isGenerating,
+                isContinualGenerationActive = uiState.isContinualGenerationActive,
+                onPromptChange = viewModel::onPromptChange,
+                onReferenceImageClick = { imagePickerLauncher.launch("image/*") },
+                onSettingsClick = viewModel::onSettingsToggle,
+                onGenerateClick = {
+                    if (!uiState.isGenerating && !uiState.isContinualGenerationActive) {
+                        scrollOnGenerationStart = true
                     }
+                    viewModel.generate()
                 }
-            }
-
-            // Bottom section with settings and input bar
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .imePadding()
-            ) {
-                // Input Section at the Bottom
-                UniversalInputBar(
-                    inputContent = {
-                        BasicTextField(
-                            value = uiState.prompt,
-                            onValueChange = viewModel::onPromptChange,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp, horizontal = 12.dp),
-                            textStyle = TextStyle(
-                                color = MaterialTheme.colorScheme.onSurface,
-                                fontSize = 16.sp
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            decorationBox = { innerTextField ->
-                                if (uiState.prompt.isEmpty()) {
-                                    Text(
-                                        text = "Describe what to create...",
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                innerTextField()
-                            },
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send)
-                        )
-                    },
-                    actionContent = {
-                        // 1. Reference/Sample Upload Icon (Dynamic Visibility)
-                        if (uiState.mediaType != MediaCapability.MUSIC) {
-                            IconButton(onClick = { imagePickerLauncher.launch("image/*") }) {
-                                val hasReference = (uiState.settings as? VisualGenerationSettings)?.referenceImageUri != null
-                                Icon(
-                                    imageVector = Icons.Default.AddPhotoAlternate,
-                                    contentDescription = "Add reference image",
-                                    tint = if (hasReference) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    },
-                    trailingAction = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            // Media Mode / Studio Options Trigger
-                            val currentIcon = when (uiState.mediaType) {
-                                MediaCapability.IMAGE -> Icons.Default.Image
-                                MediaCapability.VIDEO -> Icons.Default.Movie
-                                MediaCapability.MUSIC -> Icons.Default.MusicNote
-                            }
-
-                            StandardTrailingAction(
-                                icon = currentIcon,
-                                onClick = viewModel::onSettingsToggle,
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                description = "Studio Options"
-                            )
-
-                            val isStopAction = uiState.isGenerating || uiState.isContinualGenerationActive
-                            val icon = if (isStopAction) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send
-                            val containerColor = if (isStopAction) {
-                                MaterialTheme.colorScheme.errorContainer
-                            } else {
-                                MaterialTheme.colorScheme.primary
-                            }
-                            val contentColor = if (isStopAction) {
-                                MaterialTheme.colorScheme.onErrorContainer
-                            } else {
-                                MaterialTheme.colorScheme.onPrimary
-                            }
-
-                            StandardTrailingAction(
-                                icon = icon,
-                                onClick = { viewModel.generate() },
-                                containerColor = containerColor,
-                                contentColor = contentColor,
-                                enabled = uiState.prompt.isNotBlank() || isStopAction
-                            )
-                        }
-                    }
-                )
-            }
+            )
         }
     }
 
@@ -313,15 +221,415 @@ fun StudioScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun StudioTopBar(
+    onNavigateToHistory: () -> Unit,
+    onNavigateToGallery: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    CenterAlignedTopAppBar(
+        modifier = modifier,
+        navigationIcon = {
+            IconButton(onClick = onNavigateToHistory) {
+                Icon(
+                    imageVector = Icons.Default.Menu,
+                    contentDescription = "Open history"
+                )
+            }
+        },
+        title = {
+            Text(
+                text = "Studio",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        actions = {
+            IconButton(onClick = onNavigateToGallery) {
+                Icon(
+                    imageVector = Icons.Default.PhotoLibrary,
+                    contentDescription = "Open gallery"
+                )
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun StudioGalleryPane(
+    groupedGallery: List<StudioGalleryGroup>,
+    isGenerating: Boolean,
+    activeGenerationPrompt: String?,
+    generationPlaceholderCount: Int,
+    hazeState: HazeState,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onMediaClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier) {
+        if (groupedGallery.isEmpty() && !isGenerating) {
+            EmptyStudioState()
+        } else {
+            StudioGalleryList(
+                groupedGallery = groupedGallery,
+                isGenerating = isGenerating,
+                activeGenerationPrompt = activeGenerationPrompt,
+                generationPlaceholderCount = generationPlaceholderCount,
+                hazeState = hazeState,
+                listState = listState,
+                onMediaClick = onMediaClick
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun StudioGalleryList(
+    groupedGallery: List<StudioGalleryGroup>,
+    isGenerating: Boolean,
+    activeGenerationPrompt: String?,
+    generationPlaceholderCount: Int,
+    hazeState: HazeState,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    onMediaClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyColumn(
+        state = listState,
+        modifier = modifier.fillMaxSize()
+    ) {
+        groupedGallery.forEachIndexed { index, group ->
+            val isActiveGenerationGroup = isGenerating &&
+                group.prompt == activeGenerationPrompt &&
+                index == groupedGallery.lastIndex
+            val galleryRows = buildStudioGalleryRows(
+                group = group,
+                placeholderCount = if (isActiveGenerationGroup) generationPlaceholderCount else 0,
+            )
+
+            stickyHeader(key = "$GALLERY_HEADER_KEY_PREFIX${index}_${group.prompt}") {
+                PromptHeaderDivider(
+                    prompt = group.prompt,
+                    hazeState = hazeState,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            items(
+                items = galleryRows.filter { it.mediaItems.isNotEmpty() },
+                key = { row -> studioGalleryRowKey(row.mediaItems) },
+            ) { row ->
+                GalleryGridRow(
+                    rowItems = row.mediaItems,
+                    placeholderCount = row.placeholderCount,
+                    hazeState = hazeState,
+                    onMediaClick = onMediaClick
+                )
+            }
+
+            val remainingPlaceholderRows = galleryRows.filter { it.mediaItems.isEmpty() }
+            if (remainingPlaceholderRows.isNotEmpty()) {
+                itemsIndexed(
+                    items = remainingPlaceholderRows,
+                    key = { rowIndex, _ -> "$PLACEHOLDER_ROW_KEY_PREFIX${index}_$rowIndex" },
+                ) { _, row ->
+                    PlaceholderGridRow(
+                        placeholderCount = row.placeholderCount,
+                        hazeState = hazeState
+                    )
+                }
+            }
+        }
+
+        if (isGenerating && activeGenerationPrompt != null && groupedGallery.lastOrNull()?.prompt != activeGenerationPrompt) {
+            stickyHeader(key = "$GALLERY_HEADER_KEY_PREFIX$activeGenerationPrompt") {
+                PromptHeaderDivider(
+                    prompt = activeGenerationPrompt,
+                    hazeState = hazeState,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            items(
+                items = (0 until generationPlaceholderCount).chunked(GRID_COLUMNS),
+                key = { row -> "$PLACEHOLDER_ROW_KEY_PREFIX${row.first()}" },
+            ) { row ->
+                PlaceholderGridRow(
+                    placeholderCount = row.size,
+                    hazeState = hazeState
+                )
+            }
+        }
+    }
+}
+
+internal fun isGenerativeScrollThresholdVisible(
+    galleryRowKeys: List<Any>,
+    visibleItemKeys: List<Any>,
+): Boolean {
+    if (galleryRowKeys.isEmpty()) {
+        return false
+    }
+
+    val triggerRowIndex = (galleryRowKeys.lastIndex - 1).coerceAtLeast(0)
+    val visibleGalleryRowIndexes = visibleItemKeys.mapNotNull { visibleKey ->
+        galleryRowKeys.indexOf(visibleKey).takeIf { index -> index >= 0 }
+    }
+
+    return visibleGalleryRowIndexes.any { index -> index >= triggerRowIndex }
+}
+
+internal fun studioGalleryRowKey(row: List<StudioMediaUi>): String = "$GALLERY_ROW_KEY_PREFIX${row.first().id}"
+
+internal fun buildStudioGalleryRows(
+    group: StudioGalleryGroup,
+    placeholderCount: Int,
+): List<StudioGalleryRow> {
+    val mediaRows = group.items.chunked(GRID_COLUMNS).map { mediaItems ->
+        StudioGalleryRow(mediaItems = mediaItems)
+    }
+
+    if (placeholderCount <= 0) {
+        return mediaRows
+    }
+
+    val mutableRows = mediaRows.toMutableList()
+    var remainingPlaceholders = placeholderCount
+    val lastMediaRow = mutableRows.lastOrNull()
+    if (lastMediaRow != null && lastMediaRow.mediaItems.size < GRID_COLUMNS) {
+        val inlinePlaceholderCount = (GRID_COLUMNS - lastMediaRow.mediaItems.size)
+            .coerceAtMost(remainingPlaceholders)
+        mutableRows[mutableRows.lastIndex] = lastMediaRow.copy(placeholderCount = inlinePlaceholderCount)
+        remainingPlaceholders -= inlinePlaceholderCount
+    }
+
+    while (remainingPlaceholders > 0) {
+        val rowPlaceholderCount = remainingPlaceholders.coerceAtMost(GRID_COLUMNS)
+        mutableRows.add(StudioGalleryRow(mediaItems = emptyList(), placeholderCount = rowPlaceholderCount))
+        remainingPlaceholders -= rowPlaceholderCount
+    }
+
+    return mutableRows
+}
+
+@Composable
+private fun GalleryGridRow(
+    rowItems: List<StudioMediaUi>,
+    placeholderCount: Int = 0,
+    hazeState: HazeState,
+    onMediaClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .hazeSource(state = hazeState)
+    ) {
+        rowItems.forEach { asset ->
+            Box(modifier = Modifier.weight(1f)) {
+                GalleryItem(asset, onMediaClick)
+            }
+        }
+        repeat(placeholderCount) {
+            Box(modifier = Modifier.weight(1f)) {
+                GeneratingPlaceholderItem()
+            }
+        }
+        GridRemainderSpacer(itemCount = rowItems.size + placeholderCount)
+    }
+}
+
+@Composable
+private fun PlaceholderGridRow(
+    placeholderCount: Int,
+    hazeState: HazeState,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .hazeSource(state = hazeState)
+    ) {
+        repeat(placeholderCount) {
+            Box(modifier = Modifier.weight(1f)) {
+                GeneratingPlaceholderItem()
+            }
+        }
+        GridRemainderSpacer(itemCount = placeholderCount)
+    }
+}
+
+@Composable
+private fun RowScope.GridRemainderSpacer(
+    itemCount: Int
+) {
+    if (itemCount < GRID_COLUMNS) {
+        repeat(GRID_COLUMNS - itemCount) {
+            Spacer(modifier = Modifier.weight(1f))
+        }
+    }
+}
+
+@Composable
+private fun StudioInputDock(
+    prompt: String,
+    mediaType: MediaCapability,
+    hasReferenceImage: Boolean,
+    isGenerating: Boolean,
+    isContinualGenerationActive: Boolean,
+    onPromptChange: (String) -> Unit,
+    onReferenceImageClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onGenerateClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .imePadding()
+    ) {
+        UniversalInputBar(
+            inputContent = {
+                StudioPromptField(
+                    prompt = prompt,
+                    onPromptChange = onPromptChange
+                )
+            },
+            actionContent = {
+                ReferenceImageAction(
+                    mediaType = mediaType,
+                    hasReferenceImage = hasReferenceImage,
+                    onReferenceImageClick = onReferenceImageClick
+                )
+            },
+            trailingAction = {
+                StudioTrailingActions(
+                    prompt = prompt,
+                    mediaType = mediaType,
+                    isGenerating = isGenerating,
+                    isContinualGenerationActive = isContinualGenerationActive,
+                    onSettingsClick = onSettingsClick,
+                    onGenerateClick = onGenerateClick
+                )
+            }
+        )
+    }
+}
+
+@Composable
+private fun StudioPromptField(
+    prompt: String,
+    onPromptChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    BasicTextField(
+        value = prompt,
+        onValueChange = onPromptChange,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp, horizontal = 12.dp),
+        textStyle = TextStyle(
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = 16.sp
+        ),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        decorationBox = { innerTextField ->
+            if (prompt.isEmpty()) {
+                Text(
+                    text = "Describe what to create...",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            innerTextField()
+        },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send)
+    )
+}
+
+@Composable
+private fun ReferenceImageAction(
+    mediaType: MediaCapability,
+    hasReferenceImage: Boolean,
+    onReferenceImageClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (mediaType != MediaCapability.MUSIC) {
+        IconButton(
+            onClick = onReferenceImageClick,
+            modifier = modifier
+        ) {
+            Icon(
+                imageVector = Icons.Default.AddPhotoAlternate,
+                contentDescription = "Add reference image",
+                tint = if (hasReferenceImage) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun StudioTrailingActions(
+    prompt: String,
+    mediaType: MediaCapability,
+    isGenerating: Boolean,
+    isContinualGenerationActive: Boolean,
+    onSettingsClick: () -> Unit,
+    onGenerateClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        StandardTrailingAction(
+            icon = when (mediaType) {
+                MediaCapability.IMAGE -> Icons.Default.Image
+                MediaCapability.VIDEO -> Icons.Default.Movie
+                MediaCapability.MUSIC -> Icons.Default.MusicNote
+            },
+            onClick = onSettingsClick,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            description = "Studio Options"
+        )
+
+        val isStopAction = isGenerating || isContinualGenerationActive
+        StandardTrailingAction(
+            icon = if (isStopAction) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send,
+            onClick = onGenerateClick,
+            containerColor = if (isStopAction) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.primary
+            },
+            contentColor = if (isStopAction) {
+                MaterialTheme.colorScheme.onErrorContainer
+            } else {
+                MaterialTheme.colorScheme.onPrimary
+            },
+            enabled = prompt.isNotBlank() || isStopAction
+        )
+    }
+}
+
 @Composable
 private fun GalleryItem(
     asset: StudioMediaUi,
-    onMediaClick: (String) -> Unit
+    onMediaClick: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Card(
         onClick = { onMediaClick(asset.id) },
         shape = RectangleShape,
-        modifier = Modifier
+        modifier = modifier
             .aspectRatio(1f)
             .fillMaxWidth()
     ) {
@@ -332,7 +640,7 @@ private fun GalleryItem(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-            
+
             // Type badge
             Surface(
                 color = Color.Black.copy(alpha = 0.6f),
@@ -359,7 +667,9 @@ private fun GalleryItem(
 }
 
 @Composable
-private fun GeneratingPlaceholderItem() {
+private fun GeneratingPlaceholderItem(
+    modifier: Modifier = Modifier
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "studio_shimmer")
     val progress by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -374,7 +684,7 @@ private fun GeneratingPlaceholderItem() {
     val baseColor = MaterialTheme.colorScheme.surfaceVariant
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .aspectRatio(1f)
             .fillMaxWidth()
             .drawWithCache {
@@ -412,9 +722,11 @@ private fun GeneratingPlaceholderItem() {
 }
 
 @Composable
-private fun EmptyStudioState() {
+private fun EmptyStudioState(
+    modifier: Modifier = Modifier
+) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         Column(

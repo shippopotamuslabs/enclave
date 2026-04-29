@@ -43,6 +43,7 @@ openai = "4.32.0"
 anthropic = "2.27.0"
 googleGenai = "1.51.0"
 coil = "3.4.0"
+telephoto = "0.17.0"
 haze = "1.7.2"
 jtokkit = "1.1.0"
 media3 = "1.10.0"
@@ -115,6 +116,7 @@ openai-java = { group = "com.openai", name = "openai-java", version.ref = "opena
 anthropic-java = { group = "com.anthropic", name = "anthropic-java", version.ref = "anthropic" }
 google-genai = { group = "com.google.genai", name = "google-genai", version.ref = "googleGenai" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
+telephoto-zoomable-image-coil3 = { group = "me.saket.telephoto", name = "zoomable-image-coil3", version.ref = "telephoto" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

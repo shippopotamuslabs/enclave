@@ -9,6 +9,7 @@ object Routes {
     const val HISTORY = "history"
     const val STUDIO = "studio"
     const val STUDIO_DETAIL = "studio_detail?assetId={assetId}"
+    const val GALLERY = "gallery"
     const val SETTINGS_GRAPH = "settings_graph"
     const val SETTINGS_MAIN = "settings_main"
     const val MODEL_DOWNLOAD = "model_download"

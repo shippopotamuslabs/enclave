@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.feature.studio
 
+import app.cash.turbine.test
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset
@@ -28,6 +29,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -239,6 +241,40 @@ class MultimodalViewModelTest {
     }
 
     @Test
+    fun `generate clears visible prompt while preserving submitted prompt for generation`() = runTest {
+        coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(
+            listOf("image".toByteArray()),
+        )
+
+        viewModel.uiState.test {
+            assertEquals("", awaitItem().prompt)
+
+            viewModel.onPromptChange("studio prompt")
+            assertEquals("studio prompt", awaitItem().prompt)
+
+            viewModel.generate()
+            assertEquals("", awaitItem().prompt)
+
+            advanceUntilIdle()
+
+            coVerify {
+                imageGenerationPort.generateImage(
+                    prompt = "studio prompt",
+                    provider = any(),
+                    settings = any(),
+                )
+                studioRepository.saveMedia(
+                    match<ByteArray> { it.contentEquals("image".toByteArray()) },
+                    "studio prompt",
+                    MediaCapability.IMAGE.name,
+                )
+            }
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `scroll threshold only generates after prompt is sent and stops after stop action`() = runTest {
         val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
@@ -249,24 +285,28 @@ class MultimodalViewModelTest {
 
         viewModel.onPromptChange("scroll prompt")
         viewModel.onContinualModeToggle(true)
-        viewModel.onGenerativeScrollThresholdVisible("anchor-1")
+        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1", gallerySize = 1)
 
         coVerify(exactly = 0) { imageGenerationPort.generateImage(any(), any(), any()) }
 
         viewModel.generate()
         assertEquals(true, viewModel.uiState.value.isContinualGenerationActive)
 
-        viewModel.onGenerativeScrollThresholdVisible("anchor-1")
-        viewModel.onGenerativeScrollThresholdVisible("anchor-1")
+        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1", gallerySize = 1)
+        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1", gallerySize = 1)
 
         coVerify(exactly = 2) { imageGenerationPort.generateImage(any(), any(), any()) }
+
+        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1", gallerySize = 2)
+
+        coVerify(exactly = 3) { imageGenerationPort.generateImage(any(), any(), any()) }
 
         viewModel.generate()
         assertEquals(false, viewModel.uiState.value.isContinualGenerationActive)
 
-        viewModel.onGenerativeScrollThresholdVisible("anchor-2")
+        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-2", gallerySize = 3)
 
-        coVerify(exactly = 2) { imageGenerationPort.generateImage(any(), any(), any()) }
+        coVerify(exactly = 3) { imageGenerationPort.generateImage(any(), any(), any()) }
         job.cancel()
     }
 
@@ -286,7 +326,7 @@ class MultimodalViewModelTest {
         assertEquals(true, viewModel.uiState.value.isContinualGenerationActive)
 
         viewModel.onPromptChange("second prompt")
-        viewModel.onGenerativeScrollThresholdVisible("anchor-1")
+        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1", gallerySize = 1)
 
         assertEquals(false, viewModel.uiState.value.isContinualGenerationActive)
         coVerify(exactly = 1) { imageGenerationPort.generateImage(any(), any(), any()) }

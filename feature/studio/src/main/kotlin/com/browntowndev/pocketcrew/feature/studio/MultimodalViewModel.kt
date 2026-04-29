@@ -41,6 +41,7 @@ class MultimodalViewModel @Inject constructor(
     private val _continualMode = MutableStateFlow(false)
     private val _isContinualGenerationActive = MutableStateFlow(false)
     private val _error = MutableStateFlow<String?>(null)
+    private val _lastSubmittedPrompt = MutableStateFlow<String?>(null)
 
     private val templates = listOf(
         StudioTemplate("1", "Cyberpunk", "cyberpunk", "Neon lighting, futuristic city, cyberpunk style, ", " ultra detailed, 8k"),
@@ -94,7 +95,8 @@ class MultimodalViewModel @Inject constructor(
         _isSettingsOpen,
         _continualMode,
         _isContinualGenerationActive,
-        _error
+        _error,
+        _lastSubmittedPrompt
     ) { args ->
         val prompt = args[0] as String
         val isGenerating = args[1] as Boolean
@@ -108,12 +110,14 @@ class MultimodalViewModel @Inject constructor(
         val continual = args[8] as Boolean
         val isContinualGenerationActive = args[9] as Boolean
         val error = args[10] as String?
+        val lastSubmittedPrompt = args[11] as String?
 
         val currentTemplates = if (mediaType == MediaCapability.MUSIC) musicTemplates else templates
 
         StudioUiState(
             prompt = prompt,
             isGenerating = isGenerating,
+            activeGenerationPrompt = if (isGenerating) lastSubmittedPrompt else null,
             mediaType = mediaType,
             gallery = gallery,
             settings = settings,
@@ -226,23 +230,32 @@ class MultimodalViewModel @Inject constructor(
             return
         }
 
+        val submittedPrompt = _prompt.value
+        if (submittedPrompt.isBlank()) {
+            return
+        }
+
+        _lastSubmittedPrompt.value = submittedPrompt
+        _prompt.value = ""
+
         if (_continualMode.value && _mediaType.value == MediaCapability.IMAGE) {
             _isContinualGenerationActive.value = true
         }
-        startGeneration()
+        startGeneration(submittedPrompt)
     }
 
-    fun onGenerativeScrollThresholdVisible(anchorAssetId: String) {
+    fun onGenerativeScrollThresholdVisible(anchorAssetId: String, gallerySize: Int) {
+        val scrollTriggerKey = "$anchorAssetId:$gallerySize"
         if (_mediaType.value != MediaCapability.IMAGE ||
             !_isContinualGenerationActive.value ||
-            _prompt.value.isBlank() ||
+            _lastSubmittedPrompt.value.isNullOrBlank() ||
             _isGenerating.value ||
-            !consumedScrollAnchors.add(anchorAssetId)
+            !consumedScrollAnchors.add(scrollTriggerKey)
         ) {
             return
         }
 
-        startGeneration()
+        startGeneration(requireNotNull(_lastSubmittedPrompt.value))
     }
 
     private fun stopGeneration() {
@@ -255,7 +268,7 @@ class MultimodalViewModel @Inject constructor(
         _isContinualGenerationActive.value = false
     }
 
-    private fun startGeneration() {
+    private fun startGeneration(prompt: String) {
         generationJob = viewModelScope.launch {
             _isGenerating.value = true
             _error.value = null
@@ -271,9 +284,9 @@ class MultimodalViewModel @Inject constructor(
                 val currentTemplates = if (currentType == MediaCapability.MUSIC) musicTemplates else templates
                 val selectedTemplate = currentTemplates.find { it.id == _selectedTemplateId.value }
                 val finalPrompt = if (selectedTemplate != null) {
-                    "${selectedTemplate.promptPrefix}${_prompt.value}${selectedTemplate.promptSuffix}"
+                    "${selectedTemplate.promptPrefix}$prompt${selectedTemplate.promptSuffix}"
                 } else {
-                    _prompt.value
+                    prompt
                 }
 
                 val result = when (val currentSettings = _settings.value) {
@@ -290,7 +303,7 @@ class MultimodalViewModel @Inject constructor(
 
                 result.onSuccess { images ->
                     images.forEach { bytes ->
-                        studioRepository.saveMedia(bytes, _prompt.value, currentType.name)
+                        studioRepository.saveMedia(bytes, prompt, currentType.name)
                     }
                 }.onFailure { e ->
                     logger.error(TAG, "Generation failed for ${currentType.name}", e)
