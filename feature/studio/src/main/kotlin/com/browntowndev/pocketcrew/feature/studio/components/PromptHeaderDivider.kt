@@ -37,9 +37,13 @@ import dev.chrisbanes.haze.hazeEffect
 fun PromptHeaderDivider(
     prompt: String,
     hazeState: HazeState,
+    isExpanded: Boolean? = null,
+    onExpandedChange: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    var isExpanded by rememberSaveable { mutableStateOf(false) }
+    var localIsExpanded by rememberSaveable { mutableStateOf(false) }
+    val expanded = isExpanded ?: localIsExpanded
+    val updateExpanded = onExpandedChange ?: { value -> localIsExpanded = value }
     val clipboardManager = LocalClipboardManager.current
 
     Box(
@@ -51,7 +55,7 @@ fun PromptHeaderDivider(
                 noiseFactor = 0.15f
             }
             .animateContentSize()
-            .clickable { isExpanded = !isExpanded }
+            .clickable { updateExpanded(!expanded) }
     ) {
         Row(
             modifier = Modifier
@@ -63,7 +67,7 @@ fun PromptHeaderDivider(
                 text = prompt,
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White,
-                maxLines = if (isExpanded) Int.MAX_VALUE else 1,
+                maxLines = if (expanded) Int.MAX_VALUE else 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
@@ -77,9 +81,9 @@ fun PromptHeaderDivider(
             )
             
             SmallIconAction(
-                icon = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                contentDescription = if (isExpanded) "Collapse" else "Expand",
-                onClick = { isExpanded = !isExpanded }
+                icon = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand",
+                onClick = { updateExpanded(!expanded) }
             )
         }
     }
