@@ -45,6 +45,8 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -59,6 +61,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.core.ui.component.StandardTrailingAction
 import com.browntowndev.pocketcrew.core.ui.component.UniversalInputBar
+import com.browntowndev.pocketcrew.core.ui.component.UniversalVoicePromptPlaceholder
+import com.browntowndev.pocketcrew.core.ui.component.UniversalVoiceTrailingAction
 import com.browntowndev.pocketcrew.core.ui.theme.GoldVariant
 import com.browntowndev.pocketcrew.core.ui.theme.PeachAccent
 import com.browntowndev.pocketcrew.core.ui.theme.PurpleLightPrimary
@@ -74,12 +78,15 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Build
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.RenderEffect
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.graphicsLayer
+import android.widget.Toast
 
 private const val GRID_COLUMNS = 2
 private const val GALLERY_HEADER_KEY_PREFIX = "studio_header_"
@@ -125,6 +132,7 @@ fun StudioScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val hazeState = rememberHazeState()
     val listState = rememberLazyListState()
+    val context = LocalContext.current
     val visibleGallery = remember(uiState.gallery) { uiState.gallery }
     val groupedGallery = remember(visibleGallery) {
         val groups = mutableListOf<StudioGalleryGroup>()
@@ -159,6 +167,16 @@ fun StudioScreen(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         uri?.let { viewModel.onUpdateReferenceImage(it.toString()) }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.onMicClick()
+        } else {
+            Toast.makeText(context, "Microphone permission is required for speech-to-text", Toast.LENGTH_SHORT).show()
+        }
     }
 
     LaunchedEffect(uiState.error) {
@@ -253,6 +271,7 @@ fun StudioScreen(
 
             StudioInputDock(
                 prompt = uiState.prompt,
+                speechState = uiState.speechState,
                 mediaType = uiState.mediaType,
                 referenceImageUri = (uiState.settings as? VisualGenerationSettings)?.referenceImageUri,
                 isGenerating = uiState.isGenerating,
@@ -261,6 +280,13 @@ fun StudioScreen(
                 onReferenceImageClick = { imagePickerLauncher.launch("image/*") },
                 onClearReferenceImage = viewModel::onClearReferenceImage,
                 onSettingsClick = viewModel::onSettingsToggle,
+                onMicClick = {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        viewModel.onMicClick()
+                    } else {
+                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                },
                 onGenerateClick = {
                     if (!uiState.isGenerating && !uiState.isContinualGenerationActive) {
                         scrollOnGenerationStart = true
@@ -770,6 +796,7 @@ private fun RowScope.GridRemainderSpacer(
 @Composable
 private fun StudioInputDock(
     prompt: String,
+    speechState: com.browntowndev.pocketcrew.domain.port.media.SpeechState,
     mediaType: MediaCapability,
     referenceImageUri: String?,
     isGenerating: Boolean,
@@ -778,9 +805,14 @@ private fun StudioInputDock(
     onReferenceImageClick: () -> Unit,
     onClearReferenceImage: () -> Unit,
     onSettingsClick: () -> Unit,
+    onMicClick: () -> Unit,
     onGenerateClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isRecordingPhase = speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Listening ||
+                          speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.ModelLoading ||
+                          speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Transcribing
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -799,24 +831,43 @@ private fun StudioInputDock(
             inputContent = {
                 StudioPromptField(
                     prompt = prompt,
+                    speechState = speechState,
                     onPromptChange = onPromptChange
                 )
             },
-            actionContent = {
-                ReferenceImageAction(
-                    mediaType = mediaType,
-                    hasReferenceImage = referenceImageUri != null,
-                    onReferenceImageClick = onReferenceImageClick
-                )
+            actionContent = if (isRecordingPhase) null else {
+                {
+                    ReferenceImageAction(
+                        mediaType = mediaType,
+                        hasReferenceImage = referenceImageUri != null,
+                        onReferenceImageClick = onReferenceImageClick
+                    )
+                }
             },
             trailingAction = {
-                StudioTrailingActions(
-                    prompt = prompt,
-                    mediaType = mediaType,
-                    isGenerating = isGenerating,
-                    isContinualGenerationActive = isContinualGenerationActive,
-                    onSettingsClick = onSettingsClick,
-                    onGenerateClick = onGenerateClick
+                if (!isRecordingPhase) {
+                    StandardTrailingAction(
+                        icon = when (mediaType) {
+                            MediaCapability.IMAGE -> Icons.Default.Image
+                            MediaCapability.VIDEO -> Icons.Default.Movie
+                            MediaCapability.MUSIC -> Icons.Default.MusicNote
+                        },
+                        onClick = onSettingsClick,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        description = "Studio Options"
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+
+                UniversalVoiceTrailingAction(
+                    inputText = prompt,
+                    speechState = speechState,
+                    isGenerating = isGenerating || isContinualGenerationActive,
+                    canStop = true,
+                    onSend = { onGenerateClick() },
+                    onStop = onGenerateClick,
+                    onMicClick = onMicClick,
                 )
             }
         )
@@ -826,9 +877,14 @@ private fun StudioInputDock(
 @Composable
 private fun StudioPromptField(
     prompt: String,
+    speechState: com.browntowndev.pocketcrew.domain.port.media.SpeechState,
     onPromptChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isRecordingPhase = speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Listening ||
+                          speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.ModelLoading ||
+                          speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Transcribing
+
     BasicTextField(
         value = prompt,
         onValueChange = onPromptChange,
@@ -841,14 +897,15 @@ private fun StudioPromptField(
         ),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         decorationBox = { innerTextField ->
-            if (prompt.isEmpty()) {
-                Text(
-                    text = "Describe what to create...",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            if (prompt.isEmpty() || isRecordingPhase) {
+                UniversalVoicePromptPlaceholder(
+                    speechState = speechState,
+                    idlePlaceholder = "Describe what to create..."
                 )
             }
-            innerTextField()
+            if (!isRecordingPhase) {
+                innerTextField()
+            }
         },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send)
     )
@@ -917,52 +974,6 @@ private fun ReferenceImageThumbnail(
     }
 }
 
-@Composable
-private fun StudioTrailingActions(
-    prompt: String,
-    mediaType: MediaCapability,
-    isGenerating: Boolean,
-    isContinualGenerationActive: Boolean,
-    onSettingsClick: () -> Unit,
-    onGenerateClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        StandardTrailingAction(
-            icon = when (mediaType) {
-                MediaCapability.IMAGE -> Icons.Default.Image
-                MediaCapability.VIDEO -> Icons.Default.Movie
-                MediaCapability.MUSIC -> Icons.Default.MusicNote
-            },
-            onClick = onSettingsClick,
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            description = "Studio Options"
-        )
-
-        val isStopAction = isGenerating || isContinualGenerationActive
-        StandardTrailingAction(
-            icon = if (isStopAction) Icons.Default.Stop else Icons.AutoMirrored.Filled.Send,
-            onClick = onGenerateClick,
-            containerColor = if (isStopAction) {
-                MaterialTheme.colorScheme.errorContainer
-            } else {
-                MaterialTheme.colorScheme.primary
-            },
-            contentColor = if (isStopAction) {
-                MaterialTheme.colorScheme.onErrorContainer
-            } else {
-                MaterialTheme.colorScheme.onPrimary
-            },
-            enabled = prompt.isNotBlank() || isStopAction
-        )
-    }
-}
-
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun GalleryItem(
@@ -992,14 +1003,27 @@ private fun GalleryItem(
             )
             .padding(padding)
     ) {
-        AsyncImage(
-            model = asset.localUri,
-            contentDescription = null,
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(cornerRadius)),
-            contentScale = ContentScale.Crop
-        )
+        if (asset.mediaType == MediaCapability.VIDEO) {
+            StudioVideoPlayer(
+                localUri = asset.localUri,
+                contentDescription = asset.prompt,
+                autoPlay = true,
+                controlsEnabled = false,
+                muted = true,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(cornerRadius)),
+            )
+        } else {
+            AsyncImage(
+                model = asset.localUri,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(cornerRadius)),
+                contentScale = ContentScale.Crop
+            )
+        }
 
         // Saved indicator (folder icon)
         if (asset.albumId != null) {
