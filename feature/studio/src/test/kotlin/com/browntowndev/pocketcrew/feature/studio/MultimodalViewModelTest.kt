@@ -20,6 +20,12 @@ import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositor
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.pocketcrew.domain.port.media.SpeechState
+import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
+import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackStatus
+import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
+import com.browntowndev.pocketcrew.domain.usecase.chat.ListenToSpeechUseCase
+import com.browntowndev.pocketcrew.domain.usecase.media.GenerateVideoUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -27,17 +33,22 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -50,9 +61,13 @@ class MultimodalViewModelTest {
     private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
     private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
     private val getProviderCapabilitiesUseCase = mockk<GetProviderCapabilitiesUseCase>()
+    private val chatUseCases = mockk<ChatUseCases>()
+    private val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>()
+    private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
     private val logger = mockk<LoggingPort>(relaxed = true)
     private val allMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
     private lateinit var viewModel: MultimodalViewModel
+    private val speechEvents = MutableSharedFlow<SpeechState>(extraBufferCapacity = 8)
 
     @BeforeEach
     fun setup() {
@@ -63,6 +78,10 @@ class MultimodalViewModelTest {
             modelType = ModelType.IMAGE_GENERATION,
             mediaProviderId = mediaProviderId
         )
+        val videoAssignment = DefaultModelAssignment(
+            modelType = ModelType.VIDEO_GENERATION,
+            mediaProviderId = mediaProviderId
+        )
         val providerAsset = MediaProviderAsset(
             id = mediaProviderId,
             displayName = "Test Provider",
@@ -71,10 +90,14 @@ class MultimodalViewModelTest {
             credentialAlias = "test-alias"
         )
 
-        every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(assignment))
+        every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(assignment, videoAssignment))
+        coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns videoAssignment
+        coEvery { mediaProviderRepository.getMediaProvider(mediaProviderId) } returns providerAsset
         every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(providerAsset))
         every { studioRepository.observeAllMedia() } returns allMediaFlow
         every { studioRepository.observeAllAlbums() } returns flowOf(emptyList())
+        coEvery { videoGenerationPort.generateVideo(any(), any(), any()) } returns Result.success("video".toByteArray())
+        coEvery { studioRepository.cacheEphemeralMedia(any(), MediaCapability.VIDEO.name) } returns "cache://video.mp4"
         every { getProviderCapabilitiesUseCase(any()) } returns ProviderCapabilities(
             supportedAspectRatios = AspectRatio.entries.toList(),
             supportedImageQualities = listOf(GenerationQuality.SPEED),
@@ -84,14 +107,20 @@ class MultimodalViewModelTest {
             supportsReferenceImage = true,
             supportsVideo = true
         )
+
+        every { listenToSpeechUseCase.invoke(any(), any()) } returns speechEvents
+        every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
         
         viewModel = MultimodalViewModel(
             imageGenerationPort,
             videoGenerationPort,
+            generateVideoUseCase(),
             studioRepository,
             defaultModelRepository,
             mediaProviderRepository,
             getProviderCapabilitiesUseCase,
+            chatUseCases,
+            playbackController,
             logger,
         )
     }
@@ -156,10 +185,13 @@ class MultimodalViewModelTest {
         viewModel = MultimodalViewModel(
             imageGenerationPort,
             videoGenerationPort,
+            generateVideoUseCase(),
             studioRepository,
             defaultModelRepository,
             mediaProviderRepository,
             getProviderCapabilitiesUseCase,
+            chatUseCases,
+            playbackController,
             logger,
         )
         val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
@@ -492,9 +524,9 @@ class MultimodalViewModelTest {
     @Test
     fun `onAnimateMedia with ephemeral UUID uses session media and skips repository`() = runTest {
         // Given
-        val uuid = UUID.randomUUID().toString()
         coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(listOf("bytes".toByteArray()))
-        coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "cache://ephemeral.jpg"
+        coEvery { studioRepository.cacheEphemeralMedia(any(), MediaCapability.IMAGE.name) } returns "cache://ephemeral.jpg"
+        coEvery { studioRepository.cacheEphemeralMedia(any(), MediaCapability.VIDEO.name) } returns "cache://video.mp4"
         
         val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
@@ -514,12 +546,132 @@ class MultimodalViewModelTest {
         assertEquals(MediaCapability.VIDEO, viewModel.uiState.value.mediaType)
         assertEquals(generatedItem.prompt, viewModel.uiState.value.prompt)
         assertEquals(generatedItem.localUri, (viewModel.uiState.value.settings as VideoGenerationSettings).referenceImageUri)
+        assertEquals(VideoGenerationState.Success(generatedId, "cache://video.mp4"), viewModel.uiState.value.videoGenerationState)
         
         // Verify we DID NOT call repository
         coVerify(exactly = 0) { studioRepository.getMediaById(generatedId) }
         
         job.cancel()
     }
+
+    @Test
+    fun `onAnimateMedia failure publishes detail video error state`() = runTest {
+        coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(listOf("bytes".toByteArray()))
+        coEvery { studioRepository.cacheEphemeralMedia(any(), MediaCapability.IMAGE.name) } returns "cache://ephemeral.jpg"
+        coEvery { videoGenerationPort.generateVideo(any(), any(), any()) } returns Result.failure(
+            IllegalStateException("video failed"),
+        )
+
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+
+        viewModel.onPromptChange("trigger prompt")
+        viewModel.generate()
+        advanceUntilIdle()
+
+        val generatedId = viewModel.uiState.value.gallery.first().id
+        viewModel.onAnimateMedia(generatedId)
+        advanceUntilIdle()
+
+        assertEquals(VideoGenerationState.Error(generatedId, "video failed"), viewModel.uiState.value.videoGenerationState)
+        assertEquals("video failed", viewModel.uiState.value.error)
+        job.cancel()
+    }
+
+    @Test
+    fun `initial speech state is Idle`() = runTest {
+        assertEquals(SpeechState.Idle, viewModel.uiState.value.speechState)
+    }
+
+    @Test
+    fun `onMicClick starts listening when Idle`() = runTest {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        viewModel.onMicClick()
+        verify(exactly = 1) { listenToSpeechUseCase.invoke(any(), any()) }
+        job.cancel()
+    }
+
+    @Test
+    fun `onMicClick sets stop signal when Listening`() = runTest {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        viewModel.onMicClick()
+        speechEvents.emit(SpeechState.Listening(0f))
+        runCurrent()
+        viewModel.onMicClick()
+        runCurrent()
+        // Verify that the stop signal was sent.
+        verify { listenToSpeechUseCase.invoke(any(), match { it.value }) }
+        job.cancel()
+    }
+
+    @Test
+    fun `speech transcription updates prompt`() = runTest {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        viewModel.onMicClick()
+        speechEvents.emit(SpeechState.FinalText("Voice prompt"))
+        runCurrent()
+        assertEquals("Voice prompt", viewModel.uiState.value.prompt)
+        job.cancel()
+    }
+
+    @Test
+    fun `onPlayTts launches streaming playback`() = runTest {
+        val text = "Hello"
+        val ttsAssignment = DefaultModelAssignment(
+            modelType = ModelType.TTS,
+            ttsProviderId = com.browntowndev.pocketcrew.domain.model.config.TtsProviderId("tts-provider")
+        )
+        every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(ttsAssignment))
+        
+        // Re-create VM to pick up new defaults flow
+        viewModel = MultimodalViewModel(
+            imageGenerationPort,
+            videoGenerationPort,
+            generateVideoUseCase(),
+            studioRepository,
+            defaultModelRepository,
+            mediaProviderRepository,
+            getProviderCapabilitiesUseCase,
+            chatUseCases,
+            playbackController,
+            logger,
+        )
+
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        
+        every { playbackController.play(text) } returns flowOf(
+            TtsPlaybackStatus.Playing,
+            TtsPlaybackStatus.Completed
+        )
+
+        viewModel.onPlayTts(text)
+        runCurrent()
+
+        verify { playbackController.play(text) }
+        job.cancel()
+    }
+
+    @Test
+    fun `onStopTts stops playback`() = runTest {
+        viewModel.onStopTts()
+        verify { playbackController.stop() }
+    }
+
+    private fun generateVideoUseCase(): GenerateVideoUseCase =
+        GenerateVideoUseCase(
+            defaultModelRepository = defaultModelRepository,
+            mediaProviderRepository = mediaProviderRepository,
+            videoGenerationPort = videoGenerationPort,
+        )
 }
 
 private fun assertTrue(actual: Boolean) = org.junit.jupiter.api.Assertions.assertTrue(actual)

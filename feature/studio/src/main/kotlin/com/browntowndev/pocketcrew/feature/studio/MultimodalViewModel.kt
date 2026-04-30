@@ -12,7 +12,12 @@ import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.pocketcrew.domain.usecase.media.GenerateVideoUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
+import com.browntowndev.pocketcrew.domain.port.media.SpeechState
+import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
+import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackStatus
+import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -27,10 +32,13 @@ import javax.inject.Inject
 class MultimodalViewModel @Inject constructor(
     private val imageGenerationPort: ImageGenerationPort,
     private val videoGenerationPort: VideoGenerationPort,
+    private val generateVideoUseCase: GenerateVideoUseCase,
     private val studioRepository: StudioRepositoryPort,
     private val defaultModelRepository: DefaultModelRepositoryPort,
     private val mediaProviderRepository: MediaProviderRepositoryPort,
     private val getProviderCapabilitiesUseCase: GetProviderCapabilitiesUseCase,
+    private val chatUseCases: ChatUseCases,
+    private val playbackController: TtsPlaybackControllerPort,
     private val logger: LoggingPort
 ) : ViewModel() {
 
@@ -47,6 +55,13 @@ class MultimodalViewModel @Inject constructor(
     private val _sessionMedia = MutableStateFlow<List<StudioMediaUi>>(emptyList())
     private val _selectedMediaItemIds = MutableStateFlow<Set<String>>(emptySet())
     private val _isSaveBottomSheetOpen = MutableStateFlow(false)
+    private val _speechState = MutableStateFlow<SpeechState>(SpeechState.Idle)
+    private val _stopSpeechSignal = MutableStateFlow(false)
+    private val _isPlayingTts = MutableStateFlow(false)
+    private val _videoGenerationState = MutableStateFlow<VideoGenerationState>(VideoGenerationState.Idle)
+
+    private var speechJob: Job? = null
+    private var streamingTtsJob: Job? = null
 
     private val templates = listOf(
         StudioTemplate("1", "Cyberpunk", "cyberpunk", "Neon lighting, futuristic city, cyberpunk style, ", " ultra detailed, 8k"),
@@ -114,6 +129,97 @@ class MultimodalViewModel @Inject constructor(
         }
     }
 
+    private val hasTtsProviderAssignedFlow = defaultModelRepository.observeDefaults()
+        .map { assignments ->
+            assignments.any { assignment ->
+                assignment.modelType == ModelType.TTS && assignment.ttsProviderId != null
+            }
+        }
+        .distinctUntilChanged()
+
+    init {
+        observeSpeechResults()
+    }
+
+    private fun observeSpeechResults() {
+        _speechState
+            .onEach { state ->
+                when (state) {
+                    is SpeechState.FinalText -> {
+                        _prompt.value = state.text
+                    }
+                    else -> {}
+                }
+            }
+            .launchIn(viewModelScope)
+    }
+
+    fun onMicClick() {
+        val currentState = _speechState.value
+        if (
+            currentState is SpeechState.ModelLoading ||
+            currentState is SpeechState.Listening
+        ) {
+            _stopSpeechSignal.value = true
+        } else {
+            startListening()
+        }
+    }
+
+    private fun startListening() {
+        _stopSpeechSignal.value = false
+        speechJob?.cancel()
+        speechJob = chatUseCases.listenToSpeechUseCase(_prompt.value, _stopSpeechSignal.asStateFlow())
+            .onEach { state ->
+                _speechState.value = state
+            }
+            .catch { cause ->
+                _speechState.value = SpeechState.Error(cause.message ?: "Speech transcription failed.")
+            }
+            .launchIn(viewModelScope)
+    }
+
+    private fun stopListening() {
+        speechJob?.cancel()
+        speechJob = null
+        _speechState.value = SpeechState.Idle
+    }
+
+    fun onPlayTts(text: String) {
+        viewModelScope.launch {
+            if (!hasTtsProviderAssignedFlow.first()) return@launch
+
+            streamingTtsJob?.cancel()
+            streamingTtsJob = null
+            playbackController.stop()
+
+            streamingTtsJob = viewModelScope.launch {
+                playbackController.play(text)
+                    .collect { status ->
+                        when (status) {
+                            is TtsPlaybackStatus.Playing -> {
+                                _isPlayingTts.value = true
+                            }
+                            is TtsPlaybackStatus.Completed,
+                            is TtsPlaybackStatus.Error,
+                            is TtsPlaybackStatus.Stopped -> {
+                                _isPlayingTts.value = false
+                                streamingTtsJob = null
+                            }
+                            else -> {}
+                        }
+                    }
+            }
+        }
+    }
+
+    fun onStopTts() {
+        streamingTtsJob?.cancel()
+        streamingTtsJob = null
+        playbackController.stop()
+        _isPlayingTts.value = false
+    }
+
     val uiState: StateFlow<StudioUiState> = combine(
         _prompt,
         _isGenerating,
@@ -130,6 +236,9 @@ class MultimodalViewModel @Inject constructor(
         _isContinualGenerationActive,
         _error,
         _lastSubmittedPrompt,
+        _videoGenerationState,
+        _speechState,
+        _isPlayingTts,
     ) { args ->
         val prompt = args[0] as String
         val isGenerating = args[1] as Boolean
@@ -149,6 +258,9 @@ class MultimodalViewModel @Inject constructor(
         val isContinualGenerationActive = args[12] as Boolean
         val error = args[13] as String?
         val lastSubmittedPrompt = args[14] as String?
+        val videoGenerationState = args[15] as VideoGenerationState
+        val speechState = args[16] as SpeechState
+        val isPlayingTts = args[17] as Boolean
         val gallery = sessionMedia.sortedBy { it.createdAt }
 
         val currentTemplates = if (mediaType == MediaCapability.MUSIC) musicTemplates else templates
@@ -169,7 +281,10 @@ class MultimodalViewModel @Inject constructor(
             isSaveBottomSheetOpen = isSaveOpen,
             continualMode = continual,
             isContinualGenerationActive = isContinualGenerationActive,
-            error = error
+            error = error,
+            videoGenerationState = videoGenerationState,
+            speechState = speechState,
+            isPlayingTts = isPlayingTts
         )
     }.stateIn(
         scope = viewModelScope,
@@ -195,6 +310,7 @@ class MultimodalViewModel @Inject constructor(
         }
         _selectedTemplateId.value = null
         stopGeneration()
+        _videoGenerationState.value = VideoGenerationState.Idle
         consumedScrollAnchors.clear()
     }
 
@@ -297,6 +413,7 @@ class MultimodalViewModel @Inject constructor(
             _prompt.value = asset.prompt
             _settings.value = VideoGenerationSettings(referenceImageUri = asset.localUri)
             stopGeneration()
+            startDetailVideoGeneration(asset)
             consumedScrollAnchors.clear()
         }
     }
@@ -411,7 +528,7 @@ class MultimodalViewModel @Inject constructor(
                         imageGenerationPort.generateImage(finalPrompt, provider, currentSettings.withClampedGenerationCount())
                     }
                     is VideoGenerationSettings -> {
-                        videoGenerationPort.generateVideo(finalPrompt, provider, currentSettings).map { listOf(it) }
+                        generateVideoUseCase(finalPrompt, currentSettings).map { listOf(it) }
                     }
                     is MusicGenerationSettings -> {
                         Result.failure(Exception("Music generation not yet implemented"))
@@ -446,9 +563,54 @@ class MultimodalViewModel @Inject constructor(
         }
     }
 
+    private fun startDetailVideoGeneration(asset: StudioMediaAsset) {
+        generationJob = viewModelScope.launch {
+            _isGenerating.value = true
+            _error.value = null
+            _videoGenerationState.value = VideoGenerationState.Loading(asset.id)
+            try {
+                val settings = VideoGenerationSettings(referenceImageUri = asset.localUri)
+                generateVideoUseCase(asset.prompt, settings)
+                    .onSuccess { bytes ->
+                        val localUri = studioRepository.cacheEphemeralMedia(bytes, MediaCapability.VIDEO.name)
+                        val newItem = StudioMediaUi(
+                            id = UUID.randomUUID().toString(),
+                            localUri = localUri,
+                            prompt = asset.prompt,
+                            mediaType = MediaCapability.VIDEO,
+                            createdAt = System.currentTimeMillis(),
+                            albumId = asset.albumId,
+                        )
+                        _sessionMedia.update { it + newItem }
+                        _videoGenerationState.value = VideoGenerationState.Success(
+                            sourceAssetId = asset.id,
+                            localUri = localUri,
+                        )
+                    }.onFailure { cause ->
+                        logger.error(TAG, "Detail video generation failed", cause)
+                        val message = cause.message ?: "Video generation failed"
+                        _error.value = message
+                        _videoGenerationState.value = VideoGenerationState.Error(asset.id, message)
+                    }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.error(TAG, "Unexpected detail video generation error", e)
+                val message = e.message ?: "Video generation failed"
+                _error.value = message
+                _videoGenerationState.value = VideoGenerationState.Error(asset.id, message)
+            } finally {
+                _isGenerating.value = false
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         generationJob?.cancel()
+        speechJob?.cancel()
+        streamingTtsJob?.cancel()
+        playbackController.stop()
         viewModelScope.launch {
             studioRepository.clearEphemeralCache()
         }

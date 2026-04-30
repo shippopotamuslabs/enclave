@@ -87,6 +87,8 @@ import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
 import com.browntowndev.pocketcrew.core.ui.component.StandardTrailingAction
 import com.browntowndev.pocketcrew.core.ui.component.UniversalInputBar
+import com.browntowndev.pocketcrew.core.ui.component.UniversalVoicePromptPlaceholder
+import com.browntowndev.pocketcrew.core.ui.component.UniversalVoiceTrailingAction
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
@@ -202,48 +204,10 @@ fun InputBar(
                 decorationBox = { innerTextField ->
                     Box(modifier = Modifier.padding(start = 16.dp, top = 10.dp)) {
                         if (inputText.isEmpty() || isRecordingPhase) {
-                            AnimatedContent(
-                                targetState = speechState,
-                                transitionSpec = { fadeIn() togetherWith fadeOut() },
-                                label = "PlaceholderTransition",
-                                contentKey = { it::class }
-                            ) { target ->
-                                when (target) {
-                                    is SpeechState.ModelLoading -> {
-                                        Text(
-                                            text = "Preparing microphone...",
-                                            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    is SpeechState.Transcribing -> {
-                                        ShimmerText(
-                                            text = "Transcribing...",
-                                            baseColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            highlightColor = MaterialTheme.colorScheme.primary,
-                                            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp)
-                                        )
-                                    }
-                                    is SpeechState.Listening -> {
-                                        Box(
-                                            modifier = Modifier
-                                                .height(50.dp)
-                                                .fillMaxWidth()
-                                                .padding(end = 48.dp),
-                                            contentAlignment = Alignment.CenterStart
-                                        ) {
-                                            SoundWave(state = target)
-                                        }
-                                    }
-                                    else -> {
-                                        Text(
-                                            text = "Prompt the Pocket Crew",
-                                            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 22.sp),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
+                            UniversalVoicePromptPlaceholder(
+                                speechState = speechState,
+                                idlePlaceholder = "Prompt the Pocket Crew"
+                            )
                         }
                         if (!isRecordingPhase) {
                             innerTextField()
@@ -312,110 +276,24 @@ fun InputBar(
             }
         },
         trailingAction = {
-            if (speechState is SpeechState.Transcribing) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    strokeWidth = 2.dp
-                )
-            } else {
-                AnimatedContent(
-                    targetState = hasSendableContent && !isGenerating && !isRecordingPhase,
-                    transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    label = "SendMicTransition"
-                ) { isSending ->
-                    val isRecording = speechState is SpeechState.Listening || speechState is SpeechState.ModelLoading
-                    val icon = when {
-                        isGenerating || isRecording -> Icons.Default.Stop
-                        isSending -> Icons.AutoMirrored.Filled.Send
-                        else -> Icons.Default.Mic
+            UniversalVoiceTrailingAction(
+                inputText = inputText,
+                speechState = speechState,
+                isGenerating = isGenerating,
+                canStop = canStop,
+                onSend = onSend,
+                onStop = onStopGenerating,
+                onMicClick = {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        onMicClick()
+                    } else {
+                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
-                    
-                    val stopEnabled = (isGenerating && canStop) || isRecording
-                    val micEnabled = !isGenerating && !isRecording && !isGlobalInferenceBlocked
-                    val sendEnabled = isSending && !isGenerating && !isRecording && !isGlobalInferenceBlocked
-                    
-                    val enabled = stopEnabled || micEnabled || sendEnabled
-                    
-                    val containerColor = when {
-                        isRecording || isGenerating -> MaterialTheme.colorScheme.errorContainer
-                        isSending -> MaterialTheme.colorScheme.primary
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    }
-                    val contentColor = when {
-                        isRecording || isGenerating -> MaterialTheme.colorScheme.onErrorContainer
-                        isSending -> MaterialTheme.colorScheme.onPrimary
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-
-                    StandardTrailingAction(
-                        onClick = {
-                            when {
-                                isGenerating -> if (canStop) onStopGenerating()
-                                isRecording -> onMicClick()
-                                isSending -> {
-                                    onSend(inputText)
-                                    isExpanded = false
-                                }
-                                else -> {
-                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                                        onMicClick()
-                                    } else {
-                                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                                    }
-                                }
-                            }
-                        },
-                        icon = icon,
-                        enabled = enabled,
-                        containerColor = containerColor,
-                        contentColor = contentColor
-                    )
-                }
-            }
-        }
-    )
-}
-
-@Composable
-private fun SoundWave(state: SpeechState.Listening, modifier: Modifier = Modifier) {
-    var volumes by remember { mutableStateOf(listOf<Float>()) }
-    val primaryColor = MaterialTheme.colorScheme.primary
-    val silenceColor = MaterialTheme.colorScheme.surfaceVariant
-
-    LaunchedEffect(state.volume) {
-        // Amplify the RMS (which is usually around 0.01 - 0.1) for visual effect.
-        // 8x multiplier (decreased from 15x) so louder sound is required to max out.
-        val amplified = (state.volume * 8f).coerceIn(0f, 1f)
-        // Add twice per update to double horizontal scrolling speed
-        volumes = (volumes + listOf(amplified, amplified)).takeLast(100)
-    }
-
-    Canvas(
-        modifier = modifier.fillMaxSize()
-    ) {
-        val barWidth = 4.dp.toPx()
-        val spacing = 3.dp.toPx()
-        val maxBars = (size.width / (barWidth + spacing)).toInt()
-
-        val displayVolumes = volumes.takeLast(maxBars)
-
-        // Calculate startX so bars fill from the right
-        val startX = size.width - displayVolumes.size * (barWidth + spacing)
-
-        displayVolumes.forEachIndexed { index, vol ->
-            val h = (vol * size.height).coerceIn(4.dp.toPx(), size.height)
-            val x = startX + index * (barWidth + spacing)
-            val y = (size.height - h) / 2f
-
-            drawRoundRect(
-                color = if (vol <= 0.01f) silenceColor else primaryColor,
-                topLeft = Offset(x, y),
-                size = Size(barWidth, h),
-                cornerRadius = CornerRadius(barWidth / 2, barWidth / 2)
+                },
+                isGlobalInferenceBlocked = isGlobalInferenceBlocked
             )
         }
-    }
+    )
 }
 
 @Preview(showSystemUi = true)
