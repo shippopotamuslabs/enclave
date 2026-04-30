@@ -13,18 +13,21 @@ import com.openai.models.images.ImageGenerateParams
 import com.openai.models.images.ImageModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import java.util.Base64
 import javax.inject.Inject
 
 class XaiImageGenerationAdapter @Inject constructor(
-    private val clientProvider: OpenAiClientProviderPort
+    private val clientProvider: OpenAiClientProviderPort,
+    private val okHttpClient: okhttp3.OkHttpClient
 ) {
     suspend fun generateImage(
         prompt: String,
         apiKey: String,
         modelId: String,
         baseUrl: String?,
-        settings: GenerationSettings
+        settings: GenerationSettings,
+        referenceImage: ByteArray? = null
     ): Result<List<ByteArray>> = withContext(Dispatchers.IO) {
         runCatching {
             val visualSettings = settings as? VisualGenerationSettings
@@ -33,16 +36,31 @@ class XaiImageGenerationAdapter @Inject constructor(
                 ?.withClampedGenerationCount()
                 ?.generationCount
                 ?: 1
+
+            if (referenceImage != null) {
+                // xAI requires JSON format for /v1/images/edits, but the com.openai Java SDK
+                // uses multipart/form-data for image edits. We must use a raw OkHttp request.
+                return@runCatching performXaiImageEdit(
+                    prompt = prompt,
+                    apiKey = apiKey,
+                    modelId = modelId,
+                    baseUrl = baseUrl ?: "https://api.x.ai/v1",
+                    generationCount = generationCount,
+                    referenceImage = referenceImage
+                )
+            }
+
             // xAI uses OpenAI compatible API
             val client = clientProvider.getClient(apiKey, baseUrl ?: "https://api.x.ai/v1")
-            val params = ImageGenerateParams.builder()
+            val paramsBuilder = ImageGenerateParams.builder()
                 .model(ImageModel.of(modelId))
                 .prompt(prompt)
                 .responseFormat(ImageGenerateParams.ResponseFormat.B64_JSON)
                 .n(generationCount.toLong())
                 .putAdditionalBodyProperty("aspect_ratio", JsonValue.from(visualSettings.aspectRatio.toXaiAspectRatio()))
                 .putAdditionalBodyProperty("resolution", JsonValue.from(visualSettings.quality.toXaiResolution()))
-                .build()
+
+            val params = paramsBuilder.build()
 
             val response = client.images().generate(params)
             if (response.isRejectedByModeration()) {
@@ -62,6 +80,64 @@ class XaiImageGenerationAdapter @Inject constructor(
             }
             throw throwable
         }
+    }
+
+    private fun performXaiImageEdit(
+        prompt: String,
+        apiKey: String,
+        modelId: String,
+        baseUrl: String,
+        generationCount: Int,
+        referenceImage: ByteArray
+    ): List<ByteArray> {
+        val base64Image = Base64.getEncoder().encodeToString(referenceImage)
+        val dataUri = "data:image/png;base64,$base64Image"
+
+        val jsonBody = """
+            {
+                "model": "$modelId",
+                "prompt": "${prompt.replace("\"", "\\\"").replace("\n", "\\n")}",
+                "n": $generationCount,
+                "response_format": "b64_json",
+                "image": {
+                    "url": "$dataUri",
+                    "type": "image_url"
+                }
+            }
+        """.trimIndent()
+
+        val request = okhttp3.Request.Builder()
+            .url("${baseUrl.trimEnd('/')}/images/edits")
+            .header("Authorization", "Bearer $apiKey")
+            .header("Content-Type", "application/json")
+            .post(okhttp3.RequestBody.create("application/json".toMediaType(), jsonBody))
+            .build()
+
+        val response = okHttpClient.newCall(request).execute()
+        
+        if (!response.isSuccessful) {
+            val responseBody = response.body?.string() ?: ""
+            if (response.code == HTTP_BAD_REQUEST && responseBody.contains("moderation", ignoreCase = true)) {
+                throw XaiImageModerationRejectedException()
+            }
+            throw IllegalStateException("xAI edit request failed: ${response.code} $responseBody")
+        }
+
+        val responseBodyString = response.body?.string() ?: throw IllegalStateException("Empty response body")
+        // Use regex or simple parsing to extract b64_json
+        // Ideally we would use a JSON library, but since we're writing a raw client, we can parse it manually or use kotlinx.serialization
+        // To be safe and avoid adding serialization imports that might not be available, we can parse with a regex for b64_json
+        val b64Regex = """"b64_json"\s*:\s*"([^"]+)"""".toRegex()
+        val matches = b64Regex.findAll(responseBodyString)
+        
+        val images = matches.map { matchResult ->
+            Base64.getDecoder().decode(matchResult.groupValues[1])
+        }.toList()
+
+        if (images.isEmpty()) {
+            throw IllegalStateException("No image data in response: $responseBodyString")
+        }
+        return images
     }
 
     private fun AspectRatio.toXaiAspectRatio(): String = when (this) {

@@ -97,7 +97,8 @@ class StudioRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getMediaById(id: String): StudioMediaAsset? {
-        return studioMediaDao.getMediaById(id.toLong())?.toDomain()
+        val longId = id.toLongOrNull() ?: return null
+        return studioMediaDao.getMediaById(longId)?.toDomain()
     }
 
     override suspend fun createAlbum(name: String): String {
@@ -109,6 +110,20 @@ class StudioRepositoryImpl @Inject constructor(
             mediaIds = mediaIds.map { it.toLong() },
             albumId = albumId.toLong()
         )
+    }
+
+    override suspend fun readMediaBytes(localUri: String): ByteArray? {
+        if (localUri.startsWith("content://")) {
+            return context.contentResolver.openInputStream(android.net.Uri.parse(localUri))?.use { it.readBytes() }
+        }
+
+        val path = localUri.replace("file://", "")
+        val file = File(path)
+        return if (file.exists()) {
+            file.readBytes()
+        } else {
+            null
+        }
     }
 
     private fun StudioMediaEntity.toDomain() = StudioMediaAsset(

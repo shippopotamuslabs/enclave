@@ -3,18 +3,18 @@ package com.browntowndev.pocketcrew.feature.inference
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.feature.inference.media.GoogleImageGenerationAdapter
 import com.google.genai.Client
-import com.google.genai.types.GenerateImagesConfig
-import com.google.genai.types.GenerateImagesResponse
-import com.google.genai.types.GeneratedImage
-import com.google.genai.types.Image
+import com.google.genai.types.*
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.Assertions.assertArrayEquals
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.Test
+import org.junit.Assert.*
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [34])
 class GoogleImageGenerationAdapterTest {
     private val clientProvider = mockk<GoogleGenAiClientProviderPort>()
     private val client = mockk<Client>()
@@ -47,9 +47,50 @@ class GoogleImageGenerationAdapterTest {
         )
 
         assertTrue(result.isSuccess)
-        assertEquals(2, capturedConfig.numberOfImages().orElseThrow())
+        assertEquals(2, capturedConfig.numberOfImages().get())
         assertArrayEquals("first".toByteArray(), result.getOrThrow()[0])
         assertArrayEquals("second".toByteArray(), result.getOrThrow()[1])
+    }
+
+    @Test
+    fun generateImage_withReferenceImage_callsEditImage() = runTest {
+        lateinit var capturedConfig: EditImageConfig
+        lateinit var capturedReferenceImage: RawReferenceImage
+        lateinit var capturedPrompt: String
+        val adapter = object : GoogleImageGenerationAdapter(clientProvider) {
+            override fun editImage(
+                client: Client,
+                modelId: String,
+                prompt: String,
+                referenceImage: RawReferenceImage,
+                config: EditImageConfig,
+            ): EditImageResponse {
+                capturedConfig = config
+                capturedReferenceImage = referenceImage
+                capturedPrompt = prompt
+                val genResponse = successfulImageResponse("edited".toByteArray())
+                return EditImageResponse.builder()
+                    .generatedImages(genResponse.generatedImages().orElse(emptyList()))
+                    .build()
+            }
+        }
+        every { clientProvider.getClient("key", null) } returns client
+        val referenceBytes = "ref".toByteArray()
+
+        val result = adapter.generateImage(
+            prompt = "prompt",
+            apiKey = "key",
+            modelId = "imagen-3",
+            baseUrl = null,
+            settings = ImageGenerationSettings(generationCount = 1, referenceImageUri = "file://test.jpg"),
+            referenceImage = referenceBytes
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals("edited", String(result.getOrThrow()[0]))
+        assertEquals("prompt [1]", capturedPrompt)
+        assertEquals("raw", capturedReferenceImage.referenceType().get())
+        assertArrayEquals(referenceBytes, capturedReferenceImage.referenceImage().get().imageBytes().get())
     }
 
     private fun successfulImageResponse(vararg images: ByteArray): GenerateImagesResponse =

@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.media.AspectRatio
 import com.browntowndev.pocketcrew.domain.model.media.GenerationQuality
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
+import com.browntowndev.pocketcrew.domain.model.media.VideoGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.ProviderCapabilities
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.media.ImageGenerationPort
@@ -444,6 +445,79 @@ class MultimodalViewModelTest {
         viewModel.onAddAlbum("Vacation")
         
         coVerify { studioRepository.createAlbum("Vacation") }
+        job.cancel()
+    }
+
+    @Test
+    fun `onEditMedia with ephemeral UUID uses session media and skips repository`() = runTest {
+        // Given
+        val uuid = UUID.randomUUID().toString()
+        val ephemeralItem = StudioMediaUi(
+            id = uuid,
+            localUri = "cache://ephemeral.jpg",
+            prompt = "ephemeral prompt",
+            mediaType = MediaCapability.IMAGE,
+            createdAt = 12345L
+        )
+        
+        // We need to get this into the ViewModel's private _sessionMedia state.
+        // The most reliable way is to mock generate or manually trigger a state update if possible.
+        // Since _sessionMedia is private, we'll simulate it by mock-returning it from a generation call.
+        coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(listOf("bytes".toByteArray()))
+        coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "cache://ephemeral.jpg"
+        
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        
+        viewModel.onPromptChange("trigger prompt")
+        viewModel.generate()
+        advanceUntilIdle()
+        
+        // Now find the generated item's ID (which should be a UUID if the code is correct)
+        val generatedItem = viewModel.uiState.value.gallery.first()
+        val generatedId = generatedItem.id
+        
+        // When
+        viewModel.onEditMedia(generatedId)
+        
+        // Then
+        assertEquals(generatedItem.prompt, viewModel.uiState.value.prompt)
+        // Verify we DID NOT call repository (which would crash if it tried to parse UUID)
+        coVerify(exactly = 0) { studioRepository.getMediaById(generatedId) }
+        
+        job.cancel()
+    }
+
+    @Test
+    fun `onAnimateMedia with ephemeral UUID uses session media and skips repository`() = runTest {
+        // Given
+        val uuid = UUID.randomUUID().toString()
+        coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(listOf("bytes".toByteArray()))
+        coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "cache://ephemeral.jpg"
+        
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        
+        viewModel.onPromptChange("trigger prompt")
+        viewModel.generate()
+        advanceUntilIdle()
+        
+        val generatedItem = viewModel.uiState.value.gallery.first()
+        val generatedId = generatedItem.id
+        
+        // When
+        viewModel.onAnimateMedia(generatedId)
+        
+        // Then
+        assertEquals(MediaCapability.VIDEO, viewModel.uiState.value.mediaType)
+        assertEquals(generatedItem.prompt, viewModel.uiState.value.prompt)
+        assertEquals(generatedItem.localUri, (viewModel.uiState.value.settings as VideoGenerationSettings).referenceImageUri)
+        
+        // Verify we DID NOT call repository
+        coVerify(exactly = 0) { studioRepository.getMediaById(generatedId) }
+        
         job.cancel()
     }
 }
