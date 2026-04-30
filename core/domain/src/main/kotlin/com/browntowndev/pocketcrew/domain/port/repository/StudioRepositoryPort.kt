@@ -31,4 +31,5 @@ interface StudioRepositoryPort {
     suspend fun getMediaById(id: String): StudioMediaAsset?
     suspend fun createAlbum(name: String): String
     suspend fun moveMediaToAlbum(mediaIds: List<String>, albumId: String)
+    suspend fun readMediaBytes(localUri: String): ByteArray?
 }

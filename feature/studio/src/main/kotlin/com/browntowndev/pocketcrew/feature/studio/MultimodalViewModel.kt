@@ -254,8 +254,23 @@ class MultimodalViewModel @Inject constructor(
 
     fun onEditMedia(assetId: String) {
         viewModelScope.launch {
-            val asset = studioRepository.getMediaById(assetId) ?: return@launch
+            val sessionItem = _sessionMedia.value.find { it.id == assetId }
+            val asset = if (sessionItem != null) {
+                StudioMediaAsset(
+                    id = sessionItem.id,
+                    localUri = sessionItem.localUri,
+                    prompt = sessionItem.prompt,
+                    mediaType = sessionItem.mediaType.name,
+                    createdAt = sessionItem.createdAt,
+                    albumId = sessionItem.albumId
+                )
+            } else {
+                studioRepository.getMediaById(assetId)
+            } ?: return@launch
+
+            _mediaType.value = MediaCapability.IMAGE
             _prompt.value = asset.prompt
+            _settings.value = ImageGenerationSettings(referenceImageUri = asset.localUri)
             _selectedTemplateId.value = null
             stopGeneration()
             consumedScrollAnchors.clear()
@@ -264,7 +279,20 @@ class MultimodalViewModel @Inject constructor(
 
     fun onAnimateMedia(assetId: String) {
         viewModelScope.launch {
-            val asset = studioRepository.getMediaById(assetId) ?: return@launch
+            val sessionItem = _sessionMedia.value.find { it.id == assetId }
+            val asset = if (sessionItem != null) {
+                StudioMediaAsset(
+                    id = sessionItem.id,
+                    localUri = sessionItem.localUri,
+                    prompt = sessionItem.prompt,
+                    mediaType = sessionItem.mediaType.name,
+                    createdAt = sessionItem.createdAt,
+                    albumId = sessionItem.albumId
+                )
+            } else {
+                studioRepository.getMediaById(assetId)
+            } ?: return@launch
+
             _mediaType.value = MediaCapability.VIDEO
             _prompt.value = asset.prompt
             _settings.value = VideoGenerationSettings(referenceImageUri = asset.localUri)

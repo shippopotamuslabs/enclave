@@ -205,4 +205,6 @@ private class FakeStudioRepository : StudioRepositoryPort {
             if (it.id in mediaIds) it.copy(albumId = albumId) else it
         }
     }
+
+    override suspend fun readMediaBytes(localUri: String): ByteArray? = null
 }

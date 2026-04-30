@@ -54,6 +54,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -152,24 +161,46 @@ fun GalleryScreen(
                 .fillMaxSize()
                 .padding(innerPadding),
         ) {
-            if (selectedAlbum == null) {
-                AlbumGrid(
-                    albums = uiState.albums,
-                    onAlbumClick = { albumId -> selectedAlbumId = albumId },
-                )
-            } else {
-                AlbumItemGrid(
-                    album = selectedAlbum,
-                    selectedMediaItemIds = selectedMediaItemIds,
-                    onMediaItemMeasured = onMediaItemMeasured,
-                    onMediaItemSelectionToggled = { itemId ->
-                        selectedMediaItemIds = if (itemId in selectedMediaItemIds) {
-                            selectedMediaItemIds - itemId
-                        } else {
-                            selectedMediaItemIds + itemId
-                        }
-                    },
-                )
+            AnimatedContent(
+                targetState = selectedAlbum,
+                label = "album_transition",
+                transitionSpec = {
+                    if (targetState != null) {
+                        (slideIntoContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Up,
+                            animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
+                        ) + fadeIn(tween(250))).togetherWith(
+                            scaleOut(targetScale = 0.92f, animationSpec = tween(250)) + fadeOut(tween(250))
+                        )
+                    } else {
+                        (scaleIn(initialScale = 0.92f, animationSpec = tween(250)) + fadeIn(tween(250))).togetherWith(
+                            slideOutOfContainer(
+                                towards = AnimatedContentTransitionScope.SlideDirection.Down,
+                                animationSpec = spring(dampingRatio = 0.8f, stiffness = 300f)
+                            ) + fadeOut(tween(250))
+                        )
+                    }
+                }
+            ) { targetAlbum ->
+                if (targetAlbum == null) {
+                    AlbumGrid(
+                        albums = uiState.albums,
+                        onAlbumClick = { albumId -> selectedAlbumId = albumId },
+                    )
+                } else {
+                    AlbumItemGrid(
+                        album = targetAlbum,
+                        selectedMediaItemIds = selectedMediaItemIds,
+                        onMediaItemMeasured = onMediaItemMeasured,
+                        onMediaItemSelectionToggled = { itemId ->
+                            selectedMediaItemIds = if (itemId in selectedMediaItemIds) {
+                                selectedMediaItemIds - itemId
+                            } else {
+                                selectedMediaItemIds + itemId
+                            }
+                        },
+                    )
+                }
             }
         }
     }

@@ -62,11 +62,19 @@ import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.VisualGenerationSettings
 import com.browntowndev.pocketcrew.feature.studio.components.PromptHeaderDivider
 import com.browntowndev.pocketcrew.feature.studio.components.StudioOptionsBottomSheet
-import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import android.os.Build
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.RenderEffect
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.asComposeRenderEffect
+import androidx.compose.ui.graphics.graphicsLayer
 
 private const val GRID_COLUMNS = 2
 private const val GALLERY_HEADER_KEY_PREFIX = "studio_header_"
@@ -223,11 +231,12 @@ fun StudioScreen(
             StudioInputDock(
                 prompt = uiState.prompt,
                 mediaType = uiState.mediaType,
-                hasReferenceImage = (uiState.settings as? VisualGenerationSettings)?.referenceImageUri != null,
+                referenceImageUri = (uiState.settings as? VisualGenerationSettings)?.referenceImageUri,
                 isGenerating = uiState.isGenerating,
                 isContinualGenerationActive = uiState.isContinualGenerationActive,
                 onPromptChange = viewModel::onPromptChange,
                 onReferenceImageClick = { imagePickerLauncher.launch("image/*") },
+                onClearReferenceImage = viewModel::onClearReferenceImage,
                 onSettingsClick = viewModel::onSettingsToggle,
                 onGenerateClick = {
                     if (!uiState.isGenerating && !uiState.isContinualGenerationActive) {
@@ -552,11 +561,12 @@ private fun RowScope.GridRemainderSpacer(
 private fun StudioInputDock(
     prompt: String,
     mediaType: MediaCapability,
-    hasReferenceImage: Boolean,
+    referenceImageUri: String?,
     isGenerating: Boolean,
     isContinualGenerationActive: Boolean,
     onPromptChange: (String) -> Unit,
     onReferenceImageClick: () -> Unit,
+    onClearReferenceImage: () -> Unit,
     onSettingsClick: () -> Unit,
     onGenerateClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -566,6 +576,15 @@ private fun StudioInputDock(
             .fillMaxWidth()
             .imePadding()
     ) {
+        if (referenceImageUri != null) {
+            ReferenceImageThumbnail(
+                uri = referenceImageUri,
+                onClear = onClearReferenceImage,
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
+
         UniversalInputBar(
             inputContent = {
                 StudioPromptField(
@@ -576,7 +595,7 @@ private fun StudioInputDock(
             actionContent = {
                 ReferenceImageAction(
                     mediaType = mediaType,
-                    hasReferenceImage = hasReferenceImage,
+                    hasReferenceImage = referenceImageUri != null,
                     onReferenceImageClick = onReferenceImageClick
                 )
             },
@@ -638,13 +657,51 @@ private fun ReferenceImageAction(
             modifier = modifier
         ) {
             Icon(
-                imageVector = Icons.Default.AddPhotoAlternate,
-                contentDescription = "Add reference image",
+                imageVector = if (hasReferenceImage) Icons.Default.Edit else Icons.Default.AddPhotoAlternate,
+                contentDescription = "Reference image",
                 tint = if (hasReferenceImage) {
                     MaterialTheme.colorScheme.primary
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReferenceImageThumbnail(
+    uri: String,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(80.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        AsyncImage(
+            model = uri,
+            contentDescription = "Reference image thumbnail",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        Surface(
+            color = Color.Black.copy(alpha = 0.6f),
+            shape = CircleShape,
+            modifier = Modifier
+                .padding(4.dp)
+                .size(24.dp)
+                .align(Alignment.TopEnd)
+                .clickable(onClick = onClear)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Clear reference image",
+                tint = Color.White,
+                modifier = Modifier.padding(4.dp)
             )
         }
     }
@@ -973,55 +1030,121 @@ private fun MoveBottomSheet(
 private fun GeneratingPlaceholderItem(
     modifier: Modifier = Modifier
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "studio_shimmer")
-    val progress by infiniteTransition.animateFloat(
+    val localHazeState = remember { HazeState() }
+    val infiniteTransition = rememberInfiniteTransition(label = "studio_lavalamp")
+    
+    val time by infiniteTransition.animateFloat(
         initialValue = 0f,
-        targetValue = 1f,
+        targetValue = 2f * Math.PI.toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
+            animation = tween(12000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
-        label = "shimmer_progress"
+        label = "time"
     )
-
-    val baseColor = MaterialTheme.colorScheme.surfaceVariant
 
     Box(
         modifier = modifier
             .aspectRatio(1f)
             .fillMaxWidth()
-            .drawWithCache {
-                val brush = Brush.linearGradient(
-                    colors = listOf(
-                        baseColor,
-                        PeachAccent,
-                        GoldVariant,
-                        PurpleLightPrimary,
-                        baseColor
-                    ),
-                    start = Offset.Zero,
-                    end = Offset(size.width, size.height),
-                    tileMode = androidx.compose.ui.graphics.TileMode.Repeated
-                )
+            .clipToBounds() // Fix: Prevent drawing outside the box
+    ) {
+        // Deep space background to make lava pop
+        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF121214)))
 
-                onDrawBehind {
-                    val currentProgress = progress
-                    val xOffset = currentProgress * size.width
-                    val yOffset = currentProgress * size.height
+        // Lava blobs layer (Metaball effect)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeSource(state = localHazeState)
+                .graphicsLayer {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        val blur = RenderEffect.createBlurEffect(50f, 50f, android.graphics.Shader.TileMode.CLAMP)
+                        val colorMatrix = android.graphics.ColorMatrix().apply {
+                            set(
+                                floatArrayOf(
+                                    1f, 0f, 0f, 0f, 0f,
+                                    0f, 1f, 0f, 0f, 0f,
+                                    0f, 0f, 1f, 0f, 0f,
+                                    0f, 0f, 0f, 60f, -5000f // Alpha thresholding for metaballs
+                                )
+                            )
+                        }
+                        val filter = RenderEffect.createColorFilterEffect(ColorMatrixColorFilter(colorMatrix))
+                        renderEffect = RenderEffect.createChainEffect(filter, blur).asComposeRenderEffect()
+                    } else {
+                        // Fallback for API < 31
+                        alpha = 0.9f
+                    }
+                }
+                .drawWithCache {
+                    onDrawBehind {
+                        val w = size.width
+                        val h = size.height
+                        val minD = size.minDimension
 
-                    withTransform({
-                        translate(left = xOffset, top = yOffset)
-                    }) {
-                        // Draw at -xOffset, -yOffset to ensure the rectangle covers the component's visible area
-                        drawRect(
-                            brush = brush,
-                            topLeft = Offset(x = -xOffset, y = -yOffset),
-                            size = size
+                        // Blob 1: Purple base, orbits slowly
+                        val x1 = w / 2 + (w * 0.2f) * kotlin.math.cos(time)
+                        val y1 = h / 2 + (h * 0.2f) * kotlin.math.sin(time)
+                        drawCircle(
+                            color = PurpleLightPrimary,
+                            radius = minD * 0.35f,
+                            center = Offset(x1, y1)
+                        )
+
+                        // Blob 2: Peach, dramatic vertical motion
+                        val y2 = h * 0.5f + (h * 0.4f) * kotlin.math.sin(time * 1.5f)
+                        val x2 = w * 0.3f + (w * 0.15f) * kotlin.math.cos(time * 0.8f)
+                        drawCircle(
+                            color = PeachAccent,
+                            radius = minD * 0.25f,
+                            center = Offset(x2, y2)
+                        )
+
+                        // Blob 3: Gold, counter-orbit and vertical
+                        val y3 = h * 0.5f + (h * 0.35f) * kotlin.math.cos(time * 1.2f)
+                        val x3 = w * 0.7f + (w * 0.15f) * kotlin.math.sin(time * 1.1f)
+                        drawCircle(
+                            color = GoldVariant,
+                            radius = minD * 0.2f,
+                            center = Offset(x3, y3)
+                        )
+                        
+                        // Blob 4: Small Peach accent, fast orbit
+                        val y4 = h * 0.5f - (h * 0.3f) * kotlin.math.cos(time * 2f)
+                        val x4 = w * 0.5f + (w * 0.25f) * kotlin.math.sin(time * 1.7f)
+                        drawCircle(
+                            color = PeachAccent,
+                            radius = minD * 0.15f,
+                            center = Offset(x4, y4)
+                        )
+                        
+                        // Central blob to anchor the others as they pass through
+                        drawCircle(
+                            color = PurpleLightPrimary.copy(alpha = 0.5f),
+                            radius = minD * 0.2f,
+                            center = Offset(w / 2, h / 2)
                         )
                     }
                 }
-            }
-    )
+        )
+
+        // Hazy Glass Overlay
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .hazeEffect(state = localHazeState) {
+                    blurRadius = 24.dp
+                    tints = listOf(HazeTint(Color.White.copy(alpha = 0.05f)))
+                    noiseFactor = 0.15f
+                }
+                .border(
+                    width = 1.dp,
+                    color = Color.White.copy(alpha = 0.08f),
+                    shape = RectangleShape
+                )
+        )
+    }
 }
 
 @Composable

@@ -21,12 +21,14 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import kotlinx.coroutines.test.runTest
+import okhttp3.MediaType.Companion.toMediaType
 
 class XaiImageGenerationAdapterTest {
     private val clientProvider = mockk<OpenAiClientProviderPort>()
     private val client = mockk<OpenAIClient>()
     private val imageService = mockk<ImageService>()
-    private val adapter = XaiImageGenerationAdapter(clientProvider)
+    private val okHttpClient = mockk<okhttp3.OkHttpClient>()
+    private val adapter = XaiImageGenerationAdapter(clientProvider, okHttpClient)
 
     @Test
     fun generateImage_usesXaiSpecificImageFields_withoutOpenAiSize() = runTest {
@@ -144,6 +146,51 @@ class XaiImageGenerationAdapterTest {
 
         assertTrue(result.isFailure)
         assertEquals("Prompt rejected due to moderation.", result.exceptionOrNull()?.message)
+    }
+
+    @Test
+    fun generateImage_withReferenceImage_hitsImagesEditsEndpoint() = runTest {
+        // A failing test to prove we are hitting OkHttpClient instead of OpenAI Java SDK
+        // This will fail because the current code uses the OpenAI SDK's client.images().generate()
+        
+        val requestSlot = slot<okhttp3.Request>()
+        val call = mockk<okhttp3.Call>()
+        every { okHttpClient.newCall(capture(requestSlot)) } returns call
+        every { call.execute() } returns okhttp3.Response.Builder()
+            .request(okhttp3.Request.Builder().url("https://api.x.ai/v1/images/edits").build())
+            .protocol(okhttp3.Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body(
+                okhttp3.ResponseBody.create(
+                    "application/json".toMediaType(),
+                    """
+                    {
+                        "data": [
+                            {
+                                "b64_json": "${Base64.getEncoder().encodeToString("fake-edited-image".toByteArray())}"
+                            }
+                        ]
+                    }
+                    """.trimIndent()
+                )
+            )
+            .build()
+
+        val result = adapter.generateImage(
+            prompt = "Edit this",
+            apiKey = "key",
+            modelId = "grok-imagine-image",
+            baseUrl = null,
+            settings = ImageGenerationSettings(referenceImageUri = "file:///fake.png"),
+            referenceImage = "fake-image".toByteArray()
+        )
+
+        assertTrue(result.isSuccess)
+        val request = requestSlot.captured
+        assertTrue(request.url.toString().endsWith("/images/edits"))
+        assertEquals("POST", request.method)
+        assertArrayEquals("fake-edited-image".toByteArray(), result.getOrThrow().single())
     }
 
     private fun successfulImageResponse(vararg images: ByteArray = arrayOf("image".toByteArray())): ImagesResponse {
