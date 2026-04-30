@@ -34,7 +34,7 @@ class StudioRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?): String {
+    override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset {
         var finalUri = localUri
         // If the URI is in the cache directory, move it to files directory
         if (localUri.contains(context.cacheDir.path)) {
@@ -48,7 +48,7 @@ class StudioRepositoryImpl @Inject constructor(
             }
         }
 
-        studioMediaDao.insertMedia(
+        val newId = studioMediaDao.insertMedia(
             StudioMediaEntity(
                 prompt = prompt,
                 mediaUri = finalUri,
@@ -57,17 +57,16 @@ class StudioRepositoryImpl @Inject constructor(
                 albumId = albumId?.toLongOrNull()
             )
         )
-        return finalUri
+        return getMediaById(newId.toString())!!
     }
 
-    override suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String?): String {
+    override suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset {
         val fileName = "studio_${System.currentTimeMillis()}.${if (mediaType == "IMAGE") "jpg" else "mp4"}"
         val file = File(context.filesDir, fileName)
         file.writeBytes(bytes)
         
         val persistedUri = "file://${file.absolutePath}"
-        saveMedia(persistedUri, prompt, mediaType, albumId)
-        return persistedUri
+        return saveMedia(persistedUri, prompt, mediaType, albumId)
     }
 
     override suspend fun cacheEphemeralMedia(bytes: ByteArray, mediaType: String): String {
@@ -91,7 +90,10 @@ class StudioRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteMedia(id: String) {
-        studioMediaDao.deleteMedia(id.toLong())
+        val longId = id.toLongOrNull()
+        if (longId != null) {
+            studioMediaDao.deleteMedia(longId)
+        }
     }
 
     override suspend fun getMediaById(id: String): StudioMediaAsset? {

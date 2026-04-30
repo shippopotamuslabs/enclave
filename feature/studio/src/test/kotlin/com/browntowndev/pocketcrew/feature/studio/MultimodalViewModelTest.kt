@@ -373,7 +373,14 @@ class MultimodalViewModelTest {
                 mediaType = any(),
                 albumId = any()
             ) 
-        } returns "files://permanent.jpg"
+        } returns StudioMediaAsset(
+            id = "generated-long-id",
+            localUri = "files://permanent.jpg",
+            prompt = "test",
+            mediaType = MediaCapability.IMAGE.name,
+            createdAt = 1L,
+            albumId = "album-123"
+        )
         
         val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}

@@ -80,7 +80,10 @@ class StudioRepositoryImplTest {
         sourceFile.writeText("image data")
         val cacheUri = "file://${sourceFile.absolutePath}"
 
-        val resultUri = repository.saveMedia(cacheUri, "prompt", "IMAGE", albumId = "123")
+        coEvery { studioMediaDao.insertMedia(any()) } returns 1L
+        coEvery { studioMediaDao.getMediaById(1L) } returns StudioMediaEntity(prompt = "prompt", mediaUri = "file://${File(filesDir, "test.jpg").absolutePath}", mediaType = "IMAGE", createdAt = 1L, albumId = 123L).apply { id = 1L }
+
+        val resultAsset = repository.saveMedia(cacheUri, "prompt", "IMAGE", albumId = "123")
 
         // Verify file was copied to filesDir
         val destinationFile = File(filesDir, "test.jpg")
@@ -95,14 +98,18 @@ class StudioRepositoryImplTest {
                 it.albumId == 123L
             })
         }
-        assertEquals("file://${destinationFile.absolutePath}", resultUri)
+        assertEquals("file://${destinationFile.absolutePath}", resultAsset.localUri)
+        assertEquals("1", resultAsset.id)
     }
 
     @Test
     fun `saveMedia with bytes saves directly to files dir`() = runTest {
         val bytes = "new image".toByteArray()
         
-        val resultUri = repository.saveMedia(bytes, "new prompt", "IMAGE", albumId = null)
+        coEvery { studioMediaDao.insertMedia(any()) } returns 2L
+        coEvery { studioMediaDao.getMediaById(2L) } returns StudioMediaEntity(prompt = "new prompt", mediaUri = "file://${File(filesDir, "test.jpg").absolutePath}", mediaType = "IMAGE", createdAt = 1L, albumId = null).apply { id = 2L }
+
+        val resultAsset = repository.saveMedia(bytes, "new prompt", "IMAGE", albumId = null)
 
         val files = filesDir.listFiles()
         assertEquals(1, files?.size)
@@ -114,6 +121,15 @@ class StudioRepositoryImplTest {
                 it.albumId == null
             })
         }
-        assertEquals("file://${files[0].absolutePath}", resultUri)
+        assertEquals("2", resultAsset.id)
+    }
+
+    @Test
+    fun `deleteMedia with UUID ignores database deletion and does not throw exception`() = runTest {
+        // This will throw NumberFormatException if not handled correctly
+        repository.deleteMedia("5a8277e4-dcc0-45d4-81ab-8fb1324c96c9")
+
+        // Verify that no DAO deletion was attempted since it's not a Long
+        coVerify(exactly = 0) { studioMediaDao.deleteMedia(any()) }
     }
 }

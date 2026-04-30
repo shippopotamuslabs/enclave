@@ -178,9 +178,11 @@ private class FakeStudioRepository : StudioRepositoryPort {
         media.value = items
     }
 
-    override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?): String = ""
+    override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset =
+        StudioMediaAsset(id = "1", localUri = localUri, prompt = prompt, mediaType = mediaType, createdAt = 1L, albumId = albumId)
 
-    override suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String?): String = ""
+    override suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset =
+        StudioMediaAsset(id = "1", localUri = "bytes", prompt = prompt, mediaType = mediaType, createdAt = 1L, albumId = albumId)
 
     override suspend fun cacheEphemeralMedia(bytes: ByteArray, mediaType: String): String = ""
 

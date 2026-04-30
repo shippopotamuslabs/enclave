@@ -234,13 +234,13 @@ class MultimodalViewModel @Inject constructor(
             _sessionMedia.update { gallery ->
                 gallery.map { item ->
                     if (item.id in selectedIds) {
-                        val newUri = studioRepository.saveMedia(
+                        val savedAsset = studioRepository.saveMedia(
                             localUri = item.localUri,
                             prompt = item.prompt,
                             mediaType = item.mediaType.name,
                             albumId = albumId
                         )
-                        item.copy(localUri = newUri, albumId = albumId)
+                        item.copy(id = savedAsset.id, localUri = savedAsset.localUri, albumId = albumId)
                     } else {
                         item
                     }
