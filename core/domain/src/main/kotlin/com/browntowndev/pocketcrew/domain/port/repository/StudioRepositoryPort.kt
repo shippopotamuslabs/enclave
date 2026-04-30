@@ -23,8 +23,8 @@ data class StudioAlbumAsset(
 interface StudioRepositoryPort {
     fun observeAllMedia(): Flow<List<StudioMediaAsset>>
     fun observeAllAlbums(): Flow<List<StudioAlbumAsset>>
-    suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String? = null): String
-    suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String? = null): String
+    suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String? = null): StudioMediaAsset
+    suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String? = null): StudioMediaAsset
     suspend fun cacheEphemeralMedia(bytes: ByteArray, mediaType: String): String
     suspend fun clearEphemeralCache()
     suspend fun deleteMedia(id: String)

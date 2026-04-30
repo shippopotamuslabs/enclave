@@ -752,28 +752,6 @@ private fun GalleryItem(
             }
         }
 
-        // Type badge
-        Surface(
-            color = Color.Black.copy(alpha = 0.6f),
-            shape = RoundedCornerShape(4.dp),
-            modifier = Modifier
-                .padding(8.dp)
-                .align(Alignment.BottomEnd)
-        ) {
-            Icon(
-                imageVector = if (asset.mediaType == MediaCapability.IMAGE) {
-                    Icons.Default.Image
-                } else {
-                    Icons.Default.Videocam
-                },
-                contentDescription = null,
-                tint = Color.White,
-                modifier = Modifier
-                    .padding(4.dp)
-                    .size(16.dp)
-            )
-        }
-
         // Selection indicator (only for non-saved items)
         if (selectionModeActive && asset.albumId == null) {
             Box(
@@ -925,46 +903,49 @@ private fun MoveBottomSheet(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable { onMoveToAlbum(album.id) }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val imageSize = 72.dp
                         val coverUri = album.coverItems.firstOrNull()?.localUri
                         if (coverUri != null) {
                             AsyncImage(
                                 model = coverUri,
                                 contentDescription = null,
                                 modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(8.dp)),
+                                    .size(imageSize)
+                                    .clip(RoundedCornerShape(12.dp)),
                                 contentScale = ContentScale.Crop
                             )
                         } else {
                             Box(
                                 modifier = Modifier
-                                    .size(56.dp)
-                                    .clip(RoundedCornerShape(8.dp))
+                                    .size(imageSize)
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(MaterialTheme.colorScheme.surfaceVariant),
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.PhotoLibrary,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(32.dp)
                                 )
                             }
                         }
                         
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(20.dp))
                         
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = album.name,
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "${album.itemCount} items",
                                 style = MaterialTheme.typography.bodyMedium,
