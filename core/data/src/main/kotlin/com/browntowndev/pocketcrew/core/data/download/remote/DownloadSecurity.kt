@@ -79,14 +79,19 @@ internal object DownloadSecurity {
         val safeFileName = requireSafeFileName(fileName)
         val canonicalTargetDir = targetDir.canonicalFile
 
+        fun isSafeChildOf(child: File, parent: File): Boolean {
+            val childCanonical = child.canonicalPath
+            val parentCanonical = parent.canonicalPath + File.separator
+            return childCanonical.startsWith(parentCanonical)
+        }
+
         fun resolveChild(name: String): File {
-            val resolved = File(canonicalTargetDir, name).canonicalFile
-            if (resolved.parentFile != canonicalTargetDir) {
+            val resolved = File(canonicalTargetDir, File(name).name).canonicalFile
+            if (!isSafeChildOf(resolved, canonicalTargetDir)) {
                 throw SecurityException("Resolved path escapes target directory: $name")
             }
             return resolved
         }
-
         return DownloadPaths(
             targetFile = resolveChild(safeFileName),
             tempFile = resolveChild("$safeFileName${ModelConfig.TEMP_EXTENSION}"),
