@@ -25,19 +25,19 @@ class GetProviderCapabilitiesUseCase @Inject constructor() {
             id.contains("openai") -> ProviderCapabilities(
                 supportedAspectRatios = listOf(AspectRatio.ONE_ONE, AspectRatio.SIXTEEN_NINE, AspectRatio.NINE_SIXTEEN),
                 supportedImageQualities = listOf(GenerationQuality.SPEED, GenerationQuality.HD),
-                supportedVideoQualities = emptyList(),
-                supportedVideoResolutions = emptyList(),
-                supportedVideoDurations = emptyList(),
-                supportsReferenceImage = false,
-                supportsVideo = false,
+                supportedVideoQualities = listOf(GenerationQuality.SPEED, GenerationQuality.HD),
+                supportedVideoResolutions = listOf("480p", "720p", "1080p"),
+                supportedVideoDurations = listOf(4, 8, 12),
+                supportsReferenceImage = true,
+                supportsVideo = true,
                 supportsMusic = false
             )
             id.contains("google") -> ProviderCapabilities(
-                supportedAspectRatios = listOf(AspectRatio.ONE_ONE, AspectRatio.THREE_FOUR, AspectRatio.FOUR_THREE, AspectRatio.NINE_SIXTEEN, AspectRatio.SIXTEEN_NINE),
+                supportedAspectRatios = listOf(AspectRatio.ONE_ONE, AspectRatio.NINE_SIXTEEN, AspectRatio.SIXTEEN_NINE),
                 supportedImageQualities = listOf(GenerationQuality.SPEED, GenerationQuality.ULTRA),
                 supportedVideoQualities = listOf(GenerationQuality.SPEED, GenerationQuality.QUALITY),
-                supportedVideoResolutions = listOf("480p", "720p", "1080p"),
-                supportedVideoDurations = listOf(5, 10, 15),
+                supportedVideoResolutions = listOf("720p", "1080p", "4k"),
+                supportedVideoDurations = listOf(5, 6, 8),
                 supportsReferenceImage = true,
                 supportsVideo = true,
                 supportsMusic = false

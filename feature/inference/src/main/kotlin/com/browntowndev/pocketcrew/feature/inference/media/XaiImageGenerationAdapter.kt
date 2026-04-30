@@ -14,12 +14,15 @@ import com.openai.models.images.ImageModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.RequestBody
 import java.util.Base64
 import javax.inject.Inject
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class XaiImageGenerationAdapter @Inject constructor(
     private val clientProvider: OpenAiClientProviderPort,
-    private val okHttpClient: okhttp3.OkHttpClient
+    private val okHttpClient: OkHttpClient
 ) {
     suspend fun generateImage(
         prompt: String,
@@ -110,20 +113,20 @@ class XaiImageGenerationAdapter @Inject constructor(
             .url("${baseUrl.trimEnd('/')}/images/edits")
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
-            .post(okhttp3.RequestBody.create("application/json".toMediaType(), jsonBody))
+            .post(jsonBody.toRequestBody("application/json".toMediaType()))
             .build()
 
         val response = okHttpClient.newCall(request).execute()
         
         if (!response.isSuccessful) {
-            val responseBody = response.body?.string() ?: ""
+            val responseBody = response.body.string()
             if (response.code == HTTP_BAD_REQUEST && responseBody.contains("moderation", ignoreCase = true)) {
                 throw XaiImageModerationRejectedException()
             }
             throw IllegalStateException("xAI edit request failed: ${response.code} $responseBody")
         }
 
-        val responseBodyString = response.body?.string() ?: throw IllegalStateException("Empty response body")
+        val responseBodyString = response.body.string()
         // Use regex or simple parsing to extract b64_json
         // Ideally we would use a JSON library, but since we're writing a raw client, we can parse it manually or use kotlinx.serialization
         // To be safe and avoid adding serialization imports that might not be available, we can parse with a regex for b64_json
