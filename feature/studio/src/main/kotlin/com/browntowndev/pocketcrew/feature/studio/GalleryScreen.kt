@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -54,6 +55,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.spring
@@ -84,6 +86,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -91,6 +94,11 @@ import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 
 private const val ALBUM_GRID_COLUMNS = 2
 private const val ALBUM_COVER_GRID_COLUMNS = 2
@@ -123,6 +131,7 @@ fun GalleryScreen(
     onMoveMedia: (Set<String>, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val hazeState = rememberHazeState()
     var isAddAlbumDialogOpen by rememberSaveable { mutableStateOf(false) }
     var selectedAlbumId by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedMediaItemIds by rememberSaveable { mutableStateOf(emptySet<String>()) }
@@ -140,6 +149,7 @@ fun GalleryScreen(
                 title = selectedAlbum?.name ?: "Gallery",
                 selectedItemCount = selectedMediaItemIds.size,
                 showAddAlbumIcon = selectedAlbumId == null,
+                hazeState = hazeState,
                 onBackClick = {
                     if (selectedMediaItemIds.isNotEmpty()) {
                         selectedMediaItemIds = emptySet()
@@ -155,11 +165,11 @@ fun GalleryScreen(
                 onDeleteClick = { showDeleteDialog = true },
             )
         },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
+                .fillMaxSize(),
         ) {
             AnimatedContent(
                 targetState = selectedAlbum,
@@ -186,6 +196,8 @@ fun GalleryScreen(
                     AlbumGrid(
                         albums = uiState.albums,
                         onAlbumClick = { albumId -> selectedAlbumId = albumId },
+                        hazeState = hazeState,
+                        topPadding = innerPadding.calculateTopPadding(),
                     )
                 } else {
                     AlbumItemGrid(
@@ -199,6 +211,8 @@ fun GalleryScreen(
                                 selectedMediaItemIds + itemId
                             }
                         },
+                        hazeState = hazeState,
+                        topPadding = innerPadding.calculateTopPadding(),
                     )
                 }
             }
@@ -251,6 +265,7 @@ private fun GalleryTopBar(
     title: String,
     selectedItemCount: Int,
     showAddAlbumIcon: Boolean,
+    hazeState: HazeState,
     onBackClick: () -> Unit,
     onClearSelectionClick: () -> Unit,
     onAddAlbumClick: () -> Unit,
@@ -259,7 +274,18 @@ private fun GalleryTopBar(
     modifier: Modifier = Modifier,
 ) {
     CenterAlignedTopAppBar(
-        modifier = modifier,
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+            containerColor = Color.Transparent,
+            scrolledContainerColor = Color.Transparent,
+            titleContentColor = Color.White,
+            navigationIconContentColor = Color.White,
+            actionIconContentColor = Color.White,
+        ),
+        modifier = modifier.hazeEffect(state = hazeState) {
+            blurRadius = 24.dp
+            tints = listOf(HazeTint(Color.Black.copy(alpha = 0.4f)))
+            noiseFactor = 0.15f
+        },
         navigationIcon = {
             if (selectedItemCount > 0) {
                 IconButton(onClick = onClearSelectionClick) {
@@ -316,12 +342,19 @@ private fun GalleryTopBar(
 private fun AlbumGrid(
     albums: List<GalleryAlbumUi>,
     onAlbumClick: (String) -> Unit,
+    hazeState: HazeState,
+    topPadding: Dp,
     modifier: Modifier = Modifier,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(ALBUM_GRID_COLUMNS),
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            top = 16.dp + topPadding,
+            end = 16.dp,
+            bottom = 16.dp,
+        ),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
@@ -332,6 +365,7 @@ private fun AlbumGrid(
             AlbumCard(
                 album = album,
                 onClick = { onAlbumClick(album.id) },
+                hazeState = hazeState,
             )
         }
     }
@@ -341,11 +375,13 @@ private fun AlbumGrid(
 private fun AlbumCard(
     album: GalleryAlbumUi,
     onClick: () -> Unit,
+    hazeState: HazeState,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .hazeSource(state = hazeState)
             .clickable(
                 role = Role.Button,
                 onClick = onClick,
@@ -445,6 +481,8 @@ private fun AlbumItemGrid(
     selectedMediaItemIds: Set<String>,
     onMediaItemMeasured: (String, Float) -> Unit,
     onMediaItemSelectionToggled: (String) -> Unit,
+    hazeState: HazeState,
+    topPadding: Dp,
     modifier: Modifier = Modifier,
 ) {
     if (album.items.isEmpty()) {
@@ -455,6 +493,7 @@ private fun AlbumItemGrid(
     LazyVerticalStaggeredGrid(
         columns = StaggeredGridCells.Fixed(ALBUM_GRID_COLUMNS),
         modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = topPadding),
     ) {
         items(
             items = album.items,
@@ -467,6 +506,7 @@ private fun AlbumItemGrid(
                 selectionModeActive = selectedMediaItemIds.isNotEmpty(),
                 onMediaItemMeasured = onMediaItemMeasured,
                 onSelectionToggled = { onMediaItemSelectionToggled(item.id) },
+                hazeState = hazeState,
             )
         }
     }
@@ -480,6 +520,7 @@ private fun AlbumMediaItem(
     selectionModeActive: Boolean,
     onMediaItemMeasured: (String, Float) -> Unit,
     onSelectionToggled: () -> Unit,
+    hazeState: HazeState,
     modifier: Modifier = Modifier,
 ) {
     val padding by animateDpAsState(
@@ -495,6 +536,7 @@ private fun AlbumMediaItem(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(item.aspectRatio ?: 1.0f)
+            .hazeSource(state = hazeState)
             .combinedClickable(
                 onClick = {
                     if (selectionModeActive) {
