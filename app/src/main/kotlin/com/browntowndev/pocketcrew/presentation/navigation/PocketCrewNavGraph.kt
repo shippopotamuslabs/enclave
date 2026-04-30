@@ -25,7 +25,6 @@ import com.browntowndev.pocketcrew.feature.studio.GalleryRoute
 import com.browntowndev.pocketcrew.feature.studio.MultimodalViewModel
 import com.browntowndev.pocketcrew.feature.studio.StudioDetailScreen
 import com.browntowndev.pocketcrew.feature.studio.StudioScreen
-import com.browntowndev.pocketcrew.feature.studio.StudioUiState
 
 private const val ANIMATION_DURATION = 300
 

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,11 +43,15 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -89,6 +94,23 @@ data class StudioGalleryGroup(
 data class StudioGalleryRow(
     val mediaItems: List<StudioMediaUi>,
     val placeholderCount: Int = 0,
+)
+
+internal data class StudioPromptHeaderInfo(
+    val key: String,
+    val prompt: String,
+    val itemIndex: Int,
+)
+
+internal data class StudioVisibleListItemInfo(
+    val key: Any,
+    val offset: Int,
+)
+
+internal data class StudioStickyHeaderLayout(
+    val key: String,
+    val prompt: String,
+    val yOffset: Int,
 )
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -192,6 +214,7 @@ fun StudioScreen(
                 onSaveClick = viewModel::onToggleSaveBottomSheet,
                 onNavigateToHistory = onNavigateToHistory,
                 onNavigateToGallery = onNavigateToGallery,
+                hazeState = hazeState,
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -199,7 +222,6 @@ fun StudioScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = padding.calculateTopPadding())
         ) {
             StudioGalleryPane(
                 groupedGallery = groupedGallery,
@@ -209,6 +231,7 @@ fun StudioScreen(
                 generationPlaceholderCount = generationPlaceholderCount,
                 hazeState = hazeState,
                 listState = listState,
+                topPadding = padding.calculateTopPadding(),
                 onMediaClick = { id ->
                     if (uiState.selectedMediaItemIds.isNotEmpty()) {
                         val asset = groupedGallery.flatMap { it.items }.find { it.id == id }
@@ -277,10 +300,23 @@ private fun StudioTopBar(
     onSaveClick: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToGallery: () -> Unit,
+    hazeState: HazeState,
     modifier: Modifier = Modifier
 ) {
     CenterAlignedTopAppBar(
-        modifier = modifier,
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+            containerColor = Color.Transparent,
+            scrolledContainerColor = Color.Transparent,
+            titleContentColor = Color.White,
+            navigationIconContentColor = Color.White,
+            actionIconContentColor = Color.White,
+        ),
+        modifier = modifier
+            .hazeEffect(state = hazeState) {
+                blurRadius = 24.dp
+                tints = listOf(HazeTint(Color.Black.copy(alpha = 0.4f)))
+                noiseFactor = 0.15f
+            },
         navigationIcon = {
             if (selectedCount > 0) {
                 IconButton(onClick = onClearSelection) {
@@ -335,6 +371,7 @@ private fun StudioGalleryPane(
     generationPlaceholderCount: Int,
     hazeState: HazeState,
     listState: LazyListState,
+    topPadding: Dp,
     onMediaClick: (String) -> Unit,
     onMediaLongClick: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -351,6 +388,7 @@ private fun StudioGalleryPane(
                 generationPlaceholderCount = generationPlaceholderCount,
                 hazeState = hazeState,
                 listState = listState,
+                topPadding = topPadding,
                 onMediaClick = onMediaClick,
                 onMediaLongClick = onMediaLongClick
             )
@@ -368,13 +406,53 @@ private fun StudioGalleryList(
     generationPlaceholderCount: Int,
     hazeState: HazeState,
     listState: LazyListState,
+    topPadding: Dp,
     onMediaClick: (String) -> Unit,
     onMediaLongClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val promptHeaders = remember(
+        groupedGallery,
+        isGenerating,
+        activeGenerationPrompt,
+        generationPlaceholderCount,
+    ) {
+        buildStudioPromptHeaderInfo(
+            groupedGallery = groupedGallery,
+            isGenerating = isGenerating,
+            activeGenerationPrompt = activeGenerationPrompt,
+            generationPlaceholderCount = generationPlaceholderCount,
+        )
+    }
+    var stickyHeaderHeightPx by remember { mutableIntStateOf(0) }
+    var expandedPromptHeaderKeys by rememberSaveable { mutableStateOf(emptyList<String>()) }
+    LaunchedEffect(promptHeaders) {
+        val activeHeaderKeys = promptHeaders.map { header -> header.key }
+        expandedPromptHeaderKeys = expandedPromptHeaderKeys.filter { key -> key in activeHeaderKeys }
+    }
+    val stickyTopPx = with(LocalDensity.current) { topPadding.roundToPx() }
+    val stickyHeaderLayout by remember(promptHeaders, listState, stickyTopPx, stickyHeaderHeightPx) {
+        derivedStateOf {
+            calculateStudioStickyHeaderLayout(
+                headers = promptHeaders,
+                firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                visibleItems = listState.layoutInfo.visibleItemsInfo.map { visibleItem ->
+                    StudioVisibleListItemInfo(
+                        key = visibleItem.key,
+                        offset = visibleItem.offset,
+                    )
+                },
+                stickyTopPx = stickyTopPx,
+                headerHeightPx = stickyHeaderHeightPx,
+            )
+        }
+    }
+
     LazyColumn(
         state = listState,
-        modifier = modifier.fillMaxSize()
+        modifier = modifier
+            .fillMaxSize(),
+        contentPadding = PaddingValues(top = topPadding)
     ) {
         groupedGallery.forEachIndexed { index, group ->
             val isActiveGenerationGroup = isGenerating &&
@@ -385,11 +463,24 @@ private fun StudioGalleryList(
                 placeholderCount = if (isActiveGenerationGroup) generationPlaceholderCount else 0,
             )
 
-            stickyHeader(key = "$GALLERY_HEADER_KEY_PREFIX${index}_${group.prompt}") {
+            val headerKey = studioPromptHeaderKey(groupIndex = index, prompt = group.prompt)
+            item(key = headerKey) {
                 PromptHeaderDivider(
                     prompt = group.prompt,
                     hazeState = hazeState,
-                    modifier = Modifier.fillMaxWidth()
+                    isExpanded = headerKey in expandedPromptHeaderKeys,
+                    onExpandedChange = { isExpanded ->
+                        expandedPromptHeaderKeys = updateStudioExpandedHeaderKeys(
+                            expandedHeaderKeys = expandedPromptHeaderKeys,
+                            headerKey = headerKey,
+                            isExpanded = isExpanded,
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
+                        }
                 )
             }
 
@@ -422,11 +513,24 @@ private fun StudioGalleryList(
         }
 
         if (isGenerating && activeGenerationPrompt != null && groupedGallery.lastOrNull()?.prompt != activeGenerationPrompt) {
-            stickyHeader(key = "$GALLERY_HEADER_KEY_PREFIX$activeGenerationPrompt") {
+            val headerKey = studioPromptHeaderKey(groupIndex = groupedGallery.size, prompt = activeGenerationPrompt)
+            item(key = headerKey) {
                 PromptHeaderDivider(
                     prompt = activeGenerationPrompt,
                     hazeState = hazeState,
-                    modifier = Modifier.fillMaxWidth()
+                    isExpanded = headerKey in expandedPromptHeaderKeys,
+                    onExpandedChange = { isExpanded ->
+                        expandedPromptHeaderKeys = updateStudioExpandedHeaderKeys(
+                            expandedHeaderKeys = expandedPromptHeaderKeys,
+                            headerKey = headerKey,
+                            isExpanded = isExpanded,
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            alpha = if (stickyHeaderLayout?.key == headerKey) 0f else 1f
+                        }
                 )
             }
             items(
@@ -439,6 +543,25 @@ private fun StudioGalleryList(
                 )
             }
         }
+    }
+
+    stickyHeaderLayout?.let { headerLayout ->
+        PromptHeaderDivider(
+            prompt = headerLayout.prompt,
+            hazeState = hazeState,
+            isExpanded = headerLayout.key in expandedPromptHeaderKeys,
+            onExpandedChange = { isExpanded ->
+                expandedPromptHeaderKeys = updateStudioExpandedHeaderKeys(
+                    expandedHeaderKeys = expandedPromptHeaderKeys,
+                    headerKey = headerLayout.key,
+                    isExpanded = isExpanded,
+                )
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(x = 0, y = headerLayout.yOffset) }
+                .onSizeChanged { size -> stickyHeaderHeightPx = size.height },
+        )
     }
 }
 
@@ -459,6 +582,11 @@ internal fun isGenerativeScrollThresholdVisible(
 }
 
 internal fun studioGalleryRowKey(row: List<StudioMediaUi>): String = "$GALLERY_ROW_KEY_PREFIX${row.first().id}"
+
+internal fun studioPromptHeaderKey(
+    groupIndex: Int,
+    prompt: String,
+): String = "$GALLERY_HEADER_KEY_PREFIX${groupIndex}_$prompt"
 
 internal fun buildStudioGalleryRows(
     group: StudioGalleryGroup,
@@ -489,6 +617,88 @@ internal fun buildStudioGalleryRows(
     }
 
     return mutableRows
+}
+
+internal fun buildStudioPromptHeaderInfo(
+    groupedGallery: List<StudioGalleryGroup>,
+    isGenerating: Boolean,
+    activeGenerationPrompt: String?,
+    generationPlaceholderCount: Int,
+): List<StudioPromptHeaderInfo> {
+    val headers = mutableListOf<StudioPromptHeaderInfo>()
+    var itemIndex = 0
+
+    groupedGallery.forEachIndexed { groupIndex, group ->
+        val isActiveGenerationGroup = isGenerating &&
+            group.prompt == activeGenerationPrompt &&
+            groupIndex == groupedGallery.lastIndex
+        val galleryRows = buildStudioGalleryRows(
+            group = group,
+            placeholderCount = if (isActiveGenerationGroup) generationPlaceholderCount else 0,
+        )
+
+        headers.add(
+            StudioPromptHeaderInfo(
+                key = studioPromptHeaderKey(groupIndex = groupIndex, prompt = group.prompt),
+                prompt = group.prompt,
+                itemIndex = itemIndex,
+            )
+        )
+        itemIndex += 1
+        itemIndex += galleryRows.count { it.mediaItems.isNotEmpty() }
+        itemIndex += galleryRows.count { it.mediaItems.isEmpty() }
+    }
+
+    if (isGenerating && activeGenerationPrompt != null && groupedGallery.lastOrNull()?.prompt != activeGenerationPrompt) {
+        headers.add(
+            StudioPromptHeaderInfo(
+                key = studioPromptHeaderKey(groupIndex = groupedGallery.size, prompt = activeGenerationPrompt),
+                prompt = activeGenerationPrompt,
+                itemIndex = itemIndex,
+            )
+        )
+    }
+
+    return headers
+}
+
+internal fun updateStudioExpandedHeaderKeys(
+    expandedHeaderKeys: List<String>,
+    headerKey: String,
+    isExpanded: Boolean,
+): List<String> =
+    when {
+        isExpanded && headerKey !in expandedHeaderKeys -> expandedHeaderKeys + headerKey
+        !isExpanded -> expandedHeaderKeys - headerKey
+        else -> expandedHeaderKeys
+    }
+
+internal fun calculateStudioStickyHeaderLayout(
+    headers: List<StudioPromptHeaderInfo>,
+    firstVisibleItemIndex: Int,
+    visibleItems: List<StudioVisibleListItemInfo>,
+    stickyTopPx: Int,
+    headerHeightPx: Int,
+): StudioStickyHeaderLayout? {
+    val currentHeader = headers.lastOrNull { header -> header.itemIndex <= firstVisibleItemIndex }
+        ?: return null
+    val currentVisibleHeader = visibleItems.firstOrNull { visibleItem -> visibleItem.key == currentHeader.key }
+    if (currentVisibleHeader != null && currentVisibleHeader.offset > 0) {
+        return null
+    }
+
+    val nextVisibleHeaderOffset = visibleItems
+        .filter { visibleItem -> headers.any { header -> header.key == visibleItem.key && header.key != currentHeader.key } }
+        .minOfOrNull { visibleItem -> visibleItem.offset }
+    val pushedOffset = nextVisibleHeaderOffset
+        ?.let { offset -> (stickyTopPx + offset - headerHeightPx).coerceAtMost(stickyTopPx) }
+        ?: stickyTopPx
+
+    return StudioStickyHeaderLayout(
+        key = currentHeader.key,
+        prompt = currentHeader.prompt,
+        yOffset = pushedOffset,
+    )
 }
 
 @Composable
