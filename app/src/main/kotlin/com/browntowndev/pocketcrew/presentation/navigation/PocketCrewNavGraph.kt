@@ -6,8 +6,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -23,6 +25,7 @@ import com.browntowndev.pocketcrew.feature.studio.GalleryRoute
 import com.browntowndev.pocketcrew.feature.studio.MultimodalViewModel
 import com.browntowndev.pocketcrew.feature.studio.StudioDetailScreen
 import com.browntowndev.pocketcrew.feature.studio.StudioScreen
+import com.browntowndev.pocketcrew.feature.studio.StudioUiState
 
 private const val ANIMATION_DURATION = 300
 
@@ -267,12 +270,15 @@ fun PocketCrewNavGraph(
                     navController.getBackStackEntry(Routes.STUDIO)
                 }
             val studioViewModel = hiltViewModel<MultimodalViewModel>(studioBackStackEntry)
+            val studioUiState by studioViewModel.uiState.collectAsStateWithLifecycle()
 
             StudioDetailScreen(
                 assetId = assetId,
+                assets = studioUiState.gallery,
                 onNavigateBack = { navController.popBackStack() },
                 onEditMedia = studioViewModel::onEditMedia,
                 onAnimateMedia = studioViewModel::onAnimateMedia,
+                onDeleteMedia = studioViewModel::deleteMedia,
             )
         }
 

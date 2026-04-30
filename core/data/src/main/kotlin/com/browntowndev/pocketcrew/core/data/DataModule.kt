@@ -34,6 +34,7 @@ import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.local.SQLiteVecInstaller
+import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
@@ -124,7 +125,9 @@ object DataModule {
             context,
             PocketCrewDatabase::class.java,
             "pocketcrew.db"
-        ).build()
+        )
+        .fallbackToDestructiveMigration()
+        .build()
     }
 
     @Provides
@@ -176,6 +179,9 @@ object DataModule {
 
     @Provides
     fun provideStudioMediaDao(database: PocketCrewDatabase): StudioMediaDao = database.studioMediaDao()
+
+    @Provides
+    fun provideStudioAlbumDao(database: PocketCrewDatabase): StudioAlbumDao = database.studioAlbumDao()
 
     @Provides
     @Singleton

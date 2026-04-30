@@ -26,8 +26,11 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -47,6 +50,7 @@ class MultimodalViewModelTest {
     private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
     private val getProviderCapabilitiesUseCase = mockk<GetProviderCapabilitiesUseCase>()
     private val logger = mockk<LoggingPort>(relaxed = true)
+    private val allMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
     private lateinit var viewModel: MultimodalViewModel
 
     @BeforeEach
@@ -68,7 +72,8 @@ class MultimodalViewModelTest {
 
         every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(assignment))
         every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(providerAsset))
-        every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
+        every { studioRepository.observeAllMedia() } returns allMediaFlow
+        every { studioRepository.observeAllAlbums() } returns flowOf(emptyList())
         every { getProviderCapabilitiesUseCase(any()) } returns ProviderCapabilities(
             supportedAspectRatios = AspectRatio.entries.toList(),
             supportedImageQualities = listOf(GenerationQuality.SPEED),
@@ -226,14 +231,12 @@ class MultimodalViewModelTest {
                 provider = any(),
                 settings = ImageGenerationSettings(generationCount = 2),
             )
-            studioRepository.saveMedia(
+            studioRepository.cacheEphemeralMedia(
                 match<ByteArray> { it.contentEquals("first".toByteArray()) },
-                "batch prompt",
                 MediaCapability.IMAGE.name,
             )
-            studioRepository.saveMedia(
+            studioRepository.cacheEphemeralMedia(
                 match<ByteArray> { it.contentEquals("second".toByteArray()) },
-                "batch prompt",
                 MediaCapability.IMAGE.name,
             )
         }
@@ -257,18 +260,17 @@ class MultimodalViewModelTest {
 
             advanceUntilIdle()
 
-            coVerify {
-                imageGenerationPort.generateImage(
-                    prompt = "studio prompt",
-                    provider = any(),
-                    settings = any(),
-                )
-                studioRepository.saveMedia(
-                    match<ByteArray> { it.contentEquals("image".toByteArray()) },
-                    "studio prompt",
-                    MediaCapability.IMAGE.name,
-                )
-            }
+                coVerify {
+                    imageGenerationPort.generateImage(
+                        prompt = "studio prompt",
+                        provider = any(),
+                        settings = any(),
+                    )
+                    studioRepository.cacheEphemeralMedia(
+                        match<ByteArray> { it.contentEquals("image".toByteArray()) },
+                        MediaCapability.IMAGE.name,
+                    )
+                }
 
             cancelAndIgnoreRemainingEvents()
         }
@@ -334,33 +336,110 @@ class MultimodalViewModelTest {
     }
 
     @Test
-    fun `ui state maps repository media to presentation media`() = runTest {
-        every { studioRepository.observeAllMedia() } returns flowOf(
-            listOf(
-                StudioMediaAsset(
-                    id = "asset-1",
-                    localUri = "content://asset",
-                    prompt = "prompt",
-                    mediaType = MediaCapability.IMAGE.name,
-                    createdAt = 1L,
-                ),
-            ),
-        )
-        viewModel = MultimodalViewModel(
-            imageGenerationPort,
-            videoGenerationPort,
-            studioRepository,
-            defaultModelRepository,
-            mediaProviderRepository,
-            getProviderCapabilitiesUseCase,
-            logger,
-        )
+    fun `toggleMediaSelection updates selection state`() = runTest {
         val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
         }
+        
+        viewModel.toggleMediaSelection("asset-1")
+        assertTrue(viewModel.uiState.value.selectedMediaItemIds.contains("asset-1"))
+        
+        viewModel.toggleMediaSelection("asset-1")
+        assertFalse(viewModel.uiState.value.selectedMediaItemIds.contains("asset-1"))
+        
+        job.cancel()
+    }
 
-        val media = viewModel.uiState.value.gallery.single()
-        assertEquals(StudioMediaUi("asset-1", "content://asset", "prompt", MediaCapability.IMAGE, 1L), media)
+    @Test
+    fun `onSaveSelectedMediaToAlbum moves selected media and clears selection`() = runTest {
+        // Given
+        val ephemeralItem = StudioMediaUi(
+            id = "asset-1",
+            localUri = "cache://ephemeral.jpg",
+            prompt = "ephemeral prompt",
+            mediaType = MediaCapability.IMAGE,
+            createdAt = 1L
+        )
+        // Inject ephemeral item into gallery (since it's a private flow, we simulate via generate)
+        coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(
+            listOf("image".toByteArray())
+        )
+        coEvery { studioRepository.cacheEphemeralMedia(any(), any()) } returns "cache://ephemeral.jpg"
+        
+        coEvery { 
+            studioRepository.saveMedia(
+                localUri = any(),
+                prompt = any(),
+                mediaType = any(),
+                albumId = any()
+            ) 
+        } returns "files://permanent.jpg"
+        
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        
+        viewModel.onPromptChange("test")
+        viewModel.generate()
+        advanceUntilIdle()
+        
+        val generatedId = viewModel.uiState.value.gallery.first().id
+        viewModel.toggleMediaSelection(generatedId)
+        
+        // Open bottom sheet
+        viewModel.onToggleSaveBottomSheet()
+        assertTrue(viewModel.uiState.value.isSaveBottomSheetOpen)
+        
+        // Save it
+        viewModel.onSaveSelectedMediaToAlbum("album-123")
+        
+        // Manually update mock repository flow to simulate persistence
+        allMediaFlow.update { current ->
+            current + StudioMediaAsset(
+                id = generatedId,
+                localUri = "files://permanent.jpg",
+                prompt = "test",
+                mediaType = MediaCapability.IMAGE.name,
+                createdAt = 1L,
+                albumId = "album-123"
+            )
+        }
+        
+        advanceUntilIdle()
+        
+        assertTrue(viewModel.uiState.value.selectedMediaItemIds.isEmpty())
+        assertFalse(viewModel.uiState.value.isSaveBottomSheetOpen)
+        assertEquals(1, viewModel.uiState.value.gallery.size)
+        assertEquals("album-123", viewModel.uiState.value.gallery.first().albumId)
+        
+        job.cancel()
+    }
+
+    @Test
+    fun `viewModel onCleared clears ephemeral cache`() = runTest {
+        // Trigger onCleared via ViewModelStore or reflection if needed, 
+        // but here we just call it directly for the unit test.
+        val method = viewModel.javaClass.getDeclaredMethod("onCleared")
+        method.isAccessible = true
+        method.invoke(viewModel)
+        
+        advanceUntilIdle()
+        
+        coVerify { studioRepository.clearEphemeralCache() }
+    }
+
+    @Test
+    fun `onAddAlbum calls repository createAlbum`() = runTest {
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        
+        viewModel.onAddAlbum("Vacation")
+        
+        coVerify { studioRepository.createAlbum("Vacation") }
         job.cancel()
     }
 }
+
+private fun assertTrue(actual: Boolean) = org.junit.jupiter.api.Assertions.assertTrue(actual)
+private fun assertFalse(actual: Boolean) = org.junit.jupiter.api.Assertions.assertFalse(actual)

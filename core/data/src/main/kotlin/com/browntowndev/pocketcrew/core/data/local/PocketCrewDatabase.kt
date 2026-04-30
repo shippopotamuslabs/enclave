@@ -21,6 +21,7 @@ import androidx.room.TypeConverters
         MemoriesEntity::class,
         MediaProviderEntity::class,
         StudioMediaEntity::class,
+        StudioAlbumEntity::class,
     ],
     version = 1,
     exportSchema = false
@@ -42,4 +43,5 @@ abstract class PocketCrewDatabase : RoomDatabase() {
     abstract fun memoriesDao(): MemoriesDao
     abstract fun mediaProviderDao(): MediaProviderDao
     abstract fun studioMediaDao(): StudioMediaDao
+    abstract fun studioAlbumDao(): StudioAlbumDao
 }

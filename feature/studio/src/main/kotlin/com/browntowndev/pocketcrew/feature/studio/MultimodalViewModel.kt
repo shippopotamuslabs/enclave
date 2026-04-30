@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.port.media.ImageGenerationPort
 import com.browntowndev.pocketcrew.domain.port.media.VideoGenerationPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,6 +19,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 @HiltViewModel
@@ -42,6 +44,9 @@ class MultimodalViewModel @Inject constructor(
     private val _isContinualGenerationActive = MutableStateFlow(false)
     private val _error = MutableStateFlow<String?>(null)
     private val _lastSubmittedPrompt = MutableStateFlow<String?>(null)
+    private val _sessionMedia = MutableStateFlow<List<StudioMediaUi>>(emptyList())
+    private val _selectedMediaItemIds = MutableStateFlow<Set<String>>(emptySet())
+    private val _isSaveBottomSheetOpen = MutableStateFlow(false)
 
     private val templates = listOf(
         StudioTemplate("1", "Cyberpunk", "cyberpunk", "Neon lighting, futuristic city, cyberpunk style, ", " ultra detailed, 8k"),
@@ -80,37 +85,71 @@ class MultimodalViewModel @Inject constructor(
         getProviderCapabilitiesUseCase(provider?.provider?.name)
     }
 
-    private val galleryFlow = studioRepository.observeAllMedia().map { assets ->
-        assets.map { asset -> asset.toUi() }
+    private val albumsFlow = combine(
+        studioRepository.observeAllAlbums(),
+        studioRepository.observeAllMedia()
+    ) { albums, allMedia ->
+        val albumItems = mutableMapOf<String, MutableList<StudioMediaUi>>()
+        albumItems[DEFAULT_GALLERY_ALBUM_ID] = mutableListOf()
+        albums.forEach { albumItems[it.id] = mutableListOf() }
+
+        allMedia.forEach { asset ->
+            val item = asset.toUi()
+            val albumId = asset.albumId ?: DEFAULT_GALLERY_ALBUM_ID
+            albumItems[albumId]?.add(item)
+        }
+
+        listOf(
+            GalleryAlbumUi(
+                id = DEFAULT_GALLERY_ALBUM_ID,
+                name = "Default Album",
+                items = albumItems[DEFAULT_GALLERY_ALBUM_ID] ?: emptyList(),
+            ),
+        ) + albums.map { album ->
+            GalleryAlbumUi(
+                id = album.id,
+                name = album.name,
+                items = albumItems[album.id] ?: emptyList(),
+            )
+        }
     }
 
     val uiState: StateFlow<StudioUiState> = combine(
         _prompt,
         _isGenerating,
         _mediaType,
-        galleryFlow,
+        _sessionMedia,
+        _selectedMediaItemIds,
+        albumsFlow,
         _settings,
         capabilitiesFlow,
         _selectedTemplateId,
         _isSettingsOpen,
+        _isSaveBottomSheetOpen,
         _continualMode,
         _isContinualGenerationActive,
         _error,
-        _lastSubmittedPrompt
+        _lastSubmittedPrompt,
     ) { args ->
         val prompt = args[0] as String
         val isGenerating = args[1] as Boolean
         val mediaType = args[2] as MediaCapability
         @Suppress("UNCHECKED_CAST")
-        val gallery = args[3] as List<StudioMediaUi>
-        val settings = args[4] as GenerationSettings
-        val caps = args[5] as ProviderCapabilities?
-        val templateId = args[6] as String?
-        val isOpen = args[7] as Boolean
-        val continual = args[8] as Boolean
-        val isContinualGenerationActive = args[9] as Boolean
-        val error = args[10] as String?
-        val lastSubmittedPrompt = args[11] as String?
+        val sessionMedia = args[3] as List<StudioMediaUi>
+        @Suppress("UNCHECKED_CAST")
+        val selectedMediaItemIds = args[4] as Set<String>
+        @Suppress("UNCHECKED_CAST")
+        val albums = args[5] as List<GalleryAlbumUi>
+        val settings = args[6] as GenerationSettings
+        val caps = args[7] as ProviderCapabilities?
+        val templateId = args[8] as String?
+        val isOpen = args[9] as Boolean
+        val isSaveOpen = args[10] as Boolean
+        val continual = args[11] as Boolean
+        val isContinualGenerationActive = args[12] as Boolean
+        val error = args[13] as String?
+        val lastSubmittedPrompt = args[14] as String?
+        val gallery = sessionMedia.sortedBy { it.createdAt }
 
         val currentTemplates = if (mediaType == MediaCapability.MUSIC) musicTemplates else templates
 
@@ -120,11 +159,14 @@ class MultimodalViewModel @Inject constructor(
             activeGenerationPrompt = if (isGenerating) lastSubmittedPrompt else null,
             mediaType = mediaType,
             gallery = gallery,
+            selectedMediaItemIds = selectedMediaItemIds,
+            albums = albums,
             settings = settings,
             capabilities = caps,
             templates = currentTemplates,
             selectedTemplateId = templateId,
             isSettingsOpen = isOpen,
+            isSaveBottomSheetOpen = isSaveOpen,
             continualMode = continual,
             isContinualGenerationActive = isContinualGenerationActive,
             error = error
@@ -162,6 +204,52 @@ class MultimodalViewModel @Inject constructor(
 
     fun onSettingsToggle() {
         _isSettingsOpen.value = !_isSettingsOpen.value
+    }
+
+    fun onToggleSaveBottomSheet() {
+        _isSaveBottomSheetOpen.value = !_isSaveBottomSheetOpen.value
+    }
+
+    fun onAddAlbum(name: String) {
+        viewModelScope.launch {
+            studioRepository.createAlbum(name)
+        }
+    }
+
+    fun toggleMediaSelection(id: String) {
+        _selectedMediaItemIds.update { current ->
+            if (current.contains(id)) current - id else current + id
+        }
+    }
+
+    fun clearMediaSelection() {
+        _selectedMediaItemIds.value = emptySet()
+    }
+
+    fun onSaveSelectedMediaToAlbum(albumId: String) {
+        val selectedIds = _selectedMediaItemIds.value
+        if (selectedIds.isEmpty()) return
+
+        viewModelScope.launch {
+            _sessionMedia.update { gallery ->
+                gallery.map { item ->
+                    if (item.id in selectedIds) {
+                        val newUri = studioRepository.saveMedia(
+                            localUri = item.localUri,
+                            prompt = item.prompt,
+                            mediaType = item.mediaType.name,
+                            albumId = albumId
+                        )
+                        item.copy(localUri = newUri, albumId = albumId)
+                    } else {
+                        item
+                    }
+                }
+            }
+            
+            clearMediaSelection()
+            onToggleSaveBottomSheet()
+        }
     }
 
     fun onEditMedia(assetId: String) {
@@ -221,6 +309,7 @@ class MultimodalViewModel @Inject constructor(
     fun deleteMedia(id: String) {
         viewModelScope.launch {
             studioRepository.deleteMedia(id)
+            _sessionMedia.update { gallery -> gallery.filter { it.id != id } }
         }
     }
 
@@ -303,7 +392,15 @@ class MultimodalViewModel @Inject constructor(
 
                 result.onSuccess { images ->
                     images.forEach { bytes ->
-                        studioRepository.saveMedia(bytes, prompt, currentType.name)
+                        val localUri = studioRepository.cacheEphemeralMedia(bytes, currentType.name)
+                        val newItem = StudioMediaUi(
+                            id = UUID.randomUUID().toString(),
+                            localUri = localUri,
+                            prompt = prompt,
+                            mediaType = currentType,
+                            createdAt = System.currentTimeMillis()
+                        )
+                        _sessionMedia.update { it + newItem }
                     }
                 }.onFailure { e ->
                     logger.error(TAG, "Generation failed for ${currentType.name}", e)
@@ -324,7 +421,19 @@ class MultimodalViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         generationJob?.cancel()
+        viewModelScope.launch {
+            studioRepository.clearEphemeralCache()
+        }
     }
+
+    private fun StudioMediaAsset.toUi() = StudioMediaUi(
+        id = id,
+        localUri = localUri,
+        prompt = prompt,
+        mediaType = MediaCapability.valueOf(mediaType),
+        createdAt = createdAt,
+        albumId = albumId,
+    )
 
     companion object {
         private const val TAG = "MultimodalViewModel"

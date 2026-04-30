@@ -11,6 +11,8 @@ data class StudioMediaUi(
     val prompt: String,
     val mediaType: MediaCapability,
     val createdAt: Long,
+    val albumId: String? = null,
+    val aspectRatio: Float? = null,
 )
 
 fun StudioMediaAsset.toUi(): StudioMediaUi =
@@ -24,4 +26,5 @@ fun StudioMediaAsset.toUi(): StudioMediaUi =
             else -> MediaCapability.IMAGE
         },
         createdAt = createdAt,
+        albumId = albumId,
     )

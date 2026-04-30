@@ -11,15 +11,17 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import java.util.UUID
 import javax.inject.Inject
 
 @HiltViewModel
 class GalleryViewModel @Inject constructor(
-    studioRepository: StudioRepositoryPort,
+    private val studioRepository: StudioRepositoryPort,
 ) : ViewModel() {
+    private val userAlbums = studioRepository.observeAllAlbums()
+    private val itemAspectRatios = MutableStateFlow<Map<String, Float>>(emptyMap())
 
-    private val userAlbums = MutableStateFlow<List<GalleryAlbumDraft>>(emptyList())
     private val mediaItems = studioRepository.observeAllMedia().map { assets ->
         assets.map { asset -> asset.toUi() }
     }
@@ -27,19 +29,30 @@ class GalleryViewModel @Inject constructor(
     val uiState: StateFlow<GalleryUiState> = combine(
         mediaItems,
         userAlbums,
-    ) { media, albums ->
+        itemAspectRatios,
+    ) { media, albums, ratios ->
+        val albumItems = mutableMapOf<String, MutableList<StudioMediaUi>>()
+        albumItems[DEFAULT_GALLERY_ALBUM_ID] = mutableListOf()
+        albums.forEach { albumItems[it.id] = mutableListOf() }
+
+        media.forEach { item ->
+            val mappedItem = item.copy(aspectRatio = ratios[item.id])
+            val albumId = item.albumId ?: DEFAULT_GALLERY_ALBUM_ID
+            albumItems[albumId]?.add(mappedItem)
+        }
+
         GalleryUiState(
             albums = listOf(
                 GalleryAlbumUi(
                     id = DEFAULT_GALLERY_ALBUM_ID,
                     name = "Default Album",
-                    items = media,
+                    items = albumItems[DEFAULT_GALLERY_ALBUM_ID] ?: emptyList(),
                 ),
             ) + albums.map { album ->
                 GalleryAlbumUi(
                     id = album.id,
                     name = album.name,
-                    items = emptyList(),
+                    items = albumItems[album.id] ?: emptyList(),
                 )
             },
         )
@@ -63,11 +76,29 @@ class GalleryViewModel @Inject constructor(
             return
         }
 
-        userAlbums.update { currentAlbums ->
-            currentAlbums + GalleryAlbumDraft(
-                id = UUID.randomUUID().toString(),
-                name = trimmedName,
-            )
+        viewModelScope.launch {
+            studioRepository.createAlbum(trimmedName)
+        }
+    }
+
+    fun deleteMedia(mediaIds: Set<String>) {
+        viewModelScope.launch {
+            mediaIds.forEach { id ->
+                studioRepository.deleteMedia(id)
+            }
+        }
+    }
+
+    fun moveMediaToAlbum(mediaIds: Set<String>, targetAlbumId: String) {
+        viewModelScope.launch {
+            studioRepository.moveMediaToAlbum(mediaIds.toList(), targetAlbumId)
+        }
+    }
+
+    fun onMediaItemMeasured(id: String, aspectRatio: Float) {
+        if (itemAspectRatios.value[id] == aspectRatio) return
+        itemAspectRatios.update { currentRatios ->
+            currentRatios + (id to aspectRatio)
         }
     }
 }

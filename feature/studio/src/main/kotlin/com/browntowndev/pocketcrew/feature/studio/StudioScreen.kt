@@ -4,26 +4,36 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -36,6 +46,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -84,7 +95,7 @@ fun StudioScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val hazeState = rememberHazeState()
     val listState = rememberLazyListState()
-    val visibleGallery = remember(uiState.gallery) { uiState.gallery.asReversed() }
+    val visibleGallery = remember(uiState.gallery) { uiState.gallery }
     val groupedGallery = remember(visibleGallery) {
         val groups = mutableListOf<StudioGalleryGroup>()
         if (visibleGallery.isNotEmpty()) {
@@ -168,6 +179,9 @@ fun StudioScreen(
     Scaffold(
         topBar = {
             StudioTopBar(
+                selectedCount = uiState.selectedMediaItemIds.size,
+                onClearSelection = viewModel::clearMediaSelection,
+                onSaveClick = viewModel::onToggleSaveBottomSheet,
                 onNavigateToHistory = onNavigateToHistory,
                 onNavigateToGallery = onNavigateToGallery,
             )
@@ -181,12 +195,28 @@ fun StudioScreen(
         ) {
             StudioGalleryPane(
                 groupedGallery = groupedGallery,
+                selectedIds = uiState.selectedMediaItemIds,
                 isGenerating = uiState.isGenerating,
                 activeGenerationPrompt = uiState.activeGenerationPrompt,
                 generationPlaceholderCount = generationPlaceholderCount,
                 hazeState = hazeState,
                 listState = listState,
-                onMediaClick = onMediaClick,
+                onMediaClick = { id ->
+                    if (uiState.selectedMediaItemIds.isNotEmpty()) {
+                        val asset = groupedGallery.flatMap { it.items }.find { it.id == id }
+                        if (asset?.albumId == null) {
+                            viewModel.toggleMediaSelection(id)
+                        }
+                    } else {
+                        onMediaClick(id)
+                    }
+                },
+                onMediaLongClick = { id ->
+                    val asset = groupedGallery.flatMap { it.items }.find { it.id == id }
+                    if (asset?.albumId == null) {
+                        viewModel.toggleMediaSelection(id)
+                    }
+                },
                 modifier = Modifier.weight(1f)
             )
 
@@ -219,11 +249,23 @@ fun StudioScreen(
             onTemplateSelected = viewModel::onTemplateSelected
         )
     }
+
+    if (uiState.isSaveBottomSheetOpen) {
+        MoveBottomSheet(
+            albums = uiState.albums,
+            onDismiss = viewModel::onToggleSaveBottomSheet,
+            onMoveToAlbum = viewModel::onSaveSelectedMediaToAlbum,
+            onAddAlbum = viewModel::onAddAlbum
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun StudioTopBar(
+    selectedCount: Int,
+    onClearSelection: () -> Unit,
+    onSaveClick: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToGallery: () -> Unit,
     modifier: Modifier = Modifier
@@ -231,26 +273,44 @@ private fun StudioTopBar(
     CenterAlignedTopAppBar(
         modifier = modifier,
         navigationIcon = {
-            IconButton(onClick = onNavigateToHistory) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = "Open history"
-                )
+            if (selectedCount > 0) {
+                IconButton(onClick = onClearSelection) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Clear selection"
+                    )
+                }
+            } else {
+                IconButton(onClick = onNavigateToHistory) {
+                    Icon(
+                        imageVector = Icons.Default.Menu,
+                        contentDescription = "Open history"
+                    )
+                }
             }
         },
         title = {
             Text(
-                text = "Studio",
+                text = if (selectedCount > 0) "$selectedCount Selected" else "Studio",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
         },
         actions = {
-            IconButton(onClick = onNavigateToGallery) {
-                Icon(
-                    imageVector = Icons.Default.PhotoLibrary,
-                    contentDescription = "Open gallery"
-                )
+            if (selectedCount > 0) {
+                IconButton(onClick = onSaveClick) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
+                        contentDescription = "Save to album"
+                    )
+                }
+            } else {
+                IconButton(onClick = onNavigateToGallery) {
+                    Icon(
+                        imageVector = Icons.Default.PhotoLibrary,
+                        contentDescription = "Open gallery"
+                    )
+                }
             }
         }
     )
@@ -260,12 +320,14 @@ private fun StudioTopBar(
 @Composable
 private fun StudioGalleryPane(
     groupedGallery: List<StudioGalleryGroup>,
+    selectedIds: Set<String>,
     isGenerating: Boolean,
     activeGenerationPrompt: String?,
     generationPlaceholderCount: Int,
     hazeState: HazeState,
-    listState: androidx.compose.foundation.lazy.LazyListState,
+    listState: LazyListState,
     onMediaClick: (String) -> Unit,
+    onMediaLongClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier) {
@@ -274,12 +336,14 @@ private fun StudioGalleryPane(
         } else {
             StudioGalleryList(
                 groupedGallery = groupedGallery,
+                selectedIds = selectedIds,
                 isGenerating = isGenerating,
                 activeGenerationPrompt = activeGenerationPrompt,
                 generationPlaceholderCount = generationPlaceholderCount,
                 hazeState = hazeState,
                 listState = listState,
-                onMediaClick = onMediaClick
+                onMediaClick = onMediaClick,
+                onMediaLongClick = onMediaLongClick
             )
         }
     }
@@ -289,12 +353,14 @@ private fun StudioGalleryPane(
 @Composable
 private fun StudioGalleryList(
     groupedGallery: List<StudioGalleryGroup>,
+    selectedIds: Set<String>,
     isGenerating: Boolean,
     activeGenerationPrompt: String?,
     generationPlaceholderCount: Int,
     hazeState: HazeState,
-    listState: androidx.compose.foundation.lazy.LazyListState,
+    listState: LazyListState,
     onMediaClick: (String) -> Unit,
+    onMediaLongClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyColumn(
@@ -324,9 +390,11 @@ private fun StudioGalleryList(
             ) { row ->
                 GalleryGridRow(
                     rowItems = row.mediaItems,
+                    selectedIds = selectedIds,
                     placeholderCount = row.placeholderCount,
                     hazeState = hazeState,
-                    onMediaClick = onMediaClick
+                    onMediaClick = onMediaClick,
+                    onMediaLongClick = onMediaLongClick
                 )
             }
 
@@ -417,9 +485,11 @@ internal fun buildStudioGalleryRows(
 @Composable
 private fun GalleryGridRow(
     rowItems: List<StudioMediaUi>,
+    selectedIds: Set<String>,
     placeholderCount: Int = 0,
     hazeState: HazeState,
     onMediaClick: (String) -> Unit,
+    onMediaLongClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -429,7 +499,13 @@ private fun GalleryGridRow(
     ) {
         rowItems.forEach { asset ->
             Box(modifier = Modifier.weight(1f)) {
-                GalleryItem(asset, onMediaClick)
+                GalleryItem(
+                    asset = asset,
+                    isSelected = asset.id in selectedIds,
+                    selectionModeActive = selectedIds.isNotEmpty(),
+                    onMediaClick = onMediaClick,
+                    onMediaLongClick = onMediaLongClick
+                )
             }
         }
         repeat(placeholderCount) {
@@ -620,42 +696,54 @@ private fun StudioTrailingActions(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun GalleryItem(
     asset: StudioMediaUi,
+    isSelected: Boolean,
+    selectionModeActive: Boolean,
     onMediaClick: (String) -> Unit,
+    onMediaLongClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        onClick = { onMediaClick(asset.id) },
-        shape = RectangleShape,
+    val padding by animateDpAsState(
+        targetValue = if (isSelected) 12.dp else 0.dp,
+        label = "selection_padding"
+    )
+    val cornerRadius by animateDpAsState(
+        targetValue = if (isSelected) 8.dp else 0.dp,
+        label = "selection_corner_radius"
+    )
+
+    Box(
         modifier = modifier
             .aspectRatio(1f)
             .fillMaxWidth()
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
-                model = asset.localUri,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
+            .combinedClickable(
+                onClick = { onMediaClick(asset.id) },
+                onLongClick = { onMediaLongClick(asset.id) }
             )
+            .padding(padding)
+    ) {
+        AsyncImage(
+            model = asset.localUri,
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .clip(RoundedCornerShape(cornerRadius)),
+            contentScale = ContentScale.Crop
+        )
 
-            // Type badge
+        // Saved indicator (folder icon)
+        if (asset.albumId != null) {
             Surface(
                 color = Color.Black.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(4.dp),
-                modifier = Modifier
-                    .padding(8.dp)
-                    .align(Alignment.BottomEnd)
+                shape = RoundedCornerShape(bottomStart = 8.dp),
+                modifier = Modifier.align(Alignment.TopEnd)
             ) {
                 Icon(
-                    imageVector = if (asset.mediaType == MediaCapability.IMAGE) {
-                        Icons.Default.Image
-                    } else {
-                        Icons.Default.Videocam
-                    },
-                    contentDescription = null,
+                    imageVector = Icons.Default.Folder,
+                    contentDescription = "Saved to album",
                     tint = Color.White,
                     modifier = Modifier
                         .padding(4.dp)
@@ -663,6 +751,240 @@ private fun GalleryItem(
                 )
             }
         }
+
+        // Type badge
+        Surface(
+            color = Color.Black.copy(alpha = 0.6f),
+            shape = RoundedCornerShape(4.dp),
+            modifier = Modifier
+                .padding(8.dp)
+                .align(Alignment.BottomEnd)
+        ) {
+            Icon(
+                imageVector = if (asset.mediaType == MediaCapability.IMAGE) {
+                    Icons.Default.Image
+                } else {
+                    Icons.Default.Videocam
+                },
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier
+                    .padding(4.dp)
+                    .size(16.dp)
+            )
+        }
+
+        // Selection indicator (only for non-saved items)
+        if (selectionModeActive && asset.albumId == null) {
+            Box(
+                modifier = Modifier
+                    .padding(8.dp)
+                    .size(24.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isSelected) MaterialTheme.colorScheme.primary
+                        else Color.Black.copy(alpha = 0.4f)
+                    )
+                    .border(
+                        width = 2.dp,
+                        color = Color.White,
+                        shape = CircleShape
+                    )
+                    .align(Alignment.TopStart),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AddAlbumDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var albumName by remember { mutableStateOf("") }
+    val trimmedName = albumName.trim()
+
+    AlertDialog(
+        modifier = modifier,
+        onDismissRequest = onDismiss,
+        title = { Text(text = "New Album") },
+        text = {
+            OutlinedTextField(
+                value = albumName,
+                onValueChange = { albumName = it },
+                label = { Text(text = "Album name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(trimmedName) },
+                enabled = trimmedName.isNotEmpty(),
+            ) {
+                Text(text = "Confirm")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "Cancel")
+            }
+        },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MoveBottomSheet(
+    albums: List<GalleryAlbumUi>,
+    onDismiss: () -> Unit,
+    onMoveToAlbum: (String) -> Unit,
+    onAddAlbum: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var isAddingNewAlbum by remember { mutableStateOf(false) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 32.dp)
+        ) {
+            Text(
+                text = "Save to Album",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(16.dp)
+            )
+
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                item {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        onClick = { isAddingNewAlbum = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Create New Album",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+                
+                if (albums.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = "Existing Albums",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp)
+                        )
+                    }
+                }
+
+                items(
+                    items = albums,
+                    key = { album -> album.id }
+                ) { album ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onMoveToAlbum(album.id) }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val coverUri = album.coverItems.firstOrNull()?.localUri
+                        if (coverUri != null) {
+                            AsyncImage(
+                                model = coverUri,
+                                contentDescription = null,
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PhotoLibrary,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.width(16.dp))
+                        
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = album.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${album.itemCount} items",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (isAddingNewAlbum) {
+        AddAlbumDialog(
+            onDismiss = { isAddingNewAlbum = false },
+            onConfirm = { name ->
+                onAddAlbum(name)
+                isAddingNewAlbum = false
+            }
+        )
     }
 }
 

@@ -35,40 +35,13 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 sealed class StudioDetailUiState {
-    object Loading : StudioDetailUiState()
     data class Success(val assets: List<StudioMediaUi>, val initialIndex: Int) : StudioDetailUiState()
-    data class Error(val message: String) : StudioDetailUiState()
 }
 
 @HiltViewModel
 class StudioDetailViewModel @Inject constructor(
-    private val studioRepository: StudioRepositoryPort,
     private val saveMediaToGalleryUseCase: SaveMediaToGalleryUseCase
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow<StudioDetailUiState>(StudioDetailUiState.Loading)
-    val uiState = _uiState.asStateFlow()
-
-    fun loadAsset(id: String) {
-        viewModelScope.launch {
-            studioRepository.observeAllMedia().collect { assets ->
-                val uiAssets = assets.map { it.toUi() }.reversed()
-                val initialIndex = uiAssets.indexOfFirst { it.id == id }.coerceAtLeast(0)
-                _uiState.value = if (uiAssets.isNotEmpty()) {
-                    StudioDetailUiState.Success(uiAssets, initialIndex)
-                } else {
-                    StudioDetailUiState.Error("Asset not found")
-                }
-            }
-        }
-    }
-
-    fun deleteAsset(id: String, onDeleted: () -> Unit) {
-        viewModelScope.launch {
-            studioRepository.deleteMedia(id)
-            onDeleted()
-        }
-    }
-
     fun saveToGallery(asset: StudioMediaUi) {
         viewModelScope.launch {
             saveMediaToGalleryUseCase(asset.localUri, asset.mediaType)
@@ -80,37 +53,49 @@ class StudioDetailViewModel @Inject constructor(
 @Composable
 fun StudioDetailScreen(
     assetId: String,
+    assets: List<StudioMediaUi>,
     onNavigateBack: () -> Unit,
     onEditMedia: (String) -> Unit,
     onAnimateMedia: (String) -> Unit,
+    onDeleteMedia: (String) -> Unit,
     viewModel: StudioDetailViewModel = hiltViewModel()
 ) {
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-
-    LaunchedEffect(assetId) {
-        viewModel.loadAsset(assetId)
+    val initialIndex = remember(assets, assetId) {
+        assets.indexOfFirst { it.id == assetId }.coerceAtLeast(0)
     }
 
     Scaffold(
         containerColor = Color.Black,
         topBar = { StudioDetailTopBar(onNavigateBack = onNavigateBack) }
     ) { padding ->
-        StudioDetailStateContent(
-            uiState = uiState,
-            onEdit = { asset ->
-                onEditMedia(asset.id)
-                onNavigateBack()
-            },
-            onAnimate = { asset ->
-                onAnimateMedia(asset.id)
-                onNavigateBack()
-            },
-            onSave = viewModel::saveToGallery,
-            onDelete = { asset ->
-                viewModel.deleteAsset(asset.id, onNavigateBack)
-            },
-            modifier = Modifier.padding(padding)
-        )
+        if (assets.isNotEmpty()) {
+            DetailContent(
+                assets = assets,
+                initialIndex = initialIndex,
+                onEdit = { asset ->
+                    onEditMedia(asset.id)
+                    onNavigateBack()
+                },
+                onAnimate = { asset ->
+                    onAnimateMedia(asset.id)
+                    onNavigateBack()
+                },
+                onSave = viewModel::saveToGallery,
+                onDelete = { asset ->
+                    onDeleteMedia(asset.id)
+                    onNavigateBack()
+                },
+                modifier = Modifier.padding(padding)
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize()) {
+                Text(
+                    text = "Asset not found",
+                    color = Color.White,
+                    modifier = Modifier.align(Alignment.Center)
+                )
+            }
+        }
     }
 }
 
@@ -140,40 +125,6 @@ private fun StudioDetailTopBar(
     )
 }
 
-@Composable
-private fun StudioDetailStateContent(
-    uiState: StudioDetailUiState,
-    onEdit: (StudioMediaUi) -> Unit,
-    onAnimate: (StudioMediaUi) -> Unit,
-    onSave: (StudioMediaUi) -> Unit,
-    onDelete: (StudioMediaUi) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(modifier = modifier.fillMaxSize()) {
-        when (uiState) {
-            is StudioDetailUiState.Loading -> {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            }
-            is StudioDetailUiState.Error -> {
-                Text(
-                    text = uiState.message,
-                    color = Color.White,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            }
-            is StudioDetailUiState.Success -> {
-                DetailContent(
-                    assets = uiState.assets,
-                    initialIndex = uiState.initialIndex,
-                    onEdit = onEdit,
-                    onAnimate = onAnimate,
-                    onSave = onSave,
-                    onDelete = onDelete
-                )
-            }
-        }
-    }
-}
 
 @Composable
 private fun DetailContent(
