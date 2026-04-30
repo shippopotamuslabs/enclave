@@ -1,9 +1,18 @@
 package com.browntowndev.pocketcrew.feature.studio
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -17,21 +26,20 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
-import me.saket.telephoto.zoomable.coil3.ZoomableAsyncImage
-import me.saket.telephoto.zoomable.rememberZoomableImageState
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
-import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.usecase.media.SaveMediaToGalleryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import me.saket.telephoto.zoomable.coil3.ZoomableAsyncImage
+import me.saket.telephoto.zoomable.rememberZoomableImageState
 import javax.inject.Inject
 
 sealed class StudioDetailUiState {
@@ -58,6 +66,7 @@ fun StudioDetailScreen(
     onEditMedia: (String) -> Unit,
     onAnimateMedia: (String) -> Unit,
     onDeleteMedia: (String) -> Unit,
+    videoGenerationState: VideoGenerationState = VideoGenerationState.Idle,
     viewModel: StudioDetailViewModel = hiltViewModel()
 ) {
     val initialIndex = remember(assets, assetId) {
@@ -72,13 +81,13 @@ fun StudioDetailScreen(
             DetailContent(
                 assets = assets,
                 initialIndex = initialIndex,
+                videoGenerationState = videoGenerationState,
                 onEdit = { asset ->
                     onEditMedia(asset.id)
                     onNavigateBack()
                 },
                 onAnimate = { asset ->
                     onAnimateMedia(asset.id)
-                    onNavigateBack()
                 },
                 onSave = viewModel::saveToGallery,
                 onDelete = { asset ->
@@ -130,6 +139,7 @@ private fun StudioDetailTopBar(
 private fun DetailContent(
     assets: List<StudioMediaUi>,
     initialIndex: Int,
+    videoGenerationState: VideoGenerationState,
     onEdit: (StudioMediaUi) -> Unit,
     onAnimate: (StudioMediaUi) -> Unit,
     onSave: (StudioMediaUi) -> Unit,
@@ -148,7 +158,10 @@ private fun DetailContent(
     ) { page ->
         val asset = assets[page]
         Box(modifier = Modifier.fillMaxSize()) {
-            DetailMedia(asset = asset)
+            DetailMedia(
+                asset = asset,
+                videoGenerationState = videoGenerationState,
+            )
             DetailActionsOverlay(
                 asset = asset,
                 onEdit = { onEdit(asset) },
@@ -164,16 +177,45 @@ private fun DetailContent(
 @Composable
 private fun DetailMedia(
     asset: StudioMediaUi,
+    videoGenerationState: VideoGenerationState,
     modifier: Modifier = Modifier
 ) {
-    val state = rememberZoomableImageState()
-    ZoomableAsyncImage(
-        model = asset.localUri,
-        contentDescription = asset.prompt,
-        state = state,
-        modifier = modifier.fillMaxSize(),
-        contentScale = ContentScale.Fit
-    )
+    val generatedVideoUri = (videoGenerationState as? VideoGenerationState.Success)
+        ?.takeIf { it.sourceAssetId == asset.id }
+        ?.localUri
+    val isLoading = videoGenerationState is VideoGenerationState.Loading &&
+        videoGenerationState.sourceAssetId == asset.id
+
+    Box(modifier = modifier.fillMaxSize()) {
+        if (generatedVideoUri != null || asset.mediaType == MediaCapability.VIDEO) {
+            StudioVideoPlayer(
+                localUri = generatedVideoUri ?: asset.localUri,
+                contentDescription = "Generated video",
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            val state = rememberZoomableImageState()
+            ZoomableAsyncImage(
+                model = asset.localUri,
+                contentDescription = asset.prompt,
+                state = state,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
+        }
+
+        if (isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.42f))
+                    .semantics { contentDescription = "Animating image" },
+                contentAlignment = Alignment.Center,
+            ) {
+                CircularProgressIndicator(color = Color.White)
+            }
+        }
+    }
 }
 
 @Composable
@@ -216,6 +258,57 @@ private fun DetailActionsOverlay(
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
+
+@Preview(name = "Image detail", showBackground = true, backgroundColor = 0xFF000000)
+@Composable
+private fun StudioDetailImagePreview() {
+    DetailContent(
+        assets = listOf(previewAsset()),
+        initialIndex = 0,
+        videoGenerationState = VideoGenerationState.Idle,
+        onEdit = {},
+        onAnimate = {},
+        onSave = {},
+        onDelete = {},
+    )
+}
+
+@Preview(name = "Loading animation", showBackground = true, backgroundColor = 0xFF000000)
+@Composable
+private fun StudioDetailLoadingPreview() {
+    DetailContent(
+        assets = listOf(previewAsset()),
+        initialIndex = 0,
+        videoGenerationState = VideoGenerationState.Loading("asset-1"),
+        onEdit = {},
+        onAnimate = {},
+        onSave = {},
+        onDelete = {},
+    )
+}
+
+@Preview(name = "Generated video", showBackground = true, backgroundColor = 0xFF000000)
+@Composable
+private fun StudioDetailVideoPreview() {
+    DetailContent(
+        assets = listOf(previewAsset()),
+        initialIndex = 0,
+        videoGenerationState = VideoGenerationState.Success("asset-1", "file:///preview.mp4"),
+        onEdit = {},
+        onAnimate = {},
+        onSave = {},
+        onDelete = {},
+    )
+}
+
+private fun previewAsset(): StudioMediaUi =
+    StudioMediaUi(
+        id = "asset-1",
+        localUri = "file:///preview.png",
+        prompt = "Cinematic mountain lake at sunrise",
+        mediaType = MediaCapability.IMAGE,
+        createdAt = 1L,
+    )
 
 @Composable
 private fun DetailActionRow(
