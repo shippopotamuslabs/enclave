@@ -19,4 +19,7 @@ interface StudioMediaDao {
 
     @Query("SELECT * FROM studio_gallery WHERE id = :id")
     suspend fun getMediaById(id: Long): StudioMediaEntity?
+
+    @Query("UPDATE studio_gallery SET albumId = :albumId WHERE id IN (:mediaIds)")
+    suspend fun updateMediaAlbum(mediaIds: List<Long>, albumId: Long)
 }
