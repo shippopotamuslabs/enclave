@@ -465,14 +465,27 @@ private fun AlbumCoverItem(
     item: StudioMediaUi,
     modifier: Modifier = Modifier,
 ) {
-    AsyncImage(
-        model = item.localUri,
-        contentDescription = null,
-        modifier = modifier
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(8.dp)),
-        contentScale = ContentScale.Crop,
-    )
+    val itemModifier = modifier
+        .aspectRatio(1f)
+        .clip(RoundedCornerShape(8.dp))
+
+    if (item.mediaType == MediaCapability.VIDEO) {
+        StudioVideoPlayer(
+            localUri = item.localUri,
+            contentDescription = item.prompt,
+            autoPlay = true,
+            controlsEnabled = false,
+            muted = true,
+            modifier = itemModifier,
+        )
+    } else {
+        AsyncImage(
+            model = item.localUri,
+            contentDescription = null,
+            modifier = itemModifier,
+            contentScale = ContentScale.Crop,
+        )
+    }
 }
 
 @Composable
@@ -549,22 +562,35 @@ private fun AlbumMediaItem(
             )
             .padding(padding),
     ) {
-        AsyncImage(
-            model = item.localUri,
-            contentDescription = null,
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(RoundedCornerShape(cornerRadius)),
-            contentScale = ContentScale.Crop,
-            onState = { state ->
-                if (state is AsyncImagePainter.State.Success) {
-                    val size = state.painter.intrinsicSize
-                    if (size.width > 0 && size.height > 0) {
-                        onMediaItemMeasured(item.id, size.width / size.height)
+        if (item.mediaType == MediaCapability.VIDEO) {
+            StudioVideoPlayer(
+                localUri = item.localUri,
+                contentDescription = item.prompt,
+                autoPlay = true,
+                controlsEnabled = false,
+                muted = true,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(cornerRadius)),
+            )
+        } else {
+            AsyncImage(
+                model = item.localUri,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(cornerRadius)),
+                contentScale = ContentScale.Crop,
+                onState = { state ->
+                    if (state is AsyncImagePainter.State.Success) {
+                        val size = state.painter.intrinsicSize
+                        if (size.width > 0 && size.height > 0) {
+                            onMediaItemMeasured(item.id, size.width / size.height)
+                        }
                     }
-                }
-            },
-        )
+                },
+            )
+        }
         Surface(
             color = Color.Black.copy(alpha = 0.6f),
             shape = RoundedCornerShape(4.dp),

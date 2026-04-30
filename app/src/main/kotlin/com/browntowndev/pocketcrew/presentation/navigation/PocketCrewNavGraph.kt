@@ -278,6 +278,7 @@ fun PocketCrewNavGraph(
                 onEditMedia = studioViewModel::onEditMedia,
                 onAnimateMedia = studioViewModel::onAnimateMedia,
                 onDeleteMedia = studioViewModel::deleteMedia,
+                videoGenerationState = studioUiState.videoGenerationState,
             )
         }
 
