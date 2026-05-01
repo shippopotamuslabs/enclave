@@ -150,10 +150,14 @@ class XaiImageGenerationAdapter @Inject constructor(
     }
 
     private fun GenerationQuality.toXaiResolution(): String = when (this) {
-        GenerationQuality.SPEED -> "1k"
+        GenerationQuality.SPEED,
+        GenerationQuality.LOW,
+        GenerationQuality.MEDIUM -> "1k"
         GenerationQuality.QUALITY,
         GenerationQuality.HD,
-        GenerationQuality.ULTRA -> "2k"
+        GenerationQuality.ULTRA,
+        GenerationQuality.HIGH,
+        GenerationQuality.AUTO -> "2k"
     }
 
     private fun com.openai.models.images.ImagesResponse.isRejectedByModeration(): Boolean =

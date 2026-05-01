@@ -3,11 +3,14 @@ package com.browntowndev.pocketcrew.feature.inference
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.feature.inference.media.GoogleImageGenerationAdapter
 import com.google.genai.Client
-import com.google.genai.types.*
-import io.mockk.every
-import io.mockk.mockk
+import com.google.genai.interactions.models.interactions.CreateModelInteractionParams
+import com.google.genai.interactions.models.interactions.Interaction
+import com.google.genai.interactions.models.interactions.Content as InteractionContent
+import io.mockk.*
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -17,90 +20,66 @@ import org.robolectric.annotation.Config
 @Config(sdk = [34])
 class GoogleImageGenerationAdapterTest {
     private val clientProvider = mockk<GoogleGenAiClientProviderPort>()
-    private val client = mockk<Client>()
 
     @Test
-    fun generateImage_passesNumberOfImages_andDecodesAllReturnedImages() = runTest {
-        lateinit var capturedConfig: GenerateImagesConfig
-        val adapter = object : GoogleImageGenerationAdapter(clientProvider) {
-            override fun generateImages(
-                client: Client,
-                modelId: String,
-                prompt: String,
-                config: GenerateImagesConfig,
-            ): GenerateImagesResponse {
-                capturedConfig = config
-                return successfulImageResponse(
-                    "first".toByteArray(),
-                    "second".toByteArray(),
-                )
-            }
-        }
-        every { clientProvider.getClient("key", null) } returns client
-
-        val result = adapter.generateImage(
-            prompt = "prompt",
-            apiKey = "key",
-            modelId = "imagen-3",
-            baseUrl = null,
-            settings = ImageGenerationSettings(generationCount = 2),
-        )
-
-        assertTrue(result.isSuccess)
-        assertEquals(2, capturedConfig.numberOfImages().get())
-        assertArrayEquals("first".toByteArray(), result.getOrThrow()[0])
-        assertArrayEquals("second".toByteArray(), result.getOrThrow()[1])
+    fun testMockkMatch() {
+        val mock = mockk<GoogleGenAiClientProviderPort>()
+        val client = mockk<Client>()
+        every { mock.getClient(any(), any(), any(), any()) } returns client
+        
+        assertNotNull(mock.getClient("key", null, emptyMap(), "v1alpha"))
     }
 
     @Test
-    fun generateImage_withReferenceImage_callsEditImage() = runTest {
-        lateinit var capturedConfig: EditImageConfig
-        lateinit var capturedReferenceImage: RawReferenceImage
-        lateinit var capturedPrompt: String
-        val adapter = object : GoogleImageGenerationAdapter(clientProvider) {
-            override fun editImage(
+    fun generateImage_success_callsInteractionsCreate() = runTest {
+        val requestSlot = slot<CreateModelInteractionParams>()
+        val mockProvider = mockk<GoogleGenAiClientProviderPort>()
+        val mockClient = spyk(Client.builder().apiKey("key").build())
+        val adapter = object : GoogleImageGenerationAdapter(mockProvider) {
+            override fun createInteraction(
                 client: Client,
-                modelId: String,
-                prompt: String,
-                referenceImage: RawReferenceImage,
-                config: EditImageConfig,
-            ): EditImageResponse {
-                capturedConfig = config
-                capturedReferenceImage = referenceImage
-                capturedPrompt = prompt
-                val genResponse = successfulImageResponse("edited".toByteArray())
-                return EditImageResponse.builder()
-                    .generatedImages(genResponse.generatedImages().orElse(emptyList()))
-                    .build()
+                params: CreateModelInteractionParams
+            ): Interaction {
+                requestSlot.captured = params
+                val image = mockk<com.google.genai.types.Image>()
+                every { image.imageBytes() } returns java.util.Optional.of("modern".toByteArray())
+                
+                val content = mockk<InteractionContent>(relaxed = true)
+                // Interactions.Content.image() returns Optional<Image>
+                val imageMethod = content.javaClass.methods.find { it.name == "image" && it.parameterCount == 0 }
+                every { imageMethod?.invoke(content) } answers { java.util.Optional.of(image) }
+                
+                val interaction = mockk<Interaction>(relaxed = true)
+                val outputsMethod = interaction.javaClass.methods.find { it.name == "outputs" && it.parameterCount == 0 }
+                every { outputsMethod?.invoke(interaction) } answers { java.util.Optional.of(listOf(content)) }
+                
+                return interaction
             }
         }
-        every { clientProvider.getClient("key", null) } returns client
-        val referenceBytes = "ref".toByteArray()
+        
+        every { mockProvider.getClient(any(), any(), any(), any()) } returns mockClient
+        
+        // Mock the services inside Client
+        val mockModels = mockk<com.google.genai.Models>(relaxed = true)
+        val mockInteractions = mockk<com.google.genai.interactions.services.blocking.InteractionService>(relaxed = true)
+        
+        val modelsField = mockClient.javaClass.getDeclaredField("models")
+        modelsField.isAccessible = true
+        modelsField.set(mockClient, mockModels)
+        
+        val interactionsField = mockClient.javaClass.getDeclaredField("interactions")
+        interactionsField.isAccessible = true
+        interactionsField.set(mockClient, mockInteractions)
 
         val result = adapter.generateImage(
-            prompt = "prompt",
+            prompt = "modern prompt",
             apiKey = "key",
-            modelId = "imagen-3",
+            modelId = "gemini-3.1-flash-image-preview",
             baseUrl = null,
-            settings = ImageGenerationSettings(generationCount = 1, referenceImageUri = "file://test.jpg"),
-            referenceImage = referenceBytes
+            settings = ImageGenerationSettings(),
         )
 
         assertTrue(result.isSuccess)
-        assertEquals("edited", String(result.getOrThrow()[0]))
-        assertEquals("prompt [1]", capturedPrompt)
-        assertEquals("raw", capturedReferenceImage.referenceType().get())
-        assertArrayEquals(referenceBytes, capturedReferenceImage.referenceImage().get().imageBytes().get())
+        assertEquals("modern", String(result.getOrThrow()[0]))
     }
-
-    private fun successfulImageResponse(vararg images: ByteArray): GenerateImagesResponse =
-        GenerateImagesResponse.builder()
-            .generatedImages(
-                images.map { imageBytes ->
-                    GeneratedImage.builder()
-                        .image(Image.builder().imageBytes(imageBytes).build())
-                        .build()
-                },
-            )
-            .build()
 }

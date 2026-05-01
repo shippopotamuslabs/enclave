@@ -20,9 +20,6 @@ class OpenAiImageGenerationAdapter @Inject constructor(
     ): Result<List<ByteArray>> = withContext(Dispatchers.IO) {
         runCatching {
             if (referenceImage != null) {
-                // OpenAI DALL-E 2/3 do not natively support Image-to-Image generation using both a reference
-                // image and a text prompt without hallucinatory side-effects (e.g. requiring a fully transparent mask
-                // which forces the model to ignore the reference image). Therefore, we fail fast.
                 throw UnsupportedOperationException("OpenAI does not support image-to-image generation with text prompts.")
             }
 
@@ -34,18 +31,6 @@ class OpenAiImageGenerationAdapter @Inject constructor(
                 ?: 1
             val client = clientProvider.getClient(apiKey, baseUrl)
             
-            if (modelId.equals("dall-e-3", ignoreCase = true) && generationCount > 1) {
-                return@runCatching coroutineScope {
-                    (1..generationCount).map {
-                        async {
-                            val params = createParams(modelId, prompt, visualSettings, generationCount = 1)
-                            val response = client.images().generate(params)
-                            response.decodeImages().single()
-                        }
-                    }.awaitAll()
-                }
-            }
-
             val params = createParams(modelId, prompt, visualSettings, generationCount)
             val response = client.images().generate(params)
             response.decodeImages()
@@ -61,19 +46,21 @@ class OpenAiImageGenerationAdapter @Inject constructor(
         ImageGenerateParams.builder()
                 .model(ImageModel.of(modelId))
                 .prompt(prompt)
-                .responseFormat(ImageGenerateParams.ResponseFormat.B64_JSON)
                 .n(generationCount.toLong())
                 .apply {
                     val size = when (visualSettings.aspectRatio) {
-                        AspectRatio.SIXTEEN_NINE -> ImageGenerateParams.Size._1792X1024
-                        AspectRatio.NINE_SIXTEEN -> ImageGenerateParams.Size._1024X1792
+                        AspectRatio.SIXTEEN_NINE -> ImageGenerateParams.Size.of("1536x1024")
+                        AspectRatio.NINE_SIXTEEN -> ImageGenerateParams.Size.of("1024x1536")
                         else -> ImageGenerateParams.Size._1024X1024
                     }
                     size(size)
                     
                     val quality = when (visualSettings.quality) {
-                        GenerationQuality.HD -> ImageGenerateParams.Quality.HD
-                        else -> ImageGenerateParams.Quality.STANDARD
+                        GenerationQuality.HD, GenerationQuality.HIGH -> ImageGenerateParams.Quality.of("high")
+                        GenerationQuality.LOW -> ImageGenerateParams.Quality.of("low")
+                        GenerationQuality.MEDIUM -> ImageGenerateParams.Quality.of("medium")
+                        GenerationQuality.AUTO -> ImageGenerateParams.Quality.of("auto")
+                        else -> ImageGenerateParams.Quality.of("auto")
                     }
                     quality(quality)
                 }
