@@ -136,6 +136,7 @@ fun InputBar(
 
     UniversalInputBar(
         isExpanded = isExpanded,
+        onExpandToggle = { isExpanded = !isExpanded },
         modifier = modifier.then(
             if (!isExpanded && !isRecordingPhase) {
                 Modifier.clickable { focusRequester.requestFocus() }
@@ -182,9 +183,6 @@ fun InputBar(
                 value = inputText,
                 onValueChange = {
                     onInputChange(it)
-                    if (!isExpanded && (it.contains("\n") || it.length > 40)) {
-                        isExpanded = true
-                    }
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -196,13 +194,13 @@ fun InputBar(
                     lineHeight = 22.sp
                 ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                maxLines = if (isExpanded) Int.MAX_VALUE else 4,
+                maxLines = if (isExpanded) Int.MAX_VALUE else 1,
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Sentences,
                     imeAction = if (isExpanded) ImeAction.Default else ImeAction.Send
                 ),
                 decorationBox = { innerTextField ->
-                    Box(modifier = Modifier.padding(start = 16.dp, top = 10.dp)) {
+                    Box(modifier = Modifier.padding(start = 16.dp, top = 4.dp)) {
                         if (inputText.isEmpty() || isRecordingPhase) {
                             UniversalVoicePromptPlaceholder(
                                 speechState = speechState,
@@ -233,24 +231,23 @@ fun InputBar(
                         }
                     )
                 }
-
-                Spacer(Modifier.weight(1f))
-
+            }
+        },
+        trailingAction = {
+            if (!isRecordingPhase) {
                 // ChatModeUi selector
                 ExposedDropdownMenuBox(
                     expanded = modeExpanded,
                     onExpandedChange = { modeExpanded = it }
                 ) {
-                    IconButton(
+                    StandardTrailingAction(
+                        painter = painterResource(selectedMode.iconRes),
                         onClick = { /* Toggle handled via onExpandedChange */ },
                         modifier = Modifier.menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                    ) {
-                        Icon(
-                            painter = painterResource(selectedMode.iconRes),
-                            contentDescription = selectedMode.getDisplayName(context),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        description = selectedMode.getDisplayName(context)
+                    )
                     ExposedDropdownMenu(
                         expanded = modeExpanded,
                         onDismissRequest = { modeExpanded = false },
@@ -273,9 +270,9 @@ fun InputBar(
                         }
                     }
                 }
+                Spacer(Modifier.width(8.dp))
             }
-        },
-        trailingAction = {
+
             UniversalVoiceTrailingAction(
                 inputText = inputText,
                 speechState = speechState,

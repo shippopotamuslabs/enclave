@@ -2,6 +2,9 @@ package com.browntowndev.pocketcrew.core.ui.component
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -13,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -27,10 +31,13 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
@@ -58,8 +65,17 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 /**
  * A universal container for input bars (Chat, Studio, etc.).
@@ -69,14 +85,20 @@ import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 @Composable
 fun UniversalInputBar(
     modifier: Modifier = Modifier,
-    backgroundColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    backgroundColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     shape: Shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
     attachmentContent: (@Composable ColumnScope.() -> Unit)? = null,
     inputContent: @Composable ColumnScope.() -> Unit,
     actionContent: (@Composable RowScope.() -> Unit)? = null,
     trailingAction: @Composable (RowScope.() -> Unit)? = null,
     isExpanded: Boolean = false,
+    onExpandToggle: (() -> Unit)? = null,
+    maxHeightCollapsed: androidx.compose.ui.unit.Dp = 200.dp,
+    hazeState: HazeState? = null,
+    hazeAlpha: Float = 0.4f,
 ) {
+    val focusManager = LocalFocusManager.current
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = Color.Transparent,
@@ -86,71 +108,164 @@ fun UniversalInputBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(shape)
-                .background(backgroundColor)
+                .then(
+                    if (hazeState != null) {
+                        Modifier.hazeEffect(state = hazeState) {
+                            blurRadius = 24.dp
+                            tints = listOf(HazeTint(Color.Black.copy(alpha = hazeAlpha)))
+                            noiseFactor = 0.15f
+                        }
+                    } else Modifier.background(backgroundColor)
+                )
                 .navigationBarsPadding()
-                .then(if (isExpanded) Modifier.fillMaxHeight(0.9f) else Modifier.heightIn(min = 56.dp))
-                .padding(bottom = 12.dp, top = 12.dp, start = 16.dp, end = 16.dp)
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = if (isExpanded) Arrangement.SpaceBetween else Arrangement.spacedBy(6.dp)
-            ) {
-                if (attachmentContent != null) {
-                    attachmentContent()
-                }
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val contentMaxH = maxHeight
+                val density = LocalDensity.current
+                var attachmentHeight by remember { mutableStateOf(0.dp) }
+                var inputHeight by remember { mutableStateOf(0.dp) }
+                val innerTopHeight by remember { derivedStateOf { attachmentHeight + inputHeight } }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top
+                
+                val expandFraction by animateFloatAsState(
+                    targetValue = if (isExpanded) 1f else 0f,
+                    animationSpec = spring(
+                        dampingRatio = 1.0f,
+                        stiffness = 400.0f
+                    ),
+                    label = "expandFraction"
+                )
+                
+                // Calculate the true collapsed height based on the current unconstrained inner content
+                val unconstrainedHeight = 12.dp + innerTopHeight + 56.dp
+                val trueCollapsedHeight = unconstrainedHeight.coerceIn(112.dp, maxHeightCollapsed)
+                val currentHeight = lerp(trueCollapsedHeight, contentMaxH * 0.7f, expandFraction)
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            when (expandFraction) {
+                                0f -> Modifier.heightIn(min = 112.dp, max = maxHeightCollapsed)
+                                1f -> Modifier.fillMaxHeight(0.7f) // Reduced from 0.9f to avoid hitting TopAppBar
+                                else -> Modifier.height(currentHeight)
+                            }
+                        )
+                        .padding(start = 16.dp, end = 16.dp)
                 ) {
+                    // TOP CONTENT (Pinned attachments + Scrollable input)
                     Column(
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp, bottom = 56.dp) // Reserves space for the bottom row (48dp height + 8dp padding)
+                            .then(if (isExpanded || expandFraction > 0f) Modifier.fillMaxHeight() else Modifier.wrapContentHeight()),
+                        verticalArrangement = Arrangement.Top
                     ) {
-                        inputContent()
-                    }
+                        // 1. Pinned Attachment Row
+                        if (attachmentContent != null) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onSizeChanged { attachmentHeight = with(density) { it.height.toDp() } }
+                            ) {
+                                attachmentContent()
+                            }
+                        } else {
+                            attachmentHeight = 0.dp
+                        }
 
-                    if (trailingAction != null) {
-                        Spacer(Modifier.width(48.dp))
-                    }
-                }
-
-                var lastActionContent by remember { mutableStateOf(actionContent) }
-                if (actionContent != null) {
-                    lastActionContent = actionContent
-                }
-
-                AnimatedVisibility(
-                    visible = actionContent != null,
-                    enter = expandVertically() + fadeIn(),
-                    exit = shrinkVertically() + fadeOut()
-                ) {
-                    lastActionContent?.let { content ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
+                        // 2. Scrollable Input Area
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f, fill = false)
+                                .verticalScroll(rememberScrollState())
                         ) {
-                            content()
+                            Box(modifier = Modifier.onSizeChanged { inputHeight = with(density) { it.height.toDp() } }) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.Top
+                                ) {
+                                    Column(
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        inputContent()
+                                    }
 
-                            if (trailingAction != null) {
-                                Spacer(Modifier.width(48.dp))
+                                    if (onExpandToggle != null) {
+                                        // Sufficient space for the top-right chevron
+                                        Spacer(Modifier.width(40.dp))
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            }
 
-            if (trailingAction != null) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .heightIn(min = 48.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row {
-                        trailingAction()
+                    // BOTTOM LEFT: Action Content (Attach, Mode, etc)
+                    var lastActionContent by remember { mutableStateOf(actionContent) }
+                    if (actionContent != null) {
+                        lastActionContent = actionContent
+                    }
+
+                    AnimatedVisibility(
+                        visible = actionContent != null,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                        modifier = Modifier.align(Alignment.BottomStart)
+                    ) {
+                        lastActionContent?.let { content ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 8.dp)
+                                    .heightIn(min = 48.dp),
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                content()
+                                
+                                // Ensure the trailing area is reserved in the action row too
+                                if (trailingAction != null) {
+                                    Spacer(Modifier.width(104.dp))
+                                }
+                            }
+                        }
+                    }
+
+                    // Top Right: Expand/Collapse Toggle
+                    if (onExpandToggle != null) {
+                        IconButton(
+                            onClick = {
+                                if (isExpanded) focusManager.clearFocus()
+                                onExpandToggle()
+                            },
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(top = 4.dp)
+                                .size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = if (isExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // Bottom Right: Trailing Container (Mic, Send)
+                    if (trailingAction != null) {
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(bottom = 8.dp)
+                                .heightIn(min = 48.dp),
+                            verticalAlignment = Alignment.Bottom,
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            this@Row.trailingAction()
+                        }
                     }
                 }
-            }
+            } // End BoxWithConstraints
         }
     }
 }
@@ -173,13 +288,44 @@ fun StandardTrailingAction(
 ) {
     Box(
         modifier = modifier
-            .size(40.dp)
+            .size(48.dp)
             .background(if (enabled) containerColor else disabledContainerColor, shape = shape)
             .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
+            contentDescription = description,
+            tint = if (enabled) contentColor else disabledContentColor
+        )
+    }
+}
+
+/**
+ * A standardized circular action button for use in [UniversalInputBar]'s trailingAction slot.
+ */
+@Composable
+fun StandardTrailingAction(
+    painter: androidx.compose.ui.graphics.painter.Painter,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    containerColor: Color = MaterialTheme.colorScheme.primary,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimary,
+    disabledContainerColor: Color = MaterialTheme.colorScheme.surfaceVariant,
+    disabledContentColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
+    shape: Shape = CircleShape,
+    description: String? = null,
+) {
+    Box(
+        modifier = modifier
+            .size(48.dp)
+            .background(if (enabled) containerColor else disabledContainerColor, shape = shape)
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = painter,
             contentDescription = description,
             tint = if (enabled) contentColor else disabledContentColor
         )
