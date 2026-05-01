@@ -139,6 +139,8 @@ data class MediaProviderEditorUiState(
     val isEditing: Boolean = false,
     val assetDraft: MediaProviderAssetUi? = null,
     val selectedReusableCredential: ReusableApiCredentialUi? = null,
+    val isDiscoveringApiModels: Boolean = false,
+    val discoveredApiModels: List<DiscoveredApiModel> = emptyList(),
 )
 
 @Immutable

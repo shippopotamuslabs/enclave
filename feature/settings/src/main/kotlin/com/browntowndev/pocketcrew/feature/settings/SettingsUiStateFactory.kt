@@ -70,6 +70,8 @@ internal data class MediaProvidersTransientState(
     val assetDraft: MediaProviderAssetUi? = null,
     val selectedReusableApiCredentialAlias: String? = null,
     val selectedReusableApiCredentialName: String? = null,
+    val isDiscoveringApiModels: Boolean = false,
+    val discoveredApiModels: List<DiscoveredApiModel> = emptyList(),
 )
 
 internal data class AssignmentDialogTransientState(
@@ -333,6 +335,8 @@ class SettingsUiStateFactory @Inject constructor(
                 isEditing = mediaState.selectedAsset != null || mediaState.assetDraft != null,
                 assetDraft = mediaState.assetDraft,
                 selectedReusableCredential = selectedMediaReusableCredential,
+                isDiscoveringApiModels = mediaState.isDiscoveringApiModels,
+                discoveredApiModels = mediaState.discoveredApiModels,
             ),
             searchSkillEditor = SearchSkillEditorUiState(
                 isEditing = searchSkillState.isEditing,
