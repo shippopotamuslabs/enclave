@@ -2,9 +2,12 @@ package com.browntowndev.pocketcrew.feature.studio
 
 import app.cash.turbine.test
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
+import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -21,6 +24,7 @@ import org.junit.jupiter.api.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class GalleryViewModelTest {
     private val repository = FakeStudioRepository()
+    private val shareMediaPort = mockk<ShareMediaPort>(relaxed = true)
 
     @BeforeEach
     fun setup() {
@@ -40,7 +44,7 @@ class GalleryViewModelTest {
                 studioMediaAsset(id = "asset-2"),
             ),
         )
-        val viewModel = GalleryViewModel(repository)
+        val viewModel = GalleryViewModel(repository, shareMediaPort)
 
         viewModel.uiState.test {
             val state = awaitItem()
@@ -55,7 +59,7 @@ class GalleryViewModelTest {
 
     @Test
     fun `add album trims name and appends empty album`() = runTest {
-        val viewModel = GalleryViewModel(repository)
+        val viewModel = GalleryViewModel(repository, shareMediaPort)
 
         viewModel.uiState.test {
             assertEquals(listOf("Default Album"), awaitItem().albums.map { it.name })
@@ -70,7 +74,7 @@ class GalleryViewModelTest {
 
     @Test
     fun `add album ignores blank names`() = runTest {
-        val viewModel = GalleryViewModel(repository)
+        val viewModel = GalleryViewModel(repository, shareMediaPort)
 
         viewModel.uiState.test {
             val initialState = awaitItem()
@@ -83,6 +87,38 @@ class GalleryViewModelTest {
     }
 
     @Test
+    fun `rename album updates album name`() = runTest {
+        val viewModel = GalleryViewModel(repository, shareMediaPort)
+        viewModel.addAlbum("Old Name")
+        
+        viewModel.uiState.test {
+            val stateWithAlbum = awaitItem()
+            val albumId = stateWithAlbum.albums.last().id
+            
+            viewModel.renameAlbum(albumId, "New Name")
+            
+            val updatedState = awaitItem()
+            assertEquals("New Name", updatedState.albums.last().name)
+        }
+    }
+
+    @Test
+    fun `rename album ignores blank names`() = runTest {
+        val viewModel = GalleryViewModel(repository, shareMediaPort)
+        viewModel.addAlbum("Old Name")
+        
+        viewModel.uiState.test {
+            val stateWithAlbum = awaitItem()
+            val albumId = stateWithAlbum.albums.last().id
+            
+            viewModel.renameAlbum(albumId, "   ")
+            
+            expectNoEvents()
+            assertEquals("Old Name", stateWithAlbum.albums.last().name)
+        }
+    }
+
+    @Test
     fun `deleteMedia removes specified items`() = runTest {
         repository.emitMedia(
             listOf(
@@ -91,7 +127,7 @@ class GalleryViewModelTest {
                 studioMediaAsset(id = "asset-3"),
             )
         )
-        val viewModel = GalleryViewModel(repository)
+        val viewModel = GalleryViewModel(repository, shareMediaPort)
 
         viewModel.uiState.test {
             assertEquals(3, awaitItem().albums.single().itemCount)
@@ -105,6 +141,52 @@ class GalleryViewModelTest {
     }
 
     @Test
+    fun `deleteAlbums removes specified albums`() = runTest {
+        val viewModel = GalleryViewModel(repository, shareMediaPort)
+        viewModel.addAlbum("Album 1")
+        viewModel.addAlbum("Album 2")
+        viewModel.addAlbum("Album 3")
+        
+        viewModel.uiState.test {
+            val initialState = awaitItem()
+            val album1Id = initialState.albums.first { it.name == "Album 1" }.id
+            val album3Id = initialState.albums.first { it.name == "Album 3" }.id
+            
+            viewModel.deleteAlbums(setOf(album1Id, album3Id))
+            
+            val nextState = awaitItem()
+            val remainingAlbumNames = nextState.albums.map { it.name }
+            assertEquals(listOf("Default Album", "Album 2"), remainingAlbumNames)
+        }
+    }
+
+    @Test
+    fun `shareMedia passes correct URIs to ShareMediaPort`() = runTest {
+        repository.emitMedia(listOf(studioMediaAsset(id = "asset-1")))
+        val viewModel = GalleryViewModel(repository, shareMediaPort)
+        
+        viewModel.uiState.test {
+            awaitItem() // Initial
+            viewModel.shareMedia(setOf("asset-1"))
+            
+            verify { shareMediaPort.shareMedia(listOf("content://asset-1"), "*/*") }
+        }
+    }
+
+    @Test
+    fun `shareSingleMedia passes correct URI and MIME type`() = runTest {
+        repository.emitMedia(listOf(studioMediaAsset(id = "asset-1")))
+        val viewModel = GalleryViewModel(repository, shareMediaPort)
+        
+        viewModel.uiState.test {
+            awaitItem() // Initial
+            viewModel.shareSingleMedia("asset-1")
+            
+            verify { shareMediaPort.shareMedia(listOf("content://asset-1"), "image/*") }
+        }
+    }
+
+    @Test
     fun `moveMediaToAlbum moves items to specified album`() = runTest {
         repository.emitMedia(
             listOf(
@@ -112,7 +194,7 @@ class GalleryViewModelTest {
                 studioMediaAsset(id = "asset-2"),
             )
         )
-        val viewModel = GalleryViewModel(repository)
+        val viewModel = GalleryViewModel(repository, shareMediaPort)
         viewModel.addAlbum("Custom Album")
 
         viewModel.uiState.test {
@@ -140,7 +222,7 @@ class GalleryViewModelTest {
                 studioMediaAsset(id = "asset-1"),
             )
         )
-        val viewModel = GalleryViewModel(repository)
+        val viewModel = GalleryViewModel(repository, shareMediaPort)
 
         viewModel.uiState.test {
             val initialState = awaitItem()
@@ -198,6 +280,16 @@ private class FakeStudioRepository : StudioRepositoryPort {
         val id = nextAlbumId++.toString()
         albums.value = albums.value + StudioAlbumAsset(id = id, name = name)
         return id
+    }
+
+    override suspend fun renameAlbum(id: String, name: String) {
+        albums.value = albums.value.map {
+            if (it.id == id) it.copy(name = name) else it
+        }
+    }
+
+    override suspend fun deleteAlbum(id: String) {
+        albums.value = albums.value.filter { it.id != id }
     }
 
     override suspend fun moveMediaToAlbum(mediaIds: List<String>, albumId: String) {

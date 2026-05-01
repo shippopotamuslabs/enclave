@@ -25,7 +25,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -34,12 +33,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.browntowndev.pocketcrew.core.ui.component.FullscreenMediaViewer
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.usecase.media.SaveMediaToGalleryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
-import me.saket.telephoto.zoomable.coil3.ZoomableAsyncImage
-import me.saket.telephoto.zoomable.rememberZoomableImageState
 import javax.inject.Inject
 
 sealed class StudioDetailUiState {
@@ -64,7 +62,8 @@ fun StudioDetailScreen(
     assets: List<StudioMediaUi>,
     onNavigateBack: () -> Unit,
     onEditMedia: (String) -> Unit,
-    onAnimateMedia: (String) -> Unit,
+    onAnimateMedia: (String, Boolean) -> Unit,
+    onShareMedia: (String) -> Unit,
     onDeleteMedia: (String) -> Unit,
     videoGenerationState: VideoGenerationState = VideoGenerationState.Idle,
     viewModel: StudioDetailViewModel = hiltViewModel()
@@ -86,10 +85,13 @@ fun StudioDetailScreen(
                     onEditMedia(asset.id)
                     onNavigateBack()
                 },
-                onAnimate = { asset ->
-                    onAnimateMedia(asset.id)
+                onAnimate = { asset, autoAnimate ->
+                    onAnimateMedia(asset.id, autoAnimate)
                 },
                 onSave = viewModel::saveToGallery,
+                onShare = { asset ->
+                    onShareMedia(asset.id)
+                },
                 onDelete = { asset ->
                     onDeleteMedia(asset.id)
                     onNavigateBack()
@@ -141,8 +143,9 @@ private fun DetailContent(
     initialIndex: Int,
     videoGenerationState: VideoGenerationState,
     onEdit: (StudioMediaUi) -> Unit,
-    onAnimate: (StudioMediaUi) -> Unit,
+    onAnimate: (StudioMediaUi, Boolean) -> Unit,
     onSave: (StudioMediaUi) -> Unit,
+    onShare: (StudioMediaUi) -> Unit,
     onDelete: (StudioMediaUi) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -165,8 +168,9 @@ private fun DetailContent(
             DetailActionsOverlay(
                 asset = asset,
                 onEdit = { onEdit(asset) },
-                onAnimate = { onAnimate(asset) },
+                onAnimate = { autoAnimate -> onAnimate(asset, autoAnimate) },
                 onSave = { onSave(asset) },
+                onShare = { onShare(asset) },
                 onDelete = { onDelete(asset) },
                 modifier = Modifier.align(Alignment.BottomCenter)
             )
@@ -187,22 +191,18 @@ private fun DetailMedia(
         videoGenerationState.sourceAssetId == asset.id
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (generatedVideoUri != null || asset.mediaType == MediaCapability.VIDEO) {
-            StudioVideoPlayer(
-                localUri = generatedVideoUri ?: asset.localUri,
-                contentDescription = "Generated video",
-                modifier = Modifier.fillMaxSize(),
-            )
-        } else {
-            val state = rememberZoomableImageState()
-            ZoomableAsyncImage(
-                model = asset.localUri,
-                contentDescription = asset.prompt,
-                state = state,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
-            )
-        }
+        FullscreenMediaViewer(
+            localUri = generatedVideoUri ?: asset.localUri,
+            mediaType = if (generatedVideoUri != null || asset.mediaType == MediaCapability.VIDEO) {
+                MediaCapability.VIDEO
+            } else if (asset.mediaType == MediaCapability.MUSIC) {
+                MediaCapability.MUSIC
+            } else {
+                MediaCapability.IMAGE
+            },
+            contentDescription = asset.prompt,
+            modifier = Modifier.fillMaxSize(),
+        )
 
         if (isLoading) {
             Box(
@@ -222,8 +222,9 @@ private fun DetailMedia(
 private fun DetailActionsOverlay(
     asset: StudioMediaUi,
     onEdit: () -> Unit,
-    onAnimate: () -> Unit,
+    onAnimate: (Boolean) -> Unit,
     onSave: () -> Unit,
+    onShare: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -252,6 +253,7 @@ private fun DetailActionsOverlay(
             onEdit = onEdit,
             onAnimate = onAnimate,
             onSave = onSave,
+            onShare = onShare,
             onDelete = onDelete
         )
 
@@ -267,8 +269,9 @@ private fun StudioDetailImagePreview() {
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Idle,
         onEdit = {},
-        onAnimate = {},
+        onAnimate = { _, _ -> },
         onSave = {},
+        onShare = {},
         onDelete = {},
     )
 }
@@ -281,8 +284,9 @@ private fun StudioDetailLoadingPreview() {
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Loading("asset-1"),
         onEdit = {},
-        onAnimate = {},
+        onAnimate = { _, _ -> },
         onSave = {},
+        onShare = {},
         onDelete = {},
     )
 }
@@ -295,8 +299,9 @@ private fun StudioDetailVideoPreview() {
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Success("asset-1", "file:///preview.mp4"),
         onEdit = {},
-        onAnimate = {},
+        onAnimate = { _, _ -> },
         onSave = {},
+        onShare = {},
         onDelete = {},
     )
 }
@@ -314,8 +319,9 @@ private fun previewAsset(): StudioMediaUi =
 private fun DetailActionRow(
     mediaType: MediaCapability,
     onEdit: () -> Unit,
-    onAnimate: () -> Unit,
+    onAnimate: (Boolean) -> Unit,
     onSave: () -> Unit,
+    onShare: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -326,9 +332,11 @@ private fun DetailActionRow(
     ) {
         ActionItem(Icons.Default.Edit, "Edit", onEdit)
         if (mediaType == MediaCapability.IMAGE) {
-            ActionItem(Icons.Default.Movie, "Animate", onAnimate)
+            ActionItem(Icons.Default.Movie, "Animate", onClick = { onAnimate(false) })
+            ActionItem(Icons.Default.FastForward, "Quick Animate", onClick = { onAnimate(true) })
         }
         ActionItem(Icons.Default.Download, "Save", onSave)
+        ActionItem(Icons.Default.Share, "Share", onShare)
         ActionItem(Icons.Default.Delete, "Delete", onDelete, isDestructive = true)
     }
 }

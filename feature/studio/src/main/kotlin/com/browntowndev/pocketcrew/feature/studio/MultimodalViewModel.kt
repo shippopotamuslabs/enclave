@@ -12,6 +12,8 @@ import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
+import com.browntowndev.pocketcrew.domain.usecase.media.GenerateMusicUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.GenerateVideoUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
@@ -33,6 +35,8 @@ class MultimodalViewModel @Inject constructor(
     private val imageGenerationPort: ImageGenerationPort,
     private val videoGenerationPort: VideoGenerationPort,
     private val generateVideoUseCase: GenerateVideoUseCase,
+    private val generateMusicUseCase: GenerateMusicUseCase,
+    private val shareMediaPort: ShareMediaPort,
     private val studioRepository: StudioRepositoryPort,
     private val defaultModelRepository: DefaultModelRepositoryPort,
     private val mediaProviderRepository: MediaProviderRepositoryPort,
@@ -342,6 +346,28 @@ class MultimodalViewModel @Inject constructor(
         _selectedMediaItemIds.value = emptySet()
     }
 
+    fun shareMedia(assetIds: Set<String>) {
+        val uris = _sessionMedia.value
+            .filter { it.id in assetIds }
+            .map { it.localUri }
+        
+        if (uris.isNotEmpty()) {
+            shareMediaPort.shareMedia(uris, "*/*")
+        }
+    }
+
+    fun shareSingleMedia(assetId: String) {
+        val asset = _sessionMedia.value.find { it.id == assetId }
+        if (asset != null) {
+            val mimeType = when (asset.mediaType) {
+                MediaCapability.IMAGE -> "image/*"
+                MediaCapability.VIDEO -> "video/*"
+                MediaCapability.MUSIC -> "audio/*"
+            }
+            shareMediaPort.shareMedia(listOf(asset.localUri), mimeType)
+        }
+    }
+
     fun onSaveSelectedMediaToAlbum(albumId: String) {
         val selectedIds = _selectedMediaItemIds.value
         if (selectedIds.isEmpty()) return
@@ -384,16 +410,21 @@ class MultimodalViewModel @Inject constructor(
                 studioRepository.getMediaById(assetId)
             } ?: return@launch
 
-            _mediaType.value = MediaCapability.IMAGE
+            val mediaCapability = MediaCapability.valueOf(asset.mediaType)
+            _mediaType.value = mediaCapability
             _prompt.value = asset.prompt
-            _settings.value = ImageGenerationSettings(referenceImageUri = asset.localUri)
+            _settings.value = when (mediaCapability) {
+                MediaCapability.IMAGE -> ImageGenerationSettings(referenceImageUri = asset.localUri)
+                MediaCapability.VIDEO -> VideoGenerationSettings(referenceImageUri = asset.localUri)
+                MediaCapability.MUSIC -> MusicGenerationSettings()
+            }
             _selectedTemplateId.value = null
             stopGeneration()
             consumedScrollAnchors.clear()
         }
     }
 
-    fun onAnimateMedia(assetId: String) {
+    fun onAnimateMedia(assetId: String, autoAnimate: Boolean = false) {
         viewModelScope.launch {
             val sessionItem = _sessionMedia.value.find { it.id == assetId }
             val asset = if (sessionItem != null) {
@@ -413,8 +444,10 @@ class MultimodalViewModel @Inject constructor(
             _prompt.value = asset.prompt
             _settings.value = VideoGenerationSettings(referenceImageUri = asset.localUri)
             stopGeneration()
-            startDetailVideoGeneration(asset)
             consumedScrollAnchors.clear()
+            if (autoAnimate) {
+                startDetailVideoGeneration(asset)
+            }
         }
     }
 
@@ -531,7 +564,7 @@ class MultimodalViewModel @Inject constructor(
                         generateVideoUseCase(finalPrompt, currentSettings).map { listOf(it) }
                     }
                     is MusicGenerationSettings -> {
-                        Result.failure(Exception("Music generation not yet implemented"))
+                        generateMusicUseCase(finalPrompt, currentSettings).map { listOf(it) }
                     }
                 }
 
@@ -569,7 +602,7 @@ class MultimodalViewModel @Inject constructor(
             _error.value = null
             _videoGenerationState.value = VideoGenerationState.Loading(asset.id)
             try {
-                val settings = VideoGenerationSettings(referenceImageUri = asset.localUri)
+                val settings = (_settings.value as? VideoGenerationSettings) ?: VideoGenerationSettings(referenceImageUri = asset.localUri)
                 generateVideoUseCase(asset.prompt, settings)
                     .onSuccess { bytes ->
                         val localUri = studioRepository.cacheEphemeralMedia(bytes, MediaCapability.VIDEO.name)

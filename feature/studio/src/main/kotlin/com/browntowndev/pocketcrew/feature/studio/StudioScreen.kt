@@ -1,4 +1,7 @@
+@file:OptIn(ExperimentalStdlibApi::class)
 package com.browntowndev.pocketcrew.feature.studio
+
+import kotlin.ExperimentalStdlibApi
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,6 +52,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.text.font.FontWeight
+import com.browntowndev.pocketcrew.core.ui.theme.PurpleLightPrimary
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -63,12 +68,15 @@ import com.browntowndev.pocketcrew.core.ui.component.StandardTrailingAction
 import com.browntowndev.pocketcrew.core.ui.component.UniversalInputBar
 import com.browntowndev.pocketcrew.core.ui.component.UniversalVoicePromptPlaceholder
 import com.browntowndev.pocketcrew.core.ui.component.UniversalVoiceTrailingAction
+import com.browntowndev.pocketcrew.core.ui.component.VideoPlayer
 import com.browntowndev.pocketcrew.core.ui.theme.GoldVariant
 import com.browntowndev.pocketcrew.core.ui.theme.PeachAccent
 import com.browntowndev.pocketcrew.core.ui.theme.PurpleLightPrimary
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.VisualGenerationSettings
+import com.browntowndev.pocketcrew.core.ui.component.dialog.AddAlbumDialog
+import com.browntowndev.pocketcrew.core.ui.component.sheet.MoveToAlbumBottomSheet
 import com.browntowndev.pocketcrew.feature.studio.components.PromptHeaderDivider
 import com.browntowndev.pocketcrew.feature.studio.components.StudioOptionsBottomSheet
 import dev.chrisbanes.haze.HazeState
@@ -230,6 +238,7 @@ fun StudioScreen(
                 selectedCount = uiState.selectedMediaItemIds.size,
                 onClearSelection = viewModel::clearMediaSelection,
                 onSaveClick = viewModel::onToggleSaveBottomSheet,
+                onShareClick = { viewModel.shareMedia(uiState.selectedMediaItemIds) },
                 onNavigateToHistory = onNavigateToHistory,
                 onNavigateToGallery = onNavigateToGallery,
                 hazeState = hazeState,
@@ -309,8 +318,8 @@ fun StudioScreen(
     }
 
     if (uiState.isSaveBottomSheetOpen) {
-        MoveBottomSheet(
-            albums = uiState.albums,
+        MoveToAlbumBottomSheet(
+            albums = uiState.albums.map { it.toAlbumSelectionItem() },
             onDismiss = viewModel::onToggleSaveBottomSheet,
             onMoveToAlbum = viewModel::onSaveSelectedMediaToAlbum,
             onAddAlbum = viewModel::onAddAlbum
@@ -324,6 +333,7 @@ private fun StudioTopBar(
     selectedCount: Int,
     onClearSelection: () -> Unit,
     onSaveClick: () -> Unit,
+    onShareClick: () -> Unit,
     onNavigateToHistory: () -> Unit,
     onNavigateToGallery: () -> Unit,
     hazeState: HazeState,
@@ -369,6 +379,12 @@ private fun StudioTopBar(
         },
         actions = {
             if (selectedCount > 0) {
+                IconButton(onClick = onShareClick) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Share selected items"
+                    )
+                }
                 IconButton(onClick = onSaveClick) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
@@ -1004,7 +1020,7 @@ private fun GalleryItem(
             .padding(padding)
     ) {
         if (asset.mediaType == MediaCapability.VIDEO) {
-            StudioVideoPlayer(
+            VideoPlayer(
                 localUri = asset.localUri,
                 contentDescription = asset.prompt,
                 autoPlay = true,
@@ -1014,6 +1030,25 @@ private fun GalleryItem(
                     .fillMaxSize()
                     .clip(RoundedCornerShape(cornerRadius)),
             )
+        } else if (asset.mediaType == MediaCapability.MUSIC) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(cornerRadius))
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf<Color>(PurpleLightPrimary.copy(alpha = 0.3f), Color.Black)
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.MusicNote,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
         } else {
             AsyncImage(
                 model = asset.localUri,
@@ -1075,190 +1110,6 @@ private fun GalleryItem(
     }
 }
 
-@Composable
-private fun AddAlbumDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var albumName by remember { mutableStateOf("") }
-    val trimmedName = albumName.trim()
-
-    AlertDialog(
-        modifier = modifier,
-        onDismissRequest = onDismiss,
-        title = { Text(text = "New Album") },
-        text = {
-            OutlinedTextField(
-                value = albumName,
-                onValueChange = { albumName = it },
-                label = { Text(text = "Album name") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(trimmedName) },
-                enabled = trimmedName.isNotEmpty(),
-            ) {
-                Text(text = "Confirm")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(text = "Cancel")
-            }
-        },
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MoveBottomSheet(
-    albums: List<GalleryAlbumUi>,
-    onDismiss: () -> Unit,
-    onMoveToAlbum: (String) -> Unit,
-    onAddAlbum: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var isAddingNewAlbum by remember { mutableStateOf(false) }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        modifier = modifier
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 32.dp)
-        ) {
-            Text(
-                text = "Save to Album",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(16.dp)
-            )
-
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(bottom = 16.dp)
-            ) {
-                item {
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        onClick = { isAddingNewAlbum = true }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Create New Album",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
-                }
-                
-                if (albums.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = "Existing Albums",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 8.dp)
-                        )
-                    }
-                }
-
-                items(
-                    items = albums,
-                    key = { album -> album.id }
-                ) { album ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onMoveToAlbum(album.id) }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val imageSize = 72.dp
-                        val coverUri = album.coverItems.firstOrNull()?.localUri
-                        if (coverUri != null) {
-                            AsyncImage(
-                                model = coverUri,
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .size(imageSize)
-                                    .clip(RoundedCornerShape(12.dp)),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(imageSize)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PhotoLibrary,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                            }
-                        }
-                        
-                        Spacer(modifier = Modifier.width(20.dp))
-                        
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = album.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${album.itemCount} items",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if (isAddingNewAlbum) {
-        AddAlbumDialog(
-            onDismiss = { isAddingNewAlbum = false },
-            onConfirm = { name ->
-                onAddAlbum(name)
-                isAddingNewAlbum = false
-            }
-        )
-    }
-}
 
 @Composable
 private fun GeneratingPlaceholderItem(

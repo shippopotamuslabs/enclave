@@ -22,4 +22,7 @@ interface StudioMediaDao {
 
     @Query("UPDATE studio_gallery SET albumId = :albumId WHERE id IN (:mediaIds)")
     suspend fun updateMediaAlbum(mediaIds: List<Long>, albumId: Long)
+
+    @Query("UPDATE studio_gallery SET albumId = NULL WHERE albumId = :albumId")
+    suspend fun reassignMediaToDefault(albumId: Long)
 }

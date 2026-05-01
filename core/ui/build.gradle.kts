@@ -52,6 +52,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.text.google.fonts)
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.telephoto.zoomable.image.coil3)
+    implementation(libs.coil.compose)
 
     // Lifecycle
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -63,6 +65,10 @@ dependencies {
     // Markdown rendering
     implementation(libs.markdown.parser)
     implementation(libs.markdown.renderer)
+
+    // Media3
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
 
     // Testing
     testImplementation(libs.junit.jupiter)

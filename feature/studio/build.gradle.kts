@@ -83,4 +83,5 @@ dependencies {
     testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(project(":core:testing"))
     testImplementation(libs.turbine)
+    testRuntimeOnly(libs.junit.vintage.engine)
 }

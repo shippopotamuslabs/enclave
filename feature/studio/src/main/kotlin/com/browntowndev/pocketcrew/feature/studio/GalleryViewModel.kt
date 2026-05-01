@@ -2,6 +2,8 @@ package com.browntowndev.pocketcrew.feature.studio
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,6 +20,7 @@ import javax.inject.Inject
 @HiltViewModel
 class GalleryViewModel @Inject constructor(
     private val studioRepository: StudioRepositoryPort,
+    private val shareMediaPort: ShareMediaPort,
 ) : ViewModel() {
     private val userAlbums = studioRepository.observeAllAlbums()
     private val itemAspectRatios = MutableStateFlow<Map<String, Float>>(emptyMap())
@@ -55,6 +58,7 @@ class GalleryViewModel @Inject constructor(
                     items = albumItems[album.id] ?: emptyList(),
                 )
             },
+            isLoading = false,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -67,6 +71,7 @@ class GalleryViewModel @Inject constructor(
                     items = emptyList(),
                 ),
             ),
+            isLoading = true,
         ),
     )
 
@@ -81,10 +86,60 @@ class GalleryViewModel @Inject constructor(
         }
     }
 
+    fun renameAlbum(albumId: String, newName: String) {
+        val trimmedName = newName.trim()
+        if (trimmedName.isEmpty()) {
+            return
+        }
+        viewModelScope.launch {
+            studioRepository.renameAlbum(albumId, trimmedName)
+        }
+    }
+
     fun deleteMedia(mediaIds: Set<String>) {
         viewModelScope.launch {
             mediaIds.forEach { id ->
                 studioRepository.deleteMedia(id)
+            }
+        }
+    }
+
+    fun deleteAlbums(albumIds: Set<String>) {
+        viewModelScope.launch {
+            albumIds.forEach { id ->
+                studioRepository.deleteAlbum(id)
+            }
+        }
+    }
+
+    fun shareMedia(mediaIds: Set<String>) {
+        viewModelScope.launch {
+            val uris = mutableListOf<String>()
+            val mediaList = uiState.value.albums.flatMap { it.items }
+            
+            mediaIds.forEach { id ->
+                val asset = mediaList.find { it.id == id }
+                if (asset != null) {
+                    uris.add(asset.localUri)
+                }
+            }
+            
+            if (uris.isNotEmpty()) {
+                shareMediaPort.shareMedia(uris, "*/*")
+            }
+        }
+    }
+
+    fun shareSingleMedia(mediaId: String) {
+        viewModelScope.launch {
+            val asset = uiState.value.albums.flatMap { it.items }.find { it.id == mediaId }
+            if (asset != null) {
+                val mimeType = when (asset.mediaType) {
+                    MediaCapability.IMAGE -> "image/*"
+                    MediaCapability.VIDEO -> "video/*"
+                    MediaCapability.MUSIC -> "audio/*"
+                }
+                shareMediaPort.shareMedia(listOf(asset.localUri), mimeType)
             }
         }
     }
