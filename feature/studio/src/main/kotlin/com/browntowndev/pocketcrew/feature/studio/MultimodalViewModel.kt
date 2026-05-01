@@ -55,6 +55,7 @@ class MultimodalViewModel @Inject constructor(
     private val _continualMode = MutableStateFlow(false)
     private val _isContinualGenerationActive = MutableStateFlow(false)
     private val _error = MutableStateFlow<String?>(null)
+    private val _referenceMediaType = MutableStateFlow<MediaCapability?>(null)
     private val _lastSubmittedPrompt = MutableStateFlow<String?>(null)
     private val _sessionMedia = MutableStateFlow<List<StudioMediaUi>>(emptyList())
     private val _selectedMediaItemIds = MutableStateFlow<Set<String>>(emptySet())
@@ -243,6 +244,7 @@ class MultimodalViewModel @Inject constructor(
         _videoGenerationState,
         _speechState,
         _isPlayingTts,
+        _referenceMediaType,
     ) { args ->
         val prompt = args[0] as String
         val isGenerating = args[1] as Boolean
@@ -265,6 +267,7 @@ class MultimodalViewModel @Inject constructor(
         val videoGenerationState = args[15] as VideoGenerationState
         val speechState = args[16] as SpeechState
         val isPlayingTts = args[17] as Boolean
+        val referenceMediaType = args[18] as MediaCapability?
         val gallery = sessionMedia.sortedBy { it.createdAt }
 
         val currentTemplates = if (mediaType == MediaCapability.MUSIC) musicTemplates else templates
@@ -286,6 +289,7 @@ class MultimodalViewModel @Inject constructor(
             continualMode = continual,
             isContinualGenerationActive = isContinualGenerationActive,
             error = error,
+            referenceMediaType = referenceMediaType,
             videoGenerationState = videoGenerationState,
             speechState = speechState,
             isPlayingTts = isPlayingTts
@@ -413,6 +417,7 @@ class MultimodalViewModel @Inject constructor(
             val mediaCapability = MediaCapability.valueOf(asset.mediaType)
             _mediaType.value = mediaCapability
             _prompt.value = asset.prompt
+            _referenceMediaType.value = mediaCapability
             _settings.value = when (mediaCapability) {
                 MediaCapability.IMAGE -> ImageGenerationSettings(referenceImageUri = asset.localUri)
                 MediaCapability.VIDEO -> VideoGenerationSettings(referenceImageUri = asset.localUri)
@@ -442,6 +447,7 @@ class MultimodalViewModel @Inject constructor(
 
             _mediaType.value = MediaCapability.VIDEO
             _prompt.value = asset.prompt
+            _referenceMediaType.value = MediaCapability.valueOf(asset.mediaType)
             _settings.value = VideoGenerationSettings(referenceImageUri = asset.localUri)
             stopGeneration()
             consumedScrollAnchors.clear()
@@ -469,6 +475,12 @@ class MultimodalViewModel @Inject constructor(
 
     fun onUpdateReferenceImage(uri: String?) {
         val currentSettings = _settings.value
+        if (uri == null) {
+            _referenceMediaType.value = null
+        } else if (_referenceMediaType.value == null) {
+            _referenceMediaType.value = MediaCapability.IMAGE
+        }
+
         _settings.value = when (currentSettings) {
             is ImageGenerationSettings -> currentSettings.copy(referenceImageUri = uri).withClampedGenerationCount()
             is VideoGenerationSettings -> currentSettings.copy(referenceImageUri = uri)
