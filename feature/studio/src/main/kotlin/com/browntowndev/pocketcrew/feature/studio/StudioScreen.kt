@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.feature.studio
 
 import kotlin.ExperimentalStdlibApi
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
@@ -23,6 +24,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -51,10 +54,12 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import com.browntowndev.pocketcrew.core.ui.theme.PurpleLightPrimary
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -422,7 +427,7 @@ private fun StudioGalleryPane(
 ) {
     Box(modifier = modifier) {
         if (groupedGallery.isEmpty() && !isGenerating) {
-            EmptyStudioState()
+            EmptyStudioState(topPadding = topPadding)
         } else {
             StudioGalleryList(
                 groupedGallery = groupedGallery,
@@ -828,16 +833,24 @@ private fun StudioInputDock(
     onGenerateClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var isExpanded by rememberSaveable { mutableStateOf(false) }
+    
+    BackHandler(enabled = isExpanded) {
+        isExpanded = false
+    }
+
     val isRecordingPhase = speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Listening ||
                           speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.ModelLoading ||
                           speechState is com.browntowndev.pocketcrew.domain.port.media.SpeechState.Transcribing
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .imePadding()
+            .imePadding() // Ensure it stays above keyboard
     ) {
         UniversalInputBar(
+            isExpanded = isExpanded,
+            onExpandToggle = { isExpanded = !isExpanded },
             attachmentContent = if (referenceImageUri != null) {
                 {
                     ReferenceImageThumbnail(
@@ -851,7 +864,10 @@ private fun StudioInputDock(
                 StudioPromptField(
                     prompt = prompt,
                     speechState = speechState,
-                    onPromptChange = onPromptChange
+                    isExpanded = isExpanded,
+                    onPromptChange = { 
+                        onPromptChange(it)
+                    }
                 )
             },
             actionContent = if (isRecordingPhase) null else {
@@ -897,6 +913,7 @@ private fun StudioInputDock(
 private fun StudioPromptField(
     prompt: String,
     speechState: com.browntowndev.pocketcrew.domain.port.media.SpeechState,
+    isExpanded: Boolean,
     onPromptChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -907,12 +924,15 @@ private fun StudioPromptField(
     BasicTextField(
         value = prompt,
         onValueChange = onPromptChange,
+        maxLines = if (isExpanded) Int.MAX_VALUE else 1,
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp, horizontal = 12.dp),
+            .padding(vertical = 4.dp, horizontal = 12.dp),
         textStyle = TextStyle(
             color = MaterialTheme.colorScheme.onSurface,
-            fontSize = 16.sp
+            fontFamily = FontFamily.SansSerif,
+            fontSize = 16.sp,
+            lineHeight = 22.sp
         ),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         decorationBox = { innerTextField ->
@@ -926,7 +946,10 @@ private fun StudioPromptField(
                 innerTextField()
             }
         },
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send)
+        keyboardOptions = KeyboardOptions(
+            capitalization = KeyboardCapitalization.Sentences,
+            imeAction = if (isExpanded) ImeAction.Default else ImeAction.Send
+        )
     )
 }
 
@@ -1246,10 +1269,13 @@ private fun GeneratingPlaceholderItem(
 
 @Composable
 private fun EmptyStudioState(
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    topPadding: Dp = 0.dp
 ) {
     Box(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .padding(top = topPadding),
         contentAlignment = Alignment.Center
     ) {
         Column(

@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.media.AspectRatio
 import com.browntowndev.pocketcrew.domain.model.media.GenerationQuality
+import com.browntowndev.pocketcrew.domain.model.media.GenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.VideoGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.MusicGenerationSettings
@@ -37,6 +38,7 @@ import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
@@ -61,6 +63,7 @@ import org.junit.jupiter.api.Test
 class MultimodalViewModelTest {
     private val imageGenerationPort = mockk<ImageGenerationPort>(relaxed = true)
     private val videoGenerationPort = mockk<VideoGenerationPort>(relaxed = true)
+    private val generateVideoUseCase = mockk<GenerateVideoUseCase>(relaxed = true)
     private val generateMusicUseCase = mockk<GenerateMusicUseCase>(relaxed = true)
     private val shareMediaPort = mockk<ShareMediaPort>(relaxed = true)
     private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
@@ -108,6 +111,10 @@ class MultimodalViewModelTest {
         every { studioRepository.observeAllMedia() } returns allMediaFlow
         every { studioRepository.observeAllAlbums() } returns flowOf(emptyList())
         coEvery { videoGenerationPort.generateVideo(any(), any(), any()) } returns Result.success("video".toByteArray())
+        coEvery { generateVideoUseCase(any(), any()) } coAnswers { 
+            delay(10) // Ensure it suspends so we can see the generating state
+            videoGenerationPort.generateVideo(it.invocation.args[0] as String, providerAsset, it.invocation.args[1] as GenerationSettings) 
+        }
         coEvery { studioRepository.cacheEphemeralMedia(any(), MediaCapability.VIDEO.name) } returns "cache://video.mp4"
         every { getProviderCapabilitiesUseCase(any()) } returns ProviderCapabilities(
             supportedAspectRatios = AspectRatio.entries.toList(),
@@ -125,7 +132,7 @@ class MultimodalViewModelTest {
         viewModel = MultimodalViewModel(
             imageGenerationPort,
             videoGenerationPort,
-            generateVideoUseCase(),
+            generateVideoUseCase,
             generateMusicUseCase,
             shareMediaPort,
             studioRepository,
@@ -198,7 +205,7 @@ class MultimodalViewModelTest {
         viewModel = MultimodalViewModel(
             imageGenerationPort,
             videoGenerationPort,
-            generateVideoUseCase(),
+            generateVideoUseCase,
             generateMusicUseCase,
             shareMediaPort,
             studioRepository,
@@ -537,34 +544,67 @@ class MultimodalViewModelTest {
     }
 
     @Test
-    fun `onAnimateMedia with ephemeral UUID uses session media and skips repository`() = runTest {
+    
+    fun `onAnimateMedia with autoAnimate true starts generation without updating main input state`() = runTest {
         // Given
-        coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(listOf("bytes".toByteArray()))
-        coEvery { studioRepository.cacheEphemeralMedia(any(), MediaCapability.IMAGE.name) } returns "cache://ephemeral.jpg"
-        coEvery { studioRepository.cacheEphemeralMedia(any(), MediaCapability.VIDEO.name) } returns "cache://video.mp4"
+        val assetId = "test-id"
+        val asset = StudioMediaAsset(id = assetId, prompt = "original prompt", localUri = "uri", mediaType = MediaCapability.IMAGE.name, createdAt = 0L)
+        coEvery { studioRepository.getMediaById(assetId) } returns asset
         
         val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
         }
         
-        viewModel.onPromptChange("trigger prompt")
-        viewModel.generate()
-        advanceUntilIdle()
+        // When & Then
+        viewModel.uiState.test {
+            // Initial state
+            var state = awaitItem()
+            while (state.isGenerating) { state = awaitItem() }
+            assertEquals(false, state.isGenerating)
+            
+            viewModel.onAnimateMedia(assetId, autoAnimate = true, customPrompt = "custom prompt")
+            
+            // Wait for generating state with the correct prompt
+            state = awaitItem()
+            while (!state.isGenerating || state.activeGenerationPrompt != "custom prompt") {
+                state = awaitItem()
+            }
+            
+            assertEquals(true, state.isGenerating)
+            assertEquals("custom prompt", state.activeGenerationPrompt)
+            
+            advanceUntilIdle()
+            // Wait for success state
+            while (state.isGenerating || state.videoGenerationState !is VideoGenerationState.Success) {
+                state = awaitItem()
+            }
+            assertEquals(false, state.isGenerating)
+            assertEquals(VideoGenerationState.Success(assetId, "cache://video.mp4"), state.videoGenerationState)
+            cancelAndIgnoreRemainingEvents()
+        }
         
-        val generatedItem = viewModel.uiState.value.gallery.first()
-        val generatedId = generatedItem.id
+        job.cancel()
+    }
+
+    @Test
+    fun `onAnimateMedia with autoAnimate false populates main input state for editing`() = runTest {
+        // Given
+        val assetId = "test-id"
+        val asset = StudioMediaAsset(id = assetId, prompt = "original prompt", localUri = "uri", mediaType = MediaCapability.IMAGE.name, createdAt = 0L)
+        coEvery { studioRepository.getMediaById(assetId) } returns asset
+        
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
         
         // When
-        viewModel.onAnimateMedia(generatedId, autoAnimate = true)
+        viewModel.onAnimateMedia(assetId, autoAnimate = false)
+        advanceUntilIdle()
         
         // Then
         assertEquals(MediaCapability.VIDEO, viewModel.uiState.value.mediaType)
-        assertEquals(generatedItem.prompt, viewModel.uiState.value.prompt)
-        assertEquals(generatedItem.localUri, (viewModel.uiState.value.settings as VideoGenerationSettings).referenceImageUri)
-        assertEquals(VideoGenerationState.Success(generatedId, "cache://video.mp4"), viewModel.uiState.value.videoGenerationState)
-        
-        // Verify we DID NOT call repository
-        coVerify(exactly = 0) { studioRepository.getMediaById(generatedId) }
+        assertEquals("original prompt", viewModel.uiState.value.prompt)
+        assertEquals("uri", (viewModel.uiState.value.settings as VideoGenerationSettings).referenceImageUri)
         
         job.cancel()
     }
@@ -699,7 +739,7 @@ class MultimodalViewModelTest {
         viewModel = MultimodalViewModel(
             imageGenerationPort,
             videoGenerationPort,
-            generateVideoUseCase(),
+            generateVideoUseCase,
             generateMusicUseCase,
             shareMediaPort,
             studioRepository,
@@ -843,14 +883,6 @@ class MultimodalViewModelTest {
         job.cancel()
     }
 
-    private fun generateVideoUseCase(): GenerateVideoUseCase =
-// ... existing code ...
-        GenerateVideoUseCase(
-            defaultModelRepository = defaultModelRepository,
-            mediaProviderRepository = mediaProviderRepository,
-            videoGenerationPort = videoGenerationPort,
-        )
+    private fun assertTrue(actual: Boolean) = org.junit.jupiter.api.Assertions.assertTrue(actual)
+    private fun assertFalse(actual: Boolean) = org.junit.jupiter.api.Assertions.assertFalse(actual)
 }
-
-private fun assertTrue(actual: Boolean) = org.junit.jupiter.api.Assertions.assertTrue(actual)
-private fun assertFalse(actual: Boolean) = org.junit.jupiter.api.Assertions.assertFalse(actual)

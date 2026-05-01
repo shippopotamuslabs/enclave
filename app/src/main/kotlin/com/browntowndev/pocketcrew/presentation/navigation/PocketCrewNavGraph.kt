@@ -248,6 +248,15 @@ fun PocketCrewNavGraph(
                         nullable = true
                         defaultValue = null
                     },
+                    navArgument("animatePrompt") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("autoAnimate") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    },
                 ),
             enterTransition = {
                 val initialLevel = getRouteLevel(initialState.destination.route)
@@ -313,12 +322,14 @@ fun PocketCrewNavGraph(
             val studioViewModel = hiltViewModel<MultimodalViewModel>()
             val editAssetId = backStackEntry.arguments?.getString("editAssetId")
             val animateAssetId = backStackEntry.arguments?.getString("animateAssetId")
+            val animatePrompt = backStackEntry.arguments?.getString("animatePrompt")
+            val autoAnimate = backStackEntry.arguments?.getBoolean("autoAnimate") ?: false
 
-            LaunchedEffect(editAssetId, animateAssetId) {
+            LaunchedEffect(editAssetId, animateAssetId, animatePrompt, autoAnimate) {
                 if (editAssetId != null) {
                     studioViewModel.onEditMedia(editAssetId)
                 } else if (animateAssetId != null) {
-                    studioViewModel.onAnimateMedia(animateAssetId)
+                    studioViewModel.onAnimateMedia(animateAssetId, autoAnimate, animatePrompt)
                 }
             }
 
@@ -487,9 +498,13 @@ fun PocketCrewNavGraph(
                 albums = galleryUiState.albums,
                 onNavigateBack = { navController.popBackStack() },
                 onShareMedia = galleryViewModel::shareSingleMedia,
-                onSendToStudio = { id, mode ->
-                    val targetRoute =
-                        if (mode == "edit") Routes.studioWithEditAsset(id) else Routes.studioWithAnimateAsset(id)
+                onSendToStudio = { id, mode, prompt ->
+                    val targetRoute = when (mode) {
+                        "edit" -> Routes.studioWithEditAsset(id)
+                        "animate" -> Routes.studioDetailWithAnimateAsset(id, autoAnimate = prompt != null, prompt = prompt)
+                        "quick_animate" -> Routes.studioDetailWithAnimateAsset(id, autoAnimate = true)
+                        else -> Routes.studioWithEditAsset(id)
+                    }
                     navController.navigate(targetRoute) {
                         popUpTo(Routes.STUDIO) { inclusive = true }
                     }
@@ -503,7 +518,18 @@ fun PocketCrewNavGraph(
 
         composable(
             route = Routes.STUDIO_DETAIL,
-            arguments = listOf(navArgument("assetId") { type = NavType.StringType }),
+            arguments = listOf(
+                navArgument("assetId") { type = NavType.StringType },
+                navArgument("animatePrompt") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+                navArgument("autoAnimate") {
+                    type = NavType.BoolType
+                    defaultValue = false
+                },
+            ),
             enterTransition = {
                 val initialLevel = getRouteLevel(initialState.destination.route)
                 val targetLevel = getRouteLevel(targetState.destination.route)
@@ -566,6 +592,9 @@ fun PocketCrewNavGraph(
             },
         ) { backStackEntry ->
             val assetId = backStackEntry.arguments?.getString("assetId") ?: ""
+            val animatePrompt = backStackEntry.arguments?.getString("animatePrompt")
+            val autoAnimate = backStackEntry.arguments?.getBoolean("autoAnimate") ?: false
+
             // Use the studio's backstack entry to share the ViewModel
             val studioBackStackEntry =
                 remember(backStackEntry) {
@@ -573,6 +602,12 @@ fun PocketCrewNavGraph(
                 }
             val studioViewModel = hiltViewModel<MultimodalViewModel>(studioBackStackEntry)
             val studioUiState by studioViewModel.uiState.collectAsStateWithLifecycle()
+
+            LaunchedEffect(assetId, animatePrompt, autoAnimate) {
+                if (autoAnimate) {
+                    studioViewModel.onAnimateMedia(assetId, true, animatePrompt)
+                }
+            }
 
             StudioDetailScreen(
                 assetId = assetId,

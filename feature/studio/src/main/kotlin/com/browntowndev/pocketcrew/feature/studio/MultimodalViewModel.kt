@@ -472,12 +472,17 @@ class MultimodalViewModel @Inject constructor(
                 studioRepository.getMediaById(assetId)
             } ?: return@launch
 
+            // Update the shared state so the input bar reflects the current context
             _mediaType.value = MediaCapability.VIDEO
-            _prompt.value = customPrompt ?: asset.prompt
-            _referenceMediaType.value = MediaCapability.valueOf(asset.mediaType)
-            _settings.value = VideoGenerationSettings(referenceImageUri = asset.localUri)
-            stopGeneration()
-            consumedScrollAnchors.clear()
+            _prompt.value = customPrompt ?: asset.prompt ?: ""
+            _settings.value = VideoGenerationSettings(
+                referenceImageUri = asset.localUri,
+                aspectRatio = AspectRatio.ONE_ONE,
+                quality = GenerationQuality.SPEED,
+                videoDuration = 5,
+                videoResolution = "480p"
+            )
+
             if (autoAnimate) {
                 startDetailVideoGeneration(asset, customPrompt)
             }
@@ -644,8 +649,10 @@ class MultimodalViewModel @Inject constructor(
             _error.value = null
             _videoGenerationState.value = VideoGenerationState.Loading(asset.id)
             try {
-                val settings = (_settings.value as? VideoGenerationSettings) ?: VideoGenerationSettings(referenceImageUri = asset.localUri)
-                val finalPrompt = customPrompt ?: asset.prompt
+                val settings = (_settings.value as? VideoGenerationSettings)?.copy(referenceImageUri = asset.localUri)
+                    ?: VideoGenerationSettings(referenceImageUri = asset.localUri)
+                val finalPrompt = customPrompt ?: asset.prompt ?: ""
+                _lastSubmittedPrompt.value = finalPrompt
                 generateVideoUseCase(finalPrompt, settings)
                     .onSuccess { bytes ->
                         val localUri = studioRepository.cacheEphemeralMedia(bytes, MediaCapability.VIDEO.name)
