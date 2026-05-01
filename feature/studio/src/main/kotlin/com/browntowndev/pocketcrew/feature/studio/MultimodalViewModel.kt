@@ -65,6 +65,9 @@ class MultimodalViewModel @Inject constructor(
     private val _isPlayingTts = MutableStateFlow(false)
     private val _videoGenerationState = MutableStateFlow<VideoGenerationState>(VideoGenerationState.Idle)
 
+    private var lastProcessedEditAssetId: String? = null
+    private var lastProcessedAnimateAssetId: String? = null
+
     private var speechJob: Job? = null
     private var streamingTtsJob: Job? = null
 
@@ -399,6 +402,9 @@ class MultimodalViewModel @Inject constructor(
     }
 
     fun onEditMedia(assetId: String) {
+        if (assetId == lastProcessedEditAssetId) return
+        lastProcessedEditAssetId = assetId
+
         viewModelScope.launch {
             val sessionItem = _sessionMedia.value.find { it.id == assetId }
             val asset = if (sessionItem != null) {
@@ -430,6 +436,9 @@ class MultimodalViewModel @Inject constructor(
     }
 
     fun onAnimateMedia(assetId: String, autoAnimate: Boolean = false) {
+        if (assetId == lastProcessedAnimateAssetId) return
+        lastProcessedAnimateAssetId = assetId
+
         viewModelScope.launch {
             val sessionItem = _sessionMedia.value.find { it.id == assetId }
             val asset = if (sessionItem != null) {
@@ -508,6 +517,9 @@ class MultimodalViewModel @Inject constructor(
             stopGeneration()
             return
         }
+
+        lastProcessedEditAssetId = null
+        lastProcessedAnimateAssetId = null
 
         val submittedPrompt = _prompt.value
         if (submittedPrompt.isBlank()) {

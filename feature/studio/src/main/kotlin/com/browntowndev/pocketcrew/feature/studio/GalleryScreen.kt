@@ -216,12 +216,14 @@ fun GalleryScreen(
         modifier = modifier,
         topBar = {
             val selectionCount = selectedMediaItemIds.size + selectedAlbumIds.size
+            val isDefaultAlbumSelected = DEFAULT_GALLERY_ALBUM_ID in selectedAlbumIds
             GalleryTopBar(
                 title = selectedAlbum?.name ?: "Gallery",
                 selectedItemCount = selectionCount,
                 selectedMediaItemCount = selectedMediaItemIds.size,
                 showAddAlbumIcon = selectedAlbumId == null,
                 showRenameAlbumIcon = selectedAlbumId != null && selectedAlbumId != DEFAULT_GALLERY_ALBUM_ID && selectedMediaItemIds.isEmpty(),
+                showDeleteIcon = selectionCount > 0 && !isDefaultAlbumSelected,
                 hazeState = hazeState,
                 onBackClick = {
                     if (selectedMediaItemIds.isNotEmpty()) {
@@ -260,6 +262,7 @@ fun GalleryScreen(
             AnimatedContent(
                 targetState = selectedAlbum,
                 label = "album_transition",
+                contentKey = { it?.id ?: "root" },
                 transitionSpec = {
                     if (targetState != null) {
                         (slideIntoContainer(
@@ -289,17 +292,13 @@ fun GalleryScreen(
                         videoThumbnails = videoThumbnailCache.frames,
                         onAlbumClick = { albumId ->
                             if (selectedAlbumIds.isNotEmpty()) {
-                                if (albumId != DEFAULT_GALLERY_ALBUM_ID) {
-                                    selectedAlbumIds = if (albumId in selectedAlbumIds) selectedAlbumIds - albumId else selectedAlbumIds + albumId
-                                }
+                                selectedAlbumIds = if (albumId in selectedAlbumIds) selectedAlbumIds - albumId else selectedAlbumIds + albumId
                             } else {
                                 selectedAlbumId = albumId
                             }
                         },
                         onAlbumSelectionToggled = { albumId ->
-                            if (albumId != DEFAULT_GALLERY_ALBUM_ID) {
-                                selectedAlbumIds = if (albumId in selectedAlbumIds) selectedAlbumIds - albumId else selectedAlbumIds + albumId
-                            }
+                            selectedAlbumIds = if (albumId in selectedAlbumIds) selectedAlbumIds - albumId else selectedAlbumIds + albumId
                         },
                         hazeState = hazeState,
                         topPadding = innerPadding.calculateTopPadding(),
@@ -398,6 +397,7 @@ private fun GalleryTopBar(
     selectedMediaItemCount: Int,
     showAddAlbumIcon: Boolean,
     showRenameAlbumIcon: Boolean,
+    showDeleteIcon: Boolean,
     hazeState: HazeState,
     onBackClick: () -> Unit,
     onClearSelectionClick: () -> Unit,
@@ -463,11 +463,13 @@ private fun GalleryTopBar(
                         contentDescription = "Move",
                     )
                 }
-                IconButton(onClick = onDeleteClick) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
-                    )
+                if (showDeleteIcon) {
+                    IconButton(onClick = onDeleteClick) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                        )
+                    }
                 }
             } else {
                 if (showRenameAlbumIcon) {
@@ -568,7 +570,7 @@ private fun AlbumCard(
                 videoThumbnails = videoThumbnails,
                 modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(cornerRadius)),
             )
-            if (selectionModeActive && album.id != DEFAULT_GALLERY_ALBUM_ID) {
+            if (selectionModeActive) {
                 Box(
                     modifier = Modifier
                         .padding(8.dp)

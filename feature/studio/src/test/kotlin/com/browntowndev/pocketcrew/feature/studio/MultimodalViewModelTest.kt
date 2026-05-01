@@ -764,6 +764,85 @@ class MultimodalViewModelTest {
         job.cancel()
     }
 
+    @Test
+    fun `onEditMedia does not overwrite manual changes if called again with same ID`() = runTest {
+        // Given
+        val assetId = "asset-1"
+        val asset = StudioMediaAsset(
+            id = assetId,
+            localUri = "file://image.jpg",
+            prompt = "Original Prompt",
+            mediaType = MediaCapability.IMAGE.name,
+            createdAt = 1L
+        )
+        coEvery { studioRepository.getMediaById(assetId) } returns asset
+
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+
+        // When - First navigation
+        viewModel.onEditMedia(assetId)
+        assertEquals("Original Prompt", viewModel.uiState.value.prompt)
+
+        // User clears the prompt
+        viewModel.onPromptChange("")
+        assertEquals("", viewModel.uiState.value.prompt)
+
+        // Then - Re-navigating to the same asset (simulated by LaunchedEffect trigger)
+        viewModel.onEditMedia(assetId)
+        assertEquals("", viewModel.uiState.value.prompt) // Should remain empty
+
+        // But - Navigating to a different asset SHOULD update
+        val assetId2 = "asset-2"
+        val asset2 = StudioMediaAsset(
+            id = assetId2,
+            localUri = "file://image2.jpg",
+            prompt = "Second Prompt",
+            mediaType = MediaCapability.IMAGE.name,
+            createdAt = 2L
+        )
+        coEvery { studioRepository.getMediaById(assetId2) } returns asset2
+
+        viewModel.onEditMedia(assetId2)
+        assertEquals("Second Prompt", viewModel.uiState.value.prompt)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `onAnimateMedia does not overwrite manual changes if called again with same ID`() = runTest {
+        // Given
+        val assetId = "asset-1"
+        val asset = StudioMediaAsset(
+            id = assetId,
+            localUri = "file://image.jpg",
+            prompt = "Original Prompt",
+            mediaType = MediaCapability.IMAGE.name,
+            createdAt = 1L
+        )
+        coEvery { studioRepository.getMediaById(assetId) } returns asset
+
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+
+        // When - First navigation
+        viewModel.onAnimateMedia(assetId, autoAnimate = false)
+        assertEquals("Original Prompt", viewModel.uiState.value.prompt)
+        assertEquals(MediaCapability.VIDEO, viewModel.uiState.value.mediaType)
+
+        // User changes prompt
+        viewModel.onPromptChange("Changed")
+        assertEquals("Changed", viewModel.uiState.value.prompt)
+
+        // Then - Re-navigating to the same asset
+        viewModel.onAnimateMedia(assetId, autoAnimate = false)
+        assertEquals("Changed", viewModel.uiState.value.prompt)
+
+        job.cancel()
+    }
+
     private fun generateVideoUseCase(): GenerateVideoUseCase =
 // ... existing code ...
         GenerateVideoUseCase(

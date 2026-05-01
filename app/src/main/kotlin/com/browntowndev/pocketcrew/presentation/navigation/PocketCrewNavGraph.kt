@@ -85,14 +85,24 @@ fun PocketCrewNavGraph(
                     },
                 ),
             enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             exitTransition = {
-                val targetRoute = targetState.destination.route
-                if (targetRoute == Routes.STUDIO || targetRoute == Routes.STUDIO_DETAIL) {
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
                     slideOutHorizontally(
                         targetOffsetX = { -it },
                         animationSpec = tween(ANIMATION_DURATION),
@@ -105,24 +115,34 @@ fun PocketCrewNavGraph(
                 }
             },
             popEnterTransition = {
-                val initialRoute = initialState.destination.route
-                if (initialRoute == Routes.STUDIO || initialRoute == Routes.STUDIO_DETAIL) {
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
                     slideInHorizontally(
-                        initialOffsetX = { -it },
+                        initialOffsetX = { it },
                         animationSpec = tween(ANIMATION_DURATION),
                     )
                 } else {
                     slideInHorizontally(
-                        initialOffsetX = { it },
+                        initialOffsetX = { -it },
                         animationSpec = tween(ANIMATION_DURATION),
                     )
                 }
             },
             popExitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
         ) {
             ChatRoute(
@@ -138,28 +158,64 @@ fun PocketCrewNavGraph(
         composable(
             route = Routes.HISTORY,
             enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { -it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { -it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             popEnterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { -it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             popExitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { -it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
         ) {
             HistoryRoute(
@@ -194,28 +250,64 @@ fun PocketCrewNavGraph(
                     },
                 ),
             enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             popEnterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { -it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             popExitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
         ) { backStackEntry ->
             val studioViewModel = hiltViewModel<MultimodalViewModel>()
@@ -244,28 +336,64 @@ fun PocketCrewNavGraph(
         composable(
             route = Routes.GALLERY,
             enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { -it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             popEnterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { -it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             popExitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
         ) {
             GalleryRoute(
@@ -288,16 +416,64 @@ fun PocketCrewNavGraph(
                     navArgument("assetId") { type = NavType.StringType },
                 ),
             enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
+            },
+            popEnterTransition = {
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
+            },
+            popExitTransition = {
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
         ) { backStackEntry ->
             val albumId = backStackEntry.arguments?.getString("albumId") ?: ""
@@ -329,16 +505,64 @@ fun PocketCrewNavGraph(
             route = Routes.STUDIO_DETAIL,
             arguments = listOf(navArgument("assetId") { type = NavType.StringType }),
             enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
             exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { it },
-                    animationSpec = tween(ANIMATION_DURATION),
-                )
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
+            },
+            popEnterTransition = {
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
+            },
+            popExitTransition = {
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
             },
         ) { backStackEntry ->
             val assetId = backStackEntry.arguments?.getString("assetId") ?: ""
@@ -369,5 +593,20 @@ fun PocketCrewNavGraph(
             navController = navController,
             onShowSnackbar = onShowSnackbar,
         )
+    }
+}
+
+private fun getRouteLevel(route: String?): Int {
+    if (route == null) return -1
+    return when {
+        route.startsWith(Routes.SETTINGS_GRAPH) || route.startsWith(Routes.SETTINGS_MAIN) -> 6
+        route.startsWith(Routes.GALLERY_DETAIL.substringBefore("?")) -> 5
+        route.startsWith(Routes.GALLERY) -> 4
+        route.startsWith(Routes.STUDIO_DETAIL.substringBefore("?")) -> 3
+        route.startsWith(Routes.STUDIO) -> 2
+        route.startsWith(Routes.CHAT) -> 1
+        route.startsWith(Routes.HISTORY) -> 0
+        route == Routes.MODEL_DOWNLOAD -> -1
+        else -> -1
     }
 }
