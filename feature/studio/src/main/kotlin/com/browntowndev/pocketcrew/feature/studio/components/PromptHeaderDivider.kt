@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandLess
@@ -55,22 +59,34 @@ fun PromptHeaderDivider(
                 noiseFactor = 0.15f
             }
             .animateContentSize()
-            .clickable { updateExpanded(!expanded) }
+            .then(if (!expanded) Modifier.clickable { updateExpanded(true) } else Modifier)
     ) {
         Row(
             modifier = Modifier
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = prompt,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White,
-                maxLines = if (expanded) Int.MAX_VALUE else 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .then(
+                        if (expanded) {
+                            Modifier
+                                .heightIn(max = 240.dp)
+                                .verticalScroll(rememberScrollState())
+                        } else Modifier
+                    )
+            ) {
+                Text(
+                    text = prompt,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                    maxLines = if (expanded) Int.MAX_VALUE else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             
             SmallIconAction(
                 icon = Icons.Default.ContentCopy,

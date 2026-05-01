@@ -3,7 +3,9 @@ package com.browntowndev.pocketcrew.feature.studio.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -126,29 +128,58 @@ fun TemplateChip(
 fun SettingRow(
     label: String,
     subLabel: String = "",
+    stacked: Boolean = false,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .defaultMinSize(minHeight = 64.dp)
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column {
-            Text(text = label, style = MaterialTheme.typography.titleMedium)
-            if (subLabel.isNotEmpty()) {
-                Text(
-                    text = subLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    val layoutModifier = modifier
+        .fillMaxWidth()
+        .defaultMinSize(minHeight = 64.dp)
+        .padding(horizontal = 16.dp)
+
+    if (stacked) {
+        Column(
+            modifier = layoutModifier.padding(vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Column {
+                Text(text = label, style = MaterialTheme.typography.titleMedium)
+                if (subLabel.isNotEmpty()) {
+                    Text(
+                        text = subLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                content()
             }
         }
-        Box(contentAlignment = Alignment.CenterEnd) {
-            content()
+    } else {
+        Row(
+            modifier = layoutModifier,
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(text = label, style = MaterialTheme.typography.titleMedium)
+                if (subLabel.isNotEmpty()) {
+                    Text(
+                        text = subLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(16.dp))
+            Box(contentAlignment = Alignment.CenterEnd) {
+                content()
+            }
         }
     }
 }
@@ -231,75 +262,81 @@ fun PillSelector(
     modifier: Modifier = Modifier
 ) {
     val selectedIndex = options.indexOf(selected).coerceAtLeast(0)
-    val itemWidth = if (options.size > 3) 72.dp else 84.dp
-    val totalWidth = itemWidth * options.size
+    val itemWidthFallback = if (options.size > 3) 72.dp else 84.dp
+    val totalWidthFallback = itemWidthFallback * options.size
 
     Box(
         modifier = modifier
-            .width(totalWidth)
+            .then(if (modifier == Modifier) Modifier.width(totalWidthFallback) else Modifier)
             .height(38.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
-            .padding(2.dp)
     ) {
-        // Indicator offset animation
-        val indicatorOffset by animateDpAsState(
-            targetValue = itemWidth * selectedIndex,
-            animationSpec = tween(
-                durationMillis = 300,
-                easing = FastOutSlowInEasing
-            ),
-            label = "pillIndicatorOffset"
-        )
-
-        // The sliding white pill
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
-                .offset(x = indicatorOffset)
-                .width(itemWidth)
-                .fillMaxHeight()
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            horizontalArrangement = Arrangement.spacedBy(0.dp)
+                .fillMaxSize()
+                .padding(2.dp)
         ) {
-            options.forEachIndexed { index, option ->
-                val isSelected = index == selectedIndex
-                val textColor by animateColorAsState(
-                    targetValue = if (isSelected) {
-                        MaterialTheme.colorScheme.onPrimaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    label = "pillTextColor"
-                )
+            val indicatorWidth = maxWidth / options.size.coerceAtLeast(1)
+            val targetBias = if (options.size > 1) {
+                (selectedIndex.toFloat() / (options.size - 1).toFloat()) * 2f - 1f
+            } else {
+                -1f
+            }
+            val horizontalBias by animateFloatAsState(
+                targetValue = targetBias,
+                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+                label = "pillIndicatorBias"
+            )
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(CircleShape)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            onClick = { onSelected(option) }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = option,
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            fontSize = if (options.size > 3) 11.sp else 12.sp
-                        ),
-                        color = textColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(indicatorWidth)
+                    .align(BiasAlignment(horizontalBias = horizontalBias, verticalBias = 0f))
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
+            )
+
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                options.forEachIndexed { index, option ->
+                    val isSelected = index == selectedIndex
+                    val textColor by animateColorAsState(
+                        targetValue = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        label = "pillTextColor"
                     )
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .clip(CircleShape)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { onSelected(option) }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = option,
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = if (options.size > 3) 11.sp else 12.sp
+                            ),
+                            color = textColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
         }
@@ -531,14 +568,18 @@ private fun VideoSettingsSection(
                         bottomEnd = 0.dp
                     )
                 ) {
-                    SettingRow(label = "Duration") {
+                    SettingRow(
+                        label = "Duration",
+                        stacked = caps.supportedVideoDurations.size > 2
+                    ) {
                         PillSelector(
                             selected = "${settings.videoDuration}s",
                             options = caps.supportedVideoDurations.map { "${it}s" },
                             onSelected = { durationStr ->
                                 val duration = durationStr.dropLast(1).toIntOrNull() ?: settings.videoDuration
                                 onUpdateSettings(settings.copy(videoDuration = duration))
-                            }
+                            },
+                            modifier = if (caps.supportedVideoDurations.size > 2) Modifier.fillMaxWidth() else Modifier
                         )
                     }
                 }
@@ -557,13 +598,17 @@ private fun VideoSettingsSection(
                         bottomEnd = 16.dp
                     )
                 ) {
-                    SettingRow(label = "Resolution") {
+                    SettingRow(
+                        label = "Resolution",
+                        stacked = caps.supportedVideoResolutions.size > 2
+                    ) {
                         PillSelector(
                             selected = settings.videoResolution,
                             options = caps.supportedVideoResolutions,
                             onSelected = { res ->
                                 onUpdateSettings(settings.copy(videoResolution = res))
-                            }
+                            },
+                            modifier = if (caps.supportedVideoResolutions.size > 2) Modifier.fillMaxWidth() else Modifier
                         )
                     }
                 }
@@ -620,17 +665,22 @@ private fun ImageQualityCard(
             bottomEnd = 0.dp
         )
     ) {
-        SettingRow(label = "Image Gen Mode") {
-            if (capabilities.supportedImageQualities.isNotEmpty()) {
+        val options = capabilities.supportedImageQualities.map { it.displayName }
+        SettingRow(
+            label = "Image Gen Mode",
+            stacked = options.size > 2 || options.any { it.length > 8 }
+        ) {
+            if (options.isNotEmpty()) {
                 PillSelector(
                     selected = settings.quality.displayName,
-                    options = capabilities.supportedImageQualities.map { it.displayName },
+                    options = options,
                     onSelected = { qualityDisplayName ->
                         val quality = capabilities.supportedImageQualities.first {
                             it.displayName == qualityDisplayName
                         }
                         onUpdateSettings(settings.copy(quality = quality))
-                    }
+                    },
+                    modifier = if (options.size > 2) Modifier.fillMaxWidth() else Modifier
                 )
             } else {
                 Text("Default", style = MaterialTheme.typography.bodySmall)

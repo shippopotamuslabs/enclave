@@ -39,8 +39,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.browntowndev.pocketcrew.core.ui.component.FullscreenMediaViewer
+import com.browntowndev.pocketcrew.core.ui.component.sheet.CustomAnimationPromptPane
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,7 +62,7 @@ fun GalleryDetailScreen(
     albums: List<GalleryAlbumUi>,
     onNavigateBack: () -> Unit,
     onShareMedia: (String) -> Unit,
-    onSendToStudio: (String, String) -> Unit,
+    onSendToStudio: (String, String, String?) -> Unit,
     onDeleteMedia: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -61,6 +73,8 @@ fun GalleryDetailScreen(
     val initialIndex = remember(assets, assetId) {
         assets.indexOfFirst { it.id == assetId }.coerceAtLeast(0)
     }
+    val hazeState = rememberHazeState()
+    var showCustomPromptInput by remember { mutableStateOf(false) }
 
     Scaffold(
         modifier = modifier,
@@ -93,28 +107,56 @@ fun GalleryDetailScreen(
                 pageCount = { assets.size }
             )
 
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding),
-                beyondViewportPageCount = 1
-            ) { page ->
-                val asset = assets[page]
-                Box(modifier = Modifier.fillMaxSize()) {
-                    FullscreenMediaViewer(
-                        localUri = asset.localUri,
-                        mediaType = asset.mediaType,
-                        contentDescription = asset.prompt,
-                        modifier = Modifier.fillMaxSize(),
-                    )
+            BackHandler(enabled = showCustomPromptInput) {
+                showCustomPromptInput = false
+            }
 
-                    GalleryDetailActionsOverlay(
-                        asset = asset,
-                        onShare = { onShareMedia(asset.id) },
-                        onSendToStudio = { mode -> onSendToStudio(asset.id, mode) },
-                        onDelete = { onDeleteMedia(asset.id) },
-                        modifier = Modifier.align(Alignment.BottomCenter)
+            Box(modifier = Modifier.fillMaxSize().padding(padding)) {
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxSize()
+                        .hazeSource(hazeState),
+                    beyondViewportPageCount = 1
+                ) { page ->
+                    val asset = assets[page]
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        FullscreenMediaViewer(
+                            localUri = asset.localUri,
+                            mediaType = asset.mediaType,
+                            contentDescription = asset.prompt,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+
+                        GalleryDetailActionsOverlay(
+                            asset = asset,
+                            onShare = { onShareMedia(asset.id) },
+                            onSendToStudio = { mode ->
+                                if (mode == "animate") {
+                                    showCustomPromptInput = true
+                                } else {
+                                    onSendToStudio(asset.id, mode, null)
+                                }
+                            },
+                            onDelete = { onDeleteMedia(asset.id) },
+                            modifier = Modifier.align(Alignment.BottomCenter)
+                        )
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = showCustomPromptInput,
+                    enter = slideInVertically(initialOffsetY = { it }),
+                    exit = slideOutVertically(targetOffsetY = { it }),
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                ) {
+                    val asset = assets[pagerState.currentPage]
+                    CustomAnimationPromptPane(
+                        onSend = { prompt ->
+                            onSendToStudio(asset.id, "animate", prompt)
+                            showCustomPromptInput = false
+                        },
+                        onDismiss = { showCustomPromptInput = false },
+                        hazeState = hazeState
                     )
                 }
             }
@@ -162,6 +204,7 @@ private fun GalleryDetailActionsOverlay(
             ActionItem(Icons.Default.Edit, "Edit", onClick = { onSendToStudio("edit") })
             if (asset.mediaType == MediaCapability.IMAGE) {
                 ActionItem(Icons.Default.Movie, "Animate", onClick = { onSendToStudio("animate") })
+                ActionItem(Icons.Default.FastForward, "Quick Animate", onClick = { onSendToStudio("quick_animate") })
             }
             ActionItem(Icons.Default.Share, "Share", onClick = onShare)
             ActionItem(Icons.Default.Delete, "Delete", onClick = onDelete, isDestructive = true)
