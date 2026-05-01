@@ -14,6 +14,9 @@ interface StudioAlbumDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAlbum(album: StudioAlbumEntity): Long
 
+    @Query("UPDATE studio_albums SET name = :name WHERE id = :id")
+    suspend fun updateAlbumName(id: Long, name: String)
+
     @Query("DELETE FROM studio_albums WHERE id = :id")
     suspend fun deleteAlbum(id: Long)
 }

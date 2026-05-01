@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -21,7 +22,9 @@ import com.browntowndev.pocketcrew.feature.chat.ChatRoute
 import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
 import com.browntowndev.pocketcrew.feature.history.HistoryRoute
 import com.browntowndev.pocketcrew.feature.settings.navigation.settingsGraph
+import com.browntowndev.pocketcrew.feature.studio.GalleryDetailScreen
 import com.browntowndev.pocketcrew.feature.studio.GalleryRoute
+import com.browntowndev.pocketcrew.feature.studio.GalleryViewModel
 import com.browntowndev.pocketcrew.feature.studio.MultimodalViewModel
 import com.browntowndev.pocketcrew.feature.studio.StudioDetailScreen
 import com.browntowndev.pocketcrew.feature.studio.StudioScreen
@@ -176,7 +179,20 @@ fun PocketCrewNavGraph(
         }
 
         composable(
-            route = Routes.STUDIO,
+            route = Routes.STUDIO_WITH_ARGS,
+            arguments =
+                listOf(
+                    navArgument("editAssetId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("animateAssetId") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                ),
             enterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { it },
@@ -185,7 +201,7 @@ fun PocketCrewNavGraph(
             },
             exitTransition = {
                 slideOutHorizontally(
-                    targetOffsetX = { -it },
+                    targetOffsetX = { it },
                     animationSpec = tween(ANIMATION_DURATION),
                 )
             },
@@ -201,8 +217,19 @@ fun PocketCrewNavGraph(
                     animationSpec = tween(ANIMATION_DURATION),
                 )
             },
-        ) {
+        ) { backStackEntry ->
             val studioViewModel = hiltViewModel<MultimodalViewModel>()
+            val editAssetId = backStackEntry.arguments?.getString("editAssetId")
+            val animateAssetId = backStackEntry.arguments?.getString("animateAssetId")
+
+            LaunchedEffect(editAssetId, animateAssetId) {
+                if (editAssetId != null) {
+                    studioViewModel.onEditMedia(editAssetId)
+                } else if (animateAssetId != null) {
+                    studioViewModel.onAnimateMedia(animateAssetId)
+                }
+            }
+
             StudioScreen(
                 viewModel = studioViewModel,
                 onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
@@ -243,6 +270,58 @@ fun PocketCrewNavGraph(
         ) {
             GalleryRoute(
                 onNavigateBack = { navController.popBackStack() },
+                onNavigateToDetail = { albumId, assetId ->
+                    navController.navigate(
+                        Routes.GALLERY_DETAIL
+                            .replace("{albumId}", albumId)
+                            .replace("{assetId}", assetId),
+                    )
+                },
+            )
+        }
+
+        composable(
+            route = Routes.GALLERY_DETAIL,
+            arguments =
+                listOf(
+                    navArgument("albumId") { type = NavType.StringType },
+                    navArgument("assetId") { type = NavType.StringType },
+                ),
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { it },
+                    animationSpec = tween(ANIMATION_DURATION),
+                )
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { it },
+                    animationSpec = tween(ANIMATION_DURATION),
+                )
+            },
+        ) { backStackEntry ->
+            val albumId = backStackEntry.arguments?.getString("albumId") ?: ""
+            val assetId = backStackEntry.arguments?.getString("assetId") ?: ""
+            val galleryViewModel = hiltViewModel<GalleryViewModel>()
+            val galleryUiState by galleryViewModel.uiState.collectAsStateWithLifecycle()
+
+            GalleryDetailScreen(
+                albumId = albumId,
+                assetId = assetId,
+                albums = galleryUiState.albums,
+                onNavigateBack = { navController.popBackStack() },
+                onShareMedia = galleryViewModel::shareSingleMedia,
+                onSendToStudio = { id, mode ->
+                    val targetRoute =
+                        if (mode == "edit") Routes.studioWithEditAsset(id) else Routes.studioWithAnimateAsset(id)
+                    navController.navigate(targetRoute) {
+                        popUpTo(Routes.STUDIO) { inclusive = true }
+                    }
+                },
+                onDeleteMedia = { id ->
+                    galleryViewModel.deleteMedia(setOf(id))
+                    navController.popBackStack()
+                },
             )
         }
 
@@ -276,7 +355,11 @@ fun PocketCrewNavGraph(
                 assets = studioUiState.gallery,
                 onNavigateBack = { navController.popBackStack() },
                 onEditMedia = studioViewModel::onEditMedia,
-                onAnimateMedia = studioViewModel::onAnimateMedia,
+                onAnimateMedia = { id, autoAnimate ->
+                    studioViewModel.onAnimateMedia(id, autoAnimate)
+                    navController.popBackStack(Routes.STUDIO, inclusive = false)
+                },
+                onShareMedia = studioViewModel::shareSingleMedia,
                 onDeleteMedia = studioViewModel::deleteMedia,
                 videoGenerationState = studioUiState.videoGenerationState,
             )

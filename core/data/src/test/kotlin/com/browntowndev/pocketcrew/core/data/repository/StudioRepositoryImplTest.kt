@@ -4,8 +4,10 @@ import android.content.Context
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
+import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -21,6 +23,7 @@ class StudioRepositoryImplTest {
 
     private val studioMediaDao = mockk<StudioMediaDao>(relaxed = true)
     private val studioAlbumDao = mockk<StudioAlbumDao>(relaxed = true)
+    private val transactionProvider = FakeTransactionProvider()
     private val context = mockk<Context>()
 
     @TempDir
@@ -43,6 +46,7 @@ class StudioRepositoryImplTest {
         repository = StudioRepositoryImpl(
             studioMediaDao = studioMediaDao,
             studioAlbumDao = studioAlbumDao,
+            transactionProvider = transactionProvider,
             context = context
         )
     }
@@ -125,6 +129,47 @@ class StudioRepositoryImplTest {
     }
 
     @Test
+    fun `renameAlbum trims name and updates album row`() = runTest {
+        repository.renameAlbum("42", "  Sunrise  ")
+
+        coVerify {
+            studioAlbumDao.updateAlbumName(42L, "Sunrise")
+        }
+    }
+
+    @Test
+    fun `renameAlbum ignores blank or invalid ids`() = runTest {
+        repository.renameAlbum("abc", "Album")
+        repository.renameAlbum("42", "   ")
+
+        coVerify(exactly = 0) {
+            studioAlbumDao.updateAlbumName(any(), any())
+        }
+    }
+
+    @Test
+    fun `deleteAlbum reassigns media to null before deleting album`() = runTest {
+        repository.deleteAlbum("7")
+
+        coVerifyOrder {
+            studioMediaDao.reassignMediaToDefault(7L)
+            studioAlbumDao.deleteAlbum(7L)
+        }
+    }
+
+    @Test
+    fun `deleteAlbum ignores invalid ids`() = runTest {
+        repository.deleteAlbum("not-a-number")
+
+        coVerify(exactly = 0) {
+            studioMediaDao.reassignMediaToDefault(any())
+        }
+        coVerify(exactly = 0) {
+            studioAlbumDao.deleteAlbum(any())
+        }
+    }
+
+    @Test
     fun `deleteMedia with UUID ignores database deletion and does not throw exception`() = runTest {
         // This will throw NumberFormatException if not handled correctly
         repository.deleteMedia("5a8277e4-dcc0-45d4-81ab-8fb1324c96c9")
@@ -153,5 +198,11 @@ class StudioRepositoryImplTest {
         org.junit.jupiter.api.Assertions.assertArrayEquals(bytes, result)
 
         io.mockk.unmockkStatic(android.net.Uri::class)
+    }
+}
+
+private class FakeTransactionProvider : TransactionProvider {
+    override suspend fun <T> runInTransaction(block: suspend () -> T): T {
+        return block()
     }
 }

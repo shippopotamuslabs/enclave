@@ -8,10 +8,16 @@ object Routes {
     const val CHAT_DEEP_LINK_PATTERN = ChatNotificationDeepLink.URI_PATTERN
     const val HISTORY = "history"
     const val STUDIO = "studio"
+    const val STUDIO_WITH_ARGS = "studio?editAssetId={editAssetId}&animateAssetId={animateAssetId}"
     const val STUDIO_DETAIL = "studio_detail?assetId={assetId}"
     const val GALLERY = "gallery"
+    const val GALLERY_DETAIL = "gallery_detail?albumId={albumId}&assetId={assetId}"
     const val SETTINGS_GRAPH = "settings_graph"
     const val SETTINGS_MAIN = "settings_main"
     const val MODEL_DOWNLOAD = "model_download"
     const val BYOK_CONFIGURE = "byok_configure"
+
+    fun studioWithEditAsset(assetId: String): String = "$STUDIO?editAssetId=$assetId"
+
+    fun studioWithAnimateAsset(assetId: String): String = "$STUDIO?animateAssetId=$assetId"
 }

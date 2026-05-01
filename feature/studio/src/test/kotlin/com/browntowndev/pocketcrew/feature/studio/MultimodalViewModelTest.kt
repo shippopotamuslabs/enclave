@@ -11,9 +11,12 @@ import com.browntowndev.pocketcrew.domain.model.media.AspectRatio
 import com.browntowndev.pocketcrew.domain.model.media.GenerationQuality
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.VideoGenerationSettings
+import com.browntowndev.pocketcrew.domain.model.media.MusicGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.ProviderCapabilities
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.media.ImageGenerationPort
+import com.browntowndev.pocketcrew.domain.port.media.MusicGenerationPort
+import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import com.browntowndev.pocketcrew.domain.port.media.VideoGenerationPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
@@ -25,6 +28,7 @@ import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackStatus
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.ListenToSpeechUseCase
+import com.browntowndev.pocketcrew.domain.usecase.media.GenerateMusicUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.GenerateVideoUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -57,6 +61,8 @@ import org.junit.jupiter.api.Test
 class MultimodalViewModelTest {
     private val imageGenerationPort = mockk<ImageGenerationPort>(relaxed = true)
     private val videoGenerationPort = mockk<VideoGenerationPort>(relaxed = true)
+    private val generateMusicUseCase = mockk<GenerateMusicUseCase>(relaxed = true)
+    private val shareMediaPort = mockk<ShareMediaPort>(relaxed = true)
     private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
     private val defaultModelRepository = mockk<DefaultModelRepositoryPort>(relaxed = true)
     private val mediaProviderRepository = mockk<MediaProviderRepositoryPort>(relaxed = true)
@@ -90,7 +96,12 @@ class MultimodalViewModelTest {
             credentialAlias = "test-alias"
         )
 
-        every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(assignment, videoAssignment))
+        val musicAssignment = DefaultModelAssignment(
+            modelType = ModelType.MUSIC_GENERATION,
+            mediaProviderId = mediaProviderId
+        )
+
+        every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(assignment, videoAssignment, musicAssignment))
         coEvery { defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION) } returns videoAssignment
         coEvery { mediaProviderRepository.getMediaProvider(mediaProviderId) } returns providerAsset
         every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(providerAsset))
@@ -115,6 +126,8 @@ class MultimodalViewModelTest {
             imageGenerationPort,
             videoGenerationPort,
             generateVideoUseCase(),
+            generateMusicUseCase,
+            shareMediaPort,
             studioRepository,
             defaultModelRepository,
             mediaProviderRepository,
@@ -186,6 +199,8 @@ class MultimodalViewModelTest {
             imageGenerationPort,
             videoGenerationPort,
             generateVideoUseCase(),
+            generateMusicUseCase,
+            shareMediaPort,
             studioRepository,
             defaultModelRepository,
             mediaProviderRepository,
@@ -540,7 +555,7 @@ class MultimodalViewModelTest {
         val generatedId = generatedItem.id
         
         // When
-        viewModel.onAnimateMedia(generatedId)
+        viewModel.onAnimateMedia(generatedId, autoAnimate = true)
         
         // Then
         assertEquals(MediaCapability.VIDEO, viewModel.uiState.value.mediaType)
@@ -571,11 +586,61 @@ class MultimodalViewModelTest {
         advanceUntilIdle()
 
         val generatedId = viewModel.uiState.value.gallery.first().id
-        viewModel.onAnimateMedia(generatedId)
+        viewModel.onAnimateMedia(generatedId, autoAnimate = true)
         advanceUntilIdle()
 
         assertEquals(VideoGenerationState.Error(generatedId, "video failed"), viewModel.uiState.value.videoGenerationState)
         assertEquals("video failed", viewModel.uiState.value.error)
+        job.cancel()
+    }
+
+    @Test
+    fun `shareMedia passes correct URIs to ShareMediaPort`() = runTest {
+        // Given
+        coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(listOf("bytes".toByteArray()))
+        coEvery { studioRepository.cacheEphemeralMedia(any(), MediaCapability.IMAGE.name) } returns "cache://ephemeral.jpg"
+        
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        
+        viewModel.onPromptChange("trigger prompt")
+        viewModel.generate()
+        advanceUntilIdle()
+        
+        val generatedItem = viewModel.uiState.value.gallery.first()
+        
+        // When
+        viewModel.shareMedia(setOf(generatedItem.id))
+        
+        // Then
+        verify { shareMediaPort.shareMedia(listOf("cache://ephemeral.jpg"), "*/*") }
+        
+        job.cancel()
+    }
+
+    @Test
+    fun `shareSingleMedia passes correct URI and MIME type to ShareMediaPort`() = runTest {
+        // Given
+        coEvery { imageGenerationPort.generateImage(any(), any(), any()) } returns Result.success(listOf("bytes".toByteArray()))
+        coEvery { studioRepository.cacheEphemeralMedia(any(), MediaCapability.IMAGE.name) } returns "cache://ephemeral.jpg"
+        
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        
+        viewModel.onPromptChange("trigger prompt")
+        viewModel.generate()
+        advanceUntilIdle()
+        
+        val generatedItem = viewModel.uiState.value.gallery.first()
+        
+        // When
+        viewModel.shareSingleMedia(generatedItem.id)
+        
+        // Then
+        verify { shareMediaPort.shareMedia(listOf("cache://ephemeral.jpg"), "image/*") }
+        
         job.cancel()
     }
 
@@ -635,6 +700,8 @@ class MultimodalViewModelTest {
             imageGenerationPort,
             videoGenerationPort,
             generateVideoUseCase(),
+            generateMusicUseCase,
+            shareMediaPort,
             studioRepository,
             defaultModelRepository,
             mediaProviderRepository,
@@ -666,7 +733,39 @@ class MultimodalViewModelTest {
         verify { playbackController.stop() }
     }
 
+    @Test
+    fun `generate music success updates gallery`() = runTest {
+        // Given
+        val prompt = "techno track"
+        val musicBytes = "music bytes".toByteArray()
+        val localUri = "cache://music.mp3"
+        val musicSettings = MusicGenerationSettings()
+        
+        coEvery { generateMusicUseCase(prompt, any()) } returns Result.success(musicBytes)
+        coEvery { studioRepository.cacheEphemeralMedia(musicBytes, MediaCapability.MUSIC.name) } returns localUri
+        
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        
+        // When
+        viewModel.onMediaTypeChange(MediaCapability.MUSIC)
+        viewModel.onPromptChange(prompt)
+        viewModel.generate()
+        advanceUntilIdle()
+        
+        // Then
+        val state = viewModel.uiState.value
+        assertEquals(1, state.gallery.size)
+        assertEquals(localUri, state.gallery.first().localUri)
+        assertEquals(MediaCapability.MUSIC, state.gallery.first().mediaType)
+        assertFalse(state.isGenerating)
+        
+        job.cancel()
+    }
+
     private fun generateVideoUseCase(): GenerateVideoUseCase =
+// ... existing code ...
         GenerateVideoUseCase(
             defaultModelRepository = defaultModelRepository,
             mediaProviderRepository = mediaProviderRepository,

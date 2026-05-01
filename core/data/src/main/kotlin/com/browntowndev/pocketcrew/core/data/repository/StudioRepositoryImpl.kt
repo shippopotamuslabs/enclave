@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
 import com.browntowndev.pocketcrew.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -19,6 +20,7 @@ import javax.inject.Singleton
 class StudioRepositoryImpl @Inject constructor(
     private val studioMediaDao: StudioMediaDao,
     private val studioAlbumDao: StudioAlbumDao,
+    private val transactionProvider: TransactionProvider,
     @ApplicationContext private val context: Context
 ) : StudioRepositoryPort {
 
@@ -103,6 +105,25 @@ class StudioRepositoryImpl @Inject constructor(
 
     override suspend fun createAlbum(name: String): String {
         return studioAlbumDao.insertAlbum(StudioAlbumEntity(name = name)).toString()
+    }
+
+    override suspend fun renameAlbum(id: String, name: String) {
+        val longId = id.toLongOrNull() ?: return
+        val trimmedName = name.trim()
+        if (trimmedName.isEmpty()) {
+            return
+        }
+
+        studioAlbumDao.updateAlbumName(longId, trimmedName)
+    }
+
+    override suspend fun deleteAlbum(id: String) {
+        val longId = id.toLongOrNull() ?: return
+
+        transactionProvider.runInTransaction {
+            studioMediaDao.reassignMediaToDefault(longId)
+            studioAlbumDao.deleteAlbum(longId)
+        }
     }
 
     override suspend fun moveMediaToAlbum(mediaIds: List<String>, albumId: String) {
