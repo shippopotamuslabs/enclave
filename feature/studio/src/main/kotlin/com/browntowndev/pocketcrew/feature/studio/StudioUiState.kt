@@ -34,6 +34,7 @@ data class StudioUiState(
     val continualMode: Boolean = false,
     val isContinualGenerationActive: Boolean = false,
     val error: String? = null,
+    val referenceMediaType: MediaCapability? = null,
     val videoGenerationState: VideoGenerationState = VideoGenerationState.Idle,
     val speechState: SpeechState = SpeechState.Idle,
     val isPlayingTts: Boolean = false,
