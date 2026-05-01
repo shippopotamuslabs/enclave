@@ -11,10 +11,10 @@ value class MediaProviderId(val value: String)
 /**
  * Enum representing media capabilities.
  */
-enum class MediaCapability {
-    IMAGE,
-    VIDEO,
-    MUSIC
+enum class MediaCapability(val displayName: String) {
+    IMAGE("Image"),
+    VIDEO("Video"),
+    MUSIC("Music")
 }
 
 /**

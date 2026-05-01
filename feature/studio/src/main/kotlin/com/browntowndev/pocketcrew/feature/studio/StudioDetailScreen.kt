@@ -33,10 +33,33 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.component.FullscreenMediaViewer
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.usecase.media.SaveMediaToGalleryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -62,7 +85,7 @@ fun StudioDetailScreen(
     assets: List<StudioMediaUi>,
     onNavigateBack: () -> Unit,
     onEditMedia: (String) -> Unit,
-    onAnimateMedia: (String, Boolean) -> Unit,
+    onAnimateMedia: (String, Boolean, String?) -> Unit,
     onShareMedia: (String) -> Unit,
     onDeleteMedia: (String) -> Unit,
     videoGenerationState: VideoGenerationState = VideoGenerationState.Idle,
@@ -71,22 +94,25 @@ fun StudioDetailScreen(
     val initialIndex = remember(assets, assetId) {
         assets.indexOfFirst { it.id == assetId }.coerceAtLeast(0)
     }
+    val hazeState = rememberHazeState()
 
     Scaffold(
         containerColor = Color.Black,
-        topBar = { StudioDetailTopBar(onNavigateBack = onNavigateBack) }
+        topBar = { StudioDetailTopBar(onNavigateBack = onNavigateBack) },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         if (assets.isNotEmpty()) {
             DetailContent(
                 assets = assets,
                 initialIndex = initialIndex,
                 videoGenerationState = videoGenerationState,
+                hazeState = hazeState,
                 onEdit = { asset ->
                     onEditMedia(asset.id)
                     onNavigateBack()
                 },
-                onAnimate = { asset, autoAnimate ->
-                    onAnimateMedia(asset.id, autoAnimate)
+                onAnimate = { asset, autoAnimate, customPrompt ->
+                    onAnimateMedia(asset.id, autoAnimate, customPrompt)
                 },
                 onSave = viewModel::saveToGallery,
                 onShare = { asset ->
@@ -142,8 +168,9 @@ private fun DetailContent(
     assets: List<StudioMediaUi>,
     initialIndex: Int,
     videoGenerationState: VideoGenerationState,
+    hazeState: HazeState,
     onEdit: (StudioMediaUi) -> Unit,
-    onAnimate: (StudioMediaUi, Boolean) -> Unit,
+    onAnimate: (StudioMediaUi, Boolean, String?) -> Unit,
     onSave: (StudioMediaUi) -> Unit,
     onShare: (StudioMediaUi) -> Unit,
     onDelete: (StudioMediaUi) -> Unit,
@@ -153,26 +180,53 @@ private fun DetailContent(
         initialPage = initialIndex,
         pageCount = { assets.size }
     )
+    var showCustomPromptInput by remember { mutableStateOf(false) }
 
-    HorizontalPager(
-        state = pagerState,
-        modifier = modifier.fillMaxSize(),
-        beyondViewportPageCount = 1
-    ) { page ->
-        val asset = assets[page]
-        Box(modifier = Modifier.fillMaxSize()) {
-            DetailMedia(
-                asset = asset,
-                videoGenerationState = videoGenerationState,
-            )
-            DetailActionsOverlay(
-                asset = asset,
-                onEdit = { onEdit(asset) },
-                onAnimate = { autoAnimate -> onAnimate(asset, autoAnimate) },
-                onSave = { onSave(asset) },
-                onShare = { onShare(asset) },
-                onDelete = { onDelete(asset) },
-                modifier = Modifier.align(Alignment.BottomCenter)
+    Box(modifier = modifier.fillMaxSize()) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+                .hazeSource(hazeState),
+            beyondViewportPageCount = 1
+        ) { page ->
+            val asset = assets[page]
+            Box(modifier = Modifier.fillMaxSize()) {
+                DetailMedia(
+                    asset = asset,
+                    videoGenerationState = videoGenerationState,
+                )
+                DetailActionsOverlay(
+                    asset = asset,
+                    onEdit = { onEdit(asset) },
+                    onAnimate = { autoAnimate ->
+                        if (autoAnimate) {
+                            onAnimate(asset, true, null)
+                        } else {
+                            showCustomPromptInput = true
+                        }
+                    },
+                    onSave = { onSave(asset) },
+                    onShare = { onShare(asset) },
+                    onDelete = { onDelete(asset) },
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = showCustomPromptInput,
+            enter = slideInVertically(initialOffsetY = { it }),
+            exit = slideOutVertically(targetOffsetY = { it }),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            val asset = assets[pagerState.currentPage]
+            CustomAnimationPromptPane(
+                onSend = { prompt ->
+                    onAnimate(asset, true, prompt)
+                    showCustomPromptInput = false
+                },
+                onDismiss = { showCustomPromptInput = false },
+                hazeState = hazeState
             )
         }
     }
@@ -261,6 +315,97 @@ private fun DetailActionsOverlay(
     }
 }
 
+@Composable
+private fun CustomAnimationPromptPane(
+    onSend: (String) -> Unit,
+    onDismiss: () -> Unit,
+    hazeState: HazeState
+) {
+    var prompt by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(Unit) {
+        delay(300) // Wait for slide animation
+        focusRequester.requestFocus()
+        keyboardController?.show()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .hazeEffect(
+                state = hazeState,
+                style = MaterialTheme.colorScheme.surface.let { color ->
+                    dev.chrisbanes.haze.HazeStyle(
+                        tint = dev.chrisbanes.haze.HazeTint(color.copy(alpha = 0.5f)),
+                        blurRadius = 30.dp
+                    )
+                }
+            )
+            .padding(WindowInsets.ime.asPaddingValues()) // Bleed to bottom including IME
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = prompt,
+                    onValueChange = { prompt = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester),
+                    placeholder = { Text("What should the animation do?", color = Color.White.copy(alpha = 0.6f)) },
+                    textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color.White.copy(alpha = 0.5f),
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.3f),
+                        cursorColor = Color.White
+                    ),
+                    maxLines = 4,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                    keyboardActions = KeyboardActions(onSend = {
+                        if (prompt.isNotBlank()) {
+                            onSend(prompt)
+                        }
+                    }),
+                    trailingIcon = {
+                        IconButton(
+                            onClick = {
+                                if (prompt.isNotBlank()) {
+                                    onSend(prompt)
+                                }
+                            },
+                            enabled = prompt.isNotBlank()
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "Send",
+                                tint = if (prompt.isNotBlank()) Color.White else Color.White.copy(alpha = 0.3f)
+                            )
+                        }
+                    }
+                )
+            }
+            
+            // Background scrim click to dismiss
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(0.dp) // Invisible but could be expanded if needed
+                    .clickable(onClick = onDismiss)
+            )
+        }
+    }
+}
+
 @Preview(name = "Image detail", showBackground = true, backgroundColor = 0xFF000000)
 @Composable
 private fun StudioDetailImagePreview() {
@@ -268,8 +413,9 @@ private fun StudioDetailImagePreview() {
         assets = listOf(previewAsset()),
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Idle,
+        hazeState = rememberHazeState(),
         onEdit = {},
-        onAnimate = { _, _ -> },
+        onAnimate = { _, _, _ -> },
         onSave = {},
         onShare = {},
         onDelete = {},
@@ -283,8 +429,9 @@ private fun StudioDetailLoadingPreview() {
         assets = listOf(previewAsset()),
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Loading("asset-1"),
+        hazeState = rememberHazeState(),
         onEdit = {},
-        onAnimate = { _, _ -> },
+        onAnimate = { _, _, _ -> },
         onSave = {},
         onShare = {},
         onDelete = {},
@@ -298,8 +445,9 @@ private fun StudioDetailVideoPreview() {
         assets = listOf(previewAsset()),
         initialIndex = 0,
         videoGenerationState = VideoGenerationState.Success("asset-1", "file:///preview.mp4"),
+        hazeState = rememberHazeState(),
         onEdit = {},
-        onAnimate = { _, _ -> },
+        onAnimate = { _, _, _ -> },
         onSave = {},
         onShare = {},
         onDelete = {},

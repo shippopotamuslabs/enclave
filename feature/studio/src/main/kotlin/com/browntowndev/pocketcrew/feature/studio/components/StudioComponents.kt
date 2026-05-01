@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.feature.studio.components
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -29,7 +30,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.tooling.preview.Preview
 import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.core.ui.component.MediaModeToggle
@@ -228,32 +231,36 @@ fun PillSelector(
     modifier: Modifier = Modifier
 ) {
     val selectedIndex = options.indexOf(selected).coerceAtLeast(0)
-    val itemWidth = 80.dp
+    val itemWidth = if (options.size > 3) 72.dp else 84.dp
     val totalWidth = itemWidth * options.size
 
     Box(
         modifier = modifier
             .width(totalWidth)
-            .height(36.dp)
+            .height(38.dp)
             .clip(CircleShape)
             .background(MaterialTheme.colorScheme.surfaceContainerHighest)
+            .padding(2.dp)
     ) {
         // Indicator offset animation
         val indicatorOffset by animateDpAsState(
             targetValue = itemWidth * selectedIndex,
-            animationSpec = tween(durationMillis = 250),
+            animationSpec = tween(
+                durationMillis = 300,
+                easing = FastOutSlowInEasing
+            ),
             label = "pillIndicatorOffset"
         )
 
-        // Sliding Indicator
+        // The sliding white pill
         Box(
             modifier = Modifier
                 .offset(x = indicatorOffset)
                 .width(itemWidth)
                 .fillMaxHeight()
-                .padding(2.dp)
                 .clip(CircleShape)
-                .background(Color.White)
+                .background(MaterialTheme.colorScheme.primaryContainer)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), CircleShape)
         )
 
         Row(
@@ -263,7 +270,11 @@ fun PillSelector(
             options.forEachIndexed { index, option ->
                 val isSelected = index == selectedIndex
                 val textColor by animateColorAsState(
-                    targetValue = if (isSelected) Color.Black else MaterialTheme.colorScheme.onSurfaceVariant,
+                    targetValue = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
                     label = "pillTextColor"
                 )
 
@@ -282,9 +293,12 @@ fun PillSelector(
                     Text(
                         text = option,
                         style = MaterialTheme.typography.labelMedium.copy(
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = if (options.size > 3) 11.sp else 12.sp
                         ),
-                        color = textColor
+                        color = textColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

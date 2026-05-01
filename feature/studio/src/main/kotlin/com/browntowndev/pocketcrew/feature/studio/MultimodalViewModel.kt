@@ -147,6 +147,24 @@ class MultimodalViewModel @Inject constructor(
 
     init {
         observeSpeechResults()
+        observeCapabilities()
+    }
+
+    private fun observeCapabilities() {
+        capabilitiesFlow
+            .onEach { caps ->
+                val currentSettings = _settings.value
+                if (currentSettings is ImageGenerationSettings) {
+                    if (caps.supportedImageQualities.isNotEmpty() && !caps.supportedImageQualities.contains(currentSettings.quality)) {
+                        _settings.value = currentSettings.copy(quality = caps.supportedImageQualities.first())
+                    }
+                } else if (currentSettings is VideoGenerationSettings) {
+                    if (caps.supportedVideoQualities.isNotEmpty() && !caps.supportedVideoQualities.contains(currentSettings.quality)) {
+                        _settings.value = currentSettings.copy(quality = caps.supportedVideoQualities.first())
+                    }
+                }
+            }
+            .launchIn(viewModelScope)
     }
 
     private fun observeSpeechResults() {
@@ -435,8 +453,8 @@ class MultimodalViewModel @Inject constructor(
         }
     }
 
-    fun onAnimateMedia(assetId: String, autoAnimate: Boolean = false) {
-        if (assetId == lastProcessedAnimateAssetId) return
+    fun onAnimateMedia(assetId: String, autoAnimate: Boolean = false, customPrompt: String? = null) {
+        if (assetId == lastProcessedAnimateAssetId && customPrompt == null) return
         lastProcessedAnimateAssetId = assetId
 
         viewModelScope.launch {
@@ -455,13 +473,13 @@ class MultimodalViewModel @Inject constructor(
             } ?: return@launch
 
             _mediaType.value = MediaCapability.VIDEO
-            _prompt.value = asset.prompt
+            _prompt.value = customPrompt ?: asset.prompt
             _referenceMediaType.value = MediaCapability.valueOf(asset.mediaType)
             _settings.value = VideoGenerationSettings(referenceImageUri = asset.localUri)
             stopGeneration()
             consumedScrollAnchors.clear()
             if (autoAnimate) {
-                startDetailVideoGeneration(asset)
+                startDetailVideoGeneration(asset, customPrompt)
             }
         }
     }
@@ -620,20 +638,21 @@ class MultimodalViewModel @Inject constructor(
         }
     }
 
-    private fun startDetailVideoGeneration(asset: StudioMediaAsset) {
+    private fun startDetailVideoGeneration(asset: StudioMediaAsset, customPrompt: String? = null) {
         generationJob = viewModelScope.launch {
             _isGenerating.value = true
             _error.value = null
             _videoGenerationState.value = VideoGenerationState.Loading(asset.id)
             try {
                 val settings = (_settings.value as? VideoGenerationSettings) ?: VideoGenerationSettings(referenceImageUri = asset.localUri)
-                generateVideoUseCase(asset.prompt, settings)
+                val finalPrompt = customPrompt ?: asset.prompt
+                generateVideoUseCase(finalPrompt, settings)
                     .onSuccess { bytes ->
                         val localUri = studioRepository.cacheEphemeralMedia(bytes, MediaCapability.VIDEO.name)
                         val newItem = StudioMediaUi(
                             id = UUID.randomUUID().toString(),
                             localUri = localUri,
-                            prompt = asset.prompt,
+                            prompt = finalPrompt,
                             mediaType = MediaCapability.VIDEO,
                             createdAt = System.currentTimeMillis(),
                             albumId = asset.albumId,

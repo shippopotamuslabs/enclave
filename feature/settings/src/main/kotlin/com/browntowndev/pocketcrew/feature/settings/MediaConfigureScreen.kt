@@ -73,7 +73,7 @@ fun MediaConfigureRoute(
     }
 
     val handleBack: () -> Unit = {
-        viewModel.onShowMediaProvidersSheet(false)
+        viewModel.onBackToMediaList()
         onNavigateBack()
     }
 
@@ -84,9 +84,10 @@ fun MediaConfigureRoute(
         onMediaAssetFieldChange = viewModel::onMediaAssetFieldChange,
         onApiKeyChange = viewModel::onApiKeyChange,
         onSelectReusableApiCredential = viewModel::onSelectReusableApiCredential,
+        onFetchMediaModels = viewModel::onFetchMediaModels,
         onSaveMediaProvider = {
             viewModel.onSaveMediaProvider(onSuccess = {
-                viewModel.onShowMediaProvidersSheet(false)
+                viewModel.onBackToMediaList()
                 onNavigateBack()
             })
         },
@@ -103,6 +104,7 @@ fun MediaConfigureScreen(
     onMediaAssetFieldChange: (MediaProviderAssetUi) -> Unit,
     onApiKeyChange: (String) -> Unit,
     onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
+    onFetchMediaModels: () -> Unit,
     onSaveMediaProvider: () -> Unit,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
@@ -112,6 +114,7 @@ fun MediaConfigureScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var providerDropdownExpanded by remember { mutableStateOf(false) }
     var capabilityDropdownExpanded by remember { mutableStateOf(false) }
+    var modelDropdownExpanded by remember { mutableStateOf(false) }
 
     val isSaveEnabled = draft.displayName.isNotBlank() &&
             draft.modelName.isNotBlank() &&
@@ -121,7 +124,7 @@ fun MediaConfigureScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Media Generation Provider", fontWeight = FontWeight.Bold) },
+                title = { Text("Media Generation Models", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -201,7 +204,7 @@ fun MediaConfigureScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 OutlinedTextField(
-                    value = draft.capability.name,
+                    value = draft.capability.displayName,
                     onValueChange = {},
                     readOnly = true,
                     label = { Text("Capability") },
@@ -217,7 +220,7 @@ fun MediaConfigureScreen(
                 ) {
                     MediaCapability.entries.forEach { capability ->
                         DropdownMenuItem(
-                            text = { Text(capability.name) },
+                            text = { Text(capability.displayName) },
                             onClick = {
                                 onMediaAssetFieldChange(draft.copy(capability = capability))
                                 capabilityDropdownExpanded = false
@@ -291,19 +294,61 @@ fun MediaConfigureScreen(
             OutlinedTextField(
                 value = draft.displayName,
                 onValueChange = { onMediaAssetFieldChange(draft.copy(displayName = it)) },
-                label = { Text("Display Name (e.g. My OpenAI DALL-E)") },
+                label = { Text("Display Name (e.g. OpenAI Images 2)") },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             )
 
             // Model ID
-            OutlinedTextField(
-                value = draft.modelName,
-                onValueChange = { onMediaAssetFieldChange(draft.copy(modelName = it)) },
-                label = { Text("Model ID (e.g. dall-e-3)") },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            )
+            ExposedDropdownMenuBox(
+                expanded = modelDropdownExpanded,
+                onExpandedChange = { modelDropdownExpanded = it },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = draft.modelName,
+                    onValueChange = { onMediaAssetFieldChange(draft.copy(modelName = it)) },
+                    label = { Text("Model ID (e.g. gpt-images-2)") },
+                    trailingIcon = {
+                        if (uiState.mediaProviderEditor.isDiscoveringApiModels) {
+                            androidx.compose.material3.CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelDropdownExpanded)
+                        }
+                    },
+                    modifier = Modifier
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable)
+                        .fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                ExposedDropdownMenu(
+                    expanded = modelDropdownExpanded,
+                    onDismissRequest = { modelDropdownExpanded = false }
+                ) {
+                    val discoveredModels = uiState.mediaProviderEditor.discoveredApiModels
+                    if (discoveredModels.isEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text("No models found. Try fetching or type manually.") },
+                            onClick = { },
+                            enabled = false
+                        )
+                    } else {
+                        discoveredModels.forEach { discoveredModel ->
+                            DropdownMenuItem(
+                                text = { Text(discoveredModel.name ?: discoveredModel.id) },
+                                onClick = {
+                                    onMediaAssetFieldChange(draft.copy(modelName = discoveredModel.id))
+                                    modelDropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
 
             // Base URL (for proxies)
             OutlinedTextField(
@@ -313,6 +358,15 @@ fun MediaConfigureScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             )
+
+            Button(
+                onClick = onFetchMediaModels,
+                enabled = apiKey.isNotBlank() || isKeySaved,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Fetch Available Models")
+            }
 
             // Use as Default Toggle
             Row(
@@ -329,7 +383,7 @@ fun MediaConfigureScreen(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = "Set this as the default model for ${draft.capability.name.lowercase()} generation.",
+                        text = "Set this as the default model for ${draft.capability.displayName.lowercase()} generation.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -357,6 +411,7 @@ fun MediaConfigureScreenPreview() {
             onMediaAssetFieldChange = {},
             onApiKeyChange = {},
             onSelectReusableApiCredential = {},
+            onFetchMediaModels = {},
             onSaveMediaProvider = {},
         )
     }

@@ -701,10 +701,21 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onShowMediaProvidersSheet(show: Boolean) {
-        if (show) {
-            _mediaState.update { it.copy(isSheetOpen = true) }
-        } else {
-            _mediaState.update { MediaProvidersTransientState() }
+        if (!show) {
+            _mediaState.update { it.copy(isSheetOpen = false) }
+            return
+        }
+
+        _mediaState.update {
+            it.copy(
+                isSheetOpen = true,
+                selectedAsset = null,
+                assetDraft = null,
+                selectedReusableApiCredentialAlias = null,
+                selectedReusableApiCredentialName = null,
+                isDiscoveringApiModels = false,
+                discoveredApiModels = emptyList(),
+            )
         }
     }
 
@@ -719,17 +730,34 @@ class SettingsViewModel @Inject constructor(
                 ),
                 selectedReusableApiCredentialAlias = null,
                 selectedReusableApiCredentialName = null,
+                isDiscoveringApiModels = false,
+                discoveredApiModels = emptyList(),
             )
         }
     }
 
     fun onSelectMediaProviderAsset(asset: MediaProviderAssetUi?) {
-        _mediaState.update { it.copy(selectedAsset = asset, assetDraft = asset) }
+        _currentApiKey.value = ""
+        _mediaState.update {
+            it.copy(
+                selectedAsset = asset,
+                assetDraft = asset,
+                selectedReusableApiCredentialAlias = null,
+                selectedReusableApiCredentialName = null,
+                isDiscoveringApiModels = false,
+                discoveredApiModels = emptyList(),
+            )
+        }
     }
 
     fun onMediaAssetFieldChange(asset: MediaProviderAssetUi) {
         val existingDraft = _mediaState.value.assetDraft
-        
+        val discoveryScopeChanged =
+            existingDraft == null ||
+                existingDraft.provider != asset.provider ||
+                existingDraft.capability != asset.capability ||
+                existingDraft.baseUrl.normalizedBaseUrl() != asset.baseUrl.normalizedBaseUrl()
+
         if (asset.id.value.isNotEmpty() && asset.useAsDefault != existingDraft?.useAsDefault) {
             viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update default model", "Failed to update default model")) {
                 val modelType = when (asset.capability) {
@@ -751,6 +779,8 @@ class SettingsViewModel @Inject constructor(
                 assetDraft = asset,
                 selectedReusableApiCredentialAlias = if (existingDraft?.provider != asset.provider) null else state.selectedReusableApiCredentialAlias,
                 selectedReusableApiCredentialName = if (existingDraft?.provider != asset.provider) null else state.selectedReusableApiCredentialName,
+                discoveredApiModels = if (discoveryScopeChanged) emptyList() else state.discoveredApiModels,
+                isDiscoveringApiModels = if (discoveryScopeChanged) false else state.isDiscoveringApiModels,
             )
         }
     }
@@ -771,7 +801,37 @@ class SettingsViewModel @Inject constructor(
             it.copy(
                 selectedReusableApiCredentialAlias = reusableCredential?.credentialAlias,
                 selectedReusableApiCredentialName = reusableCredential?.displayName,
+                discoveredApiModels = emptyList(),
+                isDiscoveringApiModels = false,
             )
+        }
+    }
+
+    fun onFetchMediaModels() {
+        val draft = _mediaState.value.assetDraft ?: return
+        val credentialAlias = resolveMediaCredentialAlias(draft)
+        if (_currentApiKey.value.isBlank() && credentialAlias == null) return
+
+        _mediaState.update { it.copy(isDiscoveringApiModels = true) }
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch media models", "Failed to fetch models")) {
+            try {
+                val result = apiProviderUseCases.discoverApiModels(
+                    ApiModelDiscoveryRequest(
+                        provider = draft.provider,
+                        currentApiKey = _currentApiKey.value,
+                        credentialAlias = credentialAlias,
+                        baseUrl = draft.baseUrl,
+                        selectedModelId = draft.modelName.takeIf(String::isNotBlank),
+                    )
+                )
+                _mediaState.update { state ->
+                    state.copy(
+                        discoveredApiModels = result.models.filterMediaModels(draft.capability),
+                    )
+                }
+            } finally {
+                _mediaState.update { it.copy(isDiscoveringApiModels = false) }
+            }
         }
     }
 
@@ -1193,6 +1253,20 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun onBackToMediaList() {
+        _currentApiKey.value = ""
+        _mediaState.update {
+            it.copy(
+                selectedAsset = null,
+                assetDraft = null,
+                selectedReusableApiCredentialAlias = null,
+                selectedReusableApiCredentialName = null,
+                isDiscoveringApiModels = false,
+                discoveredApiModels = emptyList(),
+            )
+        }
+    }
+
     fun onCleanupCustomHeaders() {
         _apiState.update { state ->
             val draft = state.presetDraft ?: return@update state
@@ -1362,6 +1436,10 @@ class SettingsViewModel @Inject constructor(
         ?.takeIf { it.isNotBlank() }
         ?: asset.credentialAlias.takeIf { it.isNotBlank() }
 
+    private fun resolveMediaCredentialAlias(asset: MediaProviderAssetUi): String? = _mediaState.value.selectedReusableApiCredentialAlias
+        ?.takeIf { it.isNotBlank() }
+        ?: asset.credentialAlias.takeIf { it.isNotBlank() }
+
     private fun ApiProvidersTransientState.discoveredModelFor(asset: ApiModelAssetUi?): DiscoveredApiModel? =
         discoveredApiModels.find { it.id == asset?.modelId }
 
@@ -1412,6 +1490,25 @@ class SettingsViewModel @Inject constructor(
 
     private fun List<DiscoveredApiModel>.filterGoogleTtsModels(): List<DiscoveredApiModel> =
         filter { it.id.isGoogleTtsModelCandidate() }
+
+    private fun List<DiscoveredApiModel>.filterMediaModels(capability: MediaCapability): List<DiscoveredApiModel> {
+        return filter { model ->
+            when (capability) {
+                MediaCapability.IMAGE -> {
+                    (model.id.contains("gpt-image-", ignoreCase = true) ||
+                            model.id.contains("gemini-3.1", ignoreCase = true) ||
+                            model.id.contains("dall-e-3", ignoreCase = true)) &&
+                            !model.id.contains("dall-e-2", ignoreCase = true)
+                }
+                MediaCapability.VIDEO -> {
+                    model.id.contains("veo-3", ignoreCase = true)
+                }
+                MediaCapability.MUSIC -> {
+                    model.id.contains("lyria-3", ignoreCase = true)
+                }
+            }
+        }
+    }
 
     private fun String.isGoogleTtsModelCandidate(): Boolean =
         endsWith("-tts") || endsWith("-tts-preview")

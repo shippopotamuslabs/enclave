@@ -47,9 +47,9 @@ fun MediaModeToggle(
     modifier: Modifier = Modifier
 ) {
     val items = listOf(
-        ToggleItem("Image", Icons.Default.Image, MediaCapability.IMAGE),
-        ToggleItem("Video", Icons.Default.Movie, MediaCapability.VIDEO),
-        ToggleItem("Music", Icons.Default.MusicNote, MediaCapability.MUSIC)
+        ToggleItem(MediaCapability.IMAGE.displayName, Icons.Default.Image, MediaCapability.IMAGE),
+        ToggleItem(MediaCapability.VIDEO.displayName, Icons.Default.Movie, MediaCapability.VIDEO),
+        ToggleItem(MediaCapability.MUSIC.displayName, Icons.Default.MusicNote, MediaCapability.MUSIC)
     )
 
     val padding = 0.dp

@@ -76,7 +76,7 @@ fun MediaProvidersBottomSheet(
                 .padding(bottom = 32.dp)
         ) {
             Text(
-                text = "Media Generation Providers",
+                text = "Media Generation Models",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -133,7 +133,7 @@ fun MediaProvidersBottomSheet(
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "${asset.provider.displayName} • ${asset.capability.name} • ${asset.modelName}",
+                                        text = "${asset.provider.displayName} • ${asset.capability.displayName} • ${asset.modelName}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

@@ -131,7 +131,7 @@ class DefaultModelRepositoryImpl @Inject constructor(
             if (mediaProvider != null) {
                 displayName = mediaProvider.displayName
                 providerName = mediaProvider.provider.displayName
-                presetName = mediaProvider.capability.name
+                presetName = mediaProvider.capability.displayName
             }
         }
 
