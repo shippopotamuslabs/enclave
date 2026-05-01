@@ -1,16 +1,12 @@
 package com.browntowndev.pocketcrew.feature.inference.media
 
-import com.browntowndev.pocketcrew.domain.model.media.AspectRatio
 import com.browntowndev.pocketcrew.domain.model.media.GenerationSettings
-import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
-import com.browntowndev.pocketcrew.domain.model.media.VisualGenerationSettings
-import com.browntowndev.pocketcrew.domain.model.media.withClampedGenerationCount
 import com.browntowndev.pocketcrew.feature.inference.GoogleGenAiClientProviderPort
 import com.google.genai.Client
-import com.google.genai.types.*
+import com.google.genai.interactions.models.interactions.CreateModelInteractionParams
+import com.google.genai.interactions.models.interactions.Interaction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.Optional
 import javax.inject.Inject
 
 open class GoogleImageGenerationAdapter @Inject constructor(
@@ -24,55 +20,41 @@ open class GoogleImageGenerationAdapter @Inject constructor(
         settings: GenerationSettings,
         referenceImage: ByteArray? = null
     ): Result<List<ByteArray>> = withContext(Dispatchers.IO) {
-        runCatching {
-            val visualSettings = settings as? VisualGenerationSettings
-                ?: throw IllegalArgumentException("Settings must be VisualGenerationSettings")
-            val generationCount = (settings as? ImageGenerationSettings)
-                ?.withClampedGenerationCount()
-                ?.generationCount
-                ?: 1
+        runCatching<List<ByteArray>> {
             val client = clientProvider.getClient(apiKey, baseUrl)
-            val ratio = when (visualSettings.aspectRatio) {
-                AspectRatio.ONE_ONE -> "1:1"
-                AspectRatio.THREE_FOUR -> "3:4"
-                AspectRatio.FOUR_THREE -> "4:3"
-                AspectRatio.NINE_SIXTEEN -> "9:16"
-                AspectRatio.SIXTEEN_NINE -> "16:9"
-                else -> "1:1"
+
+            val params = CreateModelInteractionParams.builder()
+                .model(modelId)
+                .input(prompt)
+                .build()
+            val interaction = createInteraction(client, params)
+            
+            val outputs = try {
+                val method = interaction.javaClass.methods.find { it.name == "outputs" }
+                val optional = method?.invoke(interaction) as? java.util.Optional<List<Any>>
+                optional?.orElse(emptyList()) ?: emptyList()
+            } catch (e: Exception) {
+                emptyList()
             }
 
-            val response = if (referenceImage != null) {
-                // Imagen 3 requires [1] in the prompt to link to the reference image
-                val finalPrompt = if (prompt.contains("[1]")) prompt else "$prompt [1]"
-                
-                val config = EditImageConfig.builder()
-                    .aspectRatio(ratio)
-                    .numberOfImages(generationCount)
-                    .editMode("EDIT_MODE_DEFAULT")
-                    .build()
-                
-                val rawImage = RawReferenceImage.builder()
-                    .referenceImage(Image.builder().imageBytes(referenceImage).build())
-                    .referenceType("raw")
-                    .build()
-                
-                val editResponse = editImage(client, modelId, finalPrompt, rawImage, config)
-                GenerateImagesResponse.builder()
-                    .generatedImages(editResponse.generatedImages().orElse(emptyList()))
-                    .build()
-            } else {
-                val config = GenerateImagesConfig.builder()
-                    .aspectRatio(ratio)
-                    .numberOfImages(generationCount)
-                    .build()
-                
-                generateImages(client, modelId, prompt, config)
-            }
-
-            val images = response.generatedImages().orElse(emptyList())
-                .mapNotNull { generatedImage ->
-                    generatedImage.image().orElse(null)?.imageBytes()?.orElse(null)
+            val images = outputs.mapNotNull { content ->
+                try {
+                    val method = content.javaClass.methods.find { it.name == "image" }
+                    val optional = method?.invoke(content) as? java.util.Optional<Any>
+                    optional?.orElse(null)
+                } catch (e: Exception) {
+                    null
                 }
+            }.mapNotNull { imageObj ->
+                try {
+                    val method = imageObj.javaClass.methods.find { it.name == "imageBytes" }
+                    val optional = method?.invoke(imageObj) as? java.util.Optional<ByteArray>
+                    optional?.orElse(null)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            
             if (images.isEmpty()) {
                 throw IllegalStateException("No image generated")
             }
@@ -80,18 +62,8 @@ open class GoogleImageGenerationAdapter @Inject constructor(
         }
     }
 
-    protected open fun generateImages(
+    protected open fun createInteraction(
         client: Client,
-        modelId: String,
-        prompt: String,
-        config: GenerateImagesConfig,
-    ): GenerateImagesResponse = client.models.generateImages(modelId, prompt, config)
-
-    protected open fun editImage(
-        client: Client,
-        modelId: String,
-        prompt: String,
-        referenceImage: RawReferenceImage,
-        config: EditImageConfig,
-    ): EditImageResponse = client.models.editImage(modelId, prompt, listOf(referenceImage), config)
+        params: CreateModelInteractionParams,
+    ): Interaction = client.interactions.create(params)
 }

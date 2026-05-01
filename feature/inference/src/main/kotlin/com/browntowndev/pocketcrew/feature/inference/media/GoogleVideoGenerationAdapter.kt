@@ -3,32 +3,26 @@ package com.browntowndev.pocketcrew.feature.inference.media
 import com.browntowndev.pocketcrew.domain.model.media.AspectRatio
 import com.browntowndev.pocketcrew.domain.model.media.GenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.VideoGenerationSettings
+import com.browntowndev.pocketcrew.feature.inference.GoogleGenAiClientProviderPort
+import com.google.genai.Client
+import com.google.genai.types.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonArray
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.put
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.Base64
 import javax.inject.Inject
 
-class GoogleVideoGenerationAdapter(
+open class GoogleVideoGenerationAdapter(
     private val okHttpClient: OkHttpClient,
+    private val clientProvider: GoogleGenAiClientProviderPort,
     private val pollDelayMillis: Long,
 ) {
     @Inject
-    constructor(okHttpClient: OkHttpClient) : this(okHttpClient, DEFAULT_POLL_DELAY_MILLIS)
+    constructor(
+        okHttpClient: OkHttpClient,
+        clientProvider: GoogleGenAiClientProviderPort,
+    ) : this(okHttpClient, clientProvider, DEFAULT_POLL_DELAY_MILLIS)
 
     suspend fun generateVideo(
         prompt: String,
@@ -41,69 +35,43 @@ class GoogleVideoGenerationAdapter(
         runCatching {
             val videoSettings = settings as? VideoGenerationSettings
                 ?: throw IllegalArgumentException("Settings must be VideoGenerationSettings")
-            val rootUrl = baseUrl?.trimEnd('/') ?: DEFAULT_BASE_URL
-            val operation = executeJson(
-                request = Request.Builder()
-                    .url("$rootUrl/models/$modelId:predictLongRunning")
-                    .header("x-goog-api-key", apiKey)
-                    .post(createRequestBody(prompt, videoSettings, referenceImage))
-                    .build(),
-            ).string("name")
-            val videoUri = pollUntilComplete(rootUrl, apiKey, operation)
-            executeBytes(
-                request = Request.Builder()
-                    .url(videoUri)
-                    .header("x-goog-api-key", apiKey)
-                    .get()
-                    .build(),
-            )
-        }
-    }
 
-    private suspend fun pollUntilComplete(rootUrl: String, apiKey: String, operationName: String): String {
-        repeat(MAX_POLL_ATTEMPTS) {
-            val response = executeJson(
-                request = Request.Builder()
-                    .url("$rootUrl/$operationName")
-                    .header("x-goog-api-key", apiKey)
-                    .get()
-                    .build(),
-            )
-            if (response["error"] != null) {
-                throw IllegalStateException("Google video generation failed: ${response["error"]}")
-            }
-            if (response["done"]?.jsonPrimitive?.content == "true") {
-                return response.findGoogleVideoUri()
-            }
-            delay(pollDelayMillis)
+            val client = clientProvider.getClient(apiKey, baseUrl)
+            val config = GenerateVideosConfig.builder()
+                .aspectRatio(videoSettings.aspectRatio.toGoogleAspectRatio())
+                .durationSeconds(videoSettings.videoDuration)
+                .resolution(videoSettings.videoResolution)
+                .generateAudio(true)
+                .build()
+            val source = GenerateVideosSource.builder().prompt(prompt).build()
+            val operation = generateVideos(client, modelId, source, config)
+            
+            val completedOp = pollSdkOperationUntilComplete(client, operation)
+            val response = try {
+                val method = completedOp.javaClass.methods.find { it.name == "response" }
+                val optional = method?.invoke(completedOp) as? java.util.Optional<GenerateVideosResponse>
+                optional?.orElse(null)
+            } catch (e: Exception) {
+                null
+            } ?: throw IllegalStateException("Google video operation finished but returned no response")
+            
+            val generatedVideos = response.generatedVideos().orElse(emptyList())
+            val videoUrl = generatedVideos.firstOrNull()?.let { genVideo ->
+                try {
+                    val videoMethod = genVideo.javaClass.methods.find { it.name == "video" }
+                    val videoOptional = videoMethod?.invoke(genVideo) as? java.util.Optional<Any>
+                    val videoObj = videoOptional?.orElse(null)
+                    
+                    val uriMethod = videoObj?.javaClass?.methods?.find { it.name == "uri" }
+                    val uriOptional = uriMethod?.invoke(videoObj) as? java.util.Optional<String>
+                    uriOptional?.orElse(null)
+                } catch (e: Exception) {
+                    null
+                }
+            } ?: throw IllegalStateException("No video URL returned by SDK")
+            
+            return@runCatching downloadVideo(videoUrl, apiKey)
         }
-        throw IllegalStateException("Google video generation timed out")
-    }
-
-    private fun createRequestBody(
-        prompt: String,
-        settings: VideoGenerationSettings,
-        referenceImage: ByteArray?,
-    ): RequestBody {
-        val request = buildJsonObject {
-            put("instances", buildJsonArray {
-                add(buildJsonObject {
-                    put("prompt", prompt)
-                    if (referenceImage != null) {
-                        put("image", buildJsonObject {
-                            put("bytesBase64Encoded", Base64.getEncoder().encodeToString(referenceImage))
-                            put("mimeType", "image/png")
-                        })
-                    }
-                })
-            })
-            put("parameters", buildJsonObject {
-                put("aspectRatio", settings.aspectRatio.toGoogleAspectRatio())
-                put("durationSeconds", settings.videoDuration)
-                put("resolution", settings.videoResolution)
-            })
-        }
-        return request.toString().toRequestBody("application/json".toMediaType())
     }
 
     private fun AspectRatio.toGoogleAspectRatio(): String = when (this) {
@@ -113,42 +81,61 @@ class GoogleVideoGenerationAdapter(
         else -> AspectRatio.SIXTEEN_NINE.ratio
     }
 
-    private fun executeJson(request: Request): JsonObject {
-        val response = okHttpClient.newCall(request).execute()
-        val responseBody = response.body.string()
-        if (!response.isSuccessful) {
-            throw IllegalStateException("Google video request failed: ${response.code} $responseBody")
+    protected open fun generateVideos(
+        client: Client,
+        modelId: String,
+        source: GenerateVideosSource,
+        config: GenerateVideosConfig,
+    ): GenerateVideosOperation = client.models.generateVideos(modelId, source, config)
+
+    private suspend fun pollSdkOperationUntilComplete(client: Client, operation: GenerateVideosOperation): GenerateVideosOperation {
+        repeat(MAX_POLL_ATTEMPTS) {
+            val ops = client.javaClass.getField("operations").get(client) as com.google.genai.Operations
+            val getMethod = ops.javaClass.methods.find { it.name == "getVideosOperation" }
+            val currentOp = getMethod?.invoke(ops, operation, GetOperationConfig.builder().build()) as GenerateVideosOperation
+            
+            val isDone = try {
+                val method = currentOp.javaClass.methods.find { it.name == "done" }
+                val optional = method?.invoke(currentOp) as? java.util.Optional<Boolean>
+                optional?.orElse(false) ?: false
+            } catch (e: Exception) {
+                false
+            }
+            
+            if (isDone) {
+                val error = try {
+                    val method = currentOp.javaClass.methods.find { it.name == "error" }
+                    val optional = method?.invoke(currentOp) as? java.util.Optional<Any>
+                    optional?.orElse(null)
+                } catch (e: Exception) {
+                    null
+                }
+                if (error != null) {
+                    throw IllegalStateException("Google video generation failed: $error")
+                }
+                return currentOp
+            }
+            delay(pollDelayMillis)
         }
-        return Json.parseToJsonElement(responseBody).jsonObject
+        throw IllegalStateException("Google video generation timed out")
     }
 
-    private fun executeBytes(request: Request): ByteArray {
-        val response = okHttpClient.newCall(request).execute()
-        val responseBody = response.body.bytes()
-        if (!response.isSuccessful) {
-            throw IllegalStateException("Google video download failed: ${response.code}")
+    protected open suspend fun downloadVideo(url: String, apiKey: String): ByteArray {
+        val request = Request.Builder()
+            .url(url)
+            .header("x-goog-api-key", apiKey)
+            .get()
+            .build()
+        
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IllegalStateException("Google video download failed: ${response.code}")
+            }
+            return response.body?.bytes() ?: throw IllegalStateException("Empty response body")
         }
-        return responseBody
-    }
-
-    private fun JsonObject.string(name: String): String =
-        get(name)?.jsonPrimitive?.content ?: throw IllegalStateException("Missing Google operation $name")
-
-    private fun JsonObject.findGoogleVideoUri(): String {
-        val generatedSamples = this["response"]?.jsonObject
-            ?.get("generateVideoResponse")?.jsonObject
-            ?.get("generatedSamples")?.jsonArray
-        val uri = generatedSamples
-            ?.firstOrNull()
-            ?.jsonObject
-            ?.get("video")?.jsonObject
-            ?.get("uri")?.jsonPrimitive
-            ?.contentOrNull
-        return uri ?: throw IllegalStateException("No Google video result URI")
     }
 
     private companion object {
-        const val DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
         const val DEFAULT_POLL_DELAY_MILLIS = 10_000L
         const val MAX_POLL_ATTEMPTS = 120
     }

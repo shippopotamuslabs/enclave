@@ -54,7 +54,11 @@ enum class GenerationQuality(val displayName: String) {
     SPEED("Speed"),
     QUALITY("Quality"),
     HD("HD"),
-    ULTRA("Ultra")
+    ULTRA("Ultra"),
+    LOW("Low"),
+    MEDIUM("Medium"),
+    HIGH("High"),
+    AUTO("Auto")
 }
 
 data class ProviderCapabilities(

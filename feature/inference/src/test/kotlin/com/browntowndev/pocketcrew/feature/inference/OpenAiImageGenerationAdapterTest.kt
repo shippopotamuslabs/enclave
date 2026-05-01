@@ -1,6 +1,9 @@
 package com.browntowndev.pocketcrew.feature.inference
 
+import com.browntowndev.pocketcrew.domain.model.media.AspectRatio
+import com.browntowndev.pocketcrew.domain.model.media.GenerationQuality
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
+import com.browntowndev.pocketcrew.domain.model.media.VisualGenerationSettings
 import com.browntowndev.pocketcrew.feature.inference.media.OpenAiImageGenerationAdapter
 import com.openai.client.OpenAIClient
 import com.openai.models.images.*
@@ -23,7 +26,7 @@ class OpenAiImageGenerationAdapterTest {
     private val adapter = OpenAiImageGenerationAdapter(clientProvider)
 
     @Test
-    fun generateImage_batchCapableModel_passesNativeCount() = runTest {
+    fun generateImage_passesNativeCount() = runTest {
         val paramsSlot = slot<ImageGenerateParams>()
         every { clientProvider.getClient("key", null) } returns client
         every { client.images() } returns imageService
@@ -35,7 +38,7 @@ class OpenAiImageGenerationAdapterTest {
         val result = adapter.generateImage(
             prompt = "prompt",
             apiKey = "key",
-            modelId = "gpt-image-1",
+            modelId = "gpt-image-2",
             baseUrl = null,
             settings = ImageGenerationSettings(generationCount = 2),
         )
@@ -47,38 +50,74 @@ class OpenAiImageGenerationAdapterTest {
     }
 
     @Test
-    fun generateImage_dalle3Batch_usesSingleImageFallbackRequests() = runTest {
+    fun generateImage_usesCorrectModernMappings() = runTest {
+        val paramsSlot = slot<ImageGenerateParams>()
         every { clientProvider.getClient("key", null) } returns client
         every { client.images() } returns imageService
-        every { imageService.generate(any()) } returnsMany listOf(
-            successfulImageResponse("first".toByteArray()),
-            successfulImageResponse("second".toByteArray()),
-        )
+        every { imageService.generate(capture(paramsSlot)) } returns successfulImageResponse("image".toByteArray())
 
-        val result = adapter.generateImage(
+        // Test High
+        adapter.generateImage(
             prompt = "prompt",
             apiKey = "key",
-            modelId = "dall-e-3",
+            modelId = "gpt-image-2",
             baseUrl = null,
-            settings = ImageGenerationSettings(generationCount = 2),
+            settings = ImageGenerationSettings(
+                aspectRatio = AspectRatio.SIXTEEN_NINE,
+                quality = GenerationQuality.HIGH
+            ),
         )
+        assertEquals("high", paramsSlot.captured.quality().get().toString())
+        assertEquals("1536x1024", paramsSlot.captured.size().get().toString())
 
-        assertTrue(result.isSuccess)
-        val capturedParams = mutableListOf<ImageGenerateParams>()
-        verify(exactly = 2) { imageService.generate(capture(capturedParams)) }
-        assertEquals(listOf(1L, 1L), capturedParams.map { it.n().get() })
-        assertEquals(setOf("first", "second"), result.getOrThrow().map { it.decodeToString() }.toSet())
+        // Test Low
+        adapter.generateImage(
+            prompt = "prompt",
+            apiKey = "key",
+            modelId = "gpt-image-2",
+            baseUrl = null,
+            settings = ImageGenerationSettings(
+                aspectRatio = AspectRatio.NINE_SIXTEEN,
+                quality = GenerationQuality.LOW
+            ),
+        )
+        assertEquals("low", paramsSlot.captured.quality().get().toString())
+        assertEquals("1024x1536", paramsSlot.captured.size().get().toString())
+
+        // Test Medium
+        adapter.generateImage(
+            prompt = "prompt",
+            apiKey = "key",
+            modelId = "gpt-image-2",
+            baseUrl = null,
+            settings = ImageGenerationSettings(
+                aspectRatio = AspectRatio.ONE_ONE,
+                quality = GenerationQuality.MEDIUM
+            ),
+        )
+        assertEquals("medium", paramsSlot.captured.quality().get().toString())
+        assertEquals("1024x1024", paramsSlot.captured.size().get().toString())
+
+        // Test Auto
+        adapter.generateImage(
+            prompt = "prompt",
+            apiKey = "key",
+            modelId = "gpt-image-2",
+            baseUrl = null,
+            settings = ImageGenerationSettings(
+                aspectRatio = AspectRatio.ONE_ONE,
+                quality = GenerationQuality.AUTO
+            ),
+        )
+        assertEquals("auto", paramsSlot.captured.quality().get().toString())
     }
 
     @Test
     fun generateImage_withReferenceImage_throwsUnsupported() = runTest {
-        // Prove that OpenAI does not support image-to-image with text prompts natively without
-        // hallucinatory mask behavior, leading us to fail fast.
-        
         val result = adapter.generateImage(
             prompt = "prompt",
             apiKey = "key",
-            modelId = "dall-e-3",
+            modelId = "gpt-image-2",
             baseUrl = null,
             settings = ImageGenerationSettings(generationCount = 1),
             referenceImage = "fake-bytes".toByteArray()

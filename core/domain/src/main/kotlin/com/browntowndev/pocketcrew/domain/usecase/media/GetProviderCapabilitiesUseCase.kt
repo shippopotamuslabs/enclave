@@ -24,7 +24,12 @@ class GetProviderCapabilitiesUseCase @Inject constructor() {
         return when {
             id.contains("openai") -> ProviderCapabilities(
                 supportedAspectRatios = listOf(AspectRatio.ONE_ONE, AspectRatio.SIXTEEN_NINE, AspectRatio.NINE_SIXTEEN),
-                supportedImageQualities = listOf(GenerationQuality.SPEED, GenerationQuality.HD),
+                supportedImageQualities = listOf(
+                    GenerationQuality.LOW,
+                    GenerationQuality.MEDIUM,
+                    GenerationQuality.HIGH,
+                    GenerationQuality.AUTO
+                ),
                 supportedVideoQualities = listOf(GenerationQuality.SPEED, GenerationQuality.HD),
                 supportedVideoResolutions = listOf("480p", "720p", "1080p"),
                 supportedVideoDurations = listOf(4, 8, 12),
