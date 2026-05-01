@@ -23,6 +23,7 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            isReturnDefaultValues = true
         }
     }
 
@@ -54,6 +55,7 @@ dependencies {
     implementation(libs.androidx.compose.foundation)
     implementation(libs.telephoto.zoomable.image.coil3)
     implementation(libs.coil.compose)
+    implementation(libs.haze)
 
     // Lifecycle
     implementation(libs.androidx.lifecycle.runtime.ktx)
