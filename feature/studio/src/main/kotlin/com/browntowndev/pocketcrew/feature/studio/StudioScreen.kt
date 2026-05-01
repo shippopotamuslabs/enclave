@@ -69,6 +69,7 @@ import com.browntowndev.pocketcrew.core.ui.component.UniversalInputBar
 import com.browntowndev.pocketcrew.core.ui.component.UniversalVoicePromptPlaceholder
 import com.browntowndev.pocketcrew.core.ui.component.UniversalVoiceTrailingAction
 import com.browntowndev.pocketcrew.core.ui.component.VideoPlayer
+import com.browntowndev.pocketcrew.core.ui.component.VideoThumbnail
 import com.browntowndev.pocketcrew.core.ui.theme.GoldVariant
 import com.browntowndev.pocketcrew.core.ui.theme.PeachAccent
 import com.browntowndev.pocketcrew.core.ui.theme.PurpleLightPrimary
@@ -283,6 +284,7 @@ fun StudioScreen(
                 speechState = uiState.speechState,
                 mediaType = uiState.mediaType,
                 referenceImageUri = (uiState.settings as? VisualGenerationSettings)?.referenceImageUri,
+                referenceMediaType = uiState.referenceMediaType,
                 isGenerating = uiState.isGenerating,
                 isContinualGenerationActive = uiState.isContinualGenerationActive,
                 onPromptChange = viewModel::onPromptChange,
@@ -815,6 +817,7 @@ private fun StudioInputDock(
     speechState: com.browntowndev.pocketcrew.domain.port.media.SpeechState,
     mediaType: MediaCapability,
     referenceImageUri: String?,
+    referenceMediaType: MediaCapability?,
     isGenerating: Boolean,
     isContinualGenerationActive: Boolean,
     onPromptChange: (String) -> Unit,
@@ -834,16 +837,16 @@ private fun StudioInputDock(
             .fillMaxWidth()
             .imePadding()
     ) {
-        if (referenceImageUri != null) {
-            ReferenceImageThumbnail(
-                uri = referenceImageUri,
-                onClear = onClearReferenceImage,
-                modifier = Modifier
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-        }
-
         UniversalInputBar(
+            attachmentContent = if (referenceImageUri != null) {
+                {
+                    ReferenceImageThumbnail(
+                        uri = referenceImageUri,
+                        mediaType = referenceMediaType,
+                        onClear = onClearReferenceImage
+                    )
+                }
+            } else null,
             inputContent = {
                 StudioPromptField(
                     prompt = prompt,
@@ -955,6 +958,7 @@ private fun ReferenceImageAction(
 @Composable
 private fun ReferenceImageThumbnail(
     uri: String,
+    mediaType: MediaCapability?,
     onClear: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -964,12 +968,20 @@ private fun ReferenceImageThumbnail(
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
     ) {
-        AsyncImage(
-            model = uri,
-            contentDescription = "Reference image thumbnail",
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop
-        )
+        if (mediaType == MediaCapability.VIDEO) {
+            VideoThumbnail(
+                videoUri = uri,
+                contentDescription = "Reference video thumbnail",
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            AsyncImage(
+                model = uri,
+                contentDescription = "Reference image thumbnail",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
 
         Surface(
             color = Color.Black.copy(alpha = 0.6f),
