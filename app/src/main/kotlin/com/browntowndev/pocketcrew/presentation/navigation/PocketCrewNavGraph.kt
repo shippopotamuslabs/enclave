@@ -579,9 +579,8 @@ fun PocketCrewNavGraph(
                 assets = studioUiState.gallery,
                 onNavigateBack = { navController.popBackStack() },
                 onEditMedia = studioViewModel::onEditMedia,
-                onAnimateMedia = { id, autoAnimate ->
-                    studioViewModel.onAnimateMedia(id, autoAnimate)
-                    navController.popBackStack(Routes.STUDIO, inclusive = false)
+                onAnimateMedia = { id, autoAnimate, customPrompt ->
+                    studioViewModel.onAnimateMedia(id, autoAnimate, customPrompt)
                 },
                 onShareMedia = studioViewModel::shareSingleMedia,
                 onDeleteMedia = studioViewModel::deleteMedia,

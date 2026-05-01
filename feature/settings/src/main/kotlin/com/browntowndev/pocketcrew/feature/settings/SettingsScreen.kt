@@ -190,7 +190,7 @@ fun SettingsScreen(
                 SectionHeader(text = "Models")
                 SettingsNavigationItem(
                     title = "Model Role Assignments",
-                    subtitle = "Set models for chat and pipeline roles",
+                    subtitle = "Set models for chat, media, and tts",
                     icon = Icons.AutoMirrored.Filled.Rule,
                     onClick = { onNavigateToModelConfigure(ModelType.MAIN) }
                 )
@@ -203,21 +203,21 @@ fun SettingsScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsNavigationItem(
-                    title = "External AI Providers",
+                    title = "API AI Models",
                     subtitle = "Manage API keys and presets",
                     icon = Icons.Default.Cloud,
                     onClick = { onShowByokSheet(true) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsNavigationItem(
-                    title = "Text to Speech Providers",
+                    title = "Text to Speech Models",
                     subtitle = "Manage TTS voices and API keys",
                     icon = Icons.Default.Vibration, // Using Vibration for audio/haptic feel
                     onClick = { onShowTtsProvidersSheet(true) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsNavigationItem(
-                    title = "Media Generation Providers",
+                    title = "Media Generation Models",
                     subtitle = "Manage Image and Video generation APIs",
                     icon = Icons.Default.Palette,
                     onClick = { onShowMediaProvidersSheet(true) }
