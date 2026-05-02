@@ -98,6 +98,9 @@ abstract class MessageDao {
     @Query("UPDATE message SET pipeline_step = :pipelineStep WHERE id = :messageId")
     abstract suspend fun updateMessagePipelineStep(messageId: MessageId, pipelineStep: PipelineStep?)
 
+    @Query("UPDATE message SET artifacts_json = :artifactsJson WHERE id = :id")
+    abstract suspend fun updateMessageArtifacts(id: MessageId, artifactsJson: String?)
+
     /**
      * Persists all message data atomically in a single transaction.
      * Updates model type, thinking timestamps, thinking content, content, pipeline step, and state.
@@ -111,6 +114,7 @@ abstract class MessageDao {
      * @param content The final message content
      * @param messageState The final message state
      * @param pipelineStep The pipeline step (for CREW mode messages)
+     * @param artifactsJson The JSON string representing the artifacts
      */
     @Transaction
     open suspend fun persistAllMessageData(
@@ -123,7 +127,8 @@ abstract class MessageDao {
         content: String,
         messageState: MessageState,
         pipelineStep: PipelineStep?,
-        tavilySources: List<TavilySourceEntity> = emptyList()
+        tavilySources: List<TavilySourceEntity> = emptyList(),
+        artifactsJson: String? = null
     ) {
         // Update model type
         updateMessageModelType(messageId, modelType)
@@ -147,6 +152,8 @@ abstract class MessageDao {
         updateMessagePipelineStep(messageId, pipelineStep)
         // Update state
         updateMessageState(messageId, messageState)
+        // Update artifacts
+        updateMessageArtifacts(messageId, artifactsJson)
 
         // Persist search sources
         if (tavilySources.isNotEmpty()) {

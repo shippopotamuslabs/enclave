@@ -17,6 +17,8 @@ import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
+import com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
 import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiResponseStreamHandler
@@ -281,6 +283,18 @@ abstract class BaseOpenAiSdkInferenceService(
                         if (sources.isNotEmpty()) {
                             emitEvent(InferenceEvent.TavilyResults(sources, modelType))
                         }
+                    }
+                }
+
+                if (toolCall.toolName == ToolDefinition.GENERATE_ARTIFACT.name) {
+                    val artifactParams = toolCall.parameters as? com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
+                    if (artifactParams != null) {
+                        emitEvent(
+                            InferenceEvent.Artifacts(
+                                artifacts = listOf(artifactParams.toRequest()),
+                                modelType = modelType
+                            )
+                        )
                     }
                 }
             },

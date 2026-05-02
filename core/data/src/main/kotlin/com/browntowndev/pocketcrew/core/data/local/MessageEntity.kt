@@ -59,4 +59,6 @@ data class MessageEntity(
     val modelType: ModelType? = null,
     @ColumnInfo(name = "pipeline_step")
     val pipelineStep: PipelineStep? = null,
+    @ColumnInfo(name = "artifacts_json")
+    val artifactsJson: String? = null,
 )

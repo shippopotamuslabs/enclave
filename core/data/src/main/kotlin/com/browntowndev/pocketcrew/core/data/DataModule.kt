@@ -129,6 +129,20 @@ object DataModule {
             "pocketcrew.db"
         )
         .fallbackToDestructiveMigration()
+        .openHelperFactory(SQLiteVecInstaller.createOpenHelperFactory(context))
+        .addCallback(object : RoomDatabase.Callback() {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                super.onCreate(db)
+                SQLiteVecInstaller.createEmbeddingTable(db)
+                SQLiteVecInstaller.createMemoryEmbeddingTable(db)
+            }
+
+            override fun onOpen(db: SupportSQLiteDatabase) {
+                super.onOpen(db)
+                SQLiteVecInstaller.createEmbeddingTable(db)
+                SQLiteVecInstaller.createMemoryEmbeddingTable(db)
+            }
+        })
         .build()
     }
 

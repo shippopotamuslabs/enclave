@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.domain.model.inference
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -10,8 +11,8 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
+import kotlinx.serialization.json.JsonClassDiscriminator
 import kotlin.reflect.KClass
-import kotlin.reflect.KProperty1
 import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.full.memberProperties
 import kotlin.reflect.jvm.javaField
@@ -48,66 +49,122 @@ data class ToolSchema(
 
 object ToolSchemaGenerator {
     fun <T : ToolParameters> generateSchema(klass: KClass<T>): ToolSchema {
-        val properties = mutableMapOf<String, JsonElement>()
-        val required = mutableListOf<String>()
+        return ToolSchema(JsonObject(generateProperties(klass)), getRequired(klass))
+    }
 
+    private fun generateProperties(klass: KClass<*>): Map<String, JsonElement> {
+        val properties = mutableMapOf<String, JsonElement>()
         klass.memberProperties.forEach { prop ->
             val toolParam = prop.findAnnotation<ToolParam>() ?: prop.javaField?.getAnnotation(ToolParam::class.java)
-            val name = prop.name
+            val name = prop.findAnnotation<SerialName>()?.value 
+                ?: prop.javaField?.getAnnotation(SerialName::class.java)?.value
+                ?: prop.name
             
-            if (toolParam?.required != false) {
-                required.add(name)
-            }
-
             properties[name] = buildJsonObject {
-                val type = mapType(prop)
-                put("type", type)
+                val propClass = prop.returnType.jvmErasure
+                val type = mapType(propClass)
                 
                 if (toolParam != null && toolParam.description.isNotBlank()) {
                     put("description", toolParam.description)
                 }
 
-                if (type == "array") {
-                    val itemType = mapArrayType(prop)
-                    putJsonObject("items") {
-                        put("type", itemType)
-                    }
-                }
-
-                // Handle Enums
-                val propClass = prop.returnType.jvmErasure
-                if (propClass.java.isEnum) {
-                    putJsonArray("enum") {
-                        propClass.java.enumConstants?.forEach { enumValue ->
-                            add(JsonPrimitive(enumValue.toString()))
+                when (type) {
+                    "array" -> {
+                        put("type", "array")
+                        val itemTypeArg = prop.returnType.arguments.firstOrNull()?.type?.jvmErasure
+                        if (itemTypeArg != null) {
+                            putJsonObject("items") {
+                                val itemSchema = generateSchemaForClass(itemTypeArg)
+                                itemSchema.forEach { (key, value) -> put(key, value) }
+                            }
                         }
+                    }
+                    "string" -> {
+                        put("type", "string")
+                        if (propClass.java.isEnum) {
+                            putJsonArray("enum") {
+                                propClass.java.enumConstants?.forEach { enumValue ->
+                                    add(JsonPrimitive(enumValue.toString()))
+                                }
+                            }
+                        }
+                    }
+                    "integer" -> put("type", "integer")
+                    "number" -> put("type", "number")
+                    "boolean" -> put("type", "boolean")
+                    "object" -> {
+                        val objSchema = generateSchemaForClass(propClass)
+                        objSchema.forEach { (key, value) -> put(key, value) }
                     }
                 }
             }
         }
-
-        return ToolSchema(JsonObject(properties), required)
+        return properties
     }
 
-    private fun mapType(prop: KProperty1<*, *>): String {
-        return when (prop.returnType.jvmErasure) {
+    @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
+    private fun generateSchemaForClass(klass: KClass<*>): JsonObject {
+        if (klass.isSealed) {
+            val discriminator = klass.findAnnotation<JsonClassDiscriminator>()?.discriminator ?: "type"
+            return buildJsonObject {
+                putJsonArray("oneOf") {
+                    klass.sealedSubclasses.forEach { subclass ->
+                        add(buildJsonObject {
+                            put("type", "object")
+                            val subProperties = generateProperties(subclass).toMutableMap()
+                            
+                            // Add discriminator
+                            val serialName = subclass.findAnnotation<SerialName>()?.value 
+                                ?: subclass.simpleName ?: ""
+                            
+                            subProperties[discriminator] = buildJsonObject {
+                                put("type", "string")
+                                putJsonArray("enum") { add(JsonPrimitive(serialName)) }
+                            }
+                            
+                            put("properties", JsonObject(subProperties))
+                            val req = getRequired(subclass).toMutableList()
+                            if (!req.contains(discriminator)) req.add(discriminator)
+                            putJsonArray("required") {
+                                req.forEach { add(JsonPrimitive(it)) }
+                            }
+                        })
+                    }
+                }
+            }
+        } else {
+            return buildJsonObject {
+                put("type", "object")
+                put("properties", JsonObject(generateProperties(klass)))
+                val req = getRequired(klass)
+                if (req.isNotEmpty()) {
+                    putJsonArray("required") {
+                        req.forEach { add(JsonPrimitive(it)) }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun getRequired(klass: KClass<*>): List<String> {
+        return klass.memberProperties.filter { prop ->
+            val toolParam = prop.findAnnotation<ToolParam>() ?: prop.javaField?.getAnnotation(ToolParam::class.java)
+            toolParam?.required != false
+        }.map { prop ->
+            prop.findAnnotation<SerialName>()?.value 
+                ?: prop.javaField?.getAnnotation(SerialName::class.java)?.value
+                ?: prop.name
+        }
+    }
+
+    private fun mapType(klass: KClass<*>): String {
+        return when (klass) {
             String::class -> "string"
             Int::class, Long::class -> "integer"
             Float::class, Double::class -> "number"
             Boolean::class -> "boolean"
             List::class -> "array"
-            else -> if (prop.returnType.jvmErasure.java.isEnum) "string" else "object"
-        }
-    }
-
-    private fun mapArrayType(prop: KProperty1<*, *>): String {
-        val typeArg = prop.returnType.arguments.firstOrNull()?.type?.jvmErasure
-        return when (typeArg) {
-            String::class -> "string"
-            Int::class, Long::class -> "integer"
-            Float::class, Double::class -> "number"
-            Boolean::class -> "boolean"
-            else -> "string"
+            else -> if (klass.java.isEnum) "string" else "object"
         }
     }
 }

@@ -125,7 +125,37 @@ class GenerateChatResponseUseCase @Inject constructor(
                                 terminalSeen = terminalSeen,
                             )
                         ) {
+                            val activeTurnKey = ActiveChatTurnKey(
+                                chatId = chatId,
+                                assistantMessageId = assistantMessageId,
+                            )
+                            
+                            // Reconcile artifacts from the snapshot port before persisting.
+                            // Artifacts are attached out-of-band via the port, so the local 
+                            // accumulator manager might not have them.
+                            val finalSnapshot = activeChatTurnSnapshotPort.getSnapshot(activeTurnKey)
+                            finalSnapshot?.messages?.forEach { (id, snapshot) ->
+                                if (snapshot.artifacts.isNotEmpty()) {
+                                    accumulatorManager.reduce(
+                                        MessageGenerationState.ArtifactsAttached(
+                                            artifacts = snapshot.artifacts,
+                                            modelType = snapshot.modelType
+                                        )
+                                    )
+                                }
+                            }
+
                             accumulatorManager.markIncompleteAsCancelled()
+                            
+                            // Reconcile with the final snapshot from the port to capture any out-of-band 
+                            // events like artifact attachments that didn't come through the flow.
+                            val snapshot = activeChatTurnSnapshotPort.getSnapshot(
+                                ActiveChatTurnKey(chatId, assistantMessageId)
+                            )
+                            if (snapshot != null) {
+                                accumulatorManager.reconcileWithSnapshot(snapshot)
+                            }
+
                             persistAccumulatedMessages(accumulatorManager)
                             
                             // Generate and save embedding for the user message
@@ -275,7 +305,15 @@ private object NoOpActiveChatTurnSnapshotPort : ActiveChatTurnSnapshotPort {
         urls: List<String>,
     ) = Unit
 
+    override suspend fun attachArtifact(
+        key: ActiveChatTurnKey,
+        assistantMessageId: MessageId,
+        artifact: com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest,
+    ) = Unit
+
     override suspend fun acknowledgeHandoff(key: ActiveChatTurnKey) = Unit
 
     override suspend fun clear(key: ActiveChatTurnKey) = Unit
+
+    override suspend fun getSnapshot(key: ActiveChatTurnKey): AccumulatedMessages? = null
 }
