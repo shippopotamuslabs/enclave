@@ -30,6 +30,8 @@ fun ChatRoute(
         onPlayAudio = viewModel::onPlayTts,
         onImageSelected = viewModel::onImageSelected,
         onClearImage = viewModel::clearSelectedImage,
+        onFileSelected = viewModel::onFileSelected,
+        onClearFile = viewModel::clearSelectedFile,
         onShieldTap = {
             val reason = viewModel.getShieldReason()
             if (reason != null) {

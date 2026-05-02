@@ -115,6 +115,9 @@ class ChatViewModel @Inject constructor(
 
     private val _selectedImageUri = MutableStateFlow<String?>(null)
 
+    private val _selectedFileName = MutableStateFlow<String?>(null)
+    private val _selectedFileText = MutableStateFlow<String?>(null)
+
     // Track current chat ID for continuing conversations
     private val _currentChatId = MutableStateFlow<ChatId?>(null)
 
@@ -396,9 +399,17 @@ class ChatViewModel @Inject constructor(
         _inputText,
         _selectedMode,
         _selectedImageUri,
+        _selectedFileName,
         _speechState,
-    ) { settings: SettingsData, inputText: String, selectedMode: ChatModeUi, selectedImageUri: String?, speechState: SpeechState ->
-        UiInputs(settings, inputText, selectedMode, selectedImageUri, speechState)
+    ) { args: Array<Any?> ->
+        UiInputs(
+            settings = args[0] as SettingsData,
+            inputText = args[1] as String,
+            selectedMode = args[2] as ChatModeUi,
+            selectedImageUri = args[3] as String?,
+            selectedFileName = args[4] as String?,
+            speechState = args[5] as SpeechState
+        )
     }
 
     private val uiInputsWithPolicyFlow = combine(
@@ -479,6 +490,7 @@ class ChatViewModel @Inject constructor(
             inputText = inputText,
             speechState = speechState,
             selectedImageUri = inputs.selectedImageUri,
+            selectedFileName = inputs.selectedFileName,
             isPhotoAttachmentEnabled = attachmentPolicy.isEnabled,
             photoAttachmentDisabledReason = attachmentPolicy.disabledReason,
             selectedMode = selectedMode,
@@ -704,6 +716,31 @@ class ChatViewModel @Inject constructor(
         _selectedImageUri.value = null
     }
 
+    fun onFileSelected(uri: String?) {
+        if (uri == null) {
+            _selectedFileName.value = null
+            _selectedFileText.value = null
+            return
+        }
+
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to process file",
+                "Could not read the selected file. Please try again.",
+            )
+        ) {
+            val metadata = chatUseCases.processFileAttachmentUseCase(uri)
+            _selectedFileName.value = metadata.name
+            _selectedFileText.value = metadata.content
+        }
+    }
+
+    fun clearSelectedFile() {
+        _selectedFileName.value = null
+        _selectedFileText.value = null
+    }
+
     fun stopGeneration() {
         val currentUiState = uiState.value
         if (!currentUiState.isGenerating || !currentUiState.canStop) {
@@ -745,6 +782,9 @@ class ChatViewModel @Inject constructor(
 
     fun onSendMessage() {
         val input = _inputText.value
+        val fileText = _selectedFileText.value
+        val fileName = _selectedFileName.value
+
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to send message", "Could not send message. Please try again.")) {
             val settings = settingsUseCases.getSettings().first()
             val selectedImageUri = if (resolvePhotoAttachmentPolicy(settings, _selectedMode.value).isEnabled) {
@@ -753,7 +793,13 @@ class ChatViewModel @Inject constructor(
                 null
             }
 
-            if (input.isNotBlank() || selectedImageUri != null) {
+            val finalPrompt = if (fileText != null) {
+                "--- Attached File: $fileName ---\n$fileText\n\n--- User Prompt ---\n$input"
+            } else {
+                input
+            }
+
+            if (finalPrompt.isNotBlank() || selectedImageUri != null) {
                 // Determine the chat ID: prefer currentChatId, then initialChatId, otherwise empty
                 val chatIdForMessage = _currentChatId.value ?: initialChatId ?: ChatId("")
 
@@ -761,7 +807,7 @@ class ChatViewModel @Inject constructor(
                 val domainMessage = Message(
                     id = MessageId(UUID.randomUUID().toString()),
                     chatId = chatIdForMessage,
-                    content = Content(text = input, imageUri = selectedImageUri),
+                    content = Content(text = finalPrompt, imageUri = selectedImageUri),
                     role = Role.USER,
                     createdAt = System.currentTimeMillis()
                 )
@@ -783,11 +829,13 @@ class ChatViewModel @Inject constructor(
                 // Clear input text
                 _inputText.value = ""
                 _selectedImageUri.value = null
+                _selectedFileName.value = null
+                _selectedFileText.value = null
 
                 // Use mode to route to appropriate service
                 // Collect the flow to keep direct inference alive and surface errors.
                 inferenceJob = chatUseCases.generateChatResponse(
-                    prompt = input,
+                    prompt = finalPrompt,
                     userMessageId = promptResult.userMessageId,
                     assistantMessageId = promptResult.assistantMessageId,
                     chatId = promptResult.chatId,
@@ -873,6 +921,7 @@ class ChatViewModel @Inject constructor(
         val inputText: String,
         val selectedMode: ChatModeUi,
         val selectedImageUri: String?,
+        val selectedFileName: String?,
         val speechState: SpeechState,
     )
 
