@@ -23,6 +23,8 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 
 @Singleton
@@ -164,8 +166,13 @@ class ChatRepositoryImpl @Inject constructor(
         content: String,
         messageState: MessageState,
         pipelineStep: PipelineStep?,
-        tavilySources: List<TavilySource>
+        tavilySources: List<TavilySource>,
+        artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>
     ) {
+        val artifactsJson = if (artifacts.isNotEmpty()) {
+            Json.encodeToString(artifacts)
+        } else null
+
         messageDao.persistAllMessageData(
             messageId = messageId,
             modelType = modelType,
@@ -176,7 +183,8 @@ class ChatRepositoryImpl @Inject constructor(
             content = content,
             messageState = messageState,
             pipelineStep = pipelineStep,
-            tavilySources = tavilySources.map { it.toEntity() }
+            tavilySources = tavilySources.map { it.toEntity() },
+            artifactsJson = artifactsJson
         )
     }
 

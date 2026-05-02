@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
+import com.browntowndev.pocketcrew.core.data.artifact.ArtifactToolExecutor
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -25,6 +26,7 @@ class CompositeToolExecutorTest {
     private lateinit var searchChatToolExecutor: SearchChatToolExecutor
     private lateinit var getMessageContextToolExecutor: GetMessageContextToolExecutor
     private lateinit var manageMemoriesToolExecutor: ManageMemoriesToolExecutor
+    private lateinit var artifactToolExecutor: ArtifactToolExecutor
     private lateinit var eventBus: ToolExecutionEventBus
     private lateinit var compositeToolExecutor: CompositeToolExecutor
 
@@ -37,6 +39,7 @@ class CompositeToolExecutorTest {
         searchChatToolExecutor = mockk()
         getMessageContextToolExecutor = mockk()
         manageMemoriesToolExecutor = mockk()
+        artifactToolExecutor = mockk()
         eventBus = mockk(relaxed = true)
         compositeToolExecutor = CompositeToolExecutor(
             searchToolExecutor = searchToolExecutor,
@@ -46,6 +49,7 @@ class CompositeToolExecutorTest {
             searchChatToolExecutor = searchChatToolExecutor,
             getMessageContextToolExecutor = getMessageContextToolExecutor,
             manageMemoriesToolExecutor = manageMemoriesToolExecutor,
+            artifactToolExecutor = artifactToolExecutor,
             eventBus = eventBus
         )
     }
@@ -158,6 +162,61 @@ class CompositeToolExecutorTest {
             eventBus.emit(match { (it as? ToolExecutionEvent.Started)?.toolName == request.toolName })
             extractToolExecutor.execute(request)
             eventBus.emit(match { it is ToolExecutionEvent.Finished && it.error == null })
+        }
+    }
+
+    @Test
+    fun `execute routes generate_artifact to artifactToolExecutor`() = runTest {
+        // Given
+        val request = ToolCallRequest(
+            chatId = ChatId("chat-abc"),
+            userMessageId = MessageId("msg-abc"),
+            toolName = ToolDefinition.GENERATE_ARTIFACT.name,
+            argumentsJson = "{\"documentType\":\"PDF\",\"title\":\"Report\",\"content\":\"{}\"}",
+            provider = "xai",
+            modelType = ModelType.FAST
+        )
+        val expectedResult = ToolExecutionResult(toolName = request.toolName, resultJson = "{\"status\": \"success\"}")
+        coEvery { artifactToolExecutor.execute(request) } returns expectedResult
+
+        // When
+        val result = compositeToolExecutor.execute(request)
+
+        // Then
+        coVerify { artifactToolExecutor.execute(request) }
+        assertEquals(expectedResult, result)
+    }
+
+    @Test
+    fun `all tools in ToolDefinition ALL_TOOLS are supported`() = runTest {
+        // Setup mocks for all executors to handle any request
+        val executors = listOf(
+            searchToolExecutor, extractToolExecutor, imageInspectToolExecutor,
+            searchChatHistoryToolExecutor, searchChatToolExecutor,
+            getMessageContextToolExecutor, manageMemoriesToolExecutor, artifactToolExecutor
+        )
+        executors.forEach {
+            coEvery { it.execute(any()) } returns ToolExecutionResult("any", "{}")
+        }
+
+        ToolDefinition.ALL_TOOLS.forEach { tool ->
+            val request = ToolCallRequest(
+                toolName = tool.name,
+                argumentsJson = "{}",
+                provider = "test",
+                modelType = ModelType.FAST
+            )
+
+            try {
+                compositeToolExecutor.execute(request)
+            } catch (e: IllegalArgumentException) {
+                if (e.message?.startsWith("Unsupported tool") == true) {
+                    org.junit.Assert.fail("Tool ${tool.name} is defined in ToolDefinition.ALL_TOOLS but not supported by CompositeToolExecutor")
+                }
+                // Other IllegalArgumentExceptions are okay (e.g. from ToolCallRequest decoding)
+            } catch (e: Exception) {
+                // Other exceptions are fine, they mean the routing worked but execution failed (expected)
+            }
         }
     }
 }

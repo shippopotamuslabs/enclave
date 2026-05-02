@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
+import com.browntowndev.pocketcrew.core.data.artifact.ArtifactToolExecutor
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,6 +22,7 @@ import javax.inject.Singleton
  * - [ToolDefinition.SEARCH_CHAT] → [SearchChatToolExecutor]
  * - [ToolDefinition.GET_MESSAGE_CONTEXT] → [GetMessageContextToolExecutor]
  * - [ToolDefinition.MANAGE_MEMORIES] → [ManageMemoriesToolExecutor]
+ * - [ToolDefinition.GENERATE_ARTIFACT] → [ArtifactToolExecutor]
  */
 @Singleton
 class CompositeToolExecutor @Inject constructor(
@@ -31,6 +33,7 @@ class CompositeToolExecutor @Inject constructor(
     private val searchChatToolExecutor: SearchChatToolExecutor,
     private val getMessageContextToolExecutor: GetMessageContextToolExecutor,
     private val manageMemoriesToolExecutor: ManageMemoriesToolExecutor,
+    private val artifactToolExecutor: ArtifactToolExecutor,
     private val eventBus: ToolExecutionEventBus,
 ) : ToolExecutorPort {
 
@@ -57,6 +60,7 @@ class CompositeToolExecutor @Inject constructor(
                 ToolDefinition.SEARCH_CHAT.name -> searchChatToolExecutor.execute(request)
                 ToolDefinition.GET_MESSAGE_CONTEXT.name -> getMessageContextToolExecutor.execute(request)
                 ToolDefinition.MANAGE_MEMORIES.name -> manageMemoriesToolExecutor.execute(request)
+                ToolDefinition.GENERATE_ARTIFACT.name -> artifactToolExecutor.execute(request)
                 else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
             }
             

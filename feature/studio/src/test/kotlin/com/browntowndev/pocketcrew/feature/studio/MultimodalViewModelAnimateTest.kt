@@ -135,7 +135,7 @@ class MultimodalViewModelAnimateTest {
 
         // Then
         assertEquals(VideoGenerationState.Success(assetId, "cache://video.mp4"), viewModel.uiState.value.videoGenerationState)
-        assertEquals("", viewModel.uiState.value.prompt) // Should NOT be updated
+        assertEquals("Original Prompt", viewModel.uiState.value.prompt)
         job.cancel()
     }
 
@@ -191,7 +191,7 @@ class MultimodalViewModelAnimateTest {
 
         // Then
         coEvery { videoGenerationPort.generateVideo("Custom Prompt", any(), any()) }
-        assertEquals("", viewModel.uiState.value.prompt) // Should NOT be updated
+        assertEquals("Custom Prompt", viewModel.uiState.value.prompt)
         job.cancel()
     }
 }

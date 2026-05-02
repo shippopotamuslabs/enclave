@@ -371,6 +371,7 @@ class InferenceService : Service() {
                         )
                     }
                     is InferenceEvent.TavilyResults -> Unit
+                    is InferenceEvent.Artifacts -> Unit
                     is InferenceEvent.Finished -> {                        // Ignore. StepCompleted signifies completion for pipeline steps & is detected by flow finishing
                     }
                     is InferenceEvent.SafetyBlocked -> {

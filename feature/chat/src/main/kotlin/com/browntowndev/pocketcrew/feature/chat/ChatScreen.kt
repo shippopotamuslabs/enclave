@@ -36,6 +36,7 @@ fun ChatScreen(
     onClearImage: () -> Unit,
     onShieldTap: () -> Unit,
     onMicClick: () -> Unit,
+    onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit = {},
 ) {
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -70,6 +71,7 @@ fun ChatScreen(
                     hasTtsProviderAssigned = uiState.hasTtsProviderAssigned,
                     onEditMessage = onEditMessage,
                     onPlayAudio = onPlayAudio,
+                    onNavigateToArtifact = onNavigateToArtifact,
                 )
 
                 if (uiState.shieldReason != null) {

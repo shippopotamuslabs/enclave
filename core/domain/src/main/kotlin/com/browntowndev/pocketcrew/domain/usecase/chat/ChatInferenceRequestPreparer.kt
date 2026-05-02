@@ -82,6 +82,7 @@ class ChatInferenceRequestPreparer(
                 includeSearchTool = searchEnabled,
                 includeImageInspectTool = imageHandling == ChatImageHandling.TOOL,
                 includeMemoryTools = true,
+                includeArtifactTool = true,
                 currentChatId = chatId.value,
                 strategy = strategy,
                 coreMemories = coreMemories,
@@ -100,6 +101,7 @@ class ChatInferenceRequestPreparer(
             add(ToolDefinition.SEARCH_CHAT)
             add(ToolDefinition.GET_MESSAGE_CONTEXT)
             add(ToolDefinition.MANAGE_MEMORIES)
+            add(ToolDefinition.GENERATE_ARTIFACT)
         }
 
         return PreparedChatInferenceRequest(

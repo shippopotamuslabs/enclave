@@ -142,6 +142,7 @@ dependencies {
     implementation(project(":feature:chat-inference-service"))
     implementation(project(":feature:inference"))
     implementation(project(":feature:studio"))
+    implementation(project(":feature:artifact"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)

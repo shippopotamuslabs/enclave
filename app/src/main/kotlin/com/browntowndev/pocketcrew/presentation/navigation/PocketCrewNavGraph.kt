@@ -21,6 +21,7 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.feature.chat.ChatRoute
 import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
 import com.browntowndev.pocketcrew.feature.history.HistoryRoute
+import com.browntowndev.pocketcrew.feature.artifact.ArtifactRoute
 import com.browntowndev.pocketcrew.feature.settings.navigation.settingsGraph
 import com.browntowndev.pocketcrew.feature.studio.GalleryDetailScreen
 import com.browntowndev.pocketcrew.feature.studio.GalleryRoute
@@ -28,6 +29,7 @@ import com.browntowndev.pocketcrew.feature.studio.GalleryViewModel
 import com.browntowndev.pocketcrew.feature.studio.MultimodalViewModel
 import com.browntowndev.pocketcrew.feature.studio.StudioDetailScreen
 import com.browntowndev.pocketcrew.feature.studio.StudioScreen
+import com.browntowndev.pocketcrew.feature.artifact.ArtifactRoute
 
 private const val ANIMATION_DURATION = 300
 
@@ -152,6 +154,12 @@ fun PocketCrewNavGraph(
                         popUpTo(Routes.CHAT_WITH_ID) { inclusive = true }
                     }
                 },
+                onNavigateToArtifactStudio = { request ->
+                    val content = kotlinx.serialization.json.Json.encodeToString(request)
+                    val encodedTitle = android.net.Uri.encode(request.title)
+                    val encodedContent = android.net.Uri.encode(content)
+                    navController.navigate(Routes.artifact(encodedTitle, encodedContent))
+                },
                 onShowSnackbar = onShowSnackbar,
             )
         }
@@ -231,6 +239,78 @@ fun PocketCrewNavGraph(
                 onNavigateToGallery = { navController.navigate(Routes.GALLERY) },
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS_GRAPH) },
                 onShowSnackbar = onShowSnackbar,
+            )
+        }
+
+        composable(
+            route = Routes.ARTIFACT_WITH_ARGS,
+            arguments = listOf(
+                navArgument("content") { type = NavType.StringType },
+                navArgument("title") { type = NavType.StringType }
+            ),
+            enterTransition = {
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
+            },
+            exitTransition = {
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
+            },
+            popEnterTransition = {
+                val initialLevel = getRouteLevel(initialState.destination.route)
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                if (initialLevel < targetLevel) {
+                    slideInHorizontally(
+                        initialOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideInHorizontally(
+                        initialOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
+            },
+            popExitTransition = {
+                val targetLevel = getRouteLevel(targetState.destination.route)
+                val currentLevel = getRouteLevel(initialState.destination.route)
+                if (targetLevel > currentLevel) {
+                    slideOutHorizontally(
+                        targetOffsetX = { -it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                } else {
+                    slideOutHorizontally(
+                        targetOffsetX = { it },
+                        animationSpec = tween(ANIMATION_DURATION),
+                    )
+                }
+            },
+        ) {
+            ArtifactRoute(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
 
@@ -636,6 +716,7 @@ private fun getRouteLevel(route: String?): Int {
         route.startsWith(Routes.SETTINGS_GRAPH) || route.startsWith(Routes.SETTINGS_MAIN) -> 6
         route.startsWith(Routes.GALLERY_DETAIL.substringBefore("?")) -> 5
         route.startsWith(Routes.GALLERY) -> 4
+        route.startsWith(Routes.ARTIFACT.substringBefore("?")) -> 3
         route.startsWith(Routes.STUDIO_DETAIL.substringBefore("?")) -> 3
         route.startsWith(Routes.STUDIO) -> 2
         route.startsWith(Routes.CHAT) -> 1

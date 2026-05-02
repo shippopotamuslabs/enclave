@@ -1,5 +1,7 @@
 package com.browntowndev.pocketcrew.feature.chat
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -60,6 +62,7 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.serialization.json.Json
 import kotlinx.coroutines.launch
 
 
@@ -87,6 +90,7 @@ class ChatViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "ChatViewModel"
+        private val jsonParser = Json { ignoreUnknownKeys = true }
     }
 
     /**
@@ -124,6 +128,8 @@ class ChatViewModel @Inject constructor(
     private val activeToolIds = mutableSetOf<String>()
     private val activeToolJobs = mutableMapOf<String, Job>()
     private val toolStartTimes = mutableMapOf<String, Long>()
+    private val activeToolNames = mutableMapOf<String, String>()
+    private val activeArtifacts = mutableMapOf<String, com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>()
 
     private val photoAttachmentPolicyFlow = combine(
         settingsUseCases.getSettings(),
@@ -288,12 +294,11 @@ class ChatViewModel @Inject constructor(
 
             when (event) {
                 is ToolExecutionEvent.Started -> {
-                    // Cancel any pending cleanup for this tool if it matches a previous ID
                     activeToolJobs[event.eventId]?.cancel()
                     activeToolIds.add(event.eventId)
                     toolStartTimes[event.eventId] = System.currentTimeMillis()
-
                     val toolName = event.toolName.lowercase()
+                    activeToolNames[event.eventId] = toolName
                     _activeToolCallBanner.value = ToolCallBannerUi(
                         kind = when (toolName) {
                             TAVILY_WEB_SEARCH.name -> ToolCallBannerKind.SEARCH
@@ -301,17 +306,28 @@ class ChatViewModel @Inject constructor(
                             ATTACHED_IMAGE_INSPECT.name -> ToolCallBannerKind.IMAGE
                             ToolDefinition.SEARCH_CHAT_HISTORY.name -> ToolCallBannerKind.MEMORY
                             ToolDefinition.SEARCH_CHAT.name -> ToolCallBannerKind.MEMORY
+                            ToolDefinition.GENERATE_ARTIFACT.name -> ToolCallBannerKind.ARTIFACT
                             else -> ToolCallBannerKind.SEARCH
                         },
                         label = when (toolName) {
-                            TAVILY_WEB_SEARCH.name -> "Searching with Tavily"
-                            TAVILY_EXTRACT.name -> "Reading webpage content"
-                            ATTACHED_IMAGE_INSPECT.name -> "Inspecting image"
-                            ToolDefinition.SEARCH_CHAT_HISTORY.name -> "Searching chat history"
-                            ToolDefinition.SEARCH_CHAT.name -> "Searching chat"
+                            TAVILY_WEB_SEARCH.name.lowercase() -> "Searching with Tavily"
+                            TAVILY_EXTRACT.name.lowercase() -> "Reading webpage content"
+                            ATTACHED_IMAGE_INSPECT.name.lowercase() -> "Inspecting image"
+                            ToolDefinition.SEARCH_CHAT_HISTORY.name.lowercase() -> "Searching chat history"
+                            ToolDefinition.SEARCH_CHAT.name.lowercase() -> "Searching chat"
+                            ToolDefinition.GENERATE_ARTIFACT.name.lowercase() -> "Generating Artifact"
                             else -> "Executing tool"
                         }
                     )
+
+                    if (toolName == ToolDefinition.GENERATE_ARTIFACT.name.lowercase()) {
+                        try {
+                            val params = jsonParser.decodeFromString<com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams>(event.argumentsJson)
+                            activeArtifacts[event.eventId] = params.toRequest()
+                        } catch (e: Exception) {
+                            loggingPort.error(TAG, "Failed to parse artifact request", e)
+                        }
+                    }
                 }
 
                 is ToolExecutionEvent.Extracting -> {
@@ -328,6 +344,10 @@ class ChatViewModel @Inject constructor(
                     val elapsed = System.currentTimeMillis() - startTime
                     val remaining = (1000 - elapsed).coerceAtLeast(0)
 
+                    // Capture the current key and artifact BEFORE the delay to avoid race conditions
+                    val capturedKey = activeTurnKeyFlow.value
+                    val capturedArtifact = activeArtifacts[event.eventId]
+
                     // Collect sources for the banner if available
                     val sources = event.resultJson?.let {
                         com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(MessageId("temp"), it)
@@ -338,7 +358,22 @@ class ChatViewModel @Inject constructor(
                             _activeToolCallBanner.value = _activeToolCallBanner.value?.copy(tavilySources = sources)
                         }
                         delay(remaining)
+                        val toolName = (activeToolNames[event.eventId] ?: "").lowercase()
+                        if (toolName == ToolDefinition.GENERATE_ARTIFACT.name.lowercase()) {
+                            if (capturedKey != null && capturedArtifact != null) {
+                                viewModelScope.launch {
+                                    activeChatTurnSnapshotPort.attachArtifact(
+                                        key = capturedKey,
+                                        assistantMessageId = capturedKey.assistantMessageId,
+                                        artifact = capturedArtifact
+                                    )
+                                    activeArtifacts.remove(event.eventId)
+                                }
+                            }
+                        }
+
                         activeToolIds.remove(event.eventId)
+                        activeToolNames.remove(event.eventId)
                         // Only clear if no other tools are active to prevent UI flickering
                         if (activeToolIds.isEmpty()) {
                             _activeToolCallBanner.value = null
@@ -501,6 +536,7 @@ class ChatViewModel @Inject constructor(
                 pipelineStep = message.content.pipelineStep,
                 imageUri = message.content.imageUri,
                 tavilySources = message.tavilySources,
+                artifacts = message.content.artifacts,
             ),
             formattedTimestamp = formatTimestamp(message.createdAt),
             indicatorState = computeIndicatorState(message),

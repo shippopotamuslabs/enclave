@@ -71,6 +71,7 @@ private fun BannerContent(banner: ToolCallBannerUi) {
                         ToolCallBannerKind.EXTRACT -> R.drawable.pageview
                         ToolCallBannerKind.IMAGE -> R.drawable.image
                         ToolCallBannerKind.MEMORY -> R.drawable.search
+                        ToolCallBannerKind.ARTIFACT -> R.drawable.document
                     }
                 ),
                 contentDescription = null,

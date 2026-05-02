@@ -12,6 +12,7 @@ class SearchToolPromptComposer @Inject constructor() {
         includeSearchTool: Boolean = true,
         includeImageInspectTool: Boolean = false,
         includeMemoryTools: Boolean = true,
+        includeArtifactTool: Boolean = false,
         currentChatId: String? = null,
         strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
         coreMemories: List<Memory> = emptyList(),
@@ -21,7 +22,7 @@ class SearchToolPromptComposer @Inject constructor() {
             formatCoreMemories(coreMemories).takeIf(String::isNotEmpty),
             baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
             formatRetrievedMemories(retrievedMemories).takeIf(String::isNotEmpty),
-            localToolContract(includeSearchTool, includeImageInspectTool, includeMemoryTools, currentChatId, strategy).takeIf(String::isNotEmpty),
+            localToolContract(includeSearchTool, includeImageInspectTool, includeMemoryTools, includeArtifactTool, currentChatId, strategy).takeIf(String::isNotEmpty),
         ).joinToString(separator = "\n\n")
 
     companion object {
@@ -89,6 +90,25 @@ To inspect:
 ${ToolDefinition.ATTACHED_IMAGE_INSPECT.toExample(strategy)}
 """.trimIndent()
 
+        private fun artifactContract(strategy: ToolCallStrategy): String = """
+# ARTIFACT STUDIO MANDATE:
+You have access to '${ToolDefinition.GENERATE_ARTIFACT.name}' to create professional, structured documents (PDFs).
+If the user's request involves creating a report, document, list, or structured summary that should be "exported" or "rendered nicely", you MUST use this tool.
+The tool produces a deterministic interactive preview and allows native PDF export.
+
+To generate an artifact:
+${ToolDefinition.GENERATE_ARTIFACT.toExample(strategy)}
+
+MANDATORY JSON STRUCTURE for 'content':
+The 'content' field must be a JSON array of sections. Each section has a 'title' (string) and a list of 'blocks' (array of objects).
+Example block objects:
+- { "type": "Heading", "text": "Section Title", "level": 1 }
+- { "type": "Paragraph", "text": "Your text here..." }
+- { "type": "BulletList", "items": ["Item 1", "Item 2"] }
+- { "type": "Table", "headers": ["Col 1", "Col 2"], "rows": [["R1C1", "R1C2"], ["R2C1", "R2C2"]] }
+- { "type": "CodeBlock", "code": "println('hello')", "language": "kotlin" }
+""".trimIndent()
+
         private fun memoryToolsContract(currentChatId: String?, strategy: ToolCallStrategy): String = buildString {
             append("""
 # CONVERSATION MEMORY TOOLS:
@@ -145,10 +165,11 @@ ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
             includeSearchTool: Boolean = true,
             includeImageInspectTool: Boolean = false,
             includeMemoryTools: Boolean = true,
+            includeArtifactTool: Boolean = false,
             currentChatId: String? = null,
             strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
         ): String {
-            if (!includeSearchTool && !includeImageInspectTool && !includeMemoryTools) return ""
+            if (!includeSearchTool && !includeImageInspectTool && !includeMemoryTools && !includeArtifactTool) return ""
             if (strategy == ToolCallStrategy.SDK_NATIVE) return ""
 
             return buildString {
@@ -162,6 +183,10 @@ ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
                 if (includeMemoryTools) {
                     if (isNotEmpty()) append("\n\n")
                     append(memoryToolsContract(currentChatId, strategy))
+                }
+                if (includeArtifactTool) {
+                    if (isNotEmpty()) append("\n\n")
+                    append(artifactContract(strategy))
                 }
                 val rules = strictRules(strategy)
                 if (rules.isNotEmpty()) {

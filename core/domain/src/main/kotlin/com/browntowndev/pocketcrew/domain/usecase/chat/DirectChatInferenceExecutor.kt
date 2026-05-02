@@ -154,6 +154,10 @@ class DirectChatInferenceExecutor @Inject constructor(
                     emit(MessageGenerationState.TavilySourcesAttached(event.sources, event.modelType))
                 }
 
+                is InferenceEvent.Artifacts -> {
+                    emit(MessageGenerationState.ArtifactsAttached(event.artifacts, event.modelType))
+                }
+
                 is InferenceEvent.Finished -> {
                     emit(MessageGenerationState.Finished(event.modelType))
                 }
