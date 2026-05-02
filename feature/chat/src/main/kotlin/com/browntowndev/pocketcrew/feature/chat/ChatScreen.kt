@@ -34,6 +34,8 @@ fun ChatScreen(
     onPlayAudio: (String) -> Unit,
     onImageSelected: (String?) -> Unit,
     onClearImage: () -> Unit,
+    onFileSelected: (String?) -> Unit,
+    onClearFile: () -> Unit,
     onShieldTap: () -> Unit,
     onMicClick: () -> Unit,
     onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit = {},
@@ -42,6 +44,12 @@ fun ChatScreen(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
         onImageSelected(uri?.toString())
+    }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        onFileSelected(uri?.toString())
     }
 
     Scaffold(
@@ -90,6 +98,7 @@ fun ChatScreen(
                 inputText = uiState.inputText,
                 speechState = uiState.speechState,
                 selectedImageUri = uiState.selectedImageUri,
+                selectedFileName = uiState.selectedFileName,
                 isPhotoAttachmentEnabled = uiState.isPhotoAttachmentEnabled,
                 photoAttachmentDisabledReason = uiState.photoAttachmentDisabledReason,
                 selectedMode = uiState.selectedMode,
@@ -100,12 +109,16 @@ fun ChatScreen(
                 onModeChange = onModeChange,
                 onSend = onSendMessage,
                 onStopGenerating = onStopGenerating,
-                onAttach = {
+                onImageAttach = {
                     imagePickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                     )
                 },
-                onClearAttachment = onClearImage,
+                onFileAttach = {
+                    filePickerLauncher.launch("*/*")
+                },
+                onClearImage = onClearImage,
+                onClearFile = onClearFile,
                 onMicClick = onMicClick,
             )
         }
@@ -128,6 +141,8 @@ private fun PreviewChatScreenLight() {
             onPlayAudio = {},
             onImageSelected = {},
             onClearImage = {},
+            onFileSelected = {},
+            onClearFile = {},
             onShieldTap = {},
             onMicClick = {},
         )

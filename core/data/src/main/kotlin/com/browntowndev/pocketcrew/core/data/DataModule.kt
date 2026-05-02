@@ -280,6 +280,10 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindFileAttachmentPort(impl: com.browntowndev.pocketcrew.core.data.media.AndroidFileAttachmentPort): com.browntowndev.pocketcrew.domain.port.media.FileAttachmentPort
+
+    @Binds
+    @Singleton
     abstract fun bindAudioCapture(impl: AndroidAudioCapture): AudioCapturePort
 
     @Binds

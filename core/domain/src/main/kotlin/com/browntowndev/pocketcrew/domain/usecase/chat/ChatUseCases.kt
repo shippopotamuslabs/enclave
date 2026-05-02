@@ -33,6 +33,11 @@ interface ChatUseCases {
     val mergeMessagesUseCase: MergeMessagesUseCase
 
     /**
+     * Processes a file attachment.
+     */
+    val processFileAttachmentUseCase: ProcessFileAttachmentUseCase
+
+    /**
      * Creates the initial user prompt.
      * @param message The user's input text
      */

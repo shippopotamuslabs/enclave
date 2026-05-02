@@ -58,6 +58,7 @@ data class ChatUiState(
     val inputText: String = "",
     val speechState: SpeechState = SpeechState.Idle,
     val selectedImageUri: String? = null,
+    val selectedFileName: String? = null,
     val isPhotoAttachmentEnabled: Boolean = false,
     val photoAttachmentDisabledReason: String? = null,
     val selectedMode: ChatModeUi = ChatModeUi.FAST,
