@@ -233,7 +233,7 @@ private fun ByokAssetListView(
 ) {
     Column {
         Text(
-            text = "External AI Providers",
+            text = "API AI Models",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(bottom = 8.dp)

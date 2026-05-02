@@ -8,6 +8,8 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsDeletionUseCa
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsDeletionUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUseCasesImpl
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsMediaUseCases
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsMediaUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsTtsUseCases
@@ -46,6 +48,10 @@ abstract class SettingsUseCasesModule {
     @Binds
     @Singleton
     abstract fun bindSettingsTtsUseCases(impl: SettingsTtsUseCasesImpl): SettingsTtsUseCases
+
+    @Binds
+    @Singleton
+    abstract fun bindSettingsMediaUseCases(impl: SettingsMediaUseCasesImpl): SettingsMediaUseCases
 
     @Binds
     @Singleton

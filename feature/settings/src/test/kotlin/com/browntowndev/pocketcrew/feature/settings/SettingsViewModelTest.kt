@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.byok.ClearDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
@@ -17,6 +18,9 @@ import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCase
+import com.browntowndev.pocketcrew.domain.usecase.media.DeleteMediaProviderUseCase
+import com.browntowndev.pocketcrew.domain.usecase.media.GetMediaProvidersUseCase
+import com.browntowndev.pocketcrew.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.pocketcrew.domain.usecase.settings.*
 import io.mockk.every
 import io.mockk.coEvery
@@ -69,9 +73,16 @@ class SettingsViewModelTest {
     private val saveTtsProviderUseCase = mockk<SaveTtsProviderUseCase>(relaxed = true)
     private val deleteTtsProviderUseCase = mockk<DeleteTtsProviderUseCase>(relaxed = true)
 
+    private val getMediaProvidersUseCase = mockk<GetMediaProvidersUseCase>()
+    private val saveMediaProviderUseCase = mockk<SaveMediaProviderUseCase>(relaxed = true)
+    private val deleteMediaProviderUseCase = mockk<DeleteMediaProviderUseCase>(relaxed = true)
+
+    private val memoriesRepository = mockk<MemoriesRepository>()
+
     private val localModelAssetUiMapper = LocalModelAssetUiMapper()
     private val apiModelAssetUiMapper = ApiModelAssetUiMapper()
     private val ttsProviderAssetUiMapper = TtsProviderAssetUiMapper()
+    private val mediaProviderAssetUiMapper = MediaProviderAssetUiMapper()
     private val reassignmentOptionUiMapper = ReassignmentOptionUiMapper()
     private val errorHandler = mockk<ViewModelErrorHandler>()
 
@@ -85,6 +96,8 @@ class SettingsViewModelTest {
         every { getApiModelAssetsUseCase() } returns MutableStateFlow(emptyList())
         every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
         every { getTtsProvidersUseCase() } returns MutableStateFlow(emptyList())
+        every { getMediaProvidersUseCase() } returns MutableStateFlow(emptyList())
+        every { memoriesRepository.getAllMemoriesFlow() } returns MutableStateFlow(emptyList())
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
 
         val settingsUseCases = SettingsUseCasesImpl(
@@ -129,15 +142,22 @@ class SettingsViewModelTest {
                 getTtsProviders = getTtsProvidersUseCase,
                 saveTtsProvider = saveTtsProviderUseCase,
                 deleteTtsProvider = deleteTtsProviderUseCase,
+            ),
+            media = SettingsMediaUseCasesImpl(
+                getMediaProviders = getMediaProvidersUseCase,
+                saveMediaProvider = saveMediaProviderUseCase,
+                deleteMediaProvider = deleteMediaProviderUseCase,
             )
         )
 
         viewModel = SettingsViewModel(
             settingsUseCases = settingsUseCases,
+            memoriesRepository = memoriesRepository,
             settingsUiStateFactory = SettingsUiStateFactory(
                 localModelAssetUiMapper,
                 apiModelAssetUiMapper,
                 ttsProviderAssetUiMapper,
+                mediaProviderAssetUiMapper,
                 ApiDiscoveryUiFilter(),
                 applyApiModelMetadataDefaultsUseCase
             ),

@@ -150,13 +150,27 @@ data class ToolDefinition(
             parametersClass = GetMessageContextParams::class,
         )
 
+        val GENERATE_ARTIFACT = ToolDefinition(
+            name = "generate_artifact",
+            description = "Generate a professional PDF document from structured content. Use this when the user wants a report, plan, summary, or other deliverable exported as a downloadable PDF. The content must follow the Artifact JSON schema (title, sections, blocks).",
+            parametersClass = GenerateArtifactParams::class,
+        )
+
+        val MANAGE_MEMORIES = ToolDefinition(
+            name = "manage_memories",
+            description = "Manage the user's memories. Use this to save important information about the user (identity, preferences, ideologies, etc.) or project context that you should remember across all conversations. You can also update, delete, or search existing memories.",
+            parametersClass = ManageMemoriesParams::class,
+        )
+
         val ALL_TOOLS = listOf(
             TAVILY_WEB_SEARCH,
             TAVILY_EXTRACT,
             ATTACHED_IMAGE_INSPECT,
             SEARCH_CHAT_HISTORY,
             SEARCH_CHAT,
-            GET_MESSAGE_CONTEXT
+            GET_MESSAGE_CONTEXT,
+            MANAGE_MEMORIES,
+            GENERATE_ARTIFACT
         )
 
         fun fromName(name: String): ToolDefinition? {

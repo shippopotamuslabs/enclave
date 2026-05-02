@@ -12,6 +12,7 @@ import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsDao
 import com.browntowndev.pocketcrew.core.data.local.ApiCredentialsEntity
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
+import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
@@ -37,6 +38,7 @@ class DefaultModelRepositoryImplTest {
     private val apiConfigsDao = mockk<ApiModelConfigurationsDao>()
     private val apiCredentialsDao = mockk<ApiCredentialsDao>()
     private val ttsProviderDao = mockk<TtsProviderDao>()
+    private val mediaProviderDao = mockk<MediaProviderDao>()
 
     @BeforeEach
     fun setup() {
@@ -46,7 +48,8 @@ class DefaultModelRepositoryImplTest {
             localModelsDao = localModelsDao,
             apiModelConfigurationsDao = apiConfigsDao,
             apiCredentialsDao = apiCredentialsDao,
-            ttsProviderDao = ttsProviderDao
+            ttsProviderDao = ttsProviderDao,
+            mediaProviderDao = mediaProviderDao
         )
     }
 

@@ -20,6 +20,13 @@ android {
     }
 
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -38,6 +45,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.material.icons.extended)
@@ -45,6 +53,9 @@ dependencies {
     implementation(libs.androidx.compose.ui.text.google.fonts)
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.telephoto.zoomable.image.coil3)
+    implementation(libs.coil.compose)
+    implementation(libs.haze)
 
     // Lifecycle
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -57,13 +68,21 @@ dependencies {
     implementation(libs.markdown.parser)
     implementation(libs.markdown.renderer)
 
+    // Media3
+    implementation(libs.media3.exoplayer)
+    implementation(libs.media3.ui)
+
     // Testing
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.compose.ui.test.junit4)
     testImplementation(project(":core:testing"))
     testRuntimeOnly(libs.junit.platform.launcher)
+    testRuntimeOnly(libs.junit.vintage.engine)
 }
 
 tasks.withType<Test> {

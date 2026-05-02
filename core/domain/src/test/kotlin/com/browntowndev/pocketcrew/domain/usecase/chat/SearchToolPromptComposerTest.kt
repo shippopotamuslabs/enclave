@@ -1,5 +1,7 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
+import com.browntowndev.pocketcrew.domain.model.memory.Memory
+import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
@@ -185,5 +187,49 @@ class SearchToolPromptComposerTest {
 
         assertTrue(composed.contains("call:get_message_context"))
         assertTrue(composed.contains("message_id"))
+    }
+
+    @Test
+    fun `compose includes manage_memories in memory tools contract`() {
+        val composed = composer.compose(
+            baseSystemPrompt = "Be concise.",
+            includeMemoryTools = true
+        )
+
+        assertTrue(composed.contains("manage_memories"))
+        assertTrue(composed.contains("save, update, delete, or search long-term memories"))
+    }
+
+    @Test
+    fun `compose formats core memories correctly`() {
+        val memories = listOf(
+            Memory(category = MemoryCategory.CORE_IDENTITY, content = "I am a helpful assistant."),
+            Memory(category = MemoryCategory.PREFERENCES, content = "User prefers short answers.")
+        )
+        val composed = composer.compose(
+            baseSystemPrompt = "Base",
+            coreMemories = memories
+        )
+
+        assertTrue(composed.contains("# ABOUT THE USER:"))
+        assertTrue(composed.contains("## Identity & Background:"))
+        assertTrue(composed.contains("- I am a helpful assistant."))
+        assertTrue(composed.contains("## Preferences & Style:"))
+        assertTrue(composed.contains("- User prefers short answers."))
+    }
+
+    @Test
+    fun `compose formats retrieved memories correctly`() {
+        val memories = listOf(
+            Memory(category = MemoryCategory.FACTS, content = "The sky is blue.")
+        )
+        val composed = composer.compose(
+            baseSystemPrompt = "Base",
+            retrievedMemories = memories
+        )
+
+        assertTrue(composed.contains("# RELEVANT FACTS & CONTEXT:"))
+        assertTrue(composed.contains("The following information was retrieved from your long-term memory"))
+        assertTrue(composed.contains("- The sky is blue."))
     }
 }

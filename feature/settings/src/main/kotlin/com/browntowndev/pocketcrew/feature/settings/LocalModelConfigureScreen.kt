@@ -465,8 +465,9 @@ fun PreviewLocalModelAssignmentSelectionBottomSheet() {
             localAssets = MockSettingsData.localModels,
             apiAssets = MockSettingsData.apiModels,
             ttsAssets = emptyList(),
+            mediaAssets = emptyList(),
             onDismiss = {},
-            onSelect = { _, _, _ -> }
+            onSelect = { _, _, _, _ -> }
         )
     }
 }

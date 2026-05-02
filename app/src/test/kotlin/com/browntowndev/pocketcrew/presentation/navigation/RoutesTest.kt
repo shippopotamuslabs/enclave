@@ -9,4 +9,9 @@ class RoutesTest {
     fun `chat route declares notification deep link pattern`() {
         assertEquals(ChatNotificationDeepLink.URI_PATTERN, Routes.CHAT_DEEP_LINK_PATTERN)
     }
+
+    @Test
+    fun `gallery route is declared`() {
+        assertEquals("gallery", Routes.GALLERY)
+    }
 }

@@ -17,6 +17,7 @@ fun SettingsRoute(
     onNavigateToModelConfigure: (ModelType) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
     onNavigateToTtsConfigure: () -> Unit,
+    onNavigateToMediaConfigure: () -> Unit,
     onNavigateToLocalModelConfigure: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -40,6 +41,11 @@ fun SettingsRoute(
         onDeleteAllConversations = viewModel::onDeleteAllConversations,
         onDeleteAllMemories = viewModel::onDeleteAllMemories,
         onShowMemoriesSheet = viewModel::onShowMemoriesSheet,
+        onAddMemory = viewModel::onAddMemory,
+        onEditMemory = viewModel::onEditMemory,
+        onUpdateMemoryDraft = viewModel::onUpdateMemoryDraft,
+        onSaveMemory = viewModel::onSaveMemory,
+        onCancelMemoryEdit = viewModel::onCancelMemoryEdit,
         onDeleteMemory = viewModel::onDeleteMemory,
         onOpenToS = {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://pocketcrew.ai/terms"))
@@ -75,6 +81,11 @@ fun SettingsRoute(
         onStartCreateTtsProviderAsset = viewModel::onStartCreateTtsProviderAsset,
         onSelectTtsProviderAsset = viewModel::onSelectTtsProviderAsset,
         onDeleteTtsProviderAsset = viewModel::onDeleteTtsProviderAsset,
+        onShowMediaProvidersSheet = viewModel::onShowMediaProvidersSheet,
+        onNavigateToMediaConfigure = onNavigateToMediaConfigure,
+        onStartCreateMediaProviderAsset = viewModel::onStartCreateMediaProviderAsset,
+        onSelectMediaProviderAsset = viewModel::onSelectMediaProviderAsset,
+        onDeleteMediaProviderAsset = viewModel::onDeleteMediaProviderAsset,
         onNavigateToLocalModelConfigure = onNavigateToLocalModelConfigure,
         onSelectLocalModelAsset = viewModel::onSelectLocalModelAsset,
         onSelectLocalModelConfig = viewModel::onSelectLocalModelConfig,

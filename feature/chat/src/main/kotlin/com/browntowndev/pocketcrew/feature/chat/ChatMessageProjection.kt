@@ -67,7 +67,11 @@ private fun MessageSnapshot.toMessage(
         id = messageId,
         chatId = chatId,
         role = Role.ASSISTANT,
-        content = Content(text = content, pipelineStep = pipelineStep),
+        content = Content(
+            text = content, 
+            pipelineStep = pipelineStep, 
+            artifacts = if (messageState == MessageState.COMPLETE) artifacts else emptyList()
+        ),
         thinkingRaw = thinkingRaw.ifBlank { null },
         thinkingDurationSeconds = thinkingDurationSeconds,
         thinkingStartTime = thinkingStartTime.takeIf { startTime -> startTime != 0L },

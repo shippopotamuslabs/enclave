@@ -1,0 +1,270 @@
+Reusing configuration cache.
+> Task :core:data:preBuild UP-TO-DATE
+> Task :core:domain:preBuild UP-TO-DATE
+> Task :core:data:preDebugBuild UP-TO-DATE
+> Task :core:domain:preDebugBuild UP-TO-DATE
+> Task :core:domain:javaPreCompileDebug UP-TO-DATE
+> Task :core:domain:generateDebugResources UP-TO-DATE
+> Task :core:domain:processDebugNavigationResources UP-TO-DATE
+> Task :core:data:generateDebugBuildConfig UP-TO-DATE
+> Task :core:domain:packageDebugResources UP-TO-DATE
+> Task :core:domain:parseDebugLocalResources UP-TO-DATE
+> Task :core:domain:generateDebugRFile UP-TO-DATE
+> Task :core:domain:compileDebugKotlin UP-TO-DATE
+> Task :core:domain:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:domain:bundleLibCompileToJarDebug UP-TO-DATE
+
+> Task :core:data:kspDebugKotlin
+i: [ksp] loaded provider(s): [dagger.hilt.processor.internal.uninstallmodules.KspUninstallModulesProcessor$Provider, dagger.hilt.android.processor.internal.viewmodel.KspViewModelProcessor$Provider, dagger.hilt.processor.internal.earlyentrypoint.KspEarlyEntryPointProcessor$Provider, dagger.hilt.android.processor.internal.androidentrypoint.KspAndroidEntryPointProcessor$Provider, dagger.hilt.processor.internal.definecomponent.KspDefineComponentProcessor$Provider, dagger.hilt.processor.internal.originatingelement.KspOriginatingElementProcessor$Provider, dagger.hilt.android.processor.internal.bindvalue.KspBindValueProcessor$Provider, dagger.hilt.processor.internal.root.KspComponentTreeDepsProcessor$Provider, dagger.hilt.processor.internal.root.KspRootProcessor$Provider, dagger.hilt.processor.internal.aliasof.KspAliasOfProcessor$Provider, dagger.hilt.processor.internal.aggregateddeps.KspAggregatedDepsProcessor$Provider, dagger.hilt.processor.internal.generatesrootinput.KspGeneratesRootInputProcessor$Provider, dagger.hilt.android.processor.internal.customtestapplication.KspCustomTestApplicationProcessor$Provider, androidx.hilt.AndroidXHiltKspProcessor$Provider, androidx.room.RoomKspProcessor$Provider, dagger.internal.codegen.KspComponentProcessor$Provider]
+w: [ksp] /home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/local/StudioMediaEntity.kt:18: albumId column references a foreign key but it is not part of an index. This may trigger full table scans whenever parent table is modified so you are highly advised to create an index that covers this column.
+e: [ksp] ModuleProcessingStep was unable to process 'com.browntowndev.pocketcrew.core.data.DataModule' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'providePocketCrewDatabase(android.content.Context)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideChatDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideMessageDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideChatSummaryDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideTavilySourceDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideMessageVisionAnalysisDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideLocalModelsDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideLocalModelConfigurationsDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideApiModelConfigurationsDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideMemoriesDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideApiCredentialsDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideDefaultModelsDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideEmbeddingDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideTtsProviderDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideMediaProviderDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideStudioMediaDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideDataStore(android.content.Context)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'providePipelineDataStore(android.content.Context)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideWorkManager(android.content.Context)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideNotificationManager(android.content.Context)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideSystemClock()' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideDownloadSpeedTracker(com.browntowndev.pocketcrew.domain.util.Clock)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideDownloadProgressTracker(com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideHashingService()' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideHttpFileDownloader(okhttp3.OkHttpClient,com.browntowndev.pocketcrew.domain.port.inference.LoggingPort)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideModelUrlProvider()' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+e: [ksp] BindingMethodProcessingStep was unable to process 'provideEmbeddingEngine(com.browntowndev.pocketcrew.core.data.inference.MiniLMEmbeddingEngine)' because 'StudioAlbumDao' could not be resolved.
+
+Dependency trace:
+    => element (OBJECT): com.browntowndev.pocketcrew.core.data.DataModule
+    => element (METHOD): provideStudioAlbumDao(com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase)
+    => type (ERROR return type): StudioAlbumDao
+
+If type 'StudioAlbumDao' is a generated type, check above for compilation errors that may have prevented the type from being generated. Otherwise, ensure that type 'StudioAlbumDao' is on your classpath.
+
+> Task :core:data:kspDebugKotlin FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':core:data:kspDebugKotlin'.
+> A failure occurred while executing com.google.devtools.ksp.gradle.KspAAWorkerAction
+   > KSP failed with exit code: PROCESSING_ERROR
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 3s
+10 actionable tasks: 1 executed, 9 up-to-date
+Configuration cache entry reused.
