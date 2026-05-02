@@ -6,6 +6,9 @@ import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCase
+import com.browntowndev.pocketcrew.domain.usecase.media.DeleteMediaProviderUseCase
+import com.browntowndev.pocketcrew.domain.usecase.media.GetMediaProvidersUseCase
+import com.browntowndev.pocketcrew.domain.usecase.media.SaveMediaProviderUseCase
 import javax.inject.Inject
 
 class SettingsPreferencesUseCasesImpl @Inject constructor(
@@ -56,6 +59,12 @@ class SettingsTtsUseCasesImpl @Inject constructor(
     override val deleteTtsProvider: DeleteTtsProviderUseCase,
 ) : SettingsTtsUseCases
 
+class SettingsMediaUseCasesImpl @Inject constructor(
+    override val getMediaProviders: GetMediaProvidersUseCase,
+    override val saveMediaProvider: SaveMediaProviderUseCase,
+    override val deleteMediaProvider: DeleteMediaProviderUseCase,
+) : SettingsMediaUseCases
+
 class SettingsUseCasesImpl @Inject constructor(
     override val preferences: SettingsPreferencesUseCases,
     override val localModels: SettingsLocalModelUseCases,
@@ -63,4 +72,5 @@ class SettingsUseCasesImpl @Inject constructor(
     override val assignments: SettingsAssignmentUseCases,
     override val deletion: SettingsDeletionUseCases,
     override val tts: SettingsTtsUseCases,
+    override val media: SettingsMediaUseCases,
 ) : SettingsUseCases

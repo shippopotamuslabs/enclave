@@ -192,16 +192,16 @@ class TtsPlaybackService : MediaSessionService() {
             registry.remove(requestId)
         }
         currentRequestId = null
-        
+
         mediaSession?.let {
             removeSession(it)
             it.release()
         }
         mediaSession = null
-        
+
         player?.release()
         player = null
-        
+
         super.onDestroy()
         logger.debug(TAG, "TtsPlaybackService destroyed")
     }

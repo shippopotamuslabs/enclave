@@ -35,7 +35,14 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
     ) {
         val entry = entryFor(key)
         entry.mutex.withLock {
-            entry.flow.update { snapshot }
+            entry.flow.update { current ->
+                // Merge current artifacts into the new snapshot if they exist
+                val mergedMessages = snapshot.messages.mapValues { (id, newSnapshot) ->
+                    val existingArtifacts = current?.messages?.get(id)?.artifacts ?: emptyList()
+                    newSnapshot.copy(artifacts = (newSnapshot.artifacts + existingArtifacts).distinct())
+                }
+                snapshot.copy(messages = mergedMessages)
+            }
             if (entry.flow.value.isTerminalSnapshot()) {
                 scheduleTerminalCleanup(key, entry)
             } else {
@@ -70,12 +77,37 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
         }
     }
 
+    override suspend fun attachArtifact(
+        key: ActiveChatTurnKey,
+        assistantMessageId: com.browntowndev.pocketcrew.domain.model.chat.MessageId,
+        artifact: com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest,
+    ) {
+        val entry = entries[key] ?: return
+        entry.mutex.withLock {
+            entry.flow.update { current ->
+                current?.copy(
+                    messages = current.messages.mapValues { (id, snapshot) ->
+                        if (id == assistantMessageId) {
+                            snapshot.copy(artifacts = snapshot.artifacts + artifact)
+                        } else {
+                            snapshot
+                        }
+                    },
+                )
+            }
+        }
+    }
+
     override suspend fun acknowledgeHandoff(key: ActiveChatTurnKey) {
         retire(key)
     }
 
     override suspend fun clear(key: ActiveChatTurnKey) {
         retire(key)
+    }
+
+    override suspend fun getSnapshot(key: ActiveChatTurnKey): AccumulatedMessages? {
+        return entries[key]?.flow?.value
     }
 
     internal fun snapshotValue(key: ActiveChatTurnKey): AccumulatedMessages? {

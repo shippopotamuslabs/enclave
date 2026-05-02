@@ -15,6 +15,7 @@ class SettingsUseCasesImplTest {
         val assignments = mockk<SettingsAssignmentUseCases>()
         val deletion = mockk<SettingsDeletionUseCases>()
         val tts = mockk<SettingsTtsUseCases>()
+        val media = mockk<SettingsMediaUseCases>()
         val getSettings = mockk<GetSettingsUseCase>()
         every { preferences.getSettings } returns getSettings
 
@@ -25,6 +26,7 @@ class SettingsUseCasesImplTest {
             assignments = assignments,
             deletion = deletion,
             tts = tts,
+            media = media,
         )
 
         assertSame(preferences, useCases.preferences)
@@ -33,6 +35,7 @@ class SettingsUseCasesImplTest {
         assertSame(assignments, useCases.assignments)
         assertSame(deletion, useCases.deletion)
         assertSame(tts, useCases.tts)
+        assertSame(media, useCases.media)
         assertSame(getSettings, useCases.getSettings)
     }
 }

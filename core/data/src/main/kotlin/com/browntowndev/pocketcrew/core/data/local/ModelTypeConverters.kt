@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.local
 import androidx.room.TypeConverter
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
@@ -55,6 +56,12 @@ class ModelTypeConverters {
 
     @TypeConverter
     fun toMessageId(value: String): MessageId = MessageId(value)
+
+    @TypeConverter
+    fun fromMemoryCategory(category: MemoryCategory): String = category.name
+
+    @TypeConverter
+    fun toMemoryCategory(value: String): MemoryCategory = MemoryCategory.valueOf(value)
 
     @TypeConverter
     fun fromDate(date: Date?): Long? = date?.time

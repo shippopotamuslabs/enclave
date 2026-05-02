@@ -32,6 +32,7 @@ internal class PersistAccumulatedChatMessagesUseCase(
                 messageState = accumulator.currentState,
                 pipelineStep = getPipelineStepForModelType(accumulator.modelType),
                 tavilySources = accumulator.tavilySources.toList(),
+                artifacts = accumulator.artifacts.toList(),
             )
 
             // Generate and save embedding for the assistant message

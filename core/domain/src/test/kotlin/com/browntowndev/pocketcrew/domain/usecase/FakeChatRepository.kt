@@ -9,6 +9,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -25,6 +26,7 @@ class FakeChatRepository : ChatRepository {
     private var nextChatId = 1
     var shouldThrowOnCreateChat = false
     private val savedAssistantMessages = mutableListOf<Pair<MessageId, String>>()
+    val persistedMessageData = mutableListOf<PersistedMessageData>()
 
     private val messagesFlows = mutableMapOf<ChatId, MutableStateFlow<List<Message>>>()
     
@@ -136,6 +138,7 @@ class FakeChatRepository : ChatRepository {
         nextChatId = 1
         shouldThrowOnCreateChat = false
         savedAssistantMessages.clear()
+        persistedMessageData.clear()
     }
     
     /**
@@ -174,7 +177,6 @@ class FakeChatRepository : ChatRepository {
     override suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat> {
         return _chatsFlow.value.filter { it.id in ids }.associateBy { it.id }
     }
-
     override suspend fun persistAllMessageData(
         messageId: MessageId,
         modelType: ModelType,
@@ -185,10 +187,39 @@ class FakeChatRepository : ChatRepository {
         content: String,
         messageState: MessageState,
         pipelineStep: PipelineStep?,
-        tavilySources: List<TavilySource>
+        tavilySources: List<TavilySource>,
+        artifacts: List<ArtifactGenerationRequest>
     ) {
-        // No-op for testing
+        persistedMessageData.add(
+            PersistedMessageData(
+                messageId = messageId,
+                modelType = modelType,
+                thinkingStartTime = thinkingStartTime,
+                thinkingEndTime = thinkingEndTime,
+                thinkingDuration = thinkingDuration,
+                thinkingRaw = thinkingRaw,
+                content = content,
+                messageState = messageState,
+                pipelineStep = pipelineStep,
+                tavilySources = tavilySources,
+                artifacts = artifacts
+            )
+        )
     }
+
+    data class PersistedMessageData(
+        val messageId: MessageId,
+        val modelType: ModelType,
+        val thinkingStartTime: Long,
+        val thinkingEndTime: Long,
+        val thinkingDuration: Int?,
+        val thinkingRaw: String?,
+        val content: String,
+        val messageState: MessageState,
+        val pipelineStep: PipelineStep?,
+        val tavilySources: List<TavilySource>,
+        val artifacts: List<ArtifactGenerationRequest>
+    )
 
     override suspend fun markSourcesExtracted(urls: List<String>) {
         // No-op for testing

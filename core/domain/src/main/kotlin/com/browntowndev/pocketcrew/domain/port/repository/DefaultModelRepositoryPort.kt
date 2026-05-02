@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.port.repository
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.coroutines.flow.Flow
@@ -14,7 +15,8 @@ interface DefaultModelRepositoryPort {
         modelType: ModelType,
         localConfigId: LocalModelConfigurationId?,
         apiConfigId: ApiModelConfigurationId?,
-        ttsProviderId: TtsProviderId? = null
+        ttsProviderId: TtsProviderId? = null,
+        mediaProviderId: MediaProviderId? = null
     )
     suspend fun clearDefault(modelType: ModelType)
 }

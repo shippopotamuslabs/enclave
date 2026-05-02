@@ -33,6 +33,7 @@ enum class ToolCallBannerKind {
     EXTRACT,
     IMAGE,
     MEMORY,
+    ARTIFACT,
 }
 
 data class ToolCallBannerUi(

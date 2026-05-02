@@ -340,7 +340,13 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
         ) = Unit
 
         override suspend fun acknowledgeHandoff(key: ActiveChatTurnKey) = Unit
+        override suspend fun attachArtifact(
+            key: ActiveChatTurnKey,
+            assistantMessageId: MessageId,
+            artifact: com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest,
+        ) = Unit
 
         override suspend fun clear(key: ActiveChatTurnKey) = Unit
+        override suspend fun getSnapshot(key: ActiveChatTurnKey): AccumulatedMessages? = null
     }
 }

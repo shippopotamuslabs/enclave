@@ -37,6 +37,10 @@ sealed interface MessageGenerationState {
         val sources: List<TavilySource>,
         val modelType: ModelType,
     ) : MessageGenerationState
+    data class ArtifactsAttached(
+        val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>,
+        val modelType: ModelType,
+    ) : MessageGenerationState
     data class StepCompleted(
         val stepOutput: String,
         val modelDisplayName: String,

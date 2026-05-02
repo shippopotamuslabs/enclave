@@ -85,7 +85,7 @@ fun TtsProvidersBottomSheet(
                 .padding(bottom = 32.dp)
         ) {
             Text(
-                text = "Text to Speech Providers",
+                text = "Text to Speech Models",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 8.dp)

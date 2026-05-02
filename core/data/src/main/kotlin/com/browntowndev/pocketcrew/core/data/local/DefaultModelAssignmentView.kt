@@ -3,6 +3,8 @@ package com.browntowndev.pocketcrew.core.data.local
 import androidx.room.ColumnInfo
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -42,5 +44,17 @@ data class DefaultModelAssignmentView(
     val ttsProviderName: ApiProvider?,
 
     @ColumnInfo(name = "ttsVoiceName")
-    val ttsVoiceName: String?
+    val ttsVoiceName: String?,
+
+    @ColumnInfo(name = "mediaProviderId")
+    val mediaProviderId: MediaProviderId?,
+
+    @ColumnInfo(name = "mediaAssetName")
+    val mediaAssetName: String?,
+
+    @ColumnInfo(name = "mediaProviderName")
+    val mediaProviderName: ApiProvider?,
+
+    @ColumnInfo(name = "mediaCapability")
+    val mediaCapability: MediaCapability?
 )

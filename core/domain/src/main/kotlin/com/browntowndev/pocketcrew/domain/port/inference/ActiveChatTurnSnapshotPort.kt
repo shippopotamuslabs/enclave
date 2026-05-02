@@ -22,8 +22,16 @@ interface ActiveChatTurnSnapshotPort {
         key: ActiveChatTurnKey,
         urls: List<String>,
     )
+    
+    suspend fun attachArtifact(
+        key: ActiveChatTurnKey,
+        assistantMessageId: MessageId,
+        artifact: com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest,
+    )
 
     suspend fun acknowledgeHandoff(key: ActiveChatTurnKey)
 
     suspend fun clear(key: ActiveChatTurnKey)
+ 
+    suspend fun getSnapshot(key: ActiveChatTurnKey): AccumulatedMessages?
 }

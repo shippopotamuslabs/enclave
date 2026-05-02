@@ -10,6 +10,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 fun HistoryRoute(
     onNavigateBack: () -> Unit,
     onNavigateToChat: (ChatId?) -> Unit,
+    onNavigateToStudio: () -> Unit,
+    onNavigateToGallery: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
     viewModel: HistoryViewModel = hiltViewModel(),
@@ -24,6 +26,8 @@ fun HistoryRoute(
         onBackClick = onNavigateBack,
         onChatClick = onNavigateToChat,
         onNewChatClick = { onNavigateToChat(null) },
+        onStudioClick = onNavigateToStudio,
+        onGalleryClick = onNavigateToGallery,
         onDeleteChat = viewModel::deleteChat,
         onRenameChat = viewModel::renameChat,
         onPinChat = viewModel::pinChat,

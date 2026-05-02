@@ -7,6 +7,9 @@ import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import kotlinx.serialization.json.Json
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
+import kotlinx.serialization.encodeToString
 
 fun ChatEntity.toDomain(): Chat = Chat(
     id = id,
@@ -25,13 +28,20 @@ fun Chat.toEntity(): ChatEntity = ChatEntity(
 )
 
 fun MessageEntity.toDomain(tavilySources: List<TavilySourceEntity> = emptyList()): Message {
+    val artifacts = try {
+        artifactsJson?.let { Json.decodeFromString<List<ArtifactGenerationRequest>>(it) } ?: emptyList()
+    } catch (e: Exception) {
+        emptyList()
+    }
+
     return Message(
         id = id,
         content = Content(
             text = content,
             pipelineStep = pipelineStep,
             imageUri = imageUri,
-            tavilySources = tavilySources.map { it.toDomain() }
+            tavilySources = tavilySources.map { it.toDomain() },
+            artifacts = artifacts
         ),
         role = role,
         chatId = chatId,
@@ -46,17 +56,24 @@ fun MessageEntity.toDomain(tavilySources: List<TavilySourceEntity> = emptyList()
     )
 }
 
-fun Message.toEntity(): MessageEntity = MessageEntity(
-    id = id,
-    content = content.text,
-    imageUri = content.imageUri,
-    role = role,
-    chatId = chatId,
-    messageState = messageState,
-    createdAt = createdAt,
-    modelType = modelType,
-    pipelineStep = content.pipelineStep
-)
+fun Message.toEntity(): MessageEntity {
+    val artifactsJson = if (content.artifacts.isNotEmpty()) {
+        Json.encodeToString(content.artifacts)
+    } else null
+
+    return MessageEntity(
+        id = id,
+        content = content.text,
+        imageUri = content.imageUri,
+        role = role,
+        chatId = chatId,
+        messageState = messageState,
+        createdAt = createdAt,
+        modelType = modelType,
+        pipelineStep = content.pipelineStep,
+        artifactsJson = artifactsJson
+    )
+}
 
 fun TavilySourceEntity.toDomain(): TavilySource = TavilySource(
     id = id,

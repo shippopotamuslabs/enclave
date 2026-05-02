@@ -54,6 +54,16 @@ internal class ChatGenerationAccumulatorManager(
                 }
             }
 
+            is MessageGenerationState.ArtifactsAttached -> {
+                getOrCreateAccumulator(state.modelType).apply {
+                    state.artifacts.forEach { newArtifact ->
+                        if (artifacts.none { it.title == newArtifact.title }) {
+                            artifacts.add(newArtifact)
+                        }
+                    }
+                }
+            }
+
             is MessageGenerationState.StepCompleted,
             is MessageGenerationState.Finished -> {
                 val modelType = when (state) {
@@ -93,6 +103,45 @@ internal class ChatGenerationAccumulatorManager(
         }
 
         return toMessagesState()
+    }
+
+    /**
+     * Reconciles the internal state with a snapshot from the ActiveChatTurnSnapshotPort.
+     * This is crucial for capturing out-of-band events like artifact attachments that
+     * happen directly via the snapshot port rather than as inference events.
+     */
+    suspend fun reconcileWithSnapshot(snapshot: AccumulatedMessages) {
+        snapshot.messages.forEach { (messageId, messageSnapshot) ->
+            // Find or create the accumulator for this message
+            val accumulator = _messages.getOrPut(messageId) {
+                MessageAccumulator(
+                    messageId = messageId,
+                    modelType = messageSnapshot.modelType,
+                    pipelineStep = messageSnapshot.pipelineStep
+                ).apply {
+                    content.append(messageSnapshot.content)
+                    thinkingRaw.append(messageSnapshot.thinkingRaw)
+                    thinkingStartTime = messageSnapshot.thinkingStartTime
+                    thinkingEndTime = messageSnapshot.thinkingEndTime
+                    isComplete = messageSnapshot.isComplete
+                    currentState = messageSnapshot.messageState
+                }
+            }
+
+            // Sync artifacts
+            messageSnapshot.artifacts.forEach { snapshotArtifact ->
+                if (accumulator.artifacts.none { it.title == snapshotArtifact.title }) {
+                    accumulator.artifacts.add(snapshotArtifact)
+                }
+            }
+
+            // Sync tavily sources
+            messageSnapshot.tavilySources.forEach { snapshotSource ->
+                if (accumulator.tavilySources.none { it.url == snapshotSource.url }) {
+                    accumulator.tavilySources.add(snapshotSource)
+                }
+            }
+        }
     }
 
     fun toMessagesState(): AccumulatedMessages =
@@ -166,6 +215,7 @@ internal class MessageAccumulator(
     var currentState: MessageState = MessageState.GENERATING,
     var pipelineStep: PipelineStep? = null,
     val tavilySources: MutableList<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = mutableListOf(),
+    val artifacts: MutableList<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = mutableListOf(),
 ) {
     val thinkingDurationSeconds: Long
         get() = if (thinkingStartTime != null && thinkingEndTime != null) {
@@ -200,6 +250,7 @@ internal class MessageAccumulator(
         messageState = currentState,
         pipelineStep = pipelineStep,
         tavilySources = tavilySources.toList(),
+        artifacts = artifacts.toList(),
     )
 }
 

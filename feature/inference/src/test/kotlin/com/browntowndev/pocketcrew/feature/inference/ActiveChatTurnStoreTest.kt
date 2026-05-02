@@ -141,14 +141,66 @@ class ActiveChatTurnStoreTest {
     }
 
     @Test
-    fun `clear removes snapshot`() = runTest {
+    fun `attachArtifact appends multiple artifacts for same message`() = runTest {
         val store = ActiveChatTurnStore()
+        val artifact1 = artifact("title 1")
+        val artifact2 = artifact("title 2")
 
-        store.publish(key, accumulated("answer"))
+        // Must publish before attaching to ensure a snapshot exists
+        store.publish(key, accumulated("initial content"))
+        store.attachArtifact(key, key.assistantMessageId, artifact1)
+        store.attachArtifact(key, key.assistantMessageId, artifact2)
+
+        val artifacts = store.snapshotValue(key)
+            ?.messages
+            ?.get(key.assistantMessageId)
+            ?.artifacts ?: emptyList()
+
+        assertEquals(2, artifacts.size)
+        assertEquals("title 1", artifacts[0].title)
+        assertEquals("title 2", artifacts[1].title)
+    }
+
+    @Test
+    fun `publish preserves existing artifacts during snapshot merge`() = runTest {
+        val store = ActiveChatTurnStore()
+        val artifact = artifact("persisted artifact")
+        
+        // Publish first to establish the snapshot
+        store.publish(key, accumulated("initial text"))
+        // Attach artifact
+        store.attachArtifact(key, key.assistantMessageId, artifact)
+        
+        // Publish a new snapshot (e.g. streaming text update)
+        val newSnapshot = accumulated("updated text")
+        store.publish(key, newSnapshot)
+
+        val message = store.snapshotValue(key)?.messages?.get(key.assistantMessageId)
+        
+        assertEquals("updated text", message?.content)
+        assertEquals(1, message?.artifacts?.size)
+        assertEquals("persisted artifact", message?.artifacts?.first()?.title)
+    }
+
+    @Test
+    fun `clear removes all artifacts along with snapshot`() = runTest {
+        val store = ActiveChatTurnStore()
+        store.publish(key, accumulated("to be cleared"))
+        store.attachArtifact(key, key.assistantMessageId, artifact("to be cleared"))
+        
         store.clear(key)
 
         assertNull(store.snapshotValue(key))
     }
+
+    private fun artifact(title: String): com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest {
+        return com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+            title = title,
+            documentType = com.browntowndev.pocketcrew.domain.model.artifact.DocumentType.PDF,
+            sections = emptyList()
+        )
+    }
+
 
     private fun accumulated(
         content: String,

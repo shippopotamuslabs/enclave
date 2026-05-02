@@ -4,6 +4,8 @@ import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -130,10 +132,10 @@ class HttpFileDownloader @Inject constructor(
             try {
                 DigestInputStream(body.byteStream(), digest).use { inputStream ->
                     val buffer = ByteArray(8192)
-                    var bytesRead: Int
+                    var bytesRead = 0
                     var bytesSinceLastSync = 0L
 
-                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    while (isActive && inputStream.read(buffer).also { bytesRead = it } != -1) {
                         val byteBuffer = ByteBuffer.wrap(buffer, 0, bytesRead)
                         channel.write(byteBuffer)
                         totalBytesRead += bytesRead
@@ -155,6 +157,9 @@ class HttpFileDownloader @Inject constructor(
             } finally {
                 channel.close()
             }
+
+            // Ensure we don't proceed to hash verification or rename if cancelled
+            ensureActive()
 
             // Verify SHA-256 hash after download completes
             val computedHash = digest.digest().joinToString("") { "%02x".format(it) }
@@ -249,10 +254,10 @@ class HttpFileDownloader @Inject constructor(
             try {
                 DigestInputStream(body.byteStream(), digest).use { inputStream ->
                     val buffer = ByteArray(8192)
-                    var bytesRead: Int
+                    var bytesRead = 0
                     var bytesSinceLastSync = 0L
 
-                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    while (isActive && inputStream.read(buffer).also { bytesRead = it } != -1) {
                         val byteBuffer = ByteBuffer.wrap(buffer, 0, bytesRead)
                         channel.write(byteBuffer)
                         totalBytesRead += bytesRead
@@ -274,6 +279,9 @@ class HttpFileDownloader @Inject constructor(
             } finally {
                 channel.close()
             }
+
+            // Ensure we don't proceed to hash verification or rename if cancelled
+            ensureActive()
 
             // Verify SHA-256 hash after download completes
             val computedHash = digest.digest().joinToString("") { "%02x".format(it) }

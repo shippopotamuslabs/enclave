@@ -9,10 +9,12 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
+import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceFactory
 import com.browntowndev.pocketcrew.domain.usecase.FakeInferenceService
 import io.mockk.coEvery
@@ -24,11 +26,50 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 class DirectChatInferenceExecutorTest {
 
-    private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private lateinit var activeModelProvider: ActiveModelProviderPort
+    private lateinit var messageRepository: MessageRepository
+    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var memoriesRepository: MemoriesRepository
+    private lateinit var embeddingEnginePort: EmbeddingEnginePort
+    private lateinit var searchToolPromptComposer: SearchToolPromptComposer
+    private lateinit var loggingPort: LoggingPort
+    private lateinit var inferenceFactory: FakeInferenceFactory
+    private lateinit var executor: DirectChatInferenceExecutor
+
+    @BeforeEach
+    fun setup() {
+        inferenceFactory = mockk()
+        activeModelProvider = mockk()
+        messageRepository = mockk()
+        settingsRepository = mockk(relaxed = true) {
+            every { settingsFlow } returns flowOf(SettingsData())
+        }
+        memoriesRepository = mockk(relaxed = true) {
+            coEvery { getCoreMemories() } returns emptyList()
+            coEvery { searchMemories(any(), any()) } returns emptyList()
+        }
+        embeddingEnginePort = mockk(relaxed = true) {
+            coEvery { getEmbedding(any()) } returns floatArrayOf()
+        }
+        searchToolPromptComposer = mockk(relaxed = true)
+        loggingPort = mockk(relaxed = true)
+
+        executor = DirectChatInferenceExecutor(
+            inferenceFactory = inferenceFactory,
+            activeModelProvider = activeModelProvider,
+            messageRepository = messageRepository,
+            settingsRepository = settingsRepository,
+            memoriesRepository = memoriesRepository,
+            embeddingEnginePort = embeddingEnginePort,
+            searchToolPromptComposer = searchToolPromptComposer,
+            loggingPort = loggingPort,
+        )
+    }
 
     private fun createExecutor(
         inferenceFactory: FakeInferenceFactory,
@@ -41,7 +82,9 @@ class DirectChatInferenceExecutorTest {
             activeModelProvider = activeModelProvider,
             messageRepository = messageRepository,
             settingsRepository = settingsRepository,
-            searchToolPromptComposer = SearchToolPromptComposer(),
+            memoriesRepository = memoriesRepository,
+            embeddingEnginePort = embeddingEnginePort,
+            searchToolPromptComposer = searchToolPromptComposer,
             loggingPort = loggingPort,
         )
     }

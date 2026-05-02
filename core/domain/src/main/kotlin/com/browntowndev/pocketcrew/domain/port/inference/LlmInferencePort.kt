@@ -79,6 +79,13 @@ sealed interface InferenceEvent {
     data class TavilyResults(val sources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource>, val modelType: ModelType) : InferenceEvent
 
     /**
+     * Emitted when an artifact generation tool execution completes.
+     * @param artifacts The list of artifacts generated.
+     * @param modelType The type of model that triggered the generation.
+     */
+    data class Artifacts(val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>, val modelType: ModelType) : InferenceEvent
+
+    /**
      * Emitted when the generation is complete.
      * @param modelType The type of model used to generate this chunk.
      */

@@ -14,4 +14,5 @@ data class Content(
     val pipelineStep: PipelineStep? = null,
     val imageUri: String? = null,
     val tavilySources: List<TavilySource> = emptyList(),
+    val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = emptyList(),
 )

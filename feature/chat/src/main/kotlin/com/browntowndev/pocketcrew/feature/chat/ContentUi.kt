@@ -14,4 +14,5 @@ data class ContentUi(
     val pipelineStep: PipelineStep? = null,
     val imageUri: String? = null,
     val tavilySources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = emptyList(),
+    val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = emptyList(),
 )

@@ -1,0 +1,28 @@
+package com.browntowndev.pocketcrew.core.data.local
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
+
+@Dao
+interface StudioMediaDao {
+    @Query("SELECT * FROM studio_gallery ORDER BY createdAt DESC")
+    fun getAllMedia(): Flow<List<StudioMediaEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMedia(media: StudioMediaEntity): Long
+
+    @Query("DELETE FROM studio_gallery WHERE id = :id")
+    suspend fun deleteMedia(id: Long)
+
+    @Query("SELECT * FROM studio_gallery WHERE id = :id")
+    suspend fun getMediaById(id: Long): StudioMediaEntity?
+
+    @Query("UPDATE studio_gallery SET albumId = :albumId WHERE id IN (:mediaIds)")
+    suspend fun updateMediaAlbum(mediaIds: List<Long>, albumId: Long)
+
+    @Query("UPDATE studio_gallery SET albumId = NULL WHERE albumId = :albumId")
+    suspend fun reassignMediaToDefault(albumId: Long)
+}

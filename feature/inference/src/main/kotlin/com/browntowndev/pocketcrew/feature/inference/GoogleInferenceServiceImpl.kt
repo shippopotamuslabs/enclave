@@ -235,6 +235,18 @@ class GoogleInferenceServiceImpl(
                             }
                         }
                     }
+
+                    if (toolCall.toolName == ToolDefinition.GENERATE_ARTIFACT.name) {
+                        val artifactParams = toolCall.parameters as? com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
+                        if (artifactParams != null) {
+                            emitEvent(
+                                InferenceEvent.Artifacts(
+                                    artifacts = listOf(artifactParams.toRequest()),
+                                    modelType = modelType
+                                )
+                            )
+                        }
+                    }
                 },
                 onFinished = { _, _, _ ->
                     emitEvent(InferenceEvent.Finished(modelType))

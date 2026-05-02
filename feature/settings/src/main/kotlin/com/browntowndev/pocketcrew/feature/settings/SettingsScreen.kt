@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,9 +51,11 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 
@@ -75,6 +78,11 @@ fun SettingsScreen(
     onDeleteAllConversations: () -> Unit,
     onDeleteAllMemories: () -> Unit,
     onShowMemoriesSheet: (Boolean) -> Unit,
+    onAddMemory: () -> Unit,
+    onEditMemory: (StoredMemory) -> Unit,
+    onUpdateMemoryDraft: (String, MemoryCategory) -> Unit,
+    onSaveMemory: () -> Unit,
+    onCancelMemoryEdit: () -> Unit,
     onDeleteMemory: (String) -> Unit,
     onOpenToS: () -> Unit,
     onShowFeedbackSheet: (Boolean) -> Unit,
@@ -82,7 +90,7 @@ fun SettingsScreen(
     onSubmitFeedback: () -> Unit,
     onShowVisionSettingsSheet: (Boolean) -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
-    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?) -> Unit,
+    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?, MediaProviderId?) -> Unit,
     onShowLocalModelsSheet: (Boolean) -> Unit,
     onShowByokSheet: (Boolean) -> Unit,
     onNavigateToByokConfigure: () -> Unit,
@@ -107,6 +115,11 @@ fun SettingsScreen(
     onStartCreateTtsProviderAsset: () -> Unit,
     onSelectTtsProviderAsset: (TtsProviderAssetUi?) -> Unit,
     onDeleteTtsProviderAsset: (TtsProviderId) -> Unit,
+    onShowMediaProvidersSheet: (Boolean) -> Unit,
+    onNavigateToMediaConfigure: () -> Unit,
+    onStartCreateMediaProviderAsset: () -> Unit,
+    onSelectMediaProviderAsset: (MediaProviderAssetUi?) -> Unit,
+    onDeleteMediaProviderAsset: (MediaProviderId) -> Unit,
     onNavigateToLocalModelConfigure: () -> Unit,
     onSelectLocalModelAsset: (LocalModelAssetUi?) -> Unit,
     onSelectLocalModelConfig: (LocalModelConfigUi?) -> Unit,
@@ -177,7 +190,7 @@ fun SettingsScreen(
                 SectionHeader(text = "Models")
                 SettingsNavigationItem(
                     title = "Model Role Assignments",
-                    subtitle = "Set models for chat and pipeline roles",
+                    subtitle = "Set models for chat, media, and tts",
                     icon = Icons.AutoMirrored.Filled.Rule,
                     onClick = { onNavigateToModelConfigure(ModelType.MAIN) }
                 )
@@ -190,17 +203,24 @@ fun SettingsScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsNavigationItem(
-                    title = "External AI Providers",
+                    title = "API AI Models",
                     subtitle = "Manage API keys and presets",
                     icon = Icons.Default.Cloud,
                     onClick = { onShowByokSheet(true) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsNavigationItem(
-                    title = "Text to Speech Providers",
+                    title = "Text to Speech Models",
                     subtitle = "Manage TTS voices and API keys",
                     icon = Icons.Default.Vibration, // Using Vibration for audio/haptic feel
                     onClick = { onShowTtsProvidersSheet(true) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                SettingsNavigationItem(
+                    title = "Media Generation Models",
+                    subtitle = "Manage Image and Video generation APIs",
+                    icon = Icons.Default.Palette,
+                    onClick = { onShowMediaProvidersSheet(true) }
                 )
             }
 
@@ -297,6 +317,19 @@ fun SettingsScreen(
             )
         }
 
+        if (uiState.home.isMemoriesSheetOpen) {
+            MemoriesBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowMemoriesSheet(false) },
+                onAddMemory = onAddMemory,
+                onEditMemory = onEditMemory,
+                onUpdateMemoryDraft = onUpdateMemoryDraft,
+                onSaveMemory = onSaveMemory,
+                onCancelMemoryEdit = onCancelMemoryEdit,
+                onDeleteMemory = onDeleteMemory
+            )
+        }
+
         if (uiState.home.isLocalModelsSheetOpen) {
             LocalModelsBottomSheet(
                 uiState = uiState,
@@ -308,6 +341,17 @@ fun SettingsScreen(
                 onDeleteLocalModelConfig = onDeleteLocalModelConfig,
                 onConfirmDeletionWithReassignment = onConfirmDeletionWithReassignment,
                 onDismissDeletionSafety = onDismissDeletionSafety
+            )
+        }
+
+        if (uiState.home.isMediaProvidersSheetOpen) {
+            MediaProvidersBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowMediaProvidersSheet(false) },
+                onNavigateToMediaConfigure = onNavigateToMediaConfigure,
+                onStartCreateMediaProviderAsset = onStartCreateMediaProviderAsset,
+                onSelectMediaProviderAsset = onSelectMediaProviderAsset,
+                onDeleteMediaProviderAsset = onDeleteMediaProviderAsset
             )
         }
     }
@@ -481,6 +525,11 @@ fun PreviewSettingsScreen() {
             onDeleteAllConversations = {},
             onDeleteAllMemories = {},
             onShowMemoriesSheet = {},
+            onAddMemory = {},
+            onEditMemory = { _ -> },
+            onUpdateMemoryDraft = { _, _ -> },
+            onSaveMemory = {},
+            onCancelMemoryEdit = {},
             onDeleteMemory = {},
             onOpenToS = {},
             onShowFeedbackSheet = {},
@@ -488,7 +537,7 @@ fun PreviewSettingsScreen() {
             onSubmitFeedback = {},
             onShowVisionSettingsSheet = {},
             onNavigateToModelConfigure = {},
-            onSetDefaultModel = { _, _, _, _ -> },
+            onSetDefaultModel = { _, _, _, _, _ -> },
             onShowLocalModelsSheet = {},
             onShowByokSheet = {},
             onNavigateToByokConfigure = {},
@@ -513,6 +562,11 @@ fun PreviewSettingsScreen() {
             onStartCreateTtsProviderAsset = {},
             onSelectTtsProviderAsset = {},
             onDeleteTtsProviderAsset = {},
+            onShowMediaProvidersSheet = {},
+            onNavigateToMediaConfigure = {},
+            onStartCreateMediaProviderAsset = {},
+            onSelectMediaProviderAsset = {},
+            onDeleteMediaProviderAsset = {},
             onNavigateToLocalModelConfigure = {},
             onSelectLocalModelAsset = {},
             onSelectLocalModelConfig = {},

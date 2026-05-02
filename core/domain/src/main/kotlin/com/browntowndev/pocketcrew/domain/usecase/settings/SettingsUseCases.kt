@@ -4,6 +4,9 @@ import com.browntowndev.pocketcrew.domain.usecase.byok.ClearDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.SetDefaultModelUseCase
+import com.browntowndev.pocketcrew.domain.usecase.media.DeleteMediaProviderUseCase
+import com.browntowndev.pocketcrew.domain.usecase.media.GetMediaProvidersUseCase
+import com.browntowndev.pocketcrew.domain.usecase.media.SaveMediaProviderUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.GetLocalModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCase
 
@@ -55,6 +58,12 @@ interface SettingsTtsUseCases {
     val deleteTtsProvider: DeleteTtsProviderUseCase
 }
 
+interface SettingsMediaUseCases {
+    val getMediaProviders: GetMediaProvidersUseCase
+    val saveMediaProvider: SaveMediaProviderUseCase
+    val deleteMediaProvider: DeleteMediaProviderUseCase
+}
+
 interface SettingsUseCases {
     val preferences: SettingsPreferencesUseCases
     val localModels: SettingsLocalModelUseCases
@@ -62,6 +71,7 @@ interface SettingsUseCases {
     val assignments: SettingsAssignmentUseCases
     val deletion: SettingsDeletionUseCases
     val tts: SettingsTtsUseCases
+    val media: SettingsMediaUseCases
 
     val getSettings: GetSettingsUseCase
         get() = preferences.getSettings

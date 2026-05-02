@@ -52,6 +52,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -412,6 +413,67 @@ class ChatViewModelTest {
         // playbackController.play should NOT be called
         verify(exactly = 0) { playbackController.play(any()) }
         assertFalse(chatViewModel.uiState.value.isPlayingTts)
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `UI state reflects multiple artifacts from active turn snapshot`() = runTest {
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        val snapshotFlow = MutableStateFlow<AccumulatedMessages?>(null)
+        val chatId = ChatId("chat")
+        val assistantId = MessageId("assistant")
+        val key = ActiveChatTurnKey(chatId, assistantId)
+        
+        // Mock processPrompt to return our IDs, which sets the requestedTurnKey
+        coEvery { chatUseCases.processPrompt(any()) } returns com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase.PromptResult(
+            chatId = chatId,
+            userMessageId = MessageId("user"),
+            assistantMessageId = assistantId
+        )
+        
+        every { activeChatTurnStore.observe(key) } returns snapshotFlow
+        
+        // Trigger send to set the active turn key
+        chatViewModel.onInputChange("test")
+        chatViewModel.onSendMessage()
+        advanceUntilIdle() // Ensure requestedTurnKey is processed
+        
+        // Simulate a snapshot with two artifacts
+        val artifact1 = com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+            title = "Doc 1",
+            documentType = com.browntowndev.pocketcrew.domain.model.artifact.DocumentType.PDF,
+            sections = emptyList()
+        )
+        val artifact2 = com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+            title = "Doc 2",
+            documentType = com.browntowndev.pocketcrew.domain.model.artifact.DocumentType.PDF,
+            sections = emptyList()
+        )
+        
+        val snapshot = AccumulatedMessages(
+            messages = mapOf(
+                assistantId to MessageSnapshot(
+                    messageId = assistantId,
+                    modelType = ModelType.FAST,
+                    content = "Here are your docs",
+                    thinkingRaw = "",
+                    messageState = MessageState.COMPLETE,
+                    artifacts = listOf(artifact1, artifact2)
+                )
+            )
+        )
+        
+        snapshotFlow.value = snapshot
+        advanceUntilIdle() // Ensure snapshot update is processed
+        
+        val uiMessages = chatViewModel.uiState.value.messages
+        val assistantMessage = uiMessages.find { it.id == assistantId }
+        
+        assertEquals(1, uiMessages.size)
+        assertEquals(2, assistantMessage?.content?.artifacts?.size)
+        assertEquals("Doc 1", assistantMessage?.content?.artifacts?.get(0)?.title)
+        assertEquals("Doc 2", assistantMessage?.content?.artifacts?.get(1)?.title)
+        
         collectJob.cancel()
     }
 
