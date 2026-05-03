@@ -38,63 +38,44 @@ class ArtifactModelsTest {
         fun `defaults to PDF`() {
             val request = ArtifactGenerationRequest(
                 title = "Test Report",
-                sections = emptyList()
+                content = ""
             )
             assertEquals(DocumentType.PDF, request.documentType)
         }
 
         @Test
-        @DisplayName("Rejects non-PDF types at construction time in Phase 1 context")
+        @DisplayName("Allows non-PDF for future phases but marks them")
         fun `allows non-PDF for future phases but marks them`() {
             val wordRequest = ArtifactGenerationRequest(
                 documentType = DocumentType.WORD,
                 title = "Word Doc",
-                sections = listOf(
-                    ArtifactSection("Intro", listOf(ArtifactBlock.Paragraph("Hello")))
-                )
+                content = "# Intro\nHello"
             )
             assertEquals(DocumentType.WORD, wordRequest.documentType)
         }
-    }
+        }
 
-    @Nested
-    @DisplayName("ArtifactGenerationResult")
-    inner class ResultTests {
+        @Nested
+        @DisplayName("ArtifactGenerationResult")
+        inner class ResultTests {
 
         @Test
         @DisplayName("isPdf returns true only for PDF requests")
         fun `identifies PDF results`() {
             val pdfResult = ArtifactGenerationResult(
-                request = ArtifactGenerationRequest(title = "PDF", sections = emptyList())
+                request = ArtifactGenerationRequest(title = "PDF", content = "")
             )
             val wordResult = ArtifactGenerationResult(
                 request = ArtifactGenerationRequest(
                     documentType = DocumentType.WORD,
                     title = "Word",
-                    sections = emptyList()
+                    content = ""
                 )
             )
 
+
             assertTrue(pdfResult.isPdf)
             assertEquals(false, wordResult.isPdf)
-        }
-    }
-
-    @Nested
-    @DisplayName("ArtifactBlock Types")
-    inner class BlockTests {
-
-        @Test
-        @DisplayName("Supports all required block types for PDF rendering")
-        fun `supports heading, paragraph, list, table, code`() {
-            val blocks = listOf(
-                ArtifactBlock.Heading(1, "Title"),
-                ArtifactBlock.Paragraph("Body text"),
-                ArtifactBlock.BulletList(listOf("Item 1")),
-                ArtifactBlock.Table(listOf("Col"), listOf(listOf("Cell"))),
-                ArtifactBlock.CodeBlock("kotlin", "fun main() {}")
-            )
-            assertEquals(5, blocks.size)
         }
     }
 }

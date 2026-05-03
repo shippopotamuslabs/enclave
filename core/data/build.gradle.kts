@@ -79,6 +79,10 @@ dependencies {
     // Security — EncryptedSharedPreferences for BYOK API key storage
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
+    // Markdown to HTML conversion
+    implementation(libs.commonmark)
+    implementation(libs.commonmark.ext.tables)
+
     // Test dependencies - JUnit 5 (Jupiter)
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)

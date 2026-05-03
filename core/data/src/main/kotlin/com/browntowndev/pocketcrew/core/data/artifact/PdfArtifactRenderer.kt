@@ -1,194 +1,144 @@
 package com.browntowndev.pocketcrew.core.data.artifact
 
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Paint
-import android.graphics.pdf.PdfDocument
 import android.os.Environment
-import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactBlock
+import android.print.PrintAttributes
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationResult
-import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactSection
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import org.commonmark.ext.gfm.tables.TablesExtension
+import org.commonmark.parser.Parser
+import org.commonmark.renderer.html.HtmlRenderer
 import java.io.File
-import java.io.FileOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
- * Renders an ArtifactGenerationResult into a professional PDF file using Android's native PdfDocument API.
- * This is the core on-device implementation for Phase 1.
+ * Renders an ArtifactGenerationResult into a professional PDF file using a headless WebView.
+ * Converts Markdown to HTML and then prints to PDF.
  */
 @Singleton
 class PdfArtifactRenderer @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
-    private val pageWidth = 595 // A4 width in points
-    private val pageHeight = 842 // A4 height in points
-    private val margin = 50f
+    private val extensions = listOf(TablesExtension.create())
+    private val markdownParser = Parser.builder()
+        .extensions(extensions)
+        .build()
+    private val htmlRenderer = HtmlRenderer.builder()
+        .extensions(extensions)
+        .build()
 
-    private val titlePaint = Paint().apply {
-        textSize = 22f
-        isFakeBoldText = true
-        color = android.graphics.Color.BLACK
-    }
+    companion object {
+        private var isSlowWholeDocumentDrawEnabled = false
 
-    private val headingPaint = Paint().apply {
-        textSize = 16f
-        isFakeBoldText = true
-        color = android.graphics.Color.BLACK
-    }
-
-    private val bodyPaint = Paint().apply {
-        textSize = 11f
-        color = android.graphics.Color.BLACK
-    }
-
-    private val listPaint = Paint().apply {
-        textSize = 11f
-        color = android.graphics.Color.BLACK
+        private fun ensureSlowWholeDocumentDrawEnabled() {
+            if (!isSlowWholeDocumentDrawEnabled) {
+                try {
+                    WebView.enableSlowWholeDocumentDraw()
+                    isSlowWholeDocumentDrawEnabled = true
+                } catch (e: Throwable) {
+                    // Ignore failures in unit tests
+                }
+            }
+        }
     }
 
     /**
      * Renders the artifact to a PDF file and returns the File handle.
      */
-    fun renderToPdf(result: ArtifactGenerationResult, fileName: String? = null): File {
-        val document = PdfDocument()
-        var currentPage = 1
-        var yPosition = margin
-
+    suspend fun renderToPdf(result: ArtifactGenerationResult, fileName: String? = null): File {
+        ensureSlowWholeDocumentDrawEnabled()
         val safeFileName = fileName ?: "Artifact_${System.currentTimeMillis()}.pdf"
         val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), safeFileName)
 
-        // Create first page
-        var pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, currentPage).create()
-        var page = document.startPage(pageInfo)
-        var canvas = page.canvas
+        val htmlContent = convertMarkdownToHtml(result.request.title, result.request.content)
+
+        return withContext(Dispatchers.Main) {
+            renderHtmlToPdf(htmlContent, file)
+        }
+    }
+
+    internal fun convertMarkdownToHtml(title: String, markdown: String): String {
+        val document = markdownParser.parse(markdown)
+        val bodyHtml = htmlRenderer.render(document)
+
+        return """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    body {
+                        font-family: sans-serif;
+                        padding: 0;
+                        margin: 0;
+                        line-height: 1.6;
+                        color: #333;
+                    }
+                    h1 { color: #000; font-size: 28px; margin-bottom: 20px; }
+                    h2 { color: #222; font-size: 22px; margin-top: 30px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+                    h3 { color: #444; font-size: 18px; margin-top: 20px; }
+                    p { margin-bottom: 15px; font-size: 14px; }
+                    ul, ol { margin-bottom: 15px; padding-left: 25px; }
+                    li { margin-bottom: 8px; font-size: 14px; }
+                    code { background: #f4f4f4; padding: 2px 4px; border-radius: 4px; font-family: monospace; font-size: 13px; }
+                    pre { background: #f4f4f4; padding: 15px; border-radius: 8px; overflow-x: auto; margin: 20px 0; border: 1px solid #ddd; }
+                    pre code { background: transparent; padding: 0; font-size: 13px; }
+                    table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+                    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; font-size: 13px; }
+                    th { background-color: #f8f8f8; font-weight: bold; }
+                    blockquote { border-left: 4px solid #ccc; margin: 0; padding-left: 16px; color: #666; font-style: italic; }
+                </style>
+            </head>
+            <body>
+                <h1>$title</h1>
+                $bodyHtml
+            </body>
+            </html>
+        """.trimIndent()
+    }
+
+    private suspend fun renderHtmlToPdf(html: String, destinationFile: File): File = suspendCancellableCoroutine { continuation ->
+        val webView = WebView(context)
         
-        // Ensure white background
-        canvas.drawColor(android.graphics.Color.WHITE)
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(view: WebView, url: String) {
+                val printAdapter = view.createPrintDocumentAdapter("Artifact")
+                val printAttributes = PrintAttributes.Builder()
+                    .setMediaSize(PrintAttributes.MediaSize.NA_LETTER)
+                    .setResolution(PrintAttributes.Resolution("pdf", "pdf", 300, 300))
+                    .setMinMargins(PrintAttributes.Margins(150, 150, 150, 150)) // 0.15 inch margins
+                    .build()
 
-        // Title
-        yPosition = drawText(canvas, result.request.title, margin, yPosition, titlePaint, pageWidth - 2 * margin)
-        yPosition += 20f
-
-        result.request.sections.forEach { section ->
-            // Check if we need a new page
-            if (yPosition > pageHeight - margin - 100) {
-                document.finishPage(page)
-                currentPage++
-                pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, currentPage).create()
-                page = document.startPage(pageInfo)
-                canvas = page.canvas
-                canvas.drawColor(android.graphics.Color.WHITE)
-                yPosition = margin
-            }
-
-            // Section Title
-            yPosition = drawText(canvas, section.title, margin, yPosition, headingPaint, pageWidth - 2 * margin)
-            yPosition += 12f
-
-            section.blocks.forEach { block ->
-                if (yPosition > pageHeight - margin - 80) {
-                    document.finishPage(page)
-                    currentPage++
-                    pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, currentPage).create()
-                    page = document.startPage(pageInfo)
-                    canvas = page.canvas
-                    canvas.drawColor(android.graphics.Color.WHITE)
-                    yPosition = margin
-                }
-
-                when (block) {
-                    is ArtifactBlock.Heading -> {
-                        yPosition = drawText(canvas, block.text, margin, yPosition, headingPaint, pageWidth - 2 * margin)
+                val pdfPrinter = android.print.PdfPrinter(printAttributes)
+                pdfPrinter.generatePdf(printAdapter, destinationFile, object : android.print.PdfPrinter.Callback {
+                    override fun onSuccess(file: File, pageCount: Int) {
+                        continuation.resume(file)
                     }
-                    is ArtifactBlock.Paragraph -> {
-                        yPosition = drawText(canvas, block.text, margin, yPosition, bodyPaint, pageWidth - 2 * margin)
-                    }
-                    is ArtifactBlock.BulletList -> {
-                        block.items.forEach { item ->
-                            yPosition = drawText(canvas, "• $item", margin + 10, yPosition, listPaint, pageWidth - 2 * margin - 20)
-                        }
-                    }
-                    is ArtifactBlock.NumberedList -> {
-                        block.items.forEachIndexed { index, item ->
-                            yPosition = drawText(canvas, "${index + 1}. $item", margin + 10, yPosition, listPaint, pageWidth - 2 * margin - 20)
-                        }
-                    }
-                    is ArtifactBlock.Table -> {
-                        // Simple table rendering (basic for Phase 1)
-                        yPosition = drawTable(canvas, block, margin, yPosition, pageWidth - 2 * margin)
-                    }
-                    is ArtifactBlock.CodeBlock -> {
-                        yPosition = drawText(canvas, "[Code: ${block.language ?: "text"}]", margin, yPosition, bodyPaint, pageWidth - 2 * margin)
-                        yPosition = drawText(canvas, block.code, margin + 10, yPosition, bodyPaint, pageWidth - 2 * margin - 20)
-                    }
-                }
-                yPosition += 8f
-            }
-            yPosition += 15f // Space between sections
-        }
 
-        document.finishPage(page)
-        document.writeTo(FileOutputStream(file))
-        document.close()
-
-        return file
-    }
-
-    private fun drawText(canvas: Canvas, text: String, x: Float, y: Float, paint: Paint, maxWidth: Float): Float {
-        val lines = text.split("\n")
-        var currentY = y
-
-        for (line in lines) {
-            val words = line.split(" ")
-            var currentLine = ""
-
-            for (word in words) {
-                if (word.isEmpty()) continue
-                
-                val testLine = if (currentLine.isEmpty()) word else "$currentLine $word"
-                if (paint.measureText(testLine) < maxWidth) {
-                    currentLine = testLine
-                } else {
-                    if (currentLine.isNotEmpty()) {
-                        canvas.drawText(currentLine, x, currentY, paint)
-                        currentY += paint.textSize + 6 // Increased line spacing
+                    override fun onFailure(error: String) {
+                        continuation.resumeWithException(RuntimeException(error))
                     }
-                    currentLine = word
-                }
-            }
-            if (currentLine.isNotEmpty()) {
-                canvas.drawText(currentLine, x, currentY, paint)
-                currentY += paint.textSize + 6
-            } else if (line.isEmpty()) {
-                // Handle empty lines for spacing
-                currentY += paint.textSize + 6
+
+                    override fun onCancelled() {
+                        continuation.cancel()
+                    }
+                })
             }
         }
-        return currentY
-    }
 
-    private fun drawTable(canvas: Canvas, table: ArtifactBlock.Table, x: Float, y: Float, width: Float): Float {
-        var currentY = y
-        val colWidth = width / table.headers.size
-
-        // Draw header
-        table.headers.forEachIndexed { index, header ->
-            canvas.drawText(header, x + (index * colWidth) + 5, currentY, headingPaint)
+        webView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
+        
+        continuation.invokeOnCancellation {
+            webView.stopLoading()
         }
-        currentY += 20f
-
-        // Draw rows
-        table.rows.forEach { row ->
-            row.forEachIndexed { index, cell ->
-                if (index < table.headers.size) {
-                    canvas.drawText(cell, x + (index * colWidth) + 5, currentY, bodyPaint)
-                }
-            }
-            currentY += 18f
-        }
-        return currentY
     }
 }
