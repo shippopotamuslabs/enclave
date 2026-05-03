@@ -91,9 +91,9 @@ import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.core.content.ContextCompat
-import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.core.ui.component.ShimmerText
 import com.browntowndev.pocketcrew.core.ui.component.StandardTrailingAction
+import com.browntowndev.pocketcrew.core.ui.component.UniversalImageAttachment
 import com.browntowndev.pocketcrew.core.ui.component.UniversalInputBar
 import com.browntowndev.pocketcrew.core.ui.component.UniversalVoicePromptPlaceholder
 import com.browntowndev.pocketcrew.core.ui.component.UniversalVoiceTrailingAction
@@ -156,29 +156,11 @@ fun InputBar(
         ),
         attachmentContent = {
             AnimatedVisibility(visible = selectedImageUri != null && speechState == SpeechState.Idle) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(92.dp)
-                ) {
-                    AsyncImage(
-                        model = selectedImageUri,
-                        contentDescription = "Selected image preview",
-                        modifier = Modifier
-                            .size(92.dp)
-                            .clip(RoundedCornerShape(16.dp))
-                    )
-                    IconButton(
-                        onClick = onClearImage,
-                        modifier = Modifier.align(Alignment.TopEnd)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Remove selected image",
-                            tint = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
+                UniversalImageAttachment(
+                    uri = selectedImageUri!!,
+                    onClear = onClearImage,
+                    modifier = Modifier.padding(start = 16.dp, top = 8.dp)
+                )
             }
 
             AnimatedVisibility(visible = selectedFileName != null && speechState == SpeechState.Idle) {

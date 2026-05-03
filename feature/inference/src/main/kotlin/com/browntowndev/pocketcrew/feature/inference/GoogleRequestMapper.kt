@@ -113,8 +113,7 @@ object GoogleRequestMapper {
             ToolConfig.builder()
                 .functionCallingConfig(
                     FunctionCallingConfig.builder()
-                        .mode(FunctionCallingConfigMode.Known.ANY)
-                        .allowedFunctionNames(options.availableTools.map(ToolDefinition::name))
+                        .mode(FunctionCallingConfigMode.Known.AUTO)
                         .build()
                 )
                 .build()

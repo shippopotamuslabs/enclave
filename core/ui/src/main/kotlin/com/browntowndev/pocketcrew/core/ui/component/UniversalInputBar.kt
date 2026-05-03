@@ -36,6 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Mic
@@ -65,11 +66,13 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
@@ -503,6 +506,57 @@ fun SoundWave(state: SpeechState.Listening, modifier: Modifier = Modifier) {
                 topLeft = Offset(x, y),
                 size = Size(barWidth, h),
                 cornerRadius = CornerRadius(barWidth / 2, barWidth / 2)
+            )
+        }
+    }
+}
+
+/**
+ * A standardized thumbnail for image or video attachments in an input bar.
+ */
+@Composable
+fun UniversalImageAttachment(
+    uri: String,
+    onClear: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null,
+    isVideo: Boolean = false,
+) {
+    Box(
+        modifier = modifier
+            .size(80.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        if (isVideo) {
+            VideoThumbnail(
+                videoUri = uri,
+                contentDescription = contentDescription ?: "Reference video thumbnail",
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            AsyncImage(
+                model = uri,
+                contentDescription = contentDescription ?: "Attached image preview",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        }
+
+        Surface(
+            color = Color.Black.copy(alpha = 0.6f),
+            shape = CircleShape,
+            modifier = Modifier
+                .padding(4.dp)
+                .size(24.dp)
+                .align(Alignment.TopEnd)
+                .clickable(onClick = onClear)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Clear attachment",
+                tint = Color.White,
+                modifier = Modifier.padding(4.dp)
             )
         }
     }

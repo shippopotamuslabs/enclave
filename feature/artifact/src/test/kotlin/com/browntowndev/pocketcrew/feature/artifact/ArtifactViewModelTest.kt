@@ -2,9 +2,7 @@ package com.browntowndev.pocketcrew.feature.artifact
 
 import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.pocketcrew.core.data.artifact.PdfArtifactRenderer
-import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactBlock
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
-import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactSection
 import com.browntowndev.pocketcrew.domain.model.artifact.DocumentType
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import io.mockk.coEvery
@@ -18,12 +16,9 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.io.File
@@ -37,18 +32,12 @@ class ArtifactViewModelTest {
     private val shareMediaPort: ShareMediaPort = mockk(relaxed = true)
     
     private val testTitle = "Test Artifact"
-    private val testSections = listOf(
-        ArtifactSection(
-            title = "Section 1",
-            blocks = listOf(ArtifactBlock.Paragraph("Hello World"))
-        )
-    )
+    private val testMarkdown = "# Section 1\nHello World"
     private val testRequest = ArtifactGenerationRequest(
         documentType = DocumentType.PDF,
         title = testTitle,
-        sections = testSections
+        content = testMarkdown
     )
-    private val jsonContent = Json.encodeToString(testSections)
 
     @BeforeEach
     fun setUp() {
@@ -63,7 +52,7 @@ class ArtifactViewModelTest {
     @Test
     fun `init should decode URL-encoded content and title`() = runTest {
         val encodedTitle = URLEncoder.encode(testTitle, "UTF-8")
-        val encodedContent = URLEncoder.encode(jsonContent, "UTF-8")
+        val encodedContent = URLEncoder.encode(testMarkdown, "UTF-8")
         
         val savedStateHandle = SavedStateHandle(
             mapOf(
@@ -78,8 +67,7 @@ class ArtifactViewModelTest {
         val uiState = viewModel.uiState.value
         assertNotNull(uiState.result)
         assertEquals(testTitle, uiState.result?.request?.title)
-        assertEquals(1, uiState.result?.request?.sections?.size)
-        assertEquals("Section 1", uiState.result?.request?.sections?.first()?.title)
+        assertEquals(testMarkdown, uiState.result?.request?.content)
     }
 
     @Test
@@ -87,7 +75,7 @@ class ArtifactViewModelTest {
         val savedStateHandle = SavedStateHandle(
             mapOf(
                 "title" to testTitle,
-                "content" to jsonContent
+                "content" to testMarkdown
             )
         )
         
@@ -107,39 +95,11 @@ class ArtifactViewModelTest {
     }
 
     @Test
-    fun `init should decode content with SerialNames`() = runTest {
-        val jsonWithSerialNames = """
-            [
-              {
-                "title": "Section 1",
-                "blocks": [
-                  {
-                    "type": "paragraph",
-                    "text": "Hello World"
-                  },
-                  {
-                    "type": "heading",
-                    "level": 1,
-                    "text": "My Heading"
-                  },
-                  {
-                    "type": "bullet_list",
-                    "items": ["Item 1"]
-                  },
-                  {
-                    "type": "code_block",
-                    "language": "kotlin",
-                    "code": "val x = 1"
-                  }
-                ]
-              }
-            ]
-        """.trimIndent()
-        
+    fun `init should handle raw markdown content fallback`() = runTest {
         val savedStateHandle = SavedStateHandle(
             mapOf(
                 "title" to "Test",
-                "content" to jsonWithSerialNames
+                "content" to testMarkdown
             )
         )
 
@@ -148,12 +108,6 @@ class ArtifactViewModelTest {
 
         val uiState = viewModel.uiState.value
         assertNotNull(uiState.result)
-        assertEquals(1, uiState.result?.request?.sections?.size)
-        val section = uiState.result?.request?.sections?.first()
-        assertEquals(4, section?.blocks?.size)
-        assertTrue(section?.blocks?.get(0) is ArtifactBlock.Paragraph)
-        assertTrue(section?.blocks?.get(1) is ArtifactBlock.Heading)
-        assertTrue(section?.blocks?.get(2) is ArtifactBlock.BulletList)
-        assertTrue(section?.blocks?.get(3) is ArtifactBlock.CodeBlock)
+        assertEquals(testMarkdown, uiState.result?.request?.content)
     }
 }

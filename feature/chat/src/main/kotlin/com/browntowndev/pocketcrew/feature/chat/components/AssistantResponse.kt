@@ -444,7 +444,7 @@ private fun ArtifactCard(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "${artifact.sections.size} sections • Generated",
+                    text = "PDF Document • Generated",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1

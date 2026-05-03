@@ -152,7 +152,7 @@ data class ToolDefinition(
 
         val GENERATE_ARTIFACT = ToolDefinition(
             name = "generate_artifact",
-            description = "Generate a professional PDF document from structured content. Use this when the user wants a report, plan, summary, or other deliverable exported as a downloadable PDF. The content must follow the Artifact JSON schema (title, sections, blocks).",
+            description = "Generate a professional PDF document from Markdown content. Use this when the user wants a report, plan, summary, or other deliverable exported as a downloadable PDF. The content must be formatted as standard Markdown (headers, lists, tables, code blocks, etc.).",
             parametersClass = GenerateArtifactParams::class,
         )
 

@@ -70,11 +70,11 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.core.ui.component.StandardTrailingAction
+import com.browntowndev.pocketcrew.core.ui.component.UniversalImageAttachment
 import com.browntowndev.pocketcrew.core.ui.component.UniversalInputBar
 import com.browntowndev.pocketcrew.core.ui.component.UniversalVoicePromptPlaceholder
 import com.browntowndev.pocketcrew.core.ui.component.UniversalVoiceTrailingAction
 import com.browntowndev.pocketcrew.core.ui.component.VideoPlayer
-import com.browntowndev.pocketcrew.core.ui.component.VideoThumbnail
 import com.browntowndev.pocketcrew.core.ui.theme.GoldVariant
 import com.browntowndev.pocketcrew.core.ui.theme.PeachAccent
 import com.browntowndev.pocketcrew.core.ui.theme.PurpleLightPrimary
@@ -853,10 +853,11 @@ private fun StudioInputDock(
             onExpandToggle = { isExpanded = !isExpanded },
             attachmentContent = if (referenceImageUri != null) {
                 {
-                    ReferenceImageThumbnail(
+                    UniversalImageAttachment(
                         uri = referenceImageUri,
-                        mediaType = referenceMediaType,
-                        onClear = onClearReferenceImage
+                        isVideo = referenceMediaType == MediaCapability.VIDEO,
+                        onClear = onClearReferenceImage,
+                        modifier = Modifier.padding(start = 16.dp, top = 8.dp)
                     )
                 }
             } else null,
@@ -973,53 +974,6 @@ private fun ReferenceImageAction(
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 }
-            )
-        }
-    }
-}
-
-@Composable
-private fun ReferenceImageThumbnail(
-    uri: String,
-    mediaType: MediaCapability?,
-    onClear: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .size(80.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        if (mediaType == MediaCapability.VIDEO) {
-            VideoThumbnail(
-                videoUri = uri,
-                contentDescription = "Reference video thumbnail",
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            AsyncImage(
-                model = uri,
-                contentDescription = "Reference image thumbnail",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        }
-
-        Surface(
-            color = Color.Black.copy(alpha = 0.6f),
-            shape = CircleShape,
-            modifier = Modifier
-                .padding(4.dp)
-                .size(24.dp)
-                .align(Alignment.TopEnd)
-                .clickable(onClick = onClear)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "Clear reference image",
-                tint = Color.White,
-                modifier = Modifier.padding(4.dp)
             )
         }
     }
