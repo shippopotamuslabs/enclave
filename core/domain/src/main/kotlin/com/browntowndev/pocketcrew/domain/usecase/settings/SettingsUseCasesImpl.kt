@@ -26,6 +26,9 @@ class SettingsPreferencesUseCasesImpl @Inject constructor(
     override val clearTavilyApiKey: ClearTavilyApiKeyUseCase,
     override val saveExaApiKey: SaveExaApiKeyUseCase,
     override val clearExaApiKey: ClearExaApiKeyUseCase,
+    override val updateXSearchEnabled: UpdateXSearchEnabledUseCase,
+    override val saveXApiKey: SaveXApiKeyUseCase,
+    override val clearXApiKey: ClearXApiKeyUseCase,
     override val updateShowSearchProviderSwitchAlert: UpdateShowSearchProviderSwitchAlertUseCase,
     override val updateBackgroundInferenceEnabled: UpdateBackgroundInferenceEnabledUseCase,
 ) : SettingsPreferencesUseCases

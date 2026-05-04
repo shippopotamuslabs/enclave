@@ -110,13 +110,16 @@ class SettingsViewModel @Inject constructor(
     private val _mediaState = MutableStateFlow(MediaProvidersTransientState())
     private val _assignmentState = MutableStateFlow(AssignmentDialogTransientState())
     private val _deletionState = MutableStateFlow(DeletionTransientState())
+    private val _xSearchState = MutableStateFlow(XSearchTransientState())
     private val _snackbarMessages = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
     private val _currentApiKey = MutableStateFlow("")
     private val _currentTavilyApiKey = MutableStateFlow("")
     private val _currentExaApiKey = MutableStateFlow("")
+    private val _currentXApiKey = MutableStateFlow("")
     val currentApiKey: StateFlow<String> = _currentApiKey
     val currentTavilyApiKey: StateFlow<String> = _currentTavilyApiKey
+    val currentXApiKey: StateFlow<String> = _currentXApiKey
     val snackbarMessages: SharedFlow<String> = _snackbarMessages.asSharedFlow()
 
     private val preferencesUseCases = settingsUseCases.preferences
@@ -226,7 +229,9 @@ class SettingsViewModel @Inject constructor(
         _mediaState,
         _assignmentState,
         _deletionState,
+        _xSearchState,
         _sheetVisibility,
+        _currentXApiKey,
     ) { args ->
         val settings = args[0] as SettingsData
         val locals = args[1] as List<com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset>
@@ -247,7 +252,9 @@ class SettingsViewModel @Inject constructor(
         val mediaState = args[16] as MediaProvidersTransientState
         val assignmentsState = args[17] as AssignmentDialogTransientState
         val deletionState = args[18] as DeletionTransientState
-        val sheetVisibility = args[19] as SheetVisibilityState
+        val xSearchState = args[19] as XSearchTransientState
+        val sheetVisibility = args[20] as SheetVisibilityState
+        val currentXApiKey = args[21] as String
 
         settingsUiStateFactory.create(
             persistedSettings = settings,
@@ -270,6 +277,8 @@ class SettingsViewModel @Inject constructor(
             currentApiKey = apiKey,
             currentTavilyApiKey = tavilyKey,
             currentExaApiKey = exaKey,
+            currentXApiKey = currentXApiKey,
+            xSearchState = xSearchState,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -436,8 +445,20 @@ class SettingsViewModel @Inject constructor(
         _sheetVisibility.update { it.copy(visionSettings = show) }
     }
 
+    fun onShowSearchSkillSheet(show: Boolean) {
+        _sheetVisibility.update { it.copy(searchSkill = show) }
+    }
+
+    fun onSearchSkillTabChange(index: Int) {
+        _sheetVisibility.update { it.copy(searchSkillTabIndex = index) }
+    }
+
     fun onShowWebSearchSheet(show: Boolean) {
-        _sheetVisibility.update { it.copy(webSearch = show) }
+        _sheetVisibility.update { it.copy(searchSkill = show, searchSkillTabIndex = 0) }
+    }
+
+    fun onShowXSearchSheet(show: Boolean) {
+        _sheetVisibility.update { it.copy(searchSkill = show, searchSkillTabIndex = 1) }
     }
 
     fun onFeedbackTextChange(text: String) {
@@ -1097,6 +1118,42 @@ class SettingsViewModel @Inject constructor(
             _currentTavilyApiKey.value = ""
             _currentExaApiKey.value = ""
             _searchSkillState.value = SearchSkillTransientState()
+            onSuccess()
+        }
+    }
+
+    fun onXSearchEnabledChange(enabled: Boolean) {
+        _xSearchState.update { it.copy(enabled = enabled) }
+    }
+
+    fun onXApiKeyChange(key: String) {
+        _currentXApiKey.value = key
+    }
+
+    fun onClearXApiKey() {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to clear X API key", "Failed to clear X key")) {
+            preferencesUseCases.clearXApiKey()
+            _currentXApiKey.value = ""
+        }
+    }
+
+    fun onSaveXSearchSettings(onSuccess: () -> Unit) {
+        val xSearchEditor = uiState.value.xSearchEditor
+        val enabled = _xSearchState.value.enabled ?: xSearchEditor.enabled
+        val pendingKey = _currentXApiKey.value.trim()
+
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save X search settings", "Failed to save X settings")) {
+            if (enabled && pendingKey.isBlank() && !xSearchEditor.apiKeyPresent) {
+                throw IllegalStateException("An X API key is required to enable X search")
+            }
+
+            preferencesUseCases.updateXSearchEnabled(enabled)
+            if (pendingKey.isNotBlank()) {
+                preferencesUseCases.saveXApiKey(pendingKey)
+            }
+
+            _currentXApiKey.value = ""
+            _xSearchState.value = XSearchTransientState()
             onSuccess()
         }
     }

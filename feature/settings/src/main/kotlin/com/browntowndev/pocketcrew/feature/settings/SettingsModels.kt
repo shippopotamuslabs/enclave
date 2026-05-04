@@ -41,6 +41,7 @@ data class SettingsUiState(
     val apiProvidersSheet: ApiProvidersSheetUiState = ApiProvidersSheetUiState(),
     val apiProviderEditor: ApiProviderEditorUiState = ApiProviderEditorUiState(),
     val searchSkillEditor: SearchSkillEditorUiState = SearchSkillEditorUiState(),
+    val xSearchEditor: XSearchEditorUiState = XSearchEditorUiState(),
     val ttsProvidersSheet: TtsProvidersSheetUiState = TtsProvidersSheetUiState(),
     val ttsProviderEditor: TtsProviderEditorUiState = TtsProviderEditorUiState(),
     val mediaProvidersSheet: MediaProvidersSheetUiState = MediaProvidersSheetUiState(),
@@ -63,7 +64,8 @@ data class SettingsHomeUiState(
     val isVisionSettingsSheetOpen: Boolean = false,
     val isTtsProvidersSheetOpen: Boolean = false,
     val isMediaProvidersSheetOpen: Boolean = false,
-    val isWebSearchSheetOpen: Boolean = false,
+    val isSearchSkillSheetOpen: Boolean = false,
+    val searchSkillTabIndex: Int = 0,
 )
 
 @Immutable
@@ -173,6 +175,13 @@ data class SearchSkillEditorUiState(
     val currentTavilyApiKey: String = "",
     val currentExaApiKey: String = "",
     val showSwitchAlert: Boolean = true,
+)
+
+@Immutable
+data class XSearchEditorUiState(
+    val enabled: Boolean = false,
+    val apiKeyPresent: Boolean = false,
+    val currentApiKey: String = "",
 )
 
 @Immutable
@@ -501,6 +510,11 @@ object MockSettingsData {
             currentTavilyApiKey = "",
             currentExaApiKey = "",
             showSwitchAlert = true,
+        ),
+        xSearchEditor = XSearchEditorUiState(
+            enabled = false,
+            apiKeyPresent = false,
+            currentApiKey = "",
         ),
         assignments = ModelAssignmentsUiState(assignments = defaultAssignments),
     )
