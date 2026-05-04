@@ -557,23 +557,23 @@ class AnthropicInferenceServiceImpl(
             id = id,
             toolName = toolName,
             argumentsJson = if (streamedInputJson.isNotEmpty()) {
-                toolUseArgumentsJson(streamedInputJson.toString())
+                toolUseArgumentsJson(toolName, streamedInputJson.toString())
             } else {
-                toolUseArgumentsJson(initialInput)
+                toolUseArgumentsJson(toolName, initialInput)
             },
         )
 
-    private fun toolUseArgumentsJson(input: JsonValue): String {
+    private fun toolUseArgumentsJson(toolName: String, input: JsonValue): String {
         val properties: Map<*, *> = input.convert(Map::class.java) ?: emptyMap<Any?, Any?>()
-        return canonicalToolArgumentsJson(properties)
+        return canonicalToolArgumentsJson(toolName, properties)
     }
 
-    private fun toolUseArgumentsJson(inputJson: String): String =
-        canonicalToolArgumentsJson(parseToolInputJson(inputJson))
+    private fun toolUseArgumentsJson(toolName: String, inputJson: String): String =
+        canonicalToolArgumentsJson(toolName, parseToolInputJson(inputJson))
 
-    private fun canonicalToolArgumentsJson(properties: Map<*, *>): String {
+    private fun canonicalToolArgumentsJson(toolName: String, properties: Map<*, *>): String {
         @Suppress("UNCHECKED_CAST")
-        return ToolEnvelopeParser.buildArgumentsJson(properties as Map<String, *>)
+        return ToolEnvelopeParser.buildArgumentsJson(toolName, properties as Map<String, *>)
     }
 
     private fun toolUseInputProperties(argumentsJson: String): Map<String, JsonValue> =

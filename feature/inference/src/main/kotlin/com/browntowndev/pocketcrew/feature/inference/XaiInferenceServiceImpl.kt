@@ -13,6 +13,7 @@ import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
+import com.openai.errors.NotFoundException
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseFunctionToolCall
 import com.openai.models.responses.ResponseInputItem
@@ -160,16 +161,29 @@ class XaiInferenceServiceImpl(
         emitEvent: suspend (InferenceEvent) -> Unit
     ) {
         if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
-            executeToolingPrompt(prompt, options, requestHistory, emitEvent)
-            return
+            try {
+                executeToolingPrompt(prompt, options, requestHistory, emitEvent)
+                return
+            } catch (e: Exception) {
+                if (e is BadRequestException || e.message?.contains("400") == true || e.message?.contains("Bad Request") == true ||
+                    e is NotFoundException || e.message?.contains("404") == true || e.message?.contains("Not Found") == true
+                ) {
+                    loggingPort.warning(
+                        tag,
+                        "xAI Responses API rejected tooling request. Falling back to chat completions tooling. ${describeException(e)}"
+                    )
+                } else {
+                    throw e
+                }
+
+                executeChatCompletionsToolingPrompt(prompt, options, requestHistory, emitEvent)
+                return
+            }
         }
 
         logImagePayloads(options)
 
-        val multiAgentModel = XaiRequestMapper.isMultiAgentModel(modelId)
-        val chatFallbackAllowed = XaiRequestMapper.shouldAllowChatCompletionsFallback(modelId)
-        val chatReasoningContentModel = XaiRequestMapper.isChatReasoningContentModel(modelId)
-        val responseParams = XaiRequestMapper.mapToResponseParams(
+        val responseParams = OpenAiRequestMapper.mapToResponseParams(
             modelId = modelId,
             prompt = prompt,
             history = requestHistory,
@@ -179,7 +193,7 @@ class XaiInferenceServiceImpl(
         try {
             loggingPort.info(
                 tag,
-                "Using Responses API for xAI model. model=$modelId chatFallbackAllowed=$chatFallbackAllowed chatReasoningContentModel=$chatReasoningContentModel reasoningEffort=${options.reasoningEffort} reasoningBudget=${options.reasoningBudget}"
+                "Using xAI Responses API. model=$modelId reasoningEffort=${options.reasoningEffort} reasoningBudget=${options.reasoningBudget}"
             )
             streamResponses(
                 params = responseParams,
@@ -187,26 +201,18 @@ class XaiInferenceServiceImpl(
             )
             emitEvent(InferenceEvent.Finished(modelType))
         } catch (e: Exception) {
-            val badRequest = e is BadRequestException || e.message?.contains("400") == true || e.message?.contains("Bad Request") == true
-            if (!badRequest || !chatFallbackAllowed) {
-                if (badRequest && multiAgentModel) {
-                    val hint = "Responses API rejected xAI multi-agent request. NOTE: xAI currently requires developer account beta access to use custom 'client-side' tools with multi-agent models. If you see a 400 error here, your API key is likely unauthorized for tools on this model."
-                    loggingPort.error(
-                        tag,
-                        "$hint Error: ${describeException(e)}",
-                        e
-                    )
-                    throw Exception("API Error (XAI Responses): ${e.message}\n$hint", e)
-                }
+            if (e is BadRequestException || e.message?.contains("400") == true || e.message?.contains("Bad Request") == true ||
+                e is NotFoundException || e.message?.contains("404") == true || e.message?.contains("Not Found") == true
+            ) {
+                loggingPort.warning(
+                    tag,
+                    "xAI Responses API rejected request. Falling back to chat completions with reasoningStreamAvailable=false. ${describeException(e)}"
+                )
+            } else {
                 throw e
             }
 
-            loggingPort.warning(
-                tag,
-                "Responses API rejected xAI request. Falling back to chat completions. model=$modelId chatReasoningContentModel=$chatReasoningContentModel ${describeException(e)}"
-            )
-
-            val chatParams = XaiRequestMapper.mapToChatCompletionParams(
+            val chatParams = OpenAiRequestMapper.mapToChatCompletionParams(
                 modelId = modelId,
                 prompt = prompt,
                 history = requestHistory,

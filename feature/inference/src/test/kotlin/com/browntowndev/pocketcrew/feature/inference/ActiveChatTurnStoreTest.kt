@@ -197,7 +197,7 @@ class ActiveChatTurnStoreTest {
         return com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
             title = title,
             documentType = com.browntowndev.pocketcrew.domain.model.artifact.DocumentType.PDF,
-            sections = emptyList()
+            content = "Stub content for $title"
         )
     }
 
