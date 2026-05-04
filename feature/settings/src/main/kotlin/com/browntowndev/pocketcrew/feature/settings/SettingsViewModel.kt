@@ -827,10 +827,13 @@ class SettingsViewModel @Inject constructor(
                 _mediaState.update { state ->
                     state.copy(
                         discoveredApiModels = result.models.filterMediaModels(draft.capability),
+                        discoveredApiModelScope = result.scope,
+                        isDiscoveringApiModels = false,
                     )
                 }
-            } finally {
+            } catch (e: Exception) {
                 _mediaState.update { it.copy(isDiscoveringApiModels = false) }
+                throw e
             }
         }
     }
@@ -1105,8 +1108,24 @@ class SettingsViewModel @Inject constructor(
         _apiState.update { it.copy(modelSearchQuery = query) }
     }
 
+    fun onUpdateMediaModelSearchQuery(query: String) {
+        _mediaState.update { it.copy(modelSearchQuery = query) }
+    }
+
     fun onToggleModelProviderFilter(provider: String) {
         _apiState.update { state -> 
+            val currentFilters = state.modelProviderFilters
+            val newFilters = if (currentFilters.contains(provider)) {
+                currentFilters - provider
+            } else {
+                currentFilters + provider
+            }
+            state.copy(modelProviderFilters = newFilters)
+        }
+    }
+
+    fun onToggleMediaModelProviderFilter(provider: String) {
+        _mediaState.update { state ->
             val currentFilters = state.modelProviderFilters
             val newFilters = if (currentFilters.contains(provider)) {
                 currentFilters - provider
@@ -1121,8 +1140,16 @@ class SettingsViewModel @Inject constructor(
         _apiState.update { it.copy(modelProviderFilters = emptySet()) }
     }
 
+    fun onClearMediaModelProviderFilters() {
+        _mediaState.update { it.copy(modelProviderFilters = emptySet()) }
+    }
+
     fun onUpdateModelSortOption(option: ModelSortOption) {
         _apiState.update { it.copy(modelSortOption = option) }
+    }
+
+    fun onUpdateMediaModelSortOption(option: ModelSortOption) {
+        _mediaState.update { it.copy(modelSortOption = option) }
     }
 
     fun onFetchApiModels() {
@@ -1430,6 +1457,16 @@ class SettingsViewModel @Inject constructor(
                 modelSortOption = ModelSortOption.A_TO_Z,
             )
         }
+        _mediaState.update {
+            it.copy(
+                discoveredApiModels = emptyList(),
+                discoveredApiModelScope = null,
+                isDiscoveringApiModels = false,
+                modelSearchQuery = "",
+                modelProviderFilters = emptySet(),
+                modelSortOption = ModelSortOption.A_TO_Z,
+            )
+        }
     }
 
     private fun resolveTtsCredentialAlias(asset: TtsProviderAssetUi): String? = _ttsState.value.selectedReusableApiCredentialAlias
@@ -1548,6 +1585,13 @@ class SettingsViewModel @Inject constructor(
         minP = minP,
         frequencyPenalty = frequencyPenalty,
         presencePenalty = presencePenalty,
+        maxTokensDisabled = maxTokensDisabled,
+        temperatureDisabled = temperatureDisabled,
+        topPDisabled = topPDisabled,
+        topKDisabled = topKDisabled,
+        minPDisabled = minPDisabled,
+        frequencyPenaltyDisabled = frequencyPenaltyDisabled,
+        presencePenaltyDisabled = presencePenaltyDisabled,
         systemPrompt = systemPrompt,
         reasoningEffort = reasoningEffort,
         customHeaders = customHeaders.map { it.key to it.value },

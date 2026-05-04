@@ -51,9 +51,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
+import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.collect
 
@@ -85,6 +87,10 @@ fun MediaConfigureRoute(
         onApiKeyChange = viewModel::onApiKeyChange,
         onSelectReusableApiCredential = viewModel::onSelectReusableApiCredential,
         onFetchMediaModels = viewModel::onFetchMediaModels,
+        onUpdateModelSearchQuery = viewModel::onUpdateMediaModelSearchQuery,
+        onToggleModelProviderFilter = viewModel::onToggleMediaModelProviderFilter,
+        onClearModelProviderFilters = viewModel::onClearMediaModelProviderFilters,
+        onUpdateModelSortOption = viewModel::onUpdateMediaModelSortOption,
         onSaveMediaProvider = {
             viewModel.onSaveMediaProvider(onSuccess = {
                 viewModel.onBackToMediaList()
@@ -105,6 +111,10 @@ fun MediaConfigureScreen(
     onApiKeyChange: (String) -> Unit,
     onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
     onFetchMediaModels: () -> Unit,
+    onUpdateModelSearchQuery: (String) -> Unit,
+    onToggleModelProviderFilter: (String) -> Unit,
+    onClearModelProviderFilters: () -> Unit,
+    onUpdateModelSortOption: (ModelSortOption) -> Unit,
     onSaveMediaProvider: () -> Unit,
     snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
@@ -114,7 +124,6 @@ fun MediaConfigureScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var providerDropdownExpanded by remember { mutableStateOf(false) }
     var capabilityDropdownExpanded by remember { mutableStateOf(false) }
-    var modelDropdownExpanded by remember { mutableStateOf(false) }
 
     val isSaveEnabled = draft.displayName.isNotBlank() &&
             draft.modelName.isNotBlank() &&
@@ -300,55 +309,34 @@ fun MediaConfigureScreen(
             )
 
             // Model ID
-            ExposedDropdownMenuBox(
-                expanded = modelDropdownExpanded,
-                onExpandedChange = { modelDropdownExpanded = it },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                OutlinedTextField(
-                    value = draft.modelName,
-                    onValueChange = { onMediaAssetFieldChange(draft.copy(modelName = it)) },
-                    label = { Text("Model ID (e.g. gpt-images-2)") },
-                    trailingIcon = {
-                        if (uiState.mediaProviderEditor.isDiscoveringApiModels) {
-                            androidx.compose.material3.CircularProgressIndicator(
-                                modifier = Modifier.size(24.dp),
-                                strokeWidth = 2.dp
-                            )
-                        } else {
-                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = modelDropdownExpanded)
-                        }
-                    },
-                    modifier = Modifier
-                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryEditable)
-                        .fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp)
-                )
-
-                ExposedDropdownMenu(
-                    expanded = modelDropdownExpanded,
-                    onDismissRequest = { modelDropdownExpanded = false }
-                ) {
-                    val discoveredModels = uiState.mediaProviderEditor.discoveredApiModels
-                    if (discoveredModels.isEmpty()) {
-                        DropdownMenuItem(
-                            text = { Text("No models found. Try fetching or type manually.") },
-                            onClick = { },
-                            enabled = false
-                        )
-                    } else {
-                        discoveredModels.forEach { discoveredModel ->
-                            DropdownMenuItem(
-                                text = { Text(discoveredModel.name ?: discoveredModel.id) },
-                                onClick = {
-                                    onMediaAssetFieldChange(draft.copy(modelName = discoveredModel.id))
-                                    modelDropdownExpanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
+            val canFetchModels = !uiState.mediaProviderEditor.discovery.isLoading && (apiKey.isNotBlank() || isKeySaved)
+            ModelSelectionField(
+                asset = ApiModelAssetUi(
+                    credentialsId = draft.id.toApiCredentialsId(),
+                    displayName = draft.displayName,
+                    provider = draft.provider,
+                    modelId = draft.modelName,
+                    baseUrl = draft.baseUrl,
+                    isMultimodal = false,
+                    credentialAlias = draft.credentialAlias,
+                    configurations = emptyList()
+                ),
+                availableModels = uiState.mediaProviderEditor.discovery.models,
+                filteredModels = uiState.mediaProviderEditor.discovery.filteredModels,
+                isFetchingModels = uiState.mediaProviderEditor.discovery.isLoading,
+                canFetchModels = canFetchModels,
+                searchQuery = uiState.mediaProviderEditor.discovery.searchQuery,
+                providerFilters = uiState.mediaProviderEditor.discovery.providerFilters,
+                sortOption = uiState.mediaProviderEditor.discovery.sortOption,
+                onAssetChange = { updatedAsset ->
+                    onMediaAssetFieldChange(draft.copy(modelName = updatedAsset.modelId))
+                },
+                onFetchModels = onFetchMediaModels,
+                onUpdateSearchQuery = onUpdateModelSearchQuery,
+                onToggleProviderFilter = onToggleModelProviderFilter,
+                onClearProviderFilters = onClearModelProviderFilters,
+                onUpdateSortOption = onUpdateModelSortOption
+            )
 
             // Base URL (for proxies)
             OutlinedTextField(
@@ -358,15 +346,6 @@ fun MediaConfigureScreen(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp)
             )
-
-            Button(
-                onClick = onFetchMediaModels,
-                enabled = apiKey.isNotBlank() || isKeySaved,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Fetch Available Models")
-            }
 
             // Use as Default Toggle
             Row(
@@ -400,6 +379,8 @@ fun MediaConfigureScreen(
     }
 }
 
+private fun MediaProviderId.toApiCredentialsId() = ApiCredentialsId(value)
+
 @Preview(showBackground = true, name = "Media Configure Screen")
 @Composable
 fun MediaConfigureScreenPreview() {
@@ -412,6 +393,10 @@ fun MediaConfigureScreenPreview() {
             onApiKeyChange = {},
             onSelectReusableApiCredential = {},
             onFetchMediaModels = {},
+            onUpdateModelSearchQuery = {},
+            onToggleModelProviderFilter = {},
+            onClearModelProviderFilters = {},
+            onUpdateModelSortOption = {},
             onSaveMediaProvider = {},
         )
     }

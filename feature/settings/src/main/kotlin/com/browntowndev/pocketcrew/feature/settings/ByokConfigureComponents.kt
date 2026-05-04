@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Settings
@@ -25,6 +26,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import com.browntowndev.pocketcrew.core.ui.component.PersistentTooltip
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionPolicy
@@ -43,6 +47,8 @@ import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfigur
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningControlStyle
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningPolicy
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 
 @Composable
 fun OpenRouterRoutingCard(
@@ -303,6 +309,9 @@ fun TuningSlider(
     onValueChange: (Float) -> Unit,
     enabled: Boolean = true
 ) {
+    var showDialog by remember { mutableStateOf(false) }
+    var textValue by remember(value) { mutableStateOf("%.2f".format(value)) }
+
     Column {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -314,7 +323,12 @@ fun TuningSlider(
                 Spacer(modifier = Modifier.width(4.dp))
                 PersistentTooltip(description = description)
             }
-            Text("%.2f".format(value), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+            Text(
+                text = "%.2f".format(value),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable(enabled = enabled) { showDialog = true }
+            )
         }
         Slider(
             value = value,
@@ -322,6 +336,48 @@ fun TuningSlider(
             valueRange = range,
             modifier = Modifier.fillMaxWidth(),
             enabled = enabled
+        )
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Edit $label") },
+            text = {
+                Column {
+                    Text(
+                        text = "Enter a value between ${"%.2f".format(range.start)} and ${"%.2f".format(range.endInclusive)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    OutlinedTextField(
+                        value = textValue,
+                        onValueChange = { textValue = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val newValue = textValue.toFloatOrNull()
+                        if (newValue != null && newValue in range) {
+                            onValueChange(newValue)
+                            showDialog = false
+                        }
+                    }
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 }

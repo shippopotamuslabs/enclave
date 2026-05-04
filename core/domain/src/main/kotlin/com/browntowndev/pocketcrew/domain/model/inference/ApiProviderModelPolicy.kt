@@ -9,6 +9,8 @@ data class ApiReasoningPolicy(
 data class ApiModelParameterSupport(
     val reasoningPolicy: ApiReasoningPolicy,
     val supportsMaxTokens: Boolean = true,
+    val supportsTemperature: Boolean = true,
+    val supportsTopP: Boolean = true,
     val supportsTopK: Boolean = true,
     val supportsMinP: Boolean = true,
     val supportsFrequencyPenalty: Boolean = true,
@@ -85,6 +87,9 @@ object ApiProviderModelPolicy {
     fun isXaiChatReasoningContentModel(modelId: String): Boolean =
         modelId.matchesXaiChatReasoningContentModel()
 
+    fun isOpenAiReasoningModel(modelId: String): Boolean =
+        modelId.startsWith("o1") || modelId.startsWith("o3")
+
     fun parameterSupport(provider: ApiProvider, modelId: String): ApiModelParameterSupport {
         val reasoningPolicy = reasoningPolicy(provider = provider, modelId = modelId)
         if (provider == ApiProvider.ANTHROPIC) {
@@ -109,6 +114,18 @@ object ApiProviderModelPolicy {
             )
         }
 
+        if (provider == ApiProvider.OPENAI && isOpenAiReasoningModel(modelId)) {
+            return ApiModelParameterSupport(
+                reasoningPolicy = reasoningPolicy,
+                supportsTemperature = false,
+                supportsTopP = false,
+                supportsMinP = false,
+                supportsFrequencyPenalty = false,
+                supportsPresencePenalty = false,
+                supportsReasoningEffort = true,
+            )
+        }
+
         if (provider != ApiProvider.XAI) {
             return ApiModelParameterSupport(reasoningPolicy = reasoningPolicy)
         }
@@ -122,7 +139,7 @@ object ApiProviderModelPolicy {
 
         return ApiModelParameterSupport(
             reasoningPolicy = reasoningPolicy,
-            supportsMaxTokens = !isXaiMultiAgentModel(modelId),
+            supportsMaxTokens = !isXaiMultiAgentModel(modelId) && !isXaiGrok420Family(modelId) && !modelId.startsWith("grok-4.3"),
             supportsTopK = false,
             supportsMinP = false,
             supportsFrequencyPenalty = !isXaiReasoningModel(modelId),
@@ -164,7 +181,7 @@ object ApiProviderModelPolicy {
         ) {
             return false
         }
-        return contains("reasoning") || this == "grok-4" || startsWith("grok-4-")
+        return contains("reasoning") || this == "grok-4" || startsWith("grok-4-") || startsWith("grok-4.3")
     }
 
     private fun String.matchesXaiGrok4NonReasoningFamily(): Boolean =
