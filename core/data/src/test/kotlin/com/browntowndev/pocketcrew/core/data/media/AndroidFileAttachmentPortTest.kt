@@ -88,6 +88,33 @@ class AndroidFileAttachmentPortTest {
         assertEquals(fileContent, result.content)
     }
 
+    @Test
+    fun `readFileContent returns metadata and text for json file`() = runTest {
+        val uriStr = "content://media/external/file/4"
+        val uri = Uri.parse(uriStr)
+        val fileName = "test.json"
+        val fileContent = "{\"key\": \"value\"}"
+        val mimeType = "application/json"
+
+        every { contentResolver.getType(uri) } returns mimeType
+        
+        val cursor: Cursor = mockk()
+        every { contentResolver.query(uri, null, null, null, null) } returns cursor
+        every { cursor.moveToFirst() } returns true
+        every { cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME) } returns 0
+        every { cursor.getString(0) } returns fileName
+        every { cursor.close() } just Runs
+
+        val inputStream: InputStream = ByteArrayInputStream(fileContent.toByteArray())
+        every { contentResolver.openInputStream(uri) } returns inputStream
+
+        val result = port.readFileContent(uriStr)
+
+        assertEquals(fileName, result.name)
+        assertEquals(mimeType, result.mimeType)
+        assertEquals(fileContent, result.content)
+    }
+
     @Test(expected = NotImplementedError::class)
     fun `readFileContent throws NotImplementedError for unsupported mime type`() = runTest {
         val uriStr = "content://media/external/file/3"

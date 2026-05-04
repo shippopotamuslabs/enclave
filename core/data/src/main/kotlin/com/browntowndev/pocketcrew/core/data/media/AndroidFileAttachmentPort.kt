@@ -46,11 +46,12 @@ class AndroidFileAttachmentPort @Inject constructor(
     }
 
     private fun isSupported(mimeType: String): Boolean {
-        return mimeType == "text/plain" || 
-               mimeType == "text/csv" || 
-               mimeType == "text/markdown" ||
-               mimeType == "application/json" ||
-               mimeType.startsWith("text/")
+        return mimeType.startsWith("text/") || 
+               mimeType == "application/json" || 
+               mimeType == "application/xml" ||
+               mimeType == "application/javascript" ||
+               mimeType == "application/x-yaml" ||
+               mimeType == "application/toml"
     }
 
     private fun getFileName(uri: Uri): String? {

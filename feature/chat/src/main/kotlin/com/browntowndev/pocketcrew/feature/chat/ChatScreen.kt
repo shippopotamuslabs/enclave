@@ -47,7 +47,7 @@ fun ChatScreen(
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         onFileSelected(uri?.toString())
     }
@@ -115,7 +115,16 @@ fun ChatScreen(
                     )
                 },
                 onFileAttach = {
-                    filePickerLauncher.launch("*/*")
+                    filePickerLauncher.launch(
+                        arrayOf(
+                            "text/*",
+                            "application/json",
+                            "application/xml",
+                            "application/javascript",
+                            "application/x-yaml",
+                            "application/toml"
+                        )
+                    )
                 },
                 onClearImage = onClearImage,
                 onClearFile = onClearFile,
