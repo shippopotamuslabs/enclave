@@ -10,6 +10,49 @@ data class WebSearchParams(
 ) : ToolParameters
 
 @Serializable
+enum class XSortOrder {
+    relevancy, recency
+}
+
+@Serializable
+data class XSearchParams(
+    @ToolParam(description = "Primary keywords to search for. All keywords must be present (AND).", required = false)
+    val keywords: List<String>? = null,
+    @ToolParam(description = "At least one of these keywords must be present (OR).", required = false)
+    val any_keywords: List<String>? = null,
+    @ToolParam(description = "Keywords to exclude from results (NOT).", required = false)
+    val exclude_keywords: List<String>? = null,
+    @ToolParam(description = "Exact phrases to search for.", required = false)
+    val phrases: List<String>? = null,
+    @ToolParam(description = "Hashtags to include (without #).", required = false)
+    val hashtags: List<String>? = null,
+    @ToolParam(description = "Users mentioned in the post (without @).", required = false)
+    val mentions: List<String>? = null,
+    @ToolParam(description = "Limit results to posts from this user.", required = false)
+    val from_user: String? = null,
+    @ToolParam(description = "Limit results to replies to this user.", required = false)
+    val to_user: String? = null,
+    @ToolParam(description = "If true, only return posts with geo-tagging information.", required = false)
+    val has_geo: Boolean = false,
+    @ToolParam(description = "If true, only return posts with any media (images, videos, or gifs).", required = false)
+    val has_media: Boolean = false,
+    @ToolParam(description = "Limit results to a specific country code (ISO 3166-1 alpha-2, e.g. 'GB', 'US').", required = false)
+    val place_country: String? = null,
+    @ToolParam(description = "If true, only return posts with images.", required = false)
+    val has_images: Boolean = false,
+    @ToolParam(description = "If true, only return posts with videos.", required = false)
+    val has_videos: Boolean = false,
+    @ToolParam(description = "If true, only return posts with links.", required = false)
+    val has_links: Boolean = false,
+    @ToolParam(description = "The ISO 639-1 language code (e.g. 'en', 'es'). Defaults to 'en'.", required = false)
+    val language: String? = "en",
+    @ToolParam(description = "The order in which to return results.", required = false)
+    val sort_order: XSortOrder = XSortOrder.relevancy,
+    @ToolParam(description = "DEPRECATED: Use structured fields instead. Raw search query.", required = false)
+    val query: String? = null
+) : ToolParameters
+
+@Serializable
 enum class ExtractDepth {
     basic, advanced
 }

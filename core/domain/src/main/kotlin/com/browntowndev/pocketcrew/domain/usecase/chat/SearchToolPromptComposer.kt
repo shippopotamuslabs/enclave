@@ -10,6 +10,7 @@ class SearchToolPromptComposer @Inject constructor() {
     fun compose(
         baseSystemPrompt: String?,
         includeSearchTool: Boolean = true,
+        includeXSearchTool: Boolean = false,
         includeImageInspectTool: Boolean = false,
         includeMemoryTools: Boolean = true,
         includeArtifactTool: Boolean = false,
@@ -22,7 +23,15 @@ class SearchToolPromptComposer @Inject constructor() {
             formatCoreMemories(coreMemories).takeIf(String::isNotEmpty),
             baseSystemPrompt?.trim()?.takeIf(String::isNotEmpty),
             formatRetrievedMemories(retrievedMemories).takeIf(String::isNotEmpty),
-            localToolContract(includeSearchTool, includeImageInspectTool, includeMemoryTools, includeArtifactTool, currentChatId, strategy).takeIf(String::isNotEmpty),
+            localToolContract(
+                includeSearchTool = includeSearchTool,
+                includeXSearchTool = includeXSearchTool,
+                includeImageInspectTool = includeImageInspectTool,
+                includeMemoryTools = includeMemoryTools,
+                includeArtifactTool = includeArtifactTool,
+                currentChatId = currentChatId,
+                strategy = strategy
+            ).takeIf(String::isNotEmpty),
         ).joinToString(separator = "\n\n")
 
     companion object {
@@ -66,7 +75,7 @@ class SearchToolPromptComposer @Inject constructor() {
 You have access to real-time information via '${ToolDefinition.WEB_SEARCH.name}' and '${ToolDefinition.WEB_EXTRACT.name}'. 
 If the user's request involves ANY of the following, you MUST call the search tool before answering:
 - Current events, news, or recent developments.
-- Dates, times, or schedules (today is May 3, 2026).
+- Dates, times, or schedules.
 - Verifying facts, statistics, or status of products/companies.
 - Anything where your internal knowledge might be stale or incomplete.
 - Any terms you don't recognize.
@@ -80,6 +89,24 @@ If you need to read the full content of a webpage from the search results, use $
 ${ToolDefinition.WEB_EXTRACT.toExample(strategy)}
 """.trimIndent()
         }
+
+        private fun metadataRules(): String = """
+# TEMPORAL CONTEXT:
+User messages include a `[Metadata: Sent at ...]` or `[Metadata: Current Time: ...]` footer. Use this to understand the current time and the timeline of the conversation. 
+IMPORTANT: DO NOT include metadata tags or mentions of the footer in your responses. Respond naturally as if the metadata were invisible context.
+""".trimIndent()
+
+        private fun xSearchToolContract(strategy: ToolCallStrategy): String = """
+# X (TWITTER) SEARCH MANDATE:
+You have access to '${ToolDefinition.X_SEARCH.name}' to search for recent posts on X (Twitter).
+If the user's request involves ANY of the following, you SHOULD use this tool:
+- Real-time trends or public sentiment on X.
+- Recent breaking news or events being discussed on social media.
+- Finding specific posts or comments from X users.
+
+To search X:
+${ToolDefinition.X_SEARCH.toExample(strategy)}
+""".trimIndent()
 
         private fun imageInspectContract(strategy: ToolCallStrategy): String = """
 # IMAGE INSPECTION MANDATE:
@@ -164,18 +191,25 @@ ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
 
         fun localToolContract(
             includeSearchTool: Boolean = true,
+            includeXSearchTool: Boolean = false,
             includeImageInspectTool: Boolean = false,
             includeMemoryTools: Boolean = true,
             includeArtifactTool: Boolean = false,
             currentChatId: String? = null,
             strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
         ): String {
-            if (!includeSearchTool && !includeImageInspectTool && !includeMemoryTools && !includeArtifactTool) return ""
+            if (!includeSearchTool && !includeXSearchTool && !includeImageInspectTool && !includeMemoryTools && !includeArtifactTool) return ""
             if (strategy == ToolCallStrategy.SDK_NATIVE) return ""
 
             return buildString {
+                append(metadataRules())
+                append("\n\n")
                 if (includeSearchTool) {
                     append(searchToolContract(strategy))
+                }
+                if (includeXSearchTool) {
+                    if (isNotEmpty()) append("\n\n")
+                    append(xSearchToolContract(strategy))
                 }
                 if (includeImageInspectTool) {
                     if (isNotEmpty()) append("\n\n")

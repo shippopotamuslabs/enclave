@@ -27,6 +27,7 @@ class CompositeToolExecutorTest {
     private lateinit var getMessageContextToolExecutor: GetMessageContextToolExecutor
     private lateinit var manageMemoriesToolExecutor: ManageMemoriesToolExecutor
     private lateinit var artifactToolExecutor: ArtifactToolExecutor
+    private lateinit var xSearchToolExecutor: XSearchToolExecutorImpl
     private lateinit var eventBus: ToolExecutionEventBus
     private lateinit var compositeToolExecutor: CompositeToolExecutor
 
@@ -40,6 +41,7 @@ class CompositeToolExecutorTest {
         getMessageContextToolExecutor = mockk()
         manageMemoriesToolExecutor = mockk()
         artifactToolExecutor = mockk()
+        xSearchToolExecutor = mockk()
         eventBus = mockk(relaxed = true)
         compositeToolExecutor = CompositeToolExecutor(
             searchToolExecutor = searchToolExecutor,
@@ -50,6 +52,7 @@ class CompositeToolExecutorTest {
             getMessageContextToolExecutor = getMessageContextToolExecutor,
             manageMemoriesToolExecutor = manageMemoriesToolExecutor,
             artifactToolExecutor = artifactToolExecutor,
+            xSearchToolExecutor = xSearchToolExecutor,
             eventBus = eventBus
         )
     }
@@ -188,12 +191,35 @@ class CompositeToolExecutorTest {
     }
 
     @Test
+    fun `execute routes search_x_recent to xSearchToolExecutor`() = runTest {
+        // Given
+        val request = ToolCallRequest(
+            chatId = ChatId("chat-xyz"),
+            userMessageId = MessageId("msg-xyz"),
+            toolName = ToolDefinition.X_SEARCH.name,
+            argumentsJson = "{\"query\":\"test\"}",
+            provider = "x",
+            modelType = ModelType.FAST
+        )
+        val expectedResult = ToolExecutionResult(toolName = request.toolName, resultJson = "{\"status\": \"success\"}")
+        coEvery { xSearchToolExecutor.execute(request) } returns expectedResult
+
+        // When
+        val result = compositeToolExecutor.execute(request)
+
+        // Then
+        coVerify { xSearchToolExecutor.execute(request) }
+        assertEquals(expectedResult, result)
+    }
+
+    @Test
     fun `all tools in ToolDefinition ALL_TOOLS are supported`() = runTest {
         // Setup mocks for all executors to handle any request
         val executors = listOf(
             searchToolExecutor, extractToolExecutor, imageInspectToolExecutor,
             searchChatHistoryToolExecutor, searchChatToolExecutor,
-            getMessageContextToolExecutor, manageMemoriesToolExecutor, artifactToolExecutor
+            getMessageContextToolExecutor, manageMemoriesToolExecutor, artifactToolExecutor,
+            xSearchToolExecutor
         )
         executors.forEach {
             coEvery { it.execute(any()) } returns ToolExecutionResult("any", "{}")

@@ -12,6 +12,11 @@ import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPor
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
+import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+import com.browntowndev.pocketcrew.domain.util.TokenCounter
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.coroutines.flow.first
 
 class ChatInferenceRequestPreparer(
@@ -23,6 +28,10 @@ class ChatInferenceRequestPreparer(
     private val searchToolPromptComposer: SearchToolPromptComposer,
     private val loggingPort: LoggingPort,
 ) {
+    private val dateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a")
+        .withZone(ZoneId.systemDefault())
+        .withLocale(Locale.getDefault())
+
     suspend operator fun invoke(
         prompt: String,
         chatId: ChatId,
@@ -36,6 +45,7 @@ class ChatInferenceRequestPreparer(
         val userMessage = messageRepository.getMessageById(userMessageId)
         val resolvedImageTarget = messageRepository.resolveLatestImageBearingUserMessage(chatId, userMessageId)
         val searchEnabled = settings.searchEnabled
+        val xSearchEnabled = settings.xSearchEnabled
         val activeVisionCapable = config?.isMultimodal == true
         val apiVisionConfigured = visionConfig?.isLocal == false && visionConfig.isMultimodal
         val hasImageContext = resolvedImageTarget != null
@@ -56,7 +66,7 @@ class ChatInferenceRequestPreparer(
 
         loggingPort.debug(
             TAG,
-            "generateWithService config modelType=$modelType configName=${config?.name} isLocal=${config?.isLocal} searchEnabled=$searchEnabled imageHandling=$imageHandling activeVisionCapable=$activeVisionCapable apiVisionConfigured=$apiVisionConfigured thinkingEnabled=${config?.thinkingEnabled} reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget",
+            "generateWithService config modelType=$modelType configName=${config?.name} isLocal=${config?.isLocal} searchEnabled=$searchEnabled xSearchEnabled=$xSearchEnabled imageHandling=$imageHandling activeVisionCapable=$activeVisionCapable apiVisionConfigured=$apiVisionConfigured thinkingEnabled=${config?.thinkingEnabled} reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget",
         )
         if (config?.isLocal == true) {
             logLocalPrompt(prompt, modelType)
@@ -81,6 +91,7 @@ class ChatInferenceRequestPreparer(
             searchToolPromptComposer.compose(
                 baseSystemPrompt = config?.systemPrompt,
                 includeSearchTool = searchEnabled,
+                includeXSearchTool = xSearchEnabled,
                 includeImageInspectTool = imageHandling == ChatImageHandling.TOOL,
                 includeMemoryTools = true,
                 includeArtifactTool = true,
@@ -97,6 +108,9 @@ class ChatInferenceRequestPreparer(
                 add(ToolDefinition.WEB_SEARCH)
                 add(ToolDefinition.WEB_EXTRACT)
             }
+            if (settings.xSearchEnabled) {
+                add(ToolDefinition.X_SEARCH)
+            }
             if (imageHandling == ChatImageHandling.TOOL) add(ToolDefinition.ATTACHED_IMAGE_INSPECT)
             add(ToolDefinition.SEARCH_CHAT_HISTORY)
             add(ToolDefinition.SEARCH_CHAT)
@@ -105,9 +119,12 @@ class ChatInferenceRequestPreparer(
             add(ToolDefinition.GENERATE_ARTIFACT)
         }
 
+        val formattedTime = dateTimeFormatter.format(java.time.Instant.now())
+        val promptWithMetadata = "$prompt\n\n[Metadata: Current Time: $formattedTime]"
+
         return PreparedChatInferenceRequest(
             prompt = prepareChatPrompt(
-                prompt = prompt,
+                prompt = promptWithMetadata,
                 hasImageContext = hasImageContext,
                 imageHandling = imageHandling,
                 fileAttachments = userMessage?.content?.fileAttachments ?: emptyList(),

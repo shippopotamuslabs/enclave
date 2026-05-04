@@ -15,12 +15,19 @@ import com.browntowndev.pocketcrew.domain.util.ChatHistoryCompressor
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.TokenCounter
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 class ChatHistoryRehydrator(
     private val messageRepository: MessageRepository,
     private val loggingPort: LoggingPort,
     private val tokenCounter: TokenCounter = JTokkitTokenCounter,
 ) {
+    private val dateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a")
+        .withZone(ZoneId.systemDefault())
+        .withLocale(Locale.getDefault())
+
     private val rollingSummarizer = RollingSummarizer(loggingPort, tokenCounter)
 
     suspend operator fun invoke(
@@ -173,7 +180,21 @@ class ChatHistoryRehydrator(
             )
         }
 
-        service.setHistory(chatMessages)
+        val messagesWithMetadata = chatMessages.map { message ->
+            if (message.role == Role.USER) {
+                // Find original message to get createdAt.
+                // We'll match by content text for now; a robust implementation might require MessageId tracking in ChatMessage.
+                val original = filteredMessages.firstOrNull { it.content.text == message.content.substringBefore("\n\n[Metadata:") }
+                if (original != null && original.createdAt != null) {
+                    val formattedTime = dateTimeFormatter.format(java.time.Instant.ofEpochMilli(original.createdAt))
+                    message.copy(
+                        content = "${message.content}\n\n[Metadata: Sent at $formattedTime]"
+                    )
+                } else message
+            } else message
+        }
+
+        service.setHistory(messagesWithMetadata)
         loggingPort.info(
             TAG,
             "Rehydrated ${chatMessages.size} messages (summary included: ${summary != null})",
