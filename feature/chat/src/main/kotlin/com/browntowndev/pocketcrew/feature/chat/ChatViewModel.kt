@@ -315,6 +315,7 @@ class ChatViewModel @Inject constructor(
                             ToolDefinition.SEARCH_CHAT_HISTORY.name -> ToolCallBannerKind.MEMORY
                             ToolDefinition.SEARCH_CHAT.name -> ToolCallBannerKind.MEMORY
                             ToolDefinition.GENERATE_ARTIFACT.name -> ToolCallBannerKind.ARTIFACT
+                            ToolDefinition.X_SEARCH.name -> ToolCallBannerKind.X_SEARCH
                             else -> ToolCallBannerKind.SEARCH
                         },
                         label = when (toolName) {
@@ -324,6 +325,7 @@ class ChatViewModel @Inject constructor(
                             ToolDefinition.SEARCH_CHAT_HISTORY.name.lowercase() -> "Searching chat history"
                             ToolDefinition.SEARCH_CHAT.name.lowercase() -> "Searching chat"
                             ToolDefinition.GENERATE_ARTIFACT.name.lowercase() -> "Generating Artifact"
+                            ToolDefinition.X_SEARCH.name.lowercase() -> "Searching X"
                             else -> "Executing tool"
                         }
                     )

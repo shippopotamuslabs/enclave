@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerKind
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
+import com.browntowndev.pocketcrew.core.ui.component.XIcon
 
 @Composable
 fun ToolCallBanner(
@@ -64,20 +65,30 @@ private fun BannerContent(banner: ToolCallBannerUi) {
             modifier = Modifier.size(32.dp),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                painter = painterResource(
-                    id = when (banner.kind) {
-                        ToolCallBannerKind.SEARCH -> R.drawable.search
-                        ToolCallBannerKind.EXTRACT -> R.drawable.pageview
-                        ToolCallBannerKind.IMAGE -> R.drawable.image
-                        ToolCallBannerKind.MEMORY -> R.drawable.search
-                        ToolCallBannerKind.ARTIFACT -> R.drawable.document
-                    }
-                ),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(18.dp)
-            )
+            if (banner.kind == ToolCallBannerKind.X_SEARCH) {
+                Icon(
+                    imageVector = XIcon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(18.dp)
+                )
+            } else {
+                Icon(
+                    painter = painterResource(
+                        id = when (banner.kind) {
+                            ToolCallBannerKind.SEARCH -> R.drawable.search
+                            ToolCallBannerKind.EXTRACT -> R.drawable.pageview
+                            ToolCallBannerKind.IMAGE -> R.drawable.image
+                            ToolCallBannerKind.MEMORY -> R.drawable.search
+                            ToolCallBannerKind.ARTIFACT -> R.drawable.document
+                            ToolCallBannerKind.X_SEARCH -> 0 // Handled above
+                        }
+                    ),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.width(12.dp))
