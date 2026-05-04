@@ -26,7 +26,10 @@ import com.browntowndev.pocketcrew.feature.inference.openai.StreamState
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.errors.OpenAIServiceException
+import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionMessageParam
+import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
 import java.util.Optional
@@ -108,92 +111,79 @@ abstract class BaseOpenAiSdkInferenceService(
         emitEvent: suspend (InferenceEvent) -> Unit
     )
 
-    protected open fun mapToolingResponseParams(
+    protected abstract fun mapToolingResponseParams(
         prompt: String,
         options: GenerationOptions,
         requestHistory: List<ChatMessage>,
-    ): ResponseCreateParams =
-        OpenAiRequestMapper.mapToResponseParams(
-            modelId = modelId,
-            prompt = prompt,
-            history = requestHistory,
-            options = options,
-        )
+    ): ResponseCreateParams
 
-    protected open fun mapToolingFollowUpResponseParams(
+    protected abstract fun mapToolingFollowUpResponseParams(
         currentParams: ResponseCreateParams,
         prompt: String,
         options: GenerationOptions,
         requestHistory: List<ChatMessage>,
         initialResponse: StreamedOpenAiResponse,
         results: List<Pair<ToolCallRequest, String>>,
-        appendStopToolsWarning: Boolean = false,
-    ): ResponseCreateParams {
-        // Truncate large tool results when context window is known
-        val truncationAvailableTokens = options.contextWindow?.let { cw ->
-            val budget = ContextWindowPlanner.budgetFor(
-                contextWindowTokens = cw,
-                options = options,
-                modelId = modelId,
-                tokenCounter = JTokkitTokenCounter,
-            )
-            val usedTokens = ContextWindowPlanner.estimatePromptTokens(
-                history = requestHistory,
-                systemPrompt = null,
-                currentPrompt = prompt,
-                toolResultPayloads = results.map { it.second },
-                modelId = modelId,
-                tokenCounter = JTokkitTokenCounter,
-            ) ?: 0
-            (budget.usablePromptTokens - usedTokens).coerceAtLeast(0)
-        }
-        val functionCallOutputs = results.map { (toolCall, resultJson) ->
-            val truncatedResult = if (truncationAvailableTokens != null && truncationAvailableTokens > 0) {
-                NativeToolResultFormatter.truncateForApiContext(
-                    resultJson = resultJson,
-                    availableTokens = maxOf(truncationAvailableTokens / results.size.coerceAtLeast(1), 100),
-                    tokenCounter = JTokkitTokenCounter,
-                    modelId = modelId,
+        appendStopToolsWarning: Boolean,
+    ): ResponseCreateParams
+
+    protected open fun mapToolingChatCompletionParams(
+        prompt: String,
+        options: GenerationOptions,
+        requestHistory: List<ChatMessage>,
+    ): ChatCompletionCreateParams =
+        OpenAiRequestMapper.mapToChatCompletionParams(
+            modelId = modelId,
+            prompt = prompt,
+            history = requestHistory,
+            options = options
+        )
+
+    protected open fun mapToolingFollowUpChatCompletionParams(
+        currentParams: ChatCompletionCreateParams,
+        prompt: String,
+        options: GenerationOptions,
+        requestHistory: List<ChatMessage>,
+        initialResponse: StreamedOpenAiResponse,
+        results: List<Pair<ToolCallRequest, String>>,
+        appendStopToolsWarning: Boolean,
+    ): ChatCompletionCreateParams {
+        val builder = currentParams.toBuilder()
+        val messages = currentParams.messages().toMutableList()
+
+        initialResponse.assistantMessageText
+            .takeIf { it.isNotBlank() }
+            ?.let { assistantText ->
+                messages.add(
+                    ChatCompletionMessageParam.ofAssistant(
+                        ChatCompletionAssistantMessageParam.builder()
+                            .content(assistantText)
+                            .build()
+                    )
                 )
-            } else {
-                resultJson
-            }
-            // results and initialResponse.functionCalls are in the same order for parallel calls
-            val index = initialResponse.functionCalls.indexOf(toolCall)
-            val callId = if (index != -1) {
-                initialResponse.providerToolCallIds.getOrElse(index) {
-                    throw IllegalStateException("Missing provider tool call id at index $index for tool call provider=$provider model=$modelId")
-                }
-            } else {
-                "fallback_${java.util.UUID.randomUUID().toString().replace("-", "")}"
             }
 
-            ResponseInputItem.ofFunctionCallOutput(
-                ResponseInputItem.FunctionCallOutput.builder()
-                    .callId(callId)
-                    .output(truncatedResult)
-                    .build()
+        results.forEach { (_, resultJson) ->
+            messages.add(
+                ChatCompletionMessageParam.ofUser(
+                    ChatCompletionUserMessageParam.builder()
+                        .content(resultJson)
+                        .build()
+                )
             )
         }
-        val followUpInputs = if (appendStopToolsWarning) {
-            functionCallOutputs + ResponseInputItem.ofMessage(
-                ResponseInputItem.Message.builder()
-                    .role(ResponseInputItem.Message.Role.of("user"))
-                    .addInputTextContent(ContextWindowPlanner.STOP_TOOLS_WARNING)
-                    .build()
+
+        if (appendStopToolsWarning) {
+            messages.add(
+                ChatCompletionMessageParam.ofUser(
+                    ChatCompletionUserMessageParam.builder()
+                        .content(ContextWindowPlanner.STOP_TOOLS_WARNING)
+                        .build()
+                )
             )
-        } else {
-            functionCallOutputs
         }
-        val builder = ResponseCreateParams.builder()
-            .model(modelId)
-            .previousResponseId(initialResponse.responseId ?: throw IllegalStateException("Missing previous response id for tool call provider=$provider model=$modelId"))
-            .inputOfResponse(followUpInputs)
-        requestHistory
-            .filter { it.role == Role.SYSTEM }
-            .joinToString(separator = "\n\n", transform = ChatMessage::content)
-            .takeIf(String::isNotBlank)
-            ?.let(builder::instructions)
+
+        builder.messages(messages)
         return builder.build()
     }
 
@@ -400,17 +390,129 @@ abstract class BaseOpenAiSdkInferenceService(
         }
     }
 
+    protected suspend fun executeChatCompletionsToolingPrompt(
+        prompt: String,
+        options: GenerationOptions,
+        requestHistory: List<ChatMessage>,
+        emitEvent: suspend (InferenceEvent) -> Unit
+    ) {
+        logImagePayloads(options)
+        val toolLoopPayloads = mutableListOf<String>()
+
+        val initialParams = mapToolingChatCompletionParams(
+            prompt = prompt,
+            options = options,
+            requestHistory = requestHistory,
+        )
+
+        orchestrator.execute(
+            providerName = provider,
+            initialParams = initialParams,
+            tag = tag,
+            maxToolCalls = options.maxToolCalls,
+            onInferencePass = { params, _ ->
+                streamChatCompletions(
+                    params = params,
+                    emitEvent = emitEvent,
+                )
+            },
+            onToolCallDetected = { response ->
+                val sdkCalls = response.functionCalls.map {
+                    it.copy(chatId = options.chatId, userMessageId = options.userMessageId)
+                }
+                sdkCalls.ifEmpty {
+                    val rawText = response.assistantMessageText
+                    val envelope =
+                        runCatching { ToolEnvelopeParser.extractLocalToolEnvelope(rawText) }.getOrNull()
+                    if (envelope != null) {
+                        listOf(
+                            ToolCallRequest(
+                                toolName = envelope.toolName,
+                                argumentsJson = envelope.argumentsJson,
+                                provider = provider,
+                                modelType = modelType,
+                                chatId = options.chatId,
+                                userMessageId = options.userMessageId,
+                            )
+                        )
+                    } else {
+                        emptyList()
+                    }
+                }
+            },
+            onToolResultsMapped = { params, response, results ->
+                toolLoopPayloads += results.map { it.second }
+                val contextExceeded = estimateContextExceeded(
+                    requestHistory = requestHistory,
+                    prompt = prompt,
+                    options = options,
+                    toolResultPayloads = toolLoopPayloads,
+                ).contextExceeded
+                mapToolingFollowUpChatCompletionParams(
+                    currentParams = params,
+                    prompt = prompt,
+                    options = options,
+                    requestHistory = requestHistory,
+                    initialResponse = response,
+                    results = results,
+                    appendStopToolsWarning = contextExceeded,
+                )
+            },
+            onContextExceeded = { _, _ ->
+                val result = estimateContextExceeded(
+                    requestHistory = requestHistory,
+                    prompt = prompt,
+                    options = options,
+                    toolResultPayloads = toolLoopPayloads,
+                )
+                ContextExceededResult(contextExceeded = result.contextExceeded, rebuiltParams = null)
+            },
+            onToolResult = { toolCall, resultJson ->
+                if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                    val assistantMessageId = options.assistantMessageId
+                    if (assistantMessageId != null) {
+                        val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
+                        if (sources.isNotEmpty()) {
+                            emitEvent(InferenceEvent.TavilyResults(sources, modelType))
+                        }
+                    }
+                }
+
+                if (toolCall.toolName == ToolDefinition.GENERATE_ARTIFACT.name) {
+                    val artifactParams = toolCall.parameters as? GenerateArtifactParams
+                    if (artifactParams != null) {
+                        emitEvent(
+                            InferenceEvent.Artifacts(
+                                artifacts = listOf(artifactParams.toRequest()),
+                                modelType = modelType
+                            )
+                        )
+                    }
+                }
+            },
+        ) { _, _, _ ->
+            emitEvent(InferenceEvent.Finished(modelType))
+        }
+    }
+
     protected suspend fun streamChatCompletions(
         params: ChatCompletionCreateParams,
         emitEvent: suspend (InferenceEvent) -> Unit
-    ) {
+    ): StreamedOpenAiResponse {
         logChatRequest(params)
+        val accumulatedText = StringBuilder()
+        var responseId: String? = null
+        val trackedToolCalls = mutableMapOf<Long, TrackedToolCall>()
+
         client.chat().completions().createStreaming(params).use { streamResponse ->
             val iterator = streamResponse.stream().iterator()
             var finishedEmitted = false
             var outputTextDeltaCount = 0
             while (currentCoroutineContext().isActive && runInterruptible { iterator.hasNext() }) {
                 val event = runInterruptible { iterator.next() }
+                if (responseId == null) {
+                    responseId = event.id()
+                }
                 val choices = event.choices()
                 if (choices.isEmpty()) {
                     loggingPort.debug(tag, "Chat stream chunk had no choices model=$modelId")
@@ -423,7 +525,21 @@ abstract class BaseOpenAiSdkInferenceService(
                     val text = delta.content().get()
                     if (text.isNotEmpty()) {
                         outputTextDeltaCount++
+                        accumulatedText.append(text)
                         emitEvent(InferenceEvent.PartialResponse(text, modelType))
+                    }
+                }
+
+                if (delta.toolCalls().isPresent) {
+                    delta.toolCalls().get().forEach { toolCallDelta ->
+                        val index = toolCallDelta.index()
+                        val tracked = trackedToolCalls.getOrPut(index) { TrackedToolCall() }
+
+                        toolCallDelta.id().ifPresent { tracked.id = it }
+                        toolCallDelta.function().ifPresent { functionDelta ->
+                            functionDelta.name().ifPresent { tracked.name = it }
+                            functionDelta.arguments().ifPresent { tracked.arguments.append(it) }
+                        }
                     }
                 }
 
@@ -450,7 +566,41 @@ abstract class BaseOpenAiSdkInferenceService(
                 )
             }
         }
+
+        val functionCalls = mutableListOf<ToolCallRequest>()
+        val providerToolCallIds = mutableListOf<String>()
+        val providerToolItemIds = mutableListOf<String>()
+
+        trackedToolCalls.entries.sortedBy { it.key }.forEach { (_, tracked) ->
+            if (tracked.name != null) {
+                functionCalls.add(
+                    ToolCallRequest(
+                        toolName = tracked.name!!,
+                        argumentsJson = tracked.arguments.toString(),
+                        provider = provider,
+                        modelType = modelType,
+                    )
+                )
+                providerToolCallIds.add(tracked.id ?: "")
+                providerToolItemIds.add("fc_${tracked.id ?: ""}")
+            }
+        }
+
+        return StreamedOpenAiResponse(
+            emittedAny = accumulatedText.isNotEmpty() || functionCalls.isNotEmpty(),
+            functionCalls = functionCalls,
+            responseId = responseId,
+            providerToolCallIds = providerToolCallIds,
+            providerToolItemIds = providerToolItemIds,
+            assistantMessageText = accumulatedText.toString(),
+        )
     }
+
+    private data class TrackedToolCall(
+        var id: String? = null,
+        var name: String? = null,
+        val arguments: StringBuilder = StringBuilder()
+    )
 
     private fun logResponsesRequest(params: ResponseCreateParams) {
         loggingPort.debug(
@@ -466,37 +616,37 @@ abstract class BaseOpenAiSdkInferenceService(
         )
     }
 
-    protected fun describeException(throwable: Throwable): String {
+    protected fun describeException(e: Exception): String {
         val baseMessage = buildString {
             append("exception=")
-            append(throwable::class.java.simpleName)
-            throwable.message?.takeIf { it.isNotBlank() }?.let {
+            append(e::class.java.simpleName)
+            e.message?.takeIf { it.isNotBlank() }?.let {
                 append(" message=")
                 append(it)
             }
         }
 
-        if (throwable !is OpenAIServiceException) {
+        if (e !is OpenAIServiceException) {
             return baseMessage
         }
 
         return buildString {
             append(baseMessage)
             append(" status=")
-            append(throwable.statusCode())
-            safeOptionalField { throwable.code() }?.let {
+            append(e.statusCode())
+            safeOptionalField { e.code() }?.let {
                 append(" code=")
                 append(it)
             }
-            safeOptionalField { throwable.type() }?.let {
+            safeOptionalField { e.type() }?.let {
                 append(" type=")
                 append(it)
             }
-            safeOptionalField { throwable.param() }?.let {
+            safeOptionalField { e.param() }?.let {
                 append(" param=")
                 append(it)
             }
-            val body = safeSerializeBody(throwable)
+            val body = safeSerializeBody(e)
             if (body.isNotBlank()) {
                 append(" body=")
                 append(truncateForLogs(body))

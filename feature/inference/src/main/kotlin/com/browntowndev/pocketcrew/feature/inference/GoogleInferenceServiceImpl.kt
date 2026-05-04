@@ -150,12 +150,16 @@ class GoogleInferenceServiceImpl(
                 },
                 onToolCallDetected = { response ->
                     response.functionCall?.let { functionCall ->
+                        val toolName = functionCall.name().orElseThrow {
+                            IllegalStateException("Google tool execution failed before final response")
+                        }
                         listOf(
                             ToolCallRequest(
-                                toolName = functionCall.name().orElseThrow {
-                                    IllegalStateException("Google tool execution failed before final response")
-                                },
-                                argumentsJson = ToolEnvelopeParser.buildArgumentsJson(functionCall.args().orElse(emptyMap())),
+                                toolName = toolName,
+                                argumentsJson = ToolEnvelopeParser.buildArgumentsJson(
+                                    toolName = toolName,
+                                    arguments = functionCall.args().orElse(emptyMap())
+                                ),
                                 provider = PROVIDER,
                                 modelType = modelType,
                                 chatId = options.chatId,
