@@ -37,6 +37,7 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
     implementation(project(":core:ui"))
+    implementation(project(":feature:studio-generation-service"))
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)

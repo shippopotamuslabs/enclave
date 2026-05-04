@@ -925,7 +925,7 @@ private fun StudioPromptField(
     BasicTextField(
         value = prompt,
         onValueChange = onPromptChange,
-        maxLines = if (isExpanded) Int.MAX_VALUE else 1,
+        maxLines = if (isExpanded) Int.MAX_VALUE else 3,
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp, horizontal = 12.dp),
@@ -949,7 +949,7 @@ private fun StudioPromptField(
         },
         keyboardOptions = KeyboardOptions(
             capitalization = KeyboardCapitalization.Sentences,
-            imeAction = if (isExpanded) ImeAction.Default else ImeAction.Send
+            imeAction = ImeAction.Default
         )
     )
 }
