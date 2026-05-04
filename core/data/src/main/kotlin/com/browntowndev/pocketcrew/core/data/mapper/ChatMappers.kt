@@ -2,9 +2,12 @@ package com.browntowndev.pocketcrew.core.data.mapper
 
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
+import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
+import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
 import com.browntowndev.pocketcrew.core.data.local.TavilySourceEntity
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.Content
+import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
 import kotlinx.serialization.json.Json
@@ -27,7 +30,14 @@ fun Chat.toEntity(): ChatEntity = ChatEntity(
     pinned = pinned
 )
 
-fun MessageEntity.toDomain(tavilySources: List<TavilySourceEntity> = emptyList()): Message {
+fun MessageWithFiles.toDomain(tavilySources: List<TavilySourceEntity> = emptyList()): Message {
+    return message.toDomain(tavilySources, files)
+}
+
+fun MessageEntity.toDomain(
+    tavilySources: List<TavilySourceEntity> = emptyList(),
+    files: List<MessageFileEntity> = emptyList()
+): Message {
     val artifacts = try {
         artifactsJson?.let { Json.decodeFromString<List<ArtifactGenerationRequest>>(it) } ?: emptyList()
     } catch (e: Exception) {
@@ -41,7 +51,8 @@ fun MessageEntity.toDomain(tavilySources: List<TavilySourceEntity> = emptyList()
             pipelineStep = pipelineStep,
             imageUri = imageUri,
             tavilySources = tavilySources.map { it.toDomain() },
-            artifacts = artifacts
+            artifacts = artifacts,
+            fileAttachments = files.map { it.toDomain() }
         ),
         role = role,
         chatId = chatId,
@@ -74,6 +85,18 @@ fun Message.toEntity(): MessageEntity {
         artifactsJson = artifactsJson
     )
 }
+
+fun MessageFileEntity.toDomain(): FileAttachment = FileAttachment(
+    name = name,
+    content = content
+)
+
+fun FileAttachment.toEntity(id: String, messageId: String): MessageFileEntity = MessageFileEntity(
+    id = id,
+    messageId = messageId,
+    name = name,
+    content = content
+)
 
 fun TavilySourceEntity.toDomain(): TavilySource = TavilySource(
     id = id,

@@ -99,14 +99,15 @@ The tool produces a deterministic interactive preview and allows native PDF expo
 To generate an artifact:
 ${ToolDefinition.GENERATE_ARTIFACT.toExample(strategy)}
 
-MANDATORY JSON STRUCTURE for 'content':
-The 'content' field must be a JSON array of sections. Each section has a 'title' (string) and a list of 'blocks' (array of objects).
-Example block objects:
-- { "type": "Heading", "text": "Section Title", "level": 1 }
-- { "type": "Paragraph", "text": "Your text here..." }
-- { "type": "BulletList", "items": ["Item 1", "Item 2"] }
-- { "type": "Table", "headers": ["Col 1", "Col 2"], "rows": [["R1C1", "R1C2"], ["R2C1", "R2C2"]] }
-- { "type": "CodeBlock", "code": "println('hello')", "language": "kotlin" }
+CONTENT FORMAT:
+Provide the full content of the document as standard Markdown in the 'content' field.
+Use standard Markdown syntax for:
+- Headers (# for H1, ## for H2, etc.)
+- Lists (ordered and unordered)
+- Tables
+- Bold and Italic text
+- Code blocks with language labels
+- Blockquotes
 """.trimIndent()
 
         private fun memoryToolsContract(currentChatId: String?, strategy: ToolCallStrategy): String = buildString {

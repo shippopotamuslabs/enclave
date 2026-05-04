@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.work.WorkManager
 import com.browntowndev.pocketcrew.core.data.download.DownloadNotificationManager
@@ -120,6 +121,18 @@ private val Context.pipelineDataStore: DataStore<Preferences> by preferencesData
 @InstallIn(SingletonComponent::class)
 object DataModule {
 
+    private val MIGRATION_1_2 = object : Migration(1, 2) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN max_tokens_disabled INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN temperature_disabled INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN top_p_disabled INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN top_k_disabled INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN min_p_disabled INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN frequency_penalty_disabled INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN presence_penalty_disabled INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     @Provides
     @Singleton
     fun providePocketCrewDatabase(@ApplicationContext context: Context): PocketCrewDatabase {
@@ -128,6 +141,7 @@ object DataModule {
             PocketCrewDatabase::class.java,
             "pocketcrew.db"
         )
+        .addMigrations(MIGRATION_1_2)
         .fallbackToDestructiveMigration()
         .openHelperFactory(SQLiteVecInstaller.createOpenHelperFactory(context))
         .addCallback(object : RoomDatabase.Callback() {
@@ -277,6 +291,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindImageAttachmentStorage(impl: CachedImageAttachmentStorage): ImageAttachmentStoragePort
+
+    @Binds
+    @Singleton
+    abstract fun bindFileAttachmentPort(impl: com.browntowndev.pocketcrew.core.data.media.AndroidFileAttachmentPort): com.browntowndev.pocketcrew.domain.port.media.FileAttachmentPort
 
     @Binds
     @Singleton

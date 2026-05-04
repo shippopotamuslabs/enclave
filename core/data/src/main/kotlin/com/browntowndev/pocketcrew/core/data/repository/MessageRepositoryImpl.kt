@@ -66,6 +66,14 @@ class MessageRepositoryImpl @Inject constructor(
     override suspend fun saveMessage(message: Message): MessageId {
         val entity = message.toEntity()
         messageDao.insert(entity)
+
+        if (message.content.fileAttachments.isNotEmpty()) {
+            val fileEntities = message.content.fileAttachments.map { 
+                it.toEntity(id = UUID.randomUUID().toString(), messageId = entity.id.value)
+            }
+            messageDao.insertFiles(fileEntities)
+        }
+
         return entity.id
     }
 

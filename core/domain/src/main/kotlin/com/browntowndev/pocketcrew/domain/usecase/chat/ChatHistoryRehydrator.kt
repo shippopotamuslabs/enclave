@@ -61,7 +61,7 @@ class ChatHistoryRehydrator(
         }
 
         var filteredMessages = relevantMessages
-            .filter { it.content.text.isNotBlank() || it.content.imageUri != null }
+            .filter { it.content.text.isNotBlank() || it.content.imageUri != null || it.content.fileAttachments.isNotEmpty() }
             .filter { it.id != userMessageId }
             .filter { it.id != assistantMessageId }
 
@@ -141,7 +141,7 @@ class ChatHistoryRehydrator(
                     } else refreshedAllMessages
 
                     val refreshedFilteredMessages = refreshedRelevantMessages
-                        .filter { it.content.text.isNotBlank() || it.content.imageUri != null }
+                        .filter { it.content.text.isNotBlank() || it.content.imageUri != null || it.content.fileAttachments.isNotEmpty() }
                         .filter { it.id != userMessageId }
                         .filter { it.id != assistantMessageId }
 
@@ -211,29 +211,33 @@ class ChatHistoryRehydrator(
         message: Message,
         visionAnalyses: List<MessageVisionAnalysis>,
     ): String {
-        if (visionAnalyses.isEmpty()) {
-            return message.content.text.ifBlank {
+        val fileContent = if (message.content.fileAttachments.isNotEmpty()) {
+            message.content.fileAttachments.joinToString(separator = "\n\n") { file ->
+                """
+                File attached: ${file.name}
+                Content:
+                ${file.content}
+                """.trimIndent()
+            }
+        } else null
+
+        val visionContent = if (visionAnalyses.isNotEmpty()) {
+            visionAnalyses.joinToString(separator = "\n\n") { analysis ->
+                """
+                Attached image description:
+                ${analysis.analysisText}
+                """.trimIndent()
+            }
+        } else null
+
+        val mainText = message.content.text
+
+        return listOfNotNull(fileContent, visionContent, mainText)
+            .filter { it.isNotBlank() }
+            .joinToString(separator = "\n\n")
+            .ifBlank {
                 if (message.content.imageUri != null) "[User attached an image]" else ""
             }
-        }
-
-        val analysisBlock = visionAnalyses.joinToString(separator = "\n\n") { analysis ->
-            """
-            Attached image description:
-            ${analysis.analysisText}
-            """.trimIndent()
-        }
-
-        return if (message.content.text.isBlank()) {
-            analysisBlock
-        } else {
-            """
-            $analysisBlock
-
-            User request:
-            ${message.content.text}
-            """.trimIndent()
-        }
     }
 
     private companion object {

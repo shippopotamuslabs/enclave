@@ -11,6 +11,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import java.io.File
 import javax.inject.Inject
@@ -24,6 +25,9 @@ class StudioRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context
 ) : StudioRepositoryPort {
 
+    private val ephemeralMedia = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
+    private val generationError = MutableStateFlow<String?>(null)
+
     override fun observeAllMedia(): Flow<List<StudioMediaAsset>> {
         return studioMediaDao.getAllMedia().map { entities ->
             entities.map { it.toDomain() }
@@ -34,6 +38,34 @@ class StudioRepositoryImpl @Inject constructor(
         return studioAlbumDao.observeAllAlbums().map { entities ->
             entities.map { it.toDomain() }
         }
+    }
+
+    override fun observeEphemeralMedia(): Flow<List<StudioMediaAsset>> {
+        return ephemeralMedia
+    }
+
+    override fun observeGenerationError(): Flow<String?> {
+        return generationError
+    }
+
+    override suspend fun reportGenerationError(message: String?) {
+        generationError.value = message
+    }
+
+    override suspend fun clearGenerationError() {
+        generationError.value = null
+    }
+
+    override suspend fun addEphemeralMedia(asset: StudioMediaAsset) {
+        ephemeralMedia.value = ephemeralMedia.value + asset
+    }
+
+    override suspend fun updateEphemeralMedia(asset: StudioMediaAsset) {
+        ephemeralMedia.value = ephemeralMedia.value.map { if (it.id == asset.id) asset else it }
+    }
+
+    override suspend fun removeEphemeralMedia(id: String) {
+        ephemeralMedia.value = ephemeralMedia.value.filter { it.id != id }
     }
 
     override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset {
@@ -89,6 +121,8 @@ class StudioRepositoryImpl @Inject constructor(
         if (ephemeralDir.exists()) {
             ephemeralDir.deleteRecursively()
         }
+        ephemeralMedia.value = emptyList()
+        generationError.value = null
     }
 
     override suspend fun deleteMedia(id: String) {
@@ -153,11 +187,11 @@ class StudioRepositoryImpl @Inject constructor(
         prompt = prompt,
         mediaType = mediaType,
         createdAt = createdAt,
-        albumId = albumId?.toString(),
+        albumId = albumId?.toString()
     )
 
     private fun StudioAlbumEntity.toDomain() = StudioAlbumAsset(
         id = id.toString(),
-        name = name,
+        name = name
     )
 }

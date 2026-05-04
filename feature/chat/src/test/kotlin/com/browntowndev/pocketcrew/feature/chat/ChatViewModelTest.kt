@@ -63,12 +63,16 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import kotlin.coroutines.CoroutineContext
 
+import com.browntowndev.pocketcrew.domain.port.media.FileAttachmentMetadata
+import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessFileAttachmentUseCase
+
 @ExtendWith(MainDispatcherRule::class)
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class ChatViewModelTest {
 
     private val settingsUseCases: SettingsUseCases = mockk()
     private val chatUseCases: ChatUseCases = mockk()
+    private val processFileAttachmentUseCase: ProcessFileAttachmentUseCase = mockk()
     private val stageImageAttachmentUseCase: StageImageAttachmentUseCase = mockk(relaxed = true)
     private val cancelInferenceUseCase: CancelInferenceUseCase = mockk(relaxed = true)
     private val inferenceLockManager: InferenceLockManager = mockk()
@@ -112,6 +116,7 @@ class ChatViewModelTest {
         listenToSpeechUseCase = mockk()
         every { listenToSpeechUseCase.invoke(any(), any()) } returns speechEvents
         every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
+        every { chatUseCases.processFileAttachmentUseCase } returns processFileAttachmentUseCase
 
         coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
         every { chatUseCases.mergeMessagesUseCase } returns MergeMessagesUseCase()
@@ -498,5 +503,59 @@ class ChatViewModelTest {
         // Initializing should NOT set isPlayingTts to true
         assertFalse(chatViewModel.uiState.value.isPlayingTts)
         collectJob.cancel()
+    }
+
+    @Test
+    fun `onFileSelected updates uiState with file name`() = runTest {
+        val uri = "content://test.txt"
+        val metadata = FileAttachmentMetadata("test.txt", "text/plain", "File content")
+        coEvery { processFileAttachmentUseCase(uri) } returns metadata
+        
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        
+        chatViewModel.onFileSelected(uri)
+        advanceUntilIdle()
+        
+        assertEquals("test.txt", chatViewModel.uiState.value.selectedFileName)
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `onSendMessage includes file content in prompt`() = runTest {
+        val uri = "content://test.txt"
+        val metadata = FileAttachmentMetadata("test.txt", "text/plain", "Extracted content")
+        coEvery { processFileAttachmentUseCase(uri) } returns metadata
+        
+        // Mock prompt result
+        val chatId = ChatId("chat")
+        val assistantId = MessageId("assistant")
+        coEvery { chatUseCases.processPrompt(any()) } returns com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase.PromptResult(
+            chatId = chatId,
+            userMessageId = MessageId("user"),
+            assistantMessageId = assistantId
+        )
+        coEvery { chatUseCases.generateChatResponse(any(), any(), any(), any(), any(), any()) } returns flowOf()
+
+        chatViewModel.onFileSelected(uri)
+        advanceUntilIdle()
+        
+        chatViewModel.onInputChange("Hello")
+        chatViewModel.onSendMessage()
+        advanceUntilIdle()
+        
+        val expectedPrompt = "--- Attached File: test.txt ---\nExtracted content\n\n--- User Prompt ---\nHello"
+        
+        // Verify that the prompt passed to processPrompt and generateChatResponse includes the file content
+        coVerify { 
+            chatUseCases.processPrompt(match { it.content.text == expectedPrompt })
+            chatUseCases.generateChatResponse(
+                prompt = expectedPrompt,
+                userMessageId = any(),
+                assistantMessageId = any(),
+                chatId = any(),
+                mode = any(),
+                backgroundInferenceEnabled = any()
+            )
+        }
     }
 }

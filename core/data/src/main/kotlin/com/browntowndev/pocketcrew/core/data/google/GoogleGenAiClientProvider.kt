@@ -1,6 +1,7 @@
 package com.browntowndev.pocketcrew.core.data.google
 
 import android.util.LruCache
+import com.browntowndev.pocketcrew.domain.model.inference.GoogleApiConstants
 import com.google.genai.Client
 import com.google.genai.types.ListModelsConfig
 import com.google.genai.types.Model
@@ -12,7 +13,7 @@ import javax.inject.Singleton
 @Singleton
 class GoogleGenAiClientProvider @Inject constructor() {
     companion object {
-        const val GEMINI_API_VERSION = "v1alpha"
+        const val GEMINI_API_VERSION = GoogleApiConstants.DEFAULT_API_VERSION
     }
 
     private val clientCache = object : LruCache<String, Client>(8) {

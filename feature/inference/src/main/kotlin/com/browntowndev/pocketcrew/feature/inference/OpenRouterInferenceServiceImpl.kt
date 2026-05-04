@@ -15,6 +15,7 @@ import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
 import com.openai.errors.BadRequestException
+import com.openai.errors.NotFoundException
 import com.openai.models.responses.ResponseFunctionToolCall
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
@@ -166,8 +167,24 @@ class OpenRouterInferenceServiceImpl(
         emitEvent: suspend (InferenceEvent) -> Unit
     ) {
         if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
-            executeToolingPrompt(prompt, options, requestHistory, emitEvent)
-            return
+            try {
+                executeToolingPrompt(prompt, options, requestHistory, emitEvent)
+                return
+            } catch (e: Exception) {
+                if (e is BadRequestException || e.message?.contains("400") == true || e.message?.contains("Bad Request") == true ||
+                    e is NotFoundException || e.message?.contains("404") == true || e.message?.contains("Not Found") == true
+                ) {
+                    loggingPort.warning(
+                        tag,
+                        "OpenRouter Responses API rejected tooling request. Falling back to chat completions tooling. ${describeException(e)}"
+                    )
+                } else {
+                    throw e
+                }
+
+                executeChatCompletionsToolingPrompt(prompt, options, requestHistory, emitEvent)
+                return
+            }
         }
 
         logImagePayloads(options)
@@ -191,14 +208,16 @@ class OpenRouterInferenceServiceImpl(
             )
             emitEvent(InferenceEvent.Finished(modelType))
         } catch (e: Exception) {
-            if (e !is BadRequestException && e.message?.contains("400") != true && e.message?.contains("Bad Request") != true) {
+            if (e is BadRequestException || e.message?.contains("400") == true || e.message?.contains("Bad Request") == true ||
+                e is NotFoundException || e.message?.contains("404") == true || e.message?.contains("Not Found") == true
+            ) {
+                loggingPort.warning(
+                    tag,
+                    "OpenRouter Responses API rejected request. Falling back to chat completions. ${describeException(e)}"
+                )
+            } else {
                 throw e
             }
-
-            loggingPort.warning(
-                tag,
-                "OpenRouter Responses API rejected request. Falling back to chat completions. ${describeException(e)}"
-            )
 
             val chatParams = OpenRouterRequestMapper.mapToChatCompletionParams(
                 modelId = modelId,

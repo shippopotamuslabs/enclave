@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
@@ -14,6 +15,7 @@ import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiRespon
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.errors.BadRequestException
+import com.openai.models.responses.ResponseCreateParams
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -397,6 +399,22 @@ class BaseOpenAiSdkInferenceServiceTest {
     ) {
         override val tag: String = "BaseOpenAiSdkInferenceServiceTest"
 
+        override fun mapToolingResponseParams(
+            prompt: String,
+            options: GenerationOptions,
+            requestHistory: List<ChatMessage>
+        ): ResponseCreateParams = mockk()
+
+        override fun mapToolingFollowUpResponseParams(
+            currentParams: ResponseCreateParams,
+            prompt: String,
+            options: GenerationOptions,
+            requestHistory: List<ChatMessage>,
+            initialResponse: StreamedOpenAiResponse,
+            results: List<Pair<ToolCallRequest, String>>,
+            appendStopToolsWarning: Boolean
+        ): ResponseCreateParams = mockk()
+
         override suspend fun executePrompt(
             prompt: String,
             options: GenerationOptions,
@@ -404,6 +422,6 @@ class BaseOpenAiSdkInferenceServiceTest {
             emitEvent: suspend (InferenceEvent) -> Unit
         ) = Unit
 
-        fun describe(throwable: Throwable): String = describeException(throwable)
+        fun describe(throwable: Throwable): String = describeException(throwable as Exception)
     }
 }

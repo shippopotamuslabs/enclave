@@ -46,42 +46,18 @@ class ArtifactViewModel @Inject constructor(
             _uiState.value = ArtifactUiState(isLoading = true)
             try {
                 var request: ArtifactGenerationRequest? = null
-                var decodedTitle = rawTitle
-
-                // Try a few decoding strategies for robustness
-                val possibleContents = listOf(
-                    rawContent,
-                    try { URLDecoder.decode(rawContent, "UTF-8") } catch (e: Exception) { null }
-                ).filterNotNull().distinct()
+                val decodedTitle = try { URLDecoder.decode(rawTitle, "UTF-8") } catch (e: Exception) { rawTitle }
+                val decodedContent = try { URLDecoder.decode(rawContent, "UTF-8") } catch (e: Exception) { rawContent }
 
                 try {
-                    decodedTitle = URLDecoder.decode(rawTitle, "UTF-8")
+                    // Primary Strategy: Parse as a full JSON request
+                    request = jsonParser.decodeFromString<ArtifactGenerationRequest>(decodedContent)
                 } catch (e: Exception) {
-                    // Fallback to raw title
+                    // Fallback: Treat decoded content as raw markdown
+                    request = ArtifactGenerationRequest(title = decodedTitle, content = decodedContent)
                 }
 
-                for (jsonContent in possibleContents) {
-                    try {
-                        // Strategy 1: Full Request Object
-                        request = jsonParser.decodeFromString<ArtifactGenerationRequest>(jsonContent)
-                        break
-                    } catch (e: Exception) {
-                        try {
-                            // Strategy 2: List of Sections
-                            val sections = jsonParser.decodeFromString<List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactSection>>(jsonContent)
-                            request = ArtifactGenerationRequest(title = decodedTitle, sections = sections)
-                            break
-                        } catch (e2: Exception) {
-                            // Continue to next
-                        }
-                    }
-                }
-
-                if (request != null) {
-                    _uiState.value = ArtifactUiState(result = ArtifactGenerationResult(request))
-                } else {
-                    _uiState.value = ArtifactUiState(error = "Failed to parse artifact data. Format may be invalid.")
-                }
+                _uiState.value = ArtifactUiState(result = ArtifactGenerationResult(request))
             } catch (e: Exception) {
                 _uiState.value = ArtifactUiState(error = "Error loading artifact: ${e.message}")
             }

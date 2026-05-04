@@ -104,6 +104,19 @@ object ToolSchemaGenerator {
 
     @OptIn(kotlinx.serialization.ExperimentalSerializationApi::class)
     private fun generateSchemaForClass(klass: KClass<*>): JsonObject {
+        val type = mapType(klass)
+        if (type != "object" && type != "array") {
+            return buildJsonObject {
+                put("type", type)
+                if (klass.java.isEnum) {
+                    putJsonArray("enum") {
+                        klass.java.enumConstants?.forEach { enumValue ->
+                            add(JsonPrimitive(enumValue.toString()))
+                        }
+                    }
+                }
+            }
+        }
         if (klass.isSealed) {
             val discriminator = klass.findAnnotation<JsonClassDiscriminator>()?.discriminator ?: "type"
             return buildJsonObject {
