@@ -23,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.vector.ImageVector
+import com.browntowndev.pocketcrew.core.ui.component.XIcon
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.feature.chat.R
 import java.net.URI
@@ -34,6 +36,7 @@ fun WebSearchSourceRow(
     modifier: Modifier = Modifier
 ) {
     val domain = runCatching { URI(source.url).host?.removePrefix("www.") }.getOrNull() ?: source.url
+    val isXSource = domain.equals("x.com", ignoreCase = true) || domain.equals("twitter.com", ignoreCase = true)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -43,20 +46,29 @@ fun WebSearchSourceRow(
             .clickable { onClick(source.url) }
             .padding(vertical = 12.dp, horizontal = 4.dp)
     ) {
-        // Small square for the domain/favicon placeholder
+        // Small square for the domain/favicon placeholder or X icon
         Surface(
             shape = RoundedCornerShape(4.dp),
             color = MaterialTheme.colorScheme.surfaceVariant,
             modifier = Modifier.size(24.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Text(
-                    text = domain.take(1).uppercase(),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                if (isXSource) {
+                    Icon(
+                        imageVector = XIcon,
+                        contentDescription = "X",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(14.dp)
                     )
-                )
+                } else {
+                    Text(
+                        text = domain.take(1).uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
             }
         }
 
@@ -73,6 +85,18 @@ fun WebSearchSourceRow(
                 overflow = TextOverflow.Ellipsis,
                 color = MaterialTheme.colorScheme.onSurface
             )
+            if (source.content.isNotBlank()) {
+                Text(
+                    text = source.content,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    ),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(vertical = 2.dp)
+                )
+            }
             Text(
                 text = domain,
                 style = MaterialTheme.typography.labelSmall.copy(
