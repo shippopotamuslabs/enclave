@@ -1,6 +1,9 @@
 package com.browntowndev.pocketcrew.feature.chat
 
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
+import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 
 /**
  * Presentation layer content model.
@@ -13,6 +16,7 @@ data class ContentUi(
     val text: String,
     val pipelineStep: PipelineStep? = null,
     val imageUri: String? = null,
-    val tavilySources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = emptyList(),
-    val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = emptyList(),
+    val tavilySources: List<TavilySource> = emptyList(),
+    val artifacts: List<ArtifactGenerationRequest> = emptyList(),
+    val fileAttachments: List<FileAttachment> = emptyList(),
 )

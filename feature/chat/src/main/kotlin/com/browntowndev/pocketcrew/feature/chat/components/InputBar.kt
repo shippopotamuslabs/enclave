@@ -101,6 +101,9 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
 import com.browntowndev.pocketcrew.feature.chat.R
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.unit.IntOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -157,7 +160,7 @@ fun InputBar(
         attachmentContent = {
             AnimatedVisibility(visible = selectedImageUri != null && speechState == SpeechState.Idle) {
                 UniversalImageAttachment(
-                    uri = selectedImageUri!!,
+                    uri = selectedImageUri ?: "",
                     onClear = onClearImage,
                     modifier = Modifier.padding(start = 16.dp, top = 8.dp)
                 )
@@ -226,10 +229,10 @@ fun InputBar(
                     lineHeight = 22.sp
                 ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                maxLines = if (isExpanded) Int.MAX_VALUE else 1,
+                maxLines = if (isExpanded) Int.MAX_VALUE else 3,
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Sentences,
-                    imeAction = if (isExpanded) ImeAction.Default else ImeAction.Send
+                    imeAction = ImeAction.Default
                 ),
                 decorationBox = { innerTextField ->
                     Box(modifier = Modifier.padding(start = 16.dp, top = 4.dp)) {
@@ -250,44 +253,42 @@ fun InputBar(
             {
                 Box {
                     // Attachment Menu
-                    this@UniversalInputBar.AnimatedVisibility(
-                        visible = attachmentMenuExpanded,
-                        enter = fadeIn(tween(300)) + expandVertically(
-                            tween(300, easing = FastOutSlowInEasing),
-                            expandFrom = Alignment.Bottom
-                        ),
-                        exit = fadeOut(tween(250)) + shrinkVertically(
-                            tween(250, easing = LinearOutSlowInEasing),
-                            shrinkTowards = Alignment.Bottom
-                        ),
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(bottom = 56.dp)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceColorAtElevation(8.dp),
-                            shadowElevation = 8.dp,
-                            modifier = Modifier.width(180.dp)
+                    if (attachmentMenuExpanded) {
+                        Popup(
+                            alignment = Alignment.TopStart,
+                            offset = IntOffset(0, -112), // Adjusted offset to appear above the plus button
+                            onDismissRequest = { attachmentMenuExpanded = false },
+                            properties = PopupProperties(
+                                focusable = true,
+                                dismissOnClickOutside = true,
+                                dismissOnBackPress = true
+                            )
                         ) {
-                            Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                AttachmentMenuItem(
-                                    icon = Icons.Default.InsertPhoto,
-                                    label = "Attach Photo",
-                                    onClick = {
-                                        attachmentMenuExpanded = false
-                                        onImageAttach()
-                                    },
-                                    enabled = isPhotoAttachmentEnabled
-                                )
-                                AttachmentMenuItem(
-                                    icon = Icons.Default.AttachFile,
-                                    label = "Attach File",
-                                    onClick = {
-                                        attachmentMenuExpanded = false
-                                        onFileAttach()
-                                    }
-                                )
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MaterialTheme.colorScheme.surfaceColorAtElevation(8.dp),
+                                shadowElevation = 8.dp,
+                                modifier = Modifier.width(180.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                                    AttachmentMenuItem(
+                                        icon = Icons.Default.InsertPhoto,
+                                        label = "Attach Photo",
+                                        onClick = {
+                                            attachmentMenuExpanded = false
+                                            onImageAttach()
+                                        },
+                                        enabled = isPhotoAttachmentEnabled
+                                    )
+                                    AttachmentMenuItem(
+                                        icon = Icons.Default.AttachFile,
+                                        label = "Attach File",
+                                        onClick = {
+                                            attachmentMenuExpanded = false
+                                            onFileAttach()
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -297,7 +298,7 @@ fun InputBar(
                         onClick = { attachmentMenuExpanded = !attachmentMenuExpanded },
                     ) {
                         Icon(
-                            imageVector = if (attachmentMenuExpanded) Icons.Default.Close else Icons.Default.Add,
+                            imageVector = Icons.Default.Add,
                             contentDescription = "Toggle attachment menu",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )

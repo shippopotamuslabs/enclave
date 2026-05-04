@@ -104,8 +104,7 @@ fun UniversalInputBar(
 
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = Color.Transparent,
-        shape = shape
+        color = MaterialTheme.colorScheme.background,
     ) {
         Box(
             modifier = Modifier
@@ -411,6 +410,7 @@ fun UniversalVoiceTrailingAction(
     isGlobalInferenceBlocked: Boolean = false,
     hasSendableContent: Boolean = inputText.isNotBlank(),
 ) {
+    val focusManager = LocalFocusManager.current
     val isRecordingPhase = speechState is SpeechState.Listening || 
                           speechState is SpeechState.ModelLoading || 
                           speechState is SpeechState.Transcribing
@@ -462,7 +462,10 @@ fun UniversalVoiceTrailingAction(
                     when {
                         isGenerating -> if (canStop) onStop()
                         isRecording -> onMicClick()
-                        isSending -> onSend(inputText)
+                        isSending -> {
+                            onSend(inputText)
+                            focusManager.clearFocus()
+                        }
                         else -> onMicClick()
                     }
                 },

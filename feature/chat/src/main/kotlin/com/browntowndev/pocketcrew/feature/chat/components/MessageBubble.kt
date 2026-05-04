@@ -27,6 +27,8 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -157,6 +159,42 @@ fun MessageBubble(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
+                    // File Attachments
+                    if (message.content.fileAttachments.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp)
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            message.content.fileAttachments.forEach { attachment ->
+                                AssistChip(
+                                    onClick = { /* Open viewer potentially */ },
+                                    label = { 
+                                        Text(
+                                            text = attachment.name,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            maxLines = 1
+                                        ) 
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            painter = painterResource(R.drawable.document),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    colors = AssistChipDefaults.assistChipColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                        labelColor = MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    border = null
+                                )
+                            }
+                        }
+                    }
+
                     SelectionContainer(modifier = Modifier.fillMaxWidth()) {
                         val contentText = message.content.text
                         if (contentText.isBlank()) {

@@ -8,7 +8,9 @@ import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
 import com.browntowndev.pocketcrew.domain.model.chat.Content
+import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
@@ -549,6 +551,7 @@ class ChatViewModel @Inject constructor(
                 imageUri = message.content.imageUri,
                 tavilySources = message.tavilySources,
                 artifacts = message.content.artifacts,
+                fileAttachments = message.content.fileAttachments,
             ),
             formattedTimestamp = formatTimestamp(message.createdAt),
             indicatorState = computeIndicatorState(message),
@@ -793,13 +796,13 @@ class ChatViewModel @Inject constructor(
                 null
             }
 
-            val finalPrompt = if (fileText != null) {
-                "--- Attached File: $fileName ---\n$fileText\n\n--- User Prompt ---\n$input"
+            val fileAttachments = if (fileText != null && fileName != null) {
+                listOf(FileAttachment(name = fileName, content = fileText))
             } else {
-                input
+                emptyList()
             }
 
-            if (finalPrompt.isNotBlank() || selectedImageUri != null) {
+            if (input.isNotBlank() || selectedImageUri != null || fileAttachments.isNotEmpty()) {
                 // Determine the chat ID: prefer currentChatId, then initialChatId, otherwise empty
                 val chatIdForMessage = _currentChatId.value ?: initialChatId ?: ChatId("")
 
@@ -807,7 +810,11 @@ class ChatViewModel @Inject constructor(
                 val domainMessage = Message(
                     id = MessageId(UUID.randomUUID().toString()),
                     chatId = chatIdForMessage,
-                    content = Content(text = finalPrompt, imageUri = selectedImageUri),
+                    content = Content(
+                        text = input,
+                        imageUri = selectedImageUri,
+                        fileAttachments = fileAttachments
+                    ),
                     role = Role.USER,
                     createdAt = System.currentTimeMillis()
                 )
@@ -835,7 +842,7 @@ class ChatViewModel @Inject constructor(
                 // Use mode to route to appropriate service
                 // Collect the flow to keep direct inference alive and surface errors.
                 inferenceJob = chatUseCases.generateChatResponse(
-                    prompt = finalPrompt,
+                    prompt = input,
                     userMessageId = promptResult.userMessageId,
                     assistantMessageId = promptResult.assistantMessageId,
                     chatId = promptResult.chatId,

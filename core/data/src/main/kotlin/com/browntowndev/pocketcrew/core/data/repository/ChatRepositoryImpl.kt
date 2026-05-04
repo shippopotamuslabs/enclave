@@ -59,7 +59,7 @@ class ChatRepositoryImpl @Inject constructor(
         ) { entities, sources ->
             val sourcesByMessage = sources.groupBy { it.messageId }
             entities.map { entity ->
-                val messageSources = sourcesByMessage[entity.id].orEmpty()
+                val messageSources = sourcesByMessage[entity.message.id].orEmpty()
                 entity.toDomain(messageSources)
             }
         }
@@ -79,7 +79,7 @@ class ChatRepositoryImpl @Inject constructor(
     override suspend fun appendMessageContent(messageId: MessageId, content: String) {
         val existing = messageDao.getMessageById(messageId)
         if (existing != null) {
-            val newContent = existing.content + content
+            val newContent = existing.message.content + content
             messageDao.updateMessageContentText(messageId, newContent)
         }
     }
@@ -95,7 +95,7 @@ class ChatRepositoryImpl @Inject constructor(
 
     override suspend fun appendThinkingRaw(messageId: MessageId, thinkingText: String) {
         val existing = messageDao.getMessageById(messageId)
-        val currentRaw = existing?.thinkingRaw ?: ""
+        val currentRaw = existing?.message?.thinkingRaw ?: ""
         messageDao.updateThinkingRaw(messageId, currentRaw + thinkingText)
     }
 

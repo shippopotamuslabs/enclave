@@ -76,6 +76,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                 assistantMessageId = assistantMessageId,
                 chatId = chatId,
                 userHasImage = userMessage.content.imageUri != null,
+                fileAttachments = userMessage.content.fileAttachments,
                 backgroundInferenceEnabled = backgroundInferenceEnabled,
             )
             val accumulatorManager = ChatGenerationAccumulatorManager(
@@ -182,6 +183,7 @@ class GenerateChatResponseUseCase @Inject constructor(
         assistantMessageId: MessageId,
         chatId: ChatId,
         userHasImage: Boolean,
+        fileAttachments: List<com.browntowndev.pocketcrew.domain.model.chat.FileAttachment>,
         backgroundInferenceEnabled: Boolean,
     ): Flow<MessageGenerationState> = when (mode) {
         Mode.FAST -> executeSingleModelMode(
@@ -208,6 +210,7 @@ class GenerateChatResponseUseCase @Inject constructor(
             prompt = prompt,
             chatId = chatId,
             userHasImage = userHasImage,
+            fileAttachments = fileAttachments,
         )
     }
 
@@ -235,6 +238,7 @@ class GenerateChatResponseUseCase @Inject constructor(
         prompt: String,
         chatId: ChatId,
         userHasImage: Boolean,
+        fileAttachments: List<com.browntowndev.pocketcrew.domain.model.chat.FileAttachment>,
     ): Flow<MessageGenerationState> = flow {
         try {
             if (userHasImage) {
@@ -243,15 +247,12 @@ class GenerateChatResponseUseCase @Inject constructor(
             val apiVisionConfigured = activeModelProvider.getActiveConfiguration(ModelType.VISION)
                 ?.let { config -> config.isLocal == false && config.isMultimodal }
                 ?: false
-            val crewPrompt = if (userHasImage && apiVisionConfigured) {
-                prepareChatPrompt(
-                    prompt = prompt,
-                    hasImageContext = true,
-                    imageHandling = ChatImageHandling.TOOL,
-                )
-            } else {
-                prompt
-            }
+            val crewPrompt = prepareChatPrompt(
+                prompt = prompt,
+                hasImageContext = userHasImage,
+                imageHandling = if (userHasImage && apiVisionConfigured) ChatImageHandling.TOOL else ChatImageHandling.NONE,
+                fileAttachments = fileAttachments,
+            )
 
             emitAll(
                 pipelineExecutor.executePipeline(
