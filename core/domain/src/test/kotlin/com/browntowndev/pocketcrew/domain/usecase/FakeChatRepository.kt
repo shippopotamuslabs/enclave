@@ -5,7 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
@@ -187,7 +187,7 @@ class FakeChatRepository : ChatRepository {
         content: String,
         messageState: MessageState,
         pipelineStep: PipelineStep?,
-        tavilySources: List<TavilySource>,
+        webSearchSources: List<WebSearchSource>,
         artifacts: List<ArtifactGenerationRequest>
     ) {
         persistedMessageData.add(
@@ -201,7 +201,7 @@ class FakeChatRepository : ChatRepository {
                 content = content,
                 messageState = messageState,
                 pipelineStep = pipelineStep,
-                tavilySources = tavilySources,
+                webSearchSources = webSearchSources,
                 artifacts = artifacts
             )
         )
@@ -217,11 +217,15 @@ class FakeChatRepository : ChatRepository {
         val content: String,
         val messageState: MessageState,
         val pipelineStep: PipelineStep?,
-        val tavilySources: List<TavilySource>,
+        val webSearchSources: List<WebSearchSource>,
         val artifacts: List<ArtifactGenerationRequest>
     )
 
-    override suspend fun markSourcesExtracted(urls: List<String>) {
-        // No-op for testing
+    override suspend fun markWebSearchSourcesExtracted(urls: List<String>) {
+        // No-op for fake
+    }
+
+    override suspend fun markWebSearchSourceExtracted(url: String) {
+        // No-op for fake
     }
 }

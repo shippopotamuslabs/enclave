@@ -229,9 +229,9 @@ internal class OpenAiResponseStreamHandler(
                 cachedFunctionCall?.toolName?.let { return@getOrElse it }
                 loggingPort.warning(
                     tag,
-                    "Function call done event missing name provider=$provider model=$modelId; defaulting to ${ToolDefinition.TAVILY_WEB_SEARCH.name}. error=${error.message ?: error::class.java.simpleName}"
+                    "Function call done event missing name provider=$provider model=$modelId; defaulting to ${ToolDefinition.WEB_SEARCH.name}. error=${error.message ?: error::class.java.simpleName}"
                 )
-                ToolDefinition.TAVILY_WEB_SEARCH.name
+                ToolDefinition.WEB_SEARCH.name
             }
         val argumentsJson = runCatching { functionCallDone.arguments() }
             .getOrElse { error ->

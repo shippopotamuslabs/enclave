@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 
 /**
  * Configuration for [DetailBottomSheet].
@@ -86,7 +86,7 @@ sealed class DetailBottomSheetConfig {
      */
     data class Sources(
         override val isVisible: Boolean,
-        val sources: List<TavilySource>,
+        val sources: List<WebSearchSource>,
         override val onDismiss: () -> Unit,
         override val content: String = "",
         override val isStreaming: Boolean = false,
@@ -228,7 +228,7 @@ fun DetailBottomSheet(
                     }
                     is DetailBottomSheetConfig.Sources -> {
                         config.sources.forEachIndexed { index, source ->
-                            TavilySourceRow(
+                            WebSearchSourceRow(
                                 source = source,
                                 onClick = { url: String -> uriHandler.openUri(url) }
                             )

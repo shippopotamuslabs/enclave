@@ -19,6 +19,6 @@ data class MessageSnapshot(
     val isComplete: Boolean = false,
     val messageState: MessageState = if (isComplete) MessageState.COMPLETE else MessageState.GENERATING,
     val pipelineStep: PipelineStep? = null,
-    val tavilySources: List<TavilySource> = emptyList(),
+    val webSearchSources: List<WebSearchSource> = emptyList(),
     val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = emptyList(),
 )

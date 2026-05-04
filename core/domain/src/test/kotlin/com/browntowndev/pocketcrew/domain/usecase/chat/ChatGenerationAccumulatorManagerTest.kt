@@ -8,7 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Mode
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -118,7 +118,7 @@ class ChatGenerationAccumulatorManagerTest {
     }
 
     @Test
-    fun `markSourcesExtracted updates extracted flag on accumulator sources`() = runTest {
+    fun `markWebSearchSourcesExtracted updates extracted flag on accumulator sources`() = runTest {
         val manager = ChatGenerationAccumulatorManager(
             mode = Mode.FAST,
             chatId = ChatId("chat"),
@@ -127,7 +127,7 @@ class ChatGenerationAccumulatorManagerTest {
             chatRepository = mockk(relaxed = true),
         )
 
-        val source1 = TavilySource(
+        val source1 = WebSearchSource(
             messageId = MessageId("assistant"),
             title = "Source 1",
             url = "https://example.com/page1",
@@ -135,7 +135,7 @@ class ChatGenerationAccumulatorManagerTest {
             score = 0.9,
             extracted = false,
         )
-        val source2 = TavilySource(
+        val source2 = WebSearchSource(
             messageId = MessageId("assistant"),
             title = "Source 2",
             url = "https://example.com/page2",
@@ -144,20 +144,20 @@ class ChatGenerationAccumulatorManagerTest {
             extracted = false,
         )
 
-        manager.reduce(MessageGenerationState.TavilySourcesAttached(listOf(source1, source2), ModelType.FAST))
+        manager.reduce(MessageGenerationState.WebSearchSourcesAttached(listOf(source1, source2), ModelType.FAST))
 
         // Before marking, both should have extracted=false
         val snapshotBefore = manager.toMessagesState().messages.getValue(MessageId("assistant"))
-        assertFalse(snapshotBefore.tavilySources[0].extracted)
-        assertFalse(snapshotBefore.tavilySources[1].extracted)
+        assertFalse(snapshotBefore.webSearchSources[0].extracted)
+        assertFalse(snapshotBefore.webSearchSources[1].extracted)
 
         // Mark source1 as extracted
-        manager.markSourcesExtracted(listOf("https://example.com/page1"))
+        manager.markWebSearchSourcesExtracted(listOf("https://example.com/page1"))
 
         val snapshotAfter = manager.toMessagesState().messages.getValue(MessageId("assistant"))
-        assertTrue(snapshotAfter.tavilySources.first { it.url == "https://example.com/page1" }.extracted,
+        assertTrue(snapshotAfter.webSearchSources.first { it.url == "https://example.com/page1" }.extracted,
             "Marked source should have extracted=true")
-        assertFalse(snapshotAfter.tavilySources.first { it.url == "https://example.com/page2" }.extracted,
+        assertFalse(snapshotAfter.webSearchSources.first { it.url == "https://example.com/page2" }.extracted,
             "Unmarked source should still have extracted=false")
     }
 }

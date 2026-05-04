@@ -6,8 +6,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.ExtractFormat
 import com.browntowndev.pocketcrew.domain.model.inference.GetMessageContextParams
 import com.browntowndev.pocketcrew.domain.model.inference.SearchChatHistoryParams
 import com.browntowndev.pocketcrew.domain.model.inference.SearchChatParams
-import com.browntowndev.pocketcrew.domain.model.inference.TavilyExtractParams
-import com.browntowndev.pocketcrew.domain.model.inference.TavilyWebSearchParams
+import com.browntowndev.pocketcrew.domain.model.inference.WebExtractParams
+import com.browntowndev.pocketcrew.domain.model.inference.WebSearchParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolParameters
 import kotlinx.serialization.json.Json
@@ -47,7 +47,7 @@ object ToolEnvelopeParser {
     }
 
     fun buildArgumentsJson(query: String): String =
-        ToolDefinition.TAVILY_WEB_SEARCH.encodeArguments(TavilyWebSearchParams(query))
+        ToolDefinition.WEB_SEARCH.encodeArguments(WebSearchParams(query))
 
     /**
      * Converts a raw Map (usually from an SDK like Google or Anthropic) into a JSON string.
@@ -134,8 +134,8 @@ object ToolEnvelopeParser {
         urls: List<String>,
         extractDepth: String? = null,
         format: String? = null,
-    ): String = ToolDefinition.TAVILY_EXTRACT.encodeArguments(
-        TavilyExtractParams(
+    ): String = ToolDefinition.WEB_EXTRACT.encodeArguments(
+        WebExtractParams(
             urls = urls,
             extract_depth = extractDepth?.let { ExtractDepth.valueOf(it) } ?: ExtractDepth.basic,
             format = format?.let { ExtractFormat.valueOf(it) } ?: ExtractFormat.markdown
@@ -225,9 +225,9 @@ object ToolEnvelopeParser {
         val toolName = TOOL_NAME_REGEX.find(payload)?.groupValues?.get(1)
             ?: throw IllegalStateException("Malformed tool_call envelope")
         val argumentsJson = when (toolName) {
-            ToolDefinition.TAVILY_WEB_SEARCH.name -> buildArgumentsJson(extractRequiredQuery(payload))
+            ToolDefinition.WEB_SEARCH.name -> buildArgumentsJson(extractRequiredQuery(payload))
             ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> buildImageInspectArgumentsJson(extractRequiredQuestion(payload))
-            ToolDefinition.TAVILY_EXTRACT.name -> {
+            ToolDefinition.WEB_EXTRACT.name -> {
                 val urls = extractRequiredUrls(payload)
                 buildExtractArgumentsJson(urls)
             }

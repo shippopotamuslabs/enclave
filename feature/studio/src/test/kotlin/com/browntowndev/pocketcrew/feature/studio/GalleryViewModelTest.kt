@@ -12,7 +12,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
@@ -275,6 +277,20 @@ private class FakeStudioRepository : StudioRepositoryPort {
     }
 
     override suspend fun getMediaById(id: String): StudioMediaAsset? = media.value.firstOrNull { it.id == id }
+
+    override fun observeEphemeralMedia(): Flow<List<StudioMediaAsset>> = flowOf(emptyList())
+
+    override fun observeGenerationError(): Flow<String?> = flowOf(null)
+
+    override suspend fun reportGenerationError(message: String?) {}
+
+    override suspend fun clearGenerationError() {}
+
+    override suspend fun addEphemeralMedia(asset: StudioMediaAsset) {}
+
+    override suspend fun updateEphemeralMedia(asset: StudioMediaAsset) {}
+
+    override suspend fun removeEphemeralMedia(id: String) {}
 
     override suspend fun createAlbum(name: String): String {
         val id = nextAlbumId++.toString()

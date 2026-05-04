@@ -100,6 +100,11 @@ class SettingsViewModelTest {
         every { memoriesRepository.getAllMemoriesFlow() } returns MutableStateFlow(emptyList())
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
 
+        val updateSearchProviderUseCase = mockk<UpdateSearchProviderUseCase>()
+        val saveExaApiKeyUseCase = mockk<SaveExaApiKeyUseCase>()
+        val clearExaApiKeyUseCase = mockk<ClearExaApiKeyUseCase>()
+        val updateShowSearchProviderSwitchAlertUseCase = mockk<UpdateShowSearchProviderSwitchAlertUseCase>()
+
         val settingsUseCases = SettingsUseCasesImpl(
             preferences = SettingsPreferencesUseCasesImpl(
                 getSettings = getSettingsUseCase,
@@ -111,8 +116,12 @@ class SettingsViewModelTest {
                 updateCustomPromptText = updateCustomPromptTextUseCase,
                 updateAllowMemories = updateAllowMemoriesUseCase,
                 updateSearchEnabled = updateSearchEnabledUseCase,
+                updateSearchProvider = updateSearchProviderUseCase,
                 saveTavilyApiKey = saveTavilyApiKeyUseCase,
                 clearTavilyApiKey = clearTavilyApiKeyUseCase,
+                saveExaApiKey = saveExaApiKeyUseCase,
+                clearExaApiKey = clearExaApiKeyUseCase,
+                updateShowSearchProviderSwitchAlert = updateShowSearchProviderSwitchAlertUseCase,
                 updateBackgroundInferenceEnabled = updateBackgroundInferenceEnabledUseCase,
             ),
             localModels = SettingsLocalModelUseCasesImpl(

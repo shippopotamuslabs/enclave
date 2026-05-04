@@ -14,7 +14,7 @@ import androidx.room.TypeConverters
         ApiModelConfigurationEntity::class,
         ApiCredentialsEntity::class,
         DefaultModelEntity::class,
-        TavilySourceEntity::class,
+        WebSearchSourceEntity::class,
         MessageVisionAnalysisEntity::class,
         EmbeddingEntity::class,
         TtsProviderEntity::class,
@@ -24,7 +24,7 @@ import androidx.room.TypeConverters
         StudioAlbumEntity::class,
         MessageFileEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(ModelTypeConverters::class)
@@ -37,7 +37,7 @@ abstract class PocketCrewDatabase : RoomDatabase() {
     abstract fun apiModelConfigurationsDao(): ApiModelConfigurationsDao
     abstract fun apiCredentialsDao(): ApiCredentialsDao
     abstract fun defaultModelsDao(): DefaultModelsDao
-    abstract fun tavilySourceDao(): TavilySourceDao
+    abstract fun webSearchSourceDao(): WebSearchSourceDao
     abstract fun messageVisionAnalysisDao(): MessageVisionAnalysisDao
     abstract fun embeddingDao(): EmbeddingDao
     abstract fun ttsProviderDao(): TtsProviderDao

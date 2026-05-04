@@ -1,23 +1,23 @@
 package com.browntowndev.pocketcrew.domain.util
 
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-object TavilyResultParser {
+object WebSearchResultParser {
     /**
-     * Parses the JSON result from the Tavily search tool into a list of [TavilySource] objects.
+     * Parses the JSON result from a web search tool into a list of [WebSearchSource] objects.
      *
      * @param messageId The ID of the assistant message these sources should be associated with.
-     * @param resultJson The raw JSON string returned by the Tavily search tool.
-     * @return A list of [TavilySource] objects.
+     * @param resultJson The raw JSON string returned by the web search tool.
+     * @return A list of [WebSearchSource] objects.
      */
-    fun parse(messageId: MessageId, resultJson: String): List<TavilySource> {
-        val sources = mutableListOf<TavilySource>()
+    fun parse(messageId: MessageId, resultJson: String): List<WebSearchSource> {
+        val sources = mutableListOf<WebSearchSource>()
         runCatching {
             val payload = Json.parseToJsonElement(resultJson).jsonObject
             val results = payload["results"]?.jsonArray ?: return@runCatching
@@ -25,7 +25,7 @@ object TavilyResultParser {
             for (itemElement in results) {
                 val item = itemElement.jsonObject
                 sources.add(
-                    TavilySource(
+                    WebSearchSource(
                         messageId = messageId,
                         title = item["title"]?.jsonPrimitive?.content ?: "",
                         url = item["url"]?.jsonPrimitive?.content ?: "",

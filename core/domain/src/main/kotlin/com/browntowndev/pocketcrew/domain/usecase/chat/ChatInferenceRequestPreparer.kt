@@ -93,9 +93,9 @@ class ChatInferenceRequestPreparer(
             config?.systemPrompt
         }
         val availableTools = buildList {
-            if (searchEnabled) {
-                add(ToolDefinition.TAVILY_WEB_SEARCH)
-                add(ToolDefinition.TAVILY_EXTRACT)
+            if (settings.searchEnabled) {
+                add(ToolDefinition.WEB_SEARCH)
+                add(ToolDefinition.WEB_EXTRACT)
             }
             if (imageHandling == ChatImageHandling.TOOL) add(ToolDefinition.ATTACHED_IMAGE_INSPECT)
             add(ToolDefinition.SEARCH_CHAT_HISTORY)

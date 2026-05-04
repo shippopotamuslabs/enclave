@@ -23,13 +23,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.feature.chat.R
 import java.net.URI
 
 @Composable
-fun TavilySourceRow(
-    source: TavilySource,
+fun WebSearchSourceRow(
+    source: WebSearchSource,
     onClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {

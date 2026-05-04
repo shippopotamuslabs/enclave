@@ -92,7 +92,7 @@ class PocketCrewDatabaseMigrationTest {
     }
 
     @Test
-    fun `tavily_source table has extracted column with default false`() {
+    fun `web_search_source table has extracted column with default false`() {
         val db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),
             PocketCrewDatabase::class.java
@@ -101,7 +101,7 @@ class PocketCrewDatabaseMigrationTest {
         try {
             val sqliteDb = db.openHelper.readableDatabase
 
-            val cursor = sqliteDb.query("PRAGMA table_info('tavily_source')")
+            val cursor = sqliteDb.query("PRAGMA table_info('web_search_source')")
             val extractedColumn = buildMap {
                 cursor.use {
                     while (it.moveToNext()) {

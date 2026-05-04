@@ -19,7 +19,7 @@ Fix the issue where local LiteRT models are not seeing or properly executing ava
   - Inside the method, use `runBlocking` to construct a `ToolCallRequest` and run it against the injected `toolExecutor.execute()`. Return the output JSON string.
 
 ### 2. Configure LiteRT `ConversationConfig`
-- In `ConversationManagerImpl.getConversation`, check `options?.availableTools` to see if `ToolDefinition.TAVILY_WEB_SEARCH` is active.
+- In `ConversationManagerImpl.getConversation`, check `options?.availableTools` to see if `ToolDefinition.WEB_SEARCH` is active.
 - If present and the `toolExecutor` is not null, build the `tools` list:
   ```kotlin
   val tools = listOf(tool(LocalSearchToolset(toolExecutor, modelType)))

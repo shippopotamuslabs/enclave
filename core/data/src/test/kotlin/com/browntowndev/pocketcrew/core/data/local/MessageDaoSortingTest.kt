@@ -95,9 +95,9 @@ class MessageDaoSortingTest {
         val messages = dao.getMessagesByChatIdFlow(chatId).first()
 
         assertEquals(3, messages.size)
-        assertEquals("1", messages[0].id.value) // 1000L
-        assertEquals("2", messages[1].id.value) // 2000L
-        assertEquals("3", messages[2].id.value) // NULL
+        assertEquals("1", messages[0].message.id.value) // 1000L
+        assertEquals("2", messages[1].message.id.value) // 2000L
+        assertEquals("3", messages[2].message.id.value) // NULL
     }
 
     @Test
@@ -134,8 +134,8 @@ class MessageDaoSortingTest {
         val messages = dao.getMessagesByChatId(chatId)
 
         assertEquals(2, messages.size)
-        assertEquals("1", messages[0].id.value) // 1000L
-        assertEquals("3", messages[1].id.value) // NULL
+        assertEquals("1", messages[0].message.id.value) // 1000L
+        assertEquals("3", messages[1].message.id.value) // NULL
     }
 
     @Test
@@ -159,7 +159,7 @@ class MessageDaoSortingTest {
             createdAt = null,
         ))
 
-        val emissions = mutableListOf<List<MessageEntity>>()
+        val emissions = mutableListOf<List<MessageWithFiles>>()
         val collectJob = launch {
             dao.getMessagesByChatIdFlow(chatId)
                 .take(2)
@@ -180,13 +180,13 @@ class MessageDaoSortingTest {
         )
         collectJob.join()
 
-        val finalMessage = emissions.last().single { it.id == assistantMessageId }
+        val finalMessage = emissions.last().single { it.message.id == assistantMessageId }.message
         assertEquals("final answer", finalMessage.content)
         assertEquals(MessageState.COMPLETE, finalMessage.messageState)
         assertTrue(finalMessage.createdAt != null && finalMessage.createdAt > 0L)
         assertTrue(
             emissions.none { emission ->
-                val message = emission.single { it.id == assistantMessageId }
+                val message = emission.single { it.message.id == assistantMessageId }.message
                 val finalContentWithoutCompleteState =
                     message.content == "final answer" && message.messageState != MessageState.COMPLETE
                 val completeStateWithoutFinalContent =

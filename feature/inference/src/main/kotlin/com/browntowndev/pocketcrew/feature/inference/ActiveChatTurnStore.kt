@@ -51,7 +51,7 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
         }
     }
 
-    override suspend fun markSourcesExtracted(
+    override suspend fun markWebSearchSourcesExtracted(
         key: ActiveChatTurnKey,
         urls: List<String>,
     ) {
@@ -63,7 +63,7 @@ class ActiveChatTurnStore @Inject constructor() : ActiveChatTurnSnapshotPort {
                 current?.copy(
                     messages = current.messages.mapValues { (_, snapshot) ->
                         snapshot.copy(
-                            tavilySources = snapshot.tavilySources.map { source ->
+                            webSearchSources = snapshot.webSearchSources.map { source ->
                                 if (source.url in urls) {
                                     source.copy(extracted = true)
                                 } else {

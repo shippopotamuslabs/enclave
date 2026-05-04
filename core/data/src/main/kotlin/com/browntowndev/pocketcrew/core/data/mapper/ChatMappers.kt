@@ -4,12 +4,13 @@ import com.browntowndev.pocketcrew.core.data.local.ChatEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceEntity
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import kotlinx.serialization.json.Json
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import kotlinx.serialization.encodeToString
@@ -30,12 +31,12 @@ fun Chat.toEntity(): ChatEntity = ChatEntity(
     pinned = pinned
 )
 
-fun MessageWithFiles.toDomain(tavilySources: List<TavilySourceEntity> = emptyList()): Message {
-    return message.toDomain(tavilySources, files)
+fun MessageWithFiles.toDomain(webSearchSources: List<WebSearchSourceEntity> = emptyList()): Message {
+    return message.toDomain(webSearchSources, files)
 }
 
 fun MessageEntity.toDomain(
-    tavilySources: List<TavilySourceEntity> = emptyList(),
+    webSearchSources: List<WebSearchSourceEntity> = emptyList(),
     files: List<MessageFileEntity> = emptyList()
 ): Message {
     val artifacts = try {
@@ -50,7 +51,7 @@ fun MessageEntity.toDomain(
             text = content,
             pipelineStep = pipelineStep,
             imageUri = imageUri,
-            tavilySources = tavilySources.map { it.toDomain() },
+            webSearchSources = webSearchSources.map { it.toDomain() },
             artifacts = artifacts,
             fileAttachments = files.map { it.toDomain() }
         ),
@@ -63,7 +64,7 @@ fun MessageEntity.toDomain(
         thinkingStartTime = thinkingStartTime,
         thinkingEndTime = thinkingEndTime,
         modelType = modelType,
-        tavilySources = tavilySources.map { it.toDomain() }
+        webSearchSources = webSearchSources.map { it.toDomain() }
     )
 }
 
@@ -98,7 +99,7 @@ fun FileAttachment.toEntity(id: String, messageId: String): MessageFileEntity = 
     content = content
 )
 
-fun TavilySourceEntity.toDomain(): TavilySource = TavilySource(
+fun WebSearchSourceEntity.toDomain(): WebSearchSource = WebSearchSource(
     id = id,
     messageId = messageId,
     title = title,
@@ -108,7 +109,7 @@ fun TavilySourceEntity.toDomain(): TavilySource = TavilySource(
     extracted = extracted,
 )
 
-fun TavilySource.toEntity(): TavilySourceEntity = TavilySourceEntity(
+fun WebSearchSource.toEntity(): WebSearchSourceEntity = WebSearchSourceEntity(
     id = id,
     messageId = messageId,
     title = title,

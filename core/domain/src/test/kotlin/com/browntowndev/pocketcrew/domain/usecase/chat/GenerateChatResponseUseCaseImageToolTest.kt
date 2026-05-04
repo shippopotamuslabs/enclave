@@ -261,7 +261,7 @@ class GenerateChatResponseUseCaseImageToolTest {
                 content = capture(contentSlot),
                 messageState = any(),
                 pipelineStep = any(),
-                tavilySources = any(),
+                webSearchSources = any(),
             )
         } returns Unit
 
@@ -412,7 +412,7 @@ class GenerateChatResponseUseCaseImageToolTest {
         coEvery { getActiveConfiguration(ModelType.VISION) } returns visionConfig
     }
 
-    private fun fastTextConfig(): ActiveModelConfiguration = ActiveModelConfiguration(
+    private fun fastTextConfig(): ActiveModelConfiguration = ActiveModelConfiguration(modelId = "test-model", 
         id = LocalModelConfigurationId("fast-text"),
         isLocal = true,
         name = "Fast",
@@ -435,7 +435,7 @@ class GenerateChatResponseUseCaseImageToolTest {
         isMultimodal = true,
     )
 
-    private fun apiVisionConfig(): ActiveModelConfiguration = ActiveModelConfiguration(
+    private fun apiVisionConfig(): ActiveModelConfiguration = ActiveModelConfiguration(modelId = "test-model", 
         id = ApiModelConfigurationId("vision-api"),
         isLocal = false,
         name = "Vision API",

@@ -8,7 +8,7 @@ import androidx.room.PrimaryKey
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 
 @Entity(
-    tableName = "tavily_source",
+    tableName = "web_search_source",
     foreignKeys = [
         ForeignKey(
             entity = MessageEntity::class,
@@ -21,7 +21,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
         Index(value = ["message_id"])
     ]
 )
-data class TavilySourceEntity(
+data class WebSearchSourceEntity(
     @PrimaryKey
     @ColumnInfo(name = "id")
     val id: String,

@@ -20,7 +20,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
-import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
+import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.feature.inference.openai.OpenAiResponseStreamHandler
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamState
 import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
@@ -266,12 +266,12 @@ abstract class BaseOpenAiSdkInferenceService(
                 )
             },
             onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name) {
                     val assistantMessageId = options.assistantMessageId
                     if (assistantMessageId != null) {
-                        val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
+                        val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
                         if (sources.isNotEmpty()) {
-                            emitEvent(InferenceEvent.TavilyResults(sources, modelType))
+                            emitEvent(InferenceEvent.WebSearchResults(sources, modelType))
                         }
                     }
                 }
@@ -468,12 +468,12 @@ abstract class BaseOpenAiSdkInferenceService(
                 ContextExceededResult(contextExceeded = result.contextExceeded, rebuiltParams = null)
             },
             onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name) {
                     val assistantMessageId = options.assistantMessageId
                     if (assistantMessageId != null) {
-                        val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
+                        val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
                         if (sources.isNotEmpty()) {
-                            emitEvent(InferenceEvent.TavilyResults(sources, modelType))
+                            emitEvent(InferenceEvent.WebSearchResults(sources, modelType))
                         }
                     }
                 }

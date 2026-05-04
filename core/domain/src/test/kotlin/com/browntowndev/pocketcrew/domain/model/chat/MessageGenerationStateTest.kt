@@ -64,9 +64,9 @@ class MessageGenerationStateTest {
     }
 
     @Test
-    fun `isTerminal returns false for TavilySourcesAttached`() {
+    fun `isTerminal returns false for WebSearchSourcesAttached`() {
         assertFalse(
-            MessageGenerationState.TavilySourcesAttached(
+            MessageGenerationState.WebSearchSourcesAttached(
                 sources = emptyList(),
                 modelType = ModelType.MAIN,
             ).isTerminal

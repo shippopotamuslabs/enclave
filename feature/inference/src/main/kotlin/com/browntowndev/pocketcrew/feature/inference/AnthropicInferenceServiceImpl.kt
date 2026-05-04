@@ -16,7 +16,7 @@ import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
-import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
+import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.anthropic.client.AnthropicClient
 import com.anthropic.core.JsonValue
 import com.anthropic.models.messages.ContentBlockParam
@@ -254,12 +254,12 @@ class AnthropicInferenceServiceImpl(
                 )
             },
             onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name) {
                     val assistantMessageId = options.assistantMessageId
                     if (assistantMessageId != null) {
-                        val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
+                        val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
                         if (sources.isNotEmpty()) {
-                            emitEvent(InferenceEvent.TavilyResults(sources, modelType))
+                            emitEvent(InferenceEvent.WebSearchResults(sources, modelType))
                         }
                     }
                 }

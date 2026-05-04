@@ -45,6 +45,7 @@ class SettingsRepositoryImplTest {
         )
         val apiKeyManager = mockk<ApiKeyManager> {
             every { has(ApiKeyManager.TAVILY_SEARCH_ALIAS) } returns false
+            every { has(ApiKeyManager.EXA_SEARCH_ALIAS) } returns false
         }
         return SettingsRepositoryImpl(
             dataStore = dataStore,

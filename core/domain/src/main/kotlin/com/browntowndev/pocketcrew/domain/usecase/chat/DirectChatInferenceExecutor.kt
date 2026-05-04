@@ -150,8 +150,8 @@ class DirectChatInferenceExecutor @Inject constructor(
                     emit(MessageGenerationState.GeneratingText(event.chunk, event.modelType))
                 }
 
-                is InferenceEvent.TavilyResults -> {
-                    emit(MessageGenerationState.TavilySourcesAttached(event.sources, event.modelType))
+                is InferenceEvent.WebSearchResults -> {
+                    emit(MessageGenerationState.WebSearchSourcesAttached(event.sources, event.modelType))
                 }
 
                 is InferenceEvent.Artifacts -> {

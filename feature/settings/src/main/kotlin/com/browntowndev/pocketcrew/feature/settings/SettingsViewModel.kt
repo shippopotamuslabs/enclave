@@ -8,8 +8,10 @@ import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
+import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApiProviderDraft
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApiModelDiscoveryRequest
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApiPresetDraft
@@ -112,6 +114,7 @@ class SettingsViewModel @Inject constructor(
 
     private val _currentApiKey = MutableStateFlow("")
     private val _currentTavilyApiKey = MutableStateFlow("")
+    private val _currentExaApiKey = MutableStateFlow("")
     val currentApiKey: StateFlow<String> = _currentApiKey
     val currentTavilyApiKey: StateFlow<String> = _currentTavilyApiKey
     val snackbarMessages: SharedFlow<String> = _snackbarMessages.asSharedFlow()
@@ -204,27 +207,69 @@ class SettingsViewModel @Inject constructor(
     }
 
     val uiState: StateFlow<SettingsUiState> = combine(
-        persistedSettingsBundle,
-        transientSettingsBundle,
-    ) { persisted, transient ->
+        preferencesUseCases.getSettings(),
+        localModelAssetsFlow,
+        apiModelAssetsFlow,
+        ttsAssetsFlow,
+        mediaAssetsFlow,
+        assignmentUseCases.getDefaultModels(),
+        memoriesFlow,
+        _feedbackText,
+        _currentApiKey,
+        _currentTavilyApiKey,
+        _currentExaApiKey,
+        _apiState,
+        _localModelsState,
+        _memoriesState,
+        _searchSkillState,
+        _ttsState,
+        _mediaState,
+        _assignmentState,
+        _deletionState,
+        _sheetVisibility,
+    ) { args ->
+        val settings = args[0] as SettingsData
+        val locals = args[1] as List<com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset>
+        val apis = args[2] as List<com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset>
+        val tts = args[3] as List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>
+        val media = args[4] as List<com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset>
+        val defaultModels = args[5] as List<com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment>
+        val memories = args[6] as List<StoredMemory>
+        val feedbackText = args[7] as String
+        val apiKey = args[8] as String
+        val tavilyKey = args[9] as String
+        val exaKey = args[10] as String
+        val apiState = args[11] as ApiProvidersTransientState
+        val localModelsState = args[12] as LocalModelsTransientState
+        val memoriesState = args[13] as MemoriesTransientState
+        val searchSkillState = args[14] as SearchSkillTransientState
+        val ttsState = args[15] as TtsProvidersTransientState
+        val mediaState = args[16] as MediaProvidersTransientState
+        val assignmentsState = args[17] as AssignmentDialogTransientState
+        val deletionState = args[18] as DeletionTransientState
+        val sheetVisibility = args[19] as SheetVisibilityState
+
         settingsUiStateFactory.create(
-            persistedSettings = persisted.settings,
-            localAssets = persisted.localAssets,
-            apiAssets = persisted.apiAssets,
-            ttsAssets = persisted.ttsAssets,
-            mediaAssets = persisted.mediaAssets,
-            defaultModels = persisted.defaultModels,
-            sheetVisibility = transient.sheetVisibility,
-            memories = transient.memories,
-            feedbackText = transient.feedbackText,
-            localModelsState = transient.localModelsState,
-            apiState = transient.apiState,
-            ttsState = transient.ttsState,
-            mediaState = transient.mediaState,
-            searchSkillState = transient.searchSkillState,
-            assignmentsState = transient.assignmentState,
-            deletionState = transient.deletionState,
-            memoriesState = transient.memoriesState,
+            persistedSettings = settings,
+            localAssets = locals,
+            apiAssets = apis,
+            ttsAssets = tts,
+            mediaAssets = media,
+            defaultModels = defaultModels,
+            sheetVisibility = sheetVisibility,
+            memories = memories,
+            feedbackText = feedbackText,
+            localModelsState = localModelsState,
+            apiState = apiState,
+            ttsState = ttsState,
+            mediaState = mediaState,
+            searchSkillState = searchSkillState,
+            assignmentsState = assignmentsState,
+            deletionState = deletionState,
+            memoriesState = memoriesState,
+            currentApiKey = apiKey,
+            currentTavilyApiKey = tavilyKey,
+            currentExaApiKey = exaKey,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -389,6 +434,10 @@ class SettingsViewModel @Inject constructor(
 
     fun onShowVisionSettingsSheet(show: Boolean) {
         _sheetVisibility.update { it.copy(visionSettings = show) }
+    }
+
+    fun onShowWebSearchSheet(show: Boolean) {
+        _sheetVisibility.update { it.copy(webSearch = show) }
     }
 
     fun onFeedbackTextChange(text: String) {
@@ -969,18 +1018,6 @@ class SettingsViewModel @Inject constructor(
         _apiState.update { it.copy(presetDraft = config) }
     }
 
-    fun onApiKeyChange(key: String) {
-        _currentApiKey.value = key
-        if (key.isNotBlank() && _apiState.value.assetDraft?.credentialsId?.value?.isEmpty() == true) {
-            _apiState.update {
-                it.copy(
-                    selectedReusableApiCredentialAlias = null,
-                    selectedReusableApiCredentialName = null,
-                )
-            }
-        }
-    }
-
     fun onSearchEnabledChange(enabled: Boolean) {
         _searchSkillState.update { it.copy(enabled = enabled) }
     }
@@ -999,18 +1036,66 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun onExaApiKeyChange(key: String) {
+        _currentExaApiKey.value = key
+        if (key.isBlank() && !uiState.value.searchSkillEditor.exaKeyPresent) {
+            _searchSkillState.update { it.copy(enabled = false) }
+        }
+    }
+
+    fun onClearExaApiKey() {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to clear Exa API key", "Failed to clear search key")) {
+            preferencesUseCases.clearExaApiKey()
+            _currentExaApiKey.value = ""
+        }
+    }
+
+    fun onSearchProviderChange(provider: SearchProvider) {
+        _searchSkillState.update { it.copy(selectedProvider = provider) }
+    }
+
+    fun onUpdateShowSearchProviderSwitchAlert(show: Boolean) {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update alert preference", "Failed to update preference")) {
+            preferencesUseCases.updateShowSearchProviderSwitchAlert(show)
+        }
+    }
+
     fun onSaveSearchSkillSettings(onSuccess: () -> Unit) {
-        val enabled = _searchSkillState.value.enabled ?: uiState.value.searchSkillEditor.enabled
-        val pendingApiKey = _currentTavilyApiKey.value.trim()
+        val uiState = uiState.value.searchSkillEditor
+        val enabled = _searchSkillState.value.enabled ?: uiState.enabled
+        val selectedProvider = _searchSkillState.value.selectedProvider ?: uiState.selectedProvider
+        
+        val pendingTavilyKey = _currentTavilyApiKey.value.trim()
+        val pendingExaKey = _currentExaApiKey.value.trim()
+        
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save search skill settings", "Failed to save search settings")) {
-            if (enabled && pendingApiKey.isBlank() && !uiState.value.searchSkillEditor.tavilyKeyPresent) {
-                throw IllegalStateException("A Tavily API key is required to enable web search")
+            if (enabled) {
+                when (selectedProvider) {
+                    SearchProvider.TAVILY -> {
+                        if (pendingTavilyKey.isBlank() && !uiState.tavilyKeyPresent) {
+                            throw IllegalStateException("A Tavily API key is required to enable web search with Tavily")
+                        }
+                    }
+                    SearchProvider.EXA -> {
+                        if (pendingExaKey.isBlank() && !uiState.exaKeyPresent) {
+                            throw IllegalStateException("An Exa API key is required to enable web search with Exa")
+                        }
+                    }
+                }
             }
+            
             preferencesUseCases.updateSearchEnabled(enabled)
-            if (pendingApiKey.isNotBlank()) {
-                preferencesUseCases.saveTavilyApiKey(pendingApiKey)
+            preferencesUseCases.updateSearchProvider(selectedProvider)
+            
+            if (pendingTavilyKey.isNotBlank()) {
+                preferencesUseCases.saveTavilyApiKey(pendingTavilyKey)
             }
+            if (pendingExaKey.isNotBlank()) {
+                preferencesUseCases.saveExaApiKey(pendingExaKey)
+            }
+            
             _currentTavilyApiKey.value = ""
+            _currentExaApiKey.value = ""
             _searchSkillState.value = SearchSkillTransientState()
             onSuccess()
         }
@@ -1268,16 +1353,21 @@ class SettingsViewModel @Inject constructor(
     fun onBackToByokList() {
         _currentApiKey.value = ""
         _currentTavilyApiKey.value = ""
+        _currentExaApiKey.value = ""
         _searchSkillState.value = SearchSkillTransientState()
         _apiState.update {
             it.copy(
+                isSheetOpen = true,
                 selectedAsset = null,
                 assetDraft = null,
                 selectedReusableApiCredentialAlias = null,
                 selectedReusableApiCredentialName = null,
-                presetDraft = null,
             )
         }
+    }
+
+    fun onApiKeyChange(key: String) {
+        _currentApiKey.value = key
     }
 
     fun onBackToMediaList() {

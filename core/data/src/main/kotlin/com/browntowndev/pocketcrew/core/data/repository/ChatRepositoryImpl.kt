@@ -2,7 +2,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
@@ -12,7 +12,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
@@ -31,7 +31,7 @@ import kotlinx.serialization.json.Json
 class ChatRepositoryImpl @Inject constructor(
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
-    private val tavilySourceDao: TavilySourceDao,
+    private val webSearchSourceDao: WebSearchSourceDao,
 ) : ChatRepository {
 
     override fun getAllChats(): Flow<List<Chat>> {
@@ -48,20 +48,15 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> {
-        // Combine the message table Flow with a tavily_source table Flow.
-        // This ensures that source-level changes (e.g. extracted flag updates)
-        // trigger a re-read, even though the message table itself hasn't changed.
-        // Without this, markExtracted on tavily_source would not cause the
-        // messages Flow to re-emit, and the UI would show stale extracted=false.
+        // Combine the message table Flow with a web_search_source table Flow.
+        // Without this, markExtracted on web_search_source would not cause the
+        // Flow to emit, and the UI wouldn't know when a source was extracted.
         return combine(
             messageDao.getMessagesByChatIdFlow(chatId),
-            tavilySourceDao.getByChatIdFlow(chatId),
-        ) { entities, sources ->
-            val sourcesByMessage = sources.groupBy { it.messageId }
-            entities.map { entity ->
-                val messageSources = sourcesByMessage[entity.message.id].orEmpty()
-                entity.toDomain(messageSources)
-            }
+            webSearchSourceDao.getByChatIdFlow(chatId),
+        ) { messages, webSearchSources ->
+            val sourcesByMessageId = webSearchSources.groupBy { it.messageId }
+            messages.map { it.toDomain(sourcesByMessageId[it.message.id] ?: emptyList()) }
         }
     }
 
@@ -166,7 +161,7 @@ class ChatRepositoryImpl @Inject constructor(
         content: String,
         messageState: MessageState,
         pipelineStep: PipelineStep?,
-        tavilySources: List<TavilySource>,
+        webSearchSources: List<WebSearchSource>,
         artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>
     ) {
         val artifactsJson = if (artifacts.isNotEmpty()) {
@@ -183,7 +178,7 @@ class ChatRepositoryImpl @Inject constructor(
             content = content,
             messageState = messageState,
             pipelineStep = pipelineStep,
-            tavilySources = tavilySources.map { it.toEntity() },
+            webSearchSources = webSearchSources.map { it.toEntity() },
             artifactsJson = artifactsJson
         )
     }
@@ -227,9 +222,11 @@ class ChatRepositoryImpl @Inject constructor(
         return chatDao.getChatsByIds(ids).associate { it.id to it.toDomain() }
     }
 
-    override suspend fun markSourcesExtracted(urls: List<String>) {
-        for (url in urls) {
-            tavilySourceDao.markExtracted(url)
-        }
+    override suspend fun markWebSearchSourceExtracted(url: String) {
+        webSearchSourceDao.markExtracted(url)
+    }
+
+    override suspend fun markWebSearchSourcesExtracted(urls: List<String>) {
+        urls.forEach { webSearchSourceDao.markExtracted(it) }
     }
 }

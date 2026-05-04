@@ -37,7 +37,7 @@ import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.core.data.local.SQLiteVecInstaller
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioCapture
 import com.browntowndev.pocketcrew.core.data.media.AndroidAudioPlayer
@@ -133,6 +133,12 @@ object DataModule {
         }
     }
 
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE tavily_source RENAME TO web_search_source")
+        }
+    }
+
     @Provides
     @Singleton
     fun providePocketCrewDatabase(@ApplicationContext context: Context): PocketCrewDatabase {
@@ -141,7 +147,7 @@ object DataModule {
             PocketCrewDatabase::class.java,
             "pocketcrew.db"
         )
-        .addMigrations(MIGRATION_1_2)
+        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
         .fallbackToDestructiveMigration()
         .openHelperFactory(SQLiteVecInstaller.createOpenHelperFactory(context))
         .addCallback(object : RoomDatabase.Callback() {
@@ -170,7 +176,7 @@ object DataModule {
     fun provideChatSummaryDao(database: PocketCrewDatabase): ChatSummaryDao = database.chatSummaryDao()
 
     @Provides
-    fun provideTavilySourceDao(database: PocketCrewDatabase): TavilySourceDao = database.tavilySourceDao()
+    fun provideWebSearchSourceDao(database: PocketCrewDatabase): WebSearchSourceDao = database.webSearchSourceDao()
 
     @Provides
     fun provideMessageVisionAnalysisDao(database: PocketCrewDatabase): MessageVisionAnalysisDao =

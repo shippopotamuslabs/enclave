@@ -357,10 +357,10 @@ class DirectChatInferenceExecutorTest {
     }
 
     @Test
-    fun `execute emits TavilySourcesAttached for TavilyResults`() = runTest {
+    fun `execute emits WebSearchSourcesAttached for WebSearchResults`() = runTest {
         val factory = FakeInferenceFactory()
         val sources = listOf(
-            com.browntowndev.pocketcrew.domain.model.chat.TavilySource(
+            com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource(
                 messageId = com.browntowndev.pocketcrew.domain.model.chat.MessageId("u1"),
                 title = "Example",
                 url = "https://example.com",
@@ -370,7 +370,7 @@ class DirectChatInferenceExecutorTest {
         val service = FakeInferenceService(ModelType.FAST).apply {
             setEmittedEvents(
                 listOf(
-                    InferenceEvent.TavilyResults(sources, ModelType.FAST),
+                    InferenceEvent.WebSearchResults(sources, ModelType.FAST),
                     InferenceEvent.Finished(ModelType.FAST),
                 )
             )
@@ -388,52 +388,37 @@ class DirectChatInferenceExecutorTest {
             backgroundInferenceEnabled = false,
         ).toList()
 
-        val tavilyStates = states.filterIsInstance<MessageGenerationState.TavilySourcesAttached>()
+        val tavilyStates = states.filterIsInstance<MessageGenerationState.WebSearchSourcesAttached>()
         assertEquals(1, tavilyStates.size)
         assertEquals(sources, tavilyStates.first().sources)
     }
 
-    private fun mockActiveModelProvider(): ActiveModelProviderPort = mockk {
-        coEvery { getActiveConfiguration(ModelType.FAST) } returns ActiveModelConfiguration(
+    private fun mockActiveModelProvider(
+        fastConfig: ActiveModelConfiguration = ActiveModelConfiguration(
+            modelId = "test-model",
             id = LocalModelConfigurationId("fast"),
             isLocal = true,
             name = "Fast",
-            systemPrompt = "",
-            reasoningEffort = null,
+            systemPrompt = "System",
             temperature = 0.7,
             topK = 40,
-            topP = 0.95,
-            maxTokens = 512,
+            topP = 0.9,
+            maxTokens = 100,
             minP = 0.0,
-            repetitionPenalty = 1.1,
+            repetitionPenalty = 1.0,
             contextWindow = 4096,
             thinkingEnabled = false,
+            isMultimodal = false,
         )
-        coEvery { getActiveConfiguration(ModelType.THINKING) } returns ActiveModelConfiguration(
-            id = LocalModelConfigurationId("thinking"),
-            isLocal = true,
-            name = "Thinking",
-            systemPrompt = "",
-            reasoningEffort = null,
-            temperature = 0.7,
-            topK = 40,
-            topP = 0.95,
-            maxTokens = 2048,
-            minP = 0.0,
-            repetitionPenalty = 1.1,
-            contextWindow = 4096,
-            thinkingEnabled = false,
-        )
-        coEvery { getActiveConfiguration(ModelType.VISION) } returns null
+    ): ActiveModelProviderPort = mockk(relaxed = true) {
+        coEvery { getActiveConfiguration(any()) } returns fastConfig
     }
 
     private fun mockMessageRepository(): MessageRepository = mockk(relaxed = true) {
-        coEvery { getMessagesForChat(any()) } returns emptyList()
-        coEvery { getChatSummary(any()) } returns null
         coEvery { resolveLatestImageBearingUserMessage(any(), any()) } returns null
     }
 
-    private fun mockSettingsRepository(): SettingsRepository = mockk {
-        every { settingsFlow } returns flowOf(SettingsData())
+    private fun mockSettingsRepository(settings: SettingsData = SettingsData()): SettingsRepository = mockk(relaxed = true) {
+        every { settingsFlow } returns flowOf(settings)
     }
 }

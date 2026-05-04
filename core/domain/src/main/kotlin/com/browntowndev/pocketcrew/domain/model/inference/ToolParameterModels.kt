@@ -4,7 +4,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonNames
 
 @Serializable
-data class TavilyWebSearchParams(
+data class WebSearchParams(
     @ToolParam(description = "The search query to execute.")
     val query: String
 ) : ToolParameters
@@ -20,7 +20,7 @@ enum class ExtractFormat {
 }
 
 @Serializable
-data class TavilyExtractParams(
+data class WebExtractParams(
     @ToolParam(description = "List of URLs to extract content from.")
     val urls: List<String>,
     @ToolParam(description = "Extraction depth. 'basic' is faster, 'advanced' is more comprehensive but slower.")

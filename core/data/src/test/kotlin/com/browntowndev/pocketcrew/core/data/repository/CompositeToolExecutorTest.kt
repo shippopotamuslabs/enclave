@@ -60,7 +60,7 @@ class CompositeToolExecutorTest {
         val request = ToolCallRequest(
             chatId = ChatId("chat-123"),
             userMessageId = MessageId("msg-123"),
-            toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
+            toolName = ToolDefinition.WEB_SEARCH.name,
             argumentsJson = "{\"query\": \"test\"}",
             provider = "tavily",
             modelType = ModelType.FAST
@@ -90,7 +90,7 @@ class CompositeToolExecutorTest {
         val request = ToolCallRequest(
             chatId = ChatId("chat-123"),
             userMessageId = MessageId("msg-123"),
-            toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
+            toolName = ToolDefinition.WEB_SEARCH.name,
             argumentsJson = "{\"query\": \"test\"}",
             provider = "tavily",
             modelType = ModelType.FAST
@@ -124,7 +124,7 @@ class CompositeToolExecutorTest {
         val request = ToolCallRequest(
             chatId = ChatId("chat-456"),
             userMessageId = MessageId("msg-456"),
-            toolName = ToolDefinition.TAVILY_EXTRACT.name,
+            toolName = ToolDefinition.WEB_EXTRACT.name,
             argumentsJson = "{\"urls\":[\"https://example.com\"]}",
             provider = "tavily",
             modelType = ModelType.FAST
@@ -146,7 +146,7 @@ class CompositeToolExecutorTest {
         val request = ToolCallRequest(
             chatId = ChatId("chat-789"),
             userMessageId = MessageId("msg-789"),
-            toolName = ToolDefinition.TAVILY_EXTRACT.name,
+            toolName = ToolDefinition.WEB_EXTRACT.name,
             argumentsJson = "{\"urls\":[\"https://example.com\"]}",
             provider = "tavily",
             modelType = ModelType.FAST

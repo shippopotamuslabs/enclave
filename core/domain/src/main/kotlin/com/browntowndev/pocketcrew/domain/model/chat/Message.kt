@@ -31,7 +31,7 @@ data class Message(
     val thinkingStartTime: Long? = null,
     val thinkingEndTime: Long? = null,
     val modelType: ModelType? = null,
-    val tavilySources: List<TavilySource> = emptyList(),
+    val webSearchSources: List<WebSearchSource> = emptyList(),
 ) {
     /**
      * Computed duration in seconds from timestamps.

@@ -13,7 +13,7 @@ data class Content(
     val text: String,
     val pipelineStep: PipelineStep? = null,
     val imageUri: String? = null,
-    val tavilySources: List<TavilySource> = emptyList(),
+    val webSearchSources: List<WebSearchSource> = emptyList(),
     val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = emptyList(),
     val fileAttachments: List<FileAttachment> = emptyList(),
 )

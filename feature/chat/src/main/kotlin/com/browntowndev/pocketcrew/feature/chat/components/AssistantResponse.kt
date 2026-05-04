@@ -99,7 +99,7 @@ fun AssistantResponse(
         DetailBottomSheet(
             config = DetailBottomSheetConfig.Sources(
                 isVisible = showSources,
-                sources = message.tavilySources,
+                sources = message.webSearchSources,
                 onDismiss = { showSources = false }
             )
         )
@@ -206,7 +206,7 @@ fun AssistantResponse(
                         }
 
                         // Sources Pill Button
-                        if (message.tavilySources.isNotEmpty()) {
+                        if (message.webSearchSources.isNotEmpty()) {
                             Surface(
                                 shape = RoundedCornerShape(16.dp),
                                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),

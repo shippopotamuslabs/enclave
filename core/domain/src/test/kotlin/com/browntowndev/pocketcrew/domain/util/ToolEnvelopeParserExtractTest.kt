@@ -8,9 +8,9 @@ import kotlin.test.assertFailsWith
 class ToolEnvelopeParserExtractTest {
 
     @Test
-    fun `requireSupportedTool accepts tavily_extract`() {
+    fun `requireSupportedTool accepts web_extract`() {
         // Should not throw
-        ToolEnvelopeParser.requireSupportedTool("tavily_extract")
+        ToolEnvelopeParser.requireSupportedTool("web_extract")
     }
 
     @Test

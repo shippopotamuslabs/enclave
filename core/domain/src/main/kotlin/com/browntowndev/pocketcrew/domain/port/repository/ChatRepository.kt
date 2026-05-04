@@ -5,6 +5,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.model.MessageState
@@ -166,7 +167,7 @@ interface ChatRepository {
         content: String,
         messageState: MessageState,
         pipelineStep: PipelineStep?,
-        tavilySources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = emptyList(),
+        webSearchSources: List<WebSearchSource> = emptyList(),
         artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = emptyList()
     )
 
@@ -215,12 +216,17 @@ interface ChatRepository {
     suspend fun getChatsByIds(ids: List<ChatId>): Map<ChatId, Chat>
 
     /**
-     * Marks Tavily sources as extracted for the given URLs.
+     * Marks web search sources as extracted for the given URLs.
      * Called after sources are persisted to ensure the extracted flag
      * is set correctly even when extraction happens before persistence.
      *
-     * @param urls The URLs that were extracted via the Tavily extract tool.
+     * @param urls The URLs that were extracted via the web search extract tool.
      */
-    suspend fun markSourcesExtracted(urls: List<String>)
+    suspend fun markWebSearchSourcesExtracted(urls: List<String>)
+
+    /**
+     * Marks a single web search source as extracted.
+     */
+    suspend fun markWebSearchSourceExtracted(url: String)
 }
 

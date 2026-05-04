@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
+import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.ContextExceededResult
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
@@ -16,7 +17,6 @@ import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
-import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
 import com.google.genai.types.Content
 import com.google.genai.types.FunctionCall
 import com.google.genai.types.Part
@@ -230,12 +230,12 @@ class GoogleInferenceServiceImpl(
                     )
                 },
                 onToolResult = { toolCall, resultJson ->
-                    if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                    if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name) {
                         val assistantMessageId = options.assistantMessageId
                         if (assistantMessageId != null) {
-                            val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
+                            val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
                             if (sources.isNotEmpty()) {
-                                emitEvent(InferenceEvent.TavilyResults(sources, modelType))
+                                emitEvent(InferenceEvent.WebSearchResults(sources, modelType))
                             }
                         }
                     }

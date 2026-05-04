@@ -11,7 +11,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
-import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
+import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -64,10 +64,10 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                     if (!resultJson.isNullOrEmpty()) {
                         val assistantMessageId = options.assistantMessageId
                         if (assistantMessageId != null) {
-                            val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
+                            val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
                             val validSources = sources.filter { it.url.isNotEmpty() && it.title.isNotEmpty() }
                             if (validSources.isNotEmpty()) {
-                                send(InferenceEvent.TavilyResults(validSources, targetModelType))
+                                send(InferenceEvent.WebSearchResults(validSources, targetModelType))
                             }
                         }
                     }

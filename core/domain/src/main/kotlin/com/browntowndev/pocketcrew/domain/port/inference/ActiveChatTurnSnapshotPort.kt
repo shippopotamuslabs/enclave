@@ -18,7 +18,7 @@ interface ActiveChatTurnSnapshotPort {
         snapshot: AccumulatedMessages,
     )
 
-    suspend fun markSourcesExtracted(
+    suspend fun markWebSearchSourcesExtracted(
         key: ActiveChatTurnKey,
         urls: List<String>,
     )

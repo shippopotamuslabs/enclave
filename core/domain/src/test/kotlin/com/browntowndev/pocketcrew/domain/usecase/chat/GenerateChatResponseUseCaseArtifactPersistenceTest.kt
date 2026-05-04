@@ -150,7 +150,7 @@ class GenerateChatResponseUseCaseArtifactPersistenceTest {
     private open class RecordingActiveChatTurnSnapshotPort : com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort {
         override fun observe(key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey): kotlinx.coroutines.flow.Flow<com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages?> = flowOf(null)
         override suspend fun publish(key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey, snapshot: com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages) {}
-        override suspend fun markSourcesExtracted(key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey, urls: List<String>) {}
+        override suspend fun markWebSearchSourcesExtracted(key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey, urls: List<String>) {}
         override suspend fun acknowledgeHandoff(key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey) {}
         override suspend fun attachArtifact(key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey, assistantMessageId: MessageId, artifact: ArtifactGenerationRequest) {}
         override suspend fun clear(key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey) {}

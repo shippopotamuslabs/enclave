@@ -60,7 +60,7 @@ class AnalyzeImageUseCase @Inject constructor(
                             is InferenceEvent.Processing -> Unit
                             is InferenceEvent.PartialResponse -> description.append(event.chunk)
                             is InferenceEvent.Thinking -> Unit
-                            is InferenceEvent.TavilyResults -> Unit
+                            is InferenceEvent.WebSearchResults -> Unit
                             is InferenceEvent.Artifacts -> Unit
                             is InferenceEvent.Finished -> {
                                 loggingPort.info(

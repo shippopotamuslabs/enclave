@@ -23,7 +23,7 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
 import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.TAVILY_WEB_SEARCH
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.WEB_SEARCH
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
@@ -92,6 +92,7 @@ class ChatViewModelTest {
     fun setUp() {
         val activeModelProvider: ActiveModelProviderPort = mockk()
         val visionConfig = ActiveModelConfiguration(
+            modelId = "test-model",
             id = ApiModelConfigurationId("vision-api-config"),
             isLocal = false,
             name = "Vision API",
@@ -447,12 +448,12 @@ class ChatViewModelTest {
         val artifact1 = com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
             title = "Doc 1",
             documentType = com.browntowndev.pocketcrew.domain.model.artifact.DocumentType.PDF,
-            sections = emptyList()
+            content = ""
         )
         val artifact2 = com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
             title = "Doc 2",
             documentType = com.browntowndev.pocketcrew.domain.model.artifact.DocumentType.PDF,
-            sections = emptyList()
+            content = ""
         )
         
         val snapshot = AccumulatedMessages(
@@ -543,13 +544,16 @@ class ChatViewModelTest {
         chatViewModel.onSendMessage()
         advanceUntilIdle()
         
-        val expectedPrompt = "--- Attached File: test.txt ---\nExtracted content\n\n--- User Prompt ---\nHello"
-        
         // Verify that the prompt passed to processPrompt and generateChatResponse includes the file content
         coVerify { 
-            chatUseCases.processPrompt(match { it.content.text == expectedPrompt })
+            chatUseCases.processPrompt(match { 
+                it.content.text == "Hello" &&
+                it.content.fileAttachments.size == 1 &&
+                it.content.fileAttachments[0].name == "test.txt" &&
+                it.content.fileAttachments[0].content == "Extracted content"
+            })
             chatUseCases.generateChatResponse(
-                prompt = expectedPrompt,
+                prompt = "Hello",
                 userMessageId = any(),
                 assistantMessageId = any(),
                 chatId = any(),

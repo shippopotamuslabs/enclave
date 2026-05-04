@@ -11,21 +11,21 @@ import org.junit.jupiter.api.Test
 class ToolDefinitionTest {
 
     @Test
-    fun `tavily_extract constant has correct name and description`() {
-        assertEquals("tavily_extract", ToolDefinition.TAVILY_EXTRACT.name)
+    fun `web_extract constant has correct name and description`() {
+        assertEquals("web_extract", ToolDefinition.WEB_EXTRACT.name)
         assertTrue(
-            ToolDefinition.TAVILY_EXTRACT.description.contains("extract", ignoreCase = true),
+            ToolDefinition.WEB_EXTRACT.description.contains("extract", ignoreCase = true),
             "Description should mention extracting content from URLs"
         )
         assertTrue(
-            ToolDefinition.TAVILY_EXTRACT.description.contains("URL", ignoreCase = true),
+            ToolDefinition.WEB_EXTRACT.description.contains("URL", ignoreCase = true),
             "Description should mention URLs"
         )
     }
 
     @Test
-    fun `tavily_extract parameters schema requires urls array`() {
-        val schema = Json.parseToJsonElement(ToolDefinition.TAVILY_EXTRACT.parametersJson).jsonObject
+    fun `web_extract parameters schema requires urls array`() {
+        val schema = Json.parseToJsonElement(ToolDefinition.WEB_EXTRACT.parametersJson).jsonObject
 
         val properties = schema["properties"]!!.jsonObject
         assertTrue(properties.containsKey("urls"), "Schema should have 'urls' property")
@@ -39,8 +39,8 @@ class ToolDefinitionTest {
     }
 
     @Test
-    fun `tavily_extract parameters schema has required extract_depth and format properties`() {
-        val schema = Json.parseToJsonElement(ToolDefinition.TAVILY_EXTRACT.parametersJson).jsonObject
+    fun `web_extract parameters schema has required extract_depth and format properties`() {
+        val schema = Json.parseToJsonElement(ToolDefinition.WEB_EXTRACT.parametersJson).jsonObject
 
         val properties = schema["properties"]!!.jsonObject
         assertTrue(properties.containsKey("extract_depth"), "Schema should have 'extract_depth' property")
@@ -53,8 +53,8 @@ class ToolDefinitionTest {
     }
 
     @Test
-    fun `tavily_extract format enum includes markdown and text`() {
-        val schema = Json.parseToJsonElement(ToolDefinition.TAVILY_EXTRACT.parametersJson).jsonObject
+    fun `web_extract format enum includes markdown and text`() {
+        val schema = Json.parseToJsonElement(ToolDefinition.WEB_EXTRACT.parametersJson).jsonObject
         val properties = schema["properties"]!!.jsonObject
         val formatProp = properties["format"]!!.jsonObject
         val enum = formatProp["enum"]!!.jsonArray
@@ -65,8 +65,8 @@ class ToolDefinitionTest {
     }
 
     @Test
-    fun `tavily_extract extract_depth enum includes basic and advanced`() {
-        val schema = Json.parseToJsonElement(ToolDefinition.TAVILY_EXTRACT.parametersJson).jsonObject
+    fun `web_extract extract_depth enum includes basic and advanced`() {
+        val schema = Json.parseToJsonElement(ToolDefinition.WEB_EXTRACT.parametersJson).jsonObject
         val properties = schema["properties"]!!.jsonObject
         val extractDepthProp = properties["extract_depth"]!!.jsonObject
         val enum = extractDepthProp["enum"]!!.jsonArray
@@ -153,14 +153,14 @@ class ToolDefinitionTest {
     }
 
     @Test
-    fun `tavily_extract round-trip serialization`() {
-        val params = TavilyExtractParams(
+    fun `web_extract round-trip serialization`() {
+        val params = WebExtractParams(
             urls = listOf("https://example.com"),
             extract_depth = ExtractDepth.advanced,
             format = ExtractFormat.markdown
         )
-        val json = ToolDefinition.TAVILY_EXTRACT.encodeArguments(params)
-        val decoded: TavilyExtractParams = ToolDefinition.TAVILY_EXTRACT.decodeArguments(json)
+        val json = ToolDefinition.WEB_EXTRACT.encodeArguments(params)
+        val decoded: WebExtractParams = ToolDefinition.WEB_EXTRACT.decodeArguments(json)
 
         assertEquals(params, decoded)
     }

@@ -20,8 +20,12 @@ interface SettingsPreferencesUseCases {
     val updateCustomPromptText: UpdateCustomPromptTextUseCase
     val updateAllowMemories: UpdateAllowMemoriesUseCase
     val updateSearchEnabled: UpdateSearchEnabledUseCase
+    val updateSearchProvider: UpdateSearchProviderUseCase
     val saveTavilyApiKey: SaveTavilyApiKeyUseCase
     val clearTavilyApiKey: ClearTavilyApiKeyUseCase
+    val saveExaApiKey: SaveExaApiKeyUseCase
+    val clearExaApiKey: ClearExaApiKeyUseCase
+    val updateShowSearchProviderSwitchAlert: UpdateShowSearchProviderSwitchAlertUseCase
     val updateBackgroundInferenceEnabled: UpdateBackgroundInferenceEnabledUseCase
 }
 

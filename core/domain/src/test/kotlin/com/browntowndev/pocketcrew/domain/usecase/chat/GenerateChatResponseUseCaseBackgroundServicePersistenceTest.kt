@@ -113,7 +113,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                 content = any(),
                 messageState = any(),
                 pipelineStep = any(),
-                tavilySources = any(),
+                webSearchSources = any(),
             )
         }
     }
@@ -171,7 +171,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                 content = match { it.contains("Error: service start failed") },
                 messageState = MessageState.COMPLETE,
                 pipelineStep = any(),
-                tavilySources = any(),
+                webSearchSources = any(),
             )
         }
     }
@@ -238,7 +238,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
                 content = any(),
                 messageState = MessageState.COMPLETE,
                 pipelineStep = any(),
-                tavilySources = any(),
+                webSearchSources = any(),
             )
         }
     }
@@ -334,7 +334,7 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
             published += key to snapshot
         }
 
-        override suspend fun markSourcesExtracted(
+        override suspend fun markWebSearchSourcesExtracted(
             key: ActiveChatTurnKey,
             urls: List<String>,
         ) = Unit
