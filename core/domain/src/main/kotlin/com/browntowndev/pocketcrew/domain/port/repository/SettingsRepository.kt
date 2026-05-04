@@ -20,6 +20,8 @@ data class SettingsData(
     val searchProvider: SearchProvider = SearchProvider.TAVILY,
     val tavilyKeyPresent: Boolean = false,
     val exaKeyPresent: Boolean = false,
+    val xSearchEnabled: Boolean = false,
+    val xApiKeyPresent: Boolean = false,
     val showSearchProviderSwitchAlert: Boolean = true,
     val backgroundInferenceEnabled: Boolean = true,
 )
@@ -47,6 +49,9 @@ interface SettingsRepository {
     suspend fun clearTavilyApiKey()
     suspend fun saveExaApiKey(apiKey: String)
     suspend fun clearExaApiKey()
+    suspend fun updateXSearchEnabled(enabled: Boolean)
+    suspend fun saveXApiKey(apiKey: String)
+    suspend fun clearXApiKey()
     suspend fun updateShowSearchProviderSwitchAlert(show: Boolean)
     suspend fun updateBackgroundInferenceEnabled(enabled: Boolean)
 }

@@ -14,6 +14,7 @@ class ApiKeyManager @VisibleForTesting internal constructor(
     companion object {
         const val TAVILY_SEARCH_ALIAS = "tavily_web_search"
         const val EXA_SEARCH_ALIAS = "exa_web_search"
+        const val X_SEARCH_ALIAS = "x_search"
     }
 
     @Inject constructor(

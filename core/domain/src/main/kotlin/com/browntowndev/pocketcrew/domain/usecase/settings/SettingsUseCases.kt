@@ -25,6 +25,9 @@ interface SettingsPreferencesUseCases {
     val clearTavilyApiKey: ClearTavilyApiKeyUseCase
     val saveExaApiKey: SaveExaApiKeyUseCase
     val clearExaApiKey: ClearExaApiKeyUseCase
+    val updateXSearchEnabled: UpdateXSearchEnabledUseCase
+    val saveXApiKey: SaveXApiKeyUseCase
+    val clearXApiKey: ClearXApiKeyUseCase
     val updateShowSearchProviderSwitchAlert: UpdateShowSearchProviderSwitchAlertUseCase
     val updateBackgroundInferenceEnabled: UpdateBackgroundInferenceEnabledUseCase
 }

@@ -140,6 +140,18 @@ class FakeSettingsRepository : SettingsRepository {
         _settingsFlow.value = _settingsFlow.value.copy(exaKeyPresent = false)
     }
 
+    override suspend fun updateXSearchEnabled(enabled: Boolean) {
+        _settingsFlow.value = _settingsFlow.value.copy(xSearchEnabled = enabled)
+    }
+
+    override suspend fun saveXApiKey(apiKey: String) {
+        _settingsFlow.value = _settingsFlow.value.copy(xApiKeyPresent = apiKey.isNotBlank())
+    }
+
+    override suspend fun clearXApiKey() {
+        _settingsFlow.value = _settingsFlow.value.copy(xApiKeyPresent = false)
+    }
+
     override suspend fun updateShowSearchProviderSwitchAlert(show: Boolean) {
         _settingsFlow.value = _settingsFlow.value.copy(showSearchProviderSwitchAlert = show)
     }

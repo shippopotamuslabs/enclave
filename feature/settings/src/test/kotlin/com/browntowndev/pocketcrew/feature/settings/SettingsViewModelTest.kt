@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.byok.ClearDefaultModelUseCase
@@ -50,8 +51,11 @@ class SettingsViewModelTest {
     private val updateCustomPromptTextUseCase = mockk<UpdateCustomPromptTextUseCase>(relaxed = true)
     private val updateAllowMemoriesUseCase = mockk<UpdateAllowMemoriesUseCase>(relaxed = true)
     private val updateSearchEnabledUseCase = mockk<UpdateSearchEnabledUseCase>(relaxed = true)
+    private val updateXSearchEnabledUseCase = mockk<UpdateXSearchEnabledUseCase>(relaxed = true)
     private val saveTavilyApiKeyUseCase = mockk<SaveTavilyApiKeyUseCase>(relaxed = true)
     private val clearTavilyApiKeyUseCase = mockk<ClearTavilyApiKeyUseCase>(relaxed = true)
+    private val saveXApiKeyUseCase = mockk<SaveXApiKeyUseCase>(relaxed = true)
+    private val clearXApiKeyUseCase = mockk<ClearXApiKeyUseCase>(relaxed = true)
     private val updateBackgroundInferenceEnabledUseCase = mockk<UpdateBackgroundInferenceEnabledUseCase>(relaxed = true)
     private val getLocalModelAssetsUseCase = mockk<GetLocalModelAssetsUseCase>()
     private val getRestorableLocalModelsUseCase = mockk<GetRestorableLocalModelsUseCase>(relaxed = true)
@@ -121,6 +125,9 @@ class SettingsViewModelTest {
                 clearTavilyApiKey = clearTavilyApiKeyUseCase,
                 saveExaApiKey = saveExaApiKeyUseCase,
                 clearExaApiKey = clearExaApiKeyUseCase,
+                updateXSearchEnabled = updateXSearchEnabledUseCase,
+                saveXApiKey = saveXApiKeyUseCase,
+                clearXApiKey = clearXApiKeyUseCase,
                 updateShowSearchProviderSwitchAlert = updateShowSearchProviderSwitchAlertUseCase,
                 updateBackgroundInferenceEnabled = updateBackgroundInferenceEnabledUseCase,
             ),
@@ -309,4 +316,71 @@ class SettingsViewModelTest {
             clearDefaultModelUseCase(ModelType.TTS)
         }
     }
+
+    @Test
+    fun `onXSearchEnabledChange updates state`() = runTest {
+        viewModel.onXSearchEnabledChange(true)
+        assertEquals(true, viewModel.uiState.value.xSearchEditor.enabled)
+    }
+
+    @Test
+    fun `onXApiKeyChange updates current key`() = runTest {
+        viewModel.onXApiKeyChange("new-x-key")
+        assertEquals("new-x-key", viewModel.currentXApiKey.value)
+    }
+
+    @Test
+    fun `onClearXApiKey calls clear and resets state`() = runTest {
+        viewModel.onXApiKeyChange("old-key")
+        viewModel.onClearXApiKey()
+        advanceUntilIdle()
+
+        coVerify { clearXApiKeyUseCase() }
+        assertEquals("", viewModel.currentXApiKey.value)
+    }
+
+    @Test
+    fun `onSaveXSearchSettings saves enabled status and api key`() = runTest {
+        viewModel.onXSearchEnabledChange(true)
+        viewModel.onXApiKeyChange("x-api-key")
+
+        viewModel.onSaveXSearchSettings(onSuccess = {})
+        advanceUntilIdle()
+
+        coVerify {
+            updateXSearchEnabledUseCase(true)
+            saveXApiKeyUseCase("x-api-key")
+        }
+        assertEquals("", viewModel.currentXApiKey.value)
+        assertEquals(false, viewModel.uiState.value.xSearchEditor.enabled)
+    }
+
+    @Test
+    fun `onSaveMemory inserts new memory when id is empty`() = runTest {
+        val draft = StoredMemory(id = "", text = "New memory", category = MemoryCategory.PREFERENCES)
+        coEvery { memoriesRepository.insertMemory(draft.category, draft.text) } returns mockk()
+        
+        viewModel.onAddMemory()
+        viewModel.onUpdateMemoryDraft(draft.text, draft.category)
+        viewModel.onSaveMemory()
+        advanceUntilIdle()
+
+        coVerify { memoriesRepository.insertMemory(draft.category, draft.text) }
+    }
+
+    @Test
+    fun `onSaveMemory updates existing memory when id is not empty`() = runTest {
+        val existingMemory = StoredMemory(id = "mem-1", text = "Old memory", category = MemoryCategory.PREFERENCES)
+        val updatedDraft = existingMemory.copy(text = "Updated memory")
+        
+        coEvery { memoriesRepository.updateMemory(updatedDraft.id, updatedDraft.text, updatedDraft.category) } returns Unit
+        
+        viewModel.onEditMemory(existingMemory)
+        viewModel.onUpdateMemoryDraft(updatedDraft.text, updatedDraft.category)
+        viewModel.onSaveMemory()
+        advanceUntilIdle()
+
+        coVerify { memoriesRepository.updateMemory(updatedDraft.id, updatedDraft.text, updatedDraft.category) }
+    }
 }
+

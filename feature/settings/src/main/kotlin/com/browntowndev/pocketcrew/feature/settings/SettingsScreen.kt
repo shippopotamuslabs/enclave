@@ -38,6 +38,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import com.browntowndev.pocketcrew.core.ui.component.XIcon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -97,7 +98,8 @@ fun SettingsScreen(
     onNavigateToByokConfigure: () -> Unit,
     onStartCreateApiModelAsset: () -> Unit,
     onStartConfigureSearchSkill: () -> Unit,
-    onShowWebSearchSheet: (Boolean) -> Unit,
+    onShowSearchSkillSheet: (Boolean) -> Unit,
+    onSearchSkillTabChange: (Int) -> Unit,
     onSearchEnabledChange: (Boolean) -> Unit,
     onSearchProviderChange: (SearchProvider) -> Unit,
     onTavilyApiKeyChange: (String) -> Unit,
@@ -106,6 +108,10 @@ fun SettingsScreen(
     onClearExaApiKey: () -> Unit,
     onUpdateShowSearchProviderSwitchAlert: (Boolean) -> Unit,
     onSaveSearchSkillSettings: (onSuccess: () -> Unit) -> Unit,
+    onXSearchEnabledChange: (Boolean) -> Unit,
+    onXApiKeyChange: (String) -> Unit,
+    onClearXApiKey: () -> Unit,
+    onSaveXSearchSettings: (onSuccess: () -> Unit) -> Unit,
     onApiKeyChange: (String) -> Unit,
     onSearchApiKeyChange: (String) -> Unit,
     onClearSearchApiKey: () -> Unit,
@@ -236,19 +242,20 @@ fun SettingsScreen(
             item {
                 SectionHeader(text = "Tools")
                 SettingsNavigationItem(
-                    title = "Web Search",
+                    title = "Search Skills",
                     subtitle = buildString {
-                        if (uiState.searchSkillEditor.enabled) {
-                            append("Enabled")
-                            append(" • ")
-                            append(uiState.searchSkillEditor.selectedProvider.displayName)
-                        } else {
-                            append("Disabled")
+                        val webEnabled = uiState.searchSkillEditor.enabled
+                        val xEnabled = uiState.xSearchEditor.enabled
+                        when {
+                            webEnabled && xEnabled -> append("Web & X Enabled")
+                            webEnabled -> append("Web Enabled")
+                            xEnabled -> append("X Enabled")
+                            else -> append("Disabled")
                         }
                     },
                     icon = Icons.Default.Public,
                     onClick = {
-                        onShowWebSearchSheet(true)
+                        onShowSearchSkillSheet(true)
                     }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -367,10 +374,11 @@ fun SettingsScreen(
             )
         }
 
-        if (uiState.home.isWebSearchSheetOpen) {
-            WebSearchBottomSheet(
+        if (uiState.home.isSearchSkillSheetOpen) {
+            SearchSkillBottomSheet(
                 uiState = uiState,
-                onDismiss = { onShowWebSearchSheet(false) },
+                onDismiss = { onShowSearchSkillSheet(false) },
+                onTabChange = onSearchSkillTabChange,
                 onSearchEnabledChange = onSearchEnabledChange,
                 onSearchProviderChange = onSearchProviderChange,
                 onTavilyApiKeyChange = onTavilyApiKeyChange,
@@ -378,11 +386,15 @@ fun SettingsScreen(
                 onExaApiKeyChange = onExaApiKeyChange,
                 onClearExaApiKey = onClearExaApiKey,
                 onUpdateShowSearchProviderSwitchAlert = onUpdateShowSearchProviderSwitchAlert,
-                onSave = {
+                onSaveWebSearch = {
                     onSaveSearchSkillSettings {
-                        onShowWebSearchSheet(false)
+                        // Success handled by onDismiss or similar
                     }
-                }
+                },
+                onXSearchEnabledChange = onXSearchEnabledChange,
+                onXApiKeyChange = onXApiKeyChange,
+                onClearXApiKey = onClearXApiKey,
+                onSaveXSearch = onSaveXSearchSettings
             )
         }
     }
@@ -574,7 +586,8 @@ fun PreviewSettingsScreen() {
             onNavigateToByokConfigure = {},
             onStartCreateApiModelAsset = {},
             onStartConfigureSearchSkill = {},
-            onShowWebSearchSheet = {},
+            onShowSearchSkillSheet = {},
+            onSearchSkillTabChange = {},
             onSearchEnabledChange = {},
             onSearchProviderChange = {},
             onTavilyApiKeyChange = {},
@@ -583,6 +596,10 @@ fun PreviewSettingsScreen() {
             onClearExaApiKey = {},
             onUpdateShowSearchProviderSwitchAlert = {},
             onSaveSearchSkillSettings = {},
+            onXSearchEnabledChange = {},
+            onXApiKeyChange = {},
+            onClearXApiKey = {},
+            onSaveXSearchSettings = {},
             onApiKeyChange = {},
             onSearchApiKeyChange = {},
             onClearSearchApiKey = {},

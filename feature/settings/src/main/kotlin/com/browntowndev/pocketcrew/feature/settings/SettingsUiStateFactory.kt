@@ -23,7 +23,8 @@ internal data class SheetVisibilityState(
     val memories: Boolean = false,
     val feedback: Boolean = false,
     val visionSettings: Boolean = false,
-    val webSearch: Boolean = false,
+    val searchSkill: Boolean = false,
+    val searchSkillTabIndex: Int = 0,
 )
 
 internal data class LocalModelsTransientState(
@@ -58,6 +59,10 @@ internal data class SearchSkillTransientState(
     val enabled: Boolean? = null,
     val selectedProvider: SearchProvider? = null,
     val showSwitchAlert: Boolean? = null,
+)
+
+internal data class XSearchTransientState(
+    val enabled: Boolean? = null,
 )
 
 internal data class TtsProvidersTransientState(
@@ -123,6 +128,8 @@ class SettingsUiStateFactory @Inject constructor(
         currentApiKey: String,
         currentTavilyApiKey: String,
         currentExaApiKey: String,
+        currentXApiKey: String,
+        xSearchState: XSearchTransientState,
     ): SettingsUiState {
         val localModels = localAssets.map(localModelAssetUiMapper::map)
         val refreshedSelectedLocalAsset = localModelsState.selectedAsset?.let { selected ->
@@ -285,7 +292,8 @@ class SettingsUiStateFactory @Inject constructor(
                 isVisionSettingsSheetOpen = sheetVisibility.visionSettings,
                 isTtsProvidersSheetOpen = ttsState.isSheetOpen,
                 isMediaProvidersSheetOpen = mediaState.isSheetOpen,
-                isWebSearchSheetOpen = sheetVisibility.webSearch,
+                isSearchSkillSheetOpen = sheetVisibility.searchSkill,
+                searchSkillTabIndex = sheetVisibility.searchSkillTabIndex,
             ),
             customization = CustomizationUiState(
                 isSheetOpen = sheetVisibility.customization,
@@ -373,6 +381,11 @@ class SettingsUiStateFactory @Inject constructor(
                 currentTavilyApiKey = currentTavilyApiKey,
                 currentExaApiKey = currentExaApiKey,
                 showSwitchAlert = persistedSettings.showSearchProviderSwitchAlert,
+            ),
+            xSearchEditor = XSearchEditorUiState(
+                enabled = xSearchState.enabled ?: persistedSettings.xSearchEnabled,
+                apiKeyPresent = persistedSettings.xApiKeyPresent,
+                currentApiKey = currentXApiKey,
             ),
             assignments = ModelAssignmentsUiState(
                 assignments = assignmentRows,
