@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.SearchChatHistoryParam
 import com.browntowndev.pocketcrew.domain.model.inference.SearchChatParams
 import com.browntowndev.pocketcrew.domain.model.inference.WebExtractParams
 import com.browntowndev.pocketcrew.domain.model.inference.WebSearchParams
+import com.browntowndev.pocketcrew.domain.model.inference.XSearchParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolParameters
 import kotlinx.serialization.json.Json
@@ -236,6 +237,9 @@ object ToolEnvelopeParser {
             )
             ToolDefinition.SEARCH_CHAT.name -> buildSearchChatArgumentsJson(extractRequiredChatId(payload), extractRequiredQuery(payload))
             ToolDefinition.GET_MESSAGE_CONTEXT.name -> buildGetMessageContextArgumentsJson(extractRequiredMessageId(payload))
+            ToolDefinition.X_SEARCH.name -> ToolDefinition.X_SEARCH.encodeArguments(
+                XSearchParams(query = extractRequiredQuery(payload))
+            )
             else -> throw IllegalArgumentException("Unsupported tool: $toolName")
         }
 

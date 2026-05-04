@@ -254,7 +254,8 @@ class AnthropicInferenceServiceImpl(
                 )
             },
             onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name) {
+                if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name || 
+                    toolCall.toolName == ToolDefinition.X_SEARCH.name) {
                     val assistantMessageId = options.assistantMessageId
                     if (assistantMessageId != null) {
                         val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)

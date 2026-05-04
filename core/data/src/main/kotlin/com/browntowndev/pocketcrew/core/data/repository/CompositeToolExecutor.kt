@@ -23,6 +23,7 @@ import javax.inject.Singleton
  * - [ToolDefinition.GET_MESSAGE_CONTEXT] → [GetMessageContextToolExecutor]
  * - [ToolDefinition.MANAGE_MEMORIES] → [ManageMemoriesToolExecutor]
  * - [ToolDefinition.GENERATE_ARTIFACT] → [ArtifactToolExecutor]
+ * - [ToolDefinition.X_SEARCH] → [XSearchToolExecutorImpl]
  */
 @Singleton
 class CompositeToolExecutor @Inject constructor(
@@ -34,6 +35,7 @@ class CompositeToolExecutor @Inject constructor(
     private val getMessageContextToolExecutor: GetMessageContextToolExecutor,
     private val manageMemoriesToolExecutor: ManageMemoriesToolExecutor,
     private val artifactToolExecutor: ArtifactToolExecutor,
+    private val xSearchToolExecutor: XSearchToolExecutorImpl,
     private val eventBus: ToolExecutionEventBus,
 ) : ToolExecutorPort {
 
@@ -61,6 +63,7 @@ class CompositeToolExecutor @Inject constructor(
                 ToolDefinition.GET_MESSAGE_CONTEXT.name -> getMessageContextToolExecutor.execute(request)
                 ToolDefinition.MANAGE_MEMORIES.name -> manageMemoriesToolExecutor.execute(request)
                 ToolDefinition.GENERATE_ARTIFACT.name -> artifactToolExecutor.execute(request)
+                ToolDefinition.X_SEARCH.name -> xSearchToolExecutor.execute(request)
                 else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
             }
             

@@ -162,6 +162,12 @@ data class ToolDefinition(
             parametersClass = ManageMemoriesParams::class,
         )
 
+        val X_SEARCH = ToolDefinition(
+            name = "search_x_recent",
+            description = "Search for recent posts on X (Twitter). Returns a ranked list of high-impact posts matching the query. Use this to find trending topics, recent events, or public sentiment on X. Results include post text, author information, engagement metrics (impact_score), and media metadata where available. Pruned to surface the most relevant and high-engagement content.",
+            parametersClass = XSearchParams::class,
+        )
+
         val ALL_TOOLS = listOf(
             WEB_SEARCH,
             WEB_EXTRACT,
@@ -170,7 +176,8 @@ data class ToolDefinition(
             SEARCH_CHAT,
             GET_MESSAGE_CONTEXT,
             MANAGE_MEMORIES,
-            GENERATE_ARTIFACT
+            GENERATE_ARTIFACT,
+            X_SEARCH
         )
 
         fun fromName(name: String): ToolDefinition? {

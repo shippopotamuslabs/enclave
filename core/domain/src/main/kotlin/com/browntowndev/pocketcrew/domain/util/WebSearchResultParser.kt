@@ -3,12 +3,16 @@ package com.browntowndev.pocketcrew.domain.util
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 object WebSearchResultParser {
+    private val json = Json { ignoreUnknownKeys = true }
+
     /**
      * Parses the JSON result from a web search tool into a list of [WebSearchSource] objects.
      *
@@ -19,21 +23,58 @@ object WebSearchResultParser {
     fun parse(messageId: MessageId, resultJson: String): List<WebSearchSource> {
         val sources = mutableListOf<WebSearchSource>()
         runCatching {
-            val payload = Json.parseToJsonElement(resultJson).jsonObject
-            val results = payload["results"]?.jsonArray ?: return@runCatching
+            val jsonElement = json.parseToJsonElement(resultJson)
+            
+            // Handle X search result (JsonArray of posts)
+            if (jsonElement is JsonArray) {
+                jsonElement.forEach { post ->
+                    val postObj = post.jsonObject
+                    val content = postObj["text"]?.jsonPrimitive?.content 
+                        ?: postObj["content"]?.jsonPrimitive?.content
+                    val url = postObj["url"]?.jsonPrimitive?.content
+                    val userName = postObj["user_name"]?.jsonPrimitive?.content
 
-            for (itemElement in results) {
-                val item = itemElement.jsonObject
-                sources.add(
-                    WebSearchSource(
-                        messageId = messageId,
-                        title = item["title"]?.jsonPrimitive?.content ?: "",
-                        url = item["url"]?.jsonPrimitive?.content ?: "",
-                        content = item["content"]?.jsonPrimitive?.content ?: "",
-                        score = item["score"]?.jsonPrimitive?.double ?: 0.0
-                    )
-                )
+                    if (!content.isNullOrBlank() && !url.isNullOrBlank()) {
+                        sources.add(
+                            WebSearchSource(
+                                messageId = messageId,
+                                title = userName ?: "X Post",
+                                url = url,
+                                content = content,
+                                score = postObj["impact_score"]?.jsonPrimitive?.double ?: 1.0
+                            )
+                        )
+                    }
+                }
+            } else if (jsonElement is JsonObject) {
+                // Handle standard web search format (Tavily/Exa/Google)
+                // Some formats might have results in "results" or "data"
+                val results = jsonElement["results"]?.jsonArray ?: jsonElement["data"]?.jsonArray
+                
+                if (results != null) {
+                    results.forEach { itemElement ->
+                        val item = itemElement.jsonObject
+                        val title = item["title"]?.jsonPrimitive?.content
+                        val url = item["url"]?.jsonPrimitive?.content
+                        val content = item["content"]?.jsonPrimitive?.content
+                        val score = item["score"]?.jsonPrimitive?.double ?: 0.0
+
+                        if (!url.isNullOrBlank() && !content.isNullOrBlank()) {
+                            sources.add(
+                                WebSearchSource(
+                                    messageId = messageId,
+                                    title = title ?: "Source",
+                                    url = url,
+                                    content = content,
+                                    score = score
+                                )
+                            )
+                        }
+                    }
+                }
             }
+        }.onFailure { e ->
+            // Log or ignore parsing errors for robust tool results
         }
         return sources
     }

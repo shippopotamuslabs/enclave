@@ -58,7 +58,8 @@ class SearchToolPromptComposerTest {
 
         assertTrue(composed.contains("call:web_search{query: <|\"|>...<|\"|>}"))
         assertTrue(composed.contains("web_extract. Note that 'urls' must be a SINGLE string"))
-        assertTrue(composed.contains("May 3, 2026"))
+        assertFalse(composed.contains("May 3, 2026"))
+        assertTrue(composed.contains("# TEMPORAL CONTEXT:"))
         // tool_call may appear in strict rules
     }
 

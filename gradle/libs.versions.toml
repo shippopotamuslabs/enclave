@@ -35,6 +35,7 @@ markdown = "1.2.4"
 turbineVersion = "1.2.1"
 firebaseCrashlyticsVersion = "20.0.5"
 googleServicesVersion = "4.4.4"
+jacocoVersion = "0.8.14"
 firebaseCrashlyticsPluginVersion = "3.0.7"
 firebaseBomVersion = "34.12.0"
 
@@ -132,5 +133,6 @@ hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintVersion" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServicesVersion" }
+jacoco = { id = "org.jacoco.jacoco", version.ref = "jacocoVersion" }
 firebase-crashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsPluginVersion" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
