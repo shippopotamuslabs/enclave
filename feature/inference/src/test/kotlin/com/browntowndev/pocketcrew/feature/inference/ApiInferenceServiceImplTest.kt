@@ -138,7 +138,7 @@ class ApiInferenceServiceImplTest {
         )
         every { followUpStreamResponse.close() } returns Unit
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
         val loggingPort = mockk<LoggingPort>(relaxed = true)
@@ -156,7 +156,7 @@ class ApiInferenceServiceImplTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
             ),
             closeConversation = false,
         ).toList()
@@ -192,7 +192,7 @@ class ApiInferenceServiceImplTest {
         every { finalStream.stream() } returns Stream.of(mockOutputTextEvent("Final Answer"), mockCompletedEvent("r4"))
         every { finalStream.close() } returns Unit
 
-        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("tavily_web_search", "{}")
+        coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult("web_search", "{}")
 
         val loggingPort = mockk<LoggingPort>(relaxed = true)
         val service = ApiInferenceServiceImpl(
@@ -209,7 +209,7 @@ class ApiInferenceServiceImplTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH)
+                availableTools = listOf(ToolDefinition.WEB_SEARCH)
             ),
             closeConversation = false,
         ).toList()
@@ -244,7 +244,7 @@ class ApiInferenceServiceImplTest {
         )
         every { followUpStreamResponse.close() } returns Unit
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
 
@@ -264,7 +264,7 @@ class ApiInferenceServiceImplTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
             ),
             closeConversation = false,
         ).toList()
@@ -361,7 +361,7 @@ class ApiInferenceServiceImplTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
                 apiProvider = ApiProvider.OPENAI,
                 modelId = "gpt-4o"
             ),
@@ -396,15 +396,15 @@ class ApiInferenceServiceImplTest {
         }
         
         every { chatStreamResponse1.stream() } returns Stream.of(
-            mockChatToolCallChunk(index = 0, id = "call_abc", name = "tavily_web_search", args = "{\"query\":"),
+            mockChatToolCallChunk(index = 0, id = "call_abc", name = "web_search", args = "{\"query\":"),
             mockChatToolCallChunk(index = 0, args = "\"android news\"}"),
             mockChatFinishChunk(finishReason = "tool_calls")
         )
         every { chatStreamResponse1.close() } returns Unit
 
         // Mock tool execution
-        coEvery { toolExecutor.execute(match { it.toolName == "tavily_web_search" }) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+        coEvery { toolExecutor.execute(match { it.toolName == "web_search" }) } returns ToolExecutionResult(
+            toolName = "web_search",
             resultJson = "{\"results\":[]}"
         )
 
@@ -433,7 +433,7 @@ class ApiInferenceServiceImplTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
                 apiProvider = ApiProvider.OPENAI,
                 modelId = "gpt-4o"
             ),
@@ -573,7 +573,7 @@ class ApiInferenceServiceImplTest {
 
     private fun mockFunctionCallDoneEvent(): ResponseStreamEvent {
         val functionCallDone = mockk<ResponseFunctionCallArgumentsDoneEvent>()
-        every { functionCallDone.name() } returns "tavily_web_search"
+        every { functionCallDone.name() } returns "web_search"
         every { functionCallDone.arguments() } returns """{"query":"latest android tool calling"}"""
         every { functionCallDone.itemId() } returns "call_1"
         val event = mockk<ResponseStreamEvent>(relaxed = true)

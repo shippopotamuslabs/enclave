@@ -306,7 +306,7 @@ class ChatInferenceService : Service() {
                 is InferenceEvent.Processing -> MessageGenerationState.Processing(event.modelType)
                 is InferenceEvent.Thinking -> MessageGenerationState.ThinkingLive(event.chunk, modelType)
                 is InferenceEvent.PartialResponse -> MessageGenerationState.GeneratingText(event.chunk, event.modelType)
-                is InferenceEvent.TavilyResults -> MessageGenerationState.TavilySourcesAttached(event.sources, event.modelType)
+                is InferenceEvent.WebSearchResults -> MessageGenerationState.WebSearchSourcesAttached(event.sources, event.modelType)
                 is InferenceEvent.Artifacts -> MessageGenerationState.ArtifactsAttached(event.artifacts, event.modelType)
                 is InferenceEvent.Finished -> {
                     maybeShowCompletionNotification(chatId)

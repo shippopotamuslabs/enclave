@@ -5,14 +5,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Thread-safe tracker for URLs that have been extracted via the Tavily extract tool
+ * Thread-safe tracker for URLs that have been extracted via a web search extract tool
  * during an active generation session.
  *
  * The tracker records URLs when extraction happens (before sources are persisted
- * to the database). After sources are persisted, the DAO's [TavilySourceDao.markExtracted]
+ * to the database). After sources are persisted, the DAO's [WebSearchSourceDao.markExtracted]
  * is called for these URLs to set the extracted flag.
  *
- * This solves the timing issue where [TavilySourceDao.markExtracted] is called during tool
+ * This solves the timing issue where [WebSearchSourceDao.markExtracted] is called during tool
  * execution but sources haven't been inserted yet, so the UPDATE is a no-op.
  */
 @Singleton

@@ -59,7 +59,7 @@ class ChatInferenceRequestPreparerTest {
         )
 
         assertEquals(listOf("file:///tmp/direct.jpg"), request.options.imageUris)
-        assertFalse(request.options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+        assertFalse(request.options.availableTools.contains(ToolDefinition.WEB_SEARCH))
         assertFalse(request.options.availableTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
         assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
         assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
@@ -98,7 +98,7 @@ class ChatInferenceRequestPreparerTest {
 
         assertTrue(request.options.toolingEnabled)
         assertTrue(request.options.imageUris.isEmpty())
-        assertTrue(request.options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+        assertTrue(request.options.availableTools.contains(ToolDefinition.WEB_SEARCH))
         assertTrue(request.options.availableTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
         assertTrue(request.options.systemPrompt?.contains("Be concise.") == true)
         assertTrue(request.options.systemPrompt?.contains("attached_image_inspect") == true)
@@ -106,7 +106,7 @@ class ChatInferenceRequestPreparerTest {
     }
 
     @Test
-    fun `search enabled includes both TAVILY_WEB_SEARCH and TAVILY_EXTRACT in availableTools`() = runTest {
+    fun `search enabled includes both WEB_SEARCH and WEB_EXTRACT in availableTools`() = runTest {
         val preparer = ChatInferenceRequestPreparer(
             activeModelProvider = mockActiveModelProvider(
                 fastConfig = fastTextConfig(),
@@ -128,8 +128,8 @@ class ChatInferenceRequestPreparerTest {
             modelType = ModelType.FAST,
         )
 
-        assertTrue(request.options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
-        assertTrue(request.options.availableTools.contains(ToolDefinition.TAVILY_EXTRACT))
+        assertTrue(request.options.availableTools.contains(ToolDefinition.WEB_SEARCH))
+        assertTrue(request.options.availableTools.contains(ToolDefinition.WEB_EXTRACT))
     }
 
     @Test
@@ -157,7 +157,7 @@ class ChatInferenceRequestPreparerTest {
             modelType = ModelType.FAST,
         )
 
-        assertTrue(request.options.systemPrompt?.contains("call:tavily_web_search") == true)
+        assertTrue(request.options.systemPrompt?.contains("call:web_search") == true)
         // tool_call may appear in strict rules
     }
 
@@ -185,8 +185,8 @@ class ChatInferenceRequestPreparerTest {
         )
 
         // SDK_NATIVE strategy should result in no tool instructions in system prompt
-        assertFalse(request.options.systemPrompt?.contains("tavily_web_search") == true)
-        assertTrue(request.options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+        assertFalse(request.options.systemPrompt?.contains("web_search") == true)
+        assertTrue(request.options.availableTools.contains(ToolDefinition.WEB_SEARCH))
     }
 
     @Test
@@ -215,7 +215,7 @@ class ChatInferenceRequestPreparerTest {
         )
 
         assertTrue(request.options.systemPrompt?.contains("ActionResult") == true)
-        assertTrue(request.options.systemPrompt?.contains("tavily_web_search") == true)
+        assertTrue(request.options.systemPrompt?.contains("web_search") == true)
     }
 
     @Test
@@ -241,12 +241,12 @@ class ChatInferenceRequestPreparerTest {
             modelType = ModelType.FAST,
         )
 
-        assertFalse(request.options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
+        assertFalse(request.options.availableTools.contains(ToolDefinition.WEB_SEARCH))
         assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
         assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
         assertTrue(request.options.availableTools.contains(ToolDefinition.GET_MESSAGE_CONTEXT))
         assertTrue(request.options.toolingEnabled)
-        assertFalse(request.options.systemPrompt?.contains("tavily_web_search") == true)
+        assertFalse(request.options.systemPrompt?.contains("web_search") == true)
         assertTrue(request.options.systemPrompt?.contains("search_chat_history") == true)
     }
 
@@ -324,7 +324,7 @@ class ChatInferenceRequestPreparerTest {
             imageHandling = ChatImageHandling.DIRECT,
         )
 
-        assertTrue(prompt.contains("Respond helpfully based on the image"))
+        assertTrue(prompt.contains("Respond helpfully based on the context"))
         assertTrue(prompt.contains("The user attached an image."))
     }
 
@@ -343,6 +343,7 @@ class ChatInferenceRequestPreparerTest {
     private fun mockMessageRepository(
         resolvedImageTarget: ResolvedImageTarget?,
     ): MessageRepository = mockk {
+        coEvery { getMessageById(any()) } returns mockk(relaxed = true)
         coEvery { resolveLatestImageBearingUserMessage(any(), any()) } returns resolvedImageTarget
     }
 
@@ -355,7 +356,7 @@ class ChatInferenceRequestPreparerTest {
         coEvery { getEmbedding(any()) } returns floatArrayOf(0.1f, 0.2f)
     }
 
-    private fun fastTextConfig(): ActiveModelConfiguration = ActiveModelConfiguration(
+    private fun fastTextConfig(): ActiveModelConfiguration = ActiveModelConfiguration(modelId = "test-model", 
         id = LocalModelConfigurationId("fast-text"),
         isLocal = true,
         name = "Fast",
@@ -378,7 +379,7 @@ class ChatInferenceRequestPreparerTest {
         isMultimodal = true,
     )
 
-    private fun apiVisionConfig(): ActiveModelConfiguration = ActiveModelConfiguration(
+    private fun apiVisionConfig(): ActiveModelConfiguration = ActiveModelConfiguration(modelId = "test-model", 
         id = ApiModelConfigurationId("vision-api"),
         isLocal = false,
         name = "Vision API",

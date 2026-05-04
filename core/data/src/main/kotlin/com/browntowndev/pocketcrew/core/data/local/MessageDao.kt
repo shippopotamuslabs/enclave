@@ -127,7 +127,7 @@ abstract class MessageDao {
         content: String,
         messageState: MessageState,
         pipelineStep: PipelineStep?,
-        tavilySources: List<TavilySourceEntity> = emptyList(),
+        webSearchSources: List<WebSearchSourceEntity> = emptyList(),
         artifactsJson: String? = null
     ) {
         updateMessageModelType(messageId, modelType)
@@ -146,8 +146,8 @@ abstract class MessageDao {
         updateMessageState(messageId, messageState)
         updateMessageArtifacts(messageId, artifactsJson)
 
-        if (tavilySources.isNotEmpty()) {
-            insertTavilySources(tavilySources)
+        if (webSearchSources.isNotEmpty()) {
+            insertWebSearchSources(webSearchSources)
         }
 
         if (messageState == MessageState.COMPLETE) {
@@ -156,5 +156,5 @@ abstract class MessageDao {
     }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    abstract suspend fun insertTavilySources(sources: List<TavilySourceEntity>)
+    abstract suspend fun insertWebSearchSources(sources: List<WebSearchSourceEntity>)
 }

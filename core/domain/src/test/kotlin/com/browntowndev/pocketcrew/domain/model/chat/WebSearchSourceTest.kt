@@ -4,11 +4,11 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-class TavilySourceTest {
+class WebSearchSourceTest {
 
     @Test
     fun `extracted defaults to false`() {
-        val source = TavilySource(
+        val source = WebSearchSource(
             messageId = MessageId("msg-1"),
             title = "Test Source",
             url = "https://example.com",
@@ -21,7 +21,7 @@ class TavilySourceTest {
 
     @Test
     fun `extracted can be set to true`() {
-        val source = TavilySource(
+        val source = WebSearchSource(
             messageId = MessageId("msg-1"),
             title = "Test Source",
             url = "https://example.com",

@@ -72,11 +72,11 @@ sealed interface InferenceEvent {
     data class PartialResponse(val chunk: String, val modelType: ModelType) : InferenceEvent
 
     /**
-     * Emitted when a Tavily search tool execution completes with results.
-     * @param sources The list of search results returned by Tavily.
+     * Emitted when a web search tool execution completes with results.
+     * @param sources The list of search results returned by the provider.
      * @param modelType The type of model that triggered the search.
      */
-    data class TavilyResults(val sources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource>, val modelType: ModelType) : InferenceEvent
+    data class WebSearchResults(val sources: List<com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource>, val modelType: ModelType) : InferenceEvent
 
     /**
      * Emitted when an artifact generation tool execution completes.

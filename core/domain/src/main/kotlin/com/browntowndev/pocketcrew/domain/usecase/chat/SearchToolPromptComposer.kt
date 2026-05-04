@@ -63,10 +63,10 @@ class SearchToolPromptComposer @Inject constructor() {
 
             return """
 # TOOL USE MANDATE:
-You have access to real-time information via '${ToolDefinition.TAVILY_WEB_SEARCH.name}' and '${ToolDefinition.TAVILY_EXTRACT.name}'. 
+You have access to real-time information via '${ToolDefinition.WEB_SEARCH.name}' and '${ToolDefinition.WEB_EXTRACT.name}'. 
 If the user's request involves ANY of the following, you MUST call the search tool before answering:
 - Current events, news, or recent developments.
-- Dates, times, or schedules (today is April 16, 2026).
+- Dates, times, or schedules (today is May 3, 2026).
 - Verifying facts, statistics, or status of products/companies.
 - Anything where your internal knowledge might be stale or incomplete.
 - Any terms you don't recognize.
@@ -74,10 +74,10 @@ If the user's request involves ANY of the following, you MUST call the search to
 DO NOT ASSUME you know the answer. When in doubt, SEARCH.
 
 To search:
-${ToolDefinition.TAVILY_WEB_SEARCH.toExample(strategy)}
+${ToolDefinition.WEB_SEARCH.toExample(strategy)}
 
-If you need to read the full content of a webpage from the search results, use ${ToolDefinition.TAVILY_EXTRACT.name}.$extractNote
-${ToolDefinition.TAVILY_EXTRACT.toExample(strategy)}
+If you need to read the full content of a webpage from the search results, use ${ToolDefinition.WEB_EXTRACT.name}.$extractNote
+${ToolDefinition.WEB_EXTRACT.toExample(strategy)}
 """.trimIndent()
         }
 

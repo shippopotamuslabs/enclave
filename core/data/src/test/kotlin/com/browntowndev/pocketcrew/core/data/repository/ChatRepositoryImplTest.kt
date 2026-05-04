@@ -4,8 +4,9 @@ import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceDao
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceEntity
+import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -28,7 +29,7 @@ class ChatRepositoryImplTest {
 
     private lateinit var chatDao: ChatDao
     private lateinit var messageDao: MessageDao
-    private lateinit var tavilySourceDao: TavilySourceDao
+    private lateinit var tavilySourceDao: WebSearchSourceDao
     private lateinit var repository: ChatRepositoryImpl
 
     private val testDate = Date(1700_000_000_000L)
@@ -37,7 +38,7 @@ class ChatRepositoryImplTest {
     fun setup() {
         chatDao = mockk<ChatDao>(relaxed = true)
         messageDao = mockk<MessageDao>(relaxed = true)
-        tavilySourceDao = mockk<TavilySourceDao>(relaxed = true)
+        tavilySourceDao = mockk<WebSearchSourceDao>(relaxed = true)
         repository = ChatRepositoryImpl(chatDao, messageDao, tavilySourceDao)
     }
 
@@ -111,7 +112,7 @@ class ChatRepositoryImplTest {
             messageState = MessageState.COMPLETE,
             modelType = ModelType.FAST,
         )
-        val sourceEntity = TavilySourceEntity(
+        val sourceEntity = WebSearchSourceEntity(
             id = "src-1",
             messageId = messageId,
             title = "Test Source",
@@ -121,15 +122,17 @@ class ChatRepositoryImplTest {
             extracted = true,
         )
 
-        every { messageDao.getMessagesByChatIdFlow(chatId) } returns flowOf(listOf(messageEntity))
+        every { messageDao.getMessagesByChatIdFlow(chatId) } returns flowOf(
+            listOf(MessageWithFiles(message = messageEntity, files = emptyList()))
+        )
         every { tavilySourceDao.getByChatIdFlow(chatId) } returns flowOf(listOf(sourceEntity))
 
         val result = repository.getMessagesForChat(chatId).first()
 
         assertEquals(1, result.size)
-        assertEquals(1, result[0].tavilySources.size)
-        assertEquals("https://example.com", result[0].tavilySources[0].url)
-        assertTrue(result[0].tavilySources[0].extracted,
+        assertEquals(1, result[0].webSearchSources.size)
+        assertEquals("https://example.com", result[0].webSearchSources[0].url)
+        assertTrue(result[0].webSearchSources[0].extracted,
             "Extracted source should have extracted=true from tavily_source table")
     }
 }

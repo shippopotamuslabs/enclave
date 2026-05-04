@@ -39,7 +39,7 @@ enum class ToolCallBannerKind {
 data class ToolCallBannerUi(
     val kind: ToolCallBannerKind,
     val label: String,
-    val tavilySources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = emptyList(),
+    val webSearchSources: List<com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource> = emptyList(),
 )
 
 data class ChatMessage(
@@ -50,7 +50,7 @@ data class ChatMessage(
     val formattedTimestamp: String,
     val indicatorState: IndicatorState? = null,
     val modelDisplayName: String = "",
-    val tavilySources: List<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = emptyList(),
+    val webSearchSources: List<com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource> = emptyList(),
 )
 
 data class ChatUiState(

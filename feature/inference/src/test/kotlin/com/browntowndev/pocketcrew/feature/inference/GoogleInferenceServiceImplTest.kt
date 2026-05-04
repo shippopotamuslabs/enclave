@@ -33,7 +33,7 @@ class GoogleInferenceServiceImplTest {
                 GoogleSdkResult(
                     emittedAny = true,
                     functionCall = FunctionCall.builder()
-                        .name("tavily_web_search")
+                        .name("web_search")
                         .args(mapOf("query" to "latest android tool calling"))
                         .build(),
                     assistantContent = Content.builder().build(),
@@ -56,7 +56,7 @@ class GoogleInferenceServiceImplTest {
         }
 
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
 
@@ -74,7 +74,7 @@ class GoogleInferenceServiceImplTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
             ),
             closeConversation = false,
         ).toList()
@@ -104,7 +104,7 @@ class GoogleInferenceServiceImplTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
             ),
             closeConversation = false,
         ).toList()

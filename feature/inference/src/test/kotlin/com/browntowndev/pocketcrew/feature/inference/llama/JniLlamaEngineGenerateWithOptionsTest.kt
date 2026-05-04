@@ -118,7 +118,7 @@ class JniLlamaEngineGenerateWithOptionsTest {
                 engine.generateWithOptions(
                     GenerationOptions(
                         reasoningBudget = 0,
-                        systemPrompt = "Use tools when needed.\n<tool_call>{\"name\":\"tavily_web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>"
+                        systemPrompt = "Use tools when needed.\n<tool_call>{\"name\":\"web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>"
                     )
                 ).toList()
             } catch(e: Exception) {}
@@ -133,7 +133,7 @@ class JniLlamaEngineGenerateWithOptionsTest {
             }
 
             assertEquals(
-                "Use tools when needed.\n<tool_call>{\"name\":\"tavily_web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>",
+                "Use tools when needed.\n<tool_call>{\"name\":\"web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>",
                 slot.captured.first()
             )
             assertEquals("User question", slot.captured[1])

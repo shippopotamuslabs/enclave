@@ -57,6 +57,7 @@ import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -96,8 +97,16 @@ fun SettingsScreen(
     onNavigateToByokConfigure: () -> Unit,
     onStartCreateApiModelAsset: () -> Unit,
     onStartConfigureSearchSkill: () -> Unit,
-    onApiKeyChange: (String) -> Unit,
+    onShowWebSearchSheet: (Boolean) -> Unit,
     onSearchEnabledChange: (Boolean) -> Unit,
+    onSearchProviderChange: (SearchProvider) -> Unit,
+    onTavilyApiKeyChange: (String) -> Unit,
+    onClearTavilyApiKey: () -> Unit,
+    onExaApiKeyChange: (String) -> Unit,
+    onClearExaApiKey: () -> Unit,
+    onUpdateShowSearchProviderSwitchAlert: (Boolean) -> Unit,
+    onSaveSearchSkillSettings: (onSuccess: () -> Unit) -> Unit,
+    onApiKeyChange: (String) -> Unit,
     onSearchApiKeyChange: (String) -> Unit,
     onClearSearchApiKey: () -> Unit,
     onSelectReusableApiCredential: (ApiCredentialsId?) -> Unit,
@@ -229,14 +238,17 @@ fun SettingsScreen(
                 SettingsNavigationItem(
                     title = "Web Search",
                     subtitle = buildString {
-                        append(if (uiState.searchSkillEditor.enabled) "Enabled" else "Disabled")
-                        append(" • ")
-                        append(if (uiState.searchSkillEditor.tavilyKeyPresent) "Tavily key Saved" else "No Tavily Key")
+                        if (uiState.searchSkillEditor.enabled) {
+                            append("Enabled")
+                            append(" • ")
+                            append(uiState.searchSkillEditor.selectedProvider.displayName)
+                        } else {
+                            append("Disabled")
+                        }
                     },
                     icon = Icons.Default.Public,
                     onClick = {
-                        onStartConfigureSearchSkill()
-                        onNavigateToByokConfigure()
+                        onShowWebSearchSheet(true)
                     }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
@@ -352,6 +364,25 @@ fun SettingsScreen(
                 onStartCreateMediaProviderAsset = onStartCreateMediaProviderAsset,
                 onSelectMediaProviderAsset = onSelectMediaProviderAsset,
                 onDeleteMediaProviderAsset = onDeleteMediaProviderAsset
+            )
+        }
+
+        if (uiState.home.isWebSearchSheetOpen) {
+            WebSearchBottomSheet(
+                uiState = uiState,
+                onDismiss = { onShowWebSearchSheet(false) },
+                onSearchEnabledChange = onSearchEnabledChange,
+                onSearchProviderChange = onSearchProviderChange,
+                onTavilyApiKeyChange = onTavilyApiKeyChange,
+                onClearTavilyApiKey = onClearTavilyApiKey,
+                onExaApiKeyChange = onExaApiKeyChange,
+                onClearExaApiKey = onClearExaApiKey,
+                onUpdateShowSearchProviderSwitchAlert = onUpdateShowSearchProviderSwitchAlert,
+                onSave = {
+                    onSaveSearchSkillSettings {
+                        onShowWebSearchSheet(false)
+                    }
+                }
             )
         }
     }
@@ -543,8 +574,16 @@ fun PreviewSettingsScreen() {
             onNavigateToByokConfigure = {},
             onStartCreateApiModelAsset = {},
             onStartConfigureSearchSkill = {},
-            onApiKeyChange = {},
+            onShowWebSearchSheet = {},
             onSearchEnabledChange = {},
+            onSearchProviderChange = {},
+            onTavilyApiKeyChange = {},
+            onClearTavilyApiKey = {},
+            onExaApiKeyChange = {},
+            onClearExaApiKey = {},
+            onUpdateShowSearchProviderSwitchAlert = {},
+            onSaveSearchSkillSettings = {},
+            onApiKeyChange = {},
             onSearchApiKeyChange = {},
             onClearSearchApiKey = {},
             onSelectReusableApiCredential = {},

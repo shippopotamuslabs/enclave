@@ -69,7 +69,7 @@ class XaiInferenceServiceImplTest {
         every { followUpStream.close() } returns Unit
 
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
 
@@ -89,7 +89,7 @@ class XaiInferenceServiceImplTest {
                 reasoningBudget = 0,
                 reasoningEffort = ApiReasoningEffort.HIGH,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
             ),
             closeConversation = false,
         ).toList()
@@ -104,7 +104,7 @@ class XaiInferenceServiceImplTest {
         assertFalse(firstRequest.instructions().isPresent)
         assertFalse(firstRequest.reasoning().isPresent)
         assertTrue(firstRequest.input().get().toString().contains("role=system"))
-        assertTrue(firstRequest.toString().contains("tavily_web_search"))
+        assertTrue(firstRequest.toString().contains("web_search"))
         assertTrue(capturedParams[1].toString().contains("fc_call_1"))
     }
 
@@ -136,7 +136,7 @@ class XaiInferenceServiceImplTest {
         every { followUpStream.close() } returns Unit
 
         coEvery { toolExecutor.execute(any()) } returns ToolExecutionResult(
-            toolName = "tavily_web_search",
+            toolName = "web_search",
             resultJson = """{"query":"latest android tool calling","results":[{"url":"https://example.invalid/stub"}]}""",
         )
 
@@ -154,7 +154,7 @@ class XaiInferenceServiceImplTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
             ),
             closeConversation = false,
         ).toList()
@@ -205,7 +205,7 @@ class XaiInferenceServiceImplTest {
 
     private fun mockFunctionCallDoneEvent(): ResponseStreamEvent {
         val functionCallDone = mockk<ResponseFunctionCallArgumentsDoneEvent>()
-        every { functionCallDone.name() } returns "tavily_web_search"
+        every { functionCallDone.name() } returns "web_search"
         every { functionCallDone.arguments() } returns """{"query":"latest android tool calling"}"""
         every { functionCallDone.itemId() } returns "fc_item_1"
 
@@ -231,7 +231,7 @@ class XaiInferenceServiceImplTest {
         val functionCall = mockk<ResponseFunctionToolCall>()
         every { functionCall.id() } returns Optional.of("fc_item_1")
         every { functionCall.callId() } returns "fc_call_1"
-        every { functionCall.name() } returns "tavily_web_search"
+        every { functionCall.name() } returns "web_search"
         every { functionCall.arguments() } returns """{"query":"latest android tool calling"}"""
 
         val item = mockk<ResponseOutputItem>()

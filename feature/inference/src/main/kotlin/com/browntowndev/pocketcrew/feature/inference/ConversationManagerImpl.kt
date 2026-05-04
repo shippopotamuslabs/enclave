@@ -16,8 +16,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.ExtractFormat
 import com.browntowndev.pocketcrew.domain.model.inference.GetMessageContextParams
 import com.browntowndev.pocketcrew.domain.model.inference.SearchChatHistoryParams
 import com.browntowndev.pocketcrew.domain.model.inference.SearchChatParams
-import com.browntowndev.pocketcrew.domain.model.inference.TavilyExtractParams
-import com.browntowndev.pocketcrew.domain.model.inference.TavilyWebSearchParams
+import com.browntowndev.pocketcrew.domain.model.inference.WebExtractParams
+import com.browntowndev.pocketcrew.domain.model.inference.WebSearchParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolParam
@@ -233,8 +233,8 @@ class ConversationManagerImpl @Inject constructor(
                 topP = options?.topP?.toDouble() ?: activeConfig.topP ?: 0.95,
                 topK = options?.topK ?: activeConfig.topK ?: 40
             )
-            val hasSearchTool = options?.availableTools?.contains(ToolDefinition.TAVILY_WEB_SEARCH) == true
-            val hasExtractTool = options?.availableTools?.contains(ToolDefinition.TAVILY_EXTRACT) == true
+            val hasSearchTool = options?.availableTools?.contains(ToolDefinition.WEB_SEARCH) == true
+            val hasExtractTool = options?.availableTools?.contains(ToolDefinition.WEB_EXTRACT) == true
             val hasImageTool = options?.availableTools?.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT) == true
             val hasMemoryTools = options?.availableTools?.contains(ToolDefinition.SEARCH_CHAT_HISTORY) == true ||
                 options?.availableTools?.contains(ToolDefinition.SEARCH_CHAT) == true
@@ -454,17 +454,17 @@ class ConversationManagerImpl @Inject constructor(
             Log.d(TAG, "Executing native tool call: tavily_web_search with query: $query")
             loggingPort.info(
                 TAG,
-                "Native tool call requested tool=${ToolDefinition.TAVILY_WEB_SEARCH.name} modelType=$modelType queryChars=${query.length}"
+                "Native tool call requested tool=${ToolDefinition.WEB_SEARCH.name} modelType=$modelType queryChars=${query.length}"
             )
             return try {
                 runBlocking(Dispatchers.IO) {
                     loggingPort.info(
                         TAG,
-                        "Entered native tool coroutine tool=${ToolDefinition.TAVILY_WEB_SEARCH.name} modelType=$modelType"
+                        "Entered native tool coroutine tool=${ToolDefinition.WEB_SEARCH.name} modelType=$modelType"
                     )
                     val request = ToolCallRequest(
-                        toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
-                        argumentsJson = ToolDefinition.TAVILY_WEB_SEARCH.encodeArguments<TavilyWebSearchParams>(TavilyWebSearchParams(query)),
+                        toolName = ToolDefinition.WEB_SEARCH.name,
+                        argumentsJson = ToolDefinition.WEB_SEARCH.encodeArguments<WebSearchParams>(WebSearchParams(query)),
                         provider = "LITERT",
                         modelType = modelType,
                         chatId = chatId,
@@ -482,10 +482,10 @@ class ConversationManagerImpl @Inject constructor(
                 val rootCause = t.rootCause()
                 loggingPort.error(
                     TAG,
-                    "Native tool method failed before safe execution tool=${ToolDefinition.TAVILY_WEB_SEARCH.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                    "Native tool method failed before safe execution tool=${ToolDefinition.WEB_SEARCH.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
                     rootCause
                 )
-                buildToolErrorJson(ToolDefinition.TAVILY_WEB_SEARCH.name, rootCause)
+                buildToolErrorJson(ToolDefinition.WEB_SEARCH.name, rootCause)
             }
         }
     }
@@ -505,23 +505,23 @@ class ConversationManagerImpl @Inject constructor(
             Log.d(TAG, "Executing native tool call: tavily_extract with urls: $urls")
             loggingPort.info(
                 TAG,
-                "Native tool call requested tool=${ToolDefinition.TAVILY_EXTRACT.name} modelType=$modelType chatId=${chatId?.value ?: "<none>"} userMessageId=${userMessageId?.value ?: "<none>"} urlCount=${urls.length}"
+                "Native tool call requested tool=${ToolDefinition.WEB_EXTRACT.name} modelType=$modelType chatId=${chatId?.value ?: "<none>"} userMessageId=${userMessageId?.value ?: "<none>"} urlCount=${urls.length}"
             )
             return try {
                 runBlocking(Dispatchers.IO) {
                     loggingPort.info(
                         TAG,
-                        "Entered native tool coroutine tool=${ToolDefinition.TAVILY_EXTRACT.name} modelType=$modelType"
+                        "Entered native tool coroutine tool=${ToolDefinition.WEB_EXTRACT.name} modelType=$modelType"
                     )
                     val parsedUrls = NativeToolResultFormatter.parseUrls(urls)
-                    val params = TavilyExtractParams(
+                    val params = WebExtractParams(
                         urls = parsedUrls,
                         extract_depth = extract_depth.takeIf { it.isNotBlank() }?.let { ExtractDepth.valueOf(it) } ?: ExtractDepth.basic,
                         format = format.takeIf { it.isNotBlank() }?.let { ExtractFormat.valueOf(it) } ?: ExtractFormat.markdown,
                     )
                     val request = ToolCallRequest(
-                        toolName = ToolDefinition.TAVILY_EXTRACT.name,
-                        argumentsJson = ToolDefinition.TAVILY_EXTRACT.encodeArguments<TavilyExtractParams>(params),
+                        toolName = ToolDefinition.WEB_EXTRACT.name,
+                        argumentsJson = ToolDefinition.WEB_EXTRACT.encodeArguments<WebExtractParams>(params),
                         provider = "LITERT",
                         modelType = modelType,
                         chatId = chatId,
@@ -539,10 +539,10 @@ class ConversationManagerImpl @Inject constructor(
                 val rootCause = t.rootCause()
                 loggingPort.error(
                     TAG,
-                    "Native tool method failed before safe execution tool=${ToolDefinition.TAVILY_EXTRACT.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                    "Native tool method failed before safe execution tool=${ToolDefinition.WEB_EXTRACT.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
                     rootCause
                 )
-                buildToolErrorJson(ToolDefinition.TAVILY_EXTRACT.name, rootCause)
+                buildToolErrorJson(ToolDefinition.WEB_EXTRACT.name, rootCause)
             }
         }
 

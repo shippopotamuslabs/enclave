@@ -15,8 +15,8 @@ import javax.inject.Singleton
  * to the appropriate executor based on the tool name.
  *
  * Routes:
- * - [ToolDefinition.TAVILY_WEB_SEARCH] → [SearchToolExecutorImpl]
- * - [ToolDefinition.TAVILY_EXTRACT] → [ExtractToolExecutorImpl]
+ * - [ToolDefinition.WEB_SEARCH] → [SearchToolExecutorImpl]
+ * - [ToolDefinition.WEB_EXTRACT] → [ExtractToolExecutorImpl]
  * - [ToolDefinition.ATTACHED_IMAGE_INSPECT] → [ImageInspectToolExecutor]
  * - [ToolDefinition.SEARCH_CHAT_HISTORY] → [SearchChatHistoryToolExecutor]
  * - [ToolDefinition.SEARCH_CHAT] → [SearchChatToolExecutor]
@@ -53,8 +53,8 @@ class CompositeToolExecutor @Inject constructor(
 
         return try {
             val result = when (request.toolName) {
-                ToolDefinition.TAVILY_WEB_SEARCH.name -> searchToolExecutor.execute(request)
-                ToolDefinition.TAVILY_EXTRACT.name -> extractToolExecutor.execute(request)
+                ToolDefinition.WEB_SEARCH.name -> searchToolExecutor.execute(request)
+                ToolDefinition.WEB_EXTRACT.name -> extractToolExecutor.execute(request)
                 ToolDefinition.ATTACHED_IMAGE_INSPECT.name -> imageInspectToolExecutor.execute(request)
                 ToolDefinition.SEARCH_CHAT_HISTORY.name -> searchChatHistoryToolExecutor.execute(request)
                 ToolDefinition.SEARCH_CHAT.name -> searchChatToolExecutor.execute(request)

@@ -79,6 +79,6 @@ private fun MessageSnapshot.toMessage(
         createdAt = createdAt,
         messageState = messageState,
         modelType = modelType,
-        tavilySources = tavilySources,
+        webSearchSources = webSearchSources,
     )
 }

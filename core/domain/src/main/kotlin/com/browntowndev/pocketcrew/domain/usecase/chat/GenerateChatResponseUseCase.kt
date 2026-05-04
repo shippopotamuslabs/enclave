@@ -100,7 +100,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                     // correct extracted flag in real time.
                     val extractedUrls = extractedUrlTracker.urls
                     if (extractedUrls.isNotEmpty()) {
-                        accumulatorManager.markSourcesExtracted(extractedUrls.toList())
+                        accumulatorManager.markWebSearchSourcesExtracted(extractedUrls.toList())
                     }
                     if (state.isTerminal) {
                         terminalSeen = true
@@ -301,7 +301,7 @@ private object NoOpActiveChatTurnSnapshotPort : ActiveChatTurnSnapshotPort {
         snapshot: AccumulatedMessages,
     ) = Unit
 
-    override suspend fun markSourcesExtracted(
+    override suspend fun markWebSearchSourcesExtracted(
         key: ActiveChatTurnKey,
         urls: List<String>,
     ) = Unit

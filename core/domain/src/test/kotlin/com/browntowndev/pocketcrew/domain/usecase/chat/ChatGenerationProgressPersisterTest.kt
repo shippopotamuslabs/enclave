@@ -52,7 +52,7 @@ class ChatGenerationProgressPersisterTest {
                 content = any(),
                 messageState = any(),
                 pipelineStep = any(),
-                tavilySources = any(),
+                webSearchSources = any(),
             )
         }
     }
@@ -73,7 +73,7 @@ class ChatGenerationProgressPersisterTest {
                 content = capture(contentSlot),
                 messageState = capture(stateSlot),
                 pipelineStep = any(),
-                tavilySources = any(),
+                webSearchSources = any(),
             )
         } returns Unit
         val embeddingEngine = mockk<EmbeddingEnginePort>()
@@ -128,7 +128,7 @@ class ChatGenerationProgressPersisterTest {
                 content = any(),
                 messageState = any(),
                 pipelineStep = any(),
-                tavilySources = any(),
+                webSearchSources = any(),
             )
         }
     }
@@ -164,7 +164,7 @@ class ChatGenerationProgressPersisterTest {
                 content = any(),
                 messageState = any(),
                 pipelineStep = any(),
-                tavilySources = any(),
+                webSearchSources = any(),
             )
         }
     }

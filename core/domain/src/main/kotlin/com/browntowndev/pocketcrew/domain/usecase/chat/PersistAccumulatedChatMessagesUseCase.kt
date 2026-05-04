@@ -16,7 +16,7 @@ internal class PersistAccumulatedChatMessagesUseCase(
         // snapshot was created before the extraction event was processed.
         val extractedUrls = extractedUrls
         if (extractedUrls.isNotEmpty()) {
-            accumulatorManager.markSourcesExtracted(extractedUrls.toList())
+            accumulatorManager.markWebSearchSourcesExtracted(extractedUrls.toList())
         }
 
         accumulatorManager.messages.values.forEach { accumulator ->
@@ -31,7 +31,7 @@ internal class PersistAccumulatedChatMessagesUseCase(
                 content = content,
                 messageState = accumulator.currentState,
                 pipelineStep = getPipelineStepForModelType(accumulator.modelType),
-                tavilySources = accumulator.tavilySources.toList(),
+                webSearchSources = accumulator.webSearchSources.toList(),
                 artifacts = accumulator.artifacts.toList(),
             )
 
@@ -46,7 +46,7 @@ internal class PersistAccumulatedChatMessagesUseCase(
         // The extract tool may have called markExtracted before sources were persisted,
         // so the DAO update was a no-op. Now that sources exist in the DB, apply the flags.
         if (extractedUrls.isNotEmpty()) {
-            chatRepository.markSourcesExtracted(extractedUrls.toList())
+            chatRepository.markWebSearchSourcesExtracted(extractedUrls.toList())
         }
     }
 

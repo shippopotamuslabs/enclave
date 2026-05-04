@@ -50,7 +50,7 @@ class LocalToolResultPolicyTest {
 
     @Test
     fun `buildContextWindowExceededToolError returns a compact warning payload`() {
-        val result = LocalToolResultPolicy.buildContextWindowExceededToolError("tavily_web_search")
+        val result = LocalToolResultPolicy.buildContextWindowExceededToolError("web_search")
 
         assertTrue(result.contains("tool_execution_failed"))
         assertTrue(result.contains("Context window exceeded"))

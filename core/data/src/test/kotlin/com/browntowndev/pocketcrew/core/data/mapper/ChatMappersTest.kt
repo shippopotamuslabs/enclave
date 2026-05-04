@@ -1,16 +1,16 @@
 package com.browntowndev.pocketcrew.core.data.mapper
 
-import com.browntowndev.pocketcrew.core.data.local.TavilySourceEntity
+import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.domain.model.chat.TavilySource
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ChatMappersTest {
 
     @Test
-    fun `TavilySourceEntity toDomain maps extracted field`() {
-        val entity = TavilySourceEntity(
+    fun `WebSearchSourceEntity toDomain maps extracted field`() {
+        val entity = WebSearchSourceEntity(
             id = "src-1",
             messageId = MessageId("msg-1"),
             title = "Test",
@@ -28,8 +28,8 @@ class ChatMappersTest {
     }
 
     @Test
-    fun `TavilySourceEntity toDomain defaults extracted to false`() {
-        val entity = TavilySourceEntity(
+    fun `WebSearchSourceEntity toDomain defaults extracted to false`() {
+        val entity = WebSearchSourceEntity(
             id = "src-2",
             messageId = MessageId("msg-1"),
             title = "Test",
@@ -45,8 +45,8 @@ class ChatMappersTest {
     }
 
     @Test
-    fun `TavilySource toEntity maps extracted field`() {
-        val domain = TavilySource(
+    fun `WebSearchSource toEntity maps extracted field`() {
+        val domain = WebSearchSource(
             id = "src-3",
             messageId = MessageId("msg-1"),
             title = "Test",
@@ -64,8 +64,8 @@ class ChatMappersTest {
     }
 
     @Test
-    fun `TavilySource toEntity defaults extracted to false`() {
-        val domain = TavilySource(
+    fun `WebSearchSource toEntity defaults extracted to false`() {
+        val domain = WebSearchSource(
             id = "src-4",
             messageId = MessageId("msg-1"),
             title = "Test",
@@ -81,7 +81,7 @@ class ChatMappersTest {
 
     @Test
     fun `round-trip preserves extracted true`() {
-        val original = TavilySource(
+        val original = WebSearchSource(
             id = "src-5",
             messageId = MessageId("msg-1"),
             title = "Round Trip",

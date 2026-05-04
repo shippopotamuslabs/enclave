@@ -2,10 +2,11 @@ package com.browntowndev.pocketcrew.feature.settings
 
 import androidx.compose.runtime.Immutable
 import com.browntowndev.pocketcrew.domain.model.settings.AppTheme
+import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
+import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.usecase.settings.ModelDeletionTarget
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
-import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
@@ -62,6 +63,7 @@ data class SettingsHomeUiState(
     val isVisionSettingsSheetOpen: Boolean = false,
     val isTtsProvidersSheetOpen: Boolean = false,
     val isMediaProvidersSheetOpen: Boolean = false,
+    val isWebSearchSheetOpen: Boolean = false,
 )
 
 @Immutable
@@ -165,7 +167,12 @@ data class ApiProviderEditorUiState(
 data class SearchSkillEditorUiState(
     val isEditing: Boolean = false,
     val enabled: Boolean = false,
+    val selectedProvider: SearchProvider = SearchProvider.TAVILY,
     val tavilyKeyPresent: Boolean = false,
+    val exaKeyPresent: Boolean = false,
+    val currentTavilyApiKey: String = "",
+    val currentExaApiKey: String = "",
+    val showSwitchAlert: Boolean = true,
 )
 
 @Immutable
@@ -484,6 +491,16 @@ object MockSettingsData {
                     voiceName = "alloy"
                 )
             )
+        ),
+        searchSkillEditor = SearchSkillEditorUiState(
+            isEditing = false,
+            enabled = false,
+            selectedProvider = SearchProvider.TAVILY,
+            tavilyKeyPresent = false,
+            exaKeyPresent = false,
+            currentTavilyApiKey = "",
+            currentExaApiKey = "",
+            showSwitchAlert = true,
         ),
         assignments = ModelAssignmentsUiState(assignments = defaultAssignments),
     )

@@ -114,16 +114,16 @@ data class ToolDefinition(
             coerceInputValues = true
         }
 
-        val TAVILY_WEB_SEARCH = ToolDefinition(
-            name = "tavily_web_search",
+        val WEB_SEARCH = ToolDefinition(
+            name = "web_search",
             description = "Search the web and return ranked results.",
-            parametersClass = TavilyWebSearchParams::class,
+            parametersClass = WebSearchParams::class,
         )
 
-        val TAVILY_EXTRACT = ToolDefinition(
-            name = "tavily_extract",
-            description = "Extract and parse the full content from a list of URLs. Use this to read the details of webpages returned by tavily_web_search.",
-            parametersClass = TavilyExtractParams::class,
+        val WEB_EXTRACT = ToolDefinition(
+            name = "web_extract",
+            description = "Extract and parse the full content from a list of URLs. Use this to read the details of webpages returned by web_search.",
+            parametersClass = WebExtractParams::class,
         )
 
         val ATTACHED_IMAGE_INSPECT = ToolDefinition(
@@ -163,8 +163,8 @@ data class ToolDefinition(
         )
 
         val ALL_TOOLS = listOf(
-            TAVILY_WEB_SEARCH,
-            TAVILY_EXTRACT,
+            WEB_SEARCH,
+            WEB_EXTRACT,
             ATTACHED_IMAGE_INSPECT,
             SEARCH_CHAT_HISTORY,
             SEARCH_CHAT,

@@ -46,7 +46,7 @@ After:
 - Port methods:
   - `fun observe(key: ActiveChatTurnKey): Flow<AccumulatedMessages?>`
   - `suspend fun publish(key: ActiveChatTurnKey, snapshot: AccumulatedMessages)`
-  - `suspend fun markSourcesExtracted(key: ActiveChatTurnKey, urls: List<String>)`
+  - `suspend fun markWebSearchSourcesExtracted(key: ActiveChatTurnKey, urls: List<String>)`
   - `suspend fun acknowledgeHandoff(key: ActiveChatTurnKey)`
   - `suspend fun clear(key: ActiveChatTurnKey)`
 - Keep the port pure Kotlin. No Android, Hilt, Room, or feature types in `:core:domain`.
@@ -106,7 +106,7 @@ After:
 
 ## Phase 5: Tool Source Updates
 
-- Replace `ChatViewModel.markSourceExtracted()` mutation of `_inFlightMessages` with `ActiveChatTurnSnapshotPort.markSourcesExtracted(...)`.
+- Replace `ChatViewModel.markWebSearchSourceExtracted()` mutation of `_inFlightMessages` with `ActiveChatTurnSnapshotPort.markWebSearchSourcesExtracted(...)`.
 - If there is no active key, return early.
 - The accumulator should still reconcile `ExtractedUrlTracker` on later reductions so eager UI updates and persisted source flags converge.
 

@@ -160,14 +160,14 @@ class OpenAiResponseStreamHandlerTest {
             val firstEvent = mockk<com.openai.models.responses.ResponseStreamEvent>(relaxed = true)
             val firstCallDone = mockFunctionCallArgumentsDoneEvent(
                 itemId = "call_1",
-                name = "tavily_web_search",
+                name = "web_search",
                 arguments = """{"query":"first search"}"""
             )
             every { firstEvent.isFunctionCallArgumentsDone() } returns true
             every { firstEvent.functionCallArgumentsDone() } returns java.util.Optional.of(firstCallDone)
 
             handler.handleEvent(firstEvent, state)
-            assertEquals("tavily_web_search", state.toolCallRequests.firstOrNull()?.toolName)
+            assertEquals("web_search", state.toolCallRequests.firstOrNull()?.toolName)
 
             // Second function call arrives in the same response
             val secondEvent = mockk<com.openai.models.responses.ResponseStreamEvent>(relaxed = true)
@@ -182,7 +182,7 @@ class OpenAiResponseStreamHandlerTest {
             handler.handleEvent(secondEvent, state)
 
             // Both tool calls are now captured in the list (bug fixed):
-            assertEquals("tavily_web_search", state.toolCallRequests[0].toolName)
+            assertEquals("web_search", state.toolCallRequests[0].toolName)
             assertEquals("attached_image_inspect", state.toolCallRequests[1].toolName)
 
             // The provider tool call IDs are accumulated in a list:
@@ -201,7 +201,7 @@ class OpenAiResponseStreamHandlerTest {
             val event = mockk<com.openai.models.responses.ResponseStreamEvent>(relaxed = true)
             val functionCallDone = mockFunctionCallArgumentsDoneEvent(
                 itemId = "fc_1",
-                name = "tavily_web_search",
+                name = "web_search",
                 arguments = """{"query":"test"}"""
             )
             every { event.isFunctionCallArgumentsDone() } returns true
@@ -209,7 +209,7 @@ class OpenAiResponseStreamHandlerTest {
 
             handler.handleEvent(event, state)
             assertNotNull(state.toolCallRequests.firstOrNull())
-            assertEquals("tavily_web_search", state.toolCallRequests.firstOrNull()?.toolName)
+            assertEquals("web_search", state.toolCallRequests.firstOrNull()?.toolName)
         }
 
     @Test
@@ -223,7 +223,7 @@ class OpenAiResponseStreamHandlerTest {
             val event = mockk<com.openai.models.responses.ResponseStreamEvent>(relaxed = true)
             val functionCallDone = mockFunctionCallArgumentsDoneEvent(
                 itemId = "call_1",
-                name = "tavily_web_search",
+                name = "web_search",
                 arguments = """{"query":"test"}"""
             )
             every { event.isFunctionCallArgumentsDone() } returns true
@@ -231,7 +231,7 @@ class OpenAiResponseStreamHandlerTest {
 
             handler.handleEvent(event, state)
             assertEquals(1, state.toolCallRequests.size)
-            assertEquals("tavily_web_search", state.toolCallRequests[0].toolName)
+            assertEquals("web_search", state.toolCallRequests[0].toolName)
         }
 
     private fun mockFunctionCallArgumentsDoneEvent(

@@ -70,12 +70,12 @@ class GenerateChatResponseUseCaseSearchToolTest {
     )
 
     @Test
-    fun `FAST mode exposes tavily_web_search for non-local active models`() = runTest {
+    fun `FAST mode exposes web_search for non-local active models`() = runTest {
         val inferenceFactory = FakeInferenceFactory()
         val inferenceService = FakeInferenceService(ModelType.FAST)
         inferenceFactory.serviceMap[ModelType.FAST] = inferenceService
         val activeModelProvider = mockActiveModelProvider(
-            ActiveModelConfiguration(
+            ActiveModelConfiguration(modelId = "test-model", 
                 id = ApiModelConfigurationId("7"),
                 isLocal = false,
                 name = "OpenAI Fast",
@@ -120,8 +120,8 @@ class GenerateChatResponseUseCaseSearchToolTest {
 
         val options = inferenceService.getSentOptions().single()
         assertTrue(options.toolingEnabled)
-        assertTrue(options.availableTools.contains(ToolDefinition.TAVILY_WEB_SEARCH))
-        assertTrue(options.availableTools.contains(ToolDefinition.TAVILY_EXTRACT))
+        assertTrue(options.availableTools.contains(ToolDefinition.WEB_SEARCH))
+        assertTrue(options.availableTools.contains(ToolDefinition.WEB_EXTRACT))
         assertTrue(options.availableTools.contains(ToolDefinition.SEARCH_CHAT_HISTORY))
         assertTrue(options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
     }
@@ -142,7 +142,7 @@ class GenerateChatResponseUseCaseSearchToolTest {
         }
         inferenceFactory.serviceMap[ModelType.FAST] = inferenceService
         val activeModelProvider = mockActiveModelProvider(
-            ActiveModelConfiguration(
+            ActiveModelConfiguration(modelId = "test-model", 
                 id = ApiModelConfigurationId("7"),
                 isLocal = false,
                 name = "OpenAI Fast",

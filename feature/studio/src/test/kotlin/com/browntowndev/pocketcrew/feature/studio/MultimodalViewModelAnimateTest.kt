@@ -59,6 +59,7 @@ class MultimodalViewModelAnimateTest {
     @BeforeEach
     fun setup() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        val app = mockk<android.app.Application>(relaxed = true)
 
         val mediaProviderId = MediaProviderId("test-provider")
         val videoAssignment = DefaultModelAssignment(
@@ -92,18 +93,15 @@ class MultimodalViewModelAnimateTest {
         )
 
         viewModel = MultimodalViewModel(
-            imageGenerationPort,
-            videoGenerationPort,
-            GenerateVideoUseCase(defaultModelRepository, mediaProviderRepository, videoGenerationPort),
-            generateMusicUseCase,
-            shareMediaPort,
-            studioRepository,
-            defaultModelRepository,
-            mediaProviderRepository,
-            getProviderCapabilitiesUseCase,
-            chatUseCases,
-            playbackController,
-            logger,
+            application = app,
+            shareMediaPort = shareMediaPort,
+            studioRepository = studioRepository,
+            defaultModelRepository = defaultModelRepository,
+            mediaProviderRepository = mediaProviderRepository,
+            getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
+            chatUseCases = chatUseCases,
+            playbackController = playbackController,
+            logger = logger,
         )
     }
 

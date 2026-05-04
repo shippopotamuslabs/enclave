@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage as DomainChatMe
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.port.inference.LlmInferencePort
+import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.domain.util.ToolEnvelopeParser
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase
 import com.browntowndev.pocketcrew.domain.usecase.chat.ProcessThinkingTokensUseCase.SegmentKind
@@ -13,6 +14,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.GenerationEvent
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.model.inference.WebSearchParams
 import com.browntowndev.pocketcrew.feature.inference.llama.LlamaChatSessionManager
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaModelConfig
 import com.browntowndev.pocketcrew.domain.model.inference.LlamaSamplingConfig
@@ -27,7 +29,6 @@ import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPo
 import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
 import com.browntowndev.pocketcrew.domain.util.ToolContextBudget
 import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
-import com.browntowndev.pocketcrew.domain.util.TavilyResultParser
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.feature.inference.llama.ChatRole
@@ -481,12 +482,12 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 }
             },
             onToolResult = { toolCall, resultJson ->
-                if (toolCall.toolName == ToolDefinition.TAVILY_WEB_SEARCH.name) {
+                if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name) {
                     val assistantMessageId = options.assistantMessageId
                     if (assistantMessageId != null) {
-                        val sources = TavilyResultParser.parse(assistantMessageId, resultJson)
+                        val sources = WebSearchResultParser.parse(assistantMessageId, resultJson)
                         if (sources.isNotEmpty()) {
-                            emitEvent(InferenceEvent.TavilyResults(sources, targetModelType))
+                            emitEvent(InferenceEvent.WebSearchResults(sources, targetModelType))
                         }
                     }
                 }

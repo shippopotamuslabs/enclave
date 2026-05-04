@@ -8,34 +8,37 @@ import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
-import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
+import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.ATTACHED_IMAGE_INSPECT
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.WEB_EXTRACT
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.WEB_SEARCH
+import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackStatus
-import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
-import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionEvent
-import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
-import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.ATTACHED_IMAGE_INSPECT
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.TAVILY_EXTRACT
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition.Companion.TAVILY_WEB_SEARCH
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
 import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
+import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.text.SimpleDateFormat
@@ -306,8 +309,8 @@ class ChatViewModel @Inject constructor(
                     activeToolNames[event.eventId] = toolName
                     _activeToolCallBanner.value = ToolCallBannerUi(
                         kind = when (toolName) {
-                            TAVILY_WEB_SEARCH.name -> ToolCallBannerKind.SEARCH
-                            TAVILY_EXTRACT.name -> ToolCallBannerKind.EXTRACT
+                            WEB_SEARCH.name -> ToolCallBannerKind.SEARCH
+                            WEB_EXTRACT.name -> ToolCallBannerKind.EXTRACT
                             ATTACHED_IMAGE_INSPECT.name -> ToolCallBannerKind.IMAGE
                             ToolDefinition.SEARCH_CHAT_HISTORY.name -> ToolCallBannerKind.MEMORY
                             ToolDefinition.SEARCH_CHAT.name -> ToolCallBannerKind.MEMORY
@@ -315,8 +318,8 @@ class ChatViewModel @Inject constructor(
                             else -> ToolCallBannerKind.SEARCH
                         },
                         label = when (toolName) {
-                            TAVILY_WEB_SEARCH.name.lowercase() -> "Searching with Tavily"
-                            TAVILY_EXTRACT.name.lowercase() -> "Reading webpage content"
+                            WEB_SEARCH.name.lowercase() -> "Searching the web"
+                            WEB_EXTRACT.name.lowercase() -> "Reading webpage content"
                             ATTACHED_IMAGE_INSPECT.name.lowercase() -> "Inspecting image"
                             ToolDefinition.SEARCH_CHAT_HISTORY.name.lowercase() -> "Searching chat history"
                             ToolDefinition.SEARCH_CHAT.name.lowercase() -> "Searching chat"
@@ -341,7 +344,7 @@ class ChatViewModel @Inject constructor(
                         label = "Reading ${event.url}"
                     )
                     // Mark matching sources as extracted in the active turn snapshot.
-                    markSourceExtracted(event.url)
+                    markWebSearchSourceExtracted(event.url)
                 }
 
                 is ToolExecutionEvent.Finished -> {
@@ -355,12 +358,12 @@ class ChatViewModel @Inject constructor(
 
                     // Collect sources for the banner if available
                     val sources = event.resultJson?.let {
-                        com.browntowndev.pocketcrew.domain.util.TavilyResultParser.parse(MessageId("temp"), it)
+                        WebSearchResultParser.parse(MessageId("temp"), it)
                     } ?: emptyList()
 
                     activeToolJobs[event.eventId] = viewModelScope.launch {
                         if (sources.isNotEmpty()) {
-                            _activeToolCallBanner.value = _activeToolCallBanner.value?.copy(tavilySources = sources)
+                            _activeToolCallBanner.value = _activeToolCallBanner.value?.copy(webSearchSources = sources)
                         }
                         delay(remaining)
                         val toolName = (activeToolNames[event.eventId] ?: "").lowercase()
@@ -549,14 +552,14 @@ class ChatViewModel @Inject constructor(
                 text = message.content.text,
                 pipelineStep = message.content.pipelineStep,
                 imageUri = message.content.imageUri,
-                tavilySources = message.tavilySources,
+                webSearchSources = message.webSearchSources,
                 artifacts = message.content.artifacts,
                 fileAttachments = message.content.fileAttachments,
             ),
             formattedTimestamp = formatTimestamp(message.createdAt),
             indicatorState = computeIndicatorState(message),
             modelDisplayName = modelDisplayName,
-            tavilySources = message.tavilySources,
+            webSearchSources = message.webSearchSources,
         )
     }
 
@@ -908,10 +911,10 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    private fun markSourceExtracted(url: String) {
+    private fun markWebSearchSourceExtracted(url: String) {
         val key = activeTurnKeyFlow.value ?: return
         viewModelScope.launch {
-            activeChatTurnSnapshotPort.markSourcesExtracted(
+            activeChatTurnSnapshotPort.markWebSearchSourcesExtracted(
                 key = key,
                 urls = listOf(url),
             )

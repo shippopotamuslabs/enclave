@@ -11,20 +11,20 @@ class ToolCallRequestTest {
     @Test
     fun `parameters lazy property deserializes valid JSON`() {
         val request = ToolCallRequest(
-            toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
+            toolName = ToolDefinition.WEB_SEARCH.name,
             argumentsJson = """{"query": "test query"}""",
             provider = "OPENAI",
             modelType = ModelType.FAST
         )
 
-        val params = request.parameters as TavilyWebSearchParams
+        val params = request.parameters as WebSearchParams
         assertEquals("test query", params.query)
     }
 
     @Test
     fun `parameters lazy property throws SerializationException for invalid JSON`() {
         val request = ToolCallRequest(
-            toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
+            toolName = ToolDefinition.WEB_SEARCH.name,
             argumentsJson = """{"invalid": "json"}""", // Missing 'query'
             provider = "OPENAI",
             modelType = ModelType.FAST
@@ -52,7 +52,7 @@ class ToolCallRequestTest {
     @Test
     fun `parameters lazy property handles partial or malformed JSON via exception`() {
         val request = ToolCallRequest(
-            toolName = ToolDefinition.TAVILY_WEB_SEARCH.name,
+            toolName = ToolDefinition.WEB_SEARCH.name,
             argumentsJson = """{"query": "truncated...""",
             provider = "OPENAI",
             modelType = ModelType.FAST

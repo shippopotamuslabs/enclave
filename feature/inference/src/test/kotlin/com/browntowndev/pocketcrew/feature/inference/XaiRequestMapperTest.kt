@@ -190,7 +190,7 @@ class XaiRequestMapperTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
             ),
         )
 
@@ -207,7 +207,7 @@ class XaiRequestMapperTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
             ),
         )
 
@@ -215,7 +215,7 @@ class XaiRequestMapperTest {
         // Client tools are stripped for multi-agent in mapToResponseParams but NOT in mapToChatCompletionParams (Wait, checking code...)
         // Actually, it is stripped in mapToResponseParams too. 
         // My previous edit to the test was correct in principle but code has it stripped.
-        assertFalse(toolsPayload.contains("tavily_web_search"))
+        assertFalse(toolsPayload.contains("\"function\"")) // Client-side tools use the "function" type
         assertTrue(toolsPayload.contains("web_search"))
         assertTrue(toolsPayload.contains("x_search"))
     }
@@ -229,12 +229,12 @@ class XaiRequestMapperTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
             ),
         )
 
         val toolsPayload = params._additionalBodyProperties()["tools"].toString()
-        assertTrue(toolsPayload.contains("tavily_web_search"))
+        assertTrue(toolsPayload.contains("web_search"))
     }
 
     @Test

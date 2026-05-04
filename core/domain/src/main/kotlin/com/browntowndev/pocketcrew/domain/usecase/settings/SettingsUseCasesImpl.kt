@@ -21,8 +21,12 @@ class SettingsPreferencesUseCasesImpl @Inject constructor(
     override val updateCustomPromptText: UpdateCustomPromptTextUseCase,
     override val updateAllowMemories: UpdateAllowMemoriesUseCase,
     override val updateSearchEnabled: UpdateSearchEnabledUseCase,
+    override val updateSearchProvider: UpdateSearchProviderUseCase,
     override val saveTavilyApiKey: SaveTavilyApiKeyUseCase,
     override val clearTavilyApiKey: ClearTavilyApiKeyUseCase,
+    override val saveExaApiKey: SaveExaApiKeyUseCase,
+    override val clearExaApiKey: ClearExaApiKeyUseCase,
+    override val updateShowSearchProviderSwitchAlert: UpdateShowSearchProviderSwitchAlertUseCase,
     override val updateBackgroundInferenceEnabled: UpdateBackgroundInferenceEnabledUseCase,
 ) : SettingsPreferencesUseCases
 

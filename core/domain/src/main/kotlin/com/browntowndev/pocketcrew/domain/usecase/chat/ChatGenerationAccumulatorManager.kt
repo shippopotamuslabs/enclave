@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.model.chat.Mode
+import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceBusyException
@@ -48,9 +49,9 @@ internal class ChatGenerationAccumulatorManager(
                 }
             }
 
-            is MessageGenerationState.TavilySourcesAttached -> {
+            is MessageGenerationState.WebSearchSourcesAttached -> {
                 getOrCreateAccumulator(state.modelType).apply {
-                    tavilySources.addAll(state.sources)
+                    webSearchSources.addAll(state.sources)
                 }
             }
 
@@ -135,10 +136,10 @@ internal class ChatGenerationAccumulatorManager(
                 }
             }
 
-            // Sync tavily sources
-            messageSnapshot.tavilySources.forEach { snapshotSource ->
-                if (accumulator.tavilySources.none { it.url == snapshotSource.url }) {
-                    accumulator.tavilySources.add(snapshotSource)
+            // Sync web search sources
+            messageSnapshot.webSearchSources.forEach { snapshotSource ->
+                if (accumulator.webSearchSources.none { it.url == snapshotSource.url }) {
+                    accumulator.webSearchSources.add(snapshotSource)
                 }
             }
         }
@@ -166,16 +167,16 @@ internal class ChatGenerationAccumulatorManager(
     }
 
     /**
-     * Marks tavily sources as extracted for the given URLs across all accumulators.
+     * Marks web search sources as extracted for the given URLs across all accumulators.
      * Called when the extract tool completes so the UI reflects the read status immediately.
      */
-    fun markSourcesExtracted(urls: List<String>) {
+    fun markWebSearchSourcesExtracted(urls: List<String>) {
         _messages.values.forEach { accumulator ->
-            val updatedSources = accumulator.tavilySources.map { source ->
+            val updatedSources = accumulator.webSearchSources.map { source ->
                 if (source.url in urls) source.copy(extracted = true) else source
             }
-            accumulator.tavilySources.clear()
-            accumulator.tavilySources.addAll(updatedSources)
+            accumulator.webSearchSources.clear()
+            accumulator.webSearchSources.addAll(updatedSources)
         }
     }
 
@@ -214,7 +215,7 @@ internal class MessageAccumulator(
     var isComplete: Boolean = false,
     var currentState: MessageState = MessageState.GENERATING,
     var pipelineStep: PipelineStep? = null,
-    val tavilySources: MutableList<com.browntowndev.pocketcrew.domain.model.chat.TavilySource> = mutableListOf(),
+    val webSearchSources: MutableList<WebSearchSource> = mutableListOf(),
     val artifacts: MutableList<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = mutableListOf(),
 ) {
     val thinkingDurationSeconds: Long
@@ -249,7 +250,7 @@ internal class MessageAccumulator(
         isComplete = isComplete,
         messageState = currentState,
         pipelineStep = pipelineStep,
-        tavilySources = tavilySources.toList(),
+        webSearchSources = webSearchSources.toList(),
         artifacts = artifacts.toList(),
     )
 }

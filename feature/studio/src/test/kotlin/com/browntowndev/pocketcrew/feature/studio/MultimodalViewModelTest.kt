@@ -35,6 +35,8 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkConstructor
+import io.mockk.unmockkConstructor
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -61,6 +63,7 @@ import org.junit.jupiter.api.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MultimodalViewModelTest {
+    private val testDispatcher = UnconfinedTestDispatcher()
     private val imageGenerationPort = mockk<ImageGenerationPort>(relaxed = true)
     private val videoGenerationPort = mockk<VideoGenerationPort>(relaxed = true)
     private val generateVideoUseCase = mockk<GenerateVideoUseCase>(relaxed = true)
@@ -80,8 +83,9 @@ class MultimodalViewModelTest {
 
     @BeforeEach
     fun setup() {
-        Dispatchers.setMain(UnconfinedTestDispatcher())
-        
+        Dispatchers.setMain(testDispatcher)
+        val app = mockk<android.app.Application>(relaxed = true)
+
         val mediaProviderId = MediaProviderId("test-provider")
         val assignment = DefaultModelAssignment(
             modelType = ModelType.IMAGE_GENERATION,
@@ -130,18 +134,15 @@ class MultimodalViewModelTest {
         every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
         
         viewModel = MultimodalViewModel(
-            imageGenerationPort,
-            videoGenerationPort,
-            generateVideoUseCase,
-            generateMusicUseCase,
-            shareMediaPort,
-            studioRepository,
-            defaultModelRepository,
-            mediaProviderRepository,
-            getProviderCapabilitiesUseCase,
-            chatUseCases,
-            playbackController,
-            logger,
+            application = app,
+            shareMediaPort = shareMediaPort,
+            studioRepository = studioRepository,
+            defaultModelRepository = defaultModelRepository,
+            mediaProviderRepository = mediaProviderRepository,
+            getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
+            chatUseCases = chatUseCases,
+            playbackController = playbackController,
+            logger = logger,
         )
     }
 
@@ -202,19 +203,18 @@ class MultimodalViewModelTest {
         every { mediaProviderRepository.getMediaProviders() } returns flowOf(listOf(providerAsset))
         every { getProviderCapabilitiesUseCase(ApiProvider.XAI.name) } returns xaiCapabilities
 
+        val app = mockk<android.app.Application>(relaxed = true)
+
         viewModel = MultimodalViewModel(
-            imageGenerationPort,
-            videoGenerationPort,
-            generateVideoUseCase,
-            generateMusicUseCase,
-            shareMediaPort,
-            studioRepository,
-            defaultModelRepository,
-            mediaProviderRepository,
-            getProviderCapabilitiesUseCase,
-            chatUseCases,
-            playbackController,
-            logger,
+            application = app,
+            shareMediaPort = shareMediaPort,
+            studioRepository = studioRepository,
+            defaultModelRepository = defaultModelRepository,
+            mediaProviderRepository = mediaProviderRepository,
+            getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
+            chatUseCases = chatUseCases,
+            playbackController = playbackController,
+            logger = logger,
         )
         val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.uiState.collect {}
@@ -736,19 +736,18 @@ class MultimodalViewModelTest {
         every { defaultModelRepository.observeDefaults() } returns flowOf(listOf(ttsAssignment))
         
         // Re-create VM to pick up new defaults flow
+        val app = mockk<android.app.Application>(relaxed = true)
+
         viewModel = MultimodalViewModel(
-            imageGenerationPort,
-            videoGenerationPort,
-            generateVideoUseCase,
-            generateMusicUseCase,
-            shareMediaPort,
-            studioRepository,
-            defaultModelRepository,
-            mediaProviderRepository,
-            getProviderCapabilitiesUseCase,
-            chatUseCases,
-            playbackController,
-            logger,
+            application = app,
+            shareMediaPort = shareMediaPort,
+            studioRepository = studioRepository,
+            defaultModelRepository = defaultModelRepository,
+            mediaProviderRepository = mediaProviderRepository,
+            getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
+            chatUseCases = chatUseCases,
+            playbackController = playbackController,
+            logger = logger,
         )
 
         val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {

@@ -370,7 +370,7 @@ class InferenceService : Service() {
                             MessageGenerationState.GeneratingText(event.chunk, getModelTypeForStep(step))
                         )
                     }
-                    is InferenceEvent.TavilyResults -> Unit
+                    is InferenceEvent.WebSearchResults -> Unit
                     is InferenceEvent.Artifacts -> Unit
                     is InferenceEvent.Finished -> {                        // Ignore. StepCompleted signifies completion for pipeline steps & is detected by flow finishing
                     }

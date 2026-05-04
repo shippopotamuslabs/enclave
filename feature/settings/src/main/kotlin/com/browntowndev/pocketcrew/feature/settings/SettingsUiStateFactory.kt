@@ -7,6 +7,7 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset
+import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSupport
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
@@ -22,6 +23,7 @@ internal data class SheetVisibilityState(
     val memories: Boolean = false,
     val feedback: Boolean = false,
     val visionSettings: Boolean = false,
+    val webSearch: Boolean = false,
 )
 
 internal data class LocalModelsTransientState(
@@ -54,6 +56,8 @@ internal data class MemoriesTransientState(
 internal data class SearchSkillTransientState(
     val isEditing: Boolean = false,
     val enabled: Boolean? = null,
+    val selectedProvider: SearchProvider? = null,
+    val showSwitchAlert: Boolean? = null,
 )
 
 internal data class TtsProvidersTransientState(
@@ -116,6 +120,9 @@ class SettingsUiStateFactory @Inject constructor(
         assignmentsState: AssignmentDialogTransientState,
         deletionState: DeletionTransientState,
         memoriesState: MemoriesTransientState,
+        currentApiKey: String,
+        currentTavilyApiKey: String,
+        currentExaApiKey: String,
     ): SettingsUiState {
         val localModels = localAssets.map(localModelAssetUiMapper::map)
         val refreshedSelectedLocalAsset = localModelsState.selectedAsset?.let { selected ->
@@ -278,6 +285,7 @@ class SettingsUiStateFactory @Inject constructor(
                 isVisionSettingsSheetOpen = sheetVisibility.visionSettings,
                 isTtsProvidersSheetOpen = ttsState.isSheetOpen,
                 isMediaProvidersSheetOpen = mediaState.isSheetOpen,
+                isWebSearchSheetOpen = sheetVisibility.webSearch,
             ),
             customization = CustomizationUiState(
                 isSheetOpen = sheetVisibility.customization,
@@ -359,7 +367,12 @@ class SettingsUiStateFactory @Inject constructor(
             searchSkillEditor = SearchSkillEditorUiState(
                 isEditing = searchSkillState.isEditing,
                 enabled = searchSkillState.enabled ?: persistedSettings.searchEnabled,
+                selectedProvider = searchSkillState.selectedProvider ?: persistedSettings.searchProvider,
                 tavilyKeyPresent = persistedSettings.tavilyKeyPresent,
+                exaKeyPresent = persistedSettings.exaKeyPresent,
+                currentTavilyApiKey = currentTavilyApiKey,
+                currentExaApiKey = currentExaApiKey,
+                showSwitchAlert = persistedSettings.showSearchProviderSwitchAlert,
             ),
             assignments = ModelAssignmentsUiState(
                 assignments = assignmentRows,

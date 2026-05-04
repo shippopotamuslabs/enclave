@@ -74,7 +74,7 @@ class AnthropicRequestMapperTest {
     }
 
     @Test
-    fun `mapToMessageParams serializes tavily_web_search when tooling is enabled`() {
+    fun `mapToMessageParams serializes web_search when tooling is enabled`() {
         val params = AnthropicRequestMapper.mapToMessageParams(
             modelId = "claude-sonnet-4-20250514",
             prompt = "Find recent Android agent news",
@@ -82,11 +82,11 @@ class AnthropicRequestMapperTest {
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                availableTools = listOf(ToolDefinition.WEB_SEARCH),
             )
         )
 
-        assertTrue(params.toString().contains("tavily_web_search"))
+        assertTrue(params.toString().contains("web_search"))
         assertTrue(params.toString().contains("query"))
     }
 
