@@ -2,10 +2,9 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.feature.inference.media.GoogleImageGenerationAdapter
+import com.google.common.collect.ImmutableList
 import com.google.genai.Client
-import com.google.genai.interactions.models.interactions.CreateModelInteractionParams
-import com.google.genai.interactions.models.interactions.Interaction
-import com.google.genai.interactions.models.interactions.Content as InteractionContent
+import com.google.genai.types.*
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -31,55 +30,105 @@ class GoogleImageGenerationAdapterTest {
     }
 
     @Test
-    fun generateImage_success_callsInteractionsCreate() = runTest {
-        val requestSlot = slot<CreateModelInteractionParams>()
+    fun generateImage_noReference_callsGenerateContent() = runTest {
+        val promptSlot = slot<String>()
+        val contentsSlot = slot<List<Content>>()
+        val configSlot = slot<GenerateContentConfig>()
         val mockProvider = mockk<GoogleGenAiClientProviderPort>()
-        val mockClient = spyk(Client.builder().apiKey("key").build())
+        val mockClient = mockk<Client>()
+        
         val adapter = object : GoogleImageGenerationAdapter(mockProvider) {
-            override fun createInteraction(
+            override fun generateContent(
                 client: Client,
-                params: CreateModelInteractionParams
-            ): Interaction {
-                requestSlot.captured = params
-                val image = mockk<com.google.genai.types.Image>()
-                every { image.imageBytes() } returns java.util.Optional.of("modern".toByteArray())
+                modelId: String,
+                contents: List<Content>,
+                config: GenerateContentConfig
+            ): GenerateContentResponse {
+                promptSlot.captured = modelId
+                contentsSlot.captured = contents
+                configSlot.captured = config
                 
-                val content = mockk<InteractionContent>(relaxed = true)
-                // Interactions.Content.image() returns Optional<Image>
-                val imageMethod = content.javaClass.methods.find { it.name == "image" && it.parameterCount == 0 }
-                every { imageMethod?.invoke(content) } answers { java.util.Optional.of(image) }
+                val blob = mockk<Blob>()
+                every { blob.data() } returns java.util.Optional.of("modern".toByteArray())
                 
-                val interaction = mockk<Interaction>(relaxed = true)
-                val outputsMethod = interaction.javaClass.methods.find { it.name == "outputs" && it.parameterCount == 0 }
-                every { outputsMethod?.invoke(interaction) } answers { java.util.Optional.of(listOf(content)) }
+                val part = mockk<Part>()
+                every { part.inlineData() } returns java.util.Optional.of(blob)
                 
-                return interaction
+                val response = mockk<GenerateContentResponse>()
+                every { response.parts() } returns ImmutableList.of(part)
+                
+                return response
             }
         }
         
         every { mockProvider.getClient(any(), any(), any(), any()) } returns mockClient
-        
-        // Mock the services inside Client
-        val mockModels = mockk<com.google.genai.Models>(relaxed = true)
-        val mockInteractions = mockk<com.google.genai.interactions.services.blocking.InteractionService>(relaxed = true)
-        
-        val modelsField = mockClient.javaClass.getDeclaredField("models")
-        modelsField.isAccessible = true
-        modelsField.set(mockClient, mockModels)
-        
-        val interactionsField = mockClient.javaClass.getDeclaredField("interactions")
-        interactionsField.isAccessible = true
-        interactionsField.set(mockClient, mockInteractions)
 
         val result = adapter.generateImage(
             prompt = "modern prompt",
             apiKey = "key",
             modelId = "gemini-3.1-flash-image-preview",
             baseUrl = null,
-            settings = ImageGenerationSettings(),
+            settings = ImageGenerationSettings(generationCount = 2),
+            referenceImage = null
         )
 
         assertTrue(result.isSuccess)
         assertEquals("modern", String(result.getOrThrow()[0]))
+        assertEquals("gemini-3.1-flash-image-preview", promptSlot.captured)
+        assertEquals(1, contentsSlot.captured.size)
+        assertEquals(1, contentsSlot.captured[0].parts().get().size)
+        assertEquals("modern prompt", contentsSlot.captured[0].parts().get()[0].text().get())
+        assertEquals(listOf("IMAGE"), configSlot.captured.responseModalities().get())
+        assertEquals(2, configSlot.captured.candidateCount().get())
+    }
+
+    @Test
+    fun generateImage_withReference_callsGenerateContent() = runTest {
+        val contentsSlot = slot<List<Content>>()
+        val mockProvider = mockk<GoogleGenAiClientProviderPort>()
+        val mockClient = mockk<Client>()
+        
+        val adapter = object : GoogleImageGenerationAdapter(mockProvider) {
+            override fun generateContent(
+                client: Client,
+                modelId: String,
+                contents: List<Content>,
+                config: GenerateContentConfig
+            ): GenerateContentResponse {
+                contentsSlot.captured = contents
+                
+                val blob = mockk<Blob>()
+                every { blob.data() } returns java.util.Optional.of("edited".toByteArray())
+                
+                val part = mockk<Part>()
+                every { part.inlineData() } returns java.util.Optional.of(blob)
+                
+                val response = mockk<GenerateContentResponse>()
+                every { response.parts() } returns ImmutableList.of(part)
+                
+                return response
+            }
+        }
+        
+        every { mockProvider.getClient(any(), any(), any(), any()) } returns mockClient
+
+        val refBytes = "reference".toByteArray()
+        val result = adapter.generateImage(
+            prompt = "edit prompt",
+            apiKey = "key",
+            modelId = "gemini-3.1-flash-image-preview",
+            baseUrl = null,
+            settings = ImageGenerationSettings(generationCount = 3),
+            referenceImage = refBytes
+        )
+
+        assertTrue(result.isSuccess)
+        assertEquals("edited", String(result.getOrThrow()[0]))
+        assertEquals(1, contentsSlot.captured.size)
+        val parts = contentsSlot.captured[0].parts().get()
+        assertEquals(2, parts.size)
+        assertEquals("edit prompt", parts[0].text().get())
+        assertEquals("image/png", parts[1].inlineData().get().mimeType().get())
+        assertNotNull(parts[1].inlineData().get().data().get())
     }
 }

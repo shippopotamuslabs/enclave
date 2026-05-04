@@ -68,6 +68,7 @@ class LlamaInferenceServiceImplTest {
             id = LocalModelConfigurationId("7"),
             isLocal = true,
             name = "Llama Fast",
+            modelId = "7",
             systemPrompt = "You are a helpful assistant.",
             reasoningEffort = null,
             temperature = 0.7,
@@ -212,6 +213,7 @@ class LlamaInferenceServiceImplTest {
             id = LocalModelConfigurationId("9"),
             isLocal = true,
             name = "Llama Vision",
+            modelId = "9",
             systemPrompt = "You describe images.",
             reasoningEffort = null,
             temperature = 0.7,
@@ -251,6 +253,7 @@ class LlamaInferenceServiceImplTest {
                 reasoningBudget = 0,
                 modelType = ModelType.VISION,
                 imageUris = listOf("file:///tmp/cat.jpg"),
+                modelId = "9",
             ),
             closeConversation = false,
         ).toList()
@@ -265,6 +268,7 @@ class LlamaInferenceServiceImplTest {
             id = LocalModelConfigurationId("9"),
             isLocal = true,
             name = "Llama Vision",
+            modelId = "9",
             systemPrompt = "You describe images.",
             reasoningEffort = null,
             temperature = 0.7,
@@ -297,6 +301,7 @@ class LlamaInferenceServiceImplTest {
                 reasoningBudget = 0,
                 modelType = ModelType.VISION,
                 imageUris = listOf("file:///tmp/cat.jpg"),
+                modelId = "9",
             ),
             closeConversation = false,
         ).toList()
@@ -322,6 +327,7 @@ class LlamaInferenceServiceImplTest {
         GenerationOptions(
             reasoningBudget = 0,
             modelType = ModelType.FAST,
+            modelId = "7",
             systemPrompt = "Use tools when needed.\n<tool_call>{\"name\":\"tavily_web_search\",\"arguments\":{\"query\":\"...\"}}</tool_call>",
         )
 }
