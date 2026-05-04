@@ -63,6 +63,27 @@ data class ApiModelConfigurationEntity(
     @ColumnInfo(name = "system_prompt")
     val systemPrompt: String = "",
 
+    @ColumnInfo(name = "max_tokens_disabled")
+    val maxTokensDisabled: Boolean = false,
+
+    @ColumnInfo(name = "temperature_disabled")
+    val temperatureDisabled: Boolean = false,
+
+    @ColumnInfo(name = "top_p_disabled")
+    val topPDisabled: Boolean = false,
+
+    @ColumnInfo(name = "top_k_disabled")
+    val topKDisabled: Boolean = false,
+
+    @ColumnInfo(name = "min_p_disabled")
+    val minPDisabled: Boolean = false,
+
+    @ColumnInfo(name = "frequency_penalty_disabled")
+    val frequencyPenaltyDisabled: Boolean = false,
+
+    @ColumnInfo(name = "presence_penalty_disabled")
+    val presencePenaltyDisabled: Boolean = false,
+
     @ColumnInfo(name = "reasoning_effort")
     val reasoningEffort: String? = null,
 

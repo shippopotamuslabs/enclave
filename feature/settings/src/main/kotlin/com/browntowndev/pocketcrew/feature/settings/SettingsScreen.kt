@@ -196,14 +196,14 @@ fun SettingsScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsNavigationItem(
-                    title = "Local AI Models",
+                    title = "Local Models",
                     subtitle = "Manage on-device models",
                     icon = Icons.Default.Memory,
                     onClick = { onShowLocalModelsSheet(true) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 SettingsNavigationItem(
-                    title = "API AI Models",
+                    title = "API Models",
                     subtitle = "Manage API keys and presets",
                     icon = Icons.Default.Cloud,
                     onClick = { onShowByokSheet(true) }

@@ -40,13 +40,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactBlock
+import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationResult
 
 @Composable
@@ -176,148 +173,12 @@ private fun ArtifactPreview(
                 )
             }
 
-            result.request.sections.forEach { section ->
-                item {
-                    Text(
-                        text = section.title,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.padding(top = 16.dp, bottom = 12.dp)
-                    )
-                }
-
-                items(section.blocks) { block ->
-                    ArtifactBlockItem(block)
-                }
-
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ArtifactBlockItem(block: ArtifactBlock) {
-    when (block) {
-        is ArtifactBlock.Heading -> {
-            val style = when (block.level) {
-                1 -> MaterialTheme.typography.headlineSmall
-                2 -> MaterialTheme.typography.titleLarge
-                else -> MaterialTheme.typography.titleMedium
-            }
-            Text(
-                text = block.text,
-                style = style,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
-        }
-        is ArtifactBlock.Paragraph -> {
-            Text(
-                text = block.text,
-                style = MaterialTheme.typography.bodyLarge,
-                lineHeight = 24.sp,
-                modifier = Modifier.padding(vertical = 6.dp)
-            )
-        }
-        is ArtifactBlock.BulletList -> {
-            Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                block.items.forEach { item ->
-                    Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                        Text("•", modifier = Modifier.padding(horizontal = 8.dp))
-                        Text(text = item, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        }
-        is ArtifactBlock.NumberedList -> {
-            Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                block.items.forEachIndexed { index, item ->
-                    Row(modifier = Modifier.padding(vertical = 2.dp)) {
-                        Text("${index + 1}.", modifier = Modifier.padding(horizontal = 8.dp))
-                        Text(text = item, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        }
-        is ArtifactBlock.Table -> {
-            ArtifactTable(headers = block.headers, rows = block.rows)
-        }
-        is ArtifactBlock.CodeBlock -> {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                ),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    if (block.language != null) {
-                        Text(
-                            text = block.language!!.uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(bottom = 4.dp)
-                        )
-                    }
-                    Text(
-                        text = block.code,
-                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ArtifactTable(headers: List<String>, rows: List<List<String>>) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
-        shape = RoundedCornerShape(8.dp),
-        border = CardDefaults.outlinedCardBorder(),
-        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-    ) {
-        Column {
-            // Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(8.dp)
-            ) {
-                headers.forEach { header ->
-                    Text(
-                        text = header,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-            // Rows
-            rows.forEach { row ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp)
-                ) {
-                    row.forEach { cell ->
-                        Text(
-                            text = cell,
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
+            item {
+                StreamableMarkdownText(
+                    markdown = result.request.content,
+                    enableScroll = false,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }

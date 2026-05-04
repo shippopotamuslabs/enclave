@@ -9,10 +9,18 @@ import com.browntowndev.pocketcrew.domain.model.inference.SearchChatParams
 import com.browntowndev.pocketcrew.domain.model.inference.TavilyExtractParams
 import com.browntowndev.pocketcrew.domain.model.inference.TavilyWebSearchParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.model.inference.ToolParameters
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
 /**
  * Generic tool envelope parser that supports both search and image-inspect tools.
@@ -41,7 +49,35 @@ object ToolEnvelopeParser {
     fun buildArgumentsJson(query: String): String =
         ToolDefinition.TAVILY_WEB_SEARCH.encodeArguments(TavilyWebSearchParams(query))
 
+    /**
+     * Converts a raw Map (usually from an SDK like Google or Anthropic) into a JSON string.
+     * Uses the toolName to ensure the correct ToolDefinition is used for encoding, which
+     * respects @SerialName annotations and default values.
+     */
+    fun buildArgumentsJson(toolName: String, arguments: Map<String, *>): String {
+        val toolDef = ToolDefinition.fromName(toolName)
+        val jsonObject = buildJsonObjectFromMap(arguments)
+
+        if (toolDef != null) {
+            return try {
+                // This ensures we validate the arguments against the ToolParameters model
+                // and apply any @SerialName mapping.
+                val params = toolDef.decodeArguments<ToolParameters>(jsonObject.toString())
+                toolDef.encodeArguments(params)
+            } catch (e: Exception) {
+                // If decoding fails (missing fields etc), fall back to raw JSON
+                // so the executor can decide how to handle it.
+                jsonObject.toString()
+            }
+        }
+
+        return jsonObject.toString()
+    }
+
+    @Deprecated("Use buildArgumentsJson(toolName, arguments) for robust parsing",
+        ReplaceWith("buildArgumentsJson(toolName, arguments)"))
     fun buildArgumentsJson(arguments: Map<String, *>): String {
+        // Fallback for search tools if toolName is unknown
         val query = (arguments["query"] as? String)
             ?.trim()
             ?.takeIf(String::isNotEmpty)
@@ -65,7 +101,30 @@ object ToolEnvelopeParser {
             return buildExtractArgumentsJson(urls, extractDepth, format)
         }
 
-        throw IllegalArgumentException("Tool argument 'query', 'question', or 'urls' is required")
+        // Generic fallback instead of throwing
+        return buildJsonObjectFromMap(arguments).toString()
+    }
+
+    private fun buildJsonObjectFromMap(map: Map<String, *>): JsonObject {
+        return buildJsonObject {
+            map.forEach { (key, value) ->
+                put(key, toJsonElement(value))
+            }
+        }
+    }
+
+    private fun toJsonElement(value: Any?): JsonElement {
+        return when (value) {
+            null -> JsonNull
+            is Boolean -> JsonPrimitive(value)
+            is Number -> JsonPrimitive(value)
+            is String -> JsonPrimitive(value)
+            is Map<*, *> -> @Suppress("UNCHECKED_CAST") (buildJsonObjectFromMap(value as Map<String, *>))
+            is List<*> -> buildJsonArray {
+                value.forEach { add(toJsonElement(it)) }
+            }
+            else -> JsonPrimitive(value.toString())
+        }
     }
 
     fun buildImageInspectArgumentsJson(question: String): String =

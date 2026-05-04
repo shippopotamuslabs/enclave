@@ -250,4 +250,49 @@ class ToolEnvelopeParserTest {
         val promptWithEnvelope = "Use tools.\n" + "{\"name\":\"get_message_context\",\"arguments\":{}}"
         assertTrue(ToolEnvelopeParser.hasLocalToolContract(promptWithEnvelope))
     }
+
+    // --- Generic tool argument parsing fixes ---
+
+    @Test
+    fun `buildArgumentsJson handles generate_artifact tool parameters generically`() {
+        val toolName = "generate_artifact"
+        val arguments = mapOf(
+            "title" to "My Report",
+            "content" to "# Hello World"
+        )
+
+        val json = ToolEnvelopeParser.buildArgumentsJson(toolName, arguments)
+        
+        // Should contain both fields
+        assertTrue(json.contains("\"title\":\"My Report\""), "JSON should contain title")
+        assertTrue(json.contains("\"content\":\"# Hello World\""), "JSON should contain content")
+    }
+
+    @Test
+    fun `buildArgumentsJson handles search_chat_history tool parameters generically`() {
+        val toolName = "search_chat_history"
+        val arguments = mapOf(
+            "queries" to listOf("query1", "query2")
+        )
+
+        val json = ToolEnvelopeParser.buildArgumentsJson(toolName, arguments)
+        
+        assertTrue(json.contains("\"queries\":[\"query1\",\"query2\"]"), "JSON should contain queries array")
+    }
+
+    @Test
+    fun `buildArgumentsJson correctly uses toolName to distinguish tools with same keys`() {
+        // If a model calls search_chat with query and chat_id
+        val toolName = "search_chat"
+        val arguments = mapOf(
+            "chat_id" to "chat-123",
+            "query" to "important info"
+        )
+
+        val json = ToolEnvelopeParser.buildArgumentsJson(toolName, arguments)
+        
+        // Should contain BOTH chat_id and query
+        assertTrue(json.contains("\"chat_id\":\"chat-123\""), "JSON should contain chat_id")
+        assertTrue(json.contains("\"query\":\"important info\""), "JSON should contain query")
+    }
 }

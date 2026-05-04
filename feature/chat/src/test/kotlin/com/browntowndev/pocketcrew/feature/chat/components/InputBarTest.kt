@@ -9,6 +9,8 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsDisplayed
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -26,14 +28,13 @@ class InputBarTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun `when mic clicked without permission, onMicClick is not called`() {
-        var onMicClickCalled = false
-
+    fun `attachment menu expands and shows options when plus clicked`() {
         composeTestRule.setContent {
             InputBar(
                 inputText = "",
                 speechState = SpeechState.Idle,
                 selectedImageUri = null,
+                selectedFileName = null,
                 isPhotoAttachmentEnabled = true,
                 photoAttachmentDisabledReason = null,
                 selectedMode = ChatModeUi.FAST,
@@ -44,8 +45,77 @@ class InputBarTest {
                 onModeChange = {},
                 onSend = {},
                 onStopGenerating = {},
-                onAttach = {},
-                onClearAttachment = {},
+                onImageAttach = {},
+                onFileAttach = {},
+                onClearImage = {},
+                onClearFile = {},
+                onMicClick = {}
+            )
+        }
+
+        // Click plus button
+        composeTestRule.onNodeWithContentDescription("Toggle attachment menu").performClick()
+
+        // Verify options are displayed
+        composeTestRule.onNodeWithText("Attach Photo").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Attach File").assertIsDisplayed()
+    }
+
+    @Test
+    fun `file chip is displayed when selectedFileName is provided`() {
+        val fileName = "important_doc.txt"
+        composeTestRule.setContent {
+            InputBar(
+                inputText = "",
+                speechState = SpeechState.Idle,
+                selectedImageUri = null,
+                selectedFileName = fileName,
+                isPhotoAttachmentEnabled = true,
+                photoAttachmentDisabledReason = null,
+                selectedMode = ChatModeUi.FAST,
+                isGenerating = false,
+                canStop = false,
+                isGlobalInferenceBlocked = false,
+                onInputChange = {},
+                onModeChange = {},
+                onSend = {},
+                onStopGenerating = {},
+                onImageAttach = {},
+                onFileAttach = {},
+                onClearImage = {},
+                onClearFile = {},
+                onMicClick = {}
+            )
+        }
+
+        // Verify file chip is displayed with correct name
+        composeTestRule.onNodeWithText(fileName).assertIsDisplayed()
+    }
+
+    @Test
+    fun `when mic clicked without permission, onMicClick is not called`() {
+        var onMicClickCalled = false
+
+        composeTestRule.setContent {
+            InputBar(
+                inputText = "",
+                speechState = SpeechState.Idle,
+                selectedImageUri = null,
+                selectedFileName = null,
+                isPhotoAttachmentEnabled = true,
+                photoAttachmentDisabledReason = null,
+                selectedMode = ChatModeUi.FAST,
+                isGenerating = false,
+                canStop = false,
+                isGlobalInferenceBlocked = false,
+                onInputChange = {},
+                onModeChange = {},
+                onSend = {},
+                onStopGenerating = {},
+                onImageAttach = {},
+                onFileAttach = {},
+                onClearImage = {},
+                onClearFile = {},
                 onMicClick = { onMicClickCalled = true }
             )
         }
@@ -68,6 +138,7 @@ class InputBarTest {
                 inputText = "",
                 speechState = SpeechState.Idle,
                 selectedImageUri = null,
+                selectedFileName = null,
                 isPhotoAttachmentEnabled = true,
                 photoAttachmentDisabledReason = null,
                 selectedMode = ChatModeUi.FAST,
@@ -78,8 +149,10 @@ class InputBarTest {
                 onModeChange = {},
                 onSend = {},
                 onStopGenerating = {},
-                onAttach = {},
-                onClearAttachment = {},
+                onImageAttach = {},
+                onFileAttach = {},
+                onClearImage = {},
+                onClearFile = {},
                 onMicClick = { onMicClickCalled = true }
             )
         }
@@ -100,6 +173,7 @@ class InputBarTest {
                 inputText = "",
                 speechState = SpeechState.Idle,
                 selectedImageUri = null,
+                selectedFileName = null,
                 isPhotoAttachmentEnabled = true,
                 photoAttachmentDisabledReason = null,
                 selectedMode = ChatModeUi.FAST,
@@ -110,8 +184,10 @@ class InputBarTest {
                 onModeChange = {},
                 onSend = {},
                 onStopGenerating = {},
-                onAttach = {},
-                onClearAttachment = {},
+                onImageAttach = {},
+                onFileAttach = {},
+                onClearImage = {},
+                onClearFile = {},
                 onMicClick = {}
             )
         }

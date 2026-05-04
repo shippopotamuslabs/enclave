@@ -19,7 +19,7 @@ class GenerateArtifactUseCaseTest {
     @Test
     @DisplayName("Delegates to executor and returns result")
     fun `delegates to executor`() = runTest {
-        val params = GenerateArtifactParams(title = "Report", sections = emptyList())
+        val params = GenerateArtifactParams(title = "Report", content = "# Content")
         val expectedResult = ToolExecutionResult(
             toolName = "generate_artifact",
             resultJson = """{"pdf_base64":"..."}""",

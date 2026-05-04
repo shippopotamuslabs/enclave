@@ -2,22 +2,30 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
+import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
+import com.browntowndev.pocketcrew.domain.util.ContextWindowPlanner
+import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
+import com.browntowndev.pocketcrew.domain.util.NativeToolResultFormatter
+import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.core.JsonValue
 import com.openai.models.FunctionDefinition
 import com.openai.models.FunctionParameters
-import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.chat.completions.ChatCompletionContentPart
 import com.openai.models.chat.completions.ChatCompletionContentPartImage
 import com.openai.models.chat.completions.ChatCompletionContentPartText
+import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionFunctionTool
 import com.openai.models.chat.completions.ChatCompletionMessageParam
-import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
-import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
+import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.responses.FunctionTool
 import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseFunctionToolCall
 import com.openai.models.responses.ResponseInputImage
 import com.openai.models.responses.ResponseInputItem
 
@@ -30,44 +38,68 @@ object OpenAiRequestMapper {
         history: List<ChatMessage>,
         options: GenerationOptions
     ): ChatCompletionCreateParams {
+        val provider = options.apiProvider
+        val optModelId = options.modelId
+        val parameterSupport = if (provider != null && optModelId != null) {
+            ApiProviderModelPolicy.parameterSupport(provider, optModelId)
+        } else null
+
         val builder = ChatCompletionCreateParams.builder()
-            .model(modelId)
+            .model(optModelId ?: modelId)
 
         val messages = mutableListOf<ChatCompletionMessageParam>()
+        val systemMessages = mutableListOf<String>()
 
         history.filterNot(::isSyntheticAssistantError).forEach { msg ->
-            val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
-            when (msg.role) {
-                Role.SYSTEM -> {
-                    messages.add(ChatCompletionMessageParam.ofSystem(ChatCompletionSystemMessageParam.builder().content(sanitizedContent).build()))
-                }
-                Role.USER -> {
-                    messages.add(ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder().content(sanitizedContent).build()))
-                }
-                Role.ASSISTANT -> {
-                    messages.add(ChatCompletionMessageParam.ofAssistant(ChatCompletionAssistantMessageParam.builder().content(sanitizedContent).build()))
-                }
+            if (msg.role == Role.SYSTEM) {
+                systemMessages += ImagePayloads.stripBase64DataUris(msg.content)
+            } else {
+                messages.add(toContent(msg))
             }
         }
 
-        // Add the current prompt
+        options.systemPrompt?.takeIf { it.isNotBlank() }?.let {
+            if (!systemMessages.contains(it)) {
+                systemMessages.add(0, it)
+            }
+        }
+
+        val finalSystemPrompt = systemMessages.joinToString("\n\n").takeIf { it.isNotBlank() }
+        if (finalSystemPrompt != null) {
+            messages.add(
+                0,
+                ChatCompletionMessageParam.ofSystem(
+                    ChatCompletionSystemMessageParam.builder()
+                        .content(finalSystemPrompt)
+                        .build()
+                )
+            )
+        }
+
         messages.add(
             ChatCompletionMessageParam.ofUser(
                 buildChatCompletionUserMessage(prompt, options.imageUris)
             )
         )
 
-        builder.messages(messages)
-
         options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
-        options.temperature?.let { builder.temperature(it.toDouble()) }
-        options.topP?.let { builder.topP(it.toDouble()) }
-        options.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
+
+        if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
+            options.temperature?.let { builder.temperature(it.toDouble()) }
+        }
+        if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
+            options.topP?.let { builder.topP(it.toDouble()) }
+        }
+        if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
+            options.maxTokens?.let { builder.maxCompletionTokens(it.toLong()) }
+        }
+
         if (options.toolingEnabled) {
             options.availableTools.forEach { builder.addTool(it.toChatCompletionTool()) }
             builder.parallelToolCalls(false)
         }
-        
+
+        builder.messages(messages)
         return builder.build()
     }
 
@@ -119,11 +151,134 @@ object OpenAiRequestMapper {
         options.maxTokens?.let { builder.maxOutputTokens(it.toLong()) }
         if (options.toolingEnabled) {
             options.availableTools.forEach { builder.addTool(it.toResponsesTool()) }
-            builder.parallelToolCalls(false)
-            builder.maxToolCalls(1)
         }
-        
+
         return builder.build()
+    }
+
+    fun mapToFollowUpResponseParams(
+        currentParams: ResponseCreateParams,
+        prompt: String,
+        options: GenerationOptions,
+        history: List<ChatMessage>,
+        initialResponse: StreamedOpenAiResponse,
+        results: List<Pair<ToolCallRequest, String>>,
+        appendStopToolsWarning: Boolean,
+    ): ResponseCreateParams {
+        // Truncate large tool results when context window is known
+        val truncationAvailableTokens = options.contextWindow?.let { cw ->
+            val budget = ContextWindowPlanner.budgetFor(
+                contextWindowTokens = cw,
+                options = options,
+                modelId = initialResponse.responseId ?: "",
+                tokenCounter = JTokkitTokenCounter,
+            )
+            val usedTokens = ContextWindowPlanner.estimatePromptTokens(
+                history = history,
+                systemPrompt = null,
+                currentPrompt = prompt,
+                toolResultPayloads = results.map { it.second },
+                modelId = initialResponse.responseId ?: "",
+                tokenCounter = JTokkitTokenCounter,
+            ) ?: 0
+            (budget.usablePromptTokens - usedTokens).coerceAtLeast(0)
+        }
+        val builder = currentParams.toBuilder()
+        val inputItems = if (currentParams.input().isPresent && currentParams.input().get().isResponse()) {
+            currentParams.input().get().asResponse().toMutableList()
+        } else {
+            mutableListOf()
+        }
+
+        initialResponse.assistantMessageText
+            .takeIf { it.isNotBlank() }
+            ?.let { assistantText ->
+                inputItems += ResponseInputItem.ofMessage(
+                    ResponseInputItem.Message.builder()
+                        .role(ResponseInputItem.Message.Role.of("assistant"))
+                        .addInputTextContent(assistantText)
+                        .build()
+                )
+            }
+
+        // Map results back to their corresponding function calls in the initial response
+        results.forEach { (toolCall, resultJson) ->
+            val truncatedResult = if (truncationAvailableTokens != null && truncationAvailableTokens > 0) {
+                NativeToolResultFormatter.truncateForApiContext(
+                    resultJson = resultJson,
+                    availableTokens = maxOf(truncationAvailableTokens / results.size.coerceAtLeast(1), 100),
+                    tokenCounter = JTokkitTokenCounter,
+                    modelId = initialResponse.responseId ?: "",
+                )
+            } else {
+                resultJson
+            }
+            val index = initialResponse.functionCalls.indexOf(toolCall)
+
+            val callId = if (index != -1) {
+                initialResponse.providerToolCallIds.getOrElse(index) {
+                    throw IllegalStateException("Missing function call id at index $index for follow-up")
+                }
+            } else {
+                "fallback_${java.util.UUID.randomUUID().toString().replace("-", "")}"
+            }
+
+            val functionItemId = if (index != -1) {
+                initialResponse.providerToolItemIds.getOrElse(index) {
+                    "fc_${callId}"
+                }
+            } else {
+                "fc_${callId}"
+            }
+
+            inputItems += ResponseInputItem.ofFunctionCall(
+                ResponseFunctionToolCall.builder()
+                    .id(functionItemId)
+                    .callId(callId)
+                    .name(toolCall.toolName)
+                    .arguments(toolCall.argumentsJson)
+                    .build()
+            )
+            inputItems += ResponseInputItem.ofFunctionCallOutput(
+                ResponseInputItem.FunctionCallOutput.builder()
+                    .id("fco_${callId}")
+                    .callId(callId)
+                    .output(truncatedResult)
+                    .build()
+            )
+        }
+
+        if (appendStopToolsWarning) {
+            inputItems += ResponseInputItem.ofMessage(
+                ResponseInputItem.Message.builder()
+                    .role(ResponseInputItem.Message.Role.of("user"))
+                    .addInputTextContent(ContextWindowPlanner.STOP_TOOLS_WARNING)
+                    .build()
+            )
+        }
+
+        builder.inputOfResponse(inputItems)
+        return builder.build()
+    }
+
+    private fun toContent(message: ChatMessage): ChatCompletionMessageParam {
+        return when (message.role) {
+            Role.USER -> ChatCompletionMessageParam.ofUser(
+                ChatCompletionUserMessageParam.builder()
+                    .content(ImagePayloads.stripBase64DataUris(message.content))
+                    .build()
+            )
+            Role.ASSISTANT -> ChatCompletionMessageParam.ofAssistant(
+                ChatCompletionAssistantMessageParam.builder()
+                    .content(ImagePayloads.stripBase64DataUris(message.content))
+                    .build()
+            )
+            Role.SYSTEM -> ChatCompletionMessageParam.ofSystem(
+                ChatCompletionSystemMessageParam.builder()
+                    .content(ImagePayloads.stripBase64DataUris(message.content))
+                    .build()
+            )
+        }
     }
 
     private fun ToolDefinition.toChatCompletionTool(): ChatCompletionFunctionTool =

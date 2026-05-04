@@ -23,7 +23,7 @@ class ArtifactToolExecutorTest {
         val params = GenerateArtifactParams(
             documentType = DocumentType.PDF,
             title = "Test Report",
-            sections = emptyList()
+            content = ""
         )
 
         coEvery { fakeExecutor.execute(params) } returns ToolExecutionResult(
@@ -45,7 +45,7 @@ class ArtifactToolExecutorTest {
         val params = GenerateArtifactParams(
             documentType = DocumentType.WORD,
             title = "Word Doc",
-            sections = emptyList()
+            content = ""
         )
 
         coEvery { fakeExecutor.execute(params) } throws IllegalArgumentException("Server routing not implemented for WORD")

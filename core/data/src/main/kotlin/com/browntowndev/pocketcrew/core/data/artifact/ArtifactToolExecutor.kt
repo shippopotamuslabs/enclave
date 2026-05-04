@@ -38,10 +38,10 @@ class ArtifactToolExecutor @Inject constructor() : ArtifactToolExecutorPort, Too
         // Validate the content by attempting to convert to a request.
         val artifactRequest = params.toRequest()
         
-        if (artifactRequest.sections.isEmpty()) {
+        if (artifactRequest.content.isEmpty()) {
             return ToolExecutionResult(
                 toolName = "generate_artifact",
-                resultJson = "{\"status\":\"error\",\"message\":\"Failed to parse artifact sections. Please ensure you are providing a valid list of sections with appropriate blocks (heading, paragraph, bullet_list, numbered_list, table, code_block).\"}",
+                resultJson = "{\"status\":\"error\",\"message\":\"Failed to parse artifact markdown. Please ensure you are providing content in standard Markdown format.\"}",
                 cached = false,
                 latencyMs = 20
             )
@@ -54,8 +54,8 @@ class ArtifactToolExecutor @Inject constructor() : ArtifactToolExecutorPort, Too
                 append("\"status\":\"success\",")
                 append("\"document_type\":\"PDF\",")
                 append("\"title\":\"${params.title}\",")
-                append("\"sections_count\":${artifactRequest.sections.size},")
-                append("\"message\":\"Artifact JSON validated. PDF rendering will be triggered by the UI.\"")
+                append("\"content_length\":${artifactRequest.content.length},")
+                append("\"message\":\"Artifact Markdown validated. PDF rendering will be triggered by the UI.\"")
                 append("}")
             },
             cached = false,

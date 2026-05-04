@@ -1,12 +1,9 @@
 package com.browntowndev.pocketcrew.core.data.artifact
 
-import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactSection
-import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactBlock
 import com.browntowndev.pocketcrew.domain.model.artifact.DocumentType
 import com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
-import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
@@ -23,12 +20,7 @@ class ArtifactToolExecutorImplTest {
         val params = GenerateArtifactParams(
             documentType = DocumentType.PDF,
             title = "Test PDF",
-            sections = listOf(
-                ArtifactSection(
-                    title = "Section 1",
-                    blocks = listOf(ArtifactBlock.Paragraph(text = "Test text"))
-                )
-            )
+            content = "# Section 1\nTest text"
         )
 
         val result = executor.execute(params)
@@ -43,7 +35,7 @@ class ArtifactToolExecutorImplTest {
         val params = GenerateArtifactParams(
             documentType = DocumentType.WORD,
             title = "Test Word",
-            sections = emptyList()
+            content = "Content"
         )
 
         val result = runCatching { executor.execute(params) }

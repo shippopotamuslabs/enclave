@@ -33,6 +33,7 @@ class ActiveModelProviderImpl @Inject constructor(
                 id = config.id,
                 isLocal = true,
                 name = config.displayName,
+                modelId = model.localFilename,
                 systemPrompt = config.systemPrompt,
                 isMultimodal = model.isMultimodal,
                 reasoningEffort = null,
@@ -44,6 +45,13 @@ class ActiveModelProviderImpl @Inject constructor(
                 repetitionPenalty = config.repetitionPenalty,
                 contextWindow = config.contextWindow,
                 thinkingEnabled = config.thinkingEnabled,
+                maxTokensDisabled = false,
+                temperatureDisabled = false,
+                topPDisabled = false,
+                topKDisabled = false,
+                minPDisabled = false,
+                frequencyPenaltyDisabled = false,
+                presencePenaltyDisabled = false,
                 localModelFormat = model.modelFileFormat,
                 apiProvider = null
             )
@@ -57,6 +65,7 @@ class ActiveModelProviderImpl @Inject constructor(
                 id = config.id,
                 isLocal = false,
                 name = config.displayName,
+                modelId = credentials.modelId,
                 systemPrompt = config.systemPrompt,
                 isMultimodal = credentials.isMultimodal,
                 reasoningEffort = config.reasoningEffort?.let {
@@ -70,6 +79,13 @@ class ActiveModelProviderImpl @Inject constructor(
                 repetitionPenalty = null, // API models might not have repetitionPenalty
                 contextWindow = config.contextWindow,
                 thinkingEnabled = config.reasoningEffort != null,
+                maxTokensDisabled = config.maxTokensDisabled,
+                temperatureDisabled = config.temperatureDisabled,
+                topPDisabled = config.topPDisabled,
+                topKDisabled = config.topKDisabled,
+                minPDisabled = config.minPDisabled,
+                frequencyPenaltyDisabled = config.frequencyPenaltyDisabled,
+                presencePenaltyDisabled = config.presencePenaltyDisabled,
                 localModelFormat = null,
                 apiProvider = credentials.provider
             )

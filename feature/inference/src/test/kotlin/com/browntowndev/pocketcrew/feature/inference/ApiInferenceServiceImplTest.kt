@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
@@ -10,8 +11,14 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
 import com.browntowndev.pocketcrew.domain.port.inference.InferenceEvent
 import com.browntowndev.pocketcrew.domain.usecase.inference.LlmToolingOrchestrator
+import com.browntowndev.pocketcrew.feature.inference.openai.StreamedOpenAiResponse
 import com.openai.client.OpenAIClient
+import com.openai.core.JsonValue
 import com.openai.core.http.StreamResponse
+import com.openai.errors.BadRequestException
+import com.openai.errors.NotFoundException
+import com.openai.models.chat.completions.ChatCompletionChunk
+import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseFunctionToolCall
@@ -34,6 +41,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -266,6 +274,243 @@ class ApiInferenceServiceImplTest {
         assertEquals("Stay concise and cite sources.", capturedParams.first().instructions().get())
         assertTrue(capturedParams[1].instructions().isPresent)
         assertEquals("Stay concise and cite sources.", capturedParams[1].instructions().get())
+    }
+
+    @Test
+    fun `executePrompt falls back to chat completions on 404 error`() = runTest {
+        val client = mockk<OpenAIClient>(relaxed = true)
+        val responseService = mockk<ResponseService>(relaxed = true)
+        val chatService = mockk<com.openai.services.blocking.ChatService>(relaxed = true)
+        val completionService = mockk<com.openai.services.blocking.chat.ChatCompletionService>(relaxed = true)
+        val chatStreamResponse = mockk<StreamResponse<ChatCompletionChunk>>(relaxed = true)
+
+        every { client.responses() } returns responseService
+        every { client.chat() } returns chatService
+        every { chatService.completions() } returns completionService
+        every { completionService.createStreaming(any<ChatCompletionCreateParams>()) } returns chatStreamResponse
+        
+        // Mock 404 error on Responses API
+        every { responseService.createStreaming(any<ResponseCreateParams>()) } throws RuntimeException("404 Not Found")
+
+        // Mock successful Chat Completions API
+        every { chatStreamResponse.stream() } returns Stream.of(
+            mockChatChunk("Falling back to chat."),
+        )
+        every { chatStreamResponse.close() } returns Unit
+
+        val loggingPort = mockk<LoggingPort>(relaxed = true)
+        val service = ApiInferenceServiceImpl(
+            client = client,
+            modelId = "gpt-4o",
+            provider = "OPENAI",
+            modelType = ModelType.FAST,
+            loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(mockk(), loggingPort),
+        )
+
+        val events = service.sendPrompt(
+            prompt = "Hello",
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                apiProvider = ApiProvider.OPENAI,
+                modelId = "gpt-4o"
+            ),
+            closeConversation = false,
+        ).toList()
+
+        println("Collected events: $events")
+
+        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Falling back to chat." })
+        coVerify(exactly = 1) { responseService.createStreaming(any<ResponseCreateParams>()) }
+    }
+
+    @Test
+    fun `executeToolingPrompt falls back to chat completions tooling on 404 error`() = runTest {
+        val client = mockk<OpenAIClient>(relaxed = true)
+        val responseService = mockk<ResponseService>(relaxed = true)
+        val chatService = mockk<com.openai.services.blocking.ChatService>(relaxed = true)
+        val completionService = mockk<com.openai.services.blocking.chat.ChatCompletionService>(relaxed = true)
+        val chatStreamResponse = mockk<StreamResponse<ChatCompletionChunk>>(relaxed = true)
+
+        every { client.responses() } returns responseService
+        every { client.chat() } returns chatService
+        every { chatService.completions() } returns completionService
+        every { completionService.createStreaming(any<ChatCompletionCreateParams>()) } returns chatStreamResponse
+
+        // Mock 404 error on Responses API for tooling
+        every { responseService.createStreaming(any<ResponseCreateParams>()) } throws RuntimeException("404 Not Found")
+
+        // Mock successful Chat Completions API for tooling fallback
+        every { chatStreamResponse.stream() } returns Stream.of(
+            mockChatChunk("Falling back to chat tooling."),
+        )
+        every { chatStreamResponse.close() } returns Unit
+
+        val loggingPort = mockk<LoggingPort>(relaxed = true)
+        val service = ApiInferenceServiceImpl(
+            client = client,
+            modelId = "gpt-4o",
+            provider = "OPENAI",
+            modelType = ModelType.FAST,
+            loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(mockk(), loggingPort),
+        )
+
+        val events = service.sendPrompt(
+            prompt = "Use tools",
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                apiProvider = ApiProvider.OPENAI,
+                modelId = "gpt-4o"
+            ),
+            closeConversation = false,
+        ).toList()
+
+        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Falling back to chat tooling." })
+        coVerify(exactly = 1) { responseService.createStreaming(any<ResponseCreateParams>()) }
+    }
+
+    @Test
+    fun `executeToolingPrompt aggregates fragmented native tool calls in chat completions fallback`() = runTest {
+        val client = mockk<OpenAIClient>(relaxed = true)
+        val responseService = mockk<ResponseService>(relaxed = true)
+        val toolExecutor = mockk<ToolExecutorPort>(relaxed = true)
+        val chatService = mockk<com.openai.services.blocking.ChatService>(relaxed = true)
+        val completionService = mockk<com.openai.services.blocking.chat.ChatCompletionService>(relaxed = true)
+        val chatStreamResponse1 = mockk<StreamResponse<ChatCompletionChunk>>(relaxed = true)
+        val chatStreamResponse2 = mockk<StreamResponse<ChatCompletionChunk>>(relaxed = true)
+
+        every { client.responses() } returns responseService
+        every { client.chat() } returns chatService
+        every { chatService.completions() } returns completionService
+        
+        // Fail the first pass to trigger fallback
+        every { responseService.createStreaming(any<ResponseCreateParams>()) } throws RuntimeException("404 Not Found")
+
+        // Mock pass 1: Model emits tool call
+        every { client.chat().completions().createStreaming(any<ChatCompletionCreateParams>()) } answers {
+            val params = firstArg<ChatCompletionCreateParams>()
+            if (params.messages().size == 1) chatStreamResponse1 else chatStreamResponse2
+        }
+        
+        every { chatStreamResponse1.stream() } returns Stream.of(
+            mockChatToolCallChunk(index = 0, id = "call_abc", name = "tavily_web_search", args = "{\"query\":"),
+            mockChatToolCallChunk(index = 0, args = "\"android news\"}"),
+            mockChatFinishChunk(finishReason = "tool_calls")
+        )
+        every { chatStreamResponse1.close() } returns Unit
+
+        // Mock tool execution
+        coEvery { toolExecutor.execute(match { it.toolName == "tavily_web_search" }) } returns ToolExecutionResult(
+            toolName = "tavily_web_search",
+            resultJson = "{\"results\":[]}"
+        )
+
+        // Pass 2: Follow-up
+        val pass2Matcher: (ChatCompletionCreateParams) -> Boolean = { it.messages().size > 2 }
+        every { client.chat().completions().createStreaming(match(pass2Matcher)) } returns chatStreamResponse2
+        
+        every { chatStreamResponse2.stream() } returns Stream.of(
+            mockChatChunk("Here are the results."),
+            mockChatFinishChunk(finishReason = "stop")
+        )
+        every { chatStreamResponse2.close() } returns Unit
+
+        val loggingPort = mockk<LoggingPort>(relaxed = true)
+        val service = ApiInferenceServiceImpl(
+            client = client,
+            modelId = "gpt-4o",
+            provider = "OPENAI",
+            modelType = ModelType.FAST,
+            loggingPort = loggingPort,
+            orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
+        )
+
+        val events = service.sendPrompt(
+            prompt = "Search news",
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                apiProvider = ApiProvider.OPENAI,
+                modelId = "gpt-4o"
+            ),
+            closeConversation = false,
+        ).toList()
+
+        // Verify behavioral intent:
+        // 1. Fragmented tool call was aggregated
+        coVerify(exactly = 1) { 
+            toolExecutor.execute(any()) 
+        }
+        
+        // 2. Final response received
+        assertTrue(events.any { it is InferenceEvent.PartialResponse && it.chunk == "Here are the results." })
+    }
+
+    private fun mockChatToolCallChunk(
+        index: Long,
+        id: String? = null,
+        name: String? = null,
+        args: String? = null
+    ): ChatCompletionChunk {
+        val toolCall = mockk<ChatCompletionChunk.Choice.Delta.ToolCall>()
+        every { toolCall.index() } returns index
+        every { toolCall.id() } returns Optional.ofNullable(id)
+        
+        val function = mockk<ChatCompletionChunk.Choice.Delta.ToolCall.Function>()
+        every { function.name() } returns Optional.ofNullable(name)
+        every { function.arguments() } returns Optional.ofNullable(args)
+        
+        every { toolCall.function() } returns Optional.of(function)
+
+        val delta = mockk<ChatCompletionChunk.Choice.Delta>()
+        every { delta.content() } returns Optional.empty()
+        every { delta.toolCalls() } returns Optional.of(listOf(toolCall))
+        every { delta._additionalProperties() } returns emptyMap()
+
+        val choice = mockk<ChatCompletionChunk.Choice>()
+        every { choice.delta() } returns delta
+        every { choice.finishReason() } returns Optional.empty()
+
+        val chunk = mockk<ChatCompletionChunk>()
+        every { chunk.id() } returns "chat_resp_tool"
+        every { chunk.choices() } returns listOf(choice)
+        return chunk
+    }
+
+    private fun mockChatFinishChunk(finishReason: String): ChatCompletionChunk {
+        val delta = mockk<ChatCompletionChunk.Choice.Delta>()
+        every { delta.content() } returns Optional.empty()
+        every { delta.toolCalls() } returns Optional.empty()
+        every { delta._additionalProperties() } returns emptyMap()
+
+        val choice = mockk<ChatCompletionChunk.Choice>()
+        every { choice.delta() } returns delta
+        every { choice.finishReason() } returns Optional.of(ChatCompletionChunk.Choice.FinishReason.of(finishReason))
+
+        val chunk = mockk<ChatCompletionChunk>()
+        every { chunk.id() } returns "chat_resp_finish"
+        every { chunk.choices() } returns listOf(choice)
+        return chunk
+    }
+
+    private fun mockChatChunk(text: String): ChatCompletionChunk {
+        val delta = mockk<ChatCompletionChunk.Choice.Delta>()
+        every { delta.content() } returns Optional.of(text)
+        every { delta.toolCalls() } returns Optional.empty()
+        every { delta._additionalProperties() } returns emptyMap()
+
+        val choice = mockk<ChatCompletionChunk.Choice>()
+        every { choice.delta() } returns delta
+        every { choice.finishReason() } returns Optional.empty()
+
+        val chunk = mockk<ChatCompletionChunk>()
+        every { chunk.id() } returns "chat_resp_1"
+        every { chunk.choices() } returns listOf(choice)
+        return chunk
     }
 
     private fun mockTextResponse(text: String): Response {

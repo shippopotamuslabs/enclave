@@ -38,6 +38,7 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:data"))
     implementation(project(":core:ui"))
+    implementation(libs.androidx.compose.foundation)
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)

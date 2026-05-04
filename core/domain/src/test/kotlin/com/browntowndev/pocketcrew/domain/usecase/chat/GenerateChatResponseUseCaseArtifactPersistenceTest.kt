@@ -61,7 +61,7 @@ class GenerateChatResponseUseCaseArtifactPersistenceTest {
         val artifact = ArtifactGenerationRequest(
             documentType = DocumentType.PDF,
             title = "Test Artifact",
-            sections = emptyList()
+            content = ""
         )
 
         val inferenceFactory = FakeInferenceFactory()

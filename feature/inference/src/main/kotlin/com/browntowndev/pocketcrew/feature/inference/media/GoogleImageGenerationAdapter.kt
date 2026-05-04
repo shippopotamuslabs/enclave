@@ -1,10 +1,10 @@
 package com.browntowndev.pocketcrew.feature.inference.media
 
 import com.browntowndev.pocketcrew.domain.model.media.GenerationSettings
+import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.feature.inference.GoogleGenAiClientProviderPort
 import com.google.genai.Client
-import com.google.genai.interactions.models.interactions.CreateModelInteractionParams
-import com.google.genai.interactions.models.interactions.Interaction
+import com.google.genai.types.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -20,50 +20,54 @@ open class GoogleImageGenerationAdapter @Inject constructor(
         settings: GenerationSettings,
         referenceImage: ByteArray? = null
     ): Result<List<ByteArray>> = withContext(Dispatchers.IO) {
-        runCatching<List<ByteArray>> {
+        runCatching {
             val client = clientProvider.getClient(apiKey, baseUrl)
+            val imageSettings = settings as? ImageGenerationSettings
 
-            val params = CreateModelInteractionParams.builder()
-                .model(modelId)
-                .input(prompt)
+            val config = GenerateContentConfig.builder()
+                .responseModalities(listOf("IMAGE"))
+                .apply {
+                    imageSettings?.generationCount?.let { candidateCount(it) }
+                }
                 .build()
-            val interaction = createInteraction(client, params)
-            
-            val outputs = try {
-                val method = interaction.javaClass.methods.find { it.name == "outputs" }
-                val optional = method?.invoke(interaction) as? java.util.Optional<List<Any>>
-                optional?.orElse(emptyList()) ?: emptyList()
-            } catch (e: Exception) {
-                emptyList()
+
+            val parts = mutableListOf<Part>()
+            parts.add(Part.builder().text(prompt).build())
+
+            if (referenceImage != null) {
+                parts.add(
+                    Part.builder()
+                        .inlineData(
+                            Blob.builder()
+                                .mimeType("image/png")
+                                .data(referenceImage)
+                                .build()
+                        )
+                        .build()
+                )
             }
 
-            val images = outputs.mapNotNull { content ->
-                try {
-                    val method = content.javaClass.methods.find { it.name == "image" }
-                    val optional = method?.invoke(content) as? java.util.Optional<Any>
-                    optional?.orElse(null)
-                } catch (e: Exception) {
-                    null
-                }
-            }.mapNotNull { imageObj ->
-                try {
-                    val method = imageObj.javaClass.methods.find { it.name == "imageBytes" }
-                    val optional = method?.invoke(imageObj) as? java.util.Optional<ByteArray>
-                    optional?.orElse(null)
-                } catch (e: Exception) {
-                    null
-                }
-            }
+            val content = Content.builder()
+                .role("user")
+                .parts(parts)
+                .build()
+
+            val response = generateContent(client, modelId, listOf(content), config)
+            val generatedImages = response.parts()?.mapNotNull { part ->
+                part.inlineData().orElse(null)?.data()?.orElse(null)
+            } ?: emptyList()
             
-            if (images.isEmpty()) {
+            if (generatedImages.isEmpty()) {
                 throw IllegalStateException("No image generated")
             }
-            images
+            generatedImages
         }
     }
 
-    protected open fun createInteraction(
+    protected open fun generateContent(
         client: Client,
-        params: CreateModelInteractionParams,
-    ): Interaction = client.interactions.create(params)
+        modelId: String,
+        contents: List<Content>,
+        config: GenerateContentConfig
+    ): GenerateContentResponse = client.models.generateContent(modelId, contents, config)
 }

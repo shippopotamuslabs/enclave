@@ -139,8 +139,7 @@ data class MediaProviderEditorUiState(
     val isEditing: Boolean = false,
     val assetDraft: MediaProviderAssetUi? = null,
     val selectedReusableCredential: ReusableApiCredentialUi? = null,
-    val isDiscoveringApiModels: Boolean = false,
-    val discoveredApiModels: List<DiscoveredApiModel> = emptyList(),
+    val discovery: ApiModelDiscoveryUiState = ApiModelDiscoveryUiState(),
 )
 
 @Immutable
@@ -277,6 +276,13 @@ data class ApiModelConfigUi(
     val minP: Double = 0.05,
     val frequencyPenalty: Double = 0.0,
     val presencePenalty: Double = 0.0,
+    val maxTokensDisabled: Boolean = false,
+    val temperatureDisabled: Boolean = false,
+    val topPDisabled: Boolean = false,
+    val topKDisabled: Boolean = false,
+    val minPDisabled: Boolean = false,
+    val frequencyPenaltyDisabled: Boolean = false,
+    val presencePenaltyDisabled: Boolean = false,
     val customHeaders: List<CustomHeaderUi> = emptyList(),
     val openRouterRouting: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
     val thinkingEnabled: Boolean = false,

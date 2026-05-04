@@ -8,4 +8,5 @@ class ChatUseCasesImpl @Inject constructor(
     override val getChatUseCase: GetChatUseCase,
     override val mergeMessagesUseCase: MergeMessagesUseCase,
     override val listenToSpeechUseCase: ListenToSpeechUseCase,
+    override val processFileAttachmentUseCase: ProcessFileAttachmentUseCase,
 ) : ChatUseCases

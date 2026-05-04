@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.feature.inference
 import android.util.LruCache
 import com.anthropic.client.AnthropicClient
 import com.anthropic.client.okhttp.AnthropicOkHttpClient
+import com.browntowndev.pocketcrew.domain.model.inference.GoogleApiConstants
 import com.google.genai.Client
 import com.google.genai.types.HttpOptions
 import com.openai.client.OpenAIClient
@@ -38,7 +39,7 @@ interface GoogleGenAiClientProviderPort {
     ): Client
 
     companion object {
-        const val GEMINI_API_VERSION = "v1alpha"
+        const val GEMINI_API_VERSION = GoogleApiConstants.DEFAULT_API_VERSION
     }
 }
 

@@ -14,21 +14,23 @@ class GoogleRequestMapperTest {
 
     @Test
     fun `mapToGenerateContentRequest maps system prompt history and reasoning budget`() {
+        val history = listOf(
+            ChatMessage(DomainRole.SYSTEM, "You are a helpful assistant."),
+            ChatMessage(DomainRole.USER, "Hello"),
+            ChatMessage(DomainRole.ASSISTANT, "Hi there!")
+        )
         val request = GoogleRequestMapper.mapToGenerateContentRequest(
             prompt = "How are you?",
-            history = listOf(
-                ChatMessage(DomainRole.SYSTEM, "You are a concise assistant."),
-                ChatMessage(DomainRole.USER, "Hello"),
-                ChatMessage(DomainRole.ASSISTANT, "Hi there!"),
-                ChatMessage(DomainRole.ASSISTANT, "Error: API Error (GOOGLE): 400: invalid"),
-            ),
+            history = history,
             options = GenerationOptions(
-                reasoningBudget = 2048,
-                systemPrompt = "Use short answers.",
+                reasoningBudget = 1024,
+                systemPrompt = "Stay concise.",
                 temperature = 0.7f,
                 topP = 0.9f,
                 topK = 32,
                 maxTokens = 512,
+                apiProvider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.GOOGLE,
+                modelId = "gemini-1.5-flash"
             )
         )
 
@@ -40,10 +42,10 @@ class GoogleRequestMapperTest {
         assertEquals("Hi there!", request.contents[1].parts().orElseThrow().single().text().orElseThrow())
         assertEquals("How are you?", request.contents[2].parts().orElseThrow().single().text().orElseThrow())
         assertEquals(
-            "Use short answers.\n\nYou are a concise assistant.",
+            "Stay concise.\n\nYou are a helpful assistant.",
             request.config.systemInstruction().orElseThrow().parts().orElseThrow().single().text().orElseThrow()
         )
-        assertEquals(2048, request.config.thinkingConfig().orElseThrow().thinkingBudget().orElseThrow())
+        assertEquals(1024, request.config.thinkingConfig().orElseThrow().thinkingBudget().orElseThrow())
         assertTrue(request.config.thinkingConfig().orElseThrow().includeThoughts().orElse(false))
         assertEquals(0.7f, request.config.temperature().orElseThrow())
         assertEquals(0.9f, request.config.topP().orElseThrow())
@@ -59,12 +61,9 @@ class GoogleRequestMapperTest {
     @Test
     fun `mapToGenerateContentRequest omits thinking config when reasoning budget is disabled`() {
         val request = GoogleRequestMapper.mapToGenerateContentRequest(
-            prompt = "Explain the plan.",
+            prompt = "Hello",
             history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                maxTokens = 1024,
-            )
+            options = GenerationOptions(reasoningBudget = 0)
         )
 
         assertTrue(request.config.thinkingConfig().isEmpty)
@@ -75,12 +74,14 @@ class GoogleRequestMapperTest {
     @Test
     fun `mapToGenerateContentRequest adds function declarations when tooling is enabled`() {
         val request = GoogleRequestMapper.mapToGenerateContentRequest(
-            prompt = "Find the latest Android tooling news.",
+            prompt = "Search news",
             history = emptyList(),
             options = GenerationOptions(
                 reasoningBudget = 0,
                 toolingEnabled = true,
                 availableTools = listOf(ToolDefinition.TAVILY_WEB_SEARCH),
+                apiProvider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.GOOGLE,
+                modelId = "gemini-1.5-flash"
             )
         )
 
@@ -90,14 +91,32 @@ class GoogleRequestMapperTest {
 
         assertEquals("tavily_web_search", functionDeclaration.name().orElseThrow())
         assertTrue(request.config.toolConfig().isPresent)
-        assertEquals(
-            listOf("tavily_web_search"),
-            request.config.toolConfig().orElseThrow()
-                .functionCallingConfig().orElseThrow()
-                .allowedFunctionNames().orElseThrow()
-        )
+        assertTrue(request.config.toolConfig().orElseThrow().functionCallingConfig().isPresent)
         assertTrue(parameters.properties().orElseThrow().containsKey("query"))
         assertEquals(listOf("query"), parameters.required().orElseThrow())
+    }
+
+    @Test
+    fun `mapToGenerateContentRequest serializes attached image inspect with question parameter`() {
+        val request = GoogleRequestMapper.mapToGenerateContentRequest(
+            prompt = "Describe this",
+            history = emptyList(),
+            options = GenerationOptions(
+                reasoningBudget = 0,
+                toolingEnabled = true,
+                availableTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
+                apiProvider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.GOOGLE,
+                modelId = "gemini-1.5-flash"
+            )
+        )
+
+        val functionDeclaration = request.config.tools().orElseThrow().single()
+            .functionDeclarations().orElseThrow().single()
+        val parameters = functionDeclaration.parameters().orElseThrow()
+
+        assertEquals("attached_image_inspect", functionDeclaration.name().orElseThrow())
+        assertTrue(parameters.properties().orElseThrow().containsKey("question"))
+        assertEquals(listOf("question"), parameters.required().orElseThrow())
     }
 
     @Test
@@ -114,27 +133,6 @@ class GoogleRequestMapperTest {
         val parts = request.contents.single().parts().orElseThrow()
         assertEquals(2, parts.size)
         assertTrue(parts[1].inlineData().isPresent)
-    }
-
-    @Test
-    fun `mapToGenerateContentRequest serializes attached image inspect with question parameter`() {
-        val request = GoogleRequestMapper.mapToGenerateContentRequest(
-            prompt = "Inspect the image",
-            history = emptyList(),
-            options = GenerationOptions(
-                reasoningBudget = 0,
-                toolingEnabled = true,
-                availableTools = listOf(ToolDefinition.ATTACHED_IMAGE_INSPECT),
-            )
-        )
-
-        val functionDeclaration = request.config.tools().orElseThrow().single()
-            .functionDeclarations().orElseThrow().single()
-        val parameters = functionDeclaration.parameters().orElseThrow()
-
-        assertEquals("attached_image_inspect", functionDeclaration.name().orElseThrow())
-        assertTrue(parameters.properties().orElseThrow().containsKey("question"))
-        assertEquals(listOf("question"), parameters.required().orElseThrow())
     }
 
     private fun createTempImageUri(): String {

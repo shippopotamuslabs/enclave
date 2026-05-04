@@ -1,9 +1,11 @@
 package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Relation
 import androidx.room.Transaction
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -12,27 +14,40 @@ import com.browntowndev.pocketcrew.domain.model.MessageState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
+data class MessageWithFiles(
+    @Embedded val message: MessageEntity,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "message_id"
+    )
+    val files: List<MessageFileEntity>
+)
+
 @Dao
 abstract class MessageDao {
+    @Transaction
     @Query("SELECT * FROM message WHERE id = :id")
-    abstract suspend fun getMessageById(id: MessageId): MessageEntity?
+    abstract suspend fun getMessageById(id: MessageId): MessageWithFiles?
 
+    @Transaction
     @Query("""
         SELECT * FROM message
         WHERE id IN (:ids)
     """)
-    abstract fun getMessages(ids: List<MessageId>): Flow<List<MessageEntity>>
+    abstract fun getMessages(ids: List<MessageId>): Flow<List<MessageWithFiles>>
 
+    @Transaction
     @Query("""
         SELECT * FROM message
         WHERE id IN (:ids)
         AND chat_id = :chatId
         ORDER BY created_at IS NULL, created_at ASC
     """)
-    abstract suspend fun getMessagesForChat(chatId: ChatId, ids: List<MessageId>): List<MessageEntity>
+    abstract suspend fun getMessagesForChat(chatId: ChatId, ids: List<MessageId>): List<MessageWithFiles>
 
+    @Transaction
     @Query("SELECT * FROM message ORDER BY created_at IS NULL, created_at ASC")
-    abstract fun getAllMessages(): Flow<List<MessageEntity>>
+    abstract fun getAllMessages(): Flow<List<MessageWithFiles>>
 
     @Query("UPDATE message SET content = :content, thinking_duration_seconds = :thinkingDuration, thinking_raw = :thinkingRaw WHERE id = :id")
     abstract suspend fun updateMessageContent(
@@ -42,31 +57,28 @@ abstract class MessageDao {
         thinkingRaw: String?
     )
 
+    @Transaction
     @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY created_at IS NULL, created_at ASC")
-    abstract suspend fun getMessagesByChatId(chatId: ChatId): List<MessageEntity>
+    abstract suspend fun getMessagesByChatId(chatId: ChatId): List<MessageWithFiles>
 
+    @Transaction
     @Query("SELECT * FROM message WHERE chat_id = :chatId AND created_at IS NOT NULL AND created_at < :timestamp ORDER BY created_at DESC LIMIT :limit")
-    abstract suspend fun getMessagesBefore(chatId: ChatId, timestamp: Long, limit: Int): List<MessageEntity>
+    abstract suspend fun getMessagesBefore(chatId: ChatId, timestamp: Long, limit: Int): List<MessageWithFiles>
 
+    @Transaction
     @Query("SELECT * FROM message WHERE chat_id = :chatId AND created_at IS NOT NULL AND created_at > :timestamp ORDER BY created_at ASC LIMIT :limit")
-    abstract suspend fun getMessagesAfter(chatId: ChatId, timestamp: Long, limit: Int): List<MessageEntity>
+    abstract suspend fun getMessagesAfter(chatId: ChatId, timestamp: Long, limit: Int): List<MessageWithFiles>
 
+    @Transaction
     @Query("SELECT * FROM message WHERE chat_id = :chatId ORDER BY created_at IS NULL, created_at ASC")
-    abstract fun getMessagesByChatIdFlow(chatId: ChatId): Flow<List<MessageEntity>>
+    abstract fun getMessagesByChatIdFlow(chatId: ChatId): Flow<List<MessageWithFiles>>
 
-    /**
-     * Get messages by their message states.
-     * Used for CREW pipeline resume to find incomplete messages.
-     *
-     * @param chatId The chat ID to filter by
-     * @param states The list of message states to filter by (PROCESSING, THINKING, GENERATING)
-     * @return List of messages matching the given states
-     */
+    @Transaction
     @Query("SELECT * FROM message WHERE chat_id = :chatId AND message_state IN (:states) ORDER BY created_at IS NULL, created_at ASC")
     abstract suspend fun getMessagesByStates(
         chatId: ChatId,
         states: List<MessageState>
-    ): List<MessageEntity>
+    ): List<MessageWithFiles>
 
     @Query("UPDATE message SET message_state = :messageState WHERE id = :id")
     abstract suspend fun updateMessageState(id: MessageId, messageState: MessageState)
@@ -86,6 +98,9 @@ abstract class MessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     abstract suspend fun insert(messageEntity: MessageEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun insertFiles(files: List<MessageFileEntity>)
+
     @Query("UPDATE message SET thinking_start_time = :startTime WHERE id = :messageId")
     abstract suspend fun updateThinkingStartTime(messageId: MessageId, startTime: Long)
 
@@ -101,21 +116,6 @@ abstract class MessageDao {
     @Query("UPDATE message SET artifacts_json = :artifactsJson WHERE id = :id")
     abstract suspend fun updateMessageArtifacts(id: MessageId, artifactsJson: String?)
 
-    /**
-     * Persists all message data atomically in a single transaction.
-     * Updates model type, thinking timestamps, thinking content, content, pipeline step, and state.
-     *
-     * @param messageId The ID of the message to update
-     * @param modelType The model type used
-     * @param thinkingStartTime The thinking start timestamp (0 if not applicable)
-     * @param thinkingEndTime The thinking end timestamp (0 if not applicable)
-     * @param thinkingDuration The thinking duration in seconds (null if not applicable)
-     * @param thinkingRaw The raw thinking content (null to clear)
-     * @param content The final message content
-     * @param messageState The final message state
-     * @param pipelineStep The pipeline step (for CREW mode messages)
-     * @param artifactsJson The JSON string representing the artifacts
-     */
     @Transaction
     open suspend fun persistAllMessageData(
         messageId: MessageId,
@@ -130,32 +130,22 @@ abstract class MessageDao {
         tavilySources: List<TavilySourceEntity> = emptyList(),
         artifactsJson: String? = null
     ) {
-        // Update model type
         updateMessageModelType(messageId, modelType)
-        // Update thinking start time
         if (thinkingStartTime > 0) {
             updateThinkingStartTime(messageId, thinkingStartTime)
         }
-        // Update thinking end time
         if (thinkingEndTime > 0) {
             updateThinkingEndTime(messageId, thinkingEndTime)
         }
-        // Update thinking duration
         if (thinkingDuration != null) {
             updateThinkingDuration(messageId, thinkingDuration)
         }
-        // Update thinking raw
         updateThinkingRaw(messageId, thinkingRaw)
-        // Update content
         updateMessageContentText(messageId, content)
-        // Update pipeline step
         updateMessagePipelineStep(messageId, pipelineStep)
-        // Update state
         updateMessageState(messageId, messageState)
-        // Update artifacts
         updateMessageArtifacts(messageId, artifactsJson)
 
-        // Persist search sources
         if (tavilySources.isNotEmpty()) {
             insertTavilySources(tavilySources)
         }

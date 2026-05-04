@@ -31,6 +31,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -715,6 +717,7 @@ fun ContextConfiguration(
                 modifier = Modifier.weight(1f),
                 value = config.maxTokens,
                 onValueChange = { onConfigChange(config.copy(maxTokens = it)) },
+                enabled = !config.maxTokensDisabled,
                 label = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Max Tokens")
@@ -727,6 +730,86 @@ fun ContextConfiguration(
             )
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun ParameterExclusionSection(
+    config: ApiModelConfigUi,
+    onConfigChange: (ApiModelConfigUi) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ConfigurationHeader("Advanced: Exclude Parameters")
+        Text(
+            text = "If a provider rejects specific parameters (like o1/o3 and temperature), you can explicitly exclude them from the API request here.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        androidx.compose.foundation.layout.FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            ParameterExclusionChip(
+                label = "Max Tokens",
+                selected = config.maxTokensDisabled,
+                onSelectedChange = { onConfigChange(config.copy(maxTokensDisabled = it)) }
+            )
+            ParameterExclusionChip(
+                label = "Temperature",
+                selected = config.temperatureDisabled,
+                onSelectedChange = { onConfigChange(config.copy(temperatureDisabled = it)) }
+            )
+            ParameterExclusionChip(
+                label = "Top P",
+                selected = config.topPDisabled,
+                onSelectedChange = { onConfigChange(config.copy(topPDisabled = it)) }
+            )
+            ParameterExclusionChip(
+                label = "Top K",
+                selected = config.topKDisabled,
+                onSelectedChange = { onConfigChange(config.copy(topKDisabled = it)) }
+            )
+            ParameterExclusionChip(
+                label = "Min P",
+                selected = config.minPDisabled,
+                onSelectedChange = { onConfigChange(config.copy(minPDisabled = it)) }
+            )
+            ParameterExclusionChip(
+                label = "Freq. Penalty",
+                selected = config.frequencyPenaltyDisabled,
+                onSelectedChange = { onConfigChange(config.copy(frequencyPenaltyDisabled = it)) }
+            )
+            ParameterExclusionChip(
+                label = "Pres. Penalty",
+                selected = config.presencePenaltyDisabled,
+                onSelectedChange = { onConfigChange(config.copy(presencePenaltyDisabled = it)) }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ParameterExclusionChip(
+    label: String,
+    selected: Boolean,
+    onSelectedChange: (Boolean) -> Unit
+) {
+    FilterChip(
+        selected = selected,
+        onClick = { onSelectedChange(!selected) },
+        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+        leadingIcon = if (selected) {
+            {
+                Icon(
+                    imageVector = Icons.Default.Clear,
+                    contentDescription = null,
+                    modifier = Modifier.size(FilterChipDefaults.IconSize)
+                )
+            }
+        } else null
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -743,6 +826,7 @@ fun TuningConfiguration(
         OutlinedTextField(
             value = config.topK,
             onValueChange = { onConfigChange(config.copy(topK = it)) },
+            enabled = !config.topKDisabled,
             label = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Top K")
@@ -817,25 +901,32 @@ fun TuningConfiguration(
             description = "Limits the next token choice to tokens with probability at least P times the probability of the most likely token.",
             value = config.minP.toFloat(),
             range = 0f..1f,
-            onValueChange = { onConfigChange(config.copy(minP = it.toDouble())) }
+            onValueChange = { onConfigChange(config.copy(minP = it.toDouble())) },
+            enabled = !config.minPDisabled && parameterSupport.supportsMinP
         )
     }
 
-    TuningSlider(
-        label = "Temperature",
-        description = "Controls randomness. Lower values are more deterministic; higher values are more creative.",
-        value = config.temperature.toFloat(),
-        range = 0f..2f,
-        onValueChange = { onConfigChange(config.copy(temperature = it.toDouble())) }
-    )
+    if (parameterSupport.supportsTemperature) {
+        TuningSlider(
+            label = "Temperature",
+            description = "Controls randomness. Lower values are more deterministic; higher values are more creative.",
+            value = config.temperature.toFloat(),
+            range = 0f..2f,
+            onValueChange = { onConfigChange(config.copy(temperature = it.toDouble())) },
+            enabled = !config.temperatureDisabled && parameterSupport.supportsTemperature
+        )
+    }
 
-    TuningSlider(
-        label = "Top P",
-        description = "Limits the next token choice to a subset of tokens whose cumulative probability exceeds P.",
-        value = config.topP.toFloat(),
-        range = 0f..1f,
-        onValueChange = { onConfigChange(config.copy(topP = it.toDouble())) }
-    )
+    if (parameterSupport.supportsTopP) {
+        TuningSlider(
+            label = "Top P",
+            description = "Limits the next token choice to a subset of tokens whose cumulative probability exceeds P.",
+            value = config.topP.toFloat(),
+            range = 0f..1f,
+            onValueChange = { onConfigChange(config.copy(topP = it.toDouble())) },
+            enabled = !config.topPDisabled && parameterSupport.supportsTopP
+        )
+    }
 
     if (parameterSupport.supportsFrequencyPenalty) {
         TuningSlider(
@@ -843,7 +934,8 @@ fun TuningConfiguration(
             description = "Penalizes tokens based on their frequency in the generated text so far.",
             value = config.frequencyPenalty.toFloat(),
             range = -2f..2f,
-            onValueChange = { onConfigChange(config.copy(frequencyPenalty = it.toDouble())) }
+            onValueChange = { onConfigChange(config.copy(frequencyPenalty = it.toDouble())) },
+            enabled = !config.frequencyPenaltyDisabled && parameterSupport.supportsFrequencyPenalty
         )
     }
 
@@ -853,11 +945,13 @@ fun TuningConfiguration(
             description = "Penalizes tokens based on whether they have appeared at least once in the generated text.",
             value = config.presencePenalty.toFloat(),
             range = -2f..2f,
-            onValueChange = { onConfigChange(config.copy(presencePenalty = it.toDouble())) }
+            onValueChange = { onConfigChange(config.copy(presencePenalty = it.toDouble())) },
+            enabled = !config.presencePenaltyDisabled
         )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PresetConfigurationForm(
     provider: ApiProvider,
@@ -905,6 +999,11 @@ fun PresetConfigurationForm(
 
         TuningConfiguration(
             parameterSupport = parameterSupport,
+            config = config,
+            onConfigChange = onConfigChange
+        )
+
+        ParameterExclusionSection(
             config = config,
             onConfigChange = onConfigChange
         )
