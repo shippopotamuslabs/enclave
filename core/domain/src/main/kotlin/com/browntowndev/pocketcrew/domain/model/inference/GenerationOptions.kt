@@ -2,6 +2,9 @@ package com.browntowndev.pocketcrew.domain.model.inference
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 /**
  * Per-response generation options passed at request time.
@@ -12,6 +15,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 data class GenerationOptions(
     val reasoningBudget: Int,        // 0 = reasoning OFF, >0 = reasoning ON with budget
     val modelType: ModelType? = null, // The requesting role (FAST, THINKING, etc.)
+    val modelId: String? = null,
+    val apiProvider: ApiProvider? = null,
     val systemPrompt: String? = null,
     val imageUris: List<String> = emptyList(),
     val reasoningEffort: ApiReasoningEffort? = null,
@@ -21,6 +26,13 @@ data class GenerationOptions(
     val minP: Float? = null,
     val maxTokens: Int? = null,
     val contextWindow: Int? = null,
+    val maxTokensDisabled: Boolean = false,
+    val temperatureDisabled: Boolean = false,
+    val topPDisabled: Boolean = false,
+    val topKDisabled: Boolean = false,
+    val minPDisabled: Boolean = false,
+    val frequencyPenaltyDisabled: Boolean = false,
+    val presencePenaltyDisabled: Boolean = false,
     val toolingEnabled: Boolean = false,
     val availableTools: List<ToolDefinition> = emptyList(),
     val maxToolCalls: Int = 10,

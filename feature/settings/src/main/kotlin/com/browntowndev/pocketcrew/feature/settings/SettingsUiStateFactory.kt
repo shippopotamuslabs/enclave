@@ -70,8 +70,12 @@ internal data class MediaProvidersTransientState(
     val assetDraft: MediaProviderAssetUi? = null,
     val selectedReusableApiCredentialAlias: String? = null,
     val selectedReusableApiCredentialName: String? = null,
-    val isDiscoveringApiModels: Boolean = false,
     val discoveredApiModels: List<DiscoveredApiModel> = emptyList(),
+    val discoveredApiModelScope: ApiModelDiscoveryScope? = null,
+    val isDiscoveringApiModels: Boolean = false,
+    val modelSearchQuery: String = "",
+    val modelProviderFilters: Set<String> = emptySet(),
+    val modelSortOption: ModelSortOption = ModelSortOption.A_TO_Z,
 )
 
 internal data class AssignmentDialogTransientState(
@@ -246,6 +250,14 @@ class SettingsUiStateFactory @Inject constructor(
             sortOption = apiState.modelSortOption,
         )
 
+        val discoveredMediaModels = mediaState.discoveredApiModels.map(DiscoveredApiModel::toUi)
+        val filteredDiscoveredMediaModels = apiDiscoveryUiFilter.filter(
+            models = discoveredMediaModels,
+            query = mediaState.modelSearchQuery,
+            providerFilters = mediaState.modelProviderFilters,
+            sortOption = mediaState.modelSortOption,
+        )
+
         val assignmentRows = buildVisibleAssignments(
             defaultModels = defaultModels,
             localModels = localModels,
@@ -335,8 +347,14 @@ class SettingsUiStateFactory @Inject constructor(
                 isEditing = mediaState.selectedAsset != null || mediaState.assetDraft != null,
                 assetDraft = mediaState.assetDraft,
                 selectedReusableCredential = selectedMediaReusableCredential,
-                isDiscoveringApiModels = mediaState.isDiscoveringApiModels,
-                discoveredApiModels = mediaState.discoveredApiModels,
+                discovery = ApiModelDiscoveryUiState(
+                    models = discoveredMediaModels,
+                    filteredModels = filteredDiscoveredMediaModels,
+                    isLoading = mediaState.isDiscoveringApiModels,
+                    searchQuery = mediaState.modelSearchQuery,
+                    providerFilters = mediaState.modelProviderFilters,
+                    sortOption = mediaState.modelSortOption,
+                ),
             ),
             searchSkillEditor = SearchSkillEditorUiState(
                 isEditing = searchSkillState.isEditing,

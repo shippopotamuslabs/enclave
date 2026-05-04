@@ -3,6 +3,8 @@ package com.browntowndev.pocketcrew.feature.inference
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.openai.core.JsonValue
@@ -30,26 +32,43 @@ object OpenRouterRequestMapper {
         prompt: String,
         history: List<ChatMessage>,
         options: GenerationOptions,
-        routing: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration()
+        routing: OpenRouterRoutingConfiguration = OpenRouterRoutingConfiguration(),
     ): ChatCompletionCreateParams {
+        val provider = options.apiProvider
+        val optModelId = options.modelId
+        val parameterSupport = if (provider != null && optModelId != null) {
+            ApiProviderModelPolicy.parameterSupport(provider, optModelId)
+        } else null
+
         val builder = ChatCompletionCreateParams.builder()
-            .model(modelId)
+            .model(optModelId ?: modelId)
 
         val messages = mutableListOf<ChatCompletionMessageParam>()
+        val systemMessages = mutableListOf<String>()
 
         history.filterNot(::isSyntheticAssistantError).forEach { msg ->
-            val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
-            when (msg.role) {
-                Role.SYSTEM -> {
-                    messages.add(ChatCompletionMessageParam.ofSystem(ChatCompletionSystemMessageParam.builder().content(sanitizedContent).build()))
-                }
-                Role.USER -> {
-                    messages.add(ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder().content(sanitizedContent).build()))
-                }
-                Role.ASSISTANT -> {
-                    messages.add(ChatCompletionMessageParam.ofAssistant(ChatCompletionAssistantMessageParam.builder().content(sanitizedContent).build()))
-                }
+            if (msg.role == Role.SYSTEM) {
+                systemMessages += ImagePayloads.stripBase64DataUris(msg.content)
+            } else {
+                messages.add(toContent(msg))
             }
+        }
+
+        options.systemPrompt?.takeIf { it.isNotBlank() }?.let {
+            if (!systemMessages.contains(it)) {
+                systemMessages.add(0, it)
+            }
+        }
+
+        val finalSystemPrompt = systemMessages.joinToString("\n\n").takeIf { it.isNotBlank() }
+        if (finalSystemPrompt != null) {
+            messages.add(0, 
+                ChatCompletionMessageParam.ofSystem(
+                    ChatCompletionSystemMessageParam.builder()
+                        .content(finalSystemPrompt)
+                        .build()
+                )
+            )
         }
 
         messages.add(
@@ -57,18 +76,25 @@ object OpenRouterRequestMapper {
                 buildChatCompletionUserMessage(prompt, options.imageUris)
             )
         )
-        builder.messages(messages)
 
         options.reasoningEffort?.let { builder.reasoningEffort(ReasoningMapper.toSdkEffort(it)) }
-        options.temperature?.let { builder.temperature(it.toDouble()) }
-        options.topP?.let { builder.topP(it.toDouble()) }
-        options.safeOpenRouterMaxTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
+
+        if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
+            options.temperature?.let { builder.temperature(it.toDouble()) }
+        }
+        if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
+            options.topP?.let { builder.topP(it.toDouble()) }
+        }
+        if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
+            options.safeOpenRouterMaxTokens()?.let { builder.maxCompletionTokens(it.toLong()) }
+        }
         if (options.toolingEnabled && options.availableTools.isNotEmpty()) {
             options.availableTools.forEach { builder.addTool(it.toChatCompletionTool()) }
             builder.parallelToolCalls(false)
         }
 
         applyOpenRouterRoutingDefaults(builder, routing)
+        builder.messages(messages)
         return builder.build()
     }
 
@@ -172,6 +198,26 @@ object OpenRouterRequestMapper {
                 )
             )
         )
+    }
+
+    private fun toContent(message: ChatMessage): ChatCompletionMessageParam {
+        return when (message.role) {
+            Role.USER -> ChatCompletionMessageParam.ofUser(
+                ChatCompletionUserMessageParam.builder()
+                    .content(ImagePayloads.stripBase64DataUris(message.content))
+                    .build()
+            )
+            Role.ASSISTANT -> ChatCompletionMessageParam.ofAssistant(
+                ChatCompletionAssistantMessageParam.builder()
+                    .content(ImagePayloads.stripBase64DataUris(message.content))
+                    .build()
+            )
+            Role.SYSTEM -> ChatCompletionMessageParam.ofSystem(
+                ChatCompletionSystemMessageParam.builder()
+                    .content(ImagePayloads.stripBase64DataUris(message.content))
+                    .build()
+            )
+        }
     }
 
     private fun isSyntheticAssistantError(message: ChatMessage): Boolean =

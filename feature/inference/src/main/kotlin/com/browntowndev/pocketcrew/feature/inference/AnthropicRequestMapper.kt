@@ -2,6 +2,8 @@ package com.browntowndev.pocketcrew.feature.inference
 
 import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProviderModelPolicy
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.GenerationOptions
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
@@ -25,13 +27,31 @@ object AnthropicRequestMapper {
         history: List<ChatMessage>,
         options: GenerationOptions
     ): MessageCreateParams {
+        val provider = options.apiProvider
+        val optModelId = options.modelId
+        val parameterSupport = if (provider != null && optModelId != null) {
+            ApiProviderModelPolicy.parameterSupport(provider, optModelId)
+        } else null
+
         val builder = MessageCreateParams.builder()
             .model(modelId)
 
-        builder.maxTokens((options.maxTokens ?: DEFAULT_MAX_TOKENS.toInt()).toLong())
-        options.temperature?.let { builder.temperature(it.toDouble()) }
-        options.topP?.let { builder.topP(it.toDouble()) }
-        options.topK?.let { builder.topK(it.toLong()) }
+        if (!options.maxTokensDisabled && parameterSupport?.supportsMaxTokens != false) {
+            builder.maxTokens((options.maxTokens ?: DEFAULT_MAX_TOKENS.toInt()).toLong())
+        } else {
+            builder.maxTokens(DEFAULT_MAX_TOKENS)
+        }
+
+        if (!options.temperatureDisabled && parameterSupport?.supportsTemperature != false) {
+            options.temperature?.let { builder.temperature(it.toDouble()) }
+        }
+        if (!options.topPDisabled && parameterSupport?.supportsTopP != false) {
+            options.topP?.let { builder.topP(it.toDouble()) }
+        }
+        if (!options.topKDisabled && parameterSupport?.supportsTopK != false) {
+            options.topK?.let { builder.topK(it.toLong()) }
+        }
+
         resolveThinkingBudgetTokens(options)?.let {
             builder.thinking(
                 ThinkingConfigEnabled.builder()

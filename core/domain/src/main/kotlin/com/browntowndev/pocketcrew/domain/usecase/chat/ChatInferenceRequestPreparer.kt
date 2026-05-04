@@ -33,6 +33,7 @@ class ChatInferenceRequestPreparer(
         val settings = settingsRepository.settingsFlow.first()
         val config = activeModelProvider.getActiveConfiguration(modelType)
         val visionConfig = activeModelProvider.getActiveConfiguration(ModelType.VISION)
+        val userMessage = messageRepository.getMessageById(userMessageId)
         val resolvedImageTarget = messageRepository.resolveLatestImageBearingUserMessage(chatId, userMessageId)
         val searchEnabled = settings.searchEnabled
         val activeVisionCapable = config?.isMultimodal == true
@@ -109,10 +110,13 @@ class ChatInferenceRequestPreparer(
                 prompt = prompt,
                 hasImageContext = hasImageContext,
                 imageHandling = imageHandling,
+                fileAttachments = userMessage?.content?.fileAttachments ?: emptyList(),
             ),
             options = GenerationOptions(
                 reasoningBudget = reasoningBudget,
                 modelType = modelType,
+                modelId = config?.modelId,
+                apiProvider = config?.apiProvider,
                 systemPrompt = systemPrompt,
                 imageUris = if (imageHandling == ChatImageHandling.DIRECT) {
                     resolvedImageTarget?.imageUri?.let { listOf(it) }.orEmpty()
@@ -125,6 +129,13 @@ class ChatInferenceRequestPreparer(
                 topP = config?.topP?.toFloat(),
                 maxTokens = config?.maxTokens,
                 contextWindow = config?.contextWindow,
+                maxTokensDisabled = config?.maxTokensDisabled ?: false,
+                temperatureDisabled = config?.temperatureDisabled ?: false,
+                topPDisabled = config?.topPDisabled ?: false,
+                topKDisabled = config?.topKDisabled ?: false,
+                minPDisabled = config?.minPDisabled ?: false,
+                frequencyPenaltyDisabled = config?.frequencyPenaltyDisabled ?: false,
+                presencePenaltyDisabled = config?.presencePenaltyDisabled ?: false,
                 toolingEnabled = toolingEnabled,
                 availableTools = availableTools,
                 chatId = chatId,
@@ -173,24 +184,40 @@ internal fun prepareChatPrompt(
     prompt: String,
     hasImageContext: Boolean,
     imageHandling: ChatImageHandling,
+    fileAttachments: List<com.browntowndev.pocketcrew.domain.model.chat.FileAttachment> = emptyList(),
 ): String {
-    if (!hasImageContext || imageHandling == ChatImageHandling.NONE) return prompt
+    val filePrefix = if (fileAttachments.isNotEmpty()) {
+        fileAttachments.joinToString(separator = "\n\n") { file ->
+            """
+            File attached: ${file.name}
+            Content:
+            ${file.content}
+            """.trimIndent()
+        }
+    } else null
 
-    val prefix = when (imageHandling) {
-        ChatImageHandling.DIRECT -> "The user attached an image."
-        ChatImageHandling.TOOL -> "The user attached an image. If you need to inspect it, use attached_image_inspect."
-        ChatImageHandling.NONE -> "The user attached an image."
-    }
+    val imagePrefix = if (hasImageContext && imageHandling != ChatImageHandling.NONE) {
+        when (imageHandling) {
+            ChatImageHandling.DIRECT -> "The user attached an image."
+            ChatImageHandling.TOOL -> "The user attached an image. If you need to inspect it, use attached_image_inspect."
+            ChatImageHandling.NONE -> "The user attached an image."
+        }
+    } else null
+
+    val contextHeader = listOfNotNull(filePrefix, imagePrefix)
+        .joinToString(separator = "\n\n")
+
+    if (contextHeader.isBlank()) return prompt
 
     return if (prompt.isBlank()) {
         """
-        $prefix
+        $contextHeader
 
-        Respond helpfully based on the image and any other context.
+        Respond helpfully based on the context.
         """.trimIndent()
     } else {
         """
-        $prefix
+        $contextHeader
 
         User request:
         ${prompt.trim()}
