@@ -86,8 +86,6 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.InsertPhoto
-import androidx.compose.material3.Surface
-import androidx.compose.material3.surfaceColorAtElevation
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.core.content.ContextCompat
@@ -97,13 +95,12 @@ import com.browntowndev.pocketcrew.core.ui.component.UniversalImageAttachment
 import com.browntowndev.pocketcrew.core.ui.component.UniversalInputBar
 import com.browntowndev.pocketcrew.core.ui.component.UniversalVoicePromptPlaceholder
 import com.browntowndev.pocketcrew.core.ui.component.UniversalVoiceTrailingAction
+import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSheet
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.feature.chat.ChatModeUi
 import com.browntowndev.pocketcrew.feature.chat.R
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
-import androidx.compose.ui.unit.IntOffset
+import androidx.compose.material3.rememberModalBottomSheetState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -131,7 +128,8 @@ fun InputBar(
 ) {
     var modeExpanded by remember { mutableStateOf(false) }
     var isExpanded by remember { mutableStateOf(false) }
-    var attachmentMenuExpanded by remember { mutableStateOf(false) }
+    var showAttachmentSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
 
@@ -148,6 +146,33 @@ fun InputBar(
     val isListening = speechState is SpeechState.ModelLoading || speechState is SpeechState.Listening
     val isRecordingPhase = isListening || speechState is SpeechState.Transcribing
     val hasSendableContent = (inputText.isNotBlank() || selectedImageUri != null || selectedFileName != null) && !isListening
+
+    if (showAttachmentSheet) {
+        JumpFreeModalBottomSheet(
+            onDismissRequest = { showAttachmentSheet = false },
+            sheetState = sheetState,
+        ) {
+            Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                AttachmentMenuItem(
+                    icon = Icons.Default.InsertPhoto,
+                    label = "Attach Photo",
+                    onClick = {
+                        showAttachmentSheet = false
+                        onImageAttach()
+                    },
+                    enabled = isPhotoAttachmentEnabled
+                )
+                AttachmentMenuItem(
+                    icon = Icons.Default.AttachFile,
+                    label = "Attach File",
+                    onClick = {
+                        showAttachmentSheet = false
+                        onFileAttach()
+                    }
+                )
+            }
+        }
+    }
 
     UniversalInputBar(
         isExpanded = isExpanded,
@@ -251,58 +276,15 @@ fun InputBar(
         },
         actionContent = if (isRecordingPhase) null else {
             {
-                Box {
-                    // Attachment Menu
-                    if (attachmentMenuExpanded) {
-                        Popup(
-                            alignment = Alignment.TopStart,
-                            offset = IntOffset(0, -112), // Adjusted offset to appear above the plus button
-                            onDismissRequest = { attachmentMenuExpanded = false },
-                            properties = PopupProperties(
-                                focusable = true,
-                                dismissOnClickOutside = true,
-                                dismissOnBackPress = true
-                            )
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(16.dp),
-                                color = MaterialTheme.colorScheme.surfaceColorAtElevation(8.dp),
-                                shadowElevation = 8.dp,
-                                modifier = Modifier.width(180.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                                    AttachmentMenuItem(
-                                        icon = Icons.Default.InsertPhoto,
-                                        label = "Attach Photo",
-                                        onClick = {
-                                            attachmentMenuExpanded = false
-                                            onImageAttach()
-                                        },
-                                        enabled = isPhotoAttachmentEnabled
-                                    )
-                                    AttachmentMenuItem(
-                                        icon = Icons.Default.AttachFile,
-                                        label = "Attach File",
-                                        onClick = {
-                                            attachmentMenuExpanded = false
-                                            onFileAttach()
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Plus Button
-                    IconButton(
-                        onClick = { attachmentMenuExpanded = !attachmentMenuExpanded },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Toggle attachment menu",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                // Plus Button
+                IconButton(
+                    onClick = { showAttachmentSheet = true },
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Show attachment options",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         },
