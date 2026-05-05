@@ -93,6 +93,18 @@ class ChatInferenceService : Service() {
 
     @Inject
     lateinit var activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort
+    
+    @Inject
+    lateinit var defaultModelRepository: com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
+    
+    @Inject
+    lateinit var mediaProviderRepository: com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
+    
+    @Inject
+    lateinit var mediaToolDefinitionFactory: com.browntowndev.pocketcrew.domain.usecase.media.MediaToolDefinitionFactory
+    
+    @Inject
+    lateinit var getProviderCapabilitiesUseCase: com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
 
     @Inject
     lateinit var chatGenerationProgressPersister: ChatGenerationProgressPersister
@@ -121,6 +133,10 @@ class ChatInferenceService : Service() {
             memoriesRepository,
             embeddingEnginePort,
             searchToolPromptComposer,
+            defaultModelRepository,
+            mediaProviderRepository,
+            mediaToolDefinitionFactory,
+            getProviderCapabilitiesUseCase,
             loggingPort
         )
     }
@@ -308,6 +324,13 @@ class ChatInferenceService : Service() {
                 is InferenceEvent.PartialResponse -> MessageGenerationState.GeneratingText(event.chunk, event.modelType)
                 is InferenceEvent.WebSearchResults -> MessageGenerationState.WebSearchSourcesAttached(event.sources, event.modelType)
                 is InferenceEvent.Artifacts -> MessageGenerationState.ArtifactsAttached(event.artifacts, event.modelType)
+                is InferenceEvent.Media -> MessageGenerationState.MediaAttached(
+                    mediaUris = event.mediaUris,
+                    mediaIds = event.mediaIds,
+                    mediaTypes = event.mediaTypes,
+                    prompts = event.prompts,
+                    modelType = event.modelType
+                )
                 is InferenceEvent.Finished -> {
                     maybeShowCompletionNotification(chatId)
                     MessageGenerationState.Finished(event.modelType)

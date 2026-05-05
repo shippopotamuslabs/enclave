@@ -492,6 +492,23 @@ class LlamaInferenceServiceImpl @Inject constructor(
                         }
                     }
                 }
+
+                if (toolCall.toolName == ToolDefinition.GENERATE_IMAGE.name ||
+                    toolCall.toolName == ToolDefinition.GENERATE_VIDEO.name ||
+                    toolCall.toolName == ToolDefinition.GENERATE_MUSIC.name) {
+                    val mediaResult = com.browntowndev.pocketcrew.domain.util.MediaResultParser.parse(resultJson)
+                    if (mediaResult.uris.isNotEmpty()) {
+                        emitEvent(
+                            InferenceEvent.Media(
+                                mediaUris = mediaResult.uris,
+                                mediaIds = mediaResult.ids,
+                                mediaTypes = mediaResult.types,
+                                prompts = mediaResult.prompts,
+                                modelType = targetModelType
+                            )
+                        )
+                    }
+                }
             },
             onNoToolCallOnFirstPass = { pass ->
                 emitProcessedText(pass.fullText, targetModelType, emitEvent)
