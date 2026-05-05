@@ -105,31 +105,27 @@ fun SearchSkillBottomSheet(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { onTabChange(0) },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Public,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Web", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal)
-                        }
+                    selectedContentColor = MaterialTheme.colorScheme.primary,
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.Public,
+                            contentDescription = "Web",
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { onTabChange(1) },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = XIcon,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("X", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal)
-                        }
+                    selectedContentColor = MaterialTheme.colorScheme.primary,
+                    unselectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    icon = {
+                        Icon(
+                            imageVector = XIcon,
+                            contentDescription = "X",
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
                 )
             }

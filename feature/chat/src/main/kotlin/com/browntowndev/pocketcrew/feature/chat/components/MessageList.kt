@@ -79,6 +79,7 @@ fun MessageList(
     onEditMessage: (String) -> Unit = { _: String -> },
     onPlayAudio: (String) -> Unit = {},
     onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit = {},
+    onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
 ) {
     val listState = rememberLazyListState()
 
@@ -173,6 +174,7 @@ fun MessageList(
                         onEditMessage = onEditMessage,
                         onPlayAudio = onPlayAudio,
                         onNavigateToArtifact = onNavigateToArtifact,
+                        onNavigateToStudio = onNavigateToStudio,
                         isPreview = isPreview
                     )
                 }
@@ -198,6 +200,7 @@ fun MessageList(
                                     onEditMessage = onEditMessage,
                                     onPlayAudio = onPlayAudio,
                                     onNavigateToArtifact = onNavigateToArtifact,
+                                    onNavigateToStudio = onNavigateToStudio,
                                     isPreview = isPreview
                                 )
                             }
@@ -269,6 +272,7 @@ private fun MessageItem(
     onEditMessage: (String) -> Unit,
     onPlayAudio: (String) -> Unit,
     onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit,
+    onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
     isPreview: Boolean,
 ) {
     Column(
@@ -304,6 +308,7 @@ private fun MessageItem(
                 hasTtsProviderAssigned = hasTtsProviderAssigned,
                 onPlayAudio = onPlayAudio,
                 onNavigateToArtifact = onNavigateToArtifact,
+                onNavigateToStudio = onNavigateToStudio,
             )
         }
     }

@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -82,6 +83,7 @@ private fun BannerContent(banner: ToolCallBannerUi) {
                             ToolCallBannerKind.MEMORY -> R.drawable.search
                             ToolCallBannerKind.ARTIFACT -> R.drawable.document
                             ToolCallBannerKind.X_SEARCH -> 0 // Handled above
+                            ToolCallBannerKind.MEDIA -> R.drawable.image // Reuse image icon for media
                         }
                     ),
                     contentDescription = null,
