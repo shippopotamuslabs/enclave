@@ -160,6 +160,9 @@ fun PocketCrewNavGraph(
                     val encodedContent = android.net.Uri.encode(content)
                     navController.navigate(Routes.artifact(encodedTitle, encodedContent))
                 },
+                onNavigateToStudio = { ids, uris, types, prompts ->
+                    navController.navigate(Routes.studioWithRehydration(ids, uris, types, prompts))
+                },
                 onShowSnackbar = onShowSnackbar,
             )
         }
@@ -337,6 +340,26 @@ fun PocketCrewNavGraph(
                         type = NavType.BoolType
                         defaultValue = false
                     },
+                    navArgument("rehydrateIds") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("rehydrateUris") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("rehydrateTypes") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("rehydratePrompts") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
                 ),
             enterTransition = {
                 val initialLevel = getRouteLevel(initialState.destination.route)
@@ -405,11 +428,30 @@ fun PocketCrewNavGraph(
             val animatePrompt = backStackEntry.arguments?.getString("animatePrompt")
             val autoAnimate = backStackEntry.arguments?.getBoolean("autoAnimate") ?: false
 
-            LaunchedEffect(editAssetId, animateAssetId, animatePrompt, autoAnimate) {
-                if (editAssetId != null) {
-                    studioViewModel.onEditMedia(editAssetId)
+            val rehydrateIds = backStackEntry.arguments?.getString("rehydrateIds")
+            val rehydrateUris = backStackEntry.arguments?.getString("rehydrateUris")
+            val rehydrateTypes = backStackEntry.arguments?.getString("rehydrateTypes")
+            val rehydratePrompts = backStackEntry.arguments?.getString("rehydratePrompts")
+
+            LaunchedEffect(editAssetId, animateAssetId, animatePrompt, autoAnimate, rehydrateIds, rehydrateUris, rehydrateTypes, rehydratePrompts) {
+                if (editAssetId != null || rehydrateUris != null) {
+                    val json = kotlinx.serialization.json.Json
+                    val ids = rehydrateIds?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
+                    val uris = rehydrateUris?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
+                    val types = rehydrateTypes?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
+                    val prompts = rehydratePrompts?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
+
+                    studioViewModel.onEditMedia(
+                        assetId = editAssetId,
+                        rehydrateIds = ids,
+                        rehydrateUris = uris,
+                        rehydrateTypes = types,
+                        rehydratePrompts = prompts
+                    )
                 } else if (animateAssetId != null) {
                     studioViewModel.onAnimateMedia(animateAssetId, autoAnimate, animatePrompt)
+                } else {
+                    studioViewModel.clearSession()
                 }
             }
 

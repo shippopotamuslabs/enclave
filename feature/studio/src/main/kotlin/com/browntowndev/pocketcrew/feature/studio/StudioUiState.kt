@@ -38,4 +38,5 @@ data class StudioUiState(
     val videoGenerationState: VideoGenerationState = VideoGenerationState.Idle,
     val speechState: SpeechState = SpeechState.Idle,
     val isPlayingTts: Boolean = false,
+    val groupedGallery: List<StudioGalleryGroup> = emptyList(),
 )

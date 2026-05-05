@@ -63,6 +63,7 @@ class MultimediaGenerationService : Service() {
         
         when (intent?.action) {
             ACTION_START -> {
+                startForeground(ONGOING_NOTIFICATION_ID, createNotification("Preparing..."))
                 val prompt = intent.getStringExtra(EXTRA_PROMPT)
                 if (prompt == null) {
                     logger.error(TAG, "No prompt provided, stopping")
@@ -71,7 +72,7 @@ class MultimediaGenerationService : Service() {
                 }
                 val mediaType = MediaCapability.valueOf(intent.getStringExtra(EXTRA_MEDIA_TYPE) ?: MediaCapability.IMAGE.name)
                 
-                startForeground(ONGOING_NOTIFICATION_ID, createNotification("Generating..."))
+                updateNotification("Generating...")
 
                 serviceScope.launch {
                     try {
@@ -92,14 +93,15 @@ class MultimediaGenerationService : Service() {
                         }
 
                         result.onSuccess { bytesList ->
-                            bytesList.forEach { bytes ->
+                            val baseTime = System.currentTimeMillis()
+                            bytesList.forEachIndexed { i, bytes ->
                                 val localUri = studioRepository.cacheEphemeralMedia(bytes, mediaType.name)
                                 val asset = com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset(
                                     id = java.util.UUID.randomUUID().toString(),
                                     localUri = localUri,
                                     prompt = prompt,
                                     mediaType = mediaType.name,
-                                    createdAt = System.currentTimeMillis()
+                                    createdAt = baseTime + i
                                 )
                                 studioRepository.addEphemeralMedia(asset)
                             }
@@ -147,6 +149,11 @@ class MultimediaGenerationService : Service() {
             .setSilent(true)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
+    }
+
+    private fun updateNotification(content: String) {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(ONGOING_NOTIFICATION_ID, createNotification(content))
     }
 
     override fun onDestroy() {

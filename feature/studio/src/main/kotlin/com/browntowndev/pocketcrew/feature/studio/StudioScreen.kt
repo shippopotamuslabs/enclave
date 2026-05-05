@@ -109,7 +109,7 @@ private const val PLACEHOLDER_ROW_KEY_PREFIX = "studio_placeholder_row_"
 
 data class StudioGalleryGroup(
     val prompt: String,
-    val items: List<StudioMediaUi>
+    val mediaItems: List<StudioMediaUi>
 )
 
 data class StudioGalleryRow(
@@ -148,28 +148,10 @@ fun StudioScreen(
     val listState = rememberLazyListState()
     val context = LocalContext.current
     val visibleGallery = remember(uiState.gallery) { uiState.gallery }
-    val groupedGallery = remember(visibleGallery) {
-        val groups = mutableListOf<StudioGalleryGroup>()
-        if (visibleGallery.isNotEmpty()) {
-            var currentPrompt = visibleGallery.first().prompt
-            var currentItems = mutableListOf<StudioMediaUi>()
-
-            for (item in visibleGallery) {
-                if (item.prompt == currentPrompt) {
-                    currentItems.add(item)
-                } else {
-                    groups.add(StudioGalleryGroup(currentPrompt, currentItems))
-                    currentPrompt = item.prompt
-                    currentItems = mutableListOf(item)
-                }
-            }
-            groups.add(StudioGalleryGroup(currentPrompt, currentItems))
-        }
-        groups
-    }
+    val groupedGallery = uiState.groupedGallery
     val galleryRowKeys = remember(groupedGallery) {
         groupedGallery.flatMap { group ->
-            group.items.chunked(GRID_COLUMNS).map(::studioGalleryRowKey)
+            group.mediaItems.chunked(GRID_COLUMNS).map(::studioGalleryRowKey)
         }
     }
     val generationPlaceholderCount = (uiState.settings as? ImageGenerationSettings)
@@ -267,7 +249,7 @@ fun StudioScreen(
                 topPadding = padding.calculateTopPadding(),
                 onMediaClick = { id ->
                     if (uiState.selectedMediaItemIds.isNotEmpty()) {
-                        val asset = groupedGallery.flatMap { it.items }.find { it.id == id }
+                        val asset = groupedGallery.flatMap { it.mediaItems }.find { it.id == id }
                         if (asset?.albumId == null) {
                             viewModel.toggleMediaSelection(id)
                         }
@@ -276,7 +258,7 @@ fun StudioScreen(
                     }
                 },
                 onMediaLongClick = { id ->
-                    val asset = groupedGallery.flatMap { it.items }.find { it.id == id }
+                    val asset = groupedGallery.flatMap { it.mediaItems }.find { it.id == id }
                     if (asset?.albumId == null) {
                         viewModel.toggleMediaSelection(id)
                     }
@@ -500,7 +482,8 @@ private fun StudioGalleryList(
     LazyColumn(
         state = listState,
         modifier = modifier
-            .fillMaxSize(),
+            .fillMaxSize()
+            .hazeSource(state = hazeState),
         contentPadding = PaddingValues(top = topPadding)
     ) {
         groupedGallery.forEachIndexed { index, group ->
@@ -641,7 +624,7 @@ internal fun buildStudioGalleryRows(
     group: StudioGalleryGroup,
     placeholderCount: Int,
 ): List<StudioGalleryRow> {
-    val mediaRows = group.items.chunked(GRID_COLUMNS).map { mediaItems ->
+    val mediaRows = group.mediaItems.chunked(GRID_COLUMNS).map { mediaItems ->
         StudioGalleryRow(mediaItems = mediaItems)
     }
 
@@ -732,7 +715,7 @@ internal fun calculateStudioStickyHeaderLayout(
     val currentHeader = headers.lastOrNull { header -> header.itemIndex <= firstVisibleItemIndex }
         ?: return null
     val currentVisibleHeader = visibleItems.firstOrNull { visibleItem -> visibleItem.key == currentHeader.key }
-    if (currentVisibleHeader != null && currentVisibleHeader.offset > 0) {
+    if (currentVisibleHeader != null && currentVisibleHeader.offset > stickyTopPx) {
         return null
     }
 
@@ -763,7 +746,6 @@ private fun GalleryGridRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .hazeSource(state = hazeState)
     ) {
         rowItems.forEach { asset ->
             Box(modifier = Modifier.weight(1f)) {
@@ -794,7 +776,6 @@ private fun PlaceholderGridRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .hazeSource(state = hazeState)
     ) {
         repeat(placeholderCount) {
             Box(modifier = Modifier.weight(1f)) {

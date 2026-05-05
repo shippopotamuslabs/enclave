@@ -30,8 +30,10 @@ interface StudioRepositoryPort {
     suspend fun addEphemeralMedia(asset: StudioMediaAsset)
     suspend fun updateEphemeralMedia(asset: StudioMediaAsset)
     suspend fun removeEphemeralMedia(id: String)
-    suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String? = null): StudioMediaAsset
-    suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String? = null): StudioMediaAsset
+    suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String? = null, createdAt: Long? = null): StudioMediaAsset
+    suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String? = null, createdAt: Long? = null): StudioMediaAsset
+    suspend fun promoteEphemeralMedia(id: String, albumId: String?): StudioMediaAsset
+    suspend fun updateMedia(asset: StudioMediaAsset)
     suspend fun cacheEphemeralMedia(bytes: ByteArray, mediaType: String): String
     suspend fun clearEphemeralCache()
     suspend fun deleteMedia(id: String)

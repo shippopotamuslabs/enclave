@@ -36,6 +36,7 @@ import androidx.compose.ui.zIndex
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 
 @Composable
 fun PromptHeaderDivider(
@@ -58,6 +59,7 @@ fun PromptHeaderDivider(
                 tints = listOf(HazeTint(Color.Black.copy(alpha = 0.4f)))
                 noiseFactor = 0.15f
             }
+            .hazeSource(state = hazeState)
             .animateContentSize()
             .then(if (!expanded) Modifier.clickable { updateExpanded(true) } else Modifier)
     ) {
