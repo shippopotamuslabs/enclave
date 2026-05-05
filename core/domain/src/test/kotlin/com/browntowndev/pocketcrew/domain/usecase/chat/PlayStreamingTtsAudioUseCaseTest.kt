@@ -56,7 +56,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         val streamingService: StreamingTtsServicePort = mockk()
 
         coEvery { resolveSelectionUseCase(any()) } returns selection
-        every { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
+        coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
         every { ttsFactory.createStreaming(ApiProvider.OPENAI, "test-api-key", null) } returns streamingService
         every { streamingService.synthesizeSpeechStreaming("Hello", "alloy", null) } returns flowOf(
             TtsAudioChunk.Data(byteArrayOf(1, 2, 3)),
@@ -81,7 +81,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         val streamingService: StreamingTtsServicePort = mockk()
 
         coEvery { resolveSelectionUseCase(any()) } returns selection
-        every { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
+        coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
         every { ttsFactory.createStreaming(ApiProvider.XAI, "test-api-key", null) } returns streamingService
         every { streamingService.synthesizeSpeechStreaming("Hello", "echo", null) } returns flowOf(
             TtsAudioChunk.Data(byteArrayOf(1, 2, 3)),
@@ -121,7 +121,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         val batchService: TtsServicePort = mockk()
 
         coEvery { resolveSelectionUseCase(any()) } returns selection
-        every { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
+        coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
         every { ttsFactory.createStreaming(ApiProvider.GOOGLE, "test-api-key", null) } returns null
         every { ttsFactory.create(ApiProvider.GOOGLE, "test-api-key", null) } returns batchService
         coEvery { batchService.synthesizeSpeech("Hello", "voice", null) } returns Result.success(byteArrayOf(1, 2, 3))
@@ -149,7 +149,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         val streamingService: StreamingTtsServicePort = mockk()
 
         coEvery { resolveSelectionUseCase(any()) } returns selection
-        every { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
+        coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
         every { ttsFactory.createStreaming(ApiProvider.OPENAI, "test-api-key", null) } returns streamingService
         every { streamingService.synthesizeSpeechStreaming(any(), any(), any()) } returns flow {
             throw RuntimeException("Network error")
@@ -175,7 +175,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         val streamingService: StreamingTtsServicePort = mockk()
 
         coEvery { resolveSelectionUseCase(any()) } returns selection
-        every { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
+        coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
         every { ttsFactory.createStreaming(ApiProvider.XAI, "test-api-key", null) } returns streamingService
         every {
             streamingService.synthesizeSpeechStreaming("Hello", "echo", "grok-3-audio")
@@ -210,7 +210,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         val chunk2 = byteArrayOf(4, 5, 6)
 
         coEvery { resolveSelectionUseCase(any()) } returns selection
-        every { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
+        coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
         every { ttsFactory.createStreaming(ApiProvider.OPENAI, "test-api-key", null) } returns streamingService
         every { streamingService.synthesizeSpeechStreaming(any(), any(), any()) } returns flowOf(
             TtsAudioChunk.Data(chunk1),
@@ -234,7 +234,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         val streamingService: StreamingTtsServicePort = mockk()
 
         coEvery { resolveSelectionUseCase(any()) } returns selection
-        every { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
+        coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
         every { ttsFactory.createStreaming(ApiProvider.OPENAI, "test-api-key", null) } returns streamingService
         every { streamingService.synthesizeSpeechStreaming(any(), any(), any()) } returns flowOf(
             TtsAudioChunk.Data(byteArrayOf(1, 2, 3)),
@@ -255,7 +255,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         val selection = ResolvedAssignedModelSelection(ttsAsset = ttsAsset)
 
         coEvery { resolveSelectionUseCase(any()) } returns selection
-        every { apiKeyProvider.getApiKey("alias-1") } returns null
+        coEvery { apiKeyProvider.getApiKey("alias-1") } returns null
 
         useCase("Hello").test {
             awaitItem() // Initializing
@@ -279,7 +279,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         val streamingService: StreamingTtsServicePort = mockk()
 
         coEvery { resolveSelectionUseCase(any()) } returns selection
-        every { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
+        coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
         every { ttsFactory.createStreaming(ApiProvider.XAI, "test-api-key", null) } returns streamingService
         every { streamingService.synthesizeSpeechStreaming(any(), any(), any()) } returns flowOf(
             TtsAudioChunk.Error("WebSocket connection failed")
@@ -308,7 +308,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         val streamingService: StreamingTtsServicePort = mockk()
 
         coEvery { resolveSelectionUseCase(any()) } returns selection
-        every { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
+        coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
         every { ttsFactory.createStreaming(ApiProvider.XAI, "test-api-key", null) } returns streamingService
         every { streamingService.synthesizeSpeechStreaming(any(), any(), any()) } returns flow {
             emit(TtsAudioChunk.Data(byteArrayOf(1, 2, 3)))
@@ -339,7 +339,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         val batchService: TtsServicePort = mockk()
 
         coEvery { resolveSelectionUseCase(any()) } returns selection
-        every { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
+        coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
         every { ttsFactory.createStreaming(ApiProvider.GOOGLE, "test-api-key", "https://custom.api.com") } returns null
         every { ttsFactory.create(ApiProvider.GOOGLE, "test-api-key", "https://custom.api.com") } returns batchService
         coEvery { batchService.synthesizeSpeech("Hello", "google-voice", "model-name") } returns Result.success(byteArrayOf(1))
@@ -360,7 +360,7 @@ class PlayStreamingTtsAudioUseCaseTest {
         val streamingService: StreamingTtsServicePort = mockk()
 
         coEvery { resolveSelectionUseCase(any()) } returns selection
-        every { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
+        coEvery { apiKeyProvider.getApiKey("alias-1") } returns "test-api-key"
         every { ttsFactory.createStreaming(ApiProvider.OPENAI, "test-api-key", null) } returns streamingService
         every { streamingService.synthesizeSpeechStreaming(any(), any(), any()) } returns flowOf(
             TtsAudioChunk.Data(byteArrayOf(1, 2, 3)),

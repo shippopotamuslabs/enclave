@@ -1,5 +1,8 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
+import com.browntowndev.pocketcrew.domain.usecase.auth.GetAuthStateUseCase
+import com.browntowndev.pocketcrew.domain.usecase.auth.LoginWithGoogleUseCase
+import com.browntowndev.pocketcrew.domain.usecase.auth.LogoutUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.ClearDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
@@ -71,6 +74,12 @@ interface SettingsMediaUseCases {
     val deleteMediaProvider: DeleteMediaProviderUseCase
 }
 
+interface SettingsAuthUseCases {
+    val loginWithGoogle: LoginWithGoogleUseCase
+    val logout: LogoutUseCase
+    val getAuthState: GetAuthStateUseCase
+}
+
 interface SettingsUseCases {
     val preferences: SettingsPreferencesUseCases
     val localModels: SettingsLocalModelUseCases
@@ -79,6 +88,7 @@ interface SettingsUseCases {
     val deletion: SettingsDeletionUseCases
     val tts: SettingsTtsUseCases
     val media: SettingsMediaUseCases
+    val auth: SettingsAuthUseCases
 
     val getSettings: GetSettingsUseCase
         get() = preferences.getSettings

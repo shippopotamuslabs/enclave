@@ -13,6 +13,7 @@ import com.browntowndev.pocketcrew.domain.model.config.OpenRouterDataCollectionP
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterProviderSort
 import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfiguration
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
+import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -30,13 +31,15 @@ class ApiModelRepositoryImplTest {
     private val credentialsDao = mockk<ApiCredentialsDao>(relaxed = true)
     private val configurationsDao = mockk<ApiModelConfigurationsDao>(relaxed = true)
     private val apiKeyManager = mockk<ApiKeyManager>(relaxed = true)
+    private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
 
     @Before
     fun setup() {
         repo = ApiModelRepositoryImpl(
             apiCredentialsDao = credentialsDao,
             apiModelConfigurationsDao = configurationsDao,
-            apiKeyManager = apiKeyManager
+            apiKeyManager = apiKeyManager,
+            cryptoManager = cryptoManager
         )
     }
 

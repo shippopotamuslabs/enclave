@@ -38,13 +38,13 @@ class VideoGenerationPortImplTest {
             googleAdapter = googleAdapter,
             xaiAdapter = xaiAdapter,
         )
-        every { apiKeyProvider.getApiKey("alias") } returns "key"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "key"
         coEvery { studioRepository.readMediaBytes("cache://reference.png") } returns "png".toByteArray()
     }
 
     @Test
     fun generateVideo_missingApiKey_returnsFailure() = runTest {
-        every { apiKeyProvider.getApiKey("alias") } returns null
+        coEvery { apiKeyProvider.getApiKey("alias") } returns null
 
         val result = port.generateVideo("prompt", provider(ApiProvider.OPENAI), VideoGenerationSettings())
 

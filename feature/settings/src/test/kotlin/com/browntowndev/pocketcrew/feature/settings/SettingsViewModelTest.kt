@@ -22,6 +22,10 @@ import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUse
 import com.browntowndev.pocketcrew.domain.usecase.media.DeleteMediaProviderUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.GetMediaProvidersUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.SaveMediaProviderUseCase
+import com.browntowndev.pocketcrew.domain.usecase.auth.GetAuthStateUseCase
+import com.browntowndev.pocketcrew.domain.usecase.auth.LoginWithGoogleUseCase
+import com.browntowndev.pocketcrew.domain.usecase.auth.LogoutUseCase
+import com.browntowndev.pocketcrew.domain.port.auth.UserProfile
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.usecase.settings.*
 import io.mockk.every
@@ -32,7 +36,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -83,6 +86,10 @@ class SettingsViewModelTest {
     private val getMediaProvidersUseCase = mockk<GetMediaProvidersUseCase>()
     private val saveMediaProviderUseCase = mockk<SaveMediaProviderUseCase>(relaxed = true)
     private val deleteMediaProviderUseCase = mockk<DeleteMediaProviderUseCase>(relaxed = true)
+
+    private val loginWithGoogleUseCase = mockk<LoginWithGoogleUseCase>(relaxed = true)
+    private val logoutUseCase = mockk<LogoutUseCase>(relaxed = true)
+    private val getAuthStateUseCase = mockk<GetAuthStateUseCase>(relaxed = true)
 
     private val memoriesRepository = mockk<MemoriesRepository>()
 
@@ -178,6 +185,11 @@ class SettingsViewModelTest {
                 getMediaProviders = getMediaProvidersUseCase,
                 saveMediaProvider = saveMediaProviderUseCase,
                 deleteMediaProvider = deleteMediaProviderUseCase,
+            ),
+            auth = SettingsAuthUseCasesImpl(
+                loginWithGoogle = loginWithGoogleUseCase,
+                logout = logoutUseCase,
+                getAuthState = getAuthStateUseCase,
             )
         )
 
@@ -198,6 +210,26 @@ class SettingsViewModelTest {
             reassignmentOptionUiMapper = reassignmentOptionUiMapper,
             errorHandler = errorHandler,
         )
+    }
+
+    @Test
+    fun `onLoginWithGoogle calls loginWithGoogle`() = runTest {
+        coEvery { loginWithGoogleUseCase() } returns Result.success(UserProfile("uid", "Name", "email", null))
+        
+        viewModel.onLoginWithGoogle()
+        advanceUntilIdle()
+        
+        coVerify { loginWithGoogleUseCase() }
+    }
+
+    @Test
+    fun `onLogout signs out and clears data`() = runTest {
+        coEvery { logoutUseCase() } returns Result.success(Unit)
+        
+        viewModel.onLogout()
+        advanceUntilIdle()
+        
+        coVerify { logoutUseCase() }
     }
 
     @Test
@@ -515,7 +547,6 @@ class SettingsViewModelTest {
 
     @Test
     fun `onFetchApiModels discovers models from API draft`() = runTest {
-        backgroundScope.launch { viewModel.uiState.collect {} }
         val asset = MockSettingsData.apiModels.first()
         coEvery { discoverApiModelsUseCase(any()) } returns ApiModelDiscoveryResult(
             models = listOf(
@@ -547,7 +578,6 @@ class SettingsViewModelTest {
 
     @Test
     fun `onSelectApiModelAsset updates state and resets discovery if scope changes`() = runTest {
-        backgroundScope.launch { viewModel.uiState.collect {} }
         val asset1 = MockSettingsData.apiModels[0] // OpenAI
         val asset2 = MockSettingsData.apiModels[1] // Anthropic
 
@@ -564,7 +594,6 @@ class SettingsViewModelTest {
 
     @Test
     fun `onApiModelAssetFieldChange resets discovery when provider changes`() = runTest {
-        backgroundScope.launch { viewModel.uiState.collect {} }
         val asset = MockSettingsData.apiModels.first()
         viewModel.onSelectApiModelAsset(asset)
         advanceUntilIdle()
@@ -580,7 +609,6 @@ class SettingsViewModelTest {
 
     @Test
     fun `onSelectModelType resolves and selects correct asset`() = runTest {
-        backgroundScope.launch { viewModel.uiState.collect {} }
         val asset = com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset(
             credentials = com.browntowndev.pocketcrew.domain.model.config.ApiCredentials(
                 id = ApiCredentialsId("api-1"),
@@ -605,12 +633,6 @@ class SettingsViewModelTest {
 
     @Test
     fun `onFetchMediaModels discovers models from media draft`() = runTest {
-        backgroundScope.launch { viewModel.uiState.collect {} }
-        val asset = TtsProviderAssetUi( // Using TtsProviderAssetUi as a placeholder or just use direct values
-             displayName = "OpenAI Media",
-             provider = ApiProvider.OPENAI,
-        )
-        // Wait, Media uses MediaProviderAssetUi
         val mediaAsset = MediaProviderAssetUi(
             displayName = "DALL-E 3",
             provider = ApiProvider.OPENAI,
@@ -642,9 +664,5 @@ class SettingsViewModelTest {
                 }
             )
         }
-        // Assuming filterMediaModels works correctly
-        // We'd need to mock it if it's an extension function that's hard to test, 
-        // but here it's likely part of the logic we want to test.
     }
 }
-

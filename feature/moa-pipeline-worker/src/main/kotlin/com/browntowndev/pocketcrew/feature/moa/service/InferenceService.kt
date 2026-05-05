@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
+import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
@@ -76,7 +77,8 @@ class InferenceService : Service() {
     @Inject
     lateinit var inferenceEventBus: InferenceEventBus
 
-    private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    @VisibleForTesting
+    internal var serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var currentJob: Job? = null
     private var currentChatId: String? = null
     private var isRunning = false

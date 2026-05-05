@@ -28,7 +28,7 @@ class FetchApiProviderModelsUseCaseImpl @Inject constructor(
         val resolvedApiKey = currentApiKey.ifBlank {
             credentialAlias
                 ?.takeIf { it.isNotBlank() }
-                ?.let(apiKeyProvider::getApiKey)
+                ?.let { apiKeyProvider.getApiKey(it) }
                 .orEmpty()
         }
         require(resolvedApiKey.isNotBlank()) {

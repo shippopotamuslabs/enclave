@@ -1,5 +1,5 @@
 # Detekt configuration for Pocket Crew
-# Strict but pragmatic rule sets
+# Strict but pragmatic rule sets optimized for Jetpack Compose and Hilt
 
 build:
   maxIssues: 0
@@ -9,7 +9,6 @@ config:
   validation: true
   warningsAsErrors: false
 
-# Enable main rule sets with relaxed thresholds for existing codebase
 potential-bugs:
   active: true
   excludes:
@@ -23,6 +22,34 @@ style:
     - '**/androidTest/**'
   MaxLineLength:
     excludeCommentStatements: true
+  MagicNumber:
+    # Ignore magic numbers in Compose and UI related files where they are idiomatic
+    excludes:
+      - '**/ui/**'
+      - '**/components/**'
+      - '**/theme/**'
+      - '**/*Screen.kt'
+      - '**/*Preview.kt'
+      - '**/navigation/**'
+    # Use list of strings to avoid type casting issues in older detekt versions
+    ignoreNumbers:
+      - '-1'
+      - '0'
+      - '1'
+      - '2'
+      - '4'
+      - '8'
+      - '16'
+      - '24'
+      - '32'
+      - '100'
+  ReturnCount:
+    # Relaxed for complex state mapping and intent handling
+    max: 5
+  UnusedPrivateProperty:
+    active: true
+  UseCheckOrError:
+    active: true
 
 complexity:
   active: true
@@ -30,18 +57,41 @@ complexity:
     - '**/test/**'
     - '**/androidTest/**'
   LongMethod:
-    threshold: 60
+    # Relaxed for declarative UI and Navigation graphs
+    threshold: 100
   CyclomaticComplexMethod:
-    threshold: 20
+    # Relaxed for complex UI branching
+    threshold: 30
+  LongParameterList:
+    # Essential for Compose state hoisting and Hilt ViewModels
+    functionThreshold: 15
+    constructorThreshold: 20
+  LargeClass:
+    # COORDINATOR ViewModels are naturally larger
+    threshold: 600
+  TooManyFunctions:
+    # Large feature ViewModels often exceed the default 11
+    # Using v1.x property names as project uses detekt 1.23.8
+    thresholdInFiles: 40
+    thresholdInClasses: 30
+    thresholdInInterfaces: 20
+    thresholdInObjects: 20
+    thresholdInEnums: 20
 
 performance:
   active: true
 
 naming:
   active: true
+  FunctionNaming:
+    # Allow PascalCase for Jetpack Compose functions
+    functionPattern: '[a-zA-Z][a-zA-Z0-9]*'
 
 empty-blocks:
   active: true
 
 exceptions:
   active: true
+  TooGenericExceptionCaught:
+    active: true
+    # We keep this active to find bad 'catch (e: Exception)' blocks
