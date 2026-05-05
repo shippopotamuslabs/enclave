@@ -579,7 +579,8 @@ Produce the final polished response for the user. Output ONLY the essay itself â
         notificationManager.createNotificationChannel(completionChannel)
     }
 
-    private fun createCancelPendingIntent(): PendingIntent {
+    @androidx.annotation.VisibleForTesting
+    internal fun createCancelPendingIntent(): PendingIntent {
         val cancelIntent = Intent(this, InferenceService::class.java).apply {
             action = ACTION_STOP
         }
@@ -591,7 +592,8 @@ Produce the final polished response for the user. Output ONLY the essay itself â
         )
     }
 
-    private fun createProgressNotification(
+    @androidx.annotation.VisibleForTesting
+    internal fun createProgressNotification(
         currentStep: PipelineStep,
         hasMoreSteps: Boolean,
         cancelPendingIntent: PendingIntent

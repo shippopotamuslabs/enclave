@@ -62,6 +62,7 @@ dependencies {
     implementation(libs.work.runtime.ktx)
 
     // Testing
+    testImplementation(project(":core:testing"))
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
