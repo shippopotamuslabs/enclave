@@ -33,6 +33,10 @@ internal class PersistAccumulatedChatMessagesUseCase(
                 pipelineStep = getPipelineStepForModelType(accumulator.modelType),
                 webSearchSources = accumulator.webSearchSources.toList(),
                 artifacts = accumulator.artifacts.toList(),
+                generatedMediaUris = accumulator.generatedMediaUris.toList(),
+                generatedMediaAssetIds = accumulator.generatedMediaAssetIds.toList(),
+                generatedMediaTypes = accumulator.generatedMediaTypes.toList(),
+                generatedMediaPrompts = accumulator.generatedMediaPrompts.toList(),
             )
 
             // Generate and save embedding for the assistant message

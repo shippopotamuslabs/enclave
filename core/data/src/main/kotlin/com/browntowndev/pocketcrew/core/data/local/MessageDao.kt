@@ -116,6 +116,22 @@ abstract class MessageDao {
     @Query("UPDATE message SET artifacts_json = :artifactsJson WHERE id = :id")
     abstract suspend fun updateMessageArtifacts(id: MessageId, artifactsJson: String?)
 
+    @Query("""
+        UPDATE message 
+        SET generated_media_uris_json = :mediaUrisJson,
+            generated_media_asset_ids_json = :mediaAssetIdsJson,
+            generated_media_types_json = :mediaTypesJson,
+            generated_media_prompts_json = :mediaPromptsJson
+        WHERE id = :id
+    """)
+    abstract suspend fun updateMessageMedia(
+        id: MessageId, 
+        mediaUrisJson: String?,
+        mediaAssetIdsJson: String? = null,
+        mediaTypesJson: String? = null,
+        mediaPromptsJson: String? = null
+    )
+
     @Transaction
     open suspend fun persistAllMessageData(
         messageId: MessageId,
@@ -128,7 +144,11 @@ abstract class MessageDao {
         messageState: MessageState,
         pipelineStep: PipelineStep?,
         webSearchSources: List<WebSearchSourceEntity> = emptyList(),
-        artifactsJson: String? = null
+        artifactsJson: String? = null,
+        mediaUrisJson: String? = null,
+        mediaAssetIdsJson: String? = null,
+        mediaTypesJson: String? = null,
+        mediaPromptsJson: String? = null
     ) {
         updateMessageModelType(messageId, modelType)
         if (thinkingStartTime > 0) {
@@ -145,6 +165,13 @@ abstract class MessageDao {
         updateMessagePipelineStep(messageId, pipelineStep)
         updateMessageState(messageId, messageState)
         updateMessageArtifacts(messageId, artifactsJson)
+        updateMessageMedia(
+            id = messageId, 
+            mediaUrisJson = mediaUrisJson,
+            mediaAssetIdsJson = mediaAssetIdsJson,
+            mediaTypesJson = mediaTypesJson,
+            mediaPromptsJson = mediaPromptsJson
+        )
 
         if (webSearchSources.isNotEmpty()) {
             insertWebSearchSources(webSearchSources)

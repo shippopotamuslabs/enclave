@@ -123,6 +123,10 @@ class GenerateChatResponseUseCaseArtifactPersistenceTest {
                     coEvery { getEmbedding(any()) } returns floatArrayOf(0.1f, 0.2f)
                 },
                 searchToolPromptComposer = SearchToolPromptComposer(),
+                defaultModelRepository = mockk(relaxed = true),
+                mediaProviderRepository = mockk(relaxed = true),
+                mediaToolDefinitionFactory = mockk(relaxed = true),
+                getProviderCapabilitiesUseCase = mockk(relaxed = true),
                 loggingPort = mockk(relaxed = true),
             ),
             embeddingEngine = mockk(relaxed = true),
@@ -153,6 +157,14 @@ class GenerateChatResponseUseCaseArtifactPersistenceTest {
         override suspend fun markWebSearchSourcesExtracted(key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey, urls: List<String>) {}
         override suspend fun acknowledgeHandoff(key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey) {}
         override suspend fun attachArtifact(key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey, assistantMessageId: MessageId, artifact: ArtifactGenerationRequest) {}
+        override suspend fun attachMedia(
+            key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey,
+            assistantMessageId: MessageId,
+            mediaUris: List<String>,
+            mediaIds: List<String>,
+            mediaTypes: List<String>,
+            prompts: List<String>
+        ) {}
         override suspend fun clear(key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey) {}
         override suspend fun getSnapshot(key: com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnKey): com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages? = null
     }

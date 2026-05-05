@@ -85,6 +85,14 @@ sealed interface InferenceEvent {
      */
     data class Artifacts(val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>, val modelType: ModelType) : InferenceEvent
 
+    data class Media(
+        val mediaUris: List<String>, 
+        val mediaIds: List<String> = emptyList(), 
+        val mediaTypes: List<String> = emptyList(),
+        val prompts: List<String> = emptyList(),
+        val modelType: ModelType
+    ) : InferenceEvent
+
     /**
      * Emitted when the generation is complete.
      * @param modelType The type of model used to generate this chunk.

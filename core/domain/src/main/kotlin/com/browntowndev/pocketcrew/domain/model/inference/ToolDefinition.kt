@@ -22,9 +22,11 @@ data class ToolDefinition(
     val name: String,
     val description: String,
     val parametersClass: KClass<out ToolParameters>,
+    val displayName: String? = null,
+    val schemaOverride: ToolSchema? = null,
 ) {
     val schema: ToolSchema by lazy {
-        ToolSchemaGenerator.generateSchema(parametersClass)
+        schemaOverride ?: ToolSchemaGenerator.generateSchema(parametersClass)
     }
 
     val parametersJson: String by lazy {
@@ -118,30 +120,35 @@ data class ToolDefinition(
             name = "web_search",
             description = "Search the web and return ranked results.",
             parametersClass = WebSearchParams::class,
+            displayName = "Searching the web...",
         )
 
         val WEB_EXTRACT = ToolDefinition(
             name = "web_extract",
             description = "Extract and parse the full content from a list of URLs. Use this to read the details of webpages returned by web_search.",
             parametersClass = WebExtractParams::class,
+            displayName = "Reading webpage content...",
         )
 
         val ATTACHED_IMAGE_INSPECT = ToolDefinition(
             name = "attached_image_inspect",
             description = "Inspect an attached image to answer a question about it.",
             parametersClass = AttachedImageInspectParams::class,
+            displayName = "Inspecting image...",
         )
 
         val SEARCH_CHAT_HISTORY = ToolDefinition(
             name = "search_chat_history",
             description = "Search the user's past conversation history for messages matching queries. Returns matching messages from across all chats, each with its chat_id and chat_name. Use when the user mentions or references something from a past conversation. Provide multiple query variants (synonyms, alternate phrasings, related terms) to cast a wide net. If you find a relevant message and need more context from that chat, use search_chat with the chat_id.",
             parametersClass = SearchChatHistoryParams::class,
+            displayName = "Searching chat history...",
         )
 
         val SEARCH_CHAT = ToolDefinition(
             name = "search_chat",
             description = "Search messages in a specific chat for details no longer in the context window due to summarization or FIFO eviction. Use when the user references something from earlier in a conversation that you cannot recall. Requires a chat_id (obtained from search_chat_history or from the current chat ID provided in your instructions).",
             parametersClass = SearchChatParams::class,
+            displayName = "Searching chat...",
         )
 
         val GET_MESSAGE_CONTEXT = ToolDefinition(
@@ -154,6 +161,7 @@ data class ToolDefinition(
             name = "generate_artifact",
             description = "Generate a professional PDF document from Markdown content. Use this when the user wants a report, plan, summary, or other deliverable exported as a downloadable PDF. The content must be formatted as standard Markdown (headers, lists, tables, code blocks, etc.).",
             parametersClass = GenerateArtifactParams::class,
+            displayName = "Generating Artifact...",
         )
 
         val MANAGE_MEMORIES = ToolDefinition(
@@ -166,6 +174,28 @@ data class ToolDefinition(
             name = "search_x_recent",
             description = "Search for recent posts on X (Twitter). Returns a ranked list of high-impact posts matching the query. Use this to find trending topics, recent events, or public sentiment on X. Results include post text, author information, engagement metrics (impact_score), and media metadata where available. Pruned to surface the most relevant and high-engagement content.",
             parametersClass = XSearchParams::class,
+            displayName = "Searching X...",
+        )
+
+        val GENERATE_IMAGE = ToolDefinition(
+            name = "generate_image",
+            description = "Generate an image from a text description.",
+            parametersClass = GenerateImageToolParams::class,
+            displayName = "Generating Image...",
+        )
+
+        val GENERATE_VIDEO = ToolDefinition(
+            name = "generate_video",
+            description = "Generate a video from a text description.",
+            parametersClass = GenerateVideoToolParams::class,
+            displayName = "Generating Video...",
+        )
+
+        val GENERATE_MUSIC = ToolDefinition(
+            name = "generate_music",
+            description = "Generate music from a text description.",
+            parametersClass = GenerateMusicToolParams::class,
+            displayName = "Generating Music...",
         )
 
         val ALL_TOOLS = listOf(
@@ -177,7 +207,10 @@ data class ToolDefinition(
             GET_MESSAGE_CONTEXT,
             MANAGE_MEMORIES,
             GENERATE_ARTIFACT,
-            X_SEARCH
+            X_SEARCH,
+            GENERATE_IMAGE,
+            GENERATE_VIDEO,
+            GENERATE_MUSIC
         )
 
         fun fromName(name: String): ToolDefinition? {

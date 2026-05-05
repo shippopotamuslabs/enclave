@@ -28,6 +28,15 @@ interface ActiveChatTurnSnapshotPort {
         assistantMessageId: MessageId,
         artifact: com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest,
     )
+    
+    suspend fun attachMedia(
+        key: ActiveChatTurnKey,
+        assistantMessageId: MessageId,
+        mediaUris: List<String>,
+        mediaIds: List<String> = emptyList(),
+        mediaTypes: List<String> = emptyList(),
+        prompts: List<String> = emptyList(),
+    )
 
     suspend fun acknowledgeHandoff(key: ActiveChatTurnKey)
 

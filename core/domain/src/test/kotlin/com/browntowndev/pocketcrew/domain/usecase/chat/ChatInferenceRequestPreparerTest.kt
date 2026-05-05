@@ -47,6 +47,10 @@ class ChatInferenceRequestPreparerTest {
             memoriesRepository = mockMemoriesRepository(),
             embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
         )
 
@@ -85,6 +89,10 @@ class ChatInferenceRequestPreparerTest {
             memoriesRepository = mockMemoriesRepository(),
             embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
         )
 
@@ -117,6 +125,10 @@ class ChatInferenceRequestPreparerTest {
             memoriesRepository = mockMemoriesRepository(),
             embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
         )
 
@@ -146,6 +158,10 @@ class ChatInferenceRequestPreparerTest {
             memoriesRepository = mockMemoriesRepository(),
             embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
         )
 
@@ -173,6 +189,10 @@ class ChatInferenceRequestPreparerTest {
             memoriesRepository = mockMemoriesRepository(),
             embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
         )
 
@@ -203,6 +223,10 @@ class ChatInferenceRequestPreparerTest {
             memoriesRepository = mockMemoriesRepository(),
             embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
         )
 
@@ -230,6 +254,10 @@ class ChatInferenceRequestPreparerTest {
             memoriesRepository = mockMemoriesRepository(),
             embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
         )
 
@@ -262,6 +290,10 @@ class ChatInferenceRequestPreparerTest {
             memoriesRepository = mockMemoriesRepository(),
             embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
         )
 
@@ -298,6 +330,10 @@ class ChatInferenceRequestPreparerTest {
             },
             embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
         )
 
@@ -422,6 +458,10 @@ class ChatInferenceRequestPreparerTest {
             memoriesRepository = mockMemoriesRepository(),
             embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
         )
 
@@ -448,6 +488,10 @@ class ChatInferenceRequestPreparerTest {
             memoriesRepository = mockMemoriesRepository(),
             embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
         )
 
@@ -474,6 +518,10 @@ class ChatInferenceRequestPreparerTest {
             memoriesRepository = mockMemoriesRepository(),
             embeddingEnginePort = mockEmbeddingEngine(),
             searchToolPromptComposer = SearchToolPromptComposer(),
+            defaultModelRepository = mockk(relaxed = true),
+            mediaProviderRepository = mockk(relaxed = true),
+            mediaToolDefinitionFactory = mockk(relaxed = true),
+            getProviderCapabilitiesUseCase = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
         )
 

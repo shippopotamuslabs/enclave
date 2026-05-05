@@ -12,6 +12,10 @@ import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPor
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsRepository
+import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
+import com.browntowndev.pocketcrew.domain.usecase.media.MediaToolDefinitionFactory
+import com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
 import com.browntowndev.pocketcrew.domain.util.JTokkitTokenCounter
 import com.browntowndev.pocketcrew.domain.util.TokenCounter
 import java.time.ZoneId
@@ -26,6 +30,10 @@ class ChatInferenceRequestPreparer(
     private val memoriesRepository: MemoriesRepository,
     private val embeddingEnginePort: EmbeddingEnginePort,
     private val searchToolPromptComposer: SearchToolPromptComposer,
+    private val defaultModelRepository: DefaultModelRepositoryPort,
+    private val mediaProviderRepository: MediaProviderRepositoryPort,
+    private val mediaToolDefinitionFactory: MediaToolDefinitionFactory,
+    private val getProviderCapabilitiesUseCase: GetProviderCapabilitiesUseCase,
     private val loggingPort: LoggingPort,
 ) {
     private val dateTimeFormatter = DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a")
@@ -87,6 +95,25 @@ class ChatInferenceRequestPreparer(
         }
 
         val toolingEnabled = true // Memory tools are always available
+        val imageAssignment = defaultModelRepository.getDefault(ModelType.IMAGE_GENERATION)
+        val imageTool = if (imageAssignment?.mediaProviderId != null) {
+            val provider = mediaProviderRepository.getMediaProvider(imageAssignment.mediaProviderId)
+            mediaToolDefinitionFactory.buildImageToolDefinition(provider?.provider?.name)
+        } else null
+
+        val videoAssignment = defaultModelRepository.getDefault(ModelType.VIDEO_GENERATION)
+        val videoTool = if (videoAssignment?.mediaProviderId != null) {
+            val provider = mediaProviderRepository.getMediaProvider(videoAssignment.mediaProviderId)
+            if (getProviderCapabilitiesUseCase(provider?.provider?.name).supportsVideo) {
+                mediaToolDefinitionFactory.buildVideoToolDefinition(provider?.provider?.name)
+            } else null
+        } else null
+
+        val musicAssignment = defaultModelRepository.getDefault(ModelType.MUSIC_GENERATION)
+        val musicTool = if (musicAssignment?.mediaProviderId != null) {
+            mediaToolDefinitionFactory.buildMusicToolDefinition()
+        } else null
+
         val systemPrompt = if (toolingEnabled) {
             searchToolPromptComposer.compose(
                 baseSystemPrompt = config?.systemPrompt,
@@ -95,6 +122,9 @@ class ChatInferenceRequestPreparer(
                 includeImageInspectTool = imageHandling == ChatImageHandling.TOOL,
                 includeMemoryTools = true,
                 includeArtifactTool = true,
+                includeImageGenerationTool = imageTool != null,
+                includeVideoGenerationTool = videoTool != null,
+                includeMusicGenerationTool = musicTool != null,
                 currentChatId = chatId.value,
                 strategy = strategy,
                 coreMemories = coreMemories,
@@ -103,6 +133,7 @@ class ChatInferenceRequestPreparer(
         } else {
             config?.systemPrompt
         }
+
         val availableTools = buildList {
             if (settings.searchEnabled) {
                 add(ToolDefinition.WEB_SEARCH)
@@ -117,6 +148,9 @@ class ChatInferenceRequestPreparer(
             add(ToolDefinition.GET_MESSAGE_CONTEXT)
             add(ToolDefinition.MANAGE_MEMORIES)
             add(ToolDefinition.GENERATE_ARTIFACT)
+            imageTool?.let { add(it) }
+            videoTool?.let { add(it) }
+            musicTool?.let { add(it) }
         }
 
         val formattedTime = dateTimeFormatter.format(java.time.Instant.now())

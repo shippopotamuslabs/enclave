@@ -35,6 +35,7 @@ enum class ToolCallBannerKind {
     MEMORY,
     ARTIFACT,
     X_SEARCH,
+    MEDIA,
 }
 
 data class ToolCallBannerUi(

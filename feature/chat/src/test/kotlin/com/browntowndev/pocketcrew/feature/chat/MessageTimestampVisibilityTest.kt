@@ -60,8 +60,9 @@ class MessageTimestampVisibilityTest {
             errorHandler = mockk(relaxed = true),
             loggingPort = mockk(relaxed = true),
             activeChatTurnSnapshotPort = ActiveChatTurnStore(),
-            
             playbackController = mockk(relaxed = true),
+            studioRepository = mockk(relaxed = true),
+            context = mockk(relaxed = true),
         )
     }
 

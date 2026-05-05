@@ -66,6 +66,10 @@ class GenerateChatResponseUseCaseSearchToolTest {
             coEvery { getEmbedding(any()) } returns floatArrayOf()
         },
         searchToolPromptComposer = SearchToolPromptComposer(),
+        defaultModelRepository = mockk(relaxed = true),
+        mediaProviderRepository = mockk(relaxed = true),
+        mediaToolDefinitionFactory = mockk(relaxed = true),
+        getProviderCapabilitiesUseCase = mockk(relaxed = true),
         loggingPort = mockk(relaxed = true),
     )
 

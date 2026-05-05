@@ -162,10 +162,30 @@ class ChatRepositoryImpl @Inject constructor(
         messageState: MessageState,
         pipelineStep: PipelineStep?,
         webSearchSources: List<WebSearchSource>,
-        artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>
+        artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>,
+        generatedMediaUris: List<String>,
+        generatedMediaAssetIds: List<String>,
+        generatedMediaTypes: List<String>,
+        generatedMediaPrompts: List<String>
     ) {
         val artifactsJson = if (artifacts.isNotEmpty()) {
             Json.encodeToString(artifacts)
+        } else null
+
+        val mediaUrisJson = if (generatedMediaUris.isNotEmpty()) {
+            Json.encodeToString(generatedMediaUris)
+        } else null
+
+        val mediaAssetIdsJson = if (generatedMediaAssetIds.isNotEmpty()) {
+            Json.encodeToString(generatedMediaAssetIds)
+        } else null
+
+        val mediaTypesJson = if (generatedMediaTypes.isNotEmpty()) {
+            Json.encodeToString(generatedMediaTypes)
+        } else null
+
+        val mediaPromptsJson = if (generatedMediaPrompts.isNotEmpty()) {
+            Json.encodeToString(generatedMediaPrompts)
         } else null
 
         messageDao.persistAllMessageData(
@@ -179,7 +199,11 @@ class ChatRepositoryImpl @Inject constructor(
             messageState = messageState,
             pipelineStep = pipelineStep,
             webSearchSources = webSearchSources.map { it.toEntity() },
-            artifactsJson = artifactsJson
+            artifactsJson = artifactsJson,
+            mediaUrisJson = mediaUrisJson,
+            mediaAssetIdsJson = mediaAssetIdsJson,
+            mediaTypesJson = mediaTypesJson,
+            mediaPromptsJson = mediaPromptsJson
         )
     }
 

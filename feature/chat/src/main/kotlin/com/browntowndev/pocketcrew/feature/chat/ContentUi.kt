@@ -19,4 +19,8 @@ data class ContentUi(
     val webSearchSources: List<WebSearchSource> = emptyList(),
     val artifacts: List<ArtifactGenerationRequest> = emptyList(),
     val fileAttachments: List<FileAttachment> = emptyList(),
+    val generatedMediaUris: List<String> = emptyList(),
+    val generatedMediaAssetIds: List<String> = emptyList(),
+    val generatedMediaTypes: List<String> = emptyList(),
+    val generatedMediaPrompts: List<String> = emptyList(),
 )

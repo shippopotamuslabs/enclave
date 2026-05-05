@@ -345,7 +345,14 @@ class GenerateChatResponseUseCaseBackgroundServicePersistenceTest {
             assistantMessageId: MessageId,
             artifact: com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest,
         ) = Unit
-
+        override suspend fun attachMedia(
+            key: ActiveChatTurnKey,
+            assistantMessageId: MessageId,
+            mediaUris: List<String>,
+            mediaIds: List<String>,
+            mediaTypes: List<String>,
+            prompts: List<String>,
+        ) = Unit
         override suspend fun clear(key: ActiveChatTurnKey) = Unit
         override suspend fun getSnapshot(key: ActiveChatTurnKey): AccumulatedMessages? = null
     }

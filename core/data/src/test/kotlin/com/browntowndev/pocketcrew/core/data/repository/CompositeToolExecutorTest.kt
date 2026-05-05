@@ -28,6 +28,7 @@ class CompositeToolExecutorTest {
     private lateinit var manageMemoriesToolExecutor: ManageMemoriesToolExecutor
     private lateinit var artifactToolExecutor: ArtifactToolExecutor
     private lateinit var xSearchToolExecutor: XSearchToolExecutorImpl
+    private lateinit var mediaToolExecutor: MediaToolExecutor
     private lateinit var eventBus: ToolExecutionEventBus
     private lateinit var compositeToolExecutor: CompositeToolExecutor
 
@@ -42,6 +43,7 @@ class CompositeToolExecutorTest {
         manageMemoriesToolExecutor = mockk()
         artifactToolExecutor = mockk()
         xSearchToolExecutor = mockk()
+        mediaToolExecutor = mockk()
         eventBus = mockk(relaxed = true)
         compositeToolExecutor = CompositeToolExecutor(
             searchToolExecutor = searchToolExecutor,
@@ -53,6 +55,7 @@ class CompositeToolExecutorTest {
             manageMemoriesToolExecutor = manageMemoriesToolExecutor,
             artifactToolExecutor = artifactToolExecutor,
             xSearchToolExecutor = xSearchToolExecutor,
+            mediaToolExecutor = mediaToolExecutor,
             eventBus = eventBus
         )
     }
@@ -213,13 +216,35 @@ class CompositeToolExecutorTest {
     }
 
     @Test
+    fun `execute routes generate_image to mediaToolExecutor`() = runTest {
+        // Given
+        val request = ToolCallRequest(
+            chatId = ChatId("chat-media"),
+            userMessageId = MessageId("msg-media"),
+            toolName = ToolDefinition.GENERATE_IMAGE.name,
+            argumentsJson = "{\"prompt\":\"test\"}",
+            provider = "replicate",
+            modelType = ModelType.FAST
+        )
+        val expectedResult = ToolExecutionResult(toolName = request.toolName, resultJson = "{\"status\": \"success\"}")
+        coEvery { mediaToolExecutor.execute(request) } returns expectedResult
+
+        // When
+        val result = compositeToolExecutor.execute(request)
+
+        // Then
+        coVerify { mediaToolExecutor.execute(request) }
+        assertEquals(expectedResult, result)
+    }
+
+    @Test
     fun `all tools in ToolDefinition ALL_TOOLS are supported`() = runTest {
         // Setup mocks for all executors to handle any request
         val executors = listOf(
             searchToolExecutor, extractToolExecutor, imageInspectToolExecutor,
             searchChatHistoryToolExecutor, searchChatToolExecutor,
             getMessageContextToolExecutor, manageMemoriesToolExecutor, artifactToolExecutor,
-            xSearchToolExecutor
+            xSearchToolExecutor, mediaToolExecutor
         )
         executors.forEach {
             coEvery { it.execute(any()) } returns ToolExecutionResult("any", "{}")

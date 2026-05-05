@@ -61,4 +61,12 @@ data class MessageEntity(
     val pipelineStep: PipelineStep? = null,
     @ColumnInfo(name = "artifacts_json")
     val artifactsJson: String? = null,
+    @ColumnInfo(name = "generated_media_uris_json")
+    val generatedMediaUrisJson: String? = null,
+    @ColumnInfo(name = "generated_media_asset_ids_json")
+    val generatedMediaAssetIdsJson: String? = null,
+    @ColumnInfo(name = "generated_media_types_json")
+    val generatedMediaTypesJson: String? = null,
+    @ColumnInfo(name = "generated_media_prompts_json")
+    val generatedMediaPromptsJson: String? = null,
 )

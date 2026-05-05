@@ -100,8 +100,9 @@ class ChatViewModelNavigationTest {
             toolExecutionEventPort = toolExecutionEventPort,
             loggingPort = loggingPort,
             activeChatTurnSnapshotPort = mockk(relaxed = true),
-            
             playbackController = mockk(relaxed = true),
+            studioRepository = mockk(relaxed = true),
+            context = mockk(relaxed = true),
             )
     }
 

@@ -188,7 +188,11 @@ class FakeChatRepository : ChatRepository {
         messageState: MessageState,
         pipelineStep: PipelineStep?,
         webSearchSources: List<WebSearchSource>,
-        artifacts: List<ArtifactGenerationRequest>
+        artifacts: List<ArtifactGenerationRequest>,
+        generatedMediaUris: List<String>,
+        generatedMediaAssetIds: List<String>,
+        generatedMediaTypes: List<String>,
+        generatedMediaPrompts: List<String>
     ) {
         persistedMessageData.add(
             PersistedMessageData(
@@ -202,7 +206,11 @@ class FakeChatRepository : ChatRepository {
                 messageState = messageState,
                 pipelineStep = pipelineStep,
                 webSearchSources = webSearchSources,
-                artifacts = artifacts
+                artifacts = artifacts,
+                generatedMediaUris = generatedMediaUris,
+                generatedMediaAssetIds = generatedMediaAssetIds,
+                generatedMediaTypes = generatedMediaTypes,
+                generatedMediaPrompts = generatedMediaPrompts
             )
         )
     }
@@ -218,7 +226,11 @@ class FakeChatRepository : ChatRepository {
         val messageState: MessageState,
         val pipelineStep: PipelineStep?,
         val webSearchSources: List<WebSearchSource>,
-        val artifacts: List<ArtifactGenerationRequest>
+        val artifacts: List<ArtifactGenerationRequest>,
+        val generatedMediaUris: List<String> = emptyList(),
+        val generatedMediaAssetIds: List<String> = emptyList(),
+        val generatedMediaTypes: List<String> = emptyList(),
+        val generatedMediaPrompts: List<String> = emptyList()
     )
 
     override suspend fun markWebSearchSourcesExtracted(urls: List<String>) {
