@@ -176,8 +176,8 @@ object ToolEnvelopeParser {
 
     fun extractRequiredUrls(argumentsJson: String): List<String> {
         try {
-            val json = kotlinx.serialization.json.Json.parseToJsonElement(argumentsJson).jsonObject
-            val urlsArray = json["urls"]?.jsonArray
+            val json = Json.parseToJsonElement(argumentsJson).jsonObject
+            val urlsArray = (json["urls"] ?: json["arguments"]?.jsonObject?.get("urls"))?.jsonArray
             if (urlsArray != null && urlsArray.isNotEmpty()) {
                 return urlsArray.map { it.jsonPrimitive.content }
             }

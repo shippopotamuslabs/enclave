@@ -77,6 +77,7 @@ class StudioRepositoryImpl @Inject constructor(
             if (file.exists() && file.absolutePath.contains(context.cacheDir.path)) {
                 val destinationFile = File(context.filesDir, file.name)
                 file.copyTo(destinationFile, overwrite = true)
+                file.delete()
                 finalUri = "file://${destinationFile.absolutePath}"
             }
         }

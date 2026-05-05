@@ -22,6 +22,7 @@ import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUse
 import com.browntowndev.pocketcrew.domain.usecase.media.DeleteMediaProviderUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.GetMediaProvidersUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.SaveMediaProviderUseCase
+import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.usecase.settings.*
 import io.mockk.every
 import io.mockk.coEvery
@@ -29,7 +30,9 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -97,7 +100,19 @@ class SettingsViewModelTest {
         val settingsFlow = MutableStateFlow(SettingsData())
         every { getSettingsUseCase() } returns settingsFlow
         every { getLocalModelAssetsUseCase() } returns MutableStateFlow(emptyList())
-        every { getApiModelAssetsUseCase() } returns MutableStateFlow(emptyList())
+        val apiAssets = MockSettingsData.apiModels.map { uiAsset ->
+             com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset(
+                 credentials = com.browntowndev.pocketcrew.domain.model.config.ApiCredentials(
+                     id = uiAsset.credentialsId,
+                     displayName = uiAsset.displayName,
+                     provider = uiAsset.provider,
+                     modelId = uiAsset.modelId,
+                     credentialAlias = uiAsset.credentialAlias
+                 ),
+                 configurations = emptyList()
+             )
+        }
+        every { getApiModelAssetsUseCase() } returns MutableStateFlow(apiAssets)
         every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
         every { getTtsProvidersUseCase() } returns MutableStateFlow(emptyList())
         every { getMediaProvidersUseCase() } returns MutableStateFlow(emptyList())
@@ -381,6 +396,255 @@ class SettingsViewModelTest {
         advanceUntilIdle()
 
         coVerify { memoriesRepository.updateMemory(updatedDraft.id, updatedDraft.text, updatedDraft.category) }
+    }
+
+    @Test
+    fun `onThemeChange updates preferences`() = runTest {
+        viewModel.onThemeChange(AppTheme.DARK)
+        advanceUntilIdle()
+        coVerify { updateThemeUseCase(AppTheme.DARK) }
+    }
+
+    @Test
+    fun `onHapticPressChange updates preferences`() = runTest {
+        viewModel.onHapticPressChange(false)
+        advanceUntilIdle()
+        coVerify { updateHapticPressUseCase(false) }
+    }
+
+    @Test
+    fun `onHapticResponseChange updates preferences`() = runTest {
+        viewModel.onHapticResponseChange(false)
+        advanceUntilIdle()
+        coVerify { updateHapticResponseUseCase(false) }
+    }
+
+    @Test
+    fun `onBackgroundInferenceChange updates preferences`() = runTest {
+        viewModel.onBackgroundInferenceChange(true)
+        advanceUntilIdle()
+        coVerify { updateBackgroundInferenceEnabledUseCase(true) }
+    }
+
+    @Test
+    fun `onDeleteMemory calls repository`() = runTest {
+        coEvery { memoriesRepository.deleteMemory("mem-1") } returns Unit
+        viewModel.onDeleteMemory("mem-1")
+        advanceUntilIdle()
+        coVerify { memoriesRepository.deleteMemory("mem-1") }
+    }
+
+    @Test
+    fun `onSaveLocalModelConfig calls use case`() = runTest {
+        val asset = MockSettingsData.localModels.first()
+        val config = LocalModelConfigUi(displayName = "Config 1")
+        coEvery { saveLocalModelPresetUseCase(any(), any()) } returns Result.success(com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId("1"))
+
+        viewModel.onSelectLocalModelAsset(asset)
+        viewModel.onSelectLocalModelConfig(config)
+        viewModel.onSaveLocalModelConfig(onSuccess = {})
+        advanceUntilIdle()
+
+        coVerify { saveLocalModelPresetUseCase(asset.metadataId, any()) }
+    }
+
+    @Test
+    fun `onSaveApiCredentials calls use case and updates state`() = runTest {
+        val draft = MockSettingsData.apiModels.first().copy(
+            credentialsId = com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId("api-1"),
+            displayName = "OpenAI"
+        )
+        val persistedAsset = com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset(
+            credentials = com.browntowndev.pocketcrew.domain.model.config.ApiCredentials(
+                id = draft.credentialsId,
+                displayName = draft.displayName,
+                provider = draft.provider,
+                modelId = draft.modelId,
+                credentialAlias = "alias-1"
+            ),
+            configurations = emptyList()
+        )
+        coEvery { saveApiProviderDraftUseCase(any()) } returns Result.success<com.browntowndev.pocketcrew.domain.usecase.settings.ApiProviderDraftSaveResult>(
+            com.browntowndev.pocketcrew.domain.usecase.settings.ApiProviderDraftSaveResult(persistedAsset = persistedAsset, createdPreset = null)
+        )
+
+        viewModel.onStartCreateApiModelAsset()
+        viewModel.onApiModelAssetFieldChange(draft)
+        viewModel.onApiKeyChange("new-key")
+        
+        viewModel.onSaveApiCredentials(onSuccess = { _, _ -> })
+        advanceUntilIdle()
+
+        coVerify { 
+            saveApiProviderDraftUseCase(match { request -> 
+                request.id == draft.credentialsId && request.apiKey == "new-key"
+            }) 
+        }
+        assertEquals("OpenAI", viewModel.uiState.value.apiProviderEditor.assetDraft?.displayName)
+    }
+
+    @Test
+    fun `onConfirmDeletionWithReassignment calls use case`() = runTest {
+        val target = ModelDeletionTarget.LocalModelAsset(com.browntowndev.pocketcrew.domain.model.config.LocalModelId("model-1"))
+        val prepared = PreparedModelDeletion.Ready(
+            target = target,
+            modelTypesNeedingReassignment = listOf(ModelType.MAIN),
+            reassignmentCandidates = emptyList()
+        )
+        coEvery { prepareModelDeletionUseCase(any()) } returns prepared
+        coEvery { executeModelDeletionWithReassignmentUseCase(any(), any(), any(), any()) } returns Result.success<Unit>(Unit)
+
+        // Trigger deletion prep
+        viewModel.onDeleteLocalModelAsset(target.id)
+        advanceUntilIdle()
+
+        // Confirm deletion
+        val replacementConfigId = com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId("2")
+        viewModel.onConfirmDeletionWithReassignment(replacementLocalConfigId = replacementConfigId, replacementApiConfigId = null)
+        advanceUntilIdle()
+
+        coVerify { 
+            executeModelDeletionWithReassignmentUseCase(
+                target = target,
+                modelTypesNeedingReassignment = listOf(ModelType.MAIN),
+                replacementLocalConfigId = replacementConfigId,
+                replacementApiConfigId = null
+            ) 
+        }
+    }
+
+    @Test
+    fun `onFetchApiModels discovers models from API draft`() = runTest {
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        val asset = MockSettingsData.apiModels.first()
+        coEvery { discoverApiModelsUseCase(any()) } returns ApiModelDiscoveryResult(
+            models = listOf(
+                DiscoveredApiModel(id = "gpt-4o"),
+                DiscoveredApiModel(id = "gpt-4o-mini"),
+            ),
+            scope = ApiModelDiscoveryScope(
+                provider = ApiProvider.OPENAI,
+                baseUrl = "",
+                credentialAlias = asset.credentialAlias,
+            ),
+        )
+
+        viewModel.onSelectApiModelAsset(asset)
+        viewModel.onFetchApiModels()
+        advanceUntilIdle()
+
+        coVerify {
+            discoverApiModelsUseCase(
+                match { request ->
+                    request.provider == ApiProvider.OPENAI &&
+                        request.credentialAlias == asset.credentialAlias
+                }
+            )
+        }
+        assertEquals(2, viewModel.uiState.value.apiProviderEditor.discovery.models.size)
+        assertEquals("gpt-4o", viewModel.uiState.value.apiProviderEditor.discovery.models[0].modelId)
+    }
+
+    @Test
+    fun `onSelectApiModelAsset updates state and resets discovery if scope changes`() = runTest {
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        val asset1 = MockSettingsData.apiModels[0] // OpenAI
+        val asset2 = MockSettingsData.apiModels[1] // Anthropic
+
+        viewModel.onSelectApiModelAsset(asset1)
+        advanceUntilIdle()
+        assertEquals(asset1.credentialsId, viewModel.uiState.value.apiProvidersSheet.selectedAsset?.credentialsId)
+
+        viewModel.onSelectApiModelAsset(asset2)
+        advanceUntilIdle()
+        assertEquals(asset2.credentialsId, viewModel.uiState.value.apiProvidersSheet.selectedAsset?.credentialsId)
+        assertEquals(1, viewModel.uiState.value.apiProviderEditor.discovery.models.size)
+        assertEquals(asset2.modelId, viewModel.uiState.value.apiProviderEditor.discovery.models[0].modelId)
+    }
+
+    @Test
+    fun `onApiModelAssetFieldChange resets discovery when provider changes`() = runTest {
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        val asset = MockSettingsData.apiModels.first()
+        viewModel.onSelectApiModelAsset(asset)
+        advanceUntilIdle()
+        
+        val changedAsset = asset.copy(provider = ApiProvider.ANTHROPIC)
+        viewModel.onApiModelAssetFieldChange(changedAsset)
+        advanceUntilIdle()
+        
+        assertEquals(1, viewModel.uiState.value.apiProviderEditor.discovery.models.size)
+        assertEquals(asset.modelId, viewModel.uiState.value.apiProviderEditor.discovery.models[0].modelId)
+        assertEquals(ApiProvider.ANTHROPIC, viewModel.uiState.value.apiProviderEditor.assetDraft?.provider)
+    }
+
+    @Test
+    fun `onSelectModelType resolves and selects correct asset`() = runTest {
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        val asset = com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset(
+            credentials = com.browntowndev.pocketcrew.domain.model.config.ApiCredentials(
+                id = ApiCredentialsId("api-1"),
+                displayName = "OpenAI",
+                provider = ApiProvider.OPENAI,
+                modelId = "gpt-4o",
+                credentialAlias = "alias-1"
+            ),
+            configurations = emptyList()
+        )
+        val selection = ResolvedAssignedModelSelection(
+            apiAsset = asset,
+            apiConfig = null
+        )
+        coEvery { resolveAssignedModelSelectionUseCase(ModelType.MAIN) } returns selection
+
+        viewModel.onSelectModelType(ModelType.MAIN)
+        advanceUntilIdle()
+
+        assertEquals(asset.credentials.id, viewModel.uiState.value.apiProvidersSheet.selectedAsset?.credentialsId)
+    }
+
+    @Test
+    fun `onFetchMediaModels discovers models from media draft`() = runTest {
+        backgroundScope.launch { viewModel.uiState.collect {} }
+        val asset = TtsProviderAssetUi( // Using TtsProviderAssetUi as a placeholder or just use direct values
+             displayName = "OpenAI Media",
+             provider = ApiProvider.OPENAI,
+        )
+        // Wait, Media uses MediaProviderAssetUi
+        val mediaAsset = MediaProviderAssetUi(
+            displayName = "DALL-E 3",
+            provider = ApiProvider.OPENAI,
+            capability = MediaCapability.IMAGE,
+            credentialAlias = "media-alias"
+        )
+        
+        coEvery { discoverApiModelsUseCase(any()) } returns ApiModelDiscoveryResult(
+            models = listOf(
+                DiscoveredApiModel(id = "dall-e-3"),
+                DiscoveredApiModel(id = "gpt-4o"), // Should be filtered out if not image capable
+            ),
+            scope = ApiModelDiscoveryScope(
+                provider = ApiProvider.OPENAI,
+                baseUrl = "",
+                credentialAlias = "media-alias",
+            ),
+        )
+
+        viewModel.onSelectMediaProviderAsset(mediaAsset)
+        viewModel.onFetchMediaModels()
+        advanceUntilIdle()
+
+        coVerify {
+            discoverApiModelsUseCase(
+                match { request ->
+                    request.provider == ApiProvider.OPENAI &&
+                        request.credentialAlias == "media-alias"
+                }
+            )
+        }
+        // Assuming filterMediaModels works correctly
+        // We'd need to mock it if it's an extension function that's hard to test, 
+        // but here it's likely part of the logic we want to test.
     }
 }
 

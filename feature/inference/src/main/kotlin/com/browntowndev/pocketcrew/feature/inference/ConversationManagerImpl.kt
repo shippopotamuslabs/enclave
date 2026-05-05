@@ -140,7 +140,8 @@ class ConversationManagerImpl @Inject constructor(
     @Volatile
     private var contextFullWarned: Boolean = false
 
-    private fun getModelPath(filename: String): String {
+    @VisibleForTesting
+    internal fun getModelPath(filename: String): String {
         // Use getExternalFilesDir to match ModelFileScanner's directory choice
         val modelsDir = File(context.getExternalFilesDir(null), "models")
         return File(modelsDir, filename).absolutePath
@@ -918,7 +919,8 @@ class ConversationManagerImpl @Inject constructor(
         }
     }
 
-    private fun createEngine(
+    @VisibleForTesting
+    internal fun createEngine(
         modelPath: String,
         backend: Backend,
         visionBackend: Backend?,
