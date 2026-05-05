@@ -70,6 +70,19 @@ class LiteRtInferenceServiceImpl @Inject constructor(
                             if (validSources.isNotEmpty()) {
                                 send(InferenceEvent.WebSearchResults(validSources, targetModelType))
                             }
+
+                            val mediaResult = com.browntowndev.pocketcrew.domain.util.MediaResultParser.parse(resultJson)
+                            if (mediaResult.uris.isNotEmpty()) {
+                                send(
+                                    InferenceEvent.Media(
+                                        mediaUris = mediaResult.uris,
+                                        mediaIds = mediaResult.ids,
+                                        mediaTypes = mediaResult.types,
+                                        prompts = mediaResult.prompts,
+                                        modelType = targetModelType
+                                    )
+                                )
+                            }
                         }
                     }
                 }
