@@ -1,15 +1,12 @@
 package com.browntowndev.pocketcrew.feature.studio
 
-import android.app.Application
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.media.*
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
-import com.browntowndev.pocketcrew.domain.port.media.ImageGenerationPort
-import com.browntowndev.pocketcrew.domain.port.media.VideoGenerationPort
+
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
@@ -19,25 +16,24 @@ import com.browntowndev.pocketcrew.domain.usecase.media.GenerateMusicUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.GenerateVideoUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
+import com.browntowndev.pocketcrew.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackStatus
 import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import com.browntowndev.pocketcrew.feature.studio.service.MultimediaGenerationService
 import javax.inject.Inject
 
 @HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
 class MultimodalViewModel @Inject constructor(
-    @ApplicationContext application: Context,
     private val shareMediaPort: ShareMediaPort,
     private val studioRepository: StudioRepositoryPort,
+    private val dispatcher: StudioGenerationDispatcherPort,
     private val defaultModelRepository: DefaultModelRepositoryPort,
     private val mediaProviderRepository: MediaProviderRepositoryPort,
     private val getProviderCapabilitiesUseCase: GetProviderCapabilitiesUseCase,
@@ -46,7 +42,6 @@ class MultimodalViewModel @Inject constructor(
     private val logger: LoggingPort
 ) : ViewModel() {
 
-    private val application = application as android.app.Application
     private val _prompt = MutableStateFlow("")
     private val _isGenerating = MutableStateFlow(false)
     private val _mediaType = MutableStateFlow(MediaCapability.IMAGE)
@@ -65,6 +60,7 @@ class MultimodalViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+    private val _sessionSavedAssetIds = MutableStateFlow<Set<String>>(emptySet())
     private val _selectedMediaItemIds = MutableStateFlow<Set<String>>(emptySet())
     private val _isSaveBottomSheetOpen = MutableStateFlow(false)
     private val _speechState = MutableStateFlow<SpeechState>(SpeechState.Idle)
@@ -124,7 +120,9 @@ class MultimodalViewModel @Inject constructor(
         albums.forEach { albumItems[it.id] = mutableListOf() }
 
         allMedia.forEach { asset ->
-            val item = asset.toUi()
+            val item = asset.toUi().copy(
+                albumId = asset.albumId ?: DEFAULT_GALLERY_ALBUM_ID
+            )
             val albumId = asset.albumId ?: DEFAULT_GALLERY_ALBUM_ID
             albumItems[albumId]?.add(item)
         }
@@ -156,6 +154,15 @@ class MultimodalViewModel @Inject constructor(
         observeSpeechResults()
         observeCapabilities()
         observeGenerationErrors()
+        observeEphemeralMedia()
+    }
+
+    private fun observeEphemeralMedia() {
+        studioRepository.observeEphemeralMedia()
+            .onEach { 
+                _isGenerating.value = false 
+            }
+            .launchIn(viewModelScope)
     }
 
     private fun observeGenerationErrors() {
@@ -271,6 +278,7 @@ class MultimodalViewModel @Inject constructor(
         _isGenerating,
         _mediaType,
         _sessionMedia,
+        _sessionSavedAssetIds,
         _selectedMediaItemIds,
         albumsFlow,
         _settings,
@@ -293,23 +301,32 @@ class MultimodalViewModel @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         val sessionMedia = args[3] as List<StudioMediaUi>
         @Suppress("UNCHECKED_CAST")
-        val selectedMediaItemIds = args[4] as Set<String>
+        val sessionSavedAssetIds = args[4] as Set<String>
         @Suppress("UNCHECKED_CAST")
-        val albums = args[5] as List<GalleryAlbumUi>
-        val settings = args[6] as GenerationSettings
-        val caps = args[7] as ProviderCapabilities?
-        val templateId = args[8] as String?
-        val isOpen = args[9] as Boolean
-        val isSaveOpen = args[10] as Boolean
-        val continual = args[11] as Boolean
-        val isContinualGenerationActive = args[12] as Boolean
-        val error = args[13] as String?
-        val lastSubmittedPrompt = args[14] as String?
-        val videoGenerationState = args[15] as VideoGenerationState
-        val speechState = args[16] as SpeechState
-        val isPlayingTts = args[17] as Boolean
-        val referenceMediaType = args[18] as MediaCapability?
-        val gallery = sessionMedia.sortedBy { it.createdAt }
+        val selectedMediaItemIds = args[5] as Set<String>
+        @Suppress("UNCHECKED_CAST")
+        val albums = args[6] as List<GalleryAlbumUi>
+        val settings = args[7] as GenerationSettings
+        val caps = args[8] as ProviderCapabilities?
+        val templateId = args[9] as String?
+        val isOpen = args[10] as Boolean
+        val isSaveOpen = args[11] as Boolean
+        val continual = args[12] as Boolean
+        val isContinualGenerationActive = args[13] as Boolean
+        val error = args[14] as String?
+        val lastSubmittedPrompt = args[15] as String?
+        val videoGenerationState = args[16] as VideoGenerationState
+        val speechState = args[17] as SpeechState
+        val isPlayingTts = args[18] as Boolean
+        val referenceMediaType = args[19] as MediaCapability?
+        
+        val gallery = (albums.flatMap { it.items }.filter { it.id in sessionSavedAssetIds } + sessionMedia)
+            .distinctBy { it.localUri.substringAfterLast('/') }
+            .sortedBy { it.createdAt }
+
+        val groupedGallery = gallery.groupBy { it.prompt }.map { (prompt, items) ->
+            StudioGalleryGroup(prompt = prompt, mediaItems = items)
+        }.sortedBy { it.mediaItems.maxOf { item -> item.createdAt } }
 
         val currentTemplates = if (mediaType == MediaCapability.MUSIC) musicTemplates else templates
 
@@ -319,6 +336,7 @@ class MultimodalViewModel @Inject constructor(
             activeGenerationPrompt = if (isGenerating) lastSubmittedPrompt else null,
             mediaType = mediaType,
             gallery = gallery,
+            groupedGallery = groupedGallery,
             selectedMediaItemIds = selectedMediaItemIds,
             albums = albums,
             settings = settings,
@@ -341,10 +359,10 @@ class MultimodalViewModel @Inject constructor(
         initialValue = StudioUiState()
     )
 
-    private var generationJob: Job? = null
     private val consumedScrollAnchors = mutableSetOf<String>()
 
     fun onPromptChange(newPrompt: String) {
+        if (_prompt.value == newPrompt) return
         _prompt.value = newPrompt
         stopGeneration()
         consumedScrollAnchors.clear()
@@ -419,29 +437,32 @@ class MultimodalViewModel @Inject constructor(
 
         viewModelScope.launch {
             val currentEphemeral = studioRepository.observeEphemeralMedia().first()
-            currentEphemeral.forEach { item ->
-                if (item.id in selectedIds) {
-                    val savedAsset = studioRepository.saveMedia(
-                        localUri = item.localUri,
-                        prompt = item.prompt,
-                        mediaType = item.mediaType,
-                        albumId = albumId
-                    )
-                    studioRepository.updateEphemeralMedia(savedAsset)
+            currentEphemeral
+                .filter { it.id in selectedIds }
+                .distinctBy { it.id }
+                .forEach { item ->
+                    val savedAsset = studioRepository.promoteEphemeralMedia(item.id, albumId)
+                    _sessionSavedAssetIds.value = _sessionSavedAssetIds.value + savedAsset.id
                 }
-            }
             
             clearMediaSelection()
             onToggleSaveBottomSheet()
         }
     }
 
-    fun onEditMedia(assetId: String) {
-        if (assetId == lastProcessedEditAssetId) return
-        lastProcessedEditAssetId = assetId
+    fun onEditMedia(
+        assetId: String?,
+        rehydrateIds: List<String> = emptyList(),
+        rehydrateUris: List<String> = emptyList(),
+        rehydrateTypes: List<String> = emptyList(),
+        rehydratePrompts: List<String> = emptyList()
+    ) {
+        val cacheKey = assetId ?: rehydrateUris.firstOrNull()
+        if (cacheKey == null || cacheKey == lastProcessedEditAssetId) return
+        lastProcessedEditAssetId = cacheKey
 
         viewModelScope.launch {
-            val sessionItem = _sessionMedia.value.find { it.id == assetId }
+            val sessionItem = assetId?.let { id -> _sessionMedia.value.find { it.id == id } }
             val asset = if (sessionItem != null) {
                 StudioMediaAsset(
                     id = sessionItem.id,
@@ -451,28 +472,66 @@ class MultimodalViewModel @Inject constructor(
                     createdAt = sessionItem.createdAt,
                     albumId = sessionItem.albumId
                 )
-            } else {
+            } else if (assetId != null) {
                 studioRepository.getMediaById(assetId)
-            } ?: return@launch
+            } else null
 
-            val mediaCapability = MediaCapability.valueOf(asset.mediaType)
-            _mediaType.value = mediaCapability
-            _prompt.value = asset.prompt
-            _referenceMediaType.value = mediaCapability
-            _settings.value = when (mediaCapability) {
-                MediaCapability.IMAGE -> ImageGenerationSettings(referenceImageUri = asset.localUri)
-                MediaCapability.VIDEO -> VideoGenerationSettings(referenceImageUri = asset.localUri)
-                MediaCapability.MUSIC -> MusicGenerationSettings()
+            val rehydratedAssets = if (asset == null && rehydrateUris.isNotEmpty()) {
+                val baseTime = System.currentTimeMillis()
+                rehydrateUris.indices.mapNotNull { i ->
+                    val uri = rehydrateUris[i]
+                    val type = rehydrateTypes.getOrNull(i)
+                    val p = rehydratePrompts.getOrNull(i)
+                    val id = rehydrateIds.getOrNull(i) ?: "rehydrated_${baseTime}_$i"
+                    
+                    StudioMediaAsset(
+                        id = id,
+                        localUri = uri,
+                        prompt = p ?: "",
+                        mediaType = type ?: "IMAGE",
+                        createdAt = baseTime + i
+                    )
+                }
+            } else emptyList()
+
+            val finalAsset = asset ?: rehydratedAssets.firstOrNull()
+            if (finalAsset == null) return@launch
+
+            val mediaCapability = try {
+                MediaCapability.valueOf(finalAsset.mediaType)
+            } catch (e: Exception) {
+                MediaCapability.IMAGE
             }
+            
+            _mediaType.value = mediaCapability
+            _referenceMediaType.value = mediaCapability
             _selectedTemplateId.value = null
             stopGeneration()
             consumedScrollAnchors.clear()
+
+            // Add all rehydrated assets to session media so they show up in the gallery
+            rehydratedAssets.forEach { studioRepository.addEphemeralMedia(it) }
+        }
+    }
+
+    fun clearSession() {
+        _prompt.value = ""
+        _lastSubmittedPrompt.value = null
+        _sessionSavedAssetIds.value = emptySet()
+        _selectedMediaItemIds.value = emptySet()
+        _isGenerating.value = false
+        _error.value = null
+        viewModelScope.launch {
+            studioRepository.clearEphemeralCache()
         }
     }
 
     fun onAnimateMedia(assetId: String, autoAnimate: Boolean = false, customPrompt: String? = null) {
-        if (assetId == lastProcessedAnimateAssetId && customPrompt == null) return
-        lastProcessedAnimateAssetId = assetId
+        if (assetId == lastProcessedAnimateAssetId && customPrompt == null && !autoAnimate) return
+        
+        if (!autoAnimate) {
+            lastProcessedAnimateAssetId = assetId
+        }
 
         viewModelScope.launch {
             val sessionItem = _sessionMedia.value.find { it.id == assetId }
@@ -489,18 +548,18 @@ class MultimodalViewModel @Inject constructor(
                 studioRepository.getMediaById(assetId)
             } ?: return@launch
 
-            // Update the shared state so the input bar reflects the current context
-            _mediaType.value = MediaCapability.VIDEO
-            _prompt.value = customPrompt ?: asset.prompt ?: ""
-            _settings.value = VideoGenerationSettings(
-                referenceImageUri = asset.localUri,
-                aspectRatio = AspectRatio.ONE_ONE,
-                quality = GenerationQuality.SPEED,
-                videoDuration = 5,
-                videoResolution = "480p"
-            )
-
-            if (autoAnimate) {
+            if (!autoAnimate) {
+                // Update the shared state so the input bar reflects the current context
+                _mediaType.value = MediaCapability.VIDEO
+                _referenceMediaType.value = MediaCapability.VIDEO
+                _settings.value = VideoGenerationSettings(
+                    aspectRatio = AspectRatio.ONE_ONE,
+                    quality = GenerationQuality.SPEED,
+                    videoDuration = 5,
+                    videoResolution = "480p"
+                )
+            } else {
+                // For autoAnimate, we just want to trigger the generation with the asset
                 startDetailVideoGeneration(asset, customPrompt)
             }
         }
@@ -549,6 +608,12 @@ class MultimodalViewModel @Inject constructor(
     }
 
     fun deleteMedia(id: String) {
+        if (id == lastProcessedEditAssetId) {
+            lastProcessedEditAssetId = null
+        }
+        if (id == lastProcessedAnimateAssetId) {
+            lastProcessedAnimateAssetId = null
+        }
         viewModelScope.launch {
             studioRepository.deleteMedia(id)
             studioRepository.removeEphemeralMedia(id)
@@ -565,9 +630,7 @@ class MultimodalViewModel @Inject constructor(
         lastProcessedAnimateAssetId = null
 
         val submittedPrompt = _prompt.value
-        if (submittedPrompt.isBlank()) {
-            return
-        }
+        if (submittedPrompt.isBlank()) return
 
         _lastSubmittedPrompt.value = submittedPrompt
         _prompt.value = ""
@@ -575,11 +638,12 @@ class MultimodalViewModel @Inject constructor(
         if (_continualMode.value && _mediaType.value == MediaCapability.IMAGE) {
             _isContinualGenerationActive.value = true
         }
+        
         startGeneration(submittedPrompt)
     }
 
     fun onGenerativeScrollThresholdVisible(anchorAssetId: String, gallerySize: Int) {
-        val scrollTriggerKey = "$anchorAssetId:$gallerySize"
+        val scrollTriggerKey = anchorAssetId
         if (_mediaType.value != MediaCapability.IMAGE ||
             !_isContinualGenerationActive.value ||
             _lastSubmittedPrompt.value.isNullOrBlank() ||
@@ -594,51 +658,26 @@ class MultimodalViewModel @Inject constructor(
 
     private fun stopGeneration() {
         _isContinualGenerationActive.value = false
-        generationJob?.cancel()
         _isGenerating.value = false
-    }
-
-    private fun deactivateContinualGeneration() {
-        _isContinualGenerationActive.value = false
+        dispatcher.stopGeneration()
     }
 
     private fun startGeneration(prompt: String) {
-        try {
-            val intent = android.content.Intent(application, MultimediaGenerationService::class.java).apply {
-                action = "com.browntowndev.pocketcrew.studio.ACTION_START"
-                putExtra("PROMPT", prompt)
-                putExtra("MEDIA_TYPE", _mediaType.value.name)
-            }
-            application.startForegroundService(intent)
-        } catch (e: RuntimeException) {
-            logger.warning(TAG, "Failed to start service (likely in test environment): ${e.message}")
-        }
+        dispatcher.startGeneration(prompt, _mediaType.value)
         _isGenerating.value = true
     }
 
     private fun startDetailVideoGeneration(asset: StudioMediaAsset, customPrompt: String? = null) {
-        try {
-            val intent = android.content.Intent(application, MultimediaGenerationService::class.java).apply {
-                action = "com.browntowndev.pocketcrew.studio.ACTION_START"
-                putExtra("PROMPT", customPrompt ?: asset.prompt ?: "")
-                putExtra("MEDIA_TYPE", MediaCapability.VIDEO.name)
-            }
-            application.startForegroundService(intent)
-        } catch (e: RuntimeException) {
-            logger.warning(TAG, "Failed to start service (likely in test environment): ${e.message}")
-        }
+        val prompt = customPrompt ?: asset.prompt ?: ""
+        dispatcher.startGeneration(prompt, MediaCapability.VIDEO)
         _isGenerating.value = true
     }
 
     override fun onCleared() {
         super.onCleared()
-        generationJob?.cancel()
         speechJob?.cancel()
         streamingTtsJob?.cancel()
         playbackController.stop()
-        viewModelScope.launch {
-            studioRepository.clearEphemeralCache()
-        }
     }
 
     private fun StudioMediaAsset.toUi() = StudioMediaUi(

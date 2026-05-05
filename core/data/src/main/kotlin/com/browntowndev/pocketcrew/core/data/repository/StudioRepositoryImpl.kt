@@ -57,6 +57,7 @@ class StudioRepositoryImpl @Inject constructor(
     }
 
     override suspend fun addEphemeralMedia(asset: StudioMediaAsset) {
+        if (ephemeralMedia.value.any { it.id == asset.id }) return
         ephemeralMedia.value = ephemeralMedia.value + asset
     }
 
@@ -68,16 +69,14 @@ class StudioRepositoryImpl @Inject constructor(
         ephemeralMedia.value = ephemeralMedia.value.filter { it.id != id }
     }
 
-    override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset {
+    override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?, createdAt: Long?): StudioMediaAsset {
         var finalUri = localUri
         // If the URI is in the cache directory, move it to files directory
-        if (localUri.contains(context.cacheDir.path)) {
+        if (localUri.startsWith("file://")) {
             val file = File(localUri.replace("file://", ""))
-            val fileName = file.name
-            val sourceFile = File(context.cacheDir, "studio_ephemeral/$fileName")
-            if (sourceFile.exists()) {
-                val destinationFile = File(context.filesDir, fileName)
-                sourceFile.copyTo(destinationFile, overwrite = true)
+            if (file.exists() && file.absolutePath.contains(context.cacheDir.path)) {
+                val destinationFile = File(context.filesDir, file.name)
+                file.copyTo(destinationFile, overwrite = true)
                 finalUri = "file://${destinationFile.absolutePath}"
             }
         }
@@ -87,20 +86,52 @@ class StudioRepositoryImpl @Inject constructor(
                 prompt = prompt,
                 mediaUri = finalUri,
                 mediaType = mediaType,
-                createdAt = System.currentTimeMillis(),
+                createdAt = createdAt ?: System.currentTimeMillis(),
                 albumId = albumId?.toLongOrNull()
             )
         )
         return getMediaById(newId.toString())!!
     }
 
-    override suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset {
+    override suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String?, createdAt: Long?): StudioMediaAsset {
         val fileName = "studio_${System.currentTimeMillis()}.${if (mediaType == "IMAGE") "jpg" else "mp4"}"
         val file = File(context.filesDir, fileName)
         file.writeBytes(bytes)
         
         val persistedUri = "file://${file.absolutePath}"
-        return saveMedia(persistedUri, prompt, mediaType, albumId)
+        return saveMedia(persistedUri, prompt, mediaType, albumId, createdAt)
+    }
+    
+    override suspend fun updateMedia(asset: StudioMediaAsset) {
+        val longId = asset.id.toLongOrNull() ?: return
+        studioMediaDao.insertMedia(
+            StudioMediaEntity(
+                id = longId,
+                prompt = asset.prompt,
+                mediaUri = asset.localUri,
+                mediaType = asset.mediaType,
+                createdAt = asset.createdAt,
+                albumId = asset.albumId?.toLongOrNull()
+            )
+        )
+    }
+
+    override suspend fun promoteEphemeralMedia(id: String, albumId: String?): StudioMediaAsset {
+        val ephemeral = ephemeralMedia.value.find { it.id == id } 
+            ?: throw IllegalArgumentException("Ephemeral media not found: $id")
+            
+        val savedAsset = saveMedia(
+            localUri = ephemeral.localUri,
+            prompt = ephemeral.prompt,
+            mediaType = ephemeral.mediaType,
+            albumId = albumId,
+            createdAt = ephemeral.createdAt
+        )
+        
+        // Remove from ephemeral list
+        removeEphemeralMedia(id)
+        
+        return savedAsset
     }
 
     override suspend fun cacheEphemeralMedia(bytes: ByteArray, mediaType: String): String {
@@ -109,7 +140,7 @@ class StudioRepositoryImpl @Inject constructor(
             ephemeralDir.mkdirs()
         }
         
-        val fileName = "ephemeral_${System.currentTimeMillis()}.${if (mediaType == "IMAGE") "jpg" else "mp4"}"
+        val fileName = "ephemeral_${java.util.UUID.randomUUID()}.${if (mediaType == "IMAGE") "jpg" else "mp4"}"
         val file = File(ephemeralDir, fileName)
         file.writeBytes(bytes)
         val localUri = "file://${file.absolutePath}"

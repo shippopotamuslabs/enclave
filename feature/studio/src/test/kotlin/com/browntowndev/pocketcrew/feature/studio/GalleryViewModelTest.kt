@@ -262,11 +262,23 @@ private class FakeStudioRepository : StudioRepositoryPort {
         media.value = items
     }
 
-    override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset =
-        StudioMediaAsset(id = "1", localUri = localUri, prompt = prompt, mediaType = mediaType, createdAt = 1L, albumId = albumId)
+    override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?, createdAt: Long?): StudioMediaAsset =
+        StudioMediaAsset(id = "1", localUri = localUri, prompt = prompt, mediaType = mediaType, createdAt = createdAt ?: 1L, albumId = albumId)
 
-    override suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String?): StudioMediaAsset =
-        StudioMediaAsset(id = "1", localUri = "bytes", prompt = prompt, mediaType = mediaType, createdAt = 1L, albumId = albumId)
+    override suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String?, createdAt: Long?): StudioMediaAsset =
+        StudioMediaAsset(id = "1", localUri = "bytes", prompt = prompt, mediaType = mediaType, createdAt = createdAt ?: 1L, albumId = albumId)
+
+    override suspend fun updateMedia(asset: StudioMediaAsset) {
+        media.value = media.value.map {
+            if (it.id == asset.id) asset else it
+        }
+    }
+
+    override suspend fun promoteEphemeralMedia(id: String, albumId: String?): StudioMediaAsset {
+        val asset = StudioMediaAsset(id = "perm-$id", localUri = "files://$id", prompt = "p", mediaType = "IMAGE", createdAt = 1L, albumId = albumId)
+        media.value = media.value + asset
+        return asset
+    }
 
     override suspend fun cacheEphemeralMedia(bytes: ByteArray, mediaType: String): String = ""
 
