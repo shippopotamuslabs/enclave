@@ -62,6 +62,7 @@ class AnalyzeImageUseCase @Inject constructor(
                             is InferenceEvent.Thinking -> Unit
                             is InferenceEvent.WebSearchResults -> Unit
                             is InferenceEvent.Artifacts -> Unit
+                            is InferenceEvent.Media -> Unit
                             is InferenceEvent.Finished -> {
                                 loggingPort.info(
                                     TAG,

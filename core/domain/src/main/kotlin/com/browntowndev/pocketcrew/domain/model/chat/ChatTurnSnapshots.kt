@@ -21,4 +21,8 @@ data class MessageSnapshot(
     val pipelineStep: PipelineStep? = null,
     val webSearchSources: List<WebSearchSource> = emptyList(),
     val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = emptyList(),
+    val generatedMediaUris: List<String> = emptyList(),
+    val generatedMediaAssetIds: List<String> = emptyList(),
+    val generatedMediaTypes: List<String> = emptyList(),
+    val generatedMediaPrompts: List<String> = emptyList(),
 )

@@ -37,6 +37,10 @@ class DirectChatInferenceExecutor @Inject constructor(
     private val memoriesRepository: MemoriesRepository,
     private val embeddingEnginePort: EmbeddingEnginePort,
     private val searchToolPromptComposer: SearchToolPromptComposer,
+    private val defaultModelRepository: com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort,
+    private val mediaProviderRepository: com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort,
+    private val mediaToolDefinitionFactory: com.browntowndev.pocketcrew.domain.usecase.media.MediaToolDefinitionFactory,
+    private val getProviderCapabilitiesUseCase: com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase,
     private val loggingPort: LoggingPort,
 ) : ChatInferenceExecutorPort {
 
@@ -51,6 +55,10 @@ class DirectChatInferenceExecutor @Inject constructor(
         memoriesRepository = memoriesRepository,
         embeddingEnginePort = embeddingEnginePort,
         searchToolPromptComposer = searchToolPromptComposer,
+        defaultModelRepository = defaultModelRepository,
+        mediaProviderRepository = mediaProviderRepository,
+        mediaToolDefinitionFactory = mediaToolDefinitionFactory,
+        getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
         loggingPort = loggingPort,
     )
 
@@ -156,6 +164,18 @@ class DirectChatInferenceExecutor @Inject constructor(
 
                 is InferenceEvent.Artifacts -> {
                     emit(MessageGenerationState.ArtifactsAttached(event.artifacts, event.modelType))
+                }
+
+                is InferenceEvent.Media -> {
+                    emit(
+                        MessageGenerationState.MediaAttached(
+                            mediaUris = event.mediaUris,
+                            mediaIds = event.mediaIds,
+                            mediaTypes = event.mediaTypes,
+                            prompts = event.prompts,
+                            modelType = event.modelType
+                        )
+                    )
                 }
 
                 is InferenceEvent.Finished -> {

@@ -24,7 +24,7 @@ import androidx.room.TypeConverters
         StudioAlbumEntity::class,
         MessageFileEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(ModelTypeConverters::class)

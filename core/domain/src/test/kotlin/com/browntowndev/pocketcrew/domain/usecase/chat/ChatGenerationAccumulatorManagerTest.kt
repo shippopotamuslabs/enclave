@@ -144,6 +144,7 @@ class ChatGenerationAccumulatorManagerTest {
             extracted = false,
         )
 
+        manager.reduce(MessageGenerationState.MediaAttached(listOf(source1.url, source2.url), modelType = ModelType.FAST))
         manager.reduce(MessageGenerationState.WebSearchSourcesAttached(listOf(source1, source2), ModelType.FAST))
 
         // Before marking, both should have extracted=false

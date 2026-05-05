@@ -41,6 +41,13 @@ sealed interface MessageGenerationState {
         val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>,
         val modelType: ModelType,
     ) : MessageGenerationState
+    data class MediaAttached(
+        val mediaUris: List<String>,
+        val mediaIds: List<String> = emptyList(),
+        val mediaTypes: List<String> = emptyList(),
+        val prompts: List<String> = emptyList(),
+        val modelType: ModelType,
+    ) : MessageGenerationState
     data class StepCompleted(
         val stepOutput: String,
         val modelDisplayName: String,

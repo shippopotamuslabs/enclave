@@ -45,6 +45,30 @@ fun MessageEntity.toDomain(
         emptyList()
     }
 
+    val mediaUris = try {
+        generatedMediaUrisJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    val mediaAssetIds = try {
+        generatedMediaAssetIdsJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    val mediaTypes = try {
+        generatedMediaTypesJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    val mediaPrompts = try {
+        generatedMediaPromptsJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
+    } catch (e: Exception) {
+        emptyList()
+    }
+
     return Message(
         id = id,
         content = Content(
@@ -53,7 +77,11 @@ fun MessageEntity.toDomain(
             imageUri = imageUri,
             webSearchSources = webSearchSources.map { it.toDomain() },
             artifacts = artifacts,
-            fileAttachments = files.map { it.toDomain() }
+            fileAttachments = files.map { it.toDomain() },
+            generatedMediaUris = mediaUris,
+            generatedMediaAssetIds = mediaAssetIds,
+            generatedMediaTypes = mediaTypes,
+            generatedMediaPrompts = mediaPrompts
         ),
         role = role,
         chatId = chatId,
@@ -73,6 +101,22 @@ fun Message.toEntity(): MessageEntity {
         Json.encodeToString(content.artifacts)
     } else null
 
+    val mediaUrisJson = if (content.generatedMediaUris.isNotEmpty()) {
+        Json.encodeToString(content.generatedMediaUris)
+    } else null
+
+    val mediaAssetIdsJson = if (content.generatedMediaAssetIds.isNotEmpty()) {
+        Json.encodeToString(content.generatedMediaAssetIds)
+    } else null
+
+    val mediaTypesJson = if (content.generatedMediaTypes.isNotEmpty()) {
+        Json.encodeToString(content.generatedMediaTypes)
+    } else null
+
+    val mediaPromptsJson = if (content.generatedMediaPrompts.isNotEmpty()) {
+        Json.encodeToString(content.generatedMediaPrompts)
+    } else null
+
     return MessageEntity(
         id = id,
         content = content.text,
@@ -83,7 +127,11 @@ fun Message.toEntity(): MessageEntity {
         createdAt = createdAt,
         modelType = modelType,
         pipelineStep = content.pipelineStep,
-        artifactsJson = artifactsJson
+        artifactsJson = artifactsJson,
+        generatedMediaUrisJson = mediaUrisJson,
+        generatedMediaAssetIdsJson = mediaAssetIdsJson,
+        generatedMediaTypesJson = mediaTypesJson,
+        generatedMediaPromptsJson = mediaPromptsJson
     )
 }
 

@@ -14,6 +14,9 @@ class SearchToolPromptComposer @Inject constructor() {
         includeImageInspectTool: Boolean = false,
         includeMemoryTools: Boolean = true,
         includeArtifactTool: Boolean = false,
+        includeImageGenerationTool: Boolean = false,
+        includeVideoGenerationTool: Boolean = false,
+        includeMusicGenerationTool: Boolean = false,
         currentChatId: String? = null,
         strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
         coreMemories: List<Memory> = emptyList(),
@@ -29,6 +32,9 @@ class SearchToolPromptComposer @Inject constructor() {
                 includeImageInspectTool = includeImageInspectTool,
                 includeMemoryTools = includeMemoryTools,
                 includeArtifactTool = includeArtifactTool,
+                includeImageGenerationTool = includeImageGenerationTool,
+                includeVideoGenerationTool = includeVideoGenerationTool,
+                includeMusicGenerationTool = includeMusicGenerationTool,
                 currentChatId = currentChatId,
                 strategy = strategy
             ).takeIf(String::isNotEmpty),
@@ -171,6 +177,39 @@ ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
 """.trimIndent())
         }
 
+        private fun mediaGenerationContract(
+            includeImage: Boolean,
+            includeVideo: Boolean,
+            includeMusic: Boolean,
+            strategy: ToolCallStrategy
+        ): String = buildString {
+            append("# MEDIA GENERATION MANDATE:\n")
+            append("You have access to professional media generation tools. Use these when the user asks you to create, generate, draw, or compose original content.\n\n")
+
+            if (includeImage) {
+                append("- Use '${ToolDefinition.GENERATE_IMAGE.name}' to generate images, illustrations, or pictures from text descriptions.\n")
+                append("To generate an image:\n")
+                append(ToolDefinition.GENERATE_IMAGE.toExample(strategy))
+                append("\n\n")
+            }
+
+            if (includeVideo) {
+                append("- Use '${ToolDefinition.GENERATE_VIDEO.name}' to generate short videos or animations from text descriptions.\n")
+                append("To generate a video:\n")
+                append(ToolDefinition.GENERATE_VIDEO.toExample(strategy))
+                append("\n\n")
+            }
+
+            if (includeMusic) {
+                append("- Use '${ToolDefinition.GENERATE_MUSIC.name}' to generate music, beats, or soundtracks from text descriptions.\n")
+                append("To generate music:\n")
+                append(ToolDefinition.GENERATE_MUSIC.toExample(strategy))
+                append("\n\n")
+            }
+
+            append("IMPORTANT: After calling any media tool, inform the user that the media has been generated and is available in their Studio. They can tap the generation card in the chat to open it.")
+        }
+
         private fun strictRules(strategy: ToolCallStrategy): String = when (strategy) {
             ToolCallStrategy.JSON_XML_ENVELOPE -> """
 # STRICT EXECUTION RULES:
@@ -195,10 +234,14 @@ ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
             includeImageInspectTool: Boolean = false,
             includeMemoryTools: Boolean = true,
             includeArtifactTool: Boolean = false,
+            includeImageGenerationTool: Boolean = false,
+            includeVideoGenerationTool: Boolean = false,
+            includeMusicGenerationTool: Boolean = false,
             currentChatId: String? = null,
             strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
         ): String {
-            if (!includeSearchTool && !includeXSearchTool && !includeImageInspectTool && !includeMemoryTools && !includeArtifactTool) return ""
+            if (!includeSearchTool && !includeXSearchTool && !includeImageInspectTool && !includeMemoryTools && !includeArtifactTool && 
+                !includeImageGenerationTool && !includeVideoGenerationTool && !includeMusicGenerationTool) return ""
             if (strategy == ToolCallStrategy.SDK_NATIVE) return ""
 
             return buildString {
@@ -222,6 +265,15 @@ ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
                 if (includeArtifactTool) {
                     if (isNotEmpty()) append("\n\n")
                     append(artifactContract(strategy))
+                }
+                if (includeImageGenerationTool || includeVideoGenerationTool || includeMusicGenerationTool) {
+                    if (isNotEmpty()) append("\n\n")
+                    append(mediaGenerationContract(
+                        includeImage = includeImageGenerationTool,
+                        includeVideo = includeVideoGenerationTool,
+                        includeMusic = includeMusicGenerationTool,
+                        strategy = strategy
+                    ))
                 }
                 val rules = strictRules(strategy)
                 if (rules.isNotEmpty()) {

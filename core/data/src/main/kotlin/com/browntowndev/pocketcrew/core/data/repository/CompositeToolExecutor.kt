@@ -36,6 +36,7 @@ class CompositeToolExecutor @Inject constructor(
     private val manageMemoriesToolExecutor: ManageMemoriesToolExecutor,
     private val artifactToolExecutor: ArtifactToolExecutor,
     private val xSearchToolExecutor: XSearchToolExecutorImpl,
+    private val mediaToolExecutor: MediaToolExecutor,
     private val eventBus: ToolExecutionEventBus,
 ) : ToolExecutorPort {
 
@@ -64,6 +65,9 @@ class CompositeToolExecutor @Inject constructor(
                 ToolDefinition.MANAGE_MEMORIES.name -> manageMemoriesToolExecutor.execute(request)
                 ToolDefinition.GENERATE_ARTIFACT.name -> artifactToolExecutor.execute(request)
                 ToolDefinition.X_SEARCH.name -> xSearchToolExecutor.execute(request)
+                ToolDefinition.GENERATE_IMAGE.name -> mediaToolExecutor.execute(request)
+                ToolDefinition.GENERATE_VIDEO.name -> mediaToolExecutor.execute(request)
+                ToolDefinition.GENERATE_MUSIC.name -> mediaToolExecutor.execute(request)
                 else -> throw IllegalArgumentException("Unsupported tool: ${request.toolName}")
             }
             

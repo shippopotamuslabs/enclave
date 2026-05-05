@@ -1,6 +1,11 @@
 package com.browntowndev.pocketcrew.feature.chat
 
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
+import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import androidx.compose.material.icons.Icons
+
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -91,6 +96,8 @@ class ChatViewModel @Inject constructor(
     private val loggingPort: LoggingPort,
     private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
     private val playbackController: TtsPlaybackControllerPort,
+    private val studioRepository: StudioRepositoryPort,
+    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     companion object {
@@ -307,6 +314,7 @@ class ChatViewModel @Inject constructor(
                     toolStartTimes[event.eventId] = System.currentTimeMillis()
                     val toolName = event.toolName.lowercase()
                     activeToolNames[event.eventId] = toolName
+                    val toolDef = ToolDefinition.fromName(toolName)
                     _activeToolCallBanner.value = ToolCallBannerUi(
                         kind = when (toolName) {
                             WEB_SEARCH.name -> ToolCallBannerKind.SEARCH
@@ -316,9 +324,12 @@ class ChatViewModel @Inject constructor(
                             ToolDefinition.SEARCH_CHAT.name -> ToolCallBannerKind.MEMORY
                             ToolDefinition.GENERATE_ARTIFACT.name -> ToolCallBannerKind.ARTIFACT
                             ToolDefinition.X_SEARCH.name -> ToolCallBannerKind.X_SEARCH
+                            ToolDefinition.GENERATE_IMAGE.name -> ToolCallBannerKind.MEDIA
+                            ToolDefinition.GENERATE_VIDEO.name -> ToolCallBannerKind.MEDIA
+                            ToolDefinition.GENERATE_MUSIC.name -> ToolCallBannerKind.MEDIA
                             else -> ToolCallBannerKind.SEARCH
                         },
-                        label = when (toolName) {
+                        label = toolDef?.displayName ?: when (toolName) {
                             WEB_SEARCH.name.lowercase() -> "Searching the web"
                             WEB_EXTRACT.name.lowercase() -> "Reading webpage content"
                             ATTACHED_IMAGE_INSPECT.name.lowercase() -> "Inspecting image"
@@ -326,6 +337,9 @@ class ChatViewModel @Inject constructor(
                             ToolDefinition.SEARCH_CHAT.name.lowercase() -> "Searching chat"
                             ToolDefinition.GENERATE_ARTIFACT.name.lowercase() -> "Generating Artifact"
                             ToolDefinition.X_SEARCH.name.lowercase() -> "Searching X"
+                            ToolDefinition.GENERATE_IMAGE.name.lowercase() -> "Generating Image"
+                            ToolDefinition.GENERATE_VIDEO.name.lowercase() -> "Generating Video"
+                            ToolDefinition.GENERATE_MUSIC.name.lowercase() -> "Generating Music"
                             else -> "Executing tool"
                         }
                     )
@@ -433,6 +447,13 @@ class ChatViewModel @Inject constructor(
         chatActionState to isPlayingTts
     }
 
+    private val studioMediaFlow = combine(
+        studioRepository.observeEphemeralMedia(),
+        studioRepository.observeAllMedia()
+    ) { ephemeral, persisted ->
+        (ephemeral + persisted).associateBy { it.id }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<ChatUiState> = combine(
         uiInputsWithPolicyFlow,
@@ -440,12 +461,14 @@ class ChatViewModel @Inject constructor(
         dbMessagesFlow,
         activeTurnSnapshotFlow,
         ttsPlaybackFlow,
-    ) {
-        inputsWithPolicy: UiInputsWithPolicy,
-        isBlocked: Boolean,
-        messages: List<Message>,
-        activeTurnSnapshotState: ActiveTurnSnapshotState,
-        ttsPlayback: Pair<ChatActionState, Boolean> ->
+        studioMediaFlow,
+    ) { args: Array<Any?> ->
+        val inputsWithPolicy = args[0] as UiInputsWithPolicy
+        val isBlocked = args[1] as Boolean
+        val messages = args[2] as List<Message>
+        val activeTurnSnapshotState = args[3] as ActiveTurnSnapshotState
+        val ttsPlayback = args[4] as Pair<ChatActionState, Boolean>
+        val studioMediaMap = args[5] as Map<String, StudioMediaAsset>
 
         val chatActionState = ttsPlayback.first
         val isPlayingTts = ttsPlayback.second
@@ -466,12 +489,27 @@ class ChatViewModel @Inject constructor(
             handoffReady = projectedMessages.handoffReady,
         )
 
+        // Reconcile media URIs with Studio Repository
+        val reconciledMessages = projectedMessages.messages.map { message ->
+            if (message.content.generatedMediaAssetIds.isEmpty()) message
+            else {
+                val reconciledUris = message.content.generatedMediaAssetIds.mapIndexed { index, id ->
+                    studioMediaMap[id]?.localUri ?: message.content.generatedMediaUris.getOrNull(index) ?: ""
+                }
+                message.copy(
+                    content = message.content.copy(
+                        generatedMediaUris = reconciledUris
+                    )
+                )
+            }
+        }
+
         // Sort chronologically and map domain messages to UI messages
         var isGenerating = false
         var canStop = true
         var hasActiveIndicator = false
         var activeIndicatorMessageId: MessageId? = null
-        val chatMessages: List<ChatMessage> = projectedMessages.messages
+        val chatMessages: List<ChatMessage> = reconciledMessages
             .map { message: Message ->
                 val chatMessage = mapToChatMessage(message)
                 val state = chatMessage.indicatorState
@@ -557,6 +595,10 @@ class ChatViewModel @Inject constructor(
                 webSearchSources = message.webSearchSources,
                 artifacts = message.content.artifacts,
                 fileAttachments = message.content.fileAttachments,
+                generatedMediaUris = message.content.generatedMediaUris,
+                generatedMediaAssetIds = message.content.generatedMediaAssetIds,
+                generatedMediaTypes = message.content.generatedMediaTypes,
+                generatedMediaPrompts = message.content.generatedMediaPrompts,
             ),
             formattedTimestamp = formatTimestamp(message.createdAt),
             indicatorState = computeIndicatorState(message),

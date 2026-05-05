@@ -8,7 +8,7 @@ object Routes {
     const val CHAT_DEEP_LINK_PATTERN = ChatNotificationDeepLink.URI_PATTERN
     const val HISTORY = "history"
     const val STUDIO = "studio"
-    const val STUDIO_WITH_ARGS = "studio?editAssetId={editAssetId}&animateAssetId={animateAssetId}&animatePrompt={animatePrompt}&autoAnimate={autoAnimate}"
+    const val STUDIO_WITH_ARGS = "studio?editAssetId={editAssetId}&animateAssetId={animateAssetId}&animatePrompt={animatePrompt}&autoAnimate={autoAnimate}&rehydrateIds={rehydrateIds}&rehydrateUris={rehydrateUris}&rehydrateTypes={rehydrateTypes}&rehydratePrompts={rehydratePrompts}"
     const val STUDIO_DETAIL = "studio_detail?assetId={assetId}&animatePrompt={animatePrompt}&autoAnimate={autoAnimate}"
     const val GALLERY = "gallery"
     const val GALLERY_DETAIL = "gallery_detail?albumId={albumId}&assetId={assetId}"
@@ -33,5 +33,15 @@ object Routes {
 
     fun artifact(title: String, content: String): String {
         return "$ARTIFACT?title=$title&content=$content"
+    }
+
+    fun studioWithRehydration(ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>): String {
+        val json = kotlinx.serialization.json.Json
+        val encodedIds = android.net.Uri.encode(json.encodeToString(ids))
+        val encodedUris = android.net.Uri.encode(json.encodeToString(uris))
+        val encodedTypes = android.net.Uri.encode(json.encodeToString(types))
+        val encodedPrompts = android.net.Uri.encode(json.encodeToString(prompts))
+        
+        return "$STUDIO?rehydrateIds=$encodedIds&rehydrateUris=$encodedUris&rehydrateTypes=$encodedTypes&rehydratePrompts=$encodedPrompts"
     }
 }

@@ -37,17 +37,23 @@ import com.browntowndev.pocketcrew.domain.usecase.chat.MergeMessagesUseCase
 import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackStatus
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
+import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
+import com.browntowndev.pocketcrew.domain.model.artifact.DocumentType
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
+import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import io.mockk.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.first
 import java.io.IOException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -82,6 +88,8 @@ class ChatViewModelTest {
     private val loggingPort: LoggingPort = mockk(relaxed = true)
     private val activeChatTurnStore: ActiveChatTurnSnapshotPort = mockk(relaxed = true)
     private val playbackController: TtsPlaybackControllerPort = mockk(relaxed = true)
+    private val studioRepository: StudioRepositoryPort = mockk(relaxed = true)
+    private val context: android.content.Context = mockk(relaxed = true)
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var defaultModelsFlow: MutableStateFlow<List<DefaultModelAssignment>>
 
@@ -133,6 +141,8 @@ class ChatViewModelTest {
         modelDisplayNamesUseCase = mockk(relaxed = true)
         coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
         every { toolExecutionEventPort.events } returns MutableSharedFlow()
+        every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
+        every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
 
         val savedStateHandle = SavedStateHandle()
 
@@ -150,6 +160,8 @@ class ChatViewModelTest {
             loggingPort = loggingPort,
             activeChatTurnSnapshotPort = activeChatTurnStore,
             playbackController = playbackController,
+            studioRepository = studioRepository,
+            context = context,
         )
     }
 
@@ -445,14 +457,14 @@ class ChatViewModelTest {
         advanceUntilIdle() // Ensure requestedTurnKey is processed
         
         // Simulate a snapshot with two artifacts
-        val artifact1 = com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+        val artifact1 = ArtifactGenerationRequest(
             title = "Doc 1",
-            documentType = com.browntowndev.pocketcrew.domain.model.artifact.DocumentType.PDF,
+            documentType = DocumentType.PDF,
             content = ""
         )
-        val artifact2 = com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+        val artifact2 = ArtifactGenerationRequest(
             title = "Doc 2",
-            documentType = com.browntowndev.pocketcrew.domain.model.artifact.DocumentType.PDF,
+            documentType = DocumentType.PDF,
             content = ""
         )
         
@@ -561,5 +573,80 @@ class ChatViewModelTest {
                 backgroundInferenceEnabled = any()
             )
         }
+    }
+
+    @Test
+    fun `UI state reconciles media URIs from StudioRepository`() = runTest {
+        val chatId = ChatId("chat-1")
+        val messageId = MessageId("msg-1")
+        val assetId = "asset-1"
+        val cacheUri = "file:///cache/test.jpg"
+        val persistentUri = "file:///files/test.jpg"
+
+        val studioMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
+        every { studioRepository.observeAllMedia() } returns studioMediaFlow
+        every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
+
+        val messagesFlow = MutableStateFlow(listOf(
+            Message(
+                id = messageId,
+                chatId = chatId,
+                content = Content(
+                    text = "Here is an image",
+                    generatedMediaUris = listOf(cacheUri),
+                    generatedMediaAssetIds = listOf(assetId),
+                    generatedMediaTypes = listOf("IMAGE"),
+                    generatedMediaPrompts = listOf("A beautiful sunset")
+                ),
+                role = Role.ASSISTANT,
+                messageState = MessageState.COMPLETE,
+                modelType = ModelType.FAST
+            )
+        ))
+        coEvery { chatUseCases.getChat(chatId) } returns messagesFlow
+
+        val savedStateHandle = SavedStateHandle(mapOf("chatId" to chatId.value))
+        chatViewModel = ChatViewModel(
+            settingsUseCases = settingsUseCases,
+            chatUseCases = chatUseCases,
+            stageImageAttachmentUseCase = stageImageAttachmentUseCase,
+            savedStateHandle = savedStateHandle,
+            cancelInferenceUseCase = cancelInferenceUseCase,
+            inferenceLockManager = inferenceLockManager,
+            modelDisplayNamesUseCase = modelDisplayNamesUseCase,
+            activeModelProvider = mockk(relaxed = true),
+            toolExecutionEventPort = toolExecutionEventPort,
+            errorHandler = errorHandler,
+            loggingPort = loggingPort,
+            activeChatTurnSnapshotPort = activeChatTurnStore,
+            playbackController = playbackController,
+            studioRepository = studioRepository,
+            context = context,
+        )
+
+        // Initial state should use cache URI
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect() }
+        runCurrent()
+        
+        val initialMessage = chatViewModel.uiState.value.messages.first()
+        assertEquals(cacheUri, initialMessage.content.generatedMediaUris.first())
+
+        // Simulate asset being saved to Gallery (URI change)
+        studioMediaFlow.value = listOf(
+            StudioMediaAsset(
+                id = assetId,
+                localUri = persistentUri,
+                mediaType = "IMAGE",
+                prompt = "A beautiful sunset",
+                createdAt = 1L
+            )
+        )
+        runCurrent()
+
+        // UI state should reflect reconciled persistent URI
+        val updatedMessage = chatViewModel.uiState.value.messages.first()
+        assertEquals(persistentUri, updatedMessage.content.generatedMediaUris.first())
+        
+        collectJob.cancel()
     }
 }

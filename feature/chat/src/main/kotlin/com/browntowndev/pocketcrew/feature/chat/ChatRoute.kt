@@ -11,6 +11,7 @@ fun ChatRoute(
     onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
     onNewChat: () -> Unit,
     onNavigateToArtifactStudio: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit,
+    onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -40,5 +41,6 @@ fun ChatRoute(
         },
         onMicClick = viewModel::onMicClick,
         onNavigateToArtifact = onNavigateToArtifactStudio,
+        onNavigateToStudio = onNavigateToStudio,
     )
 }

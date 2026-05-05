@@ -168,7 +168,11 @@ interface ChatRepository {
         messageState: MessageState,
         pipelineStep: PipelineStep?,
         webSearchSources: List<WebSearchSource> = emptyList(),
-        artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = emptyList()
+        artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = emptyList(),
+        generatedMediaUris: List<String> = emptyList(),
+        generatedMediaAssetIds: List<String> = emptyList(),
+        generatedMediaTypes: List<String> = emptyList(),
+        generatedMediaPrompts: List<String> = emptyList()
     )
 
     /**

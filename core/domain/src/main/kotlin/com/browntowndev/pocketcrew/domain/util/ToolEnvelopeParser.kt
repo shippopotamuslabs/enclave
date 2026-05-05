@@ -9,6 +9,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.SearchChatParams
 import com.browntowndev.pocketcrew.domain.model.inference.WebExtractParams
 import com.browntowndev.pocketcrew.domain.model.inference.WebSearchParams
 import com.browntowndev.pocketcrew.domain.model.inference.XSearchParams
+import com.browntowndev.pocketcrew.domain.model.inference.GenerateImageToolParams
+import com.browntowndev.pocketcrew.domain.model.inference.GenerateVideoToolParams
+import com.browntowndev.pocketcrew.domain.model.inference.GenerateMusicToolParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.model.inference.ToolParameters
 import kotlinx.serialization.json.Json
@@ -240,6 +243,30 @@ object ToolEnvelopeParser {
             ToolDefinition.X_SEARCH.name -> ToolDefinition.X_SEARCH.encodeArguments(
                 XSearchParams(query = extractRequiredQuery(payload))
             )
+            ToolDefinition.GENERATE_IMAGE.name -> {
+                val parsed = try {
+                    ToolDefinition.GENERATE_IMAGE.decodeArguments<GenerateImageToolParams>(payload)
+                } catch (_: Exception) {
+                    GenerateImageToolParams(prompt = extractRequiredString(payload, "prompt"))
+                }
+                ToolDefinition.GENERATE_IMAGE.encodeArguments(parsed)
+            }
+            ToolDefinition.GENERATE_VIDEO.name -> {
+                val parsed = try {
+                    ToolDefinition.GENERATE_VIDEO.decodeArguments<GenerateVideoToolParams>(payload)
+                } catch (_: Exception) {
+                    GenerateVideoToolParams(prompt = extractRequiredString(payload, "prompt"))
+                }
+                ToolDefinition.GENERATE_VIDEO.encodeArguments(parsed)
+            }
+            ToolDefinition.GENERATE_MUSIC.name -> {
+                val parsed = try {
+                    ToolDefinition.GENERATE_MUSIC.decodeArguments<GenerateMusicToolParams>(payload)
+                } catch (_: Exception) {
+                    GenerateMusicToolParams(prompt = extractRequiredString(payload, "prompt"))
+                }
+                ToolDefinition.GENERATE_MUSIC.encodeArguments(parsed)
+            }
             else -> throw IllegalArgumentException("Unsupported tool: $toolName")
         }
 

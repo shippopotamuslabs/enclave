@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -19,6 +20,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
@@ -66,6 +68,7 @@ fun AssistantResponse(
     hasTtsProviderAssigned: Boolean = false,
     onPlayAudio: (String) -> Unit = {},
     onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit = {},
+    onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
 ) {
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
@@ -148,6 +151,25 @@ fun AssistantResponse(
                         )
                     }
                 }
+            }
+            
+            // Generated Media Card (Aggregated)
+            if (message.content.generatedMediaUris.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                val mediaUris = message.content.generatedMediaUris
+                val mediaIds = message.content.generatedMediaAssetIds
+                val mediaTypes = message.content.generatedMediaTypes
+                val mediaPrompts = message.content.generatedMediaPrompts
+
+                MediaCard(
+                    uris = mediaUris,
+                    mediaTypes = mediaTypes,
+                    prompts = mediaPrompts,
+                    onClick = { u, t, p -> 
+                        onNavigateToStudio(mediaIds, u, t, p) 
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             }
 
             Row(
@@ -467,6 +489,134 @@ private fun ArtifactCard(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MediaCard(
+    uris: List<String>,
+    mediaTypes: List<String>,
+    prompts: List<String>,
+    onClick: (uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var loadError by remember { mutableStateOf(false) }
+    val primaryUri = uris.firstOrNull() ?: ""
+    val primaryType = mediaTypes.firstOrNull()
+    val primaryPrompt = prompts.firstOrNull()
+    val count = uris.size
+
+    Surface(
+        onClick = { if (!loadError) onClick(uris, mediaTypes, prompts) },
+        modifier = modifier
+            .fillMaxWidth()
+            .height(110.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        tonalElevation = 2.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(12.dp)
+        ) {
+            // Media Preview
+            Box(
+                modifier = Modifier
+                    .size(width = 80.dp, height = 80.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface),
+                contentAlignment = Alignment.Center
+            ) {
+                if (loadError) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Deleted",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(32.dp)
+                    )
+                } else {
+                    coil3.compose.AsyncImage(
+                        model = primaryUri,
+                        contentDescription = "Generated media",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        onError = { loadError = true },
+                        error = painterResource(R.drawable.pocket_crew_icon)
+                    )
+                    
+                    if (count > 1) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.4f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "+${count - 1}",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = androidx.compose.ui.graphics.Color.White
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                val title = if (loadError) "Media Missing" else {
+                    val typeLabel = when (primaryType) {
+                        "VIDEO" -> "Video"
+                        "MUSIC" -> "Audio"
+                        else -> "Image"
+                    }
+                    if (count > 1) "$count ${typeLabel}s Generated" else "Generated $typeLabel"
+                }
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.sp
+                    ),
+                    color = if (loadError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = if (loadError) "Deleted from storage" else "Available in Studio",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1
+                )
+                
+                Spacer(modifier = Modifier.weight(1f))
+                
+                if (!loadError) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Open in Studio",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             }
         }

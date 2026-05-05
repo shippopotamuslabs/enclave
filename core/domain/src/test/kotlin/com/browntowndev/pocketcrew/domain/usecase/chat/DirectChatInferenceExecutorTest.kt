@@ -37,6 +37,10 @@ class DirectChatInferenceExecutorTest {
     private lateinit var memoriesRepository: MemoriesRepository
     private lateinit var embeddingEnginePort: EmbeddingEnginePort
     private lateinit var searchToolPromptComposer: SearchToolPromptComposer
+    private lateinit var defaultModelRepository: com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
+    private lateinit var mediaProviderRepository: com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
+    private lateinit var mediaToolDefinitionFactory: com.browntowndev.pocketcrew.domain.usecase.media.MediaToolDefinitionFactory
+    private lateinit var getProviderCapabilitiesUseCase: com.browntowndev.pocketcrew.domain.usecase.media.GetProviderCapabilitiesUseCase
     private lateinit var loggingPort: LoggingPort
     private lateinit var inferenceFactory: FakeInferenceFactory
     private lateinit var executor: DirectChatInferenceExecutor
@@ -57,6 +61,10 @@ class DirectChatInferenceExecutorTest {
             coEvery { getEmbedding(any()) } returns floatArrayOf()
         }
         searchToolPromptComposer = mockk(relaxed = true)
+        defaultModelRepository = mockk(relaxed = true)
+        mediaProviderRepository = mockk(relaxed = true)
+        mediaToolDefinitionFactory = mockk(relaxed = true)
+        getProviderCapabilitiesUseCase = mockk(relaxed = true)
         loggingPort = mockk(relaxed = true)
 
         executor = DirectChatInferenceExecutor(
@@ -67,6 +75,10 @@ class DirectChatInferenceExecutorTest {
             memoriesRepository = memoriesRepository,
             embeddingEnginePort = embeddingEnginePort,
             searchToolPromptComposer = searchToolPromptComposer,
+            defaultModelRepository = defaultModelRepository,
+            mediaProviderRepository = mediaProviderRepository,
+            mediaToolDefinitionFactory = mediaToolDefinitionFactory,
+            getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
             loggingPort = loggingPort,
         )
     }
@@ -85,6 +97,10 @@ class DirectChatInferenceExecutorTest {
             memoriesRepository = memoriesRepository,
             embeddingEnginePort = embeddingEnginePort,
             searchToolPromptComposer = searchToolPromptComposer,
+            defaultModelRepository = defaultModelRepository,
+            mediaProviderRepository = mediaProviderRepository,
+            mediaToolDefinitionFactory = mediaToolDefinitionFactory,
+            getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
             loggingPort = loggingPort,
         )
     }

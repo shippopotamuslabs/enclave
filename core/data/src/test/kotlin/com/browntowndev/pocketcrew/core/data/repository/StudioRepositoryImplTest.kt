@@ -94,6 +94,9 @@ class StudioRepositoryImplTest {
         assertTrue(destinationFile.exists())
         assertEquals("image data", destinationFile.readText())
 
+        // Verify source file was deleted (cleanup logic)
+        assertFalse(sourceFile.exists())
+
         // Verify DAO insertion
         coVerify {
             studioMediaDao.insertMedia(match {

@@ -144,6 +144,17 @@ class GenerateChatResponseUseCase @Inject constructor(
                                         )
                                     )
                                 }
+                                if (snapshot.generatedMediaUris.isNotEmpty()) {
+                                    accumulatorManager.reduce(
+                                        MessageGenerationState.MediaAttached(
+                                            mediaUris = snapshot.generatedMediaUris,
+                                            mediaIds = snapshot.generatedMediaAssetIds,
+                                            mediaTypes = snapshot.generatedMediaTypes,
+                                            prompts = snapshot.generatedMediaPrompts,
+                                            modelType = snapshot.modelType
+                                        )
+                                    )
+                                }
                             }
 
                             accumulatorManager.markIncompleteAsCancelled()
@@ -310,6 +321,15 @@ private object NoOpActiveChatTurnSnapshotPort : ActiveChatTurnSnapshotPort {
         key: ActiveChatTurnKey,
         assistantMessageId: MessageId,
         artifact: com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest,
+    ) = Unit
+
+    override suspend fun attachMedia(
+        key: ActiveChatTurnKey,
+        assistantMessageId: MessageId,
+        mediaUris: List<String>,
+        mediaIds: List<String>,
+        mediaTypes: List<String>,
+        prompts: List<String>,
     ) = Unit
 
     override suspend fun acknowledgeHandoff(key: ActiveChatTurnKey) = Unit

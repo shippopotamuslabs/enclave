@@ -64,6 +64,19 @@ internal class ChatGenerationAccumulatorManager(
                     }
                 }
             }
+            is MessageGenerationState.MediaAttached -> {
+                getOrCreateAccumulator(state.modelType).apply {
+                    state.mediaUris.forEachIndexed { index, newUri ->
+                        if (generatedMediaUris.none { it == newUri }) {
+                            generatedMediaUris.add(newUri)
+                            // Assuming order is preserved between uris, ids, types, prompts
+                            if (index < state.mediaIds.size) generatedMediaAssetIds.add(state.mediaIds[index])
+                            if (index < state.mediaTypes.size) generatedMediaTypes.add(state.mediaTypes[index])
+                            if (index < state.prompts.size) generatedMediaPrompts.add(state.prompts[index])
+                        }
+                    }
+                }
+            }
 
             is MessageGenerationState.StepCompleted,
             is MessageGenerationState.Finished -> {
@@ -142,6 +155,22 @@ internal class ChatGenerationAccumulatorManager(
                     accumulator.webSearchSources.add(snapshotSource)
                 }
             }
+
+            // Sync media
+            messageSnapshot.generatedMediaUris.forEachIndexed { index, snapshotUri ->
+                if (accumulator.generatedMediaUris.none { it == snapshotUri }) {
+                    accumulator.generatedMediaUris.add(snapshotUri)
+                    if (index < messageSnapshot.generatedMediaAssetIds.size) {
+                        accumulator.generatedMediaAssetIds.add(messageSnapshot.generatedMediaAssetIds[index])
+                    }
+                    if (index < messageSnapshot.generatedMediaTypes.size) {
+                        accumulator.generatedMediaTypes.add(messageSnapshot.generatedMediaTypes[index])
+                    }
+                    if (index < messageSnapshot.generatedMediaPrompts.size) {
+                        accumulator.generatedMediaPrompts.add(messageSnapshot.generatedMediaPrompts[index])
+                    }
+                }
+            }
         }
     }
 
@@ -217,6 +246,10 @@ internal class MessageAccumulator(
     var pipelineStep: PipelineStep? = null,
     val webSearchSources: MutableList<WebSearchSource> = mutableListOf(),
     val artifacts: MutableList<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest> = mutableListOf(),
+    val generatedMediaUris: MutableList<String> = mutableListOf(),
+    val generatedMediaAssetIds: MutableList<String> = mutableListOf(),
+    val generatedMediaTypes: MutableList<String> = mutableListOf(),
+    val generatedMediaPrompts: MutableList<String> = mutableListOf(),
 ) {
     val thinkingDurationSeconds: Long
         get() = if (thinkingStartTime != null && thinkingEndTime != null) {
@@ -252,6 +285,10 @@ internal class MessageAccumulator(
         pipelineStep = pipelineStep,
         webSearchSources = webSearchSources.toList(),
         artifacts = artifacts.toList(),
+        generatedMediaUris = generatedMediaUris.toList(),
+        generatedMediaAssetIds = generatedMediaAssetIds.toList(),
+        generatedMediaTypes = generatedMediaTypes.toList(),
+        generatedMediaPrompts = generatedMediaPrompts.toList(),
     )
 }
 
