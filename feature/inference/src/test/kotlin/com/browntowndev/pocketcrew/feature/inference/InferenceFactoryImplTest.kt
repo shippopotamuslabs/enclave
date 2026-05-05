@@ -196,7 +196,7 @@ class InferenceFactoryImplTest {
         coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
         coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("7")) } returns config
         coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } answers { credentials }
-        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
 
         val first = factory.withInferenceService(ModelType.THINKING) { it }
 
@@ -216,7 +216,7 @@ class InferenceFactoryImplTest {
         coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
         coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("7")) } returns config
         coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-        every { apiKeyProvider.getApiKey("alias") } answers { apiKey }
+        coEvery { apiKeyProvider.getApiKey("alias") } answers { apiKey }
 
         val first = factory.withInferenceService(ModelType.THINKING) { it }
 
@@ -257,7 +257,7 @@ class InferenceFactoryImplTest {
         coEvery { defaultModelRepository.getDefault(ModelType.FAST) } returns apiAssignment
         coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("7")) } returns config
         coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
         
         val apiService = factory.withInferenceService(ModelType.FAST) { it }
         
@@ -315,7 +315,7 @@ class InferenceFactoryImplTest {
         coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns apiAssignmentThinking
         coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("7")) } returns config
         coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
         
         val apiServiceThinking = factory.withInferenceService(ModelType.THINKING) { it }
         
@@ -341,7 +341,7 @@ class InferenceFactoryImplTest {
         )
         coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("7")) } returns config
         coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
 
         val fastService = factory.withInferenceService(ModelType.FAST) { it }
         val thinkingService = factory.withInferenceService(ModelType.THINKING) { it }
@@ -358,7 +358,7 @@ class InferenceFactoryImplTest {
         coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
         coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
         coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
 
         val service = factory.withInferenceService(ModelType.THINKING) { it }
 
@@ -378,7 +378,7 @@ class InferenceFactoryImplTest {
         coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
         coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("10")) } returns config
         coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("12")) } returns credentials
-        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
 
         val service = factory.withInferenceService(ModelType.THINKING) { it }
 
@@ -398,7 +398,7 @@ class InferenceFactoryImplTest {
         coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
         coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("13")) } returns config
         coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("12")) } returns credentials
-        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
 
         val service = factory.withInferenceService(ModelType.THINKING) { it }
 
@@ -414,7 +414,7 @@ class InferenceFactoryImplTest {
         coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
         coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
         coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
 
         val service = factory.withInferenceService(ModelType.THINKING) { it }
 
@@ -438,7 +438,7 @@ class InferenceFactoryImplTest {
         coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
         coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
         coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
 
         val service = factory.withInferenceService(ModelType.THINKING) { it }
 
@@ -463,7 +463,7 @@ class InferenceFactoryImplTest {
         coEvery { defaultModelRepository.getDefault(ModelType.THINKING) } returns assignment
         coEvery { apiModelRepository.getConfigurationById(ApiModelConfigurationId("9")) } returns config
         coEvery { apiModelRepository.getCredentialsById(ApiCredentialsId("11")) } returns credentials
-        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
 
         val service = factory.withInferenceService(ModelType.THINKING) { it }
 
@@ -556,7 +556,7 @@ class InferenceFactoryImplTest {
             provider = ApiProvider.OPENAI,
             id = ApiCredentialsId("vision-creds"),
         )
-        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
 
         val service = factory.withInferenceService(ModelType.VISION) { it }
 
@@ -604,7 +604,7 @@ class InferenceFactoryImplTest {
                 else -> provider.defaultBaseUrl()
             }
         )
-        every { apiKeyProvider.getApiKey("alias") } returns "secret"
+        coEvery { apiKeyProvider.getApiKey("alias") } returns "secret"
         return factory.withInferenceService(modelType) { it }
     }
 

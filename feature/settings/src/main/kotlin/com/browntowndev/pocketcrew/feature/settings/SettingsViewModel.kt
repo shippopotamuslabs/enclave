@@ -129,6 +129,7 @@ class SettingsViewModel @Inject constructor(
     private val mediaUseCases = settingsUseCases.media
     private val assignmentUseCases = settingsUseCases.assignments
     private val deletionUseCases = settingsUseCases.deletion
+    private val authUseCases = settingsUseCases.auth
 
     private val localModelAssetsFlow = localModelUseCases.getLocalModelAssets()
     private val apiModelAssetsFlow = apiProviderUseCases.getApiModelAssets()
@@ -330,6 +331,18 @@ class SettingsViewModel @Inject constructor(
     fun onBackgroundInferenceChange(enabled: Boolean) {
         viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update background inference setting", "Failed to update setting")) {
             preferencesUseCases.updateBackgroundInferenceEnabled(enabled)
+        }
+    }
+
+    fun onLoginWithGoogle() {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to sign in with Google", "Failed to sign in")) {
+            authUseCases.loginWithGoogle().getOrThrow()
+        }
+    }
+
+    fun onLogout() {
+        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to sign out", "Failed to sign out")) {
+            authUseCases.logout().getOrThrow()
         }
     }
 

@@ -135,8 +135,28 @@ subprojects {
         }
     }
 
+    // Centralized Linting and Static Analysis
+    val excludedModules = listOf(":llama-android", ":whisper-android")
+    if (path !in excludedModules) {
+        apply(plugin = "org.jlleitschuh.gradle.ktlint")
+        apply(plugin = "io.gitlab.arturbosch.detekt")
 
+        configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+            android.set(true)
+            ignoreFailures.set(true)
+            reporters {
+                reporter(org.jlleitschuh.gradle.ktlint.reporter.ReporterType.PLAIN)
+                reporter(org.jlleitschuh.gradle.ktlint.reporter.ReporterType.CHECKSTYLE)
+            }
+        }
 
+        configure<io.gitlab.arturbosch.detekt.extensions.DetektExtension> {
+            config.setFrom("$rootDir/config/detekt/detekt.yml")
+            buildUponDefaultConfig = true
+            allRules = false
+            ignoreFailures = true
+        }
+    }
 
     plugins.withId("org.jetbrains.kotlin.jvm") {
         tasks.register<JacocoReport>("jacocoTestReport") {

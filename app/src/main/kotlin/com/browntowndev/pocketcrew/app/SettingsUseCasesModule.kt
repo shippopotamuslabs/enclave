@@ -4,6 +4,8 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsApiProviderUs
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsApiProviderUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCasesImpl
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAuthUseCases
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAuthUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsDeletionUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsDeletionUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUseCases
@@ -52,6 +54,10 @@ abstract class SettingsUseCasesModule {
     @Binds
     @Singleton
     abstract fun bindSettingsMediaUseCases(impl: SettingsMediaUseCasesImpl): SettingsMediaUseCases
+
+    @Binds
+    @Singleton
+    abstract fun bindSettingsAuthUseCases(impl: SettingsAuthUseCasesImpl): SettingsAuthUseCases
 
     @Binds
     @Singleton

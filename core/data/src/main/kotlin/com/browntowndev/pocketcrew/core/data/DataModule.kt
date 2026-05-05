@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data
 
 import android.app.NotificationManager
 import android.content.Context
+import androidx.credentials.CredentialManager
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
@@ -10,6 +11,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.work.WorkManager
+import com.browntowndev.pocketcrew.core.data.auth.FirebaseGoogleAuthManager
 import com.browntowndev.pocketcrew.core.data.download.DownloadNotificationManager
 import com.browntowndev.pocketcrew.core.data.download.DownloadProgressTracker
 import com.browntowndev.pocketcrew.core.data.download.DownloadSpeedTracker
@@ -65,6 +67,7 @@ import com.browntowndev.pocketcrew.core.data.repository.StudioRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.repository.ToolExecutionEventBus
 import com.browntowndev.pocketcrew.core.data.repository.TtsProviderRepositoryImpl
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyProviderImpl
+import com.browntowndev.pocketcrew.domain.port.auth.AuthManager
 import com.browntowndev.pocketcrew.domain.port.download.DownloadSpeedTrackerPort
 import com.browntowndev.pocketcrew.domain.port.download.FileDownloaderPort
 import com.browntowndev.pocketcrew.domain.port.download.HashingPort
@@ -100,16 +103,24 @@ import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import com.browntowndev.pocketcrew.domain.port.repository.TtsProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.UtilityModelFilePort
+import com.browntowndev.pocketcrew.core.data.remote.FirestoreDataSource
+import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
 import com.browntowndev.pocketcrew.domain.port.security.ApiKeyProviderPort
+import com.browntowndev.pocketcrew.domain.qualifier.ApplicationScope
 import com.browntowndev.pocketcrew.domain.qualifier.PipelineDataStore
 import com.browntowndev.pocketcrew.domain.util.Clock
 import com.browntowndev.pocketcrew.domain.util.SystemClock
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import javax.inject.Singleton
@@ -234,6 +245,29 @@ object DataModule {
 
     @Provides
     @Singleton
+    fun provideFirebaseAuth(): FirebaseAuth = FirebaseAuth.getInstance()
+
+    @Provides
+    @Singleton
+    fun provideFirebaseFirestore(): FirebaseFirestore = FirebaseFirestore.getInstance()
+
+    @Provides
+    @Singleton
+    @ApplicationScope
+    fun provideApplicationScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    @Provides
+    @Singleton
+    fun provideUserIdProvider(firebaseAuth: FirebaseAuth): () -> String? = {
+        firebaseAuth.currentUser?.uid
+    }
+
+    @Provides
+    @Singleton
+    fun provideCredentialManager(@ApplicationContext context: Context): CredentialManager = CredentialManager.create(context)
+
+    @Provides
+    @Singleton
     fun provideNotificationManager(@ApplicationContext context: Context): DownloadNotificationManager {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         return DownloadNotificationManager(context, notificationManager)
@@ -273,6 +307,18 @@ object DataModule {
 @Module
 @InstallIn(SingletonComponent::class)
 abstract class DataRepositoryModule {
+
+    @Binds
+    @Singleton
+    abstract fun bindAuthManager(impl: FirebaseGoogleAuthManager): AuthManager
+
+    @Binds
+    @Singleton
+    abstract fun bindCloudSyncPort(impl: FirestoreDataSource): CloudSyncPort
+
+    @Binds
+    @Singleton
+    abstract fun bindCleanupRepository(impl: com.browntowndev.pocketcrew.core.data.repository.CleanupRepositoryImpl): com.browntowndev.pocketcrew.domain.port.repository.CleanupRepository
 
     @Binds
     @Singleton
@@ -393,6 +439,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindApiKeyProvider(impl: ApiKeyProviderImpl): ApiKeyProviderPort
+
+    @Binds
+    @Singleton
+    abstract fun bindCryptoManager(impl: com.browntowndev.pocketcrew.core.data.security.CryptoManagerImpl): com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 
     @Binds
     @Singleton

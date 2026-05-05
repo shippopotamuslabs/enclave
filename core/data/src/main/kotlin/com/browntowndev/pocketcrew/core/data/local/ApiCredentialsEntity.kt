@@ -36,6 +36,9 @@ data class ApiCredentialsEntity(
     @ColumnInfo(name = "credential_alias")
     val credentialAlias: String,
 
+    @ColumnInfo(name = "encrypted_api_key", typeAffinity = ColumnInfo.BLOB)
+    val encryptedApiKey: ByteArray? = null,
+
     @ColumnInfo(name = "api_key_signature")
     val apiKeySignature: String? = null,
 

@@ -43,7 +43,7 @@ class FetchApiProviderModelsUseCaseTest {
 
     @Test
     fun `falls back to stored api key when current key is blank`() = runTest {
-        every { apiKeyProvider.getApiKey("saved-alias") } returns "stored-key"
+        coEvery { apiKeyProvider.getApiKey("saved-alias") } returns "stored-key"
         coEvery {
             apiModelCatalog.fetchModels(ApiProvider.XAI, "stored-key", "https://api.x.ai/v1")
         } returns listOf(DiscoveredApiModel(id = "grok-4.20-multi-agent"))
@@ -101,7 +101,7 @@ class FetchApiProviderModelsUseCaseTest {
 
     @Test
     fun `fails when no api key is available`() = runTest {
-        every { apiKeyProvider.getApiKey(any()) } returns null
+        coEvery { apiKeyProvider.getApiKey(any()) } returns null
 
         assertFailsWith<IllegalArgumentException> {
             useCase(

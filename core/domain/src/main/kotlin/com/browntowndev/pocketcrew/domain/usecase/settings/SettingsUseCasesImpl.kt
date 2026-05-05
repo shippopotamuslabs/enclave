@@ -1,5 +1,8 @@
 package com.browntowndev.pocketcrew.domain.usecase.settings
 
+import com.browntowndev.pocketcrew.domain.usecase.auth.GetAuthStateUseCase
+import com.browntowndev.pocketcrew.domain.usecase.auth.LoginWithGoogleUseCase
+import com.browntowndev.pocketcrew.domain.usecase.auth.LogoutUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.ClearDefaultModelUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetApiModelAssetsUseCase
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
@@ -72,6 +75,12 @@ class SettingsMediaUseCasesImpl @Inject constructor(
     override val deleteMediaProvider: DeleteMediaProviderUseCase,
 ) : SettingsMediaUseCases
 
+class SettingsAuthUseCasesImpl @Inject constructor(
+    override val loginWithGoogle: LoginWithGoogleUseCase,
+    override val logout: LogoutUseCase,
+    override val getAuthState: GetAuthStateUseCase,
+) : SettingsAuthUseCases
+
 class SettingsUseCasesImpl @Inject constructor(
     override val preferences: SettingsPreferencesUseCases,
     override val localModels: SettingsLocalModelUseCases,
@@ -80,4 +89,5 @@ class SettingsUseCasesImpl @Inject constructor(
     override val deletion: SettingsDeletionUseCases,
     override val tts: SettingsTtsUseCases,
     override val media: SettingsMediaUseCases,
+    override val auth: SettingsAuthUseCases,
 ) : SettingsUseCases

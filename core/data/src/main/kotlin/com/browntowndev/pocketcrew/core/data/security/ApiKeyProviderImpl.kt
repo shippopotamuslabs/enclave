@@ -8,7 +8,11 @@ import javax.inject.Singleton
 class ApiKeyProviderImpl @Inject constructor(
     private val apiKeyManager: ApiKeyManager
 ) : ApiKeyProviderPort {
-    override fun getApiKey(credentialAlias: String): String? {
+    override suspend fun getApiKey(credentialAlias: String): String? {
         return apiKeyManager.get(credentialAlias)
+    }
+
+    override fun saveApiKey(credentialAlias: String, apiKey: String) {
+        apiKeyManager.save(credentialAlias, apiKey)
     }
 }

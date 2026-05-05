@@ -101,6 +101,12 @@ abstract class MessageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     abstract suspend fun insertFiles(files: List<MessageFileEntity>)
 
+    @androidx.room.Update
+    abstract suspend fun update(messageEntity: MessageEntity)
+
+    @Query("DELETE FROM message WHERE id = :id")
+    abstract suspend fun deleteById(id: MessageId)
+
     @Query("UPDATE message SET thinking_start_time = :startTime WHERE id = :messageId")
     abstract suspend fun updateThinkingStartTime(messageId: MessageId, startTime: Long)
 

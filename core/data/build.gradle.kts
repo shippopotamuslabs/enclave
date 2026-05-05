@@ -40,6 +40,7 @@ ksp {
 
 dependencies {
     implementation(project(":core:domain"))
+    implementation(platform(libs.firebase.bom))
 
     // ONNX Runtime
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.17.0")
@@ -82,6 +83,13 @@ dependencies {
     // Markdown to HTML conversion
     implementation(libs.commonmark)
     implementation(libs.commonmark.ext.tables)
+
+    // Auth & Credentials
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
 
     // Test dependencies - JUnit 5 (Jupiter)
     testImplementation(libs.junit)

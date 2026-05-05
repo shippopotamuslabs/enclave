@@ -49,7 +49,7 @@ class PlayTtsWithMedia3UseCaseTest {
             ttsAsset = testTtsAsset,
         )
         coEvery { resolveSelectionUseCase(ModelType.TTS) } returns selection
-        every { apiKeyProvider.getApiKey("openai-key") } returns "sk-test"
+        coEvery { apiKeyProvider.getApiKey("openai-key") } returns "sk-test"
         every { playbackController.play("Hello") } returns flowOf(
             TtsPlaybackStatus.Playing,
             TtsPlaybackStatus.Completed,
@@ -96,7 +96,7 @@ class PlayTtsWithMedia3UseCaseTest {
             ttsAsset = testTtsAsset,
         )
         coEvery { resolveSelectionUseCase(ModelType.TTS) } returns selection
-        every { apiKeyProvider.getApiKey("openai-key") } returns null
+        coEvery { apiKeyProvider.getApiKey("openai-key") } returns null
 
         val statuses = useCase("Hello").toList()
 
@@ -112,7 +112,7 @@ class PlayTtsWithMedia3UseCaseTest {
             ttsAsset = testTtsAsset,
         )
         coEvery { resolveSelectionUseCase(ModelType.TTS) } returns selection
-        every { apiKeyProvider.getApiKey("openai-key") } returns "sk-test"
+        coEvery { apiKeyProvider.getApiKey("openai-key") } returns "sk-test"
         every { playbackController.play("Hello") } returns flowOf(
             TtsPlaybackStatus.Initializing,
             TtsPlaybackStatus.Error("Network error"),
@@ -144,7 +144,7 @@ class PlayTtsWithMedia3UseCaseTest {
             ttsAsset = testTtsAsset,
         )
         coEvery { resolveSelectionUseCase(ModelType.TTS) } returns selection
-        every { apiKeyProvider.getApiKey("openai-key") } returns "sk-test"
+        coEvery { apiKeyProvider.getApiKey("openai-key") } returns "sk-test"
         every { playbackController.play("Hello") } returns flowOf(
             TtsPlaybackStatus.Playing,
             TtsPlaybackStatus.Stopped,

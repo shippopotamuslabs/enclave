@@ -17,6 +17,7 @@ import com.browntowndev.pocketcrew.domain.model.config.OpenRouterRoutingConfigur
 import com.browntowndev.pocketcrew.domain.model.inference.ApiReasoningEffort
 import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import java.util.UUID
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -27,7 +28,8 @@ import javax.inject.Singleton
 class ApiModelRepositoryImpl @Inject constructor(
     private val apiCredentialsDao: ApiCredentialsDao,
     private val apiModelConfigurationsDao: ApiModelConfigurationsDao,
-    private val apiKeyManager: ApiKeyManager
+    private val apiKeyManager: ApiKeyManager,
+    private val cryptoManager: CryptoManagerPort,
 ) : ApiModelRepositoryPort {
 
     override fun observeAllCredentials(): Flow<List<ApiCredentials>> =
@@ -70,6 +72,13 @@ class ApiModelRepositoryImpl @Inject constructor(
                 apiKey = it,
             )
         } ?: existingEntity?.apiKeySignature
+        
+        val encryptedKeyPayload = if (sourceApiKey != null && cryptoManager.hasCachedKey()) {
+            cryptoManager.encrypt(sourceApiKey).getOrNull()
+        } else {
+            existingEntity?.encryptedApiKey
+        }
+
         val now = System.currentTimeMillis()
         val persistedId = if (credentials.id.value.isEmpty()) {
             val entity = ApiCredentialsEntity(
@@ -80,6 +89,7 @@ class ApiModelRepositoryImpl @Inject constructor(
                 baseUrl = storedBaseUrl,
                 isMultimodal = credentials.isMultimodal,
                 credentialAlias = credentials.credentialAlias,
+                encryptedApiKey = encryptedKeyPayload,
                 apiKeySignature = apiKeySignature,
                 createdAt = now,
                 updatedAt = now
@@ -95,6 +105,7 @@ class ApiModelRepositoryImpl @Inject constructor(
                 baseUrl = storedBaseUrl,
                 isMultimodal = credentials.isMultimodal,
                 credentialAlias = credentials.credentialAlias,
+                encryptedApiKey = encryptedKeyPayload,
                 apiKeySignature = apiKeySignature,
                 createdAt = existingEntity?.createdAt ?: now,
                 updatedAt = now
@@ -203,7 +214,8 @@ class ApiModelRepositoryImpl @Inject constructor(
         modelId = modelId,
         baseUrl = baseUrl,
         isMultimodal = isMultimodal,
-        credentialAlias = credentialAlias
+        credentialAlias = credentialAlias,
+        encryptedApiKey = encryptedApiKey
     )
     
     private fun ApiModelConfigurationEntity.toDomain() = ApiModelConfiguration(
