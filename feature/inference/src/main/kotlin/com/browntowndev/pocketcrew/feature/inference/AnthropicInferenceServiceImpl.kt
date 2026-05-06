@@ -86,6 +86,7 @@ class AnthropicInferenceServiceImpl(
             val requestHistory = buildRequestHistory(options)
             loggingPort.debug(
                 TAG,
+                @Suppress("MaxLineLength")
                 "sendPrompt start provider=$PROVIDER model=$modelId modelType=$modelType closeConversation=$closeConversation reasoningBudget=${options.reasoningBudget} reasoningEffort=${options.reasoningEffort} maxTokens=${options.maxTokens}"
             )
             executePrompt(prompt, options, requestHistory) { emit(it) }
@@ -98,12 +99,15 @@ class AnthropicInferenceServiceImpl(
             loggingPort.debug(TAG, "sendPrompt cancelled provider=$PROVIDER model=$modelId")
             emit(InferenceEvent.Finished(modelType))
             throw e
+        } catch (e: IllegalArgumentException) {
+            loggingPort.error(TAG, "Tool request failed. ${describeException(e)}", e)
+            emit(InferenceEvent.Error(e, modelType))
+            return@flow
+        } catch (e: IllegalStateException) {
+            loggingPort.error(TAG, "Tool request failed. ${describeException(e)}", e)
+            emit(InferenceEvent.Error(e, modelType))
+            return@flow
         } catch (e: Exception) {
-            if (e is IllegalArgumentException || e is IllegalStateException) {
-                loggingPort.error(TAG, "Tool request failed. ${describeException(e)}", e)
-                emit(InferenceEvent.Error(e, modelType))
-                return@flow
-            }
             val errorMsg = e.message ?: "Unknown error"
             loggingPort.error(TAG, "API request failed. ${describeException(e)}", e)
             emit(InferenceEvent.Error(Exception("API Error ($PROVIDER): $errorMsg", e), modelType))
@@ -132,6 +136,7 @@ class AnthropicInferenceServiceImpl(
 
         loggingPort.info(
             TAG,
+            @Suppress("MaxLineLength")
             "Using Anthropic Messages API. model=$modelId reasoningEffort=${options.reasoningEffort} reasoningBudget=${options.reasoningBudget} maxTokens=${options.maxTokens}"
         )
         logRequest(params)
@@ -166,7 +171,6 @@ class AnthropicInferenceServiceImpl(
             onInferencePass = { params, allowToolUse ->
                 streamMessages(
                     params = params,
-                    allowToolUse = allowToolUse,
                     emitEvent = emitEvent,
                 )
             },
@@ -313,6 +317,7 @@ class AnthropicInferenceServiceImpl(
         val historyWithSystemPrompt = mergeSystemPrompt(conversationHistory, options.systemPrompt)
         loggingPort.debug(
             TAG,
+            @Suppress("MaxLineLength")
             "Prepared request history provider=$PROVIDER model=$modelId modelType=$modelType historyCount=${historyWithSystemPrompt.size} systemPromptIncluded=${historyWithSystemPrompt.firstOrNull()?.role == Role.SYSTEM}"
         )
         return historyWithSystemPrompt
@@ -444,7 +449,6 @@ class AnthropicInferenceServiceImpl(
 
     private suspend fun streamMessages(
         params: MessageCreateParams,
-        allowToolUse: Boolean = false,
         emitEvent: suspend (InferenceEvent) -> Unit
     ): StreamedAnthropicResponse {
         logRequest(params)
@@ -518,6 +522,7 @@ class AnthropicInferenceServiceImpl(
                 if (event.messageStop().isPresent) {
                     loggingPort.debug(
                         TAG,
+                        @Suppress("MaxLineLength")
                         "Anthropic stream completed model=$modelId outputTextDeltas=$outputTextDeltaCount thinkingTextDeltas=$thinkingTextDeltaCount"
                     )
                 }

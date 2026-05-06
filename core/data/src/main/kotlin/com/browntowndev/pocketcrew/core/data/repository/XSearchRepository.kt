@@ -115,6 +115,11 @@ class XSearchRepository @Inject constructor(
     companion object {
         private const val SEARCH_URL = "https://api.x.com/2/tweets/search/recent"
         private const val CACHE_TTL_MS = 5 * 60 * 1000L // 5 minutes
+        // Relevancy scoring weights
+        private const val MEDIA_PRESENCE_BONUS = 2.5
+        private const val VERIFIED_AUTHOR_BONUS = 2.0
+        private const val IMPRESSION_LOG_WEIGHT = 0.5
+        private const val REPLY_COUNT_WEIGHT = 0.2
         private val json = Json { ignoreUnknownKeys = true }
     }
 
@@ -127,7 +132,7 @@ class XSearchRepository @Inject constructor(
         val normalizedQuery = query.trim().lowercase()
         val cached = cache[normalizedQuery]
         if (cached != null && System.currentTimeMillis() - cached.timestamp < CACHE_TTL_MS) {
-            return mapResponse(query, cached.body)
+            return mapResponse(cached.body)
         }
 
         val apiKey = apiKeyManager.get(ApiKeyManager.X_SEARCH_ALIAS)
@@ -165,11 +170,11 @@ class XSearchRepository @Inject constructor(
 
             val body = response.body.string()
             cache[normalizedQuery] = CachedResponse(body, System.currentTimeMillis())
-            return mapResponse(query, body)
+            return mapResponse(body)
         }
     }
 
-    internal fun mapResponse(query: String, body: String): String {
+    internal fun mapResponse(body: String): String {
         val response = json.decodeFromString<XSearchResponse>(body)
         val tweets = response.data ?: return json.encodeToString(emptyList<XPost>())
         
@@ -182,15 +187,15 @@ class XSearchRepository @Inject constructor(
             val media = tweet.attachments?.media_keys?.mapNotNull { mediaMap[it] }
             
             // Relevancy signals: verified authors and media presence are high leverage
-            val mediaBonus = if (!media.isNullOrEmpty()) 2.5 else 0.0
-            val verifiedBonus = if (user?.verified == true) 2.0 else 0.0
+            val mediaBonus = if (!media.isNullOrEmpty()) MEDIA_PRESENCE_BONUS else 0.0
+            val verifiedBonus = if (user?.verified == true) VERIFIED_AUTHOR_BONUS else 0.0
 
             val impactScore = if (metrics != null) {
                 // Weighted score: retweets and likes are high signal, impressions are low signal
                 kotlin.math.log10(metrics.like_count + 1.0) +
                 2.0 * kotlin.math.log10(metrics.retweet_count + 1.0) +
-                0.5 * kotlin.math.log10(metrics.impression_count + 1.0) +
-                metrics.reply_count * 0.2 +
+                IMPRESSION_LOG_WEIGHT * kotlin.math.log10(metrics.impression_count + 1.0) +
+                metrics.reply_count * REPLY_COUNT_WEIGHT +
                 mediaBonus + verifiedBonus
             } else mediaBonus + verifiedBonus
 

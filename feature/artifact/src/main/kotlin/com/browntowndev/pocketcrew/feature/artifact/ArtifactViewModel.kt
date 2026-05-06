@@ -46,13 +46,13 @@ class ArtifactViewModel @Inject constructor(
             _uiState.value = ArtifactUiState(isLoading = true)
             try {
                 var request: ArtifactGenerationRequest? = null
-                val decodedTitle = try { URLDecoder.decode(rawTitle, "UTF-8") } catch (e: Exception) { rawTitle }
-                val decodedContent = try { URLDecoder.decode(rawContent, "UTF-8") } catch (e: Exception) { rawContent }
+                val decodedTitle = try { URLDecoder.decode(rawTitle, "UTF-8") } catch (_: Exception) { rawTitle }
+                val decodedContent = try { URLDecoder.decode(rawContent, "UTF-8") } catch (_: Exception) { rawContent }
 
                 try {
                     // Primary Strategy: Parse as a full JSON request
                     request = jsonParser.decodeFromString<ArtifactGenerationRequest>(decodedContent)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     // Fallback: Treat decoded content as raw markdown
                     request = ArtifactGenerationRequest(title = decodedTitle, content = decodedContent)
                 }

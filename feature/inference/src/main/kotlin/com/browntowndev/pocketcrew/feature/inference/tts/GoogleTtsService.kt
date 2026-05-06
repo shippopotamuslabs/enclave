@@ -14,6 +14,12 @@ class GoogleTtsService @Inject constructor(
     private val modelsApiProvider: () -> Models,
 ) : TtsServicePort {
 
+    private companion object {
+        const val TTS_SAMPLE_RATE = 24_000
+        const val WAV_HEADER_SIZE = 44
+        const val WAV_FMT_CHUNK_SIZE = 36
+    }
+
     override suspend fun synthesizeSpeech(text: String, voice: String, modelId: String?): Result<ByteArray> = withContext(Dispatchers.IO) {
         runCatching {
             val resolvedVoice = if (voice.contains(":")) {
@@ -60,17 +66,17 @@ class GoogleTtsService @Inject constructor(
      * so that Android MediaPlayer can decode and play it.
      */
     private fun wrapPcmInWav(pcmData: ByteArray): ByteArray {
-        val sampleRate = 24_000
+        val sampleRate = TTS_SAMPLE_RATE
         val channels = 1
         val bitsPerSample = 16
         val byteRate = sampleRate * channels * bitsPerSample / 8
         val blockAlign = channels * bitsPerSample / 8
-        val header = ByteArray(44)
+        val header = ByteArray(WAV_HEADER_SIZE)
         val buffer = java.nio.ByteBuffer.wrap(header).order(java.nio.ByteOrder.LITTLE_ENDIAN)
 
         // RIFF chunk descriptor
         buffer.put("RIFF".toByteArray(Charsets.US_ASCII))
-        buffer.putInt(36 + pcmData.size) // chunk size
+        buffer.putInt(WAV_FMT_CHUNK_SIZE + pcmData.size) // chunk size
         buffer.put("WAVE".toByteArray(Charsets.US_ASCII))
 
         // fmt sub-chunk

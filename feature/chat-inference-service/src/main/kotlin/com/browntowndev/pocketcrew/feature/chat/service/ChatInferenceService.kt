@@ -158,7 +158,9 @@ class ChatInferenceService : Service() {
                 val modelType = ModelType.valueOf(intent.getStringExtra(EXTRA_MODEL_TYPE) ?: ModelType.FAST.name)
                 loggingPort.info(
                     TAG,
-                    "ACTION_START chat=${chatId.value} assistantMessageId=${assistantMessageId.value} modelType=${modelType.name} userHasImage=$userHasImage",
+                    "ACTION_START chat=${chatId.value} " +
+                        "assistantMessageId=${assistantMessageId.value} " +
+                        "modelType=${modelType.name} userHasImage=$userHasImage",
                 )
 
                 startInference(prompt, userMessageId, assistantMessageId, chatId, userHasImage, modelType)
@@ -195,7 +197,9 @@ class ChatInferenceService : Service() {
         currentAssistantMessageId = assistantMessageId
         loggingPort.info(
             TAG,
-            "startInference chat=${chatId.value} assistantMessageId=${assistantMessageId.value} modelType=${modelType.name} userHasImage=$userHasImage",
+            "startInference chat=${chatId.value} " +
+                "assistantMessageId=${assistantMessageId.value} " +
+                "modelType=${modelType.name} userHasImage=$userHasImage",
         )
         startForeground(ONGOING_NOTIFICATION_ID, createOngoingNotification(chatId))
         loggingPort.debug(TAG, "foreground service started chat=${chatId.value}")
@@ -216,7 +220,8 @@ class ChatInferenceService : Service() {
                 if (userHasImage) {
                     loggingPort.debug(
                         TAG,
-                        "emitting initial Processing state for image request chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
+                        "emitting initial Processing state for image request " +
+                            "chat=${chatId.value} assistantMessageId=${assistantMessageId.value}",
                     )
                     publishState(
                         chatId = chatId,
@@ -248,7 +253,7 @@ class ChatInferenceService : Service() {
                 withContext(NonCancellable) {
                     persistenceSession.flush(markIncompleteAsCancelled = true)
                 }
-                return@launch
+                throw e
             } catch (e: Exception) {
                 loggingPort.error(TAG, "Inference failed in service", e)
                 publishState(
@@ -276,7 +281,9 @@ class ChatInferenceService : Service() {
         val config = activeModelProvider.getActiveConfiguration(modelType)
         loggingPort.info(
             TAG,
-            "generateWithService start chat=${chatId.value} assistantMessageId=${assistantMessageId.value} modelType=${modelType.name} configAvailable=${config != null}",
+            "generateWithService start chat=${chatId.value} " +
+                "assistantMessageId=${assistantMessageId.value} " +
+                "modelType=${modelType.name} configAvailable=${config != null}",
         )
         val preparedRequest = inferenceRequestPreparer(
             prompt = prompt,
@@ -287,7 +294,9 @@ class ChatInferenceService : Service() {
         )
         loggingPort.debug(
             TAG,
-            "request prepared chat=${chatId.value} assistantMessageId=${assistantMessageId.value} promptLength=${preparedRequest.prompt.length}",
+            "request prepared chat=${chatId.value} " +
+                "assistantMessageId=${assistantMessageId.value} " +
+                "promptLength=${preparedRequest.prompt.length}",
         )
 
         try {

@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
 import com.browntowndev.pocketcrew.domain.model.chat.MessageGenerationState
@@ -26,6 +26,7 @@ internal class ChatGenerationAccumulatorManager(
     internal val messages: Map<MessageId, MessageAccumulator>
         get() = _messages
 
+    @Suppress("CyclomaticComplexMethod")
     suspend fun reduce(state: MessageGenerationState): AccumulatedMessages {
         when (state) {
             is MessageGenerationState.EngineLoading -> {

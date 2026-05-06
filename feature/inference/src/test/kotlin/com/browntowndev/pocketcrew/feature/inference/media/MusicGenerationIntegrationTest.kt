@@ -34,7 +34,7 @@ class MusicGenerationIntegrationTest {
         val expectedBytes = "music bytes".toByteArray()
 
         coEvery { apiKeyProvider.getApiKey("google-alias") } returns "test-key"
-        coEvery { googleAdapter.generateMusic(prompt, "test-key", any(), any(), settings) } returns Result.success(expectedBytes)
+        coEvery { googleAdapter.generateMusic(prompt, "test-key", any(), any()) } returns Result.success(expectedBytes)
 
         // When
         val result = musicPort.generateMusic(prompt, provider, settings)

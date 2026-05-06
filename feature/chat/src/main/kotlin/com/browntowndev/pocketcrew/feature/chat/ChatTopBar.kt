@@ -63,6 +63,7 @@ fun ChatTopBar(
     )
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview
 @Composable
 private fun PreviewChatTopBarLight() {
@@ -71,6 +72,7 @@ private fun PreviewChatTopBarLight() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview
 @Composable
 private fun PreviewChatTopBarDark() {
@@ -79,6 +81,7 @@ private fun PreviewChatTopBarDark() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview
 @Composable
 private fun PreviewChatTopBarThinking() {

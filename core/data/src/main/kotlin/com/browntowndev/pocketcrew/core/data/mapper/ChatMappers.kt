@@ -41,31 +41,31 @@ fun MessageEntity.toDomain(
 ): Message {
     val artifacts = try {
         artifactsJson?.let { Json.decodeFromString<List<ArtifactGenerationRequest>>(it) } ?: emptyList()
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         emptyList()
     }
 
     val mediaUris = try {
         generatedMediaUrisJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         emptyList()
     }
 
     val mediaAssetIds = try {
         generatedMediaAssetIdsJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         emptyList()
     }
 
     val mediaTypes = try {
         generatedMediaTypesJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         emptyList()
     }
 
     val mediaPrompts = try {
         generatedMediaPromptsJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
-    } catch (e: Exception) {
+    } catch (_: Exception) {
         emptyList()
     }
 

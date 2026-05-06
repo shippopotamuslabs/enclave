@@ -144,6 +144,7 @@ fun ByokConfigureRoute(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList")
 @Composable
 fun ByokConfigureScreen(
     uiState: SettingsUiState,

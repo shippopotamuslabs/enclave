@@ -47,6 +47,7 @@ import com.browntowndev.pocketcrew.core.ui.component.sheet.JumpFreeModalBottomSh
 import com.browntowndev.pocketcrew.domain.model.settings.SearchProvider
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList")
 @Composable
 fun SearchSkillBottomSheet(
     uiState: SettingsUiState,

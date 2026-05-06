@@ -136,7 +136,9 @@ class LiteRtInferenceServiceImpl @Inject constructor(
             } catch (e: JavaCancellationException) {
                 // LiteRT cancelProcess() signals cancellation through this exception type.
                 // Emit Finished so the UI transitions out of generating state cleanly.
-                Log.i(TAG, "LiteRT native inference cancelled by user for modelType=$targetModelType")
+                // Note: JavaCancellationException is NOT a Kotlin CancellationException,
+                // so we do not re-throw it — the native layer already handled cancellation.
+                Log.i(TAG, "LiteRT native inference cancelled by user for modelType=$targetModelType", e)
                 conversationManager.cancelProcess()
                 send(InferenceEvent.Finished(targetModelType))
             } catch (e: CancellationException) {

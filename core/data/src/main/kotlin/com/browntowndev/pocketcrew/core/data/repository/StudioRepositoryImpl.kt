@@ -69,7 +69,13 @@ class StudioRepositoryImpl @Inject constructor(
         ephemeralMedia.value = ephemeralMedia.value.filter { it.id != id }
     }
 
-    override suspend fun saveMedia(localUri: String, prompt: String, mediaType: String, albumId: String?, createdAt: Long?): StudioMediaAsset {
+    override suspend fun saveMedia(
+        localUri: String,
+        prompt: String,
+        mediaType: String,
+        albumId: String?,
+        createdAt: Long?
+    ): StudioMediaAsset {
         var finalUri = localUri
         // If the URI is in the cache directory, move it to files directory
         if (localUri.startsWith("file://")) {
@@ -94,7 +100,13 @@ class StudioRepositoryImpl @Inject constructor(
         return getMediaById(newId.toString())!!
     }
 
-    override suspend fun saveMedia(bytes: ByteArray, prompt: String, mediaType: String, albumId: String?, createdAt: Long?): StudioMediaAsset {
+    override suspend fun saveMedia(
+        bytes: ByteArray,
+        prompt: String,
+        mediaType: String,
+        albumId: String?,
+        createdAt: Long?
+    ): StudioMediaAsset {
         val fileName = "studio_${System.currentTimeMillis()}.${if (mediaType == "IMAGE") "jpg" else "mp4"}"
         val file = File(context.filesDir, fileName)
         file.writeBytes(bytes)

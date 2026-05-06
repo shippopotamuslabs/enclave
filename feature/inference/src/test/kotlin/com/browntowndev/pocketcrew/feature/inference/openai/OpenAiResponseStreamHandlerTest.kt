@@ -26,7 +26,6 @@ class OpenAiResponseStreamHandlerTest {
     private val emitEvent: suspend (InferenceEvent) -> Unit = { emittedEvents.add(it) }
 
     private fun createHandler(
-        allowToolCall: Boolean = true,
         chatId: ChatId? = null,
         userMessageId: MessageId? = null,
     ) = OpenAiResponseStreamHandler(
@@ -35,7 +34,6 @@ class OpenAiResponseStreamHandlerTest {
         modelType = ModelType.THINKING,
         loggingPort = loggingPort,
         tag = "TestHandler",
-        allowToolCall = allowToolCall,
         chatId = chatId,
         userMessageId = userMessageId,
         emitEvent = emitEvent,
@@ -153,7 +151,7 @@ class OpenAiResponseStreamHandlerTest {
             // When a model emits multiple function_call_arguments_done events
             // in a single response (parallel tool calls), both calls are accumulated
             // in the list rather than overwriting each other.
-            val handler = createHandler(allowToolCall = true)
+            val handler = createHandler()
             val state = StreamState()
 
             // First function call arrives via handleEvent
@@ -195,7 +193,7 @@ class OpenAiResponseStreamHandlerTest {
     @Test
     fun `handleEvent dispatches function_call_arguments_done and captures tool call`() =
         kotlinx.coroutines.test.runTest {
-            val handler = createHandler(allowToolCall = true)
+            val handler = createHandler()
             val state = StreamState()
 
             val event = mockk<com.openai.models.responses.ResponseStreamEvent>(relaxed = true)
@@ -213,11 +211,11 @@ class OpenAiResponseStreamHandlerTest {
         }
 
     @Test
-    fun `handleEvent captures tool call even when allowToolCall is false`() =
+    fun `handleEvent captures tool call regardless of tool call configuration`() =
         kotlinx.coroutines.test.runTest {
-            // allowToolCall = false is a signal to the model, but if it hallucinations
-            // a call anyway, we capture it so the orchestrator can report the limit error.
-            val handler = createHandler(allowToolCall = false)
+            // Tool calls are always captured by the handler so the orchestrator
+            // can report them regardless of any tool call limit configuration.
+            val handler = createHandler()
             val state = StreamState()
 
             val event = mockk<com.openai.models.responses.ResponseStreamEvent>(relaxed = true)

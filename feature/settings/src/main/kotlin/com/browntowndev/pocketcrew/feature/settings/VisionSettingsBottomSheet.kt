@@ -49,7 +49,13 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 fun VisionSettingsBottomSheet(
     uiState: SettingsUiState,
     onDismiss: () -> Unit,
-    onSetDefaultModel: (ModelType, LocalModelConfigurationId?, ApiModelConfigurationId?, TtsProviderId?, com.browntowndev.pocketcrew.domain.model.config.MediaProviderId?) -> Unit,
+    onSetDefaultModel: (
+        ModelType,
+        LocalModelConfigurationId?,
+        ApiModelConfigurationId?,
+        TtsProviderId?,
+        com.browntowndev.pocketcrew.domain.model.config.MediaProviderId?
+    ) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var isDrilledDown by remember { mutableStateOf(false) }
@@ -103,7 +109,11 @@ fun VisionSettingsBottomSheet(
                         ListItem(
                             colors = ListItemDefaults.colors(containerColor = Color.Transparent),
                             leadingContent = {
-                                Icon(imageVector = Icons.Default.Visibility, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Icon(
+                                    imageVector = Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             },
                             headlineContent = { Text("API Vision Model", fontWeight = FontWeight.Bold) },
                             supportingContent = { Text(currentVisionModel?.currentModelName ?: "None") },

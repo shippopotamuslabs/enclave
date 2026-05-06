@@ -17,11 +17,10 @@ class DiscoverApiModelsUseCase @Inject constructor(
             credentialAlias = request.credentialAlias,
             baseUrl = request.baseUrl,
         )
-        val selectedModelDetail = if (
-            request.provider == ApiProvider.XAI &&
+        val needsDetailFetch = request.provider == ApiProvider.XAI &&
             request.selectedModelId != null &&
             models.none { it.id == request.selectedModelId && it.contextWindowTokens != null }
-        ) {
+        val selectedModelDetail = if (needsDetailFetch) {
             fetchApiProviderModelDetailUseCase(
                 provider = request.provider,
                 modelId = request.selectedModelId,

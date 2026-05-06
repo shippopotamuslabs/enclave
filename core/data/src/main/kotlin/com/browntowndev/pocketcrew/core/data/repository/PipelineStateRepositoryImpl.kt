@@ -41,7 +41,7 @@ class PipelineStateRepositoryImpl @Inject constructor(
         
         return try {
             PipelineState.fromJson(serialized)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }

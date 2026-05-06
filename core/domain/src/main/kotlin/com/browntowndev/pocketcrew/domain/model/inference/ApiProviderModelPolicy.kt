@@ -38,6 +38,7 @@ enum class ApiReasoningControlStyle {
     XAI_MULTI_AGENT,
 }
 
+@Suppress("TooManyFunctions")
 object ApiProviderModelPolicy {
     private val standardReasoningEfforts = listOf(
         ApiReasoningEffort.LOW,
@@ -173,12 +174,11 @@ object ApiProviderModelPolicy {
         if (!startsWith("grok-4")) {
             return false
         }
-        if (
-            startsWith("grok-4.20-multi-agent") ||
+        val isExcludedFamily = startsWith("grok-4.20-multi-agent") ||
             startsWith("grok-4.20-reasoning") ||
             startsWith("grok-4-fast-non-reasoning") ||
             startsWith("grok-4-1-fast-non-reasoning")
-        ) {
+        if (isExcludedFamily) {
             return false
         }
         return contains("reasoning") || this == "grok-4" || startsWith("grok-4-") || startsWith("grok-4.3")

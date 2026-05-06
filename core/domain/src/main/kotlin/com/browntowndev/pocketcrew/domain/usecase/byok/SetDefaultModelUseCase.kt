@@ -7,7 +7,6 @@ import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import javax.inject.Inject
 
 interface SetDefaultModelUseCase {
@@ -22,7 +21,6 @@ interface SetDefaultModelUseCase {
 
 class SetDefaultModelUseCaseImpl @Inject constructor(
     private val defaultModelRepository: DefaultModelRepositoryPort,
-    private val localModelRepository: LocalModelRepositoryPort,
     private val apiModelRepository: ApiModelRepositoryPort,
 ) : SetDefaultModelUseCase {
     override suspend fun invoke(

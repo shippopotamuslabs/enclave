@@ -8,10 +8,6 @@ import javax.inject.Inject
 class ValidateDownloadConditionsUseCase @Inject constructor(
     private val deviceEnvironmentRepository: DeviceEnvironmentRepositoryPort
 ) {
-    companion object {
-        private const val TAG = "ValidateDownloadConditions"
-    }
-
     suspend operator fun invoke(
         missingModels: List<LocalModelAsset>,
         wifiOnly: Boolean

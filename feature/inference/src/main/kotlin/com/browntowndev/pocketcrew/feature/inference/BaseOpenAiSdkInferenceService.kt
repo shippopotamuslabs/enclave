@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runInterruptible
 
+@Suppress("LargeClass")
 abstract class BaseOpenAiSdkInferenceService(
     protected val client: OpenAIClient,
     protected val modelId: String,
@@ -55,6 +56,13 @@ abstract class BaseOpenAiSdkInferenceService(
 
     companion object {
         private const val MAX_LOG_BODY_CHARS = 4_000
+
+        /** Checks if an exception message indicates a client error (400/Bad Request or 404/Not Found). */
+        internal fun isClientErrorMessage(message: String?): Boolean =
+            message?.contains("400") == true ||
+                message?.contains("Bad Request") == true ||
+                message?.contains("404") == true ||
+                message?.contains("Not Found") == true
     }
 
     protected abstract val tag: String
@@ -74,6 +82,7 @@ abstract class BaseOpenAiSdkInferenceService(
             val requestHistory = buildRequestHistory(options)
             loggingPort.debug(
                 tag,
+                @Suppress("MaxLineLength")
                 "sendPrompt start provider=$provider model=$modelId modelType=$modelType closeConversation=$closeConversation reasoningBudget=${options.reasoningBudget} reasoningEffort=${options.reasoningEffort} maxTokens=${options.maxTokens}"
             )
             executePrompt(prompt, options, requestHistory) { emit(it) }
@@ -86,19 +95,24 @@ abstract class BaseOpenAiSdkInferenceService(
             loggingPort.debug(tag, "sendPrompt cancelled provider=$provider model=$modelId")
             emit(InferenceEvent.Finished(modelType))
             throw e
-        } catch (e: Exception) {
-            if (e is IllegalArgumentException || e is IllegalStateException) {
-                loggingPort.error(tag, "Tool request failed. ${describeException(e)}", e)
-                emit(InferenceEvent.Error(e, modelType))
-                return@flow
-            }
+        } catch (e: IllegalArgumentException) {
+            loggingPort.error(tag, "Tool request failed. ${describeException(e)}", e)
+            emit(InferenceEvent.Error(e, modelType))
+            return@flow
+        } catch (e: IllegalStateException) {
+            loggingPort.error(tag, "Tool request failed. ${describeException(e)}", e)
+            emit(InferenceEvent.Error(e, modelType))
+            return@flow
+        } catch (e: OpenAIServiceException) {
             var errorMsg = e.message ?: "Unknown error"
-            if (e is OpenAIServiceException) {
-                val bodyStr = safeSerializeBody(e)
-                if (bodyStr.isNotBlank() && !errorMsg.contains(bodyStr)) {
-                    errorMsg += " | Body: $bodyStr"
-                }
+            val bodyStr = safeSerializeBody(e)
+            if (bodyStr.isNotBlank() && !errorMsg.contains(bodyStr)) {
+                errorMsg += " | Body: $bodyStr"
             }
+            loggingPort.error(tag, "API request failed. ${describeException(e)}", e)
+            emit(InferenceEvent.Error(Exception("API Error ($provider): $errorMsg", e), modelType))
+        } catch (e: Exception) {
+            var errorMsg = e.message ?: "Unknown error"
             loggingPort.error(tag, "API request failed. ${describeException(e)}", e)
             emit(InferenceEvent.Error(Exception("API Error ($provider): $errorMsg", e), modelType))
         }
@@ -207,11 +221,10 @@ abstract class BaseOpenAiSdkInferenceService(
             initialParams = initialParams,
             tag = tag,
             maxToolCalls = options.maxToolCalls,
-            onInferencePass = { params, allowToolCall ->
+            onInferencePass = { params, _allowToolCall ->
 
                 streamResponses(
                     params = params,
-                    allowToolCall = allowToolCall,
                     chatId = options.chatId,
                     userMessageId = options.userMessageId,
                     emitEvent = emitEvent,
@@ -357,6 +370,7 @@ abstract class BaseOpenAiSdkInferenceService(
         val historyWithSystemPrompt = mergeSystemPrompt(conversationHistory, options.systemPrompt)
         loggingPort.debug(
             tag,
+            @Suppress("MaxLineLength")
             "Prepared request history provider=$provider model=$modelId modelType=$modelType historyCount=${historyWithSystemPrompt.size} systemPromptIncluded=${historyWithSystemPrompt.firstOrNull()?.role == Role.SYSTEM}"
         )
         return historyWithSystemPrompt
@@ -364,7 +378,6 @@ abstract class BaseOpenAiSdkInferenceService(
 
     protected suspend fun streamResponses(
         params: ResponseCreateParams,
-        allowToolCall: Boolean = false,
         chatId: ChatId? = null,
         userMessageId: MessageId? = null,
         emitEvent: suspend (InferenceEvent) -> Unit
@@ -376,7 +389,6 @@ abstract class BaseOpenAiSdkInferenceService(
             modelType = modelType,
             loggingPort = loggingPort,
             tag = tag,
-            allowToolCall = allowToolCall,
             chatId = chatId,
             userMessageId = userMessageId,
             emitEvent = emitEvent,
@@ -384,6 +396,7 @@ abstract class BaseOpenAiSdkInferenceService(
         val state = StreamState()
         client.responses().createStreaming(params).use { streamResponse ->
             val iterator = streamResponse.stream().iterator()
+            @Suppress("LoopWithTooManyJumpStatements")
             loop@ while (currentCoroutineContext().isActive) {
                 val hasNext = try {
                     runInterruptible { iterator.hasNext() }
@@ -589,6 +602,7 @@ abstract class BaseOpenAiSdkInferenceService(
                 if (choice.finishReason().isPresent) {
                     loggingPort.debug(
                         tag,
+                        @Suppress("MaxLineLength")
                         "Chat stream finished model=$modelId finishReason=${choice.finishReason().get()} outputTextDeltas=$outputTextDeltaCount"
                     )
                     finishedEmitted = true
@@ -641,6 +655,7 @@ abstract class BaseOpenAiSdkInferenceService(
     private fun logResponsesRequest(params: ResponseCreateParams) {
         loggingPort.debug(
             tag,
+            @Suppress("MaxLineLength")
             "Responses API request provider=$provider model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(serializeBody(params._body()))}"
         )
     }
@@ -648,6 +663,7 @@ abstract class BaseOpenAiSdkInferenceService(
     private fun logChatRequest(params: ChatCompletionCreateParams) {
         loggingPort.debug(
             tag,
+            @Suppress("MaxLineLength")
             "Chat Completions request provider=$provider model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(serializeBody(params._body()))}"
         )
     }
@@ -695,6 +711,7 @@ abstract class BaseOpenAiSdkInferenceService(
             .getOrElse { error ->
                 loggingPort.warning(
                     tag,
+                    @Suppress("MaxLineLength")
                     "Skipping malformed API error field while formatting exception. fieldError=${error.message ?: error::class.java.simpleName}"
                 )
                 null

@@ -60,6 +60,7 @@ internal class PersistAccumulatedChatMessagesUseCase(
             .trim()
 
     private companion object {
+        @Suppress("MaxLineLength")
         private val TOOL_CALL_TRACE_REGEX = Regex(
             """(?s)<!\[CDATA\[<tool>\s*\{.*?\}\s*</tool>\]\]>|autocomplete\s*\{.*?\}\s*autocomplete|,?\{"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{[^}]*\}\s*\}\s*,?"""
         )

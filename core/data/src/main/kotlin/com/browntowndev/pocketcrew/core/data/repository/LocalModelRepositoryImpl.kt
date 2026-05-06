@@ -28,7 +28,6 @@ class LocalModelRepositoryImpl @Inject constructor(
     private val configsDao: LocalModelConfigurationsDao,
     private val defaultModelsDao: DefaultModelsDao,
     private val transactionProvider: TransactionProvider,
-    private val logger: LoggingPort
 ) : LocalModelRepositoryPort {
 
     @OptIn(ExperimentalUuidApi::class)
@@ -205,19 +204,5 @@ class LocalModelRepositoryImpl @Inject constructor(
         thinkingEnabled = entity.thinkingEnabled,
         systemPrompt = entity.systemPrompt ?: "",
         isSystemPreset = entity.isSystemPreset
-    )
-
-    private fun entityToAssignment(entity: DefaultModelEntity) = DefaultModelAssignment(
-        modelType = entity.modelType,
-        localConfigId = entity.localConfigId,
-        apiConfigId = entity.apiConfigId,
-        ttsProviderId = entity.ttsProviderId,
-    )
-
-    private fun assignmentToEntity(assignment: DefaultModelAssignment) = DefaultModelEntity(
-        modelType = assignment.modelType,
-        localConfigId = assignment.localConfigId,
-        apiConfigId = assignment.apiConfigId,
-        ttsProviderId = assignment.ttsProviderId,
     )
 }

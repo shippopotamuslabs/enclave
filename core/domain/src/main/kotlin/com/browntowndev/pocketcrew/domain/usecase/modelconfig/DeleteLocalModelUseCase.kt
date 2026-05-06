@@ -70,7 +70,11 @@ class DeleteLocalModelUseCase @Inject constructor(
                         localConfigId = replacementLocalConfigId,
                         apiConfigId = replacementApiConfigId
                     )
-                    loggingPort.info(TAG, "Reassigned default slot for model type $modelType to config (local: ${replacementLocalConfigId?.value}, api: ${replacementApiConfigId?.value})")
+                    loggingPort.info(
+                        TAG,
+                        "Reassigned default slot for model type $modelType to config " +
+                            "(local: ${replacementLocalConfigId?.value}, api: ${replacementApiConfigId?.value})"
+                    )
                 }
             }
 

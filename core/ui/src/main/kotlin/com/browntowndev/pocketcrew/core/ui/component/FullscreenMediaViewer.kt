@@ -99,6 +99,7 @@ fun FullscreenMediaViewer(
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Fullscreen media light", showBackground = true, backgroundColor = 0xFF000000)
 @Composable
 private fun FullscreenMediaViewerLightPreview() {
@@ -107,6 +108,7 @@ private fun FullscreenMediaViewerLightPreview() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(name = "Fullscreen media dark", showBackground = true, backgroundColor = 0xFF000000)
 @Composable
 private fun FullscreenMediaViewerDarkPreview() {

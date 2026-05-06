@@ -6,7 +6,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.ToolExecutionResult
 import com.browntowndev.pocketcrew.domain.model.inference.ManageMemoriesParams
 import com.browntowndev.pocketcrew.domain.model.inference.MemoryAction
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutorPort
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
@@ -38,7 +37,6 @@ private data class ManageMemoriesSearchResult(
 
 @Singleton
 class ManageMemoriesToolExecutor @Inject constructor(
-    private val loggingPort: LoggingPort,
     private val memoriesRepository: MemoriesRepository,
     private val embeddingEnginePort: EmbeddingEnginePort
 ) : ToolExecutorPort {
@@ -58,7 +56,7 @@ class ManageMemoriesToolExecutor @Inject constructor(
                 MemoryAction.save -> {
                     val cat = try {
                         MemoryCategory.valueOf(categoryStr.uppercase())
-                    } catch (e: Exception) {
+                    } catch (_: Exception) {
                         MemoryCategory.FACTS
                     }
                     val mem = memoriesRepository.insertMemory(cat, content)

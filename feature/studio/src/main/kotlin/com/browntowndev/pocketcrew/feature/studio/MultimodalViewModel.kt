@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.media.*
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
@@ -30,6 +29,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("TooManyFunctions", "MagicNumber")
 class MultimodalViewModel @Inject constructor(
     private val shareMediaPort: ShareMediaPort,
     private val studioRepository: StudioRepositoryPort,
@@ -39,7 +39,6 @@ class MultimodalViewModel @Inject constructor(
     private val getProviderCapabilitiesUseCase: GetProviderCapabilitiesUseCase,
     private val chatUseCases: ChatUseCases,
     private val playbackController: TtsPlaybackControllerPort,
-    private val logger: LoggingPort
 ) : ViewModel() {
 
     private val _prompt = MutableStateFlow("")
@@ -232,6 +231,7 @@ class MultimodalViewModel @Inject constructor(
             .launchIn(viewModelScope)
     }
 
+    @Suppress("UnusedPrivateMember")
     private fun stopListening() {
         speechJob?.cancel()
         speechJob = null
@@ -499,7 +499,7 @@ class MultimodalViewModel @Inject constructor(
 
             val mediaCapability = try {
                 MediaCapability.valueOf(finalAsset.mediaType)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 MediaCapability.IMAGE
             }
             
@@ -642,12 +642,13 @@ class MultimodalViewModel @Inject constructor(
         startGeneration(submittedPrompt)
     }
 
-    fun onGenerativeScrollThresholdVisible(anchorAssetId: String, gallerySize: Int) {
+    fun onGenerativeScrollThresholdVisible(anchorAssetId: String) {
         val scrollTriggerKey = anchorAssetId
-        if (_mediaType.value != MediaCapability.IMAGE ||
+        val cannotContinueGeneration = _mediaType.value != MediaCapability.IMAGE ||
             !_isContinualGenerationActive.value ||
             _lastSubmittedPrompt.value.isNullOrBlank() ||
-            _isGenerating.value ||
+            _isGenerating.value
+        if (cannotContinueGeneration ||
             !consumedScrollAnchors.add(scrollTriggerKey)
         ) {
             return
@@ -688,8 +689,4 @@ class MultimodalViewModel @Inject constructor(
         createdAt = createdAt,
         albumId = albumId,
     )
-
-    companion object {
-        private const val TAG = "MultimodalViewModel"
-    }
 }

@@ -51,6 +51,7 @@ class XaiVideoGenerationAdapter(
         }
     }
 
+    @Suppress("ThrowsCount")
     private suspend fun pollUntilComplete(rootUrl: String, apiKey: String, requestId: String): String {
         repeat(MAX_POLL_ATTEMPTS) {
             val response = executeJson(

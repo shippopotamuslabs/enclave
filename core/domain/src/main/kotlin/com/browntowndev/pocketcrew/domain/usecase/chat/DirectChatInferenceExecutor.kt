@@ -88,13 +88,14 @@ class DirectChatInferenceExecutor @Inject constructor(
                 )
             }
         } catch (e: InferenceBusyException) {
-            emit(MessageGenerationState.Failed(error = InferenceBusyException(), modelType = modelType))
+            emit(MessageGenerationState.Failed(error = e, modelType = modelType))
         } catch (e: IllegalStateException) {
             emit(MessageGenerationState.Failed(e, modelType))
         } catch (e: java.io.IOException) {
             emit(MessageGenerationState.Failed(e, modelType))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            if (e is CancellationException) throw e
             loggingPort.error(TAG, "Unexpected error in $modelType mode", e)
             emit(MessageGenerationState.Failed(error = e, modelType = modelType))
         }

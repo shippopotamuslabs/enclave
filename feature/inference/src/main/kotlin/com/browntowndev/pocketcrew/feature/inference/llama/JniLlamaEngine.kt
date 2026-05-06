@@ -29,6 +29,7 @@ import javax.inject.Singleton
  * We use a dedicated single-thread executor to ensure thread safety.
  */
 @Singleton
+@Suppress("TooManyFunctions")
 class JniLlamaEngine @Inject constructor(
     private val gpuProfiler: GpuProfiler,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -44,6 +45,10 @@ class JniLlamaEngine @Inject constructor(
 
         // Timeout for unload - need longer to let ongoing generation finish
         private const val UNLOAD_TIMEOUT_SECONDS = 30L
+
+        // Default penalty values for non-thinking models
+        private const val DEFAULT_PENALTY_FREQ = 0.05f
+        private const val DEFAULT_PENALTY_PRESENT = 0.05f
 
         // Native library names for dual-library approach
         private const val LIBRARY_CPUDETECT = "cpudetect"
@@ -154,11 +159,10 @@ class JniLlamaEngine @Inject constructor(
     // Compression thresholds
     // Trigger compression at 80% of context window
     private val COMPRESSION_THRESHOLD_RATIO = 0.8f
-    // Compress by factor of 2 (halves the context)
-    private val COMPRESSION_FACTOR = 2
 
     override suspend fun initialize(config: LlamaModelConfig) = withContext(ioDispatcher) {
         Log.i(TAG, "Initializing llama model: ${config.modelPath}")
+        @Suppress("MaxLineLength")
         Log.i(TAG, "  contextWindow=${config.sampling.contextWindow}, maxTokens=${config.sampling.maxTokens}, batchSize=${config.sampling.batchSize}, gpuLayers=${config.sampling.gpuLayers}")
 
         if (loaded.get()) {
@@ -248,6 +252,7 @@ class JniLlamaEngine @Inject constructor(
         val (roles, contents) = buildNativeMessages()
         Log.i(
             TAG,
+            @Suppress("MaxLineLength")
             "Generation config: temp=${cfg.sampling.temperature}, topK=${cfg.sampling.topK}, topP=${cfg.sampling.topP}, maxTokens=${cfg.sampling.maxTokens}"
         )
 
@@ -304,8 +309,8 @@ class JniLlamaEngine @Inject constructor(
             Log.i(TAG, "Starting completion with reasoning_budget=$reasoningBudget")
 
             // Use 0 penalties for thinking models to avoid interfering with extended reasoning
-            val penaltyFreq = if (cfg.sampling.thinkingEnabled) 0.0f else 0.05f
-            val penaltyPresent = if (cfg.sampling.thinkingEnabled) 0.0f else 0.05f
+            val penaltyFreq = if (cfg.sampling.thinkingEnabled) 0.0f else DEFAULT_PENALTY_FREQ
+            val penaltyPresent = if (cfg.sampling.thinkingEnabled) 0.0f else DEFAULT_PENALTY_PRESENT
             Log.i(TAG, "Penalties: freq=$penaltyFreq, present=$penaltyPresent")
 
             // Use longer timeout for thinking models
@@ -364,11 +369,12 @@ class JniLlamaEngine @Inject constructor(
 
         // Derive parameters from options instead of config defaults
         val reasoningBudget = options.reasoningBudget
-        val penaltyFreq = if (reasoningBudget > 0) 0.0f else 0.05f
-        val penaltyPresent = if (reasoningBudget > 0) 0.0f else 0.05f
+        val penaltyFreq = if (reasoningBudget > 0) 0.0f else DEFAULT_PENALTY_FREQ
+        val penaltyPresent = if (reasoningBudget > 0) 0.0f else DEFAULT_PENALTY_PRESENT
         val timeoutSeconds = if (reasoningBudget > 0) GENERATION_TIMEOUT_SECONDS_THINKING else GENERATION_TIMEOUT_SECONDS_REGULAR
         val temperature = options.temperature ?: cfg.sampling.temperature
 
+        @Suppress("MaxLineLength")
         Log.i(TAG, "Generation with options: reasoningBudget=$reasoningBudget, penaltyFreq=$penaltyFreq, penaltyPresent=$penaltyPresent, timeout=$timeoutSeconds, temp=$temperature")
 
         val callback = object : NativeTokenCallback {
@@ -726,6 +732,7 @@ class JniLlamaEngine @Inject constructor(
     private external fun nativeCompressContext(seqId: Int, factor: Int): Boolean
 
     // State save/load native functions
+    @Suppress("UnusedPrivateMember")
     private external fun nativeGetStateSize(): Int
     private external fun nativeGetState(): ByteArray?
     private external fun nativeSetState(state: ByteArray): Boolean

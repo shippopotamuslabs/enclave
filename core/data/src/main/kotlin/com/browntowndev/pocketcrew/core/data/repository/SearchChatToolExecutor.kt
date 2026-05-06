@@ -52,7 +52,13 @@ class SearchChatToolExecutor @Inject constructor(
         return try {
             executeInternal(request)
         } catch (e: Exception) {
-            loggingPort.error(TAG, "search_chat FAILED provider=${request.provider} modelType=${request.modelType} arguments=${request.argumentsJson} error=${e.message}", e)
+            loggingPort.error(
+                TAG,
+                "search_chat FAILED provider=${request.provider} " +
+                    "modelType=${request.modelType} arguments=${request.argumentsJson} " +
+                    "error=${e.message}",
+                e
+            )
             throw e
         }
     }
@@ -74,7 +80,9 @@ class SearchChatToolExecutor @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "search_chat complete provider=${request.provider} modelType=${request.modelType} chatId=$chatId query=$query results=${messages.size}"
+            "search_chat complete provider=${request.provider} " +
+                "modelType=${request.modelType} chatId=$chatId " +
+                "query=$query results=${messages.size}"
         )
 
         return ToolExecutionResult(

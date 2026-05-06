@@ -128,7 +128,8 @@ class ModelFileScanner @Inject constructor(
                         assetInvalid = true
                         Log.w(
                             TAG,
-                            "Model artifact $filename has size mismatch! Expected: ${artifact.sizeInBytes}, Actual: ${file.length()}. Will re-download."
+                            "Model artifact $filename has size mismatch! " +
+                                "Expected: ${artifact.sizeInBytes}, Actual: ${file.length()}. Will re-download."
                         )
                     }
                     else -> {
@@ -222,7 +223,10 @@ class ModelFileScanner @Inject constructor(
             .distinct()
 
         if (requiredFiles.isEmpty()) {
-            throw IllegalStateException("No models configured. This is a bug - models must be configured before quickCheckModelsReady is called.")
+            throw IllegalStateException(
+            "No models configured. This is a bug - models must be configured before " +
+                "quickCheckModelsReady is called."
+        )
         }
 
         // First check that all required files exist with content

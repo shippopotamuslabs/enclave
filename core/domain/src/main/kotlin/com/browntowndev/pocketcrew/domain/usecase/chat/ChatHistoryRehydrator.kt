@@ -92,7 +92,9 @@ class ChatHistoryRehydrator(
         if (estimatedPromptTokens > budget.usablePromptTokens) {
             loggingPort.info(
                 TAG,
-                "Context budget exceeded: estimatedTokens=$estimatedPromptTokens usablePromptTokens=${budget.usablePromptTokens} thresholdTokens=${budget.thresholdTokens} window=$contextWindowTokens"
+                "Context budget exceeded: estimatedTokens=$estimatedPromptTokens " +
+                    "usablePromptTokens=${budget.usablePromptTokens} " +
+                    "thresholdTokens=${budget.thresholdTokens} window=$contextWindowTokens"
             )
 
             // Do not run local summarization for local models; it uses the same overloaded engine.

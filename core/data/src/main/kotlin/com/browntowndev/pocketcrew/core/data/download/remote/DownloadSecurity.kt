@@ -18,6 +18,7 @@ internal object DownloadSecurity {
         val metaFile: File
     )
 
+    @Suppress("ThrowsCount")
     fun requireSafeFileName(fileName: String, fieldName: String = "filename"): String {
         if (fileName.isBlank()) {
             throw SecurityException("$fieldName must not be blank")

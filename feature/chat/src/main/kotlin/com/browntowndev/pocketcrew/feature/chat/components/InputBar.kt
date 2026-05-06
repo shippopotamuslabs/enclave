@@ -111,6 +111,7 @@ import kotlinx.coroutines.launch
 
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList")
 @Composable
 fun InputBar(
     inputText: String,
@@ -153,7 +154,6 @@ fun InputBar(
 
     val isListening = speechState is SpeechState.ModelLoading || speechState is SpeechState.Listening
     val isRecordingPhase = isListening || speechState is SpeechState.Transcribing
-    val hasSendableContent = (inputText.isNotBlank() || selectedImageUri != null || selectedFileName != null) && !isListening
 
     if (showAttachmentSheet) {
         JumpFreeModalBottomSheet(

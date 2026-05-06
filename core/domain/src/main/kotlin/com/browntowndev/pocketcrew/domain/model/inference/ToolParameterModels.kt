@@ -80,7 +80,9 @@ data class AttachedImageInspectParams(
 
 @Serializable
 data class SearchChatHistoryParams(
-    @ToolParam(description = "Search queries to find relevant messages across all past conversations. Provide multiple variants (e.g. synonyms, alternate phrasings, related terms) to maximize recall. Any match across any query is returned.")
+    @ToolParam(description = "Search queries to find relevant messages across all past conversations. " +
+        "Provide multiple variants (e.g. synonyms, alternate phrasings, related terms) to maximize recall. " +
+        "Any match across any query is returned.")
     val queries: List<String> = emptyList(),
     @ToolParam(description = "Deprecated: Use queries array instead. Single search query to find relevant messages.", required = false)
     val query: String? = null
@@ -88,7 +90,8 @@ data class SearchChatHistoryParams(
 
 @Serializable
 data class SearchChatParams(
-    @ToolParam(description = "The ID of the chat to search. Use the current chat ID from your instructions for the current conversation, or a chat_id returned by search_chat_history.")
+    @ToolParam(description = "The ID of the chat to search. Use the current chat ID from your instructions " +
+        "for the current conversation, or a chat_id returned by search_chat_history.")
     val chat_id: String,
     @ToolParam(description = "The search query.")
     val query: String
@@ -115,7 +118,10 @@ data class ManageMemoriesParams(
     val action: MemoryAction,
     @ToolParam(description = "The content of the memory to save or update, or the search query.", required = false)
     val content: String? = null,
-    @ToolParam(description = "The category of the memory (for 'save' only): 'CORE_IDENTITY', 'PREFERENCES', 'FACTS', 'PROJECT_CONTEXT'.", required = false)
+    @ToolParam(
+        description = "The category of the memory (for 'save' only): 'CORE_IDENTITY', 'PREFERENCES', 'FACTS', 'PROJECT_CONTEXT'.",
+        required = false
+    )
     val category: String? = null,
     @ToolParam(description = "The ID of the memory (for 'update' or 'delete' only).", required = false)
     val id: String? = null

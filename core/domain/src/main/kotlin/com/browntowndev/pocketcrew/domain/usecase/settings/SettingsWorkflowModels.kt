@@ -141,7 +141,8 @@ data class SearchSkillSettingsDraft(
 )
 
 data class TtsProviderDraft(
-    val id: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId = com.browntowndev.pocketcrew.domain.model.config.TtsProviderId(""),
+    val id: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId =
+        com.browntowndev.pocketcrew.domain.model.config.TtsProviderId(""),
     val displayName: String,
     val provider: ApiProvider,
     val voiceName: String,

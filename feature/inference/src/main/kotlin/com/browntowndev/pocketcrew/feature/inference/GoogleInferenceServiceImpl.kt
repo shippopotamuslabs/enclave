@@ -57,6 +57,7 @@ class GoogleInferenceServiceImpl(
             val requestHistory = buildRequestHistory(options)
             loggingPort.debug(
                 TAG,
+                @Suppress("MaxLineLength")
                 "sendPrompt start provider=$PROVIDER model=$modelId modelType=$modelType closeConversation=$closeConversation reasoningBudget=${options.reasoningBudget} reasoningEffort=${options.reasoningEffort} maxTokens=${options.maxTokens}"
             )
             executePrompt(prompt, options, requestHistory) { emit(it) }
@@ -69,12 +70,15 @@ class GoogleInferenceServiceImpl(
             loggingPort.debug(TAG, "sendPrompt cancelled provider=$PROVIDER model=$modelId")
             emit(InferenceEvent.Finished(modelType))
             throw e
+        } catch (e: IllegalArgumentException) {
+            loggingPort.error(TAG, "Tool request failed. exception=${e::class.java.simpleName} message=${e.message}", e)
+            emit(InferenceEvent.Error(e, modelType))
+            return@flow
+        } catch (e: IllegalStateException) {
+            loggingPort.error(TAG, "Tool request failed. exception=${e::class.java.simpleName} message=${e.message}", e)
+            emit(InferenceEvent.Error(e, modelType))
+            return@flow
         } catch (e: Exception) {
-            if (e is IllegalArgumentException || e is IllegalStateException) {
-                loggingPort.error(TAG, "Tool request failed. exception=${e::class.java.simpleName} message=${e.message}", e)
-                emit(InferenceEvent.Error(e, modelType))
-                return@flow
-            }
             val errorMsg = e.message ?: "Unknown error"
             loggingPort.error(TAG, "API request failed. exception=${e::class.java.simpleName} message=$errorMsg", e)
             emit(InferenceEvent.Error(Exception("API Error ($PROVIDER): $errorMsg", e), modelType))
@@ -106,6 +110,7 @@ class GoogleInferenceServiceImpl(
         )
         loggingPort.debug(
             TAG,
+            @Suppress("MaxLineLength")
             "GenerateContent request provider=$PROVIDER model=$modelId baseUrl=${baseUrl ?: "<default>"} body=${truncateForLogs(request.config.toString())}"
         )
 
@@ -118,6 +123,7 @@ class GoogleInferenceServiceImpl(
         emitEvent(InferenceEvent.Finished(modelType))
     }
 
+    @Suppress("ThrowsCount")
     private suspend fun executeToolingPrompt(
         prompt: String,
         options: GenerationOptions,
@@ -242,6 +248,7 @@ class GoogleInferenceServiceImpl(
                     }
 
                     if (toolCall.toolName == ToolDefinition.GENERATE_ARTIFACT.name) {
+                        @Suppress("MaxLineLength")
                         val artifactParams = toolCall.parameters as? com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
                         if (artifactParams != null) {
                             emitEvent(
@@ -345,6 +352,7 @@ class GoogleInferenceServiceImpl(
         val historyWithSystemPrompt = mergeSystemPrompt(conversationHistory, options.systemPrompt)
         loggingPort.debug(
             TAG,
+            @Suppress("MaxLineLength")
             "Prepared request history provider=$PROVIDER model=$modelId modelType=$modelType historyCount=${historyWithSystemPrompt.size} systemPromptIncluded=${historyWithSystemPrompt.firstOrNull()?.role == Role.SYSTEM}"
         )
         return historyWithSystemPrompt

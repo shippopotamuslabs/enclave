@@ -81,7 +81,7 @@ class VideoGenerationPortImplTest {
     @Test
     fun generateVideo_googleProvider_routesToGoogleAdapter() = runTest {
         coEvery {
-            googleAdapter.generateVideo(any(), any(), any(), any(), any(), any())
+            googleAdapter.generateVideo(any(), any(), any(), any(), any())
         } returns Result.success("google".toByteArray())
 
         val result = port.generateVideo("prompt", provider(ApiProvider.GOOGLE), VideoGenerationSettings())
@@ -95,7 +95,6 @@ class VideoGenerationPortImplTest {
                 modelId = "custom-model",
                 baseUrl = null,
                 settings = VideoGenerationSettings(),
-                referenceImage = null,
             )
         }
     }

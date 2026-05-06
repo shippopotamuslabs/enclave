@@ -154,7 +154,7 @@ subprojects {
             config.setFrom("$rootDir/config/detekt/detekt.yml")
             buildUponDefaultConfig = true
             allRules = false
-            ignoreFailures = true
+            ignoreFailures = false
         }
     }
 

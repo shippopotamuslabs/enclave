@@ -31,14 +31,6 @@ class LocalModelRepositoryImplTest {
         override suspend fun <T> runInTransaction(block: suspend () -> T): T = block()
     }
 
-    private val fakeLogger = object : LoggingPort {
-        override fun info(tag: String, message: String) {}
-        override fun debug(tag: String, message: String) {}
-        override fun warning(tag: String, message: String) {}
-        override fun error(tag: String, message: String, throwable: Throwable?) {}
-        override fun recordException(tag: String, message: String, throwable: Throwable) {}
-    }
-
     @Before
     fun setup() {
         database = Room.inMemoryDatabaseBuilder(
@@ -50,8 +42,7 @@ class LocalModelRepositoryImplTest {
             database.localModelsDao(),
             database.localModelConfigurationsDao(),
             database.defaultModelsDao(),
-            fakeTransactionProvider,
-            fakeLogger
+            fakeTransactionProvider
         )
     }
 

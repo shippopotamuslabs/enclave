@@ -47,12 +47,15 @@ object XaiRequestMapper {
             val sanitizedContent = ImagePayloads.stripBase64DataUris(msg.content)
             when (msg.role) {
                 Role.SYSTEM -> {
+                    @Suppress("MaxLineLength")
                     messages.add(ChatCompletionMessageParam.ofSystem(ChatCompletionSystemMessageParam.builder().content(sanitizedContent).build()))
                 }
                 Role.USER -> {
+                    @Suppress("MaxLineLength")
                     messages.add(ChatCompletionMessageParam.ofUser(ChatCompletionUserMessageParam.builder().content(sanitizedContent).build()))
                 }
                 Role.ASSISTANT -> {
+                    @Suppress("MaxLineLength")
                     messages.add(ChatCompletionMessageParam.ofAssistant(ChatCompletionAssistantMessageParam.builder().content(sanitizedContent).build()))
                 }
             }

@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName")
+
 package com.browntowndev.pocketcrew.feature.chat.components
 
 import androidx.compose.foundation.layout.Box

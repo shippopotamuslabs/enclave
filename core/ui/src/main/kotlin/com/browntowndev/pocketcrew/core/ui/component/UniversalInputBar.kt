@@ -397,6 +397,7 @@ fun UniversalVoicePromptPlaceholder(
  * A shared trailing action that handles swapping between Mic, Send, and Stop buttons
  * based on the current speech and generation states.
  */
+@Suppress("CyclomaticComplexMethod")
 @Composable
 fun UniversalVoiceTrailingAction(
     inputText: String,

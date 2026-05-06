@@ -30,7 +30,7 @@ class SearchToolExecutorImpl @Inject constructor(
         val query = params.query.trim()
         
         if (query.isEmpty()) {
-            throw IllegalArgumentException("Tool argument 'query' is required")
+            require(false) { "Tool argument 'query' is required" }
         }
         
         val settings = settingsRepository.settingsFlow.first()
@@ -41,7 +41,9 @@ class SearchToolExecutorImpl @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "Executing search tool provider=${request.provider} modelType=${request.modelType} tool=${request.toolName} searchProvider=${settings.searchProvider} query=$query"
+            "Executing search tool provider=${request.provider} " +
+                "modelType=${request.modelType} tool=${request.toolName} " +
+                "searchProvider=${settings.searchProvider} query=$query"
         )
         
         val resultJson = when (settings.searchProvider) {
@@ -51,7 +53,9 @@ class SearchToolExecutorImpl @Inject constructor(
         
         loggingPort.info(
             TAG,
-            "Search tool execution complete provider=${request.provider} modelType=${request.modelType} tool=${request.toolName} resultChars=${resultJson.length}"
+            "Search tool execution complete provider=${request.provider} " +
+                "modelType=${request.modelType} tool=${request.toolName} " +
+                "resultChars=${resultJson.length}"
         )
         
         return ToolExecutionResult(

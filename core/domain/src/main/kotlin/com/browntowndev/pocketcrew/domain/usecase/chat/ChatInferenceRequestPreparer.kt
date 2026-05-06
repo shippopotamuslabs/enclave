@@ -40,6 +40,7 @@ class ChatInferenceRequestPreparer(
         .withZone(ZoneId.systemDefault())
         .withLocale(Locale.getDefault())
 
+    @Suppress("CyclomaticComplexMethod")
     suspend operator fun invoke(
         prompt: String,
         chatId: ChatId,
@@ -74,7 +75,11 @@ class ChatInferenceRequestPreparer(
 
         loggingPort.debug(
             TAG,
-            "generateWithService config modelType=$modelType configName=${config?.name} isLocal=${config?.isLocal} searchEnabled=$searchEnabled xSearchEnabled=$xSearchEnabled imageHandling=$imageHandling activeVisionCapable=$activeVisionCapable apiVisionConfigured=$apiVisionConfigured thinkingEnabled=${config?.thinkingEnabled} reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget",
+            "generateWithService config modelType=$modelType configName=${config?.name} " +
+                "isLocal=${config?.isLocal} searchEnabled=$searchEnabled xSearchEnabled=$xSearchEnabled " +
+                "imageHandling=$imageHandling activeVisionCapable=$activeVisionCapable " +
+                "apiVisionConfigured=$apiVisionConfigured thinkingEnabled=${config?.thinkingEnabled} " +
+                "reasoningEffort=${config?.reasoningEffort} derivedReasoningBudget=$reasoningBudget",
         )
         if (config?.isLocal == true) {
             logLocalPrompt(prompt, modelType)
@@ -204,7 +209,10 @@ class ChatInferenceRequestPreparer(
         val chunks = prompt.chunked(PROMPT_LOG_CHUNK_SIZE)
         loggingPort.debug(
             TAG,
-            "Local prompt handoff modelType=$modelType chars=${prompt.length} containsImageDescription=$containsImageDescription containsDataUri=${prompt.contains("data:image", ignoreCase = true)} containsBase64Marker=${prompt.contains("base64,", ignoreCase = true)}",
+            "Local prompt handoff modelType=$modelType chars=${prompt.length} " +
+                "containsImageDescription=$containsImageDescription " +
+                "containsDataUri=${prompt.contains("data:image", ignoreCase = true)} " +
+                "containsBase64Marker=${prompt.contains("base64,", ignoreCase = true)}",
         )
         chunks.forEachIndexed { index, chunk ->
             loggingPort.debug(

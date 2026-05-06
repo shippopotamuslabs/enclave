@@ -54,7 +54,6 @@ class InferenceFactoryImpl @Inject constructor(
     private val loggingPort: LoggingPort,
     private val orchestrator: LlmToolingOrchestrator,
     private val inferenceLockManager: InferenceLockManager,
-    private val toolExecutorProvider: Provider<ToolExecutorPort>,
     private val toolExecutionEventPort: ToolExecutionEventPort,
 ) : InferenceFactoryPort {
 
@@ -135,6 +134,7 @@ class InferenceFactoryImpl @Inject constructor(
         else -> InferenceType.ON_DEVICE
     }
 
+    @Suppress("ReturnCount", "CyclomaticComplexMethod")
     private suspend fun resolveService(
         modelType: ModelType,
         defaultAssignment: DefaultModelAssignment? = null,
@@ -260,6 +260,7 @@ class InferenceFactoryImpl @Inject constructor(
             val apiKey = apiCreds?.let { apiKeyProvider.getApiKey(it.credentialAlias) }
 
             if (apiConfig == null || apiCreds == null || apiKey == null) {
+                @Suppress("MaxLineLength")
                 loggingPort.error(TAG, "Missing API configuration or credentials for $modelType. Config: ${apiConfig?.id}, Creds: ${apiCreds?.id}, Key present: ${apiKey != null}")
                 // Fallback to on-device logic below if we somehow have both set, though UI shouldn't allow this
             } else {

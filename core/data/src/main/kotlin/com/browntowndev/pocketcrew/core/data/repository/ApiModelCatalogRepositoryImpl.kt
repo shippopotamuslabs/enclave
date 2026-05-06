@@ -81,6 +81,8 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
 ) : ApiModelCatalogPort {
     private companion object {
         private const val TAG = "ApiModelCatalog"
+        private const val PER_TOKEN_TO_PER_MILLION = 1_000_000.0
+        private const val XAI_PER_TOKEN_TO_PER_MILLION = 10_000.0
         private val json = Json { ignoreUnknownKeys = true }
     }
 
@@ -390,9 +392,9 @@ class ApiModelCatalogRepositoryImpl @Inject constructor(
 
     private fun Double.asUsdPerMillionFromPerToken(): Double? =
         takeIf { isFinite() && this >= 0.0 }
-            ?.times(1_000_000.0)
+            ?.times(PER_TOKEN_TO_PER_MILLION)
 
     private fun Double.asUsdPerMillionFromXai(): Double? =
         takeIf { isFinite() && this >= 0.0 }
-            ?.div(10_000.0)
+            ?.div(XAI_PER_TOKEN_TO_PER_MILLION)
 }

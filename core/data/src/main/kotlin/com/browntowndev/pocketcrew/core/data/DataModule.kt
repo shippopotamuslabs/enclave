@@ -130,6 +130,7 @@ private val Context.pipelineDataStore: DataStore<Preferences> by preferencesData
 
 @Module
 @InstallIn(SingletonComponent::class)
+@Suppress("TooManyFunctions")
 object DataModule {
 
     private val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -293,7 +294,10 @@ object DataModule {
 
     @Provides
     @Singleton
-    fun provideHttpFileDownloader(okHttpClient: OkHttpClient, logger: LoggingPort): FileDownloaderPort = HttpFileDownloader(okHttpClient, logger)
+    fun provideHttpFileDownloader(
+        okHttpClient: OkHttpClient,
+        logger: LoggingPort
+    ): FileDownloaderPort = HttpFileDownloader(okHttpClient, logger)
 
     @Provides
     @Singleton
@@ -306,6 +310,7 @@ object DataModule {
 
 @Module
 @InstallIn(SingletonComponent::class)
+@Suppress("TooManyFunctions")
 abstract class DataRepositoryModule {
 
     @Binds
@@ -318,7 +323,9 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindCleanupRepository(impl: com.browntowndev.pocketcrew.core.data.repository.CleanupRepositoryImpl): com.browntowndev.pocketcrew.domain.port.repository.CleanupRepository
+    abstract fun bindCleanupRepository(
+        impl: com.browntowndev.pocketcrew.core.data.repository.CleanupRepositoryImpl
+    ): com.browntowndev.pocketcrew.domain.port.repository.CleanupRepository
 
     @Binds
     @Singleton
@@ -346,7 +353,9 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindFileAttachmentPort(impl: com.browntowndev.pocketcrew.core.data.media.AndroidFileAttachmentPort): com.browntowndev.pocketcrew.domain.port.media.FileAttachmentPort
+    abstract fun bindFileAttachmentPort(
+        impl: com.browntowndev.pocketcrew.core.data.media.AndroidFileAttachmentPort
+    ): com.browntowndev.pocketcrew.domain.port.media.FileAttachmentPort
 
     @Binds
     @Singleton
@@ -430,7 +439,9 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindMediaSaver(impl: com.browntowndev.pocketcrew.core.data.media.AndroidMediaSaver): com.browntowndev.pocketcrew.domain.port.media.MediaSaverPort
+    abstract fun bindMediaSaver(
+        impl: com.browntowndev.pocketcrew.core.data.media.AndroidMediaSaver
+    ): com.browntowndev.pocketcrew.domain.port.media.MediaSaverPort
 
     @Binds
     @Singleton
@@ -442,7 +453,9 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindCryptoManager(impl: com.browntowndev.pocketcrew.core.data.security.CryptoManagerImpl): com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
+    abstract fun bindCryptoManager(
+        impl: com.browntowndev.pocketcrew.core.data.security.CryptoManagerImpl
+    ): com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 
     @Binds
     @Singleton

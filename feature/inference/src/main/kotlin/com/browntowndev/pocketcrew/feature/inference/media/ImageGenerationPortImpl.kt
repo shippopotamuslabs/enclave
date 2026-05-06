@@ -28,8 +28,11 @@ class ImageGenerationPortImpl @Inject constructor(
         }
 
         return when (provider.provider) {
+            @Suppress("MaxLineLength")
             ApiProvider.OPENAI -> openAiAdapter.generateImage(prompt, apiKey, provider.modelName ?: "dall-e-3", provider.baseUrl, settings, referenceImageBytes)
+            @Suppress("MaxLineLength")
             ApiProvider.GOOGLE -> googleAdapter.generateImage(prompt, apiKey, provider.modelName ?: "imagen-3", provider.baseUrl, settings, referenceImageBytes)
+            @Suppress("MaxLineLength")
             ApiProvider.XAI -> xaiAdapter.generateImage(prompt, apiKey, provider.modelName ?: "grok-vision-beta", provider.baseUrl, settings, referenceImageBytes)
             else -> Result.failure(UnsupportedOperationException("Image generation not supported for provider: ${provider.provider}"))
         }

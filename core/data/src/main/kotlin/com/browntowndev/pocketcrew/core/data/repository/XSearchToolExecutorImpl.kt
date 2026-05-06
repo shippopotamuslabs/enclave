@@ -31,7 +31,7 @@ class XSearchToolExecutorImpl @Inject constructor(
         val query = buildXQueryUseCase(params)
         
         if (query.isEmpty()) {
-            throw IllegalArgumentException("At least one search parameter (keywords, phrases, hashtags, etc.) is required")
+            require(false) { "At least one search parameter (keywords, phrases, hashtags, etc.) is required" }
         }
         
         val settings = settingsRepository.settingsFlow.first()
@@ -42,14 +42,18 @@ class XSearchToolExecutorImpl @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "Executing X search tool provider=${request.provider} modelType=${request.modelType} tool=${request.toolName} query=$query sortOrder=${params.sort_order.name}"
+            "Executing X search tool provider=${request.provider} " +
+                "modelType=${request.modelType} tool=${request.toolName} " +
+                "query=$query sortOrder=${params.sort_order.name}"
         )
         
         val resultJson = xSearchRepository.search(query, params.sort_order.name)
         
         loggingPort.info(
             TAG,
-            "X search tool execution complete provider=${request.provider} modelType=${request.modelType} tool=${request.toolName} resultChars=${resultJson.length}"
+            "X search tool execution complete provider=${request.provider} " +
+                "modelType=${request.modelType} tool=${request.toolName} " +
+                "resultChars=${resultJson.length}"
         )
         
         return ToolExecutionResult(

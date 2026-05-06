@@ -22,6 +22,10 @@ class MiniLMEmbeddingEngine @Inject constructor(
     private val utilityModelFilePort: UtilityModelFilePort
 ) : EmbeddingEnginePort {
 
+    private companion object {
+        const val EMBEDDING_DIMENSION = 384
+    }
+
     private val mutex = Mutex()
     private var env: OrtEnvironment? = null
     private var session: OrtSession? = null
@@ -70,31 +74,31 @@ class MiniLMEmbeddingEngine @Inject constructor(
             val floatBuffer = outputTensor.floatBuffer
             
             // Mean Pooling
-            val sums = FloatArray(384) { 0.0f }
+            val sums = FloatArray(EMBEDDING_DIMENSION) { 0.0f }
             var validTokenCount = 0
             for (i in 0 until 256) {
                 if (tokenization.attentionMask[i] == 1L) {
                     validTokenCount++
-                    for (j in 0 until 384) {
-                        sums[j] += floatBuffer.get(i * 384 + j)
+                    for (j in 0 until EMBEDDING_DIMENSION) {
+                        sums[j] += floatBuffer.get(i * EMBEDDING_DIMENSION + j)
                     }
                 }
             }
 
             if (validTokenCount > 0) {
-                for (j in 0 until 384) {
+                for (j in 0 until EMBEDDING_DIMENSION) {
                     sums[j] /= validTokenCount.toFloat()
                 }
             }
 
             // L2 Normalization
             var normSquare = 0.0f
-            for (j in 0 until 384) {
+            for (j in 0 until EMBEDDING_DIMENSION) {
                 normSquare += sums[j] * sums[j]
             }
             val norm = sqrt(normSquare)
             if (norm > 0) {
-                for (j in 0 until 384) {
+                for (j in 0 until EMBEDDING_DIMENSION) {
                     sums[j] /= norm
                 }
             }

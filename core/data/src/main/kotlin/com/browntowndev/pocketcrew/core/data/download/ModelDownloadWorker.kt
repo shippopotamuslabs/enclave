@@ -109,16 +109,14 @@ class ModelDownloadWorker @AssistedInject constructor(
         // Initialize progress tracker with spec list (deduplicates by SHA256 internally)
         progressTracker.initialize(uniqueSpecs)
 
-        val totalSize = uniqueSpecs.sumOf { it.totalArtifactSizeInBytes() }
-        val totalFiles = uniqueSpecs.size
-
         return coroutineScope {
             // Channel for conflated progress updates to avoid overwhelming WorkManager's SQLite
             val progressChannel = Channel<Unit>(Channel.CONFLATED)
 
             // Collector coroutine to handle progress updates sequentially
+            @Suppress("UnusedPrivateProperty")
             val progressCollector = launch {
-                for (signal in progressChannel) {
+                for (_unused in progressChannel) {
                     try {
                         setProgress(progressTracker.serializeToWorkData())
                         updateNotificationForeground()
@@ -144,21 +142,31 @@ class ModelDownloadWorker @AssistedInject constructor(
                             }
                         } catch (e: CancellationException) {
                             throw e
+                        } catch (e: SocketTimeoutException) {
+                            failedCount.incrementAndGet()
+                            logger.error(TAG, "Failed to download ${spec.localFileName}: ${e.message}", e)
+                            val errorMessage = "Download timed out: ${e.message}"
+                            progressTracker.updateFileState(spec.sha256) {
+                                it.copy(status = FileStatus.FAILED, error = errorMessage)
+                            }
+                            delay(500)
+                            null
+                        } catch (e: SocketException) {
+                            failedCount.incrementAndGet()
+                            logger.error(TAG, "Failed to download ${spec.localFileName}: ${e.message}", e)
+                            val errorMessage = "Connection reset: ${e.message}"
+                            progressTracker.updateFileState(spec.sha256) {
+                                it.copy(status = FileStatus.FAILED, error = errorMessage)
+                            }
+                            delay(500)
+                            null
                         } catch (e: Exception) {
                             failedCount.incrementAndGet()
                             logger.error(TAG, "Failed to download ${spec.localFileName}: ${e.message}", e)
 
-                            val errorMessage = when (e) {
-                                is SocketException -> "Connection reset: ${e.message}"
-                                is SocketTimeoutException -> "Download timed out: ${e.message}"
-                                else -> e.message
-                            }
+                            val errorMessage = e.message
                             progressTracker.updateFileState(spec.sha256) {
                                 it.copy(status = FileStatus.FAILED, error = errorMessage)
-                            }
-
-                            if (e is SocketException) {
-                                delay(500)
                             }
                             null
                         } finally {
@@ -184,7 +192,11 @@ class ModelDownloadWorker @AssistedInject constructor(
                             )
                         )
                     } else {
-                        logger.warning(TAG, "Download completed with ${failedCount.get()} failed out of ${uniqueSpecs.size}, will retry (attempt $currentAttempt)")
+                        logger.warning(
+                            TAG,
+                            "Download completed with ${failedCount.get()} failed out of " +
+                                "${uniqueSpecs.size}, will retry (attempt $currentAttempt)"
+                        )
                         Result.retry()
                     }
                 } else {
@@ -285,7 +297,8 @@ class ModelDownloadWorker @AssistedInject constructor(
                 )
                 logger.info(
                     TAG,
-                    "[DOWNLOAD] Starting download: url=$downloadUrl, remoteFileName=${artifact.remoteFileName}, localFileName=${artifact.localFileName}"
+                    "[DOWNLOAD] Starting download: url=$downloadUrl, " +
+                        "remoteFileName=${artifact.remoteFileName}, localFileName=${artifact.localFileName}"
                 )
 
                 val paths = DownloadSecurity.resolveDownloadPaths(targetDir, artifact.localFileName)

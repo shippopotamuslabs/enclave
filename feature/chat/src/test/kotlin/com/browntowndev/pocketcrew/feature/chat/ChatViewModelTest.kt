@@ -5,7 +5,7 @@ import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
@@ -89,7 +89,6 @@ class ChatViewModelTest {
     private val activeChatTurnStore: ActiveChatTurnSnapshotPort = mockk(relaxed = true)
     private val playbackController: TtsPlaybackControllerPort = mockk(relaxed = true)
     private val studioRepository: StudioRepositoryPort = mockk(relaxed = true)
-    private val context: android.content.Context = mockk(relaxed = true)
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var defaultModelsFlow: MutableStateFlow<List<DefaultModelAssignment>>
 
@@ -161,7 +160,6 @@ class ChatViewModelTest {
             activeChatTurnSnapshotPort = activeChatTurnStore,
             playbackController = playbackController,
             studioRepository = studioRepository,
-            context = context,
         )
     }
 
@@ -621,7 +619,6 @@ class ChatViewModelTest {
             activeChatTurnSnapshotPort = activeChatTurnStore,
             playbackController = playbackController,
             studioRepository = studioRepository,
-            context = context,
         )
 
         // Initial state should use cache URI

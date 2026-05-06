@@ -107,6 +107,7 @@ class SettingsUiStateFactory @Inject constructor(
     private val apiDiscoveryUiFilter: ApiDiscoveryUiFilter,
     private val applyApiModelMetadataDefaultsUseCase: ApplyApiModelMetadataDefaultsUseCase,
 ) {
+    @Suppress("LongParameterList", "CyclomaticComplexMethod")
     internal fun create(
         persistedSettings: SettingsData,
         localAssets: List<LocalModelAsset>,
@@ -125,7 +126,6 @@ class SettingsUiStateFactory @Inject constructor(
         assignmentsState: AssignmentDialogTransientState,
         deletionState: DeletionTransientState,
         memoriesState: MemoriesTransientState,
-        currentApiKey: String,
         currentTavilyApiKey: String,
         currentExaApiKey: String,
         currentXApiKey: String,

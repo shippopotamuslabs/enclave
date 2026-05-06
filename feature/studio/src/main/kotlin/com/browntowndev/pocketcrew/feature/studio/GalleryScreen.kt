@@ -222,7 +222,9 @@ fun GalleryScreen(
                 selectedItemCount = selectionCount,
                 selectedMediaItemCount = selectedMediaItemIds.size,
                 showAddAlbumIcon = selectedAlbumId == null,
-                showRenameAlbumIcon = selectedAlbumId != null && selectedAlbumId != DEFAULT_GALLERY_ALBUM_ID && selectedMediaItemIds.isEmpty(),
+                showRenameAlbumIcon = selectedAlbumId != null &&
+                    selectedAlbumId != DEFAULT_GALLERY_ALBUM_ID &&
+                    selectedMediaItemIds.isEmpty(),
                 showDeleteIcon = selectionCount > 0 && !isDefaultAlbumSelected,
                 hazeState = hazeState,
                 onBackClick = {
@@ -292,7 +294,10 @@ fun GalleryScreen(
                         videoThumbnails = videoThumbnailCache.frames,
                         onAlbumClick = { albumId ->
                             if (selectedAlbumIds.isNotEmpty()) {
-                                selectedAlbumIds = if (albumId in selectedAlbumIds) selectedAlbumIds - albumId else selectedAlbumIds + albumId
+                                selectedAlbumIds = if (albumId in selectedAlbumIds)
+                                    selectedAlbumIds - albumId
+                                else
+                                    selectedAlbumIds + albumId
                             } else {
                                 selectedAlbumId = albumId
                             }
@@ -390,6 +395,7 @@ fun GalleryScreen(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList")
 @Composable
 private fun GalleryTopBar(
     title: String,
@@ -1067,6 +1073,7 @@ private fun DeleteAlbumsDialog(
     )
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview
 @Composable
 private fun GalleryScreenPopulatedPreview() {
@@ -1099,6 +1106,7 @@ private fun GalleryScreenPopulatedPreview() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview
 @Composable
 private fun GalleryScreenDarkPreview() {

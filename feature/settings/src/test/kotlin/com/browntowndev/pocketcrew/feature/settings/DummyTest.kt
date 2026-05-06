@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 
 class DummyTest {
     @Test
-    fun dummyTest() {
+    fun `dummy test`() {
         assertTrue(true)
     }
 }

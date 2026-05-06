@@ -40,27 +40,6 @@ class InitializeModelsUseCase @Inject constructor(
     }
 
     /**
-     * Resolves remote asset configurations into slot assignments.
-     * Each RemoteModelConfiguration may specify defaultAssignments indicating which
-     * ModelType slots it should be assigned to.
-     */
-    private fun resolveSlotAssignments(
-        remoteAssets: List<RemoteModelAsset>,
-        localAssets: List<LocalModelAsset>
-    ): Map<ModelType, Pair<LocalModelAsset, LocalModelConfigurationId>> {
-        val result = mutableMapOf<ModelType, Pair<LocalModelAsset, LocalModelConfigurationId>>()
-        for ((assetIndex, remoteAsset) in remoteAssets.withIndex()) {
-            val localAsset = localAssets[assetIndex]
-            for (config in remoteAsset.configurations) {
-                for (modelType in config.defaultAssignments) {
-                    result[modelType] = Pair(localAsset, config.configId)
-                }
-            }
-        }
-        return result
-    }
-
-    /**
      * Returns the full DownloadModelsResult including scan result and models to download.
      * This allows passing scan results downstream to avoid duplicate scanning.
      */

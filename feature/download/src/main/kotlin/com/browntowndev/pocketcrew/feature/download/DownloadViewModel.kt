@@ -41,7 +41,6 @@ import kotlinx.coroutines.launch
 class DownloadViewModel @AssistedInject constructor(
     private val modelDownloadOrchestrator: ModelDownloadOrchestratorPort,
     private val downloadWorkRepository: DownloadWorkRepository,
-    private val localModelRepository: LocalModelRepositoryPort,
     private val progressParser: WorkProgressParser,
     private val errorHandler: ViewModelErrorHandler,
     @Assisted private val modelsResult: DownloadModelsResult,
@@ -183,10 +182,11 @@ class DownloadViewModel @AssistedInject constructor(
                 val currentStatus = modelDownloadOrchestrator.downloadState.value.status
                 // If downloads should have started but status is still IDLE/CHECKING,
                 // the init auto-start likely failed. Reset the guard and retry.
-                if (downloadsStarted && currentStatus != null &&
+                val isStalledStatus = currentStatus != null &&
                     currentStatus != DownloadStatus.DOWNLOADING &&
                     currentStatus != DownloadStatus.PAUSED &&
-                    currentStatus != DownloadStatus.WIFI_BLOCKED) {
+                    currentStatus != DownloadStatus.WIFI_BLOCKED
+                if (downloadsStarted && isStalledStatus) {
                     Log.d(TAG, "checkModels: downloadsStarted=true but status=$currentStatus, resetting guard")
                     downloadsStarted = false
                 }

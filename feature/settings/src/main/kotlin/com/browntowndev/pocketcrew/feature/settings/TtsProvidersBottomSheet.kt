@@ -58,8 +58,6 @@ fun TtsProvidersBottomSheet(
     onStartCreateTtsProviderAsset: () -> Unit,
     onSelectTtsProviderAsset: (TtsProviderAssetUi?) -> Unit,
     onDeleteTtsProviderAsset: (TtsProviderId) -> Unit,
-    onConfirmDeletionWithReassignment: (LocalModelConfigurationId?, ApiModelConfigurationId?) -> Unit,
-    onDismissDeletionSafety: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var pendingDeleteTarget by remember { mutableStateOf<TtsProviderAssetUi?>(null) }
@@ -227,8 +225,6 @@ fun PreviewTtsProvidersBottomSheet() {
             onStartCreateTtsProviderAsset = {},
             onSelectTtsProviderAsset = {},
             onDeleteTtsProviderAsset = {},
-            onConfirmDeletionWithReassignment = { _, _ -> },
-            onDismissDeletionSafety = {}
         )
     }
 }

@@ -37,6 +37,9 @@ class PdfArtifactRenderer @Inject constructor(
         .build()
 
     companion object {
+        private const val PDF_DPI = 300
+        private const val PDF_MARGIN_DPI = 150 // 0.15 inch margins
+
         private var isSlowWholeDocumentDrawEnabled = false
 
         private fun ensureSlowWholeDocumentDrawEnabled() {
@@ -44,7 +47,7 @@ class PdfArtifactRenderer @Inject constructor(
                 try {
                     WebView.enableSlowWholeDocumentDraw()
                     isSlowWholeDocumentDrawEnabled = true
-                } catch (e: Throwable) {
+                } catch (_: Throwable) {
                     // Ignore failures in unit tests
                 }
             }
@@ -114,8 +117,13 @@ class PdfArtifactRenderer @Inject constructor(
                 val printAdapter = view.createPrintDocumentAdapter("Artifact")
                 val printAttributes = PrintAttributes.Builder()
                     .setMediaSize(PrintAttributes.MediaSize.NA_LETTER)
-                    .setResolution(PrintAttributes.Resolution("pdf", "pdf", 300, 300))
-                    .setMinMargins(PrintAttributes.Margins(150, 150, 150, 150)) // 0.15 inch margins
+                    .setResolution(PrintAttributes.Resolution("pdf", "pdf", PDF_DPI, PDF_DPI))
+                    .setMinMargins(
+                        PrintAttributes.Margins(
+                            PDF_MARGIN_DPI, PDF_MARGIN_DPI,
+                            PDF_MARGIN_DPI, PDF_MARGIN_DPI
+                        )
+                    ) // 0.15 inch margins
                     .build()
 
                 val pdfPrinter = android.print.PdfPrinter(printAttributes)

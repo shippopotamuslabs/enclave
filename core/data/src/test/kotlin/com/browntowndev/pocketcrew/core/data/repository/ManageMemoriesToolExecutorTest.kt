@@ -6,7 +6,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.ManageMemoriesParams
 import com.browntowndev.pocketcrew.domain.model.inference.MemoryAction
 import com.browntowndev.pocketcrew.domain.model.memory.Memory
 import com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.EmbeddingEnginePort
 import com.browntowndev.pocketcrew.domain.port.repository.MemoriesRepository
 import io.mockk.coEvery
@@ -25,18 +24,15 @@ import org.junit.jupiter.api.Test
 
 class ManageMemoriesToolExecutorTest {
 
-    private lateinit var loggingPort: LoggingPort
     private lateinit var memoriesRepository: MemoriesRepository
     private lateinit var embeddingEnginePort: EmbeddingEnginePort
     private lateinit var executor: ManageMemoriesToolExecutor
 
     @BeforeEach
     fun setup() {
-        loggingPort = mockk(relaxed = true)
         memoriesRepository = mockk()
         embeddingEnginePort = mockk()
         executor = ManageMemoriesToolExecutor(
-            loggingPort = loggingPort,
             memoriesRepository = memoriesRepository,
             embeddingEnginePort = embeddingEnginePort
         )

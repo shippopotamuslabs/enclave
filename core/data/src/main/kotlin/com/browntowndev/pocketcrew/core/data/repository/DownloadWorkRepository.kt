@@ -129,8 +129,9 @@ class DownloadWorkRepository @Inject constructor(
             workInfo?.state == WorkInfo.State.ENQUEUED ||
                    workInfo?.state == WorkInfo.State.RUNNING ||
                    workInfo?.state == WorkInfo.State.BLOCKED
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            if (e is CancellationException) throw e
             Log.e(TAG, "Error checking if work is running: ${e.message}")
             false
         }
@@ -147,6 +148,7 @@ class DownloadWorkRepository @Inject constructor(
      * 5. Succeeded downloader (intermediate - waiting for finalizer)
      * 6. Enqueued/blocked worker (waiting to start)
      */
+    @Suppress("ReturnCount")
     private fun selectBestWorkInfo(workInfos: List<WorkInfo>): WorkInfo? {
         if (workInfos.isEmpty()) return null
 

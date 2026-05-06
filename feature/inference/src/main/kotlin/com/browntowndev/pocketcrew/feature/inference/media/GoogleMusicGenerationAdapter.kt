@@ -14,8 +14,7 @@ open class GoogleMusicGenerationAdapter @Inject constructor(
         prompt: String,
         apiKey: String,
         modelId: String,
-        baseUrl: String?,
-        settings: GenerationSettings
+        baseUrl: String?
     ): Result<ByteArray> = withContext(Dispatchers.IO) {
         runCatching {
             val client = clientProvider.getClient(apiKey, baseUrl)

@@ -13,7 +13,6 @@ fun HistoryRoute(
     onNavigateToStudio: () -> Unit,
     onNavigateToGallery: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onShowSnackbar: (message: String, actionLabel: String?) -> Unit,
     viewModel: HistoryViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -32,7 +31,6 @@ fun HistoryRoute(
         onRenameChat = viewModel::renameChat,
         onPinChat = viewModel::pinChat,
         onUnpinChat = viewModel::unpinChat,
-        onSettingsClick = onNavigateToSettings,
-        onShowSnackbar = onShowSnackbar
+        onSettingsClick = onNavigateToSettings
     )
 }

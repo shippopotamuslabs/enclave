@@ -9,6 +9,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "LlamaGpuHelper"
+private const val MIN_OPENGL_ES_VERSION = 0x30001
+private const val OS_HEADROOM_BYTES = 1536L * 1024 * 1024 // 1.5 GB safety buffer
 
 /**
  * Helper class to determine if GPU acceleration is available for llama.cpp inference.
@@ -40,7 +42,7 @@ object LlamaGpuHelper {
         if (activityManager != null) {
             // 2. Check for OpenGL ES 3.1+ support (required for GPU compute shaders)
             val configInfo = activityManager.deviceConfigurationInfo
-            if (configInfo.reqGlEsVersion < 0x30001) {
+            if (configInfo.reqGlEsVersion < MIN_OPENGL_ES_VERSION) {
                 Log.i(TAG, "GPU check: OpenGL ES version ${configInfo.glEsVersion} < 3.1, GPU disabled.")
                 return false
             }
@@ -90,7 +92,7 @@ object LlamaGpuHelper {
             val availableRamBytes = memoryInfo.availMem
 
             // 2. Reserve a strict safety buffer for Android OS and your app's UI to prevent crashing
-            val osHeadroomBytes = 1536L * 1024 * 1024 // 1.5 GB safety buffer
+            val osHeadroomBytes = OS_HEADROOM_BYTES
 
             // 3. Calculate how much RAM we can actually use for the GPU
             val usableRamBytes = availableRamBytes - osHeadroomBytes - contextSizeBytes
@@ -237,6 +239,7 @@ data class GpuConfig(
         /**
          * Get the total RAM in GB for dynamic GPU layer calculation.
          */
+        @Suppress("UnusedPrivateMember")
         private fun getTotalRamGb(context: Context): Int {
             val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
             if (activityManager != null) {

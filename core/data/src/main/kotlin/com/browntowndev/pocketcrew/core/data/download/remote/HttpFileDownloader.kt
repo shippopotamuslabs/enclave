@@ -29,8 +29,11 @@ class HttpFileDownloader @Inject constructor(
         // Sync to disk every 64MB to balance durability with download performance.
         // Per-chunk fsync (every 8KB) caused 20-30x slowdown due to blocking I/O.
         private const val SYNC_INTERVAL_BYTES = 64L * 1024 * 1024
+        private const val HTTP_RANGE_NOT_SATISFIABLE = 416
+        private const val HTTP_PARTIAL_CONTENT = 206
     }
 
+    @Suppress("CyclomaticComplexMethod")
     override suspend fun downloadFile(
         config: FileDownloaderPort.FileDownloadConfig,
         downloadUrl: String,
@@ -39,7 +42,11 @@ class HttpFileDownloader @Inject constructor(
         progressCallback: FileDownloaderPort.ProgressCallback?
     ): FileDownloaderPort.DownloadResult = withContext(Dispatchers.IO) {
         // Log model info for debugging
-        logger.info(TAG, "[DOWNLOAD_START] url=$downloadUrl, sizeBytes=${config.expectedSizeBytes}, existingBytes=$existingBytes filename=${config.filename}")
+        logger.info(
+            TAG,
+            "[DOWNLOAD_START] url=$downloadUrl, sizeBytes=${config.expectedSizeBytes}, " +
+                "existingBytes=$existingBytes filename=${config.filename}"
+        )
 
         val requestUrl = DownloadSecurity.requireTrustedDownloadUrl(downloadUrl)
         val filename = DownloadSecurity.requireSafeFileName(config.filename)
@@ -64,7 +71,7 @@ class HttpFileDownloader @Inject constructor(
                 DownloadSecurity.requireTrustedRedirect(requestUrl, response.request.url)
             }
 
-            if (response.code == 416) {
+            if (response.code == HTTP_RANGE_NOT_SATISFIABLE) {
                 logger.warning(
                     TAG,
                     "HTTP 416 for $filename: Range not satisfiable. Deleting temp files and restarting."
@@ -83,7 +90,7 @@ class HttpFileDownloader @Inject constructor(
                 throw Exception(errorMsg)
             }
 
-            val isResuming = response.code == 206
+            val isResuming = response.code == HTTP_PARTIAL_CONTENT
             val actualExistingBytes = if (isResuming) existingBytes else 0L
 
             val body = response.body ?: run {
@@ -336,7 +343,7 @@ class HttpFileDownloader @Inject constructor(
                     null
                 }
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }
