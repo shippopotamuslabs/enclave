@@ -68,7 +68,6 @@ class ChatViewModelActionsTest {
     private val playbackController: TtsPlaybackControllerPort = mockk(relaxed = true)
     private val studioRepository: StudioRepositoryPort = mockk(relaxed = true)
     private val activeModelProvider: ActiveModelProviderPort = mockk()
-    private val context: android.content.Context = mockk(relaxed = true)
 
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var defaultModelsFlow: MutableStateFlow<List<DefaultModelAssignment>>
@@ -131,7 +130,6 @@ class ChatViewModelActionsTest {
             activeChatTurnSnapshotPort = activeChatTurnStore,
             playbackController = playbackController,
             studioRepository = studioRepository,
-            context = context,
         )
     }
 
@@ -314,7 +312,6 @@ class ChatViewModelActionsTest {
             activeChatTurnSnapshotPort = activeChatTurnStore,
             playbackController = playbackController,
             studioRepository = studioRepository,
-            context = context,
         )
 
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }

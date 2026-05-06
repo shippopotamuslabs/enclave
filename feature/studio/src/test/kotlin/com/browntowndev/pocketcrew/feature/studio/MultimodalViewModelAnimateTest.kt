@@ -13,7 +13,6 @@ import com.browntowndev.pocketcrew.domain.model.media.AspectRatio
 import com.browntowndev.pocketcrew.domain.model.media.GenerationQuality
 import com.browntowndev.pocketcrew.domain.model.media.ProviderCapabilities
 import com.browntowndev.pocketcrew.domain.model.media.VideoGenerationSettings
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.media.ImageGenerationPort
 import com.browntowndev.pocketcrew.domain.port.media.MusicGenerationPort
 import com.browntowndev.pocketcrew.domain.port.media.StudioGenerationDispatcherPort
@@ -59,7 +58,6 @@ class MultimodalViewModelAnimateTest {
     private val getProviderCapabilitiesUseCase = mockk<GetProviderCapabilitiesUseCase>(relaxed = true)
     private val chatUseCases = mockk<ChatUseCases>(relaxed = true)
     private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
-    private val logger = mockk<LoggingPort>(relaxed = true)
     private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
     private lateinit var viewModel: MultimodalViewModel
 
@@ -108,7 +106,6 @@ class MultimodalViewModelAnimateTest {
             getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
             chatUseCases = chatUseCases,
             playbackController = playbackController,
-            logger = logger,
         )
     }
 

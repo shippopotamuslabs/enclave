@@ -21,6 +21,7 @@ import com.browntowndev.pocketcrew.feature.chat.components.MessageList
 import com.browntowndev.pocketcrew.feature.chat.components.ShieldOverlay
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 
+@Suppress("LongParameterList")
 @Composable
 fun ChatScreen(
     uiState: ChatUiState,
@@ -136,6 +137,7 @@ fun ChatScreen(
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun PreviewChatScreenLight() {

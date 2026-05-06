@@ -1,3 +1,5 @@
+@file:Suppress("FunctionNaming")
+
 package com.browntowndev.pocketcrew.feature.inference
 
 import android.content.Context
@@ -179,6 +181,7 @@ class ConversationManagerImpl @Inject constructor(
      * @return The active LiteRtConversation instance wrapping the LiteRT Conversation
      * @throws IllegalStateException if no model is registered for this model type
      */
+    @Suppress("CyclomaticComplexMethod")
     override suspend fun getConversation(
         modelType: ModelType, 
         options: GenerationOptions?,
@@ -217,6 +220,7 @@ class ConversationManagerImpl @Inject constructor(
             }
 
             if (!activeConfig.isLocal) {
+                @Suppress("MaxLineLength")
                 throw IllegalStateException("ConversationManager cannot run API models. ModelType $modelType is mapped to an API configuration.")
             }
 
@@ -276,6 +280,7 @@ class ConversationManagerImpl @Inject constructor(
             } else if (conversationChanged) {
                 Log.d(
                     TAG,
+                    @Suppress("MaxLineLength")
                     "Recreating LiteRT conversation for modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled, hasTransientToolResults=$hasTransientToolResults memory=${memorySnapshot()}"
                 )
                 closeConversationLocked()
@@ -285,6 +290,7 @@ class ConversationManagerImpl @Inject constructor(
             } else {
                 Log.d(
                     TAG,
+                    @Suppress("MaxLineLength")
                     "Reusing LiteRT conversation for modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled memory=${memorySnapshot()}"
                 )
             }
@@ -395,6 +401,7 @@ class ConversationManagerImpl @Inject constructor(
 
                 Log.d(
                     TAG,
+                    @Suppress("MaxLineLength")
                     "Creating LiteRT conversation for modelType=$modelType historySize=${history.size} hasSearchTool=$hasSearchTool memoryBeforeCreate=${memorySnapshot()}"
                 )
                 conversation = eng.createConversation(conversationConfig)
@@ -432,7 +439,8 @@ class ConversationManagerImpl @Inject constructor(
 
             Log.d(
                 TAG,
-                "getConversation decision: modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled, systemPrompt=${resolvedSystemPrompt.take(120)}, samplerConfig=$targetSamplerConfig, engineRecreated=$engineChanged, conversationRecreated=$conversationRecreated, memory=${memorySnapshot()}"
+                @Suppress("MaxLineLength")
+                "getConversation decision: modelType=$modelType, configId=$configId, thinkingEnabled=$resolvedThinkingEnabled, systemPrompt=${resolvedSystemPrompt.take(LOG_TRUNCATE_LENGTH)}, samplerConfig=$targetSamplerConfig, engineRecreated=$engineChanged, conversationRecreated=$conversationRecreated, memory=${memorySnapshot()}"
             )
             
             return@withContext conversationPort!!
@@ -483,6 +491,7 @@ class ConversationManagerImpl @Inject constructor(
                 val rootCause = t.rootCause()
                 loggingPort.error(
                     TAG,
+                    @Suppress("MaxLineLength")
                     "Native tool method failed before safe execution tool=${ToolDefinition.WEB_SEARCH.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
                     rootCause
                 )
@@ -506,6 +515,7 @@ class ConversationManagerImpl @Inject constructor(
             Log.d(TAG, "Executing native tool call: tavily_extract with urls: $urls")
             loggingPort.info(
                 TAG,
+                @Suppress("MaxLineLength")
                 "Native tool call requested tool=${ToolDefinition.WEB_EXTRACT.name} modelType=$modelType chatId=${chatId?.value ?: "<none>"} userMessageId=${userMessageId?.value ?: "<none>"} urlCount=${urls.length}"
             )
             return try {
@@ -540,6 +550,7 @@ class ConversationManagerImpl @Inject constructor(
                 val rootCause = t.rootCause()
                 loggingPort.error(
                     TAG,
+                    @Suppress("MaxLineLength")
                     "Native tool method failed before safe execution tool=${ToolDefinition.WEB_EXTRACT.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
                     rootCause
                 )
@@ -561,15 +572,17 @@ class ConversationManagerImpl @Inject constructor(
             Log.d(TAG, "Executing native tool call: attached_image_inspect with question: $question")
             loggingPort.info(
                 TAG,
+                @Suppress("MaxLineLength")
                 "Native tool call requested tool=${ToolDefinition.ATTACHED_IMAGE_INSPECT.name} modelType=$modelType chatId=${chatId?.value ?: "<none>"} userMessageId=${userMessageId?.value ?: "<none>"} questionChars=${question.length}"
             )
             return try {
                 runBlocking(Dispatchers.IO) {
                     loggingPort.info(
                         TAG,
+                        @Suppress("MaxLineLength")
                         "Entered native tool coroutine tool=${ToolDefinition.ATTACHED_IMAGE_INSPECT.name} modelType=$modelType chatId=${chatId?.value ?: "<none>"} userMessageId=${userMessageId?.value ?: "<none>"}"
                     )
-                    val request = ToolCallRequest(
+                    val request = @Suppress("MaxLineLength") ToolCallRequest(
                         toolName = ToolDefinition.ATTACHED_IMAGE_INSPECT.name,
                         argumentsJson = ToolDefinition.ATTACHED_IMAGE_INSPECT.encodeArguments<AttachedImageInspectParams>(AttachedImageInspectParams(question)),
                         provider = "LITERT",
@@ -579,6 +592,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     loggingPort.info(
                         TAG,
+                        @Suppress("MaxLineLength")
                         "Dispatching native tool call tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"}"
                     )
                     executeToolSafely(request)
@@ -589,6 +603,7 @@ class ConversationManagerImpl @Inject constructor(
                 val rootCause = t.rootCause()
                 loggingPort.error(
                     TAG,
+                    @Suppress("MaxLineLength")
                     "Native tool method failed before safe execution tool=${ToolDefinition.ATTACHED_IMAGE_INSPECT.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
                     rootCause
                 )
@@ -609,6 +624,7 @@ class ConversationManagerImpl @Inject constructor(
             Log.d(TAG, "Executing native tool call: search_chat_history with queries: $queries")
             loggingPort.info(
                 TAG,
+                @Suppress("MaxLineLength")
                 "Native tool call requested tool=${ToolDefinition.SEARCH_CHAT_HISTORY.name} modelType=$modelType queryChars=${queries.length}"
             )
             return try {
@@ -622,7 +638,7 @@ class ConversationManagerImpl @Inject constructor(
                         .map { it.trim() }
                         .filter { it.isNotEmpty() }
                         
-                    val request = ToolCallRequest(
+                    val request = @Suppress("MaxLineLength") ToolCallRequest(
                         toolName = ToolDefinition.SEARCH_CHAT_HISTORY.name,
                         argumentsJson = ToolDefinition.SEARCH_CHAT_HISTORY.encodeArguments<SearchChatHistoryParams>(SearchChatHistoryParams(queries = queryList)),
                         provider = "LITERT",
@@ -642,6 +658,7 @@ class ConversationManagerImpl @Inject constructor(
                 val rootCause = t.rootCause()
                 loggingPort.error(
                     TAG,
+                    @Suppress("MaxLineLength")
                     "Native tool method failed before safe execution tool=${ToolDefinition.SEARCH_CHAT_HISTORY.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
                     rootCause
                 )
@@ -663,6 +680,7 @@ class ConversationManagerImpl @Inject constructor(
             Log.d(TAG, "Executing native tool call: search_chat with chatId: $chat_id query: $query")
             loggingPort.info(
                 TAG,
+                @Suppress("MaxLineLength")
                 "Native tool call requested tool=${ToolDefinition.SEARCH_CHAT.name} modelType=$modelType chatId=$chat_id queryChars=${query.length}"
             )
             return try {
@@ -671,7 +689,7 @@ class ConversationManagerImpl @Inject constructor(
                         TAG,
                         "Entered native tool coroutine tool=${ToolDefinition.SEARCH_CHAT.name} modelType=$modelType chatId=$chat_id"
                     )
-                    val request = ToolCallRequest(
+                    val request = @Suppress("MaxLineLength") ToolCallRequest(
                         toolName = ToolDefinition.SEARCH_CHAT.name,
                         argumentsJson = ToolDefinition.SEARCH_CHAT.encodeArguments<SearchChatParams>(SearchChatParams(chat_id = chat_id, query = query)),
                         provider = "LITERT",
@@ -681,6 +699,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     loggingPort.info(
                         TAG,
+                        @Suppress("MaxLineLength")
                         "Dispatching native tool call tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"}"
                     )
                     executeToolSafely(request)
@@ -691,6 +710,7 @@ class ConversationManagerImpl @Inject constructor(
                 val rootCause = t.rootCause()
                 loggingPort.error(
                     TAG,
+                    @Suppress("MaxLineLength")
                     "Native tool method failed before safe execution tool=${ToolDefinition.SEARCH_CHAT.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
                     rootCause
                 )
@@ -713,12 +733,14 @@ class ConversationManagerImpl @Inject constructor(
             Log.d(TAG, "Executing native tool call: get_message_context with messageId: $message_id before: $before after: $after")
             loggingPort.info(
                 TAG,
+                @Suppress("MaxLineLength")
                 "Native tool call requested tool=${ToolDefinition.GET_MESSAGE_CONTEXT.name} modelType=$modelType chatId=${chatId?.value ?: "<none>"} userMessageId=${userMessageId?.value ?: "<none>"} messageId=$message_id"
             )
             return try {
                 runBlocking(Dispatchers.IO) {
                     loggingPort.info(
                         TAG,
+                        @Suppress("MaxLineLength")
                         "Entered native tool coroutine tool=${ToolDefinition.GET_MESSAGE_CONTEXT.name} modelType=$modelType messageId=$message_id"
                     )
                     val params = GetMessageContextParams(message_id, before, after)
@@ -732,6 +754,7 @@ class ConversationManagerImpl @Inject constructor(
                     )
                     loggingPort.info(
                         TAG,
+                        @Suppress("MaxLineLength")
                         "Dispatching native tool call tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"}"
                     )
                     executeToolSafely(request)
@@ -742,6 +765,7 @@ class ConversationManagerImpl @Inject constructor(
                 val rootCause = t.rootCause()
                 loggingPort.error(
                     TAG,
+                    @Suppress("MaxLineLength")
                     "Native tool method failed before safe execution tool=${ToolDefinition.GET_MESSAGE_CONTEXT.name} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
                     rootCause
                 )
@@ -769,6 +793,7 @@ class ConversationManagerImpl @Inject constructor(
         return try {
             loggingPort.debug(
                 TAG,
+                @Suppress("MaxLineLength")
                 "executeToolSafely entered tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"}"
             )
 
@@ -789,7 +814,7 @@ class ConversationManagerImpl @Inject constructor(
 
             loggingPort.debug(
                 TAG,
-                "Native tool call completed tool=${request.toolName} finalPayload=${decision.finalResult.take(2000)}"
+                "Native tool call completed tool=${request.toolName} finalPayload=${decision.finalResult.take(TOOL_RESULT_TRUNCATE_LENGTH)}"
             )
 
             if (decision.shouldTrackTransientToolResult) {
@@ -804,6 +829,7 @@ class ConversationManagerImpl @Inject constructor(
             if (decision.contextFull) {
                 loggingPort.warning(
                     TAG,
+                    @Suppress("MaxLineLength")
                     "Context nearly full after tool result. Appending stop-tools warning. tool=${request.toolName} usedTokens=${decision.totalTokens} window=$currentContextWindow"
                 )
                 contextFullWarned = true
@@ -812,7 +838,8 @@ class ConversationManagerImpl @Inject constructor(
             if (decision.hasErrorPayload) {
                 loggingPort.error(
                     TAG,
-                    "Native tool call returned error payload tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"} payload=${decision.finalResult.take(2000)}"
+                    @Suppress("MaxLineLength")
+                    "Native tool call returned error payload tool=${request.toolName} provider=${request.provider} modelType=${request.modelType} chatId=${request.chatId?.value ?: "<none>"} userMessageId=${request.userMessageId?.value ?: "<none>"} payload=${decision.finalResult.take(TOOL_RESULT_TRUNCATE_LENGTH)}"
                 )
             }
             decision.finalResult
@@ -839,6 +866,7 @@ class ConversationManagerImpl @Inject constructor(
         executeToolSafely(request)
 
     private fun buildToolErrorJson(toolName: String, throwable: Throwable): String =
+        @Suppress("MaxLineLength")
         """{"error":"tool_execution_failed","tool":"${escapeJson(toolName)}","exception":"${escapeJson(throwable::class.java.simpleName)}","message":"${escapeJson(throwable.message ?: "Unknown error")}"}"""
 
     private fun Throwable.rootCause(): Throwable {
@@ -866,6 +894,7 @@ class ConversationManagerImpl @Inject constructor(
         initializeEngine(modelPath, contextWindow, cacheDir, isMultimodal)
     }
 
+    @Suppress("ThrowsCount")
     private fun initializeEngine(
         modelPath: String,
         contextWindow: Int,
@@ -901,12 +930,15 @@ class ConversationManagerImpl @Inject constructor(
                 "LiteRT text engine initialized successfully with GPU backend " +
                     "(isNpu=$activeBackendIsNpu) memoryAfterInit=${memorySnapshot()}"
             )
+        } catch (e: CancellationException) {
+            Log.i(TAG, "LiteRT GPU engine initialization cancelled by user")
+            try { candidate?.close() } catch (_: Throwable) {}
+            throw e
+        } catch (e: JavaCancellationException) {
+            Log.i(TAG, "LiteRT GPU engine initialization cancelled by user")
+            try { candidate?.close() } catch (_: Throwable) {}
+            throw e
         } catch (t: Throwable) {
-            if (t is CancellationException || t is JavaCancellationException) {
-                Log.i(TAG, "LiteRT GPU engine initialization cancelled by user")
-                try { candidate?.close() } catch (_: Throwable) {}
-                throw t
-            }
             Log.w(TAG, "LiteRT GPU backend failed during initialize() memoryAfterFailure=${memorySnapshot()}", t)
             try {
                 candidate?.close()
@@ -983,6 +1015,7 @@ class ConversationManagerImpl @Inject constructor(
             val resetsNativeContextToEmpty = messages.isEmpty() && history.isEmpty() && conversation != null
 
             if (resetsNativeContextToEmpty) {
+                @Suppress("MaxLineLength")
                 Log.d(TAG, "Empty rehydrated history requires native conversation reset. (oldSize=${history.size}, newSize=${messages.size})")
                 closeConversationLocked()
             } else if (!isContinuation && conversation != null) {
@@ -1033,5 +1066,7 @@ class ConversationManagerImpl @Inject constructor(
 
     companion object {
         private const val TAG = "ConversationManager"
+        private const val LOG_TRUNCATE_LENGTH = 120
+        private const val TOOL_RESULT_TRUNCATE_LENGTH = 2000
     }
 }

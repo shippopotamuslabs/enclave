@@ -30,7 +30,6 @@ open class GoogleVideoGenerationAdapter(
         modelId: String,
         baseUrl: String?,
         settings: GenerationSettings,
-        referenceImage: ByteArray? = null,
     ): Result<ByteArray> = withContext(Dispatchers.IO) {
         runCatching {
             val videoSettings = settings as? VideoGenerationSettings
@@ -51,7 +50,7 @@ open class GoogleVideoGenerationAdapter(
                 val method = completedOp.javaClass.methods.find { it.name == "response" }
                 val optional = method?.invoke(completedOp) as? java.util.Optional<GenerateVideosResponse>
                 optional?.orElse(null)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 null
             } ?: throw IllegalStateException("Google video operation finished but returned no response")
             
@@ -65,7 +64,7 @@ open class GoogleVideoGenerationAdapter(
                     val uriMethod = videoObj?.javaClass?.methods?.find { it.name == "uri" }
                     val uriOptional = uriMethod?.invoke(videoObj) as? java.util.Optional<String>
                     uriOptional?.orElse(null)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     null
                 }
             } ?: throw IllegalStateException("No video URL returned by SDK")
@@ -98,7 +97,7 @@ open class GoogleVideoGenerationAdapter(
                 val method = currentOp.javaClass.methods.find { it.name == "done" }
                 val optional = method?.invoke(currentOp) as? java.util.Optional<Boolean>
                 optional?.orElse(false) ?: false
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 false
             }
             
@@ -107,7 +106,7 @@ open class GoogleVideoGenerationAdapter(
                     val method = currentOp.javaClass.methods.find { it.name == "error" }
                     val optional = method?.invoke(currentOp) as? java.util.Optional<Any>
                     optional?.orElse(null)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     null
                 }
                 if (error != null) {

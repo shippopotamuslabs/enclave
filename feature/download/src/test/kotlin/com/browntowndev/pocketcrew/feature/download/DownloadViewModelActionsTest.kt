@@ -18,7 +18,6 @@ import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFileFormat
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.download.ModelDownloadOrchestratorPort
-import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -42,7 +41,6 @@ class DownloadViewModelActionsTest {
 
     private val orchestrator = mockk<ModelDownloadOrchestratorPort>(relaxed = true)
     private val workRepo = mockk<DownloadWorkRepository>(relaxed = true)
-    private val registry = mockk<LocalModelRepositoryPort>(relaxed = true)
     private val parser = mockk<WorkProgressParser>(relaxed = true)
     private val errorHandler = mockk<ViewModelErrorHandler>(relaxed = true)
     private val downloadStateFlow = MutableStateFlow(DownloadState(status = DownloadStatus.IDLE))
@@ -87,7 +85,6 @@ class DownloadViewModelActionsTest {
         return DownloadViewModel(
             modelDownloadOrchestrator = orchestrator,
             downloadWorkRepository = workRepo,
-            localModelRepository = registry,
             progressParser = parser,
             errorHandler = errorHandler,
             modelsResult = modelsResult,

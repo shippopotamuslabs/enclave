@@ -59,7 +59,6 @@ class InferenceFactoryImplTest {
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val inferenceLockManager = mockk<InferenceLockManager>()
     private val toolExecutor = mockk<ToolExecutorPort>()
-    private val toolExecutorProvider = providerOf(toolExecutor)
     private val openAiClient = mockk<OpenAIClient>(relaxed = true)
     private val anthropicClient = mockk<AnthropicClient>(relaxed = true)
     private val googleClient = mockk<Client>(relaxed = true)
@@ -97,7 +96,6 @@ class InferenceFactoryImplTest {
             loggingPort = loggingPort,
             orchestrator = LlmToolingOrchestrator(toolExecutor, loggingPort),
             inferenceLockManager = inferenceLockManager,
-            toolExecutorProvider = toolExecutorProvider,
             toolExecutionEventPort = mockk(relaxed = true),
         )
     }

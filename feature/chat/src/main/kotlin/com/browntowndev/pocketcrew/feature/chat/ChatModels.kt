@@ -135,7 +135,10 @@ val fakeLongMessages = listOf(
         indicatorState = IndicatorState.Generating(
             thinkingData = ThinkingDataUi(
                 thinkingDurationSeconds = 15,
-                thinkingRaw = "Kotlin coroutines are like lightweight threads. They allow you to write asynchronous code in a sequential manner. Key concepts: **suspend functions**, **Dispatchers**, and **Scopes**.\n\n- `launch` for fire-and-forget\n- `async` for results\n- `flow` for streams"
+                thinkingRaw = "Kotlin coroutines are like lightweight threads. They allow you to write " +
+                    "asynchronous code in a sequential manner. Key concepts: **suspend functions**, " +
+                    "**Dispatchers**, and **Scopes**.\n\n- `launch` for fire-and-forget\n" +
+                    "- `async` for results\n- `flow` for streams"
             )
         ),
         modelDisplayName = "Qwen 3 8B",

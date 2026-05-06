@@ -34,6 +34,11 @@ class ModelReDownloadViewModel @Inject constructor(
     private val downloadWorkRepository: DownloadWorkRepository
 ) : ViewModel() {
 
+    private companion object {
+        const val SUCCESS_DELAY_MS = 2000L
+        const val FAILURE_DELAY_MS = 3000L
+    }
+
     private val _reDownloadStates = MutableStateFlow<Map<LocalModelId, ReDownloadProgress>>(emptyMap())
     val reDownloadStates: StateFlow<Map<LocalModelId, ReDownloadProgress>> = _reDownloadStates.asStateFlow()
 
@@ -46,7 +51,8 @@ class ModelReDownloadViewModel @Inject constructor(
                     observeDownloadProgress(modelId)
                 }
                 .onFailure { error ->
-                    _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgress.Failed(error.message ?: "Unknown error"))
+                    _reDownloadStates.value = _reDownloadStates.value +
+                        (modelId to ReDownloadProgress.Failed(error.message ?: "Unknown error"))
                     delay(3000)
                     _reDownloadStates.value = _reDownloadStates.value - modelId
                 }
@@ -93,7 +99,7 @@ class ModelReDownloadViewModel @Inject constructor(
                     when (workInfo.state) {
                         WorkInfo.State.SUCCEEDED -> {
                             _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgress.Complete)
-                            delay(2000)
+                            delay(SUCCESS_DELAY_MS)
                             _reDownloadStates.value = _reDownloadStates.value - modelId
                             false
                         }

@@ -11,7 +11,6 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.FakeDefaultModelRepository
 import com.browntowndev.pocketcrew.domain.port.repository.ApiModelRepositoryPort
-import com.browntowndev.pocketcrew.domain.port.repository.LocalModelRepositoryPort
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -23,16 +22,14 @@ import kotlin.test.assertFailsWith
 class SetDefaultModelUseCaseTest {
 
     private lateinit var repository: FakeDefaultModelRepository
-    private lateinit var localModelRepository: LocalModelRepositoryPort
     private lateinit var apiModelRepository: ApiModelRepositoryPort
     private lateinit var useCase: SetDefaultModelUseCase
 
     @BeforeEach
     fun setUp() {
         repository = FakeDefaultModelRepository()
-        localModelRepository = mockk(relaxed = true)
         apiModelRepository = mockk(relaxed = true)
-        useCase = SetDefaultModelUseCaseImpl(repository, localModelRepository, apiModelRepository)
+        useCase = SetDefaultModelUseCaseImpl(repository, apiModelRepository)
     }
 
     @Test

@@ -46,7 +46,7 @@ class SettingsRepositoryImpl @Inject constructor(
             theme = preferences[THEME_KEY]?.let { name ->
                 try {
                     AppTheme.valueOf(name)
-                } catch (e: IllegalArgumentException) {
+                } catch (_: IllegalArgumentException) {
                     AppTheme.SYSTEM
                 }
             } ?: AppTheme.SYSTEM,
@@ -56,7 +56,7 @@ class SettingsRepositoryImpl @Inject constructor(
             selectedPromptOption = preferences[SELECTED_PROMPT_OPTION_KEY]?.let { name ->
                 try {
                     SystemPromptOption.valueOf(name)
-                } catch (e: IllegalArgumentException) {
+                } catch (_: IllegalArgumentException) {
                     SystemPromptOption.CONCISE
                 }
             } ?: SystemPromptOption.CONCISE,
@@ -66,7 +66,7 @@ class SettingsRepositoryImpl @Inject constructor(
             searchProvider = preferences[SEARCH_PROVIDER_KEY]?.let { name ->
                 try {
                     SearchProvider.valueOf(name)
-                } catch (e: IllegalArgumentException) {
+                } catch (_: IllegalArgumentException) {
                     SearchProvider.TAVILY
                 }
             } ?: SearchProvider.TAVILY,

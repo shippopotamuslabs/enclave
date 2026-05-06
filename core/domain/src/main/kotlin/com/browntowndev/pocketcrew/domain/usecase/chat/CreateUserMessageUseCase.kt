@@ -116,6 +116,7 @@ class CreateUserMessageUseCase @Inject constructor(
      * @param content The message content
      * @return The generated chat name
      */
+    @Suppress("ReturnCount")
     private fun generateChatName(content: String): String {
         // Empty content returns default name
         if (content.isBlank()) {

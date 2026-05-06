@@ -109,25 +109,13 @@ internal object ImagePayloads {
         return URLConnection.guessContentTypeFromName(file.name) ?: "image/jpeg"
     }
 
+    @Suppress("ReturnCount")
     private fun detectMimeTypeFromHeader(header: ByteArray, bytesRead: Int): String? {
-        if (bytesRead >= 8 &&
-            header[0] == 0x89.toByte() &&
-            header[1] == 0x50.toByte() &&
-            header[2] == 0x4E.toByte() &&
-            header[3] == 0x47.toByte() &&
-            header[4] == 0x0D.toByte() &&
-            header[5] == 0x0A.toByte() &&
-            header[6] == 0x1A.toByte() &&
-            header[7] == 0x0A.toByte()
-        ) {
+        if (bytesRead >= 8 && isPngSignature(header)) {
             return "image/png"
         }
 
-        if (bytesRead >= 3 &&
-            header[0] == 0xFF.toByte() &&
-            header[1] == 0xD8.toByte() &&
-            header[2] == 0xFF.toByte()
-        ) {
+        if (bytesRead >= 3 && isJpegSignature(header)) {
             return "image/jpeg"
         }
 
@@ -161,4 +149,19 @@ internal object ImagePayloads {
         val digest = MessageDigest.getInstance("SHA-256")
         return digest.digest(bytes).joinToString("") { "%02x".format(it) }
     }
+
+    private fun isPngSignature(header: ByteArray): Boolean =
+        header[0] == 0x89.toByte() &&
+            header[1] == 0x50.toByte() &&
+            header[2] == 0x4E.toByte() &&
+            header[3] == 0x47.toByte() &&
+            header[4] == 0x0D.toByte() &&
+            header[5] == 0x0A.toByte() &&
+            header[6] == 0x1A.toByte() &&
+            header[7] == 0x0A.toByte()
+
+    private fun isJpegSignature(header: ByteArray): Boolean =
+        header[0] == 0xFF.toByte() &&
+            header[1] == 0xD8.toByte() &&
+            header[2] == 0xFF.toByte()
 }

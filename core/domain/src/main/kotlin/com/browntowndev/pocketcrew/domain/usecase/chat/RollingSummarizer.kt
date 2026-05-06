@@ -19,7 +19,6 @@ internal class RollingSummarizer(
         if (messages.size < 4) return null // Need enough context to summarize
 
         // Slice oldest 50% by tokens (protecting index 0 System Prompt if it exists)
-        val systemPrompt = messages.firstOrNull { it.role == Role.SYSTEM }
         val history = messages.filter { it.role != Role.SYSTEM }
         val totalTokens = history.sumOf { tokenCounter.countTokens(it.content) }
         val targetTokens = totalTokens / 2

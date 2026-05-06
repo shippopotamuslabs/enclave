@@ -8,7 +8,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
  * Transaction management is delegated to the use case layer to keep
  * this interface agnostic of transaction lifecycle.
  */
+@Suppress("TooManyFunctions")
 interface ChatRepository {
     /**
      * Returns all chats as a Flow.
@@ -139,7 +140,12 @@ interface ChatRepository {
      * @param pipelineStep The pipeline step this message belongs to (for Crew mode)
      * @return The ID of the newly created message
      */
-    suspend fun createAssistantMessage(chatId: ChatId, userMessageId: MessageId, modelType: ModelType, pipelineStep: PipelineStep? = null): MessageId
+    suspend fun createAssistantMessage(
+        chatId: ChatId,
+        userMessageId: MessageId,
+        modelType: ModelType,
+        pipelineStep: PipelineStep? = null
+    ): MessageId
 
     /**
      * Persists all message data atomically in a single transaction.
@@ -157,6 +163,7 @@ interface ChatRepository {
      * @param messageState The final message state
      * @param pipelineStep The pipeline step (for CREW mode messages)
      */
+    @Suppress("LongParameterList")
     suspend fun persistAllMessageData(
         messageId: MessageId,
         modelType: ModelType,

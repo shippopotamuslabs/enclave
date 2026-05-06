@@ -25,7 +25,6 @@ internal class OpenAiResponseStreamHandler(
     private val modelType: ModelType,
     private val loggingPort: LoggingPort,
     private val tag: String,
-    private val allowToolCall: Boolean,
     private val chatId: ChatId?,
     private val userMessageId: MessageId?,
     private val emitEvent: suspend (InferenceEvent) -> Unit,
@@ -229,6 +228,7 @@ internal class OpenAiResponseStreamHandler(
                 cachedFunctionCall?.toolName?.let { return@getOrElse it }
                 loggingPort.warning(
                     tag,
+                    @Suppress("MaxLineLength")
                     "Function call done event missing name provider=$provider model=$modelId; defaulting to ${ToolDefinition.WEB_SEARCH.name}. error=${error.message ?: error::class.java.simpleName}"
                 )
                 ToolDefinition.WEB_SEARCH.name
@@ -277,6 +277,7 @@ internal class OpenAiResponseStreamHandler(
         state.responseId = event.completed().get().response().id()
         loggingPort.debug(
             tag,
+            @Suppress("MaxLineLength")
             "Responses stream completed model=$modelId outputTextDeltas=${state.outputTextDeltaCount} reasoningTextDeltas=${state.reasoningTextDeltaCount} reasoningSummaryDeltas=${state.reasoningSummaryDeltaCount}"
         )
         return state

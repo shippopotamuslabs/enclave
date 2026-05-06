@@ -53,15 +53,21 @@ class ImageInspectToolExecutor @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "Executing image inspect tool provider=${request.provider} modelType=${request.modelType} tool=${request.toolName} question=$question"
+            "Executing image inspect tool provider=${request.provider} " +
+                "modelType=${request.modelType} tool=${request.toolName} question=$question"
         )
 
         val chatId = request.chatId
         if (chatId == null) {
-            loggingPort.warning(TAG, "Image inspect tool invoked without chat context (chatId=$chatId, userMessageId=${request.userMessageId})")
+            loggingPort.warning(
+                TAG,
+                "Image inspect tool invoked without chat context " +
+                    "(chatId=$chatId, userMessageId=${request.userMessageId})"
+            )
             return ToolExecutionResult(
                 toolName = request.toolName,
-                resultJson = """{"error": "no context", "message": "Image inspection requires chat context that is not available in this execution path."}""",
+                resultJson = """{"error": "no context", """ +
+                    """"message": "Image inspection requires chat context that is not available in this execution path."}""",
             )
         }
 
@@ -80,7 +86,9 @@ class ImageInspectToolExecutor @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "Image inspect tool resolved target chatId=${chatId.value} userMessageId=${resolvedTarget.userMessageId.value} imageUri=${resolvedTarget.imageUri}"
+            "Image inspect tool resolved target chatId=${chatId.value} " +
+                "userMessageId=${resolvedTarget.userMessageId.value} " +
+                "imageUri=${resolvedTarget.imageUri}"
         )
 
         val analysis = try {
@@ -89,7 +97,9 @@ class ImageInspectToolExecutor @Inject constructor(
             val rootCause = t.rootCause()
             loggingPort.error(
                 TAG,
-                "Image inspect tool execution failed provider=${request.provider} modelType=${request.modelType} tool=${request.toolName} cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
+                "Image inspect tool execution failed provider=${request.provider} " +
+                    "modelType=${request.modelType} tool=${request.toolName} " +
+                    "cause=${rootCause::class.java.simpleName}: ${rootCause.message}",
                 rootCause
             )
             return ToolExecutionResult(
@@ -100,7 +110,9 @@ class ImageInspectToolExecutor @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "Image inspect tool execution complete provider=${request.provider} modelType=${request.modelType} tool=${request.toolName} resultChars=${analysis.length}"
+            "Image inspect tool execution complete provider=${request.provider} " +
+                "modelType=${request.modelType} tool=${request.toolName} " +
+                "resultChars=${analysis.length}"
         )
 
         return ToolExecutionResult(

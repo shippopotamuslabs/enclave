@@ -45,7 +45,7 @@ class XSearchRepositoryTest {
         }
         """.trimIndent()
 
-        val mappedJson = repository.mapResponse("test query", rawResponse)
+        val mappedJson = repository.mapResponse(rawResponse)
         val posts = json.parseToJsonElement(mappedJson).jsonArray
 
         assertEquals(2, posts.size)
@@ -80,7 +80,7 @@ class XSearchRepositoryTest {
         }
         """.trimIndent()
 
-        val mappedJson = repository.mapResponse("test query", rawResponse)
+        val mappedJson = repository.mapResponse(rawResponse)
         val posts = json.parseToJsonElement(mappedJson).jsonArray
 
         // Should have 3 posts: Post 4 (u2), Post 1 (u1), Post 2 (u1). Post 3 (u1) should be dropped.
@@ -109,7 +109,7 @@ class XSearchRepositoryTest {
         }
         """.trimIndent()
 
-        val mappedJson = repository.mapResponse("test query", rawResponse)
+        val mappedJson = repository.mapResponse(rawResponse)
         val posts = json.parseToJsonElement(mappedJson).jsonArray
         val post = posts[0].jsonObject
 

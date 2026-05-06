@@ -89,8 +89,7 @@ fun HistoryScreen(
     onRenameChat: (ChatId, String) -> Unit,
     onPinChat: (ChatId) -> Unit,
     onUnpinChat: (ChatId) -> Unit,
-    onSettingsClick: () -> Unit,
-    @Suppress("UNUSED_PARAMETER") onShowSnackbar: (String, String?) -> Unit
+    onSettingsClick: () -> Unit
 ) {
     var optionsState by remember { mutableStateOf<HistoryOptionsState>(HistoryOptionsState.Hidden) }
     val sheetState = rememberModalBottomSheetState()
@@ -591,6 +590,7 @@ private fun BottomSheetOption(
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview(showBackground = true)
 @Composable
 private fun PreviewHistoryScreenLoading() {
@@ -608,8 +608,7 @@ private fun PreviewHistoryScreenLoading() {
             onRenameChat = { _, _ -> },
             onPinChat = {},
             onUnpinChat = {},
-            onSettingsClick = {},
-            onShowSnackbar = { _, _ -> }
+            onSettingsClick = {}
         )
     }
 }

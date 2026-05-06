@@ -29,10 +29,10 @@ import com.browntowndev.pocketcrew.feature.studio.GalleryViewModel
 import com.browntowndev.pocketcrew.feature.studio.MultimodalViewModel
 import com.browntowndev.pocketcrew.feature.studio.StudioDetailScreen
 import com.browntowndev.pocketcrew.feature.studio.StudioScreen
-import com.browntowndev.pocketcrew.feature.artifact.ArtifactRoute
 
 private const val ANIMATION_DURATION = 300
 
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 @Composable
 fun PocketCrewNavGraph(
     navController: NavHostController,
@@ -240,8 +240,7 @@ fun PocketCrewNavGraph(
                 },
                 onNavigateToStudio = { navController.navigate(Routes.STUDIO) },
                 onNavigateToGallery = { navController.navigate(Routes.GALLERY) },
-                onNavigateToSettings = { navController.navigate(Routes.SETTINGS_GRAPH) },
-                onShowSnackbar = onShowSnackbar,
+                onNavigateToSettings = { navController.navigate(Routes.SETTINGS_GRAPH) }
             )
         }
 
@@ -433,7 +432,16 @@ fun PocketCrewNavGraph(
             val rehydrateTypes = backStackEntry.arguments?.getString("rehydrateTypes")
             val rehydratePrompts = backStackEntry.arguments?.getString("rehydratePrompts")
 
-            LaunchedEffect(editAssetId, animateAssetId, animatePrompt, autoAnimate, rehydrateIds, rehydrateUris, rehydrateTypes, rehydratePrompts) {
+            LaunchedEffect(
+                editAssetId,
+                animateAssetId,
+                animatePrompt,
+                autoAnimate,
+                rehydrateIds,
+                rehydrateUris,
+                rehydrateTypes,
+                rehydratePrompts
+            ) {
                 if (editAssetId != null || rehydrateUris != null) {
                     val json = kotlinx.serialization.json.Json
                     val ids = rehydrateIds?.let { json.decodeFromString<List<String>>(it) } ?: emptyList()
@@ -462,7 +470,7 @@ fun PocketCrewNavGraph(
                 onMediaClick = { assetId ->
                     navController.navigate(Routes.STUDIO_DETAIL.replace("{assetId}", assetId))
                 },
-                onShowSnackbar = onShowSnackbar,
+                onShowSnackbar = onShowSnackbar
             )
         }
 
@@ -747,7 +755,6 @@ fun PocketCrewNavGraph(
 
         settingsGraph(
             navController = navController,
-            onShowSnackbar = onShowSnackbar,
         )
     }
 }

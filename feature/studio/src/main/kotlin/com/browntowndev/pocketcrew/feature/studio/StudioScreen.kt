@@ -214,7 +214,6 @@ fun StudioScreen(
                 if (scrollTrigger != null) {
                     viewModel.onGenerativeScrollThresholdVisible(
                         anchorAssetId = scrollTrigger.first,
-                        gallerySize = scrollTrigger.second,
                     )
                 }
             }
@@ -524,7 +523,6 @@ private fun StudioGalleryList(
                     rowItems = row.mediaItems,
                     selectedIds = selectedIds,
                     placeholderCount = row.placeholderCount,
-                    hazeState = hazeState,
                     onMediaClick = onMediaClick,
                     onMediaLongClick = onMediaLongClick
                 )
@@ -538,7 +536,6 @@ private fun StudioGalleryList(
                 ) { _, row ->
                     PlaceholderGridRow(
                         placeholderCount = row.placeholderCount,
-                        hazeState = hazeState
                     )
                 }
             }
@@ -571,7 +568,6 @@ private fun StudioGalleryList(
             ) { row ->
                 PlaceholderGridRow(
                     placeholderCount = row.size,
-                    hazeState = hazeState
                 )
             }
         }
@@ -738,7 +734,6 @@ private fun GalleryGridRow(
     rowItems: List<StudioMediaUi>,
     selectedIds: Set<String>,
     placeholderCount: Int = 0,
-    hazeState: HazeState,
     onMediaClick: (String) -> Unit,
     onMediaLongClick: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -770,7 +765,6 @@ private fun GalleryGridRow(
 @Composable
 private fun PlaceholderGridRow(
     placeholderCount: Int,
-    hazeState: HazeState,
     modifier: Modifier = Modifier
 ) {
     Row(

@@ -60,7 +60,13 @@ class SearchChatHistoryToolExecutor @Inject constructor(
         return try {
             executeInternal(request)
         } catch (e: Exception) {
-            loggingPort.error(TAG, "search_chat_history FAILED provider=${request.provider} modelType=${request.modelType} arguments=${request.argumentsJson} error=${e.message}", e)
+            loggingPort.error(
+                TAG,
+                "search_chat_history FAILED provider=${request.provider} " +
+                    "modelType=${request.modelType} arguments=${request.argumentsJson} " +
+                    "error=${e.message}",
+                e
+            )
             throw e
         }
     }
@@ -118,7 +124,9 @@ class SearchChatHistoryToolExecutor @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "search_chat_history complete provider=${request.provider} modelType=${request.modelType} queries=$queries totalMatched=$totalMatchCount returned=${sortedMessages.size}"
+            "search_chat_history complete provider=${request.provider} " +
+                "modelType=${request.modelType} queries=$queries " +
+                "totalMatched=$totalMatchCount returned=${sortedMessages.size}"
         )
 
         return ToolExecutionResult(

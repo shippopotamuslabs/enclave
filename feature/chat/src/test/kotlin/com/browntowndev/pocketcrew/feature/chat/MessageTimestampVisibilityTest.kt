@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.feature.chat
 
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.Message
@@ -62,7 +62,6 @@ class MessageTimestampVisibilityTest {
             activeChatTurnSnapshotPort = ActiveChatTurnStore(),
             playbackController = mockk(relaxed = true),
             studioRepository = mockk(relaxed = true),
-            context = mockk(relaxed = true),
         )
     }
 

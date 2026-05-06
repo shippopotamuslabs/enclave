@@ -294,16 +294,24 @@ fun MessageBubble(
 
 // ==================== PREVIEWS ====================
 
+@Suppress("UnusedPrivateMember")
 @Preview
 @Composable
 private fun PreviewMessageBubbleUser() {
     PocketCrewTheme {
         MessageBubble(
-            message = ChatMessage(id = MessageId("1"), chatId = ChatId("1"), role = MessageRole.User, content = ContentUi(text = "Hello!"), formattedTimestamp = "10:30 AM"),
+            message = ChatMessage(
+                id = MessageId("1"),
+                chatId = ChatId("1"),
+                role = MessageRole.User,
+                content = ContentUi(text = "Hello!"),
+                formattedTimestamp = "10:30 AM"
+            ),
         )
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview
 @Composable
 private fun PreviewMessageBubbleCode() {
@@ -326,6 +334,7 @@ fun main() {
     }
 }
 
+@Suppress("UnusedPrivateMember")
 @Preview
 @Composable
 private fun PreviewMessageBubbleLong() {
@@ -335,7 +344,10 @@ private fun PreviewMessageBubbleLong() {
                 id = MessageId("4"),
                 chatId = ChatId("1"),
                 role = MessageRole.User,
-                content = ContentUi(text = "This is a longer message that spans multiple lines to verify layout behavior and make sure the action buttons align properly beneath the bubble."),
+                content = ContentUi(
+                    text = "This is a longer message that spans multiple lines to verify layout " +
+                        "behavior and make sure the action buttons align properly beneath the bubble."
+                ),
                 formattedTimestamp = "10:33 AM",
             ),
         )

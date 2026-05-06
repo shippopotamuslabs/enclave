@@ -73,7 +73,7 @@ class AndroidAudioPlayer @Inject constructor(
                 continuation.invokeOnCancellation {
                     stop()
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 continuation.resume(Unit)
                 stop()
             }
@@ -109,15 +109,16 @@ class AndroidAudioPlayer @Inject constructor(
      * and returns an appropriate file extension (e.g. ".wav" or ".mp3").
      */
     private fun detectAudioExtension(audioBytes: ByteArray): String {
-        return if (audioBytes.size >= 4 &&
-            audioBytes[0] == 'R'.code.toByte() &&
-            audioBytes[1] == 'I'.code.toByte() &&
-            audioBytes[2] == 'F'.code.toByte() &&
-            audioBytes[3] == 'F'.code.toByte()
-        ) {
+        return if (audioBytes.size >= 4 && isRiffHeader(audioBytes)) {
             ".wav"
         } else {
             ".mp3"
         }
     }
+
+    private fun isRiffHeader(audioBytes: ByteArray): Boolean =
+        audioBytes[0] == 'R'.code.toByte() &&
+            audioBytes[1] == 'I'.code.toByte() &&
+            audioBytes[2] == 'F'.code.toByte() &&
+            audioBytes[3] == 'F'.code.toByte()
 }

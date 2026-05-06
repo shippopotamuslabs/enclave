@@ -1,7 +1,5 @@
 package com.browntowndev.pocketcrew.feature.chat
 
-import android.content.Context
-import dagger.hilt.android.qualifiers.ApplicationContext
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import androidx.compose.material.icons.Icons
@@ -11,7 +9,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Content
 import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
@@ -82,6 +80,7 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @HiltViewModel
+@Suppress("LargeClass")
 class ChatViewModel @Inject constructor(
     private val settingsUseCases: SettingsUseCases,
     private val chatUseCases: ChatUseCases,
@@ -97,7 +96,6 @@ class ChatViewModel @Inject constructor(
     private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
     private val playbackController: TtsPlaybackControllerPort,
     private val studioRepository: StudioRepositoryPort,
-    @ApplicationContext private val context: Context,
 ) : ViewModel() {
 
     companion object {
@@ -116,8 +114,6 @@ class ChatViewModel @Inject constructor(
     val speechState: StateFlow<SpeechState> = _speechState.asStateFlow()
 
     private val _stopSpeechSignal = MutableStateFlow(false)
-
-    private val _isGenerating = MutableStateFlow(false)
 
     // Mutable state for input text (not persisted, managed locally)
     private val _inputText = MutableStateFlow("")
@@ -152,7 +148,7 @@ class ChatViewModel @Inject constructor(
     ) { settings, selectedMode ->
         settings to selectedMode
     }.mapLatest { (settings, selectedMode) ->
-        resolvePhotoAttachmentPolicy(settings, selectedMode)
+        resolvePhotoAttachmentPolicy(selectedMode)
     }
     private val hasTtsProviderAssignedFlow = settingsUseCases.assignments.getDefaultModels()
         .map { assignments ->
@@ -297,12 +293,18 @@ class ChatViewModel @Inject constructor(
     /**
      * Observes tool lifecycle events and manages banner visibility with a 1s minimum gate.
      */
+    @Suppress("CyclomaticComplexMethod")
     private fun observeToolEvents() {
         toolExecutionEventPort.events.onEach { event ->
             val currentChatIdVal = _currentChatId.value ?: initialChatId
             val turnChatId = event.chatId
 
-            loggingPort.debug("ChatViewModel", "Received tool execution event: type=${event::class.java.simpleName} eventId=${event.eventId} turnChatId=${turnChatId?.value} currentChatId=${currentChatIdVal?.value}")
+            loggingPort.debug(
+                "ChatViewModel",
+                "Received tool execution event: type=${event::class.java.simpleName} " +
+                    "eventId=${event.eventId} turnChatId=${turnChatId?.value} " +
+                    "currentChatId=${currentChatIdVal?.value}"
+            )
 
             // Only show if it matches the current conversation context
             if (turnChatId != currentChatIdVal) return@onEach
@@ -346,7 +348,9 @@ class ChatViewModel @Inject constructor(
 
                     if (toolName == ToolDefinition.GENERATE_ARTIFACT.name.lowercase()) {
                         try {
-                            val params = jsonParser.decodeFromString<com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams>(event.argumentsJson)
+                            val params = jsonParser.decodeFromString<
+                                com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
+                                >(event.argumentsJson)
                             activeArtifacts[event.eventId] = params.toRequest()
                         } catch (e: Exception) {
                             loggingPort.error(TAG, "Failed to parse artifact request", e)
@@ -516,11 +520,11 @@ class ChatViewModel @Inject constructor(
                 if (state != null && state !is IndicatorState.None) {
                     hasActiveIndicator = true
                     activeIndicatorMessageId = chatMessage.id
-                    if (!isGenerating && (state is IndicatorState.Generating ||
+                    val isActiveGenerationState = state is IndicatorState.Generating ||
                         state is IndicatorState.Thinking ||
                         state is IndicatorState.Processing ||
-                        state is IndicatorState.EngineLoading)
-                    ) {
+                        state is IndicatorState.EngineLoading
+                    if (!isGenerating && isActiveGenerationState) {
                         isGenerating = true
                         if (state is IndicatorState.EngineLoading) {
                             canStop = false
@@ -733,7 +737,7 @@ class ChatViewModel @Inject constructor(
             )
         ) {
             val settings = settingsUseCases.getSettings().first()
-            if (!resolvePhotoAttachmentPolicy(settings, mode).isEnabled) {
+            if (!resolvePhotoAttachmentPolicy(mode).isEnabled) {
                 _selectedImageUri.value = null
             }
         }
@@ -753,7 +757,7 @@ class ChatViewModel @Inject constructor(
             )
         ) {
             val settings = settingsUseCases.getSettings().first()
-            val policy = resolvePhotoAttachmentPolicy(settings, _selectedMode.value)
+            val policy = resolvePhotoAttachmentPolicy(_selectedMode.value)
             if (!policy.isEnabled) {
                 _selectedImageUri.value = null
                 return@launch
@@ -835,9 +839,15 @@ class ChatViewModel @Inject constructor(
         val fileText = _selectedFileText.value
         val fileName = _selectedFileName.value
 
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to send message", "Could not send message. Please try again.")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to send message",
+                "Could not send message. Please try again."
+            )
+        ) {
             val settings = settingsUseCases.getSettings().first()
-            val selectedImageUri = if (resolvePhotoAttachmentPolicy(settings, _selectedMode.value).isEnabled) {
+            val selectedImageUri = if (resolvePhotoAttachmentPolicy(_selectedMode.value).isEnabled) {
                 _selectedImageUri.value
             } else {
                 null
@@ -1006,7 +1016,6 @@ class ChatViewModel @Inject constructor(
     )
 
     private suspend fun resolvePhotoAttachmentPolicy(
-        settings: SettingsData,
         selectedMode: ChatModeUi,
     ): PhotoAttachmentPolicy {
         val apiVisionConfigured = activeModelProvider.getActiveConfiguration(ModelType.VISION)

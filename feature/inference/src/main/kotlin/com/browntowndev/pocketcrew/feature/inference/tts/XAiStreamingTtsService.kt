@@ -165,7 +165,7 @@ class XAiStreamingTtsService @Inject constructor(
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 val responseInfo = response?.let { r ->
                     val code = r.code
-                    val body = r.body?.string()?.take(200)
+                    val body = r.body?.string()?.take(MAX_ERROR_BODY_LENGTH)
                     " (HTTP $code${body?.let { ", body: $it" } ?: ""})"
                 } ?: ""
                 logger.error(TAG, "WebSocket failure$responseInfo", t)
@@ -185,5 +185,6 @@ class XAiStreamingTtsService @Inject constructor(
 
     private companion object {
         const val TAG = "XAiStreamingTtsService"
+        const val MAX_ERROR_BODY_LENGTH = 200
     }
 }

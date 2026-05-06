@@ -62,7 +62,9 @@ object ToolContextBudget {
         val estimatedUsedTokens = systemPromptTokens + historyTokens + transientToolResultTokens
         val contextFull = estimatedUsedTokens > budget.thresholdTokens
 
-        val truncateToTokens = if (contextFull || estimatedUsedTokens + ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS > budget.usablePromptTokens) {
+        val truncateToTokens = if (contextFull ||
+            estimatedUsedTokens + ContextWindowPlanner.LOCAL_TOOL_RESULT_BUFFER_TOKENS > budget.usablePromptTokens
+        ) {
             // Compute per-result token budget
             val availableTokens = (budget.usablePromptTokens - estimatedUsedTokens)
                 .coerceAtLeast(0)

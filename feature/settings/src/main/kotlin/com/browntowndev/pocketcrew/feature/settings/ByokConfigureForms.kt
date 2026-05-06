@@ -445,6 +445,7 @@ fun ReusableCredentialDropdown(
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("LongParameterList")
 @Composable
 fun CredentialsConfigurationForm(
     asset: ApiModelAssetUi,
@@ -549,7 +550,8 @@ fun CredentialsConfigurationForm(
             shape = RoundedCornerShape(12.dp)
         )
 
-        val canFetchModels = !isFetchingModels && (apiKey.isNotBlank() || asset.credentialsId.value.isNotEmpty() || selectedReusableCredential != null)
+        val canFetchModels = !isFetchingModels &&
+            (apiKey.isNotBlank() || asset.credentialsId.value.isNotEmpty() || selectedReusableCredential != null)
         ModelSelectionField(
             asset = asset,
             availableModels = availableModels,
@@ -595,7 +597,9 @@ fun SystemPromptConfiguration(
                     Text("System Prompt")
                     Spacer(modifier = Modifier.width(4.dp))
                     PersistentTooltip(
-                        description = "Certain pipeline slots (like Crew Mode or Vision) require specialized system prompts to function correctly. Use the Import button to load a template."
+                        description = "Certain pipeline slots (like Crew Mode or Vision) require " +
+                            "specialized system prompts to function correctly. " +
+                            "Use the Import button to load a template."
                     )
                 }
             },
@@ -741,7 +745,8 @@ fun ParameterExclusionSection(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ConfigurationHeader("Advanced: Exclude Parameters")
         Text(
-            text = "If a provider rejects specific parameters (like o1/o3 and temperature), you can explicitly exclude them from the API request here.",
+            text = "If a provider rejects specific parameters (like o1/o3 and temperature), " +
+                "you can explicitly exclude them from the API request here.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -898,7 +903,8 @@ fun TuningConfiguration(
     if (parameterSupport.supportsMinP) {
         TuningSlider(
             label = "Min P",
-            description = "Limits the next token choice to tokens with probability at least P times the probability of the most likely token.",
+            description = "Limits the next token choice to tokens with probability " +
+                "at least P times the probability of the most likely token.",
             value = config.minP.toFloat(),
             range = 0f..1f,
             onValueChange = { onConfigChange(config.copy(minP = it.toDouble())) },

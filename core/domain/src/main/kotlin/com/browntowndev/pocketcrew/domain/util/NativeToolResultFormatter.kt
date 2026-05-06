@@ -85,7 +85,7 @@ object NativeToolResultFormatter {
             } else {
                 resultJson
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             resultJson
         }
     }
@@ -133,7 +133,7 @@ object NativeToolResultFormatter {
                 try {
                     val array = Json.parseToJsonElement(rawUrls).jsonArray
                     array.map { it.jsonPrimitive.content }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     listOf(rawUrls.trim(' ', '"', '\''))
                 }
             }

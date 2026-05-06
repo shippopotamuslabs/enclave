@@ -13,7 +13,7 @@ class SaveApiModelConfigurationUseCaseImpl @Inject constructor(
     private val apiModelRepository: ApiModelRepositoryPort,
 ) : SaveApiModelConfigurationUseCase {
     override suspend fun invoke(configuration: ApiModelConfiguration): Result<ApiModelConfigurationId> {
-        val parent = apiModelRepository.getCredentialsById(configuration.apiCredentialsId)
+        apiModelRepository.getCredentialsById(configuration.apiCredentialsId)
             ?: return Result.failure(IllegalArgumentException("Parent credentials not found"))
             
         return Result.runCatching {

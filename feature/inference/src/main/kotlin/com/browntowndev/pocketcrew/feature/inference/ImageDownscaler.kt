@@ -67,6 +67,7 @@ object ImageDownscaler {
             } ?: ExifInterface.ORIENTATION_NORMAL
 
             val matrix = Matrix()
+            @Suppress("MagicNumber")
             when (orientation) {
                 ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
                 ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)

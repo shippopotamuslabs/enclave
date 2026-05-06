@@ -17,7 +17,6 @@ import com.browntowndev.pocketcrew.domain.model.media.GenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.ImageGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.VideoGenerationSettings
 import com.browntowndev.pocketcrew.domain.model.media.ProviderCapabilities
-import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.media.StudioGenerationDispatcherPort
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepositoryPort
@@ -65,7 +64,6 @@ class MultimodalViewModelTest {
     private val chatUseCases = mockk<ChatUseCases>()
     private val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>()
     private val playbackController = mockk<TtsPlaybackControllerPort>(relaxed = true)
-    private val logger = mockk<LoggingPort>(relaxed = true)
     private val dispatcher = mockk<StudioGenerationDispatcherPort>(relaxed = true)
     
     private val allMediaFlow = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
@@ -144,7 +142,6 @@ class MultimodalViewModelTest {
             getProviderCapabilitiesUseCase = getProviderCapabilitiesUseCase,
             chatUseCases = chatUseCases,
             playbackController = playbackController,
-            logger = logger,
         )
     }
 
@@ -217,7 +214,7 @@ class MultimodalViewModelTest {
         viewModel.onContinualModeToggle(true)
         
         // Before generate, threshold hit is ignored
-        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-0", gallerySize = 0)
+        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-0")
         verify(exactly = 0) { dispatcher.startGeneration(any(), any()) }
 
         // Initial generate
@@ -231,7 +228,7 @@ class MultimodalViewModelTest {
         assertFalse(viewModel.uiState.value.isGenerating)
 
         // First threshold hit
-        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1", gallerySize = 1)
+        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
         verify(exactly = 2) { dispatcher.startGeneration(any(), any()) }
         assertTrue(viewModel.uiState.value.isGenerating)
 
@@ -241,11 +238,11 @@ class MultimodalViewModelTest {
         assertFalse(viewModel.uiState.value.isGenerating)
 
         // Second threshold hit with same anchor should be ignored (internal consumedScrollAnchors)
-        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1", gallerySize = 2)
+        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
         verify(exactly = 2) { dispatcher.startGeneration(any(), any()) }
 
         // Third threshold hit with new anchor should work
-        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-2", gallerySize = 2)
+        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-2")
         verify(exactly = 3) { dispatcher.startGeneration(any(), any()) }
 
         job.cancel()
@@ -267,7 +264,7 @@ class MultimodalViewModelTest {
         advanceUntilIdle()
 
         viewModel.onPromptChange("second prompt")
-        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1", gallerySize = 1)
+        viewModel.onGenerativeScrollThresholdVisible(anchorAssetId = "anchor-1")
 
         assertFalse(viewModel.uiState.value.isContinualGenerationActive)
         verify(exactly = 1) { dispatcher.startGeneration(any(), any()) }

@@ -59,6 +59,7 @@ class OpenAiMediaStreamService @Inject constructor(
     fun expectedMimeType(): String = MIME_TYPE_MP3
 
     /** Confirms this service uses streaming response (not readBytes). */
+    @Suppress("FunctionOnlyReturningConstant")
     fun usesStreamingResponse(): Boolean = true
 
     companion object {

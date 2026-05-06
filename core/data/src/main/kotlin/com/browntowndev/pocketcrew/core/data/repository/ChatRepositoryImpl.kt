@@ -6,7 +6,7 @@ import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.Message
@@ -42,9 +42,7 @@ class ChatRepositoryImpl @Inject constructor(
 
     override suspend fun togglePinStatus(chatId: ChatId) {
         val rowsAffected = chatDao.updatePinStatus(chatId)
-        if (rowsAffected == 0) {
-            throw IllegalArgumentException("Chat not found with id: $chatId")
-        }
+        require(rowsAffected > 0) { "Chat not found with id: $chatId" }
     }
 
     override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> {
@@ -223,16 +221,12 @@ class ChatRepositoryImpl @Inject constructor(
 
     override suspend fun deleteChat(chatId: ChatId) {
         val rowsAffected = chatDao.deleteById(chatId)
-        if (rowsAffected == 0) {
-            throw IllegalArgumentException("Chat not found with id: $chatId")
-        }
+        require(rowsAffected > 0) { "Chat not found with id: $chatId" }
     }
 
     override suspend fun renameChat(chatId: ChatId, newName: String) {
         val rowsAffected = chatDao.updateName(chatId, newName)
-        if (rowsAffected == 0) {
-            throw IllegalArgumentException("Chat not found with id: $chatId")
-        }
+        require(rowsAffected > 0) { "Chat not found with id: $chatId" }
     }
 
     override fun searchChats(query: String, messageIds: List<MessageId>): Flow<List<Chat>> {

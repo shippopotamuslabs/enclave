@@ -58,7 +58,13 @@ class GetMessageContextToolExecutor @Inject constructor(
         return try {
             executeInternal(request)
         } catch (e: Exception) {
-            loggingPort.error(TAG, "get_message_context FAILED provider=${request.provider} modelType=${request.modelType} arguments=${request.argumentsJson} error=${e.message}", e)
+            loggingPort.error(
+                TAG,
+                "get_message_context FAILED provider=${request.provider} " +
+                    "modelType=${request.modelType} arguments=${request.argumentsJson} " +
+                    "error=${e.message}",
+                e
+            )
             throw e
         }
     }
@@ -71,7 +77,9 @@ class GetMessageContextToolExecutor @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "Executing get_message_context provider=${request.provider} modelType=${request.modelType} messageId=$messageId before=$before after=$after"
+            "Executing get_message_context provider=${request.provider} " +
+                "modelType=${request.modelType} messageId=$messageId " +
+                "before=$before after=$after"
         )
 
         // First find the anchor message to get its chat ID and timestamp
@@ -105,7 +113,9 @@ class GetMessageContextToolExecutor @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "get_message_context complete provider=${request.provider} modelType=${request.modelType} messageId=$messageId returned=${contextMessages.size}"
+            "get_message_context complete provider=${request.provider} " +
+                "modelType=${request.modelType} messageId=$messageId " +
+                "returned=${contextMessages.size}"
         )
 
         return ToolExecutionResult(

@@ -30,11 +30,14 @@ import kotlinx.serialization.json.put
  * Generic tool envelope parser that supports both search and image-inspect tools.
  * Refactored from SearchToolSupport to handle multiple tool types.
  */
+@Suppress("TooManyFunctions")
 object ToolEnvelopeParser {
     private val TOOL_NAME_REGEX = Regex(""""name"\s*:\s*"([^"]+)"""")
     private val CDATA_TOOL_CALL_REGEX = Regex("""(?s)<!\[CDATA\[<tool>\s*(\{.*?\})\s*</tool>\]\]>""")
     private val WRAPPED_TOOL_CALL_REGEX = Regex("""(?s)<tool_call>\s*(\{.*?\})\s*</tool_call>""")
+    @Suppress("MaxLineLength")
     private val GLM_TOOL_CALL_REGEX = Regex("""(?s)<tool_call>\s*([a-zA-Z0-9_]+)\s*<arg_key>([^<]+)</arg_key>\s*<arg_value>(.*?)</arg_value>\s*</tool_call>""")
+    @Suppress("MaxLineLength")
     private val RAW_TOOL_CALL_REGEX = Regex("""(?s)(.*?)(?:,\s*)?(\{"name"\s*:\s*"[^"]+"\s*,\s*"arguments"\s*:\s*\{.*?\}\})(?:\s*,)?(.*)""")
 
     data class LocalToolEnvelope(
@@ -68,7 +71,7 @@ object ToolEnvelopeParser {
                 // and apply any @SerialName mapping.
                 val params = toolDef.decodeArguments<ToolParameters>(jsonObject.toString())
                 toolDef.encodeArguments(params)
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // If decoding fails (missing fields etc), fall back to raw JSON
                 // so the executor can decide how to handle it.
                 jsonObject.toString()
@@ -181,12 +184,13 @@ object ToolEnvelopeParser {
             if (urlsArray != null && urlsArray.isNotEmpty()) {
                 return urlsArray.map { it.jsonPrimitive.content }
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Fall through to throw
         }
         throw IllegalArgumentException("Tool argument 'urls' is required and must be a non-empty array")
     }
 
+    @Suppress("ThrowsCount", "CyclomaticComplexMethod")
     fun extractLocalToolEnvelope(text: String): LocalToolEnvelope? {
         val glmMatch = GLM_TOOL_CALL_REGEX.find(text)
         if (glmMatch != null) {
@@ -306,6 +310,7 @@ object ToolEnvelopeParser {
     fun buildLocalToolResultMessage(resultJson: String): String =
         "<tool_result>$resultJson</tool_result>"
 
+    @Suppress("MaxLineLength")
     fun stubResultJson(query: String): String =
         """{"query":"${escapeJson(query)}","results":[{"title":"Stub Tavily Result","url":"https://example.invalid/stub","content":"${escapeJson("Pocket Crew stub result for query: $query")}"}]}"""
 
@@ -316,7 +321,7 @@ object ToolEnvelopeParser {
             if (!value.isNullOrBlank()) {
                 return value.trim()
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Fallback to regex if JSON parsing fails (common in partial local model streams)
         }
 
@@ -352,6 +357,7 @@ object ToolEnvelopeParser {
         }
     }
 
+    @Suppress("LoopWithTooManyJumpStatements")
     private fun unescapeJson(value: String): String {
         val result = StringBuilder(value.length)
         var index = 0

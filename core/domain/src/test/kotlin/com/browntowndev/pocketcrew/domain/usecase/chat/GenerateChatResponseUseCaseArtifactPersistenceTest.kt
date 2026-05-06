@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.domain.usecase.chat
 
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.artifact.DocumentType
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId

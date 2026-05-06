@@ -19,7 +19,10 @@ fun VaultPasswordDialog(
         title = { Text("Vault Password") },
         text = {
             Column {
-                Text("Enter a vault password to securely encrypt your API keys before they are synced to the cloud. This password is never sent to the server.")
+                Text(
+                    "Enter a vault password to securely encrypt your API keys before they are synced " +
+                        "to the cloud. This password is never sent to the server."
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedTextField(
                     value = password,

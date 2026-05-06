@@ -48,7 +48,10 @@ class BuildXQueryUseCase @Inject constructor() {
             params.to_user?.isNotEmpty() == true
             
         if (!hasStandalone && query.isNotEmpty()) {
-            throw IllegalArgumentException("X search requires at least one standalone operator (keyword, phrase, hashtag, mention, or user filter) when using conjunction-required filters.")
+            require(false) {
+                "X search requires at least one standalone operator " +
+                    "(keyword, phrase, hashtag, mention, or user filter) when using conjunction-required filters."
+            }
         }
 
         return query

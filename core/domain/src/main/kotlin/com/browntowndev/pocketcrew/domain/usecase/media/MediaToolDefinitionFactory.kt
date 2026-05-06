@@ -46,9 +46,11 @@ class MediaToolDefinitionFactory @Inject constructor(
             }
         }
         
+        @Suppress("MaxLineLength")
         return ToolDefinition(
             name = "generate_image",
-            description = "Generate an image from a text description. Use this when the user asks you to create, draw, or generate an image, illustration, or picture.",
+            description = "Generate an image from a text description. " +
+                "Use this when the user asks you to create, draw, or generate an image, illustration, or picture.",
             parametersClass = GenerateImageToolParams::class,
             schemaOverride = ToolSchema(properties, listOf("prompt"))
         )
@@ -91,9 +93,11 @@ class MediaToolDefinitionFactory @Inject constructor(
             }
         }
 
+        @Suppress("MaxLineLength")
         return ToolDefinition(
             name = "generate_video",
-            description = "Generate a video from a text description. Use this when the user asks you to create or generate a video or animation.",
+            description = "Generate a video from a text description. " +
+                "Use this when the user asks you to create or generate a video or animation.",
             parametersClass = GenerateVideoToolParams::class,
             schemaOverride = ToolSchema(properties, listOf("prompt"))
         )
@@ -101,8 +105,10 @@ class MediaToolDefinitionFactory @Inject constructor(
 
     fun buildMusicToolDefinition(): ToolDefinition {
         // Music currently has no provider-specific parameters in the schema
+        @Suppress("MaxLineLength")
         return ToolDefinition.GENERATE_MUSIC.copy(
-            description = "Generate music or audio from a text description. Use this when the user asks you to create, compose, or generate music, a beat, or a soundtrack."
+            description = "Generate music or audio from a text description. " +
+                "Use this when the user asks you to create, compose, or generate music, a beat, or a soundtrack."
         )
     }
 }

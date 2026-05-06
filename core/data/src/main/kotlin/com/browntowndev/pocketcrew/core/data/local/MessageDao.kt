@@ -10,7 +10,7 @@ import androidx.room.Transaction
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import kotlinx.coroutines.flow.Flow
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 
@@ -49,6 +49,7 @@ abstract class MessageDao {
     @Query("SELECT * FROM message ORDER BY created_at IS NULL, created_at ASC")
     abstract fun getAllMessages(): Flow<List<MessageWithFiles>>
 
+    @Suppress("MaxLineLength")
     @Query("UPDATE message SET content = :content, thinking_duration_seconds = :thinkingDuration, thinking_raw = :thinkingRaw WHERE id = :id")
     abstract suspend fun updateMessageContent(
         id: MessageId,
@@ -62,10 +63,12 @@ abstract class MessageDao {
     abstract suspend fun getMessagesByChatId(chatId: ChatId): List<MessageWithFiles>
 
     @Transaction
+    @Suppress("MaxLineLength")
     @Query("SELECT * FROM message WHERE chat_id = :chatId AND created_at IS NOT NULL AND created_at < :timestamp ORDER BY created_at DESC LIMIT :limit")
     abstract suspend fun getMessagesBefore(chatId: ChatId, timestamp: Long, limit: Int): List<MessageWithFiles>
 
     @Transaction
+    @Suppress("MaxLineLength")
     @Query("SELECT * FROM message WHERE chat_id = :chatId AND created_at IS NOT NULL AND created_at > :timestamp ORDER BY created_at ASC LIMIT :limit")
     abstract suspend fun getMessagesAfter(chatId: ChatId, timestamp: Long, limit: Int): List<MessageWithFiles>
 
@@ -138,6 +141,7 @@ abstract class MessageDao {
         mediaPromptsJson: String? = null
     )
 
+    @Suppress("LongParameterList")
     @Transaction
     open suspend fun persistAllMessageData(
         messageId: MessageId,

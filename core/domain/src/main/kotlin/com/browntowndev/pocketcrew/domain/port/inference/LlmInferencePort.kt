@@ -76,14 +76,20 @@ sealed interface InferenceEvent {
      * @param sources The list of search results returned by the provider.
      * @param modelType The type of model that triggered the search.
      */
-    data class WebSearchResults(val sources: List<com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource>, val modelType: ModelType) : InferenceEvent
+    data class WebSearchResults(
+        val sources: List<com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource>,
+        val modelType: ModelType
+    ) : InferenceEvent
 
     /**
      * Emitted when an artifact generation tool execution completes.
      * @param artifacts The list of artifacts generated.
      * @param modelType The type of model that triggered the generation.
      */
-    data class Artifacts(val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>, val modelType: ModelType) : InferenceEvent
+    data class Artifacts(
+        val artifacts: List<com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest>,
+        val modelType: ModelType
+    ) : InferenceEvent
 
     data class Media(
         val mediaUris: List<String>, 

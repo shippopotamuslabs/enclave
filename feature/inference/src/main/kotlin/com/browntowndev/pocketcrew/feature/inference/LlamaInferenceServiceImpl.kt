@@ -64,6 +64,8 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
     companion object {
         private const val TAG = "LlamaInferenceService"
+        private const val DEFAULT_TEMPERATURE = 0.7f
+        private const val DEFAULT_TOP_P = 0.9f
     }
 
     private data class SessionSignature(
@@ -103,6 +105,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
      * Ensures the engine is loaded with the current model from registry.
      * If the model or config has changed since last load, tears down and reloads.
      */
+    @Suppress("ThrowsCount")
     private suspend fun ensureModelLoaded(
         modelType: ModelType, 
         options: GenerationOptions,
@@ -112,6 +115,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
             ?: throw IllegalStateException("No active configuration for $modelType")
 
         if (!activeConfig.isLocal) {
+            @Suppress("MaxLineLength")
             throw IllegalStateException("LlamaInferenceService cannot run API models. ModelType $modelType is mapped to an API configuration.")
         }
 
@@ -120,9 +124,9 @@ class LlamaInferenceServiceImpl @Inject constructor(
             ?: throw IllegalStateException("No registered asset for config ${activeConfig.id}. Download a model first.")
 
         val targetReasoningBudget = options.reasoningBudget
-        val targetTemperature = options.temperature ?: activeConfig.temperature?.toFloat() ?: 0.7f
+        val targetTemperature = options.temperature ?: activeConfig.temperature?.toFloat() ?: DEFAULT_TEMPERATURE
         val targetTopK = options.topK ?: activeConfig.topK ?: 40
-        val targetTopP = options.topP ?: activeConfig.topP?.toFloat() ?: 0.9f
+        val targetTopP = options.topP ?: activeConfig.topP?.toFloat() ?: DEFAULT_TOP_P
         val targetMaxTokens = options.maxTokens ?: activeConfig.maxTokens ?: 4096
 
         val newSignature = SessionSignature(
@@ -150,11 +154,10 @@ class LlamaInferenceServiceImpl @Inject constructor(
 
             val modelPath = getModelPath(asset.metadata.localFileName)
             val mmprojPath = asset.metadata.mmprojLocalFileName?.let(::getModelPath)
-            if (options.imageUris.isNotEmpty() &&
+            val requiresMmproj = options.imageUris.isNotEmpty() &&
                 asset.metadata.isMultimodal &&
-                asset.metadata.modelFileFormat == ModelFileFormat.GGUF &&
-                mmprojPath.isNullOrBlank()
-            ) {
+                asset.metadata.modelFileFormat == ModelFileFormat.GGUF
+            if (requiresMmproj && mmprojPath.isNullOrBlank()) {
                 throw IllegalStateException("Vision-capable GGUF model requires an mmproj companion file.")
             }
             val systemPrompt = activeConfig.systemPrompt ?: "You are a helpful assistant."
@@ -188,10 +191,11 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 currentSignature = newSignature
                 currentContextWindow = samplingConfig.contextWindow
                 currentSystemPrompt = systemPrompt
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: JavaCancellationException) {
+                throw e
             } catch (e: Exception) {
-                if (e is CancellationException || e is JavaCancellationException) {
-                    throw e
-                }
                 // GPU initialization failed, try falling back to CPU
                 if (!hasTriedCpuFallback && samplingConfig.gpuLayers > 0) {
                     Log.w(TAG, "GPU initialization failed, falling back to CPU: ${e.message}")
@@ -287,8 +291,11 @@ class LlamaInferenceServiceImpl @Inject constructor(
                 send(InferenceEvent.EngineLoading(targetModelType))
             }
             send(InferenceEvent.Processing(targetModelType))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: JavaCancellationException) {
+            throw e
         } catch (e: Exception) {
-            if (e is CancellationException) throw e
             send(InferenceEvent.Error(e, targetModelType))
             return@channelFlow
         }
@@ -476,6 +483,7 @@ class LlamaInferenceServiceImpl @Inject constructor(
                     ContextExceededResult(contextExceeded = true)
                 } else {
                     if (evaluation.contextFull) {
+                        @Suppress("MaxLineLength")
                         loggingPort.warning(TAG, "Llama context exceeded mid-loop: estimatedTokens=${evaluation.totalTokens} window=$currentContextWindow")
                     }
                     ContextExceededResult(evaluation.contextFull)

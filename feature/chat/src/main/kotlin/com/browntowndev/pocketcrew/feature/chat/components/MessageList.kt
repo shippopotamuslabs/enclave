@@ -1,3 +1,5 @@
+@file:Suppress("MaxLineLength", "UnusedPrivateMember")
+
 package com.browntowndev.pocketcrew.feature.chat.components
 
 import androidx.compose.animation.core.animateFloatAsState
@@ -340,6 +342,7 @@ private fun EmptyState(modifier: Modifier = Modifier) {
 /**
  * Shows the appropriate indicator(s) based on the message's indicator state.
  */
+@Suppress("CyclomaticComplexMethod")
 @Composable
 private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?) {
     if (indicatorState != null) {
@@ -381,9 +384,7 @@ private fun Indicators(modelDisplayName: String, indicatorState: IndicatorState?
             }
             is IndicatorState.Thinking -> {
                 ThinkingIndicator(
-                    thinkingRaw = indicatorState.thinkingRaw,
                     elapsedSeconds = elapsedSeconds,
-                    modelDisplayName = modelDisplayName,
                     isExpanded = isThinkingSheetVisible,
                     onToggleDetails = {
                         isThinkingSheetVisible = !isThinkingSheetVisible

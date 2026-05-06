@@ -506,7 +506,6 @@ private fun MediaCard(
     var loadError by remember { mutableStateOf(false) }
     val primaryUri = uris.firstOrNull() ?: ""
     val primaryType = mediaTypes.firstOrNull()
-    val primaryPrompt = prompts.firstOrNull()
     val count = uris.size
 
     Surface(

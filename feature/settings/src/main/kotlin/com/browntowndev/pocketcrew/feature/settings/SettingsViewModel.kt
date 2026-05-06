@@ -46,45 +46,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-private data class PersistedSettingsBundle(
-    val settings: com.browntowndev.pocketcrew.domain.port.repository.SettingsData,
-    val localAssets: List<com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset>,
-    val apiAssets: List<com.browntowndev.pocketcrew.domain.model.config.ApiModelAsset>,
-    val ttsAssets: List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
-    val mediaAssets: List<com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset>,
-    val defaultModels: List<com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment>,
-)
-
-private data class TransientSettingsBundle(
-    val sheetVisibility: SheetVisibilityState,
-    val memories: List<StoredMemory>,
-    val feedbackText: String,
-    val localModelsState: LocalModelsTransientState,
-    val apiState: ApiProvidersTransientState,
-    val ttsState: TtsProvidersTransientState,
-    val mediaState: MediaProvidersTransientState,
-    val searchSkillState: SearchSkillTransientState,
-    val assignmentState: AssignmentDialogTransientState,
-    val deletionState: DeletionTransientState,
-    val memoriesState: MemoriesTransientState,
-)
-
-private data class SheetTransientBundle(
-    val sheetVisibility: SheetVisibilityState,
-    val memories: List<StoredMemory>,
-    val feedbackText: String,
-    val localModelsState: LocalModelsTransientState,
-)
-
-private data class DialogTransientBundle(
-    val searchSkillState: SearchSkillTransientState,
-    val apiState: ApiProvidersTransientState,
-    val ttsState: TtsProvidersTransientState,
-    val assignmentState: AssignmentDialogTransientState,
-    val deletionState: DeletionTransientState,
-)
-
 @HiltViewModel
+@Suppress("LargeClass", "TooManyFunctions", "MagicNumber")
 class SettingsViewModel @Inject constructor(
     settingsUseCases: SettingsUseCases,
     private val memoriesRepository: MemoriesRepository,
@@ -137,77 +100,6 @@ class SettingsViewModel @Inject constructor(
     private val mediaAssetsFlow = mediaUseCases.getMediaProviders()
     private val memoriesFlow = memoriesRepository.getAllMemoriesFlow().map { memories ->
         memories.map { StoredMemory(it.id, it.content, it.category) }
-    }
-    // Combine(6) isn't available as a typed overload — nest to stay within the 5-flow limit.
-    private val ttsAndMediaBundle = combine(
-        ttsAssetsFlow,
-        mediaAssetsFlow,
-    ) { tts, media -> Pair(tts, media) }
-    private val persistedSettingsBundle = combine(
-        settingsUseCases.getSettings(),
-        localModelAssetsFlow,
-        apiModelAssetsFlow,
-        ttsAndMediaBundle,
-        assignmentUseCases.getDefaultModels(),
-    ) { settings, localAssets, apiAssets, ttsAndMedia, defaultModels ->
-        PersistedSettingsBundle(
-            settings = settings,
-            localAssets = localAssets,
-            apiAssets = apiAssets,
-            ttsAssets = ttsAndMedia.first,
-            mediaAssets = ttsAndMedia.second,
-            defaultModels = defaultModels,
-        )
-    }
-    private val sheetAndMemoriesBundle = combine(
-        _sheetVisibility,
-        memoriesFlow,
-        _feedbackText,
-        _memoriesState
-    ) { sheetVisibility, memories, feedbackText, memoriesState ->
-        object {
-            val sheetVisibility = sheetVisibility
-            val memories = memories
-            val feedbackText = feedbackText
-            val memoriesState = memoriesState
-        }
-    }
-
-    private val modelAndToolsBundle = combine(
-        _localModelsState,
-        _apiState,
-        _searchSkillState,
-        _ttsState,
-        _mediaState,
-    ) { localModelsState, apiState, searchSkillState, ttsState, mediaState ->
-        object {
-            val localModelsState = localModelsState
-            val apiState = apiState
-            val searchSkillState = searchSkillState
-            val ttsState = ttsState
-            val mediaState = mediaState
-        }
-    }
-
-    private val transientSettingsBundle = combine(
-        sheetAndMemoriesBundle,
-        modelAndToolsBundle,
-        _assignmentState,
-        _deletionState
-    ) { smBundle, mtBundle, assignmentState, deletionState ->
-        TransientSettingsBundle(
-            sheetVisibility = smBundle.sheetVisibility,
-            memories = smBundle.memories,
-            feedbackText = smBundle.feedbackText,
-            localModelsState = mtBundle.localModelsState,
-            apiState = mtBundle.apiState,
-            ttsState = mtBundle.ttsState,
-            mediaState = mtBundle.mediaState,
-            searchSkillState = mtBundle.searchSkillState,
-            assignmentState = assignmentState,
-            deletionState = deletionState,
-            memoriesState = smBundle.memoriesState,
-        )
     }
 
     val uiState: StateFlow<SettingsUiState> = combine(
@@ -275,7 +167,6 @@ class SettingsViewModel @Inject constructor(
             assignmentsState = assignmentsState,
             deletionState = deletionState,
             memoriesState = memoriesState,
-            currentApiKey = apiKey,
             currentTavilyApiKey = tavilyKey,
             currentExaApiKey = exaKey,
             currentXApiKey = currentXApiKey,
@@ -317,7 +208,13 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onHapticPressChange(enabled: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update haptic press setting", "Failed to update setting")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to update haptic press setting",
+                "Failed to update setting"
+            )
+        ) {
             preferencesUseCases.updateHapticPress(enabled)
         }
     }
@@ -329,7 +226,13 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onBackgroundInferenceChange(enabled: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update background inference setting", "Failed to update setting")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to update background inference setting",
+                "Failed to update setting"
+            )
+        ) {
             preferencesUseCases.updateBackgroundInferenceEnabled(enabled)
         }
     }
@@ -351,7 +254,13 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onCustomizationEnabledChange(enabled: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update customization setting", "Failed to update setting")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to update customization setting",
+                "Failed to update setting"
+            )
+        ) {
             preferencesUseCases.updateCustomizationEnabled(enabled)
         }
     }
@@ -433,7 +342,13 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onAllowMemoriesChange(enabled: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update memories setting", "Failed to update setting")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to update memories setting",
+                "Failed to update setting"
+            )
+        ) {
             preferencesUseCases.updateAllowMemories(enabled)
         }
     }
@@ -441,7 +356,13 @@ class SettingsViewModel @Inject constructor(
     fun onDeleteAllConversations() = Unit
 
     fun onDeleteAllMemories() {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to delete all memories", "Failed to delete all memories")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to delete all memories",
+                "Failed to delete all memories"
+            )
+        ) {
             // Add a use case for this if needed, or loop delete
             // For now, let's just use repository directly
             uiState.value.memories.memories.forEach { 
@@ -564,7 +485,13 @@ class SettingsViewModel @Inject constructor(
     fun onSaveLocalModelConfig(onSuccess: () -> Unit) {
         val selectedAsset = _localModelsState.value.selectedAsset ?: return
         val configDraft = _localModelsState.value.configDraft ?: return
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save local model configuration", "Failed to save configuration")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to save local model configuration",
+                "Failed to save configuration"
+            )
+        ) {
             localModelUseCases.saveLocalModelPreset(
                 localModelId = selectedAsset.metadataId,
                 draft = configDraft.toDomain(),
@@ -590,10 +517,19 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    fun onConfirmDeletionWithReassignment(replacementLocalConfigId: LocalModelConfigurationId?, replacementApiConfigId: ApiModelConfigurationId?) {
+    fun onConfirmDeletionWithReassignment(
+        replacementLocalConfigId: LocalModelConfigurationId?,
+        replacementApiConfigId: ApiModelConfigurationId?
+    ) {
         val deletionState = _deletionState.value
         val pendingTarget = deletionState.pendingTarget ?: return
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to complete deletion with reassignment", "Failed to delete")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to complete deletion with reassignment",
+                "Failed to delete"
+            )
+        ) {
             deletionUseCases.executeModelDeletionWithReassignment(
                 target = pendingTarget.toDomain(),
                 modelTypesNeedingReassignment = deletionState.modelTypesNeedingReassignment,
@@ -697,7 +633,13 @@ class SettingsViewModel @Inject constructor(
         }
 
         if (asset.id.value.isNotEmpty() && asset.useAsDefault != existingDraft?.useAsDefault) {
-            viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update default model", "Failed to update default model")) {
+            viewModelScope.launch(
+                errorHandler.coroutineExceptionHandler(
+                    TAG,
+                    "Failed to update default model",
+                    "Failed to update default model"
+                )
+            ) {
                 if (asset.useAsDefault) {
                     assignmentUseCases.setDefaultModel(
                         modelType = ModelType.TTS,
@@ -764,7 +706,9 @@ class SettingsViewModel @Inject constructor(
                     modelName = draft.modelName,
                     baseUrl = draft.baseUrl,
                     credentialAlias = reusedAlias ?: draft.credentialAlias.ifBlank {
-                        "tts-${draft.provider.name.lowercase()}-${draft.voiceName.lowercase()}-${java.util.UUID.randomUUID().toString().take(8)}"
+                        "tts-${draft.provider.name.lowercase()}-" +
+                            "${draft.voiceName.lowercase()}-" +
+                            "${java.util.UUID.randomUUID().toString().take(8)}"
                     },
                     apiKey = apiKey,
                 )
@@ -842,7 +786,13 @@ class SettingsViewModel @Inject constructor(
                 existingDraft.baseUrl.normalizedBaseUrl() != asset.baseUrl.normalizedBaseUrl()
 
         if (asset.id.value.isNotEmpty() && asset.useAsDefault != existingDraft?.useAsDefault) {
-            viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update default model", "Failed to update default model")) {
+            viewModelScope.launch(
+                errorHandler.coroutineExceptionHandler(
+                    TAG,
+                    "Failed to update default model",
+                    "Failed to update default model"
+                )
+            ) {
                 val modelType = when (asset.capability) {
                     MediaCapability.IMAGE -> ModelType.IMAGE_GENERATION
                     MediaCapability.VIDEO -> ModelType.VIDEO_GENERATION
@@ -860,8 +810,10 @@ class SettingsViewModel @Inject constructor(
         _mediaState.update { state ->
             state.copy(
                 assetDraft = asset,
-                selectedReusableApiCredentialAlias = if (existingDraft?.provider != asset.provider) null else state.selectedReusableApiCredentialAlias,
-                selectedReusableApiCredentialName = if (existingDraft?.provider != asset.provider) null else state.selectedReusableApiCredentialName,
+                selectedReusableApiCredentialAlias = if (existingDraft?.provider != asset.provider) null
+                    else state.selectedReusableApiCredentialAlias,
+                selectedReusableApiCredentialName = if (existingDraft?.provider != asset.provider) null
+                    else state.selectedReusableApiCredentialName,
                 discoveredApiModels = if (discoveryScopeChanged) emptyList() else state.discoveredApiModels,
                 isDiscoveringApiModels = if (discoveryScopeChanged) false else state.isDiscoveringApiModels,
             )
@@ -936,7 +888,9 @@ class SettingsViewModel @Inject constructor(
                     modelName = draft.modelName,
                     baseUrl = draft.baseUrl,
                     credentialAlias = reusedAlias ?: draft.credentialAlias.ifBlank {
-                        "media-${draft.provider.name.lowercase()}-${draft.capability.name.lowercase()}-${java.util.UUID.randomUUID().toString().take(8)}"
+                        "media-${draft.provider.name.lowercase()}-" +
+                            "${draft.capability.name.lowercase()}-" +
+                            "${java.util.UUID.randomUUID().toString().take(8)}"
                     }
                 ),
                 apiKey = apiKey
@@ -1039,8 +993,10 @@ class SettingsViewModel @Inject constructor(
             val normalizedAsset = it.normalizeVisionCapability(asset, existingModels)
             it.copy(
                 assetDraft = normalizedAsset,
-                selectedReusableApiCredentialAlias = if (existingDraft?.provider != asset.provider) null else it.selectedReusableApiCredentialAlias,
-                selectedReusableApiCredentialName = if (existingDraft?.provider != asset.provider) null else it.selectedReusableApiCredentialName,
+                selectedReusableApiCredentialAlias = if (existingDraft?.provider != asset.provider) null
+                    else it.selectedReusableApiCredentialAlias,
+                selectedReusableApiCredentialName = if (existingDraft?.provider != asset.provider) null
+                    else it.selectedReusableApiCredentialName,
                 discoveredApiModels = existingModels.mergeSelectedModel(normalizedAsset),
                 discoveredApiModelScope = if (discoveryScopeChanged) null else it.discoveredApiModelScope,
             )
@@ -1089,7 +1045,13 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun onUpdateShowSearchProviderSwitchAlert(show: Boolean) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to update alert preference", "Failed to update preference")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to update alert preference",
+                "Failed to update preference"
+            )
+        ) {
             preferencesUseCases.updateShowSearchProviderSwitchAlert(show)
         }
     }
@@ -1102,7 +1064,13 @@ class SettingsViewModel @Inject constructor(
         val pendingTavilyKey = _currentTavilyApiKey.value.trim()
         val pendingExaKey = _currentExaApiKey.value.trim()
         
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save search skill settings", "Failed to save search settings")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to save search skill settings",
+                "Failed to save search settings"
+            )
+        ) {
             if (enabled) {
                 when (selectedProvider) {
                     SearchProvider.TAVILY -> {
@@ -1155,7 +1123,13 @@ class SettingsViewModel @Inject constructor(
         val enabled = _xSearchState.value.enabled ?: xSearchEditor.enabled
         val pendingKey = _currentXApiKey.value.trim()
 
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save X search settings", "Failed to save X settings")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to save X search settings",
+                "Failed to save X settings"
+            )
+        ) {
             if (enabled && pendingKey.isBlank() && !xSearchEditor.apiKeyPresent) {
                 throw IllegalStateException("An X API key is required to enable X search")
             }
@@ -1245,7 +1219,13 @@ class SettingsViewModel @Inject constructor(
         val presetDraft = uiState.value.apiProviderEditor.presetDraft ?: return
         val parentCredentialsId = if (presetDraft.credentialsId.value.isNotEmpty()) presetDraft.credentialsId else assetDraft.credentialsId
 
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to save API configuration", "Failed to save configuration")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to save API configuration",
+                "Failed to save configuration"
+            )
+        ) {
             apiProviderUseCases.saveApiPreset(
                 provider = assetDraft.provider,
                 parentCredentialsId = parentCredentialsId,
@@ -1343,7 +1323,13 @@ class SettingsViewModel @Inject constructor(
         if (_currentApiKey.value.isBlank() && credentialAlias == null) return
 
         _apiState.update { it.copy(isDiscoveringApiModels = true) }
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch TTS provider models", "Failed to fetch models")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to fetch TTS provider models",
+                "Failed to fetch models"
+            )
+        ) {
             try {
                 val result = apiProviderUseCases.discoverApiModels(
                     ApiModelDiscoveryRequest(
@@ -1474,7 +1460,13 @@ class SettingsViewModel @Inject constructor(
         ttsProviderId: TtsProviderId? = null,
         mediaProviderId: MediaProviderId? = null,
     ) {
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to set default model", "Failed to update default model")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to set default model",
+                "Failed to update default model"
+            )
+        ) {
             assignmentUseCases.setDefaultModel(
                 modelType = modelType,
                 localConfigId = localConfigId,
@@ -1541,7 +1533,13 @@ class SettingsViewModel @Inject constructor(
         val credentialAlias = resolveCredentialAlias(asset)
         if (_currentApiKey.value.isBlank() && credentialAlias == null) return
 
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch xAI model details", "Failed to fetch model details")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to fetch xAI model details",
+                "Failed to fetch model details"
+            )
+        ) {
             val result = apiProviderUseCases.discoverApiModels(
                 ApiModelDiscoveryRequest(
                     provider = asset.provider,
@@ -1578,7 +1576,13 @@ class SettingsViewModel @Inject constructor(
         if (_currentApiKey.value.isBlank() && credentialAlias == null) return
 
         _apiState.update { it.copy(isDiscoveringApiModels = true) }
-        viewModelScope.launch(errorHandler.coroutineExceptionHandler(TAG, "Failed to fetch provider models on re-entry", "Failed to fetch models")) {
+        viewModelScope.launch(
+            errorHandler.coroutineExceptionHandler(
+                TAG,
+                "Failed to fetch provider models on re-entry",
+                "Failed to fetch models"
+            )
+        ) {
             try {
                 val result = apiProviderUseCases.discoverApiModels(
                     ApiModelDiscoveryRequest(

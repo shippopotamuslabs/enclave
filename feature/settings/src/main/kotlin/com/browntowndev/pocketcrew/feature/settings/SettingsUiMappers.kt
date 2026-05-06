@@ -126,6 +126,7 @@ class LocalModelAssetUiMapper @Inject constructor() {
 }
 
 class ApiDiscoveryUiFilter @Inject constructor() {
+    @Suppress("CyclomaticComplexMethod")
     fun filter(
         models: List<DiscoveredApiModelUi>,
         query: String,

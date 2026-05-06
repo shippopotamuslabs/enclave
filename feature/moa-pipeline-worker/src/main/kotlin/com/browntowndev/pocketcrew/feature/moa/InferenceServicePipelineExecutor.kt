@@ -34,10 +34,6 @@ class InferenceServicePipelineExecutor @Inject constructor(
     private val inferenceEventBus: InferenceEventBus,
 ) : PipelineExecutorPort {
 
-    companion object {
-        private const val TAG = "InferenceServicePipelineExecutor"
-    }
-
     override fun executePipeline(
         chatId: String,
         userMessage: String,

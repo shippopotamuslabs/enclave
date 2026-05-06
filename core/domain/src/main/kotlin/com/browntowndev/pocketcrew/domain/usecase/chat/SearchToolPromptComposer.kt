@@ -73,7 +73,8 @@ class SearchToolPromptComposer @Inject constructor() {
 
         private fun searchToolContract(strategy: ToolCallStrategy): String {
             val extractNote = if (strategy == ToolCallStrategy.LITE_RT_NATIVE) {
-                " Note that 'urls' must be a SINGLE string where you list the URLs separated by commas. For very long pages, only the most relevant first part will be provided to fit the context window:"
+                " Note that 'urls' must be a SINGLE string where you list the URLs separated by commas. " +
+                    "For very long pages, only the most relevant first part will be provided to fit the context window:"
             } else ""
 
             return """
@@ -96,6 +97,7 @@ ${ToolDefinition.WEB_EXTRACT.toExample(strategy)}
 """.trimIndent()
         }
 
+        @Suppress("MaxLineLength")
         private fun metadataRules(): String = """
 # TEMPORAL CONTEXT:
 User messages include a `[Metadata: Sent at ...]` or `[Metadata: Current Time: ...]` footer. Use this to understand the current time and the timeline of the conversation. 
@@ -123,6 +125,7 @@ To inspect:
 ${ToolDefinition.ATTACHED_IMAGE_INSPECT.toExample(strategy)}
 """.trimIndent()
 
+        @Suppress("MaxLineLength")
         private fun artifactContract(strategy: ToolCallStrategy): String = """
 # ARTIFACT STUDIO MANDATE:
 You have access to '${ToolDefinition.GENERATE_ARTIFACT.name}' to create professional, structured documents (PDFs).
@@ -143,6 +146,7 @@ Use standard Markdown syntax for:
 - Blockquotes
 """.trimIndent()
 
+        @Suppress("MaxLineLength")
         private fun memoryToolsContract(currentChatId: String?, strategy: ToolCallStrategy): String = buildString {
             append("""
 # CONVERSATION MEMORY TOOLS:
@@ -159,7 +163,8 @@ You have access to '${ToolDefinition.SEARCH_CHAT_HISTORY.name}', '${ToolDefiniti
             }
 
             if (currentChatId != null) {
-                append("\n\nThe current chat ID is \"" + currentChatId + "\". Use this ID with ${ToolDefinition.SEARCH_CHAT.name} to search messages in the current conversation.")
+                append("\n\nThe current chat ID is \"" + currentChatId + "\". " +
+                    "Use this ID with ${ToolDefinition.SEARCH_CHAT.name} to search messages in the current conversation.")
             }
             append("""
 
@@ -184,17 +189,20 @@ ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
             strategy: ToolCallStrategy
         ): String = buildString {
             append("# MEDIA GENERATION MANDATE:\n")
-            append("You have access to professional media generation tools. Use these when the user asks you to create, generate, draw, or compose original content.\n\n")
+            append("You have access to professional media generation tools. " +
+                "Use these when the user asks you to create, generate, draw, or compose original content.\n\n")
 
             if (includeImage) {
-                append("- Use '${ToolDefinition.GENERATE_IMAGE.name}' to generate images, illustrations, or pictures from text descriptions.\n")
+                append("- Use '${ToolDefinition.GENERATE_IMAGE.name}' to generate images, " +
+                "illustrations, or pictures from text descriptions.\n")
                 append("To generate an image:\n")
                 append(ToolDefinition.GENERATE_IMAGE.toExample(strategy))
                 append("\n\n")
             }
 
             if (includeVideo) {
-                append("- Use '${ToolDefinition.GENERATE_VIDEO.name}' to generate short videos or animations from text descriptions.\n")
+                append("- Use '${ToolDefinition.GENERATE_VIDEO.name}' to generate short videos " +
+                "or animations from text descriptions.\n")
                 append("To generate a video:\n")
                 append(ToolDefinition.GENERATE_VIDEO.toExample(strategy))
                 append("\n\n")
@@ -207,7 +215,8 @@ ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
                 append("\n\n")
             }
 
-            append("IMPORTANT: After calling any media tool, inform the user that the media has been generated and is available in their Studio. They can tap the generation card in the chat to open it.")
+            append("IMPORTANT: After calling any media tool, inform the user that the media has been generated " +
+                "and is available in their Studio. They can tap the generation card in the chat to open it.")
         }
 
         private fun strictRules(strategy: ToolCallStrategy): String = when (strategy) {
@@ -240,8 +249,10 @@ ${ToolDefinition.MANAGE_MEMORIES.toExample(strategy)}
             currentChatId: String? = null,
             strategy: ToolCallStrategy = ToolCallStrategy.JSON_XML_ENVELOPE,
         ): String {
-            if (!includeSearchTool && !includeXSearchTool && !includeImageInspectTool && !includeMemoryTools && !includeArtifactTool && 
-                !includeImageGenerationTool && !includeVideoGenerationTool && !includeMusicGenerationTool) return ""
+            val noToolsIncluded = !includeSearchTool && !includeXSearchTool && !includeImageInspectTool &&
+                !includeMemoryTools && !includeArtifactTool &&
+                !includeImageGenerationTool && !includeVideoGenerationTool && !includeMusicGenerationTool
+            if (noToolsIncluded) return ""
             if (strategy == ToolCallStrategy.SDK_NATIVE) return ""
 
             return buildString {

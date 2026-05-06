@@ -272,20 +272,24 @@ class GenerateChatResponseUseCase @Inject constructor(
                 )
             )
         } catch (e: InferenceBusyException) {
-            emitBusyState(ModelType.MAIN)
+            emitBusyState(ModelType.MAIN, e)
         } catch (e: IllegalStateException) {
             emit(MessageGenerationState.Failed(e, ModelType.MAIN))
         } catch (e: java.io.IOException) {
             emit(MessageGenerationState.Failed(e, ModelType.MAIN))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            if (e is CancellationException) throw e
             loggingPort.error(TAG, "Unexpected error in CREW mode", e)
             emit(MessageGenerationState.Failed(e, ModelType.MAIN))
         }
     }
 
-    private suspend fun kotlinx.coroutines.flow.FlowCollector<MessageGenerationState>.emitBusyState(modelType: ModelType) {
-        emit(MessageGenerationState.Failed(InferenceBusyException(), modelType))
+    private suspend fun kotlinx.coroutines.flow.FlowCollector<MessageGenerationState>.emitBusyState(
+        modelType: ModelType,
+        exception: InferenceBusyException = InferenceBusyException()
+    ) {
+        emit(MessageGenerationState.Failed(exception, modelType))
     }
 
     private fun shouldSkipFinalPersistenceForBackgroundCancellation(

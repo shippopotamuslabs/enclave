@@ -59,7 +59,10 @@ class ExtractToolExecutorImpl @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "Executing extract tool provider=${request.provider} modelType=${request.modelType} tool=${request.toolName} searchProvider=${settings.searchProvider} urls=${urls.size} extractDepth=$extractDepth format=$format"
+            "Executing extract tool provider=${request.provider} " +
+                "modelType=${request.modelType} tool=${request.toolName} " +
+                "searchProvider=${settings.searchProvider} urls=${urls.size} " +
+                "extractDepth=$extractDepth format=$format"
         )
 
         val resultJson = when (settings.searchProvider) {
@@ -87,7 +90,9 @@ class ExtractToolExecutorImpl @Inject constructor(
 
         loggingPort.info(
             TAG,
-            "Extract tool execution complete provider=${request.provider} modelType=${request.modelType} tool=${request.toolName} resultChars=${resultJson.length}"
+            "Extract tool execution complete provider=${request.provider} " +
+                "modelType=${request.modelType} tool=${request.toolName} " +
+                "resultChars=${resultJson.length}"
         )
 
         return ToolExecutionResult(

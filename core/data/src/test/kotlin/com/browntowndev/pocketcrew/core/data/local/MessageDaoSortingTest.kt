@@ -2,7 +2,7 @@ package com.browntowndev.pocketcrew.core.data.local
 
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
-import com.browntowndev.pocketcrew.domain.model.MessageState
+import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role

@@ -27,12 +27,10 @@ import kotlinx.coroutines.channels.Channel
 
 @Singleton
 class ModelDownloadOrchestratorImpl @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val sessionManager: DownloadSessionManager,
     private val deviceEnvironmentRepository: DeviceEnvironmentRepositoryPort,
     private val initializeFileProgress: InitializeFileProgressUseCase,
     private val workScheduler: DownloadWorkScheduler,
-    private val progressParser: WorkProgressParser,
     private val logger: LoggingPort,
     override val speedTracker: DownloadSpeedTrackerPort,
 ) : ModelDownloadOrchestratorPort {
@@ -115,7 +113,12 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         if (!deviceEnvironmentRepository.hasRequiredStorage(15L * 1024 * 1024 * 1024)) {
             val errorMsg = "Insufficient storage space. Need at least 15 GB free."
             logger.info(TAG, "Validation failed - $errorMsg")
-            val initResult = initializeFileProgress(scan, modelsResult.allModels, _downloadState.value.currentDownloads, modelsResult.utilityAssets)
+            val initResult = initializeFileProgress(
+                scan,
+                modelsResult.allModels,
+                _downloadState.value.currentDownloads,
+                modelsResult.utilityAssets
+            )
             stateManager.applyProgressInit(initResult)
             stateManager.updateState { copy(status = DownloadStatus.ERROR, errorMessage = errorMsg) }
             return false
@@ -124,7 +127,12 @@ class ModelDownloadOrchestratorImpl @Inject constructor(
         logger.info(TAG, "Starting downloads for ${modelsToDownload.size} models (wifiOnly=$wifiOnly)")
         speedTracker.clearAll()
 
-        val initResult = initializeFileProgress(scan, modelsResult.allModels, _downloadState.value.currentDownloads, modelsResult.utilityAssets)
+        val initResult = initializeFileProgress(
+            scan,
+            modelsResult.allModels,
+            _downloadState.value.currentDownloads,
+            modelsResult.utilityAssets
+        )
         stateManager.applyProgressInit(initResult)
 
         val assetsToEnqueue = (modelsResult.allModels.values + modelsResult.utilityAssets).filter { asset ->

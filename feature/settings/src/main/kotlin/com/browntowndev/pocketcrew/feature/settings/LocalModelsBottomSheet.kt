@@ -76,6 +76,8 @@ private sealed interface LocalModelsSheetView {
     ) : LocalModelsSheetView
 }
 
+private val SUCCESS_COLOR = Color(0xFF4CAF50) // Material Green 500
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LocalModelsBottomSheet(
@@ -453,7 +455,7 @@ private fun LocalModelAssetCard(
                                 Icon(
                                     imageVector = Icons.Default.CheckCircle,
                                     contentDescription = "Download Complete",
-                                    tint = Color(0xFF4CAF50), // Green
+                                    tint = SUCCESS_COLOR, // Green
                                     modifier = Modifier.size(20.dp)
                                 )
                             }

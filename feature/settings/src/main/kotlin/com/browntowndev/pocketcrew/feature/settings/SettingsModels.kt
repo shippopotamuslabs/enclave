@@ -225,7 +225,8 @@ data class ReassignmentOptionUi(
 
 @Immutable
 data class TtsProviderAssetUi(
-    val id: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId = com.browntowndev.pocketcrew.domain.model.config.TtsProviderId(""),
+    val id: com.browntowndev.pocketcrew.domain.model.config.TtsProviderId =
+        com.browntowndev.pocketcrew.domain.model.config.TtsProviderId(""),
     val displayName: String = "",
     val provider: ApiProvider = ApiProvider.OPENAI,
     val voiceName: String = "",
@@ -408,9 +409,24 @@ object MockSettingsData {
             remoteFileName = "Meta-Llama-3-8B-Instruct-Q4_K_M.gguf",
             sizeInBytes = 4_920_000_000L,
             configurations = listOf(
-                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-1"), localModelId = LocalModelId("1"), displayName = "Default", temperature = 0.7),
-                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-2"), localModelId = LocalModelId("1"), displayName = "Creative", temperature = 1.2),
-                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-3"), localModelId = LocalModelId("1"), displayName = "Precise", temperature = 0.1)
+                LocalModelConfigUi(
+                    id = LocalModelConfigurationId("cfg-1"),
+                    localModelId = LocalModelId("1"),
+                    displayName = "Default",
+                    temperature = 0.7
+                ),
+                LocalModelConfigUi(
+                    id = LocalModelConfigurationId("cfg-2"),
+                    localModelId = LocalModelId("1"),
+                    displayName = "Creative",
+                    temperature = 1.2
+                ),
+                LocalModelConfigUi(
+                    id = LocalModelConfigurationId("cfg-3"),
+                    localModelId = LocalModelId("1"),
+                    displayName = "Precise",
+                    temperature = 0.1
+                )
             ),
             isMultimodal = true
         ),
@@ -423,7 +439,12 @@ object MockSettingsData {
             remoteFileName = "gemma-2-9b-it-Q4_K_M.gguf",
             sizeInBytes = 5_400_000_000L,
             configurations = listOf(
-                LocalModelConfigUi(id = LocalModelConfigurationId("cfg-4"), localModelId = LocalModelId("2"), displayName = "Standard", temperature = 0.8)
+                LocalModelConfigUi(
+                    id = LocalModelConfigurationId("cfg-4"),
+                    localModelId = LocalModelId("2"),
+                    displayName = "Standard",
+                    temperature = 0.8
+                )
             )
         )
     )
@@ -438,8 +459,18 @@ object MockSettingsData {
             isMultimodal = true,
             credentialAlias = "OpenAI Primary",
             configurations = listOf(
-                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-1"), credentialsId = ApiCredentialsId("1"), displayName = "Balanced", temperature = 0.7),
-                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-2"), credentialsId = ApiCredentialsId("1"), displayName = "Creative", temperature = 1.0)
+                ApiModelConfigUi(
+                    id = ApiModelConfigurationId("cfg-1"),
+                    credentialsId = ApiCredentialsId("1"),
+                    displayName = "Balanced",
+                    temperature = 0.7
+                ),
+                ApiModelConfigUi(
+                    id = ApiModelConfigurationId("cfg-2"),
+                    credentialsId = ApiCredentialsId("1"),
+                    displayName = "Creative",
+                    temperature = 1.0
+                )
             )
         ),
         ApiModelAssetUi(
@@ -451,7 +482,12 @@ object MockSettingsData {
             isMultimodal = true,
             credentialAlias = "Anthropic Work",
             configurations = listOf(
-                ApiModelConfigUi(id = ApiModelConfigurationId("cfg-3"), credentialsId = ApiCredentialsId("2"), displayName = "Standard", temperature = 0.7)
+                ApiModelConfigUi(
+                    id = ApiModelConfigurationId("cfg-3"),
+                    credentialsId = ApiCredentialsId("2"),
+                    displayName = "Standard",
+                    temperature = 0.7
+                )
             )
         ),
         ApiModelAssetUi(
@@ -477,7 +513,14 @@ object MockSettingsData {
     val defaultAssignments = listOf(
         DefaultModelAssignmentUi(ModelType.MAIN, ModelSource.API, "GPT-4o (Balanced)", "Synthesis", "OpenAI", isMultimodal = true),
         DefaultModelAssignmentUi(ModelType.FAST, ModelSource.ON_DEVICE, "Llama 3 8B (Default)", "Fast", isMultimodal = true),
-        DefaultModelAssignmentUi(ModelType.VISION, ModelSource.API, "Claude 3.5 Sonnet (Standard)", "Vision (API)", "Anthropic", isMultimodal = true),
+        DefaultModelAssignmentUi(
+            ModelType.VISION,
+            ModelSource.API,
+            "Claude 3.5 Sonnet (Standard)",
+            "Vision (API)",
+            "Anthropic",
+            isMultimodal = true
+        ),
         DefaultModelAssignmentUi(ModelType.THINKING, ModelSource.ON_DEVICE, "Llama 3 8B (Precise)", "Thinking")
     )
 

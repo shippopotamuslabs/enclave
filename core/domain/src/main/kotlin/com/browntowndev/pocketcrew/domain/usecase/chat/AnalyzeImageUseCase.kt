@@ -28,8 +28,10 @@ class AnalyzeImageUseCase @Inject constructor(
 ) {
     companion object {
         private const val TAG = "AnalyzeImageUseCase"
+        @Suppress("MaxLineLength")
         private const val DEFAULT_PROMPT =
-            "Describe this image in detail. Focus on directly observable content, any visible text, and details that matter for answering the user's request."
+            "Describe this image in detail. Focus on directly observable content, " +
+                "any visible text, and details that matter for answering the user's request."
     }
 
     suspend operator fun invoke(imageUri: String, prompt: String): String =
@@ -79,7 +81,8 @@ class AnalyzeImageUseCase @Inject constructor(
                             is InferenceEvent.Error -> {
                                 loggingPort.error(
                                     TAG,
-                                    "Vision analysis inference error imageUri=$imageUri cause=${event.cause::class.java.simpleName}: ${event.cause.message}",
+                                    "Vision analysis inference error imageUri=$imageUri " +
+                                        "cause=${event.cause::class.java.simpleName}: ${event.cause.message}",
                                     event.cause
                                 )
                                 throw event.cause

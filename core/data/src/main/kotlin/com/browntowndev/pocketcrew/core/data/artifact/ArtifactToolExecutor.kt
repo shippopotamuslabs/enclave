@@ -41,7 +41,9 @@ class ArtifactToolExecutor @Inject constructor() : ArtifactToolExecutorPort, Too
         if (artifactRequest.content.isEmpty()) {
             return ToolExecutionResult(
                 toolName = "generate_artifact",
-                resultJson = "{\"status\":\"error\",\"message\":\"Failed to parse artifact markdown. Please ensure you are providing content in standard Markdown format.\"}",
+                resultJson = "{\"status\":\"error\"," +
+                    "\"message\":\"Failed to parse artifact markdown. " +
+                    "Please ensure you are providing content in standard Markdown format.\"}",
                 cached = false,
                 latencyMs = 20
             )
