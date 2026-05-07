@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.domain.usecase.auth
 import com.browntowndev.pocketcrew.domain.port.auth.AuthManager
 import com.browntowndev.pocketcrew.domain.port.repository.CleanupRepository
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
+import com.browntowndev.pocketcrew.domain.usecase.settings.AutoAssignLocalModelsUseCase
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.coVerify
@@ -15,7 +16,13 @@ class LogoutUseCaseTest {
     private val authManager = mockk<AuthManager>()
     private val cleanupRepository = mockk<CleanupRepository>()
     private val cloudSyncPort = mockk<CloudSyncPort>(relaxed = true)
-    private val logoutUseCase = LogoutUseCase(authManager, cleanupRepository, cloudSyncPort)
+    private val autoAssignLocalModelsUseCase = mockk<AutoAssignLocalModelsUseCase>(relaxed = true)
+    private val logoutUseCase = LogoutUseCase(
+        authManager,
+        cleanupRepository,
+        cloudSyncPort,
+        autoAssignLocalModelsUseCase
+    )
 
     @Test
     fun `invoke signs out and clears data on success`() = runTest {
@@ -28,6 +35,7 @@ class LogoutUseCaseTest {
         coVerify { authManager.signOut() }
         coVerify { cloudSyncPort.stopListening() }
         coVerify { cleanupRepository.clearAllData() }
+        coVerify { autoAssignLocalModelsUseCase() }
     }
 
     @Test
@@ -38,5 +46,19 @@ class LogoutUseCaseTest {
 
         coVerify { authManager.signOut() }
         coVerify(exactly = 0) { cleanupRepository.clearAllData() }
+        coVerify(exactly = 0) { autoAssignLocalModelsUseCase() }
+    }
+
+    @Test
+    fun `invoke returns success even if cleanup fails`() = runTest {
+        coEvery { authManager.signOut() } returns Result.success(Unit)
+        coEvery { cleanupRepository.clearAllData() } throws Exception("Database error")
+        every { cloudSyncPort.stopListening() } returns Unit
+
+        val result = logoutUseCase()
+
+        assert(result.isSuccess)
+        coVerify { authManager.signOut() }
+        coVerify { cleanupRepository.clearAllData() }
     }
 }

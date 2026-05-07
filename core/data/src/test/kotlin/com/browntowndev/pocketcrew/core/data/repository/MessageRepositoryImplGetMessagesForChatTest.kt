@@ -13,11 +13,17 @@ import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
+import android.content.Context
+import androidx.work.WorkManager
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import org.junit.After
 
 class MessageRepositoryImplGetMessagesForChatTest {
 
@@ -26,6 +32,7 @@ class MessageRepositoryImplGetMessagesForChatTest {
     private lateinit var chatSummaryDao: ChatSummaryDao
     private lateinit var embeddingDao: EmbeddingDao
     private lateinit var repository: MessageRepositoryImpl
+    private val workManager = mockk<WorkManager>(relaxed = true)
 
     @BeforeEach
     fun setup() {
@@ -34,11 +41,17 @@ class MessageRepositoryImplGetMessagesForChatTest {
         chatSummaryDao = mockk(relaxed = true)
         embeddingDao = mockk(relaxed = true)
         repository = MessageRepositoryImpl(
+            workManager,
             messageDao,
             messageVisionAnalysisDao,
             chatSummaryDao,
             embeddingDao,
         )
+    }
+
+    @After
+    fun tearDown() {
+        // No longer need mockkStatic
     }
 
     // ========== Basic Functionality Tests ==========

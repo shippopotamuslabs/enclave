@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.browntowndev.pocketcrew.feature.chat.R
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.feature.chat.ToolCallBannerUi
 import com.browntowndev.pocketcrew.feature.chat.ChatMessage
 import com.browntowndev.pocketcrew.core.ui.component.markdown.StreamableMarkdownText
@@ -69,6 +71,7 @@ fun AssistantResponse(
     onPlayAudio: (String) -> Unit = {},
     onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit = {},
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
+    onShareClick: (MessageId) -> Unit = {},
 ) {
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
@@ -183,12 +186,23 @@ fun AssistantResponse(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    // Action Buttons - Copy and Sources
                     val isComplete = message.indicatorState is IndicatorState.Complete || 
                                     message.indicatorState is IndicatorState.None || 
                                     isPreview
                     
                     if (isComplete) {
+                        // Share Button
+                        IconButton(
+                            onClick = { onShareClick(message.id) },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Share",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
                         // Copy Button
                         IconButton(
                             onClick = {

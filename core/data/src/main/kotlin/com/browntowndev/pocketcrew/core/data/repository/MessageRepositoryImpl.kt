@@ -20,6 +20,14 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import androidx.sqlite.db.SimpleSQLiteQuery
+import android.content.Context
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.browntowndev.pocketcrew.core.data.sync.SyncWorker
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -39,11 +47,26 @@ import javax.inject.Singleton
  */
 @Singleton
 class MessageRepositoryImpl @Inject constructor(
+    private val workManager: WorkManager,
     private val messageDao: MessageDao,
     private val messageVisionAnalysisDao: MessageVisionAnalysisDao,
     private val chatSummaryDao: ChatSummaryDao,
     private val embeddingDao: EmbeddingDao,
 ) : MessageRepository {
+
+    private fun triggerSync() {
+        workManager.enqueueUniqueWork(
+            "pocketcrew_sync",
+            ExistingWorkPolicy.REPLACE,
+            OneTimeWorkRequestBuilder<SyncWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+        )
+    }
 
     /**
      * Saves a message to the database.
@@ -68,6 +91,7 @@ class MessageRepositoryImpl @Inject constructor(
             messageDao.insertFiles(fileEntities)
         }
 
+        triggerSync()
         return entity.id
     }
 
@@ -83,6 +107,7 @@ class MessageRepositoryImpl @Inject constructor(
                 arrayOf(messageId.value, vectorBlob),
             ),
         )
+        triggerSync()
     }
 
     override suspend fun searchSimilarMessages(queryVector: FloatArray, limit: Int): List<MessageId> {

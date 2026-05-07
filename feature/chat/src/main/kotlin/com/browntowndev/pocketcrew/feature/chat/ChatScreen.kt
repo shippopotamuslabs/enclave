@@ -18,8 +18,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.browntowndev.pocketcrew.feature.chat.components.InputBar
 import com.browntowndev.pocketcrew.feature.chat.components.MessageList
+import com.browntowndev.pocketcrew.feature.chat.components.ShareBottomSheet
 import com.browntowndev.pocketcrew.feature.chat.components.ShieldOverlay
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
+import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 
 @Suppress("LongParameterList")
 @Composable
@@ -41,6 +43,10 @@ fun ChatScreen(
     onMicClick: () -> Unit,
     onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit = {},
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
+    onShareClick: (MessageId) -> Unit = {},
+    onShareTurn: () -> Unit = {},
+    onShareFullChat: () -> Unit = {},
+    onDismissShareSheet: () -> Unit = {},
 ) {
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -64,6 +70,13 @@ fun ChatScreen(
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
     ) { innerPadding ->
+        ShareBottomSheet(
+            shareState = uiState.shareState,
+            onShareTurn = onShareTurn,
+            onShareFullChat = onShareFullChat,
+            onDismiss = onDismissShareSheet,
+        )
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -83,6 +96,7 @@ fun ChatScreen(
                     onPlayAudio = onPlayAudio,
                     onNavigateToArtifact = onNavigateToArtifact,
                     onNavigateToStudio = onNavigateToStudio,
+                    onShareClick = onShareClick,
                 )
 
                 if (uiState.shieldReason != null) {
@@ -96,43 +110,45 @@ fun ChatScreen(
                 }
             }
 
-            InputBar(
-                modifier = Modifier.fillMaxWidth(),
-                inputText = uiState.inputText,
-                speechState = uiState.speechState,
-                selectedImageUri = uiState.selectedImageUri,
-                selectedFileName = uiState.selectedFileName,
-                isPhotoAttachmentEnabled = uiState.isPhotoAttachmentEnabled,
-                photoAttachmentDisabledReason = uiState.photoAttachmentDisabledReason,
-                selectedMode = uiState.selectedMode,
-                isGenerating = uiState.isGenerating,
-                canStop = uiState.canStop,
-                isGlobalInferenceBlocked = uiState.isGlobalInferenceBlocked,
-                onInputChange = onInputChange,
-                onModeChange = onModeChange,
-                onSend = onSendMessage,
-                onStopGenerating = onStopGenerating,
-                onImageAttach = {
-                    imagePickerLauncher.launch(
-                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                    )
-                },
-                onFileAttach = {
-                    filePickerLauncher.launch(
-                        arrayOf(
-                            "text/*",
-                            "application/json",
-                            "application/xml",
-                            "application/javascript",
-                            "application/x-yaml",
-                            "application/toml"
+            if (!uiState.isReadOnly) {
+                InputBar(
+                    modifier = Modifier.fillMaxWidth(),
+                    inputText = uiState.inputText,
+                    speechState = uiState.speechState,
+                    selectedImageUri = uiState.selectedImageUri,
+                    selectedFileName = uiState.selectedFileName,
+                    isPhotoAttachmentEnabled = uiState.isPhotoAttachmentEnabled,
+                    photoAttachmentDisabledReason = uiState.photoAttachmentDisabledReason,
+                    selectedMode = uiState.selectedMode,
+                    isGenerating = uiState.isGenerating,
+                    canStop = uiState.canStop,
+                    isGlobalInferenceBlocked = uiState.isGlobalInferenceBlocked,
+                    onInputChange = onInputChange,
+                    onModeChange = onModeChange,
+                    onSend = onSendMessage,
+                    onStopGenerating = onStopGenerating,
+                    onImageAttach = {
+                        imagePickerLauncher.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                         )
-                    )
-                },
-                onClearImage = onClearImage,
-                onClearFile = onClearFile,
-                onMicClick = onMicClick,
-            )
+                    },
+                    onFileAttach = {
+                        filePickerLauncher.launch(
+                            arrayOf(
+                                "text/*",
+                                "application/json",
+                                "application/xml",
+                                "application/javascript",
+                                "application/x-yaml",
+                                "application/toml"
+                            )
+                        )
+                    },
+                    onClearImage = onClearImage,
+                    onClearFile = onClearFile,
+                    onMicClick = onMicClick,
+                )
+            }
         }
     }
 }

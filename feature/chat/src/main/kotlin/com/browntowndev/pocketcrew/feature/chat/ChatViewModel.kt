@@ -44,11 +44,7 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCa
 import com.browntowndev.pocketcrew.domain.util.WebSearchResultParser
 import com.browntowndev.pocketcrew.feature.chat.ChatModeMapper.toDomain
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.UUID
-import javax.inject.Inject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -57,21 +53,28 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.mapLatest
-import kotlinx.coroutines.flow.scan
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.update
-import kotlinx.serialization.json.Json
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
+import javax.inject.Inject
+import kotlinx.serialization.json.Json
 
 
 /**
@@ -96,6 +99,7 @@ class ChatViewModel @Inject constructor(
     private val activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort,
     private val playbackController: TtsPlaybackControllerPort,
     private val studioRepository: StudioRepositoryPort,
+    private val shareChatUseCase: com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase,
 ) : ViewModel() {
 
     companion object {
@@ -131,6 +135,13 @@ class ChatViewModel @Inject constructor(
 
     // Holds dynamically loaded display names
     private val _modelDisplayNames = MutableStateFlow<Map<ModelType, String>>(emptyMap())
+
+    private val _shareState = MutableStateFlow<ShareState>(ShareState.Idle)
+    private val _isReadOnly = MutableStateFlow(false)
+    private val _sharedMessages = MutableStateFlow<List<Message>>(emptyList())
+    
+    // Caches share URLs by ShareOption key to avoid redundant uploads
+    private val shareUrlCache = mutableMapOf<com.browntowndev.pocketcrew.domain.model.share.ShareOption, String>()
 
     // Tracks the current active tool call banner (transient, non-persisted)
     private val _activeToolCallBanner = MutableStateFlow<ToolCallBannerUi?>(null)
@@ -466,13 +477,21 @@ class ChatViewModel @Inject constructor(
         activeTurnSnapshotFlow,
         ttsPlaybackFlow,
         studioMediaFlow,
+        _shareState,
+        _isReadOnly,
+        _sharedMessages,
     ) { args: Array<Any?> ->
         val inputsWithPolicy = args[0] as UiInputsWithPolicy
         val isBlocked = args[1] as Boolean
-        val messages = args[2] as List<Message>
+        val dbMessages = args[2] as List<Message>
         val activeTurnSnapshotState = args[3] as ActiveTurnSnapshotState
         val ttsPlayback = args[4] as Pair<ChatActionState, Boolean>
         val studioMediaMap = args[5] as Map<String, StudioMediaAsset>
+        val shareState = args[6] as ShareState
+        val isReadOnly = args[7] as Boolean
+        val sharedMessages = args[8] as List<Message>
+
+        val messages = if (isReadOnly) sharedMessages else dbMessages
 
         val chatActionState = ttsPlayback.first
         val isPlayingTts = ttsPlayback.second
@@ -555,6 +574,8 @@ class ChatViewModel @Inject constructor(
             backgroundInferenceEnabled = settings.backgroundInferenceEnabled,
             hasTtsProviderAssigned = chatActionState.hasTtsProviderAssigned,
             isPlayingTts = isPlayingTts,
+            shareState = shareState,
+            isReadOnly = isReadOnly,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -920,6 +941,100 @@ class ChatViewModel @Inject constructor(
 
     fun onShieldTap() {
         // Placeholder for future shield/security info interaction
+    }
+
+    private val _shareUiEvents = kotlinx.coroutines.flow.MutableSharedFlow<ShareUiEvent>()
+    val shareUiEvents = _shareUiEvents.asSharedFlow()
+
+    private var pendingShareMessageId: MessageId? = null
+
+    fun onShareClick(messageId: MessageId) {
+        pendingShareMessageId = messageId
+        val chatId = _currentChatId.value ?: initialChatId ?: return
+        
+        // Check if we already have a cached URL for this single turn
+        val option = com.browntowndev.pocketcrew.domain.model.share.ShareOption.SingleTurn(chatId, messageId)
+        val cachedUrl = shareUrlCache[option]
+        
+        if (cachedUrl != null) {
+            _shareState.value = ShareState.Success(cachedUrl)
+        } else {
+            _shareState.value = ShareState.ShowingSheet
+        }
+    }
+
+    fun onShareTurn() {
+        val chatId = _currentChatId.value ?: initialChatId ?: return
+        val messageId = pendingShareMessageId ?: return
+        val option = com.browntowndev.pocketcrew.domain.model.share.ShareOption.SingleTurn(chatId, messageId)
+
+        viewModelScope.launch {
+            _shareState.value = ShareState.Loading
+            shareChatUseCase(option)
+                .onSuccess { sharedChat ->
+                    shareUrlCache[option] = sharedChat.shareUrl
+                    _shareState.value = ShareState.Success(sharedChat.shareUrl)
+                    _shareUiEvents.emit(ShareUiEvent.OpenShareSheet(sharedChat.shareUrl))
+                }
+                .onFailure { error ->
+                    _shareState.value = ShareState.Error(error.message ?: "Failed to share chat")
+                }
+        }
+    }
+
+    fun onShareFullChat() {
+        val chatId = _currentChatId.value ?: initialChatId ?: return
+        val option = com.browntowndev.pocketcrew.domain.model.share.ShareOption.FullConversation(chatId)
+
+        viewModelScope.launch {
+            val cachedUrl = shareUrlCache[option]
+            if (cachedUrl != null) {
+                _shareState.value = ShareState.Success(cachedUrl)
+                _shareUiEvents.emit(ShareUiEvent.OpenShareSheet(cachedUrl))
+                return@launch
+            }
+
+            _shareState.value = ShareState.Loading
+            shareChatUseCase(option)
+                .onSuccess { sharedChat ->
+                    shareUrlCache[option] = sharedChat.shareUrl
+                    _shareState.value = ShareState.Success(sharedChat.shareUrl)
+                    _shareUiEvents.emit(ShareUiEvent.OpenShareSheet(sharedChat.shareUrl))
+                }
+                .onFailure { error ->
+                    _shareState.value = ShareState.Error(error.message ?: "Failed to share chat")
+                }
+        }
+    }
+
+    fun onDismissShareSheet() {
+        pendingShareMessageId = null
+        _shareState.value = ShareState.Idle
+    }
+
+    fun onLoadSharedChat(shareId: String) {
+        viewModelScope.launch {
+            shareChatUseCase.getSharedChat(shareId)
+                .onSuccess { sharedChat ->
+                    sharedChat?.let { chat ->
+                        val mappedMessages = withContext(Dispatchers.Default) {
+                            chat.messages.mapIndexed { index, sharedMessage ->
+                                Message(
+                                    id = MessageId("shared-$index"),
+                                    chatId = ChatId("shared-chat"),
+                                    role = Role.fromApiValue(sharedMessage.role),
+                                    content = Content(text = sharedMessage.content),
+                                    createdAt = sharedMessage.timestamp,
+                                    messageState = MessageState.COMPLETE
+                                )
+                            }
+                        }
+                        _sharedMessages.value = mappedMessages
+                        _isReadOnly.value = true
+                        _shareState.value = ShareState.Idle
+                    }
+                }
+        }
     }
 
     fun onMicClick() {

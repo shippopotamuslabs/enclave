@@ -26,6 +26,8 @@ fun SettingsRoute(
     SettingsScreen(
         uiState = uiState,
         onCloseClick = onCloseClick,
+        onLoginClick = viewModel::onLoginWithGoogle,
+        onLogoutClick = viewModel::onLogout,
         onThemeChange = viewModel::onThemeChange,
         onHapticPressChange = viewModel::onHapticPressChange,
         onHapticResponseChange = viewModel::onHapticResponseChange,

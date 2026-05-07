@@ -18,6 +18,8 @@ import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.QueryDocumentSnapshot
 import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.SetOptions
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.Blob
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -29,6 +31,16 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import android.util.Log
+import com.browntowndev.pocketcrew.domain.model.chat.Chat
+import com.browntowndev.pocketcrew.domain.model.chat.Message
+import com.browntowndev.pocketcrew.domain.model.chat.Role
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
+import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -42,18 +54,37 @@ class FirestoreDataSourceTest {
     private val firestore = mockk<FirebaseFirestore>()
     private val chatDao = mockk<ChatDao>(relaxed = true)
     private val messageDao = mockk<MessageDao>(relaxed = true)
+    private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
+    private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val testScope = TestScope(UnconfinedTestDispatcher())
     private lateinit var dataSource: FirestoreDataSource
 
     @BeforeEach
     fun setup() {
+        mockkStatic(Log::class)
+        every { Log.d(any<String>(), any<String>()) } returns 0
+        every { Log.e(any<String>(), any<String>()) } returns 0
+        every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
+        every { Log.w(any<String>(), any<String>()) } returns 0
+
+        every { cryptoManager.hasCachedKey() } returns true
+        every { cryptoManager.encrypt(any()) } returns Result.success("encrypted".toByteArray())
+        every { cryptoManager.decrypt(any()) } returns Result.success("decrypted")
+
         dataSource = FirestoreDataSource(
             firestore = firestore,
             chatDao = chatDao,
             messageDao = messageDao,
+            cryptoManager = cryptoManager,
+            loggingPort = loggingPort,
             externalScope = testScope,
             userIdProvider = { "test-user-id" }
         )
+    }
+
+    @AfterEach
+    fun tearDown() {
+        unmockkStatic(Log::class)
     }
 
     @Nested
@@ -81,6 +112,8 @@ class FirestoreDataSourceTest {
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
+                cryptoManager = cryptoManager,
+                loggingPort = loggingPort,
                 externalScope = testScope,
                 userIdProvider = { null }
             )
@@ -155,7 +188,7 @@ class FirestoreDataSourceTest {
         fun addedInsertsNewChat() = runTest {
             val mockDoc = mockk<QueryDocumentSnapshot>()
             every { mockDoc.id } returns "chat-1"
-            every { mockDoc.getString("name") } returns "Test Chat"
+            every { mockDoc.getBlob("name") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getLong("created") } returns 1000L
             every { mockDoc.getLong("lastModified") } returns 2000L
             every { mockDoc.getBoolean("pinned") } returns false
@@ -167,17 +200,17 @@ class FirestoreDataSourceTest {
 
             coVerify {
                 chatDao.insert(match {
-                    it.id.value == "chat-1" && it.name == "Test Chat"
+                    it.id.value == "chat-1" && it.name == "decrypted"
                 })
             }
         }
 
         @Test
-        @DisplayName("ADDED skips insert when chat already exists locally")
+        @DisplayName("ADDED skips insert when chat already exists and is NOT a placeholder")
         fun addedSkipsExistingChat() = runTest {
             val mockDoc = mockk<QueryDocumentSnapshot>()
             every { mockDoc.id } returns "chat-1"
-            every { mockDoc.getString("name") } returns "Test Chat"
+            every { mockDoc.getBlob("name") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getLong("created") } returns 1000L
             every { mockDoc.getLong("lastModified") } returns 2000L
             every { mockDoc.getBoolean("pinned") } returns false
@@ -185,8 +218,8 @@ class FirestoreDataSourceTest {
             coEvery { chatDao.getChatById(ChatId("chat-1")) } returns ChatEntity(
                 id = ChatId("chat-1"),
                 name = "Existing",
-                created = Date(500L),
-                lastModified = Date(600L),
+                created = Date(1000L), // NOT a placeholder
+                lastModified = Date(1100L),
                 pinned = false
             )
 
@@ -197,11 +230,39 @@ class FirestoreDataSourceTest {
         }
 
         @Test
+        @DisplayName("ADDED replaces chat when it exists locally as a placeholder")
+        fun addedReplacesPlaceholderChat() = runTest {
+            val mockDoc = mockk<QueryDocumentSnapshot>()
+            every { mockDoc.id } returns "chat-1"
+            every { mockDoc.getBlob("name") } returns Blob.fromBytes("encrypted".toByteArray())
+            every { mockDoc.getLong("created") } returns 1000L
+            every { mockDoc.getLong("lastModified") } returns 2000L
+            every { mockDoc.getBoolean("pinned") } returns false
+
+            coEvery { chatDao.getChatById(ChatId("chat-1")) } returns ChatEntity(
+                id = ChatId("chat-1"),
+                name = "Syncing...",
+                created = Date(0L), // Placeholder sentinel value
+                lastModified = Date(0L),
+                pinned = false
+            )
+
+            val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.ADDED)
+            chatsListenerSlot.captured.onEvent(snapshot, null)
+
+            coVerify {
+                chatDao.insert(match {
+                    it.id.value == "chat-1" && it.name == "decrypted" && it.created.time == 1000L
+                })
+            }
+        }
+
+        @Test
         @DisplayName("MODIFIED upserts chat into local database")
         fun modifiedUpsertsChat() = runTest {
             val mockDoc = mockk<QueryDocumentSnapshot>()
             every { mockDoc.id } returns "chat-1"
-            every { mockDoc.getString("name") } returns "Updated Chat"
+            every { mockDoc.getBlob("name") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getLong("created") } returns 1000L
             every { mockDoc.getLong("lastModified") } returns 3000L
             every { mockDoc.getBoolean("pinned") } returns true
@@ -211,7 +272,7 @@ class FirestoreDataSourceTest {
 
             coVerify {
                 chatDao.insert(match {
-                    it.id.value == "chat-1" && it.name == "Updated Chat" && it.pinned
+                    it.id.value == "chat-1" && it.name == "decrypted" && it.pinned
                 })
             }
         }
@@ -260,25 +321,29 @@ class FirestoreDataSourceTest {
         }
 
         @Test
-        @DisplayName("ADDED inserts new message when not in local DB")
-        fun addedInsertsNewMessage() = runTest {
+        @DisplayName("ADDED inserts new message and placeholder chat when chat not in local DB")
+        fun addedInsertsNewMessageAndPlaceholder() = runTest {
             val mockDoc = mockk<QueryDocumentSnapshot>()
             every { mockDoc.id } returns "msg-1"
             every { mockDoc.getString("chatId") } returns "chat-1"
-            every { mockDoc.getString("content") } returns "Hello"
+            every { mockDoc.getBlob("content") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getString("role") } returns "USER"
             every { mockDoc.getString("messageState") } returns "COMPLETE"
             every { mockDoc.getLong("createdAt") } returns null
             every { mockDoc.getString("modelType") } returns null
 
             coEvery { messageDao.getMessageById(MessageId("msg-1")) } returns null
+            coEvery { chatDao.getChatById(ChatId("chat-1")) } returns null
 
             val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.ADDED)
             messagesListenerSlot.captured.onEvent(snapshot, null)
 
             coVerify {
+                chatDao.insert(match {
+                    it.id.value == "chat-1" && it.created.time == 0L && it.name == "Syncing..."
+                })
                 messageDao.insert(match {
-                    it.id.value == "msg-1" && it.chatId.value == "chat-1" && it.content == "Hello"
+                    it.id.value == "msg-1" && it.chatId.value == "chat-1" && it.content == "decrypted"
                 })
             }
         }
@@ -289,7 +354,7 @@ class FirestoreDataSourceTest {
             val mockDoc = mockk<QueryDocumentSnapshot>()
             every { mockDoc.id } returns "msg-1"
             every { mockDoc.getString("chatId") } returns "chat-1"
-            every { mockDoc.getString("content") } returns "Hello"
+            every { mockDoc.getBlob("content") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getString("role") } returns "USER"
             every { mockDoc.getString("messageState") } returns "COMPLETE"
             every { mockDoc.getLong("createdAt") } returns null
@@ -309,7 +374,7 @@ class FirestoreDataSourceTest {
             val mockDoc = mockk<QueryDocumentSnapshot>()
             every { mockDoc.id } returns "msg-1"
             every { mockDoc.getString("chatId") } returns "chat-1"
-            every { mockDoc.getString("content") } returns "Updated content"
+            every { mockDoc.getBlob("content") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getString("role") } returns "ASSISTANT"
             every { mockDoc.getString("messageState") } returns "COMPLETE"
             every { mockDoc.getLong("createdAt") } returns 1000L
@@ -320,7 +385,7 @@ class FirestoreDataSourceTest {
 
             coVerify {
                 messageDao.insert(match {
-                    it.id.value == "msg-1" && it.content == "Updated content"
+                    it.id.value == "msg-1" && it.content == "decrypted"
                 })
             }
         }
@@ -349,6 +414,8 @@ class FirestoreDataSourceTest {
                 firestore = firestore,
                 chatDao = chatDao,
                 messageDao = messageDao,
+                cryptoManager = cryptoManager,
+                loggingPort = loggingPort,
                 externalScope = testScope,
                 userIdProvider = { null }
             )
@@ -440,6 +507,74 @@ class FirestoreDataSourceTest {
         }
     }
 
+        @Test
+        @DisplayName("syncEntitiesToCloud uses multiple batches for more than 500 items")
+        fun syncEntitiesToCloudUsesMultipleBatches() = runTest {
+            val messages = (1..550).map { i ->
+                Message(
+                    id = MessageId("msg-$i"),
+                    chatId = ChatId("chat1"),
+                    content = com.browntowndev.pocketcrew.domain.model.chat.Content(text = "Hello $i"),
+                    role = Role.USER,
+                    createdAt = 1000L + i
+                )
+            }
+
+            every { firestore.runBatch(any<com.google.firebase.firestore.WriteBatch.Function>()) } returns Tasks.forResult(null)
+
+            val result = dataSource.syncEntitiesToCloud(emptyList(), messages)
+
+            assertTrue(result.isSuccess)
+            // Verify runBatch was called twice
+            verify(exactly = 2) { firestore.runBatch(any()) }
+        }
+    inner class VaultSaltTests {
+        private val userDocRef = mockk<DocumentReference>(relaxed = true)
+
+        @BeforeEach
+        fun setup() {
+            every { firestore.document("users/test-user-id") } returns userDocRef
+        }
+
+        @Test
+        @DisplayName("updateVaultSalt updates the user document with the salt")
+        fun updateVaultSaltSucceeds() = runTest {
+            every { userDocRef.set(any(), any<SetOptions>()) } returns Tasks.forResult(null)
+
+            val result = dataSource.updateVaultSalt("test-salt")
+
+            assertTrue(result.isSuccess)
+            verify { userDocRef.set(mapOf("vaultSalt" to "test-salt"), SetOptions.merge()) }
+        }
+
+        @Test
+        @DisplayName("getVaultSalt retrieves the salt from the user document")
+        fun getVaultSaltSucceeds() = runTest {
+            val snapshot = mockk<DocumentSnapshot>()
+            every { snapshot.exists() } returns true
+            every { snapshot.getString("vaultSalt") } returns "test-salt"
+            every { userDocRef.get() } returns Tasks.forResult(snapshot)
+
+            val result = dataSource.getVaultSalt()
+
+            assertTrue(result.isSuccess)
+            assertEquals("test-salt", result.getOrNull())
+        }
+
+        @Test
+        @DisplayName("getVaultSalt returns null if document doesn't exist")
+        fun getVaultSaltReturnsNullIfNoDoc() = runTest {
+            val snapshot = mockk<DocumentSnapshot>()
+            every { snapshot.exists() } returns false
+            every { userDocRef.get() } returns Tasks.forResult(snapshot)
+
+            val result = dataSource.getVaultSalt()
+
+            assertTrue(result.isSuccess)
+            assertEquals(null, result.getOrNull())
+        }
+    }
+
     private fun mockSnapshot(
         docs: List<QueryDocumentSnapshot>,
         changeType: DocumentChange.Type
@@ -452,6 +587,7 @@ class FirestoreDataSourceTest {
             change
         }
         every { snapshot.documentChanges } returns changes
+        every { snapshot.size() } returns docs.size
         return snapshot
     }
 }

@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
+import com.browntowndev.pocketcrew.core.data.sync.SyncWorker
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
@@ -17,6 +18,13 @@ import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
+import android.content.Context
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,10 +37,25 @@ import kotlinx.serialization.json.Json
 
 @Singleton
 class ChatRepositoryImpl @Inject constructor(
+    private val workManager: WorkManager,
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
     private val webSearchSourceDao: WebSearchSourceDao,
 ) : ChatRepository {
+
+    private fun triggerSync() {
+        workManager.enqueueUniqueWork(
+            "pocketcrew_sync",
+            ExistingWorkPolicy.REPLACE,
+            OneTimeWorkRequestBuilder<SyncWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+        )
+    }
 
     override fun getAllChats(): Flow<List<Chat>> {
         return chatDao.getAllChats().map { entities ->
@@ -43,6 +66,7 @@ class ChatRepositoryImpl @Inject constructor(
     override suspend fun togglePinStatus(chatId: ChatId) {
         val rowsAffected = chatDao.updatePinStatus(chatId)
         require(rowsAffected > 0) { "Chat not found with id: $chatId" }
+        triggerSync()
     }
 
     override fun getMessagesForChat(chatId: ChatId): Flow<List<Message>> {
@@ -63,10 +87,12 @@ class ChatRepositoryImpl @Inject constructor(
         if (messageState == MessageState.COMPLETE) {
             messageDao.updateMessageCreatedAt(messageId, System.currentTimeMillis())
         }
+        triggerSync()
     }
 
     override suspend fun updateMessageContent(messageId: MessageId, content: String) {
         messageDao.updateMessageContentText(messageId, content)
+        triggerSync()
     }
 
     override suspend fun appendMessageContent(messageId: MessageId, content: String) {
@@ -74,22 +100,26 @@ class ChatRepositoryImpl @Inject constructor(
         if (existing != null) {
             val newContent = existing.message.content + content
             messageDao.updateMessageContentText(messageId, newContent)
+            triggerSync()
         }
     }
 
     override suspend fun setThinkingStartTime(messageId: MessageId) {
         messageDao.updateThinkingStartTime(messageId, System.currentTimeMillis())
         messageDao.updateMessageState(messageId, MessageState.THINKING)
+        triggerSync()
     }
 
     override suspend fun setThinkingEndTime(messageId: MessageId) {
         messageDao.updateThinkingEndTime(messageId, System.currentTimeMillis())
+        triggerSync()
     }
 
     override suspend fun appendThinkingRaw(messageId: MessageId, thinkingText: String) {
         val existing = messageDao.getMessageById(messageId)
         val currentRaw = existing?.message?.thinkingRaw ?: ""
         messageDao.updateThinkingRaw(messageId, currentRaw + thinkingText)
+        triggerSync()
     }
 
     override suspend fun clearThinking(messageId: MessageId) {
@@ -98,10 +128,12 @@ class ChatRepositoryImpl @Inject constructor(
         messageDao.updateThinkingEndTime(messageId, 0)
         messageDao.updateMessageState(messageId, MessageState.COMPLETE)
         messageDao.updateMessageCreatedAt(messageId, System.currentTimeMillis())
+        triggerSync()
     }
 
     override suspend fun updateMessageModelType(messageId: MessageId, modelType: ModelType) {
         messageDao.updateMessageModelType(messageId, modelType)
+        triggerSync()
     }
 
     override suspend fun createAssistantMessage(
@@ -118,15 +150,18 @@ class ChatRepositoryImpl @Inject constructor(
             userMessageId = userMessageId,
             messageState = MessageState.PROCESSING,
             modelType = modelType,
-            pipelineStep = pipelineStep
+            pipelineStep = pipelineStep,
+            pendingSync = true
         )
         messageDao.insert(entity)
+        triggerSync()
         return entity.id
     }
 
     override suspend fun createChat(chat: Chat): ChatId {
         val entity = chat.toEntity()
         chatDao.insert(entity)
+        triggerSync()
         return entity.id
     }
 
@@ -143,6 +178,7 @@ class ChatRepositoryImpl @Inject constructor(
             thinkingDuration = duration?.toInt(),
             thinkingRaw = thinkingData?.rawFullThought
         )
+        triggerSync()
     }
 
     /**
@@ -203,6 +239,7 @@ class ChatRepositoryImpl @Inject constructor(
             mediaTypesJson = mediaTypesJson,
             mediaPromptsJson = mediaPromptsJson
         )
+        triggerSync()
     }
 
     /**
@@ -222,11 +259,13 @@ class ChatRepositoryImpl @Inject constructor(
     override suspend fun deleteChat(chatId: ChatId) {
         val rowsAffected = chatDao.deleteById(chatId)
         require(rowsAffected > 0) { "Chat not found with id: $chatId" }
+        triggerSync()
     }
 
     override suspend fun renameChat(chatId: ChatId, newName: String) {
         val rowsAffected = chatDao.updateName(chatId, newName)
         require(rowsAffected > 0) { "Chat not found with id: $chatId" }
+        triggerSync()
     }
 
     override fun searchChats(query: String, messageIds: List<MessageId>): Flow<List<Chat>> {
@@ -242,9 +281,11 @@ class ChatRepositoryImpl @Inject constructor(
 
     override suspend fun markWebSearchSourceExtracted(url: String) {
         webSearchSourceDao.markExtracted(url)
+        triggerSync()
     }
 
     override suspend fun markWebSearchSourcesExtracted(urls: List<String>) {
         urls.forEach { webSearchSourceDao.markExtracted(it) }
+        triggerSync()
     }
 }

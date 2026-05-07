@@ -12,6 +12,8 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiModelParameterSuppo
 import com.browntowndev.pocketcrew.domain.model.inference.DiscoveredApiModel
 import com.browntowndev.pocketcrew.domain.model.inference.ModelSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
+import com.browntowndev.pocketcrew.domain.port.auth.AuthState
+import com.browntowndev.pocketcrew.domain.port.auth.UserProfile
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApiModelDiscoveryScope
 import com.browntowndev.pocketcrew.domain.usecase.settings.ApplyApiModelMetadataDefaultsUseCase
@@ -115,6 +117,7 @@ class SettingsUiStateFactory @Inject constructor(
         ttsAssets: List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>,
         mediaAssets: List<MediaProviderAsset>,
         defaultModels: List<DefaultModelAssignment>,
+        authState: AuthState,
         sheetVisibility: SheetVisibilityState,
         memories: List<StoredMemory>,
         feedbackText: String,
@@ -284,6 +287,7 @@ class SettingsUiStateFactory @Inject constructor(
                 hapticPress = persistedSettings.hapticPress,
                 hapticResponse = persistedSettings.hapticResponse,
                 backgroundInferenceEnabled = persistedSettings.backgroundInferenceEnabled,
+                auth = authState.toUi(),
                 isLocalModelsSheetOpen = localModelsState.isSheetOpen,
                 isApiProvidersSheetOpen = apiState.isSheetOpen,
                 isDataControlsSheetOpen = sheetVisibility.dataControls,
@@ -450,6 +454,20 @@ class SettingsUiStateFactory @Inject constructor(
             displayLabel = modelType.displayLabel,
         )
     }
+
+    private fun AuthState.toUi(): AuthStateUi = when (this) {
+        is AuthState.Authenticated -> AuthStateUi.Authenticated(user.toUi())
+        AuthState.Loading -> AuthStateUi.Loading
+        AuthState.Unauthenticated -> AuthStateUi.Unauthenticated
+        is AuthState.Error -> AuthStateUi.Error(message)
+    }
+
+    private fun UserProfile.toUi(): UserProfileUi = UserProfileUi(
+        uid = uid,
+        displayName = displayName,
+        email = email,
+        photoUrl = photoUrl,
+    )
 
     private companion object {
         val VISIBLE_MODEL_ASSIGNMENT_TYPES = listOf(

@@ -109,6 +109,7 @@ class SettingsViewModel @Inject constructor(
         ttsAssetsFlow,
         mediaAssetsFlow,
         assignmentUseCases.getDefaultModels(),
+        authUseCases.getAuthState(),
         memoriesFlow,
         _feedbackText,
         _currentApiKey,
@@ -132,22 +133,23 @@ class SettingsViewModel @Inject constructor(
         val tts = args[3] as List<com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset>
         val media = args[4] as List<com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset>
         val defaultModels = args[5] as List<com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment>
-        val memories = args[6] as List<StoredMemory>
-        val feedbackText = args[7] as String
-        val apiKey = args[8] as String
-        val tavilyKey = args[9] as String
-        val exaKey = args[10] as String
-        val apiState = args[11] as ApiProvidersTransientState
-        val localModelsState = args[12] as LocalModelsTransientState
-        val memoriesState = args[13] as MemoriesTransientState
-        val searchSkillState = args[14] as SearchSkillTransientState
-        val ttsState = args[15] as TtsProvidersTransientState
-        val mediaState = args[16] as MediaProvidersTransientState
-        val assignmentsState = args[17] as AssignmentDialogTransientState
-        val deletionState = args[18] as DeletionTransientState
-        val xSearchState = args[19] as XSearchTransientState
-        val sheetVisibility = args[20] as SheetVisibilityState
-        val currentXApiKey = args[21] as String
+        val authState = args[6] as com.browntowndev.pocketcrew.domain.port.auth.AuthState
+        val memories = args[7] as List<StoredMemory>
+        val feedbackText = args[8] as String
+        val apiKey = args[9] as String
+        val tavilyKey = args[10] as String
+        val exaKey = args[11] as String
+        val apiState = args[12] as ApiProvidersTransientState
+        val localModelsState = args[13] as LocalModelsTransientState
+        val memoriesState = args[14] as MemoriesTransientState
+        val searchSkillState = args[15] as SearchSkillTransientState
+        val ttsState = args[16] as TtsProvidersTransientState
+        val mediaState = args[17] as MediaProvidersTransientState
+        val assignmentsState = args[18] as AssignmentDialogTransientState
+        val deletionState = args[19] as DeletionTransientState
+        val xSearchState = args[20] as XSearchTransientState
+        val sheetVisibility = args[21] as SheetVisibilityState
+        val currentXApiKey = args[22] as String
 
         settingsUiStateFactory.create(
             persistedSettings = settings,
@@ -156,6 +158,7 @@ class SettingsViewModel @Inject constructor(
             ttsAssets = tts,
             mediaAssets = media,
             defaultModels = defaultModels,
+            authState = authState,
             sheetVisibility = sheetVisibility,
             memories = memories,
             feedbackText = feedbackText,

@@ -131,14 +131,19 @@ dependencies {
     implementation(project(":feature:artifact"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.litertlm.android)
     implementation(platform(libs.firebase.bom))
+    implementation(platform(libs.grpc.bom))
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.crashlytics)
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.functions)
+    implementation(libs.grpc.android)
+    implementation(libs.grpc.okhttp)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
@@ -152,7 +157,6 @@ dependencies {
     implementation(libs.hilt.android)
     implementation(libs.androidx.compose.ui.text)
     implementation(libs.androidx.compose.animation)
-    implementation(libs.identity.doctypes.jvm)
     implementation(libs.androidx.compose.foundation)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
@@ -183,6 +187,17 @@ dependencies {
     kspAndroidTest(libs.hilt.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+
+// =============================================================================
+// Dependency Resolution Strategy
+// =============================================================================
+configurations.all {
+    resolutionStrategy.eachDependency {
+        if (requested.group == "io.grpc") {
+            useVersion(libs.versions.grpc.get())
+        }
+    }
 }
 
 // =============================================================================

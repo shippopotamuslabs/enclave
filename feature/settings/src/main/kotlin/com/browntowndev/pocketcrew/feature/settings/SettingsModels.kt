@@ -30,6 +30,22 @@ data class StoredMemory(
 )
 
 @Immutable
+data class UserProfileUi(
+    val uid: String,
+    val displayName: String?,
+    val email: String?,
+    val photoUrl: String?
+)
+
+@Immutable
+sealed interface AuthStateUi {
+    data object Unauthenticated : AuthStateUi
+    data class Authenticated(val user: UserProfileUi) : AuthStateUi
+    data class Error(val message: String) : AuthStateUi
+    data object Loading : AuthStateUi
+}
+
+@Immutable
 data class SettingsUiState(
     val home: SettingsHomeUiState = SettingsHomeUiState(),
     val customization: CustomizationUiState = CustomizationUiState(),
@@ -56,6 +72,7 @@ data class SettingsHomeUiState(
     val hapticPress: Boolean = true,
     val hapticResponse: Boolean = true,
     val backgroundInferenceEnabled: Boolean = true,
+    val auth: AuthStateUi = AuthStateUi.Loading,
     val isLocalModelsSheetOpen: Boolean = false,
     val isApiProvidersSheetOpen: Boolean = false,
     val isDataControlsSheetOpen: Boolean = false,

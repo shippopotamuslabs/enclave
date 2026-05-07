@@ -42,6 +42,7 @@ import com.browntowndev.pocketcrew.domain.model.artifact.DocumentType
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
+import com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import io.mockk.*
@@ -89,6 +90,7 @@ class ChatViewModelTest {
     private val activeChatTurnStore: ActiveChatTurnSnapshotPort = mockk(relaxed = true)
     private val playbackController: TtsPlaybackControllerPort = mockk(relaxed = true)
     private val studioRepository: StudioRepositoryPort = mockk(relaxed = true)
+    private val shareChatUseCase: ShareChatUseCase = mockk(relaxed = true)
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var defaultModelsFlow: MutableStateFlow<List<DefaultModelAssignment>>
 
@@ -160,6 +162,7 @@ class ChatViewModelTest {
             activeChatTurnSnapshotPort = activeChatTurnStore,
             playbackController = playbackController,
             studioRepository = studioRepository,
+            shareChatUseCase = shareChatUseCase,
         )
     }
 
@@ -619,6 +622,7 @@ class ChatViewModelTest {
             activeChatTurnSnapshotPort = activeChatTurnStore,
             playbackController = playbackController,
             studioRepository = studioRepository,
+            shareChatUseCase = shareChatUseCase,
         )
 
         // Initial state should use cache URI

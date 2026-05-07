@@ -82,6 +82,7 @@ fun MessageList(
     onPlayAudio: (String) -> Unit = {},
     onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit = {},
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit = { _, _, _, _ -> },
+    onShareClick: (MessageId) -> Unit = {},
 ) {
     val listState = rememberLazyListState()
 
@@ -177,6 +178,7 @@ fun MessageList(
                         onPlayAudio = onPlayAudio,
                         onNavigateToArtifact = onNavigateToArtifact,
                         onNavigateToStudio = onNavigateToStudio,
+                        onShareClick = onShareClick,
                         isPreview = isPreview
                     )
                 }
@@ -203,6 +205,7 @@ fun MessageList(
                                     onPlayAudio = onPlayAudio,
                                     onNavigateToArtifact = onNavigateToArtifact,
                                     onNavigateToStudio = onNavigateToStudio,
+                                    onShareClick = onShareClick,
                                     isPreview = isPreview
                                 )
                             }
@@ -275,6 +278,7 @@ private fun MessageItem(
     onPlayAudio: (String) -> Unit,
     onNavigateToArtifact: (com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest) -> Unit,
     onNavigateToStudio: (ids: List<String>, uris: List<String>, types: List<String>, prompts: List<String>) -> Unit,
+    onShareClick: (MessageId) -> Unit,
     isPreview: Boolean,
 ) {
     Column(
@@ -311,6 +315,7 @@ private fun MessageItem(
                 onPlayAudio = onPlayAudio,
                 onNavigateToArtifact = onNavigateToArtifact,
                 onNavigateToStudio = onNavigateToStudio,
+                onShareClick = onShareClick,
             )
         }
     }

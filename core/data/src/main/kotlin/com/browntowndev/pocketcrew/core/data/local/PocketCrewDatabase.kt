@@ -24,7 +24,7 @@ import androidx.room.TypeConverters
         StudioAlbumEntity::class,
         MessageFileEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(ModelTypeConverters::class)
@@ -45,4 +45,14 @@ abstract class PocketCrewDatabase : RoomDatabase() {
     abstract fun mediaProviderDao(): MediaProviderDao
     abstract fun studioMediaDao(): StudioMediaDao
     abstract fun studioAlbumDao(): StudioAlbumDao
+    abstract fun cleanupDao(): CleanupDao
+
+    companion object {
+        val MIGRATION_4_5 = object : androidx.room.migration.Migration(4, 5) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE chat ADD COLUMN pending_sync INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE message ADD COLUMN pending_sync INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+    }
 }

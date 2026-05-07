@@ -18,5 +18,7 @@ data class ChatEntity(
     @ColumnInfo(name = "last_modified")
     val lastModified: Date,
     @ColumnInfo(name = "pinned")
-    val pinned: Boolean
+    val pinned: Boolean,
+    @ColumnInfo(name = "pending_sync")
+    val pendingSync: Boolean = false
 )

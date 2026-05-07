@@ -30,13 +30,19 @@ abstract class ChatDao {
     @Query("SELECT * FROM chat WHERE id IN (:ids)")
     abstract suspend fun getChatsByIds(ids: List<ChatId>): List<ChatEntity>
 
-    @Query("UPDATE chat SET pinned = NOT pinned WHERE id = :chatId")
+    @Query("SELECT * FROM chat WHERE pending_sync = 1")
+    abstract suspend fun getPendingSyncChats(): List<ChatEntity>
+
+    @Query("UPDATE chat SET pending_sync = 0 WHERE id IN (:ids)")
+    abstract suspend fun markSynced(ids: List<ChatId>)
+
+    @Query("UPDATE chat SET pinned = NOT pinned, pending_sync = 1 WHERE id = :chatId")
     abstract suspend fun updatePinStatus(chatId: ChatId): Int
 
     @Query("DELETE FROM chat WHERE id = :chatId")
     abstract suspend fun deleteById(chatId: ChatId): Int
 
-    @Query("UPDATE chat SET name = :newName WHERE id = :chatId")
+    @Query("UPDATE chat SET name = :newName, pending_sync = 1 WHERE id = :chatId")
     abstract suspend fun updateName(chatId: ChatId, newName: String): Int
 
     @Query("""

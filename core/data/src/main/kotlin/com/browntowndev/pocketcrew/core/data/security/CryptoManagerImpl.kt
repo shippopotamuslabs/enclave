@@ -42,13 +42,7 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
     private var inMemoryKey: SecretKeySpec? = null
 
     private val cachedKey: SecretKeySpec?
-        get() {
-            if (inMemoryKey != null) return inMemoryKey
-            val encodedKeyStr = prefs.getString(PREF_CACHED_KEY, null) ?: return null
-            val encodedKey = Base64.decode(encodedKeyStr, Base64.DEFAULT)
-            inMemoryKey = SecretKeySpec(encodedKey, "AES")
-            return inMemoryKey
-        }
+        get() = inMemoryKey
 
     override fun deriveAndCacheKey(password: String, salt: ByteArray): Result<Unit> {
         return try {
@@ -56,7 +50,6 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
             val spec = PBEKeySpec(password.toCharArray(), salt, ITERATION_COUNT, KEY_LENGTH)
             val tmp = factory.generateSecret(spec)
             inMemoryKey = SecretKeySpec(tmp.encoded, "AES")
-            prefs.edit().putString(PREF_CACHED_KEY, Base64.encodeToString(tmp.encoded, Base64.DEFAULT)).apply()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -65,7 +58,6 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
 
     override fun clearKey() {
         inMemoryKey = null
-        prefs.edit().remove(PREF_CACHED_KEY).apply()
     }
 
     override fun hasCachedKey(): Boolean {
@@ -122,6 +114,12 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
         }
     }
 
+    override fun generateSalt(): ByteArray {
+        val salt = ByteArray(SALT_LENGTH)
+        SecureRandom().nextBytes(salt)
+        return salt
+    }
+
     companion object {
         private const val PREF_CACHED_KEY = "cached_derived_key"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
@@ -129,5 +127,6 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
         private const val KEY_LENGTH = 256
         private const val IV_LENGTH = 12 // 96 bits recommended for GCM
         private const val TAG_LENGTH = 128
+        private const val SALT_LENGTH = 16
     }
 }

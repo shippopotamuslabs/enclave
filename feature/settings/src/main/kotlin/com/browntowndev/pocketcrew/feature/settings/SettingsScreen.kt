@@ -30,6 +30,8 @@ import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -48,6 +50,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.domain.model.config.ApiCredentialsId
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
@@ -67,6 +70,8 @@ import com.browntowndev.pocketcrew.domain.model.settings.SystemPromptOption
 fun SettingsScreen(
     uiState: SettingsUiState,
     onCloseClick: () -> Unit,
+    onLoginClick: () -> Unit,
+    onLogoutClick: () -> Unit,
     onThemeChange: (AppTheme) -> Unit,
     onHapticPressChange: (Boolean) -> Unit,
     onHapticResponseChange: (Boolean) -> Unit,
@@ -149,6 +154,14 @@ fun SettingsScreen(
                 .padding(horizontal = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            item {
+                AccountSection(
+                    authState = uiState.home.auth,
+                    onLoginClick = onLoginClick,
+                    onLogoutClick = onLogoutClick
+                )
+            }
+
             item {
                 SectionHeader(text = "Appearance")
                 ThemeSelection(
@@ -391,6 +404,105 @@ fun SectionHeader(text: String) {
 }
 
 @Composable
+fun AccountSection(
+    authState: AuthStateUi,
+    onLoginClick: () -> Unit,
+    onLogoutClick: () -> Unit
+) {
+    SectionHeader(text = "Account")
+    when (authState) {
+        is AuthStateUi.Authenticated -> {
+            ListItem(
+                leadingContent = {
+                    if (authState.user.photoUrl != null) {
+                        AsyncImage(
+                            model = authState.user.photoUrl,
+                            contentDescription = "Profile picture",
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.AccountCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                headlineContent = {
+                    Text(
+                        text = authState.user.displayName ?: "User",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                supportingContent = authState.user.email?.let { email ->
+                    {
+                        Text(
+                            text = email,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                trailingContent = {
+                    IconButton(onClick = onLogoutClick) {
+                        Icon(
+                            imageVector = Icons.Default.Logout,
+                            contentDescription = "Logout",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            )
+        }
+        AuthStateUi.Unauthenticated -> {
+            ListItem(
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                headlineContent = { Text("Login with Google") },
+                supportingContent = { Text("Sync your data across devices") },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    .clickable(onClick = onLoginClick)
+            )
+        }
+        AuthStateUi.Loading -> {
+            ListItem(
+                headlineContent = { Text("Loading account...") },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            )
+        }
+        is AuthStateUi.Error -> {
+            ListItem(
+                headlineContent = { Text("Error: ${authState.message}") },
+                trailingContent = {
+                    IconButton(onClick = onLoginClick) {
+                        Icon(imageVector = Icons.Default.AccountCircle, contentDescription = "Retry Login")
+                    }
+                },
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.errorContainer)
+            )
+        }
+    }
+}
+
+@Composable
 fun ThemeSelection(
     selectedTheme: AppTheme,
     onThemeChange: (AppTheme) -> Unit
@@ -533,6 +645,8 @@ fun PreviewSettingsScreen() {
         SettingsScreen(
             uiState = MockSettingsData.baseUiState,
             onCloseClick = {},
+            onLoginClick = {},
+            onLogoutClick = {},
             onThemeChange = {},
             onHapticPressChange = {},
             onHapticResponseChange = {},
@@ -592,3 +706,4 @@ fun PreviewSettingsScreen() {
         )
     }
 }
+

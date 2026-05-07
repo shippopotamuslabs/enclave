@@ -50,6 +50,7 @@ dependencies {
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // Hilt
     implementation(libs.hilt.android)
@@ -87,6 +88,7 @@ dependencies {
     // Auth & Credentials
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
+    implementation(libs.firebase.functions)
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
@@ -107,6 +109,7 @@ dependencies {
     testImplementation(libs.junit)
     testRuntimeOnly(libs.junit.vintage.engine)
     testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.work.testing)
     testImplementation(testFixtures(project(":core:domain")))
     testImplementation(project(":core:testing"))
 

@@ -69,4 +69,6 @@ data class MessageEntity(
     val generatedMediaTypesJson: String? = null,
     @ColumnInfo(name = "generated_media_prompts_json")
     val generatedMediaPromptsJson: String? = null,
+    @ColumnInfo(name = "pending_sync")
+    val pendingSync: Boolean = false
 )

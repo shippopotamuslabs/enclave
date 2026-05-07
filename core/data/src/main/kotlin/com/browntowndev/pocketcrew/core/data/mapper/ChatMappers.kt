@@ -28,7 +28,8 @@ fun Chat.toEntity(): ChatEntity = ChatEntity(
     name = name,
     created = created,
     lastModified = lastModified,
-    pinned = pinned
+    pinned = pinned,
+    pendingSync = true
 )
 
 fun MessageWithFiles.toDomain(webSearchSources: List<WebSearchSourceEntity> = emptyList()): Message {
@@ -131,7 +132,8 @@ fun Message.toEntity(): MessageEntity {
         generatedMediaUrisJson = mediaUrisJson,
         generatedMediaAssetIdsJson = mediaAssetIdsJson,
         generatedMediaTypesJson = mediaTypesJson,
-        generatedMediaPromptsJson = mediaPromptsJson
+        generatedMediaPromptsJson = mediaPromptsJson,
+        pendingSync = true
     )
 }
 

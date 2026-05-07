@@ -50,7 +50,7 @@ abstract class MessageDao {
     abstract fun getAllMessages(): Flow<List<MessageWithFiles>>
 
     @Suppress("MaxLineLength")
-    @Query("UPDATE message SET content = :content, thinking_duration_seconds = :thinkingDuration, thinking_raw = :thinkingRaw WHERE id = :id")
+    @Query("UPDATE message SET content = :content, thinking_duration_seconds = :thinkingDuration, thinking_raw = :thinkingRaw, pending_sync = 1 WHERE id = :id")
     abstract suspend fun updateMessageContent(
         id: MessageId,
         content: String,
@@ -83,19 +83,26 @@ abstract class MessageDao {
         states: List<MessageState>
     ): List<MessageWithFiles>
 
-    @Query("UPDATE message SET message_state = :messageState WHERE id = :id")
+    @Transaction
+    @Query("SELECT * FROM message WHERE pending_sync = 1")
+    abstract suspend fun getPendingSyncMessages(): List<MessageWithFiles>
+
+    @Query("UPDATE message SET pending_sync = 0 WHERE id IN (:ids)")
+    abstract suspend fun markSynced(ids: List<MessageId>)
+
+    @Query("UPDATE message SET message_state = :messageState, pending_sync = 1 WHERE id = :id")
     abstract suspend fun updateMessageState(id: MessageId, messageState: MessageState)
 
-    @Query("UPDATE message SET created_at = :timestamp WHERE id = :id")
+    @Query("UPDATE message SET created_at = :timestamp, pending_sync = 1 WHERE id = :id")
     abstract suspend fun updateMessageCreatedAt(id: MessageId, timestamp: Long)
 
-    @Query("UPDATE message SET content = :content WHERE id = :id")
+    @Query("UPDATE message SET content = :content, pending_sync = 1 WHERE id = :id")
     abstract suspend fun updateMessageContentText(id: MessageId, content: String)
 
-    @Query("UPDATE message SET model_type = :modelType WHERE id = :id")
+    @Query("UPDATE message SET model_type = :modelType, pending_sync = 1 WHERE id = :id")
     abstract suspend fun updateMessageModelType(id: MessageId, modelType: ModelType)
 
-    @Query("UPDATE message SET thinking_duration_seconds = :thinkingDuration WHERE id = :id")
+    @Query("UPDATE message SET thinking_duration_seconds = :thinkingDuration, pending_sync = 1 WHERE id = :id")
     abstract suspend fun updateThinkingDuration(id: MessageId, thinkingDuration: Int)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -110,19 +117,19 @@ abstract class MessageDao {
     @Query("DELETE FROM message WHERE id = :id")
     abstract suspend fun deleteById(id: MessageId)
 
-    @Query("UPDATE message SET thinking_start_time = :startTime WHERE id = :messageId")
+    @Query("UPDATE message SET thinking_start_time = :startTime, pending_sync = 1 WHERE id = :messageId")
     abstract suspend fun updateThinkingStartTime(messageId: MessageId, startTime: Long)
 
-    @Query("UPDATE message SET thinking_end_time = :endTime WHERE id = :messageId")
+    @Query("UPDATE message SET thinking_end_time = :endTime, pending_sync = 1 WHERE id = :messageId")
     abstract suspend fun updateThinkingEndTime(messageId: MessageId, endTime: Long)
 
-    @Query("UPDATE message SET thinking_raw = :thinkingRaw WHERE id = :messageId")
+    @Query("UPDATE message SET thinking_raw = :thinkingRaw, pending_sync = 1 WHERE id = :messageId")
     abstract suspend fun updateThinkingRaw(messageId: MessageId, thinkingRaw: String?)
 
-    @Query("UPDATE message SET pipeline_step = :pipelineStep WHERE id = :messageId")
+    @Query("UPDATE message SET pipeline_step = :pipelineStep, pending_sync = 1 WHERE id = :messageId")
     abstract suspend fun updateMessagePipelineStep(messageId: MessageId, pipelineStep: PipelineStep?)
 
-    @Query("UPDATE message SET artifacts_json = :artifactsJson WHERE id = :id")
+    @Query("UPDATE message SET artifacts_json = :artifactsJson, pending_sync = 1 WHERE id = :id")
     abstract suspend fun updateMessageArtifacts(id: MessageId, artifactsJson: String?)
 
     @Query("""
@@ -130,7 +137,8 @@ abstract class MessageDao {
         SET generated_media_uris_json = :mediaUrisJson,
             generated_media_asset_ids_json = :mediaAssetIdsJson,
             generated_media_types_json = :mediaTypesJson,
-            generated_media_prompts_json = :mediaPromptsJson
+            generated_media_prompts_json = :mediaPromptsJson,
+            pending_sync = 1
         WHERE id = :id
     """)
     abstract suspend fun updateMessageMedia(

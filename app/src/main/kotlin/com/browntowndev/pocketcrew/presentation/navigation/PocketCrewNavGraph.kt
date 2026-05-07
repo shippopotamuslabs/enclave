@@ -19,6 +19,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.navDeepLink
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.feature.chat.ChatRoute
+import com.browntowndev.pocketcrew.feature.chat.ChatViewModel
 import com.browntowndev.pocketcrew.feature.download.ModelDownloadScreen
 import com.browntowndev.pocketcrew.feature.history.HistoryRoute
 import com.browntowndev.pocketcrew.feature.artifact.ArtifactRoute
@@ -756,6 +757,47 @@ fun PocketCrewNavGraph(
         settingsGraph(
             navController = navController,
         )
+
+        composable(
+            route = Routes.SHARED_CHAT,
+            arguments = listOf(
+                navArgument("shareId") { type = NavType.StringType }
+            ),
+            deepLinks = listOf(
+                navDeepLink {
+                    uriPattern = Routes.SHARED_CHAT_DEEP_LINK_PATTERN
+                }
+            )
+        ) { backStackEntry ->
+            val shareId = backStackEntry.arguments?.getString("shareId")
+            val chatViewModel = hiltViewModel<ChatViewModel>()
+
+            LaunchedEffect(shareId) {
+                if (shareId != null) {
+                    chatViewModel.onLoadSharedChat(shareId)
+                }
+            }
+
+            ChatRoute(
+                onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
+                onNewChat = {
+                    navController.navigate(Routes.CHAT) {
+                        popUpTo(Routes.SHARED_CHAT) { inclusive = true }
+                    }
+                },
+                onNavigateToArtifactStudio = { request ->
+                    val content = kotlinx.serialization.json.Json.encodeToString(request)
+                    val encodedTitle = android.net.Uri.encode(request.title)
+                    val encodedContent = android.net.Uri.encode(content)
+                    navController.navigate(Routes.artifact(encodedTitle, encodedContent))
+                },
+                onNavigateToStudio = { ids, uris, types, prompts ->
+                    navController.navigate(Routes.studioWithRehydration(ids, uris, types, prompts))
+                },
+                onShowSnackbar = onShowSnackbar,
+                viewModel = chatViewModel
+            )
+        }
     }
 }
 

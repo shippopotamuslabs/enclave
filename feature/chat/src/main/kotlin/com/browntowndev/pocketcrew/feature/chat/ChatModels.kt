@@ -77,7 +77,21 @@ data class ChatUiState(
     val backgroundInferenceEnabled: Boolean = true,
     val hasTtsProviderAssigned: Boolean = false,
     val isPlayingTts: Boolean = false,
+    val shareState: ShareState = ShareState.Idle,
+    val isReadOnly: Boolean = false,
 )
+
+sealed interface ShareState {
+    data object Idle : ShareState
+    data object ShowingSheet : ShareState
+    data object Loading : ShareState
+    data class Success(val shareUrl: String) : ShareState
+    data class Error(val message: String) : ShareState
+}
+
+sealed interface ShareUiEvent {
+    data class OpenShareSheet(val shareUrl: String) : ShareUiEvent
+}
 
 /**
  * Used in previews - various indicator states.

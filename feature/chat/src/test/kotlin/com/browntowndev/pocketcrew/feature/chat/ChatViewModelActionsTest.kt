@@ -6,7 +6,6 @@ import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
 import com.browntowndev.pocketcrew.domain.model.config.ActiveModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.ApiModelConfigurationId
 import com.browntowndev.pocketcrew.domain.model.config.DefaultModelAssignment
-import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
 import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
@@ -22,12 +21,11 @@ import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCa
 import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
 import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
-import io.mockk.coEvery
-import io.mockk.every
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -68,6 +66,7 @@ class ChatViewModelActionsTest {
     private val playbackController: TtsPlaybackControllerPort = mockk(relaxed = true)
     private val studioRepository: StudioRepositoryPort = mockk(relaxed = true)
     private val activeModelProvider: ActiveModelProviderPort = mockk()
+    private val shareChatUseCase: ShareChatUseCase = mockk(relaxed = true)
 
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var defaultModelsFlow: MutableStateFlow<List<DefaultModelAssignment>>
@@ -130,6 +129,7 @@ class ChatViewModelActionsTest {
             activeChatTurnSnapshotPort = activeChatTurnStore,
             playbackController = playbackController,
             studioRepository = studioRepository,
+            shareChatUseCase = shareChatUseCase,
         )
     }
 
@@ -312,6 +312,7 @@ class ChatViewModelActionsTest {
             activeChatTurnSnapshotPort = activeChatTurnStore,
             playbackController = playbackController,
             studioRepository = studioRepository,
+            shareChatUseCase = shareChatUseCase,
         )
 
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
