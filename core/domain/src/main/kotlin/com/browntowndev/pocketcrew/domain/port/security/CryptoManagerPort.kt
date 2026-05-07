@@ -2,29 +2,32 @@ package com.browntowndev.pocketcrew.domain.port.security
 
 interface CryptoManagerPort {
     /**
-     * Derives an AES-256-GCM key from the given password and salt using PBKDF2
-     * and caches it in memory for subsequent encrypt/decrypt operations.
+     * Derives a secret key from the password and salt, and caches it in memory and persistent storage.
      */
     fun deriveAndCacheKey(password: String, salt: ByteArray): Result<Unit>
-    
+
     /**
-     * Clears the cached key from memory.
+     * Clears the cached key from memory and persistent storage.
      */
     fun clearKey()
-    
+
     /**
-     * Returns true if a key is currently cached in memory.
+     * Returns true if a key is currently cached (in memory or persistent storage).
      */
     fun hasCachedKey(): Boolean
 
     /**
-     * Encrypts a plaintext string. The resulting ByteArray contains the
-     * Initialization Vector (IV) prepended to the ciphertext.
+     * Encrypts the plaintext using the cached key.
      */
     fun encrypt(plaintext: String): Result<ByteArray>
 
     /**
-     * Decrypts a ciphertext ByteArray that has the IV prepended to it.
+     * Decrypts the ciphertext using the cached key.
      */
     fun decrypt(ciphertext: ByteArray): Result<String>
+
+    /**
+     * Generates a new random salt for key derivation.
+     */
+    fun generateSalt(): ByteArray
 }

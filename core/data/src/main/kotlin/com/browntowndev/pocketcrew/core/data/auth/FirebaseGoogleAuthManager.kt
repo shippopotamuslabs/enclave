@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.auth
 import android.content.Context
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
+import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import com.browntowndev.pocketcrew.domain.port.auth.AuthManager
 import com.browntowndev.pocketcrew.domain.port.auth.AuthState
@@ -55,9 +56,11 @@ class FirebaseGoogleAuthManager @Inject constructor(
 
     override suspend fun signInWithGoogle(): Result<UserProfile> {
         return try {
-            val webClientId = context.getString(
-                context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
-            )
+            val resourceId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+            if (resourceId == 0) {
+                return Result.failure(Exception("Google Sign-In configuration missing: default_web_client_id not found. Please check your google-services.json."))
+            }
+            val webClientId = context.getString(resourceId)
 
             val googleIdOption = GetGoogleIdOption.Builder()
                 .setFilterByAuthorizedAccounts(false)
@@ -71,22 +74,30 @@ class FirebaseGoogleAuthManager @Inject constructor(
             val result = credentialManager.getCredential(context, request)
             val credential = result.credential
 
-            if (credential is GoogleIdTokenCredential) {
-                val firebaseCredential = GoogleAuthProvider.getCredential(credential.idToken, null)
-                val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
-                val user = authResult.user ?: throw Exception("Firebase sign in failed")
-                
-                Result.success(
-                    UserProfile(
-                        uid = user.uid,
-                        displayName = user.displayName,
-                        email = user.email,
-                        photoUrl = user.photoUrl?.toString()
-                    )
-                )
-            } else {
-                Result.failure(Exception("Unexpected credential type: ${credential.type}"))
+            val firebaseCredential = when {
+                credential is GoogleIdTokenCredential -> {
+                    GoogleAuthProvider.getCredential(credential.idToken, null)
+                }
+                credential is CustomCredential && credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL -> {
+                    val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+                    GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
+                }
+                else -> {
+                    return Result.failure(Exception("Unexpected credential type: ${credential.type}"))
+                }
             }
+
+            val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
+            val user = authResult.user ?: throw Exception("Firebase sign in failed")
+
+            Result.success(
+                UserProfile(
+                    uid = user.uid,
+                    displayName = user.displayName,
+                    email = user.email,
+                    photoUrl = user.photoUrl?.toString()
+                )
+            )
         } catch (e: Exception) {
             Result.failure(e)
         }

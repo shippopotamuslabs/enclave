@@ -1,7 +1,10 @@
 package com.browntowndev.pocketcrew.feature.chat
 
+import android.content.Intent
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
@@ -15,6 +18,21 @@ fun ChatRoute(
     viewModel: ChatViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        viewModel.shareUiEvents.collect { event ->
+            when (event) {
+                is ShareUiEvent.OpenShareSheet -> {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, event.shareUrl)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Share Chat"))
+                }
+            }
+        }
+    }
 
     ChatScreen(
         uiState = uiState,
@@ -42,5 +60,9 @@ fun ChatRoute(
         onMicClick = viewModel::onMicClick,
         onNavigateToArtifact = onNavigateToArtifactStudio,
         onNavigateToStudio = onNavigateToStudio,
+        onShareClick = viewModel::onShareClick,
+        onShareTurn = viewModel::onShareTurn,
+        onShareFullChat = viewModel::onShareFullChat,
+        onDismissShareSheet = viewModel::onDismissShareSheet,
     )
 }

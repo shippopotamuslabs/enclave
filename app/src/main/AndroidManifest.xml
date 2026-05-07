@@ -42,6 +42,9 @@
                 <data
                     android:host="chat"
                     android:scheme="pocketcrew" />
+                <data
+                    android:host="shared"
+                    android:scheme="pocketcrew" />
             </intent-filter>
         </activity>
 

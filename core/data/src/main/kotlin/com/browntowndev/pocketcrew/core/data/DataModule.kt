@@ -254,6 +254,11 @@ object DataModule {
 
     @Provides
     @Singleton
+    fun provideFirebaseFunctions(): com.google.firebase.functions.FirebaseFunctions = 
+        com.google.firebase.functions.FirebaseFunctions.getInstance()
+
+    @Provides
+    @Singleton
     @ApplicationScope
     fun provideApplicationScope(): CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -320,6 +325,12 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindCloudSyncPort(impl: FirestoreDataSource): CloudSyncPort
+
+    @Binds
+    @Singleton
+    abstract fun bindBiometricPort(
+        impl: com.browntowndev.pocketcrew.core.data.security.AndroidBiometricManager
+    ): com.browntowndev.pocketcrew.domain.port.security.BiometricPort
 
     @Binds
     @Singleton
@@ -446,6 +457,12 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindShareMediaPort(impl: AndroidShareMediaAdapter): ShareMediaPort
+
+    @Binds
+    @Singleton
+    abstract fun bindShareRepository(
+        impl: com.browntowndev.pocketcrew.core.data.repository.FirestoreShareRepository
+    ): com.browntowndev.pocketcrew.domain.port.repository.ShareRepositoryPort
 
     @Binds
     @Singleton

@@ -24,6 +24,11 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.Date
+import android.content.Context
+import androidx.work.WorkManager
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import org.junit.After
 
 class ChatRepositoryImplTest {
 
@@ -31,6 +36,7 @@ class ChatRepositoryImplTest {
     private lateinit var messageDao: MessageDao
     private lateinit var tavilySourceDao: WebSearchSourceDao
     private lateinit var repository: ChatRepositoryImpl
+    private val workManager = mockk<WorkManager>(relaxed = true)
 
     private val testDate = Date(1700_000_000_000L)
 
@@ -39,7 +45,12 @@ class ChatRepositoryImplTest {
         chatDao = mockk<ChatDao>(relaxed = true)
         messageDao = mockk<MessageDao>(relaxed = true)
         tavilySourceDao = mockk<WebSearchSourceDao>(relaxed = true)
-        repository = ChatRepositoryImpl(chatDao, messageDao, tavilySourceDao)
+        repository = ChatRepositoryImpl(workManager, chatDao, messageDao, tavilySourceDao)
+    }
+
+    @After
+    fun tearDown() {
+        // No longer need mockkStatic(WorkManager::class)
     }
 
     @Test

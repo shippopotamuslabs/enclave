@@ -23,6 +23,8 @@ object Routes {
     const val BYOK_CONFIGURE = "byok_configure"
     const val ARTIFACT = "artifact"
     const val ARTIFACT_WITH_ARGS = "artifact?content={content}&title={title}"
+    const val SHARED_CHAT = "shared?shareId={shareId}"
+    const val SHARED_CHAT_DEEP_LINK_PATTERN = "pocketcrew://shared/{shareId}"
 
     fun studioWithEditAsset(assetId: String): String = "$STUDIO?editAssetId=$assetId"
 

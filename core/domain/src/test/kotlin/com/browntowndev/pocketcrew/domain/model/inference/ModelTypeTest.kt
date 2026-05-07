@@ -44,4 +44,24 @@ class ModelTypeTest {
         assertEquals(ModelType.MUSIC_GENERATION, ModelType.fromApiValue("music_generation"))
         assertEquals(ModelType.UNASSIGNED, ModelType.fromApiValue("unassigned"))
     }
+
+    @Test
+    fun `isTextModel returns true for all LLM slots`() {
+        assert(ModelType.FAST.isTextModel)
+        assert(ModelType.THINKING.isTextModel)
+        assert(ModelType.MAIN.isTextModel)
+        assert(ModelType.VISION.isTextModel)
+        assert(ModelType.DRAFT_ONE.isTextModel)
+        assert(ModelType.DRAFT_TWO.isTextModel)
+        assert(ModelType.FINAL_SYNTHESIS.isTextModel)
+    }
+
+    @Test
+    fun `isTextModel returns false for utility or generation slots`() {
+        assert(!ModelType.TTS.isTextModel)
+        assert(!ModelType.IMAGE_GENERATION.isTextModel)
+        assert(!ModelType.VIDEO_GENERATION.isTextModel)
+        assert(!ModelType.MUSIC_GENERATION.isTextModel)
+        assert(!ModelType.UNASSIGNED.isTextModel)
+    }
 }

@@ -55,6 +55,9 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.androidx.compose.material.icons.extended)
 
+    // Image loading
+    implementation(libs.coil.compose)
+
     // Navigation
     implementation(libs.navigation.compose)
 

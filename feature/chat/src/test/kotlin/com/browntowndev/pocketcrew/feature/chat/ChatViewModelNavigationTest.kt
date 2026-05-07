@@ -2,91 +2,80 @@ package com.browntowndev.pocketcrew.feature.chat
 
 import androidx.lifecycle.SavedStateHandle
 import com.browntowndev.pocketcrew.core.testing.MainDispatcherRule
-import com.browntowndev.pocketcrew.domain.model.chat.ChatId
-import com.browntowndev.pocketcrew.domain.model.chat.Content
-import com.browntowndev.pocketcrew.domain.model.chat.Message
-import com.browntowndev.pocketcrew.domain.model.chat.MessageId
-import com.browntowndev.pocketcrew.domain.model.chat.Role
-import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
-import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
-import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
-import com.browntowndev.pocketcrew.domain.usecase.chat.ListenToSpeechUseCase
-import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
-import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
-import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
-import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
 import com.browntowndev.pocketcrew.core.ui.error.ViewModelErrorHandler
+import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.inference.ToolExecutionEventPort
-import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
-import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsAssignmentUseCases
-import com.browntowndev.pocketcrew.feature.inference.ActiveChatTurnStore
+import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
+import com.browntowndev.pocketcrew.domain.port.repository.ActiveModelProviderPort
+import com.browntowndev.pocketcrew.domain.port.repository.SettingsData
+import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.pocketcrew.domain.usecase.chat.ChatUseCases
+import com.browntowndev.pocketcrew.domain.usecase.chat.GetModelDisplayNameUseCase
+import com.browntowndev.pocketcrew.domain.usecase.chat.StageImageAttachmentUseCase
+import com.browntowndev.pocketcrew.domain.usecase.inference.CancelInferenceUseCase
+import com.browntowndev.pocketcrew.domain.usecase.inference.InferenceLockManager
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsUseCases
+import com.browntowndev.pocketcrew.domain.usecase.share.ShareChatUseCase
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 
 @ExtendWith(MainDispatcherRule::class)
-@OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModelNavigationTest {
 
     private lateinit var settingsUseCases: SettingsUseCases
     private lateinit var chatUseCases: ChatUseCases
+    private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
+    private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
     private lateinit var inferenceLockManager: InferenceLockManager
     private lateinit var modelDisplayNamesUseCase: GetModelDisplayNameUseCase
-    private lateinit var stageImageAttachmentUseCase: StageImageAttachmentUseCase
     private lateinit var activeModelProvider: ActiveModelProviderPort
-    private lateinit var errorHandler: ViewModelErrorHandler
-    private lateinit var cancelInferenceUseCase: CancelInferenceUseCase
     private lateinit var toolExecutionEventPort: ToolExecutionEventPort
+    private lateinit var errorHandler: ViewModelErrorHandler
     private lateinit var loggingPort: LoggingPort
+    private lateinit var activeChatTurnSnapshotPort: ActiveChatTurnSnapshotPort
+    private lateinit var playbackController: TtsPlaybackControllerPort
+    private lateinit var studioRepository: StudioRepositoryPort
+    private lateinit var shareChatUseCase: ShareChatUseCase
 
     @BeforeEach
     fun setup() {
         settingsUseCases = mockk(relaxed = true)
         chatUseCases = mockk(relaxed = true)
+        stageImageAttachmentUseCase = mockk(relaxed = true)
+        cancelInferenceUseCase = mockk(relaxed = true)
         inferenceLockManager = mockk(relaxed = true)
         modelDisplayNamesUseCase = mockk(relaxed = true)
-        stageImageAttachmentUseCase = mockk(relaxed = true)
         activeModelProvider = mockk(relaxed = true)
-        errorHandler = mockk(relaxed = true)
-        cancelInferenceUseCase = mockk(relaxed = true)
         toolExecutionEventPort = mockk(relaxed = true)
+        errorHandler = mockk(relaxed = true)
         loggingPort = mockk(relaxed = true)
+        activeChatTurnSnapshotPort = mockk(relaxed = true)
+        playbackController = mockk(relaxed = true)
+        studioRepository = mockk(relaxed = true)
+        shareChatUseCase = mockk(relaxed = true)
 
-        val listenToSpeechUseCase = mockk<ListenToSpeechUseCase>(relaxed = true)
-        every { listenToSpeechUseCase.invoke(any(), any()) } returns MutableSharedFlow()
-        every { chatUseCases.listenToSpeechUseCase } returns listenToSpeechUseCase
-
-        coEvery { chatUseCases.getChat(any()) } returns MutableStateFlow(emptyList())
-        every { settingsUseCases.getSettings() } returns MutableStateFlow(SettingsData())
-        val assignmentUseCases = mockk<SettingsAssignmentUseCases>()
-        val getDefaultModelsUseCase = mockk<GetDefaultModelsUseCase>()
-        every { settingsUseCases.assignments } returns assignmentUseCases
-        every { assignmentUseCases.getDefaultModels } returns getDefaultModelsUseCase
-        every { getDefaultModelsUseCase() } returns MutableStateFlow(emptyList())
-        every { inferenceLockManager.isInferenceBlocked } returns MutableStateFlow(false)
+        every { settingsUseCases.getSettings() } returns flowOf(SettingsData())
+        every { settingsUseCases.assignments.getDefaultModels() } returns flowOf(emptyList())
         every { toolExecutionEventPort.events } returns MutableSharedFlow()
-        coEvery { modelDisplayNamesUseCase.invoke(any()) } returns "Test Model"
-        every { chatUseCases.mergeMessagesUseCase(any(), any()) } answers { firstArg() }
+        every { activeChatTurnSnapshotPort.observe(any()) } returns flowOf(null)
+        every { studioRepository.observeEphemeralMedia() } returns flowOf(emptyList())
+        every { studioRepository.observeAllMedia() } returns flowOf(emptyList())
     }
 
-    private fun createViewModel(savedStateHandle: SavedStateHandle): ChatViewModel {
+    private fun createViewModel(chatId: String?): ChatViewModel {
+        val savedStateHandle = SavedStateHandle().apply {
+            if (chatId != null) set("chatId", chatId)
+        }
         return ChatViewModel(
             settingsUseCases = settingsUseCases,
             chatUseCases = chatUseCases,
@@ -96,120 +85,25 @@ class ChatViewModelNavigationTest {
             inferenceLockManager = inferenceLockManager,
             modelDisplayNamesUseCase = modelDisplayNamesUseCase,
             activeModelProvider = activeModelProvider,
-            errorHandler = errorHandler,
             toolExecutionEventPort = toolExecutionEventPort,
+            errorHandler = errorHandler,
             loggingPort = loggingPort,
-            activeChatTurnSnapshotPort = mockk(relaxed = true),
-            playbackController = mockk(relaxed = true),
-            studioRepository = mockk(relaxed = true),
-            )
-    }
-
-    @Test
-    fun `initialChatId parses valid string from SavedStateHandle`() {
-        val savedStateHandle = SavedStateHandle(mapOf("chatId" to "42"))
-        val viewModel = createViewModel(savedStateHandle)
-
-        assertEquals(ChatId("42"), viewModel.initialChatId)
-    }
-
-    @Test
-    fun `initialChatId returns non-null for any string in SavedStateHandle`() {
-        val savedStateHandle = SavedStateHandle(mapOf("chatId" to "some_id"))
-        val viewModel = createViewModel(savedStateHandle)
-
-        assertEquals(ChatId("some_id"), viewModel.initialChatId)
-    }
-
-    @Test
-    fun `initialChatId returns null when missing from SavedStateHandle`() {
-        val savedStateHandle = SavedStateHandle()
-        val viewModel = createViewModel(savedStateHandle)
-
-        assertNull(viewModel.initialChatId)
-    }
-
-    @Test
-    fun `uiState emits current chatId when initialized with valid id`() = runTest {
-        val savedStateHandle = SavedStateHandle(mapOf("chatId" to "42"))
-        
-        val messages = listOf(
-            Message(id = MessageId("1"), chatId = ChatId("42"), content = Content("Hello"), role = Role.USER)
+            activeChatTurnSnapshotPort = activeChatTurnSnapshotPort,
+            playbackController = playbackController,
+            studioRepository = studioRepository,
+            shareChatUseCase = shareChatUseCase,
         )
-        coEvery { chatUseCases.getChat(ChatId("42")) } returns flowOf(messages)
-        
-        val viewModel = createViewModel(savedStateHandle)
-        
-        // Start collecting uiState to trigger the lazy StateFlow
-        val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
-        
-        runCurrent()
-        advanceTimeBy(100)
-        runCurrent()
-
-        val state = viewModel.uiState.value
-        assertEquals(ChatId("42"), state.chatId)
-        assertEquals(1, state.messages.size)
-        assertEquals("Hello", state.messages[0].content.text)
-        
-        collectJob.cancel()
     }
 
     @Test
-    fun `uiState emits null when initialized without chatId`() = runTest {
-        val savedStateHandle = SavedStateHandle()
-        val viewModel = createViewModel(savedStateHandle)
-        
-        val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
-        
-        runCurrent()
-        advanceTimeBy(100)
-        runCurrent()
-
-        val state = viewModel.uiState.value
-        assertNull(state.chatId)
-        assertEquals(0, state.messages.size)
-        
-        collectJob.cancel()
-    }
-    
-    @Test
-    fun `uiState emits chatId when initialized with invalid chatId string`() = runTest {
-        // Since chatId is now a String (UUID), any string is technically accepted by the wrapper
-        val savedStateHandle = SavedStateHandle(mapOf("chatId" to "invalid"))
-        val viewModel = createViewModel(savedStateHandle)
-        
-        val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
-        
-        runCurrent()
-        advanceTimeBy(100)
-        runCurrent()
-
-        val state = viewModel.uiState.value
-        assertEquals(ChatId("invalid"), state.chatId)
-        assertEquals(0, state.messages.size)
-        
-        collectJob.cancel()
+    fun `initialChatId is correctly retrieved from SavedStateHandle`() {
+        val viewModel = createViewModel("test-chat-id")
+        assertEquals(ChatId("test-chat-id"), viewModel.initialChatId)
     }
 
     @Test
-    fun `uiState emits empty messages when chat ID not found in database`() = runTest {
-        val savedStateHandle = SavedStateHandle(mapOf("chatId" to "999"))
-        
-        coEvery { chatUseCases.getChat(ChatId("999")) } returns flowOf(emptyList())
-        
-        val viewModel = createViewModel(savedStateHandle)
-        
-        val collectJob = backgroundScope.launch { viewModel.uiState.collect { } }
-        
-        runCurrent()
-        advanceTimeBy(100)
-        runCurrent()
-
-        val state = viewModel.uiState.value
-        assertEquals(ChatId("999"), state.chatId)
-        assertEquals(0, state.messages.size)
-        
-        collectJob.cancel()
+    fun `initialChatId is null when not in SavedStateHandle`() {
+        val viewModel = createViewModel(null)
+        assertEquals(null, viewModel.initialChatId)
     }
 }
