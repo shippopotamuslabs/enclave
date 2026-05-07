@@ -88,3 +88,10 @@ diff.txt
 edge-gallery
 
 image generation styles/
+
+# Firebase
+.firebase/
+firebase-debug.log*
+.runtimeconfig.json
+functions/lib/
+functions/node_modules/
