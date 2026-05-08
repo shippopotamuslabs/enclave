@@ -1,0 +1,18 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Shared chat media is publicly readable so recipients can view images
+    match /shared_chat_media/{shareId}/{mediaId} {
+      allow read: if true;
+      // Only the owner of the shared chat can write to its media folder.
+      // We check the ownerId on the firestore document.
+      allow write: if request.auth != null && 
+                   firestore.get(/databases/(default)/documents/shared_chats/$(shareId)).data.ownerId == request.auth.uid;
+    }
+
+    // User-specific media
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

@@ -20,14 +20,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
 import androidx.sqlite.db.SimpleSQLiteQuery
-import android.content.Context
-import androidx.work.Constraints
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import com.browntowndev.pocketcrew.core.data.sync.SyncWorker
-import dagger.hilt.android.qualifiers.ApplicationContext
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import kotlinx.coroutines.flow.first
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -47,26 +40,14 @@ import javax.inject.Singleton
  */
 @Singleton
 class MessageRepositoryImpl @Inject constructor(
-    private val workManager: WorkManager,
+    private val syncTrigger: CloudSyncTrigger,
     private val messageDao: MessageDao,
     private val messageVisionAnalysisDao: MessageVisionAnalysisDao,
     private val chatSummaryDao: ChatSummaryDao,
     private val embeddingDao: EmbeddingDao,
 ) : MessageRepository {
 
-    private fun triggerSync() {
-        workManager.enqueueUniqueWork(
-            "pocketcrew_sync",
-            ExistingWorkPolicy.REPLACE,
-            OneTimeWorkRequestBuilder<SyncWorker>()
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build()
-                )
-                .build()
-        )
-    }
+    private fun triggerSync() = syncTrigger.trigger()
 
     /**
      * Saves a message to the database.
@@ -81,6 +62,7 @@ class MessageRepositoryImpl @Inject constructor(
      * @return The ID of the saved message
      */
     override suspend fun saveMessage(message: Message): MessageId {
+        require(message.chatId != null) { "Message(id=${message.id.value}) must have a chatId before persisting — route through CreateUserMessageUseCase" }
         val entity = message.toEntity()
         messageDao.insert(entity)
 
@@ -107,7 +89,6 @@ class MessageRepositoryImpl @Inject constructor(
                 arrayOf(messageId.value, vectorBlob),
             ),
         )
-        triggerSync()
     }
 
     override suspend fun searchSimilarMessages(queryVector: FloatArray, limit: Int): List<MessageId> {
@@ -151,7 +132,7 @@ class MessageRepositoryImpl @Inject constructor(
         modelType: ModelType,
     ) {
         val now = System.currentTimeMillis()
-        messageVisionAnalysisDao.insert(
+        messageVisionAnalysisDao.upsert(
             MessageVisionAnalysisEntity(
                 id = UUID.randomUUID().toString(),
                 userMessageId = userMessageId,
@@ -161,8 +142,10 @@ class MessageRepositoryImpl @Inject constructor(
                 modelType = modelType,
                 createdAt = now,
                 updatedAt = now,
+                pendingSync = 1,
             )
         )
+        triggerSync()
     }
 
     override suspend fun getVisionAnalysesForMessages(

@@ -88,16 +88,18 @@ class StudioRepositoryImpl @Inject constructor(
             }
         }
 
-        val newId = studioMediaDao.insertMedia(
+        val newId = java.util.UUID.randomUUID().toString()
+        studioMediaDao.insertMedia(
             StudioMediaEntity(
+                id = newId,
                 prompt = prompt,
                 mediaUri = finalUri,
                 mediaType = mediaType,
                 createdAt = createdAt ?: System.currentTimeMillis(),
-                albumId = albumId?.toLongOrNull()
+                albumId = albumId
             )
         )
-        return getMediaById(newId.toString())!!
+        return getMediaById(newId)!!
     }
 
     override suspend fun saveMedia(
@@ -116,15 +118,14 @@ class StudioRepositoryImpl @Inject constructor(
     }
     
     override suspend fun updateMedia(asset: StudioMediaAsset) {
-        val longId = asset.id.toLongOrNull() ?: return
         studioMediaDao.insertMedia(
             StudioMediaEntity(
-                id = longId,
+                id = asset.id,
                 prompt = asset.prompt,
                 mediaUri = asset.localUri,
                 mediaType = asset.mediaType,
                 createdAt = asset.createdAt,
-                albumId = asset.albumId?.toLongOrNull()
+                albumId = asset.albumId
             )
         )
     }
@@ -170,44 +171,36 @@ class StudioRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteMedia(id: String) {
-        val longId = id.toLongOrNull()
-        if (longId != null) {
-            studioMediaDao.deleteMedia(longId)
-        }
+        studioMediaDao.softDeleteById(id)
     }
 
     override suspend fun getMediaById(id: String): StudioMediaAsset? {
-        val longId = id.toLongOrNull() ?: return null
-        return studioMediaDao.getMediaById(longId)?.toDomain()
+        return studioMediaDao.getMediaById(id)?.toDomain()
     }
 
     override suspend fun createAlbum(name: String): String {
-        return studioAlbumDao.insertAlbum(StudioAlbumEntity(name = name)).toString()
+        val id = java.util.UUID.randomUUID().toString()
+        studioAlbumDao.insertAlbum(StudioAlbumEntity(id = id, name = name))
+        return id
     }
 
     override suspend fun renameAlbum(id: String, name: String) {
-        val longId = id.toLongOrNull() ?: return
         val trimmedName = name.trim()
-        if (trimmedName.isEmpty()) {
-            return
-        }
-
-        studioAlbumDao.updateAlbumName(longId, trimmedName)
+        if (trimmedName.isEmpty()) return
+        studioAlbumDao.updateAlbumName(id, trimmedName)
     }
 
     override suspend fun deleteAlbum(id: String) {
-        val longId = id.toLongOrNull() ?: return
-
         transactionProvider.runInTransaction {
-            studioMediaDao.reassignMediaToDefault(longId)
-            studioAlbumDao.deleteAlbum(longId)
+            studioMediaDao.reassignMediaToDefault(id)
+            studioAlbumDao.softDeleteById(id)
         }
     }
 
     override suspend fun moveMediaToAlbum(mediaIds: List<String>, albumId: String) {
         studioMediaDao.updateMediaAlbum(
-            mediaIds = mediaIds.map { it.toLong() },
-            albumId = albumId.toLong()
+            mediaIds = mediaIds,
+            albumId = albumId
         )
     }
 

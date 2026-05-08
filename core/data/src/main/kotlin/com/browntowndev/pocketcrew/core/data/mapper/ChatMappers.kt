@@ -20,7 +20,8 @@ fun ChatEntity.toDomain(): Chat = Chat(
     name = name,
     created = created,
     lastModified = lastModified,
-    pinned = pinned
+    pinned = pinned,
+    isSyncing = created.time == 0L
 )
 
 fun Chat.toEntity(): ChatEntity = ChatEntity(
@@ -29,7 +30,7 @@ fun Chat.toEntity(): ChatEntity = ChatEntity(
     created = created,
     lastModified = lastModified,
     pinned = pinned,
-    pendingSync = true
+    pendingSync = 1
 )
 
 fun MessageWithFiles.toDomain(webSearchSources: List<WebSearchSourceEntity> = emptyList()): Message {
@@ -123,7 +124,7 @@ fun Message.toEntity(): MessageEntity {
         content = content.text,
         imageUri = content.imageUri,
         role = role,
-        chatId = chatId,
+        chatId = requireNotNull(chatId) { "Cannot persist Message(id=${id.value}) with null chatId — must go through CreateUserMessageUseCase" },
         messageState = messageState,
         createdAt = createdAt,
         modelType = modelType,
@@ -133,7 +134,7 @@ fun Message.toEntity(): MessageEntity {
         generatedMediaAssetIdsJson = mediaAssetIdsJson,
         generatedMediaTypesJson = mediaTypesJson,
         generatedMediaPromptsJson = mediaPromptsJson,
-        pendingSync = true
+        pendingSync = 1
     )
 }
 
@@ -146,7 +147,8 @@ fun FileAttachment.toEntity(id: String, messageId: String): MessageFileEntity = 
     id = id,
     messageId = messageId,
     name = name,
-    content = content
+    content = content,
+    pendingSync = 1
 )
 
 fun WebSearchSourceEntity.toDomain(): WebSearchSource = WebSearchSource(
@@ -167,4 +169,5 @@ fun WebSearchSource.toEntity(): WebSearchSourceEntity = WebSearchSourceEntity(
     content = content,
     score = score,
     extracted = extracted,
+    pendingSync = 1
 )

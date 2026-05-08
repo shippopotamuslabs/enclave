@@ -26,6 +26,8 @@ import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.browntowndev.pocketcrew.domain.usecase.security.UnlockVaultUseCase
 import javax.crypto.Cipher
 
+import com.browntowndev.pocketcrew.domain.port.repository.EmbeddingProgressPort
+
 sealed interface AppStartupState {
     data object Loading : AppStartupState
 
@@ -37,6 +39,8 @@ sealed interface AppStartupState {
         val isVaultLocked: Boolean = false,
         val isBiometricUnlockPossible: Boolean = false,
         val pendingBiometricEnrollmentPassword: String? = null,
+        val isReindexing: Boolean = false,
+        val reindexProgress: Float = 0f,
     ) : AppStartupState {
         val initialRoute =
             if (initializationError != null ||
@@ -62,6 +66,7 @@ class MainViewModel
         private val unlockVaultUseCase: UnlockVaultUseCase,
         private val loggingPort: LoggingPort,
         private val errorHandler: ViewModelErrorHandler,
+        private val embeddingProgressPort: EmbeddingProgressPort,
     ) : ViewModel() {
         companion object {
             private const val TAG = "MainViewModel"
@@ -99,16 +104,28 @@ class MainViewModel
 
                     loggingPort.debug(TAG, "initializeApp: isLocked=$isLocked, isBioPossible=$isBioPossible")
 
-                    getAuthStateUseCase().collect { authState ->
+                    combine(
+                        getAuthStateUseCase(),
+                        embeddingProgressPort.isReindexing,
+                        embeddingProgressPort.progress
+                    ) { authState, isReindexing, progress ->
+                        Triple(authState, isReindexing, progress)
+                    }.collect { (authState, isReindexing, progress) ->
                         _startupState.update { 
                             if (it is AppStartupState.Ready) {
-                                it.copy(authState = authState)
+                                it.copy(
+                                    authState = authState,
+                                    isReindexing = isReindexing,
+                                    reindexProgress = progress
+                                )
                             } else {
                                 AppStartupState.Ready(
                                     authState = authState,
                                     modelsResult = modelsResult,
                                     isVaultLocked = isLocked,
-                                    isBiometricUnlockPossible = isBioPossible
+                                    isBiometricUnlockPossible = isBioPossible,
+                                    isReindexing = isReindexing,
+                                    reindexProgress = progress
                                 ) 
                             }
                         }
@@ -120,13 +137,21 @@ class MainViewModel
                         e,
                         "Failed to initialize models",
                     )
-                    getAuthStateUseCase().collect { authState ->
+                    combine(
+                        getAuthStateUseCase(),
+                        embeddingProgressPort.isReindexing,
+                        embeddingProgressPort.progress
+                    ) { authState, isReindexing, progress ->
+                        Triple(authState, isReindexing, progress)
+                    }.collect { (authState, isReindexing, progress) ->
                         _startupState.update {
                             AppStartupState.Ready(
                                 authState = authState,
                                 modelsResult = null,
                                 initializationError = "Failed to initialize models",
-                                isVaultLocked = !cryptoManager.hasCachedKey()
+                                isVaultLocked = !cryptoManager.hasCachedKey(),
+                                isReindexing = isReindexing,
+                                reindexProgress = progress
                             )
                         }
                     }

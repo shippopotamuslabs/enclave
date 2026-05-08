@@ -15,5 +15,10 @@ data class MediaProviderEntity(
     val modelName: String? = null,
     val baseUrl: String? = null,
     val credentialAlias: String,
-    val updatedAt: Long = System.currentTimeMillis()
+    @androidx.room.ColumnInfo(name = "pending_sync")
+    val pendingSync: Int = 0,
+    @androidx.room.ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis(),
+    @androidx.room.ColumnInfo(name = "deleted")
+    val deleted: Boolean = false
 )

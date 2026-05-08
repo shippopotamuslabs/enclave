@@ -37,4 +37,10 @@ data class WebSearchSourceEntity(
     val score: Double,
     @ColumnInfo(name = "extracted", defaultValue = "0")
     val extracted: Boolean = false,
+    @ColumnInfo(name = "pending_sync")
+    val pendingSync: Int = 0,
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "deleted")
+    val deleted: Boolean = false
 )

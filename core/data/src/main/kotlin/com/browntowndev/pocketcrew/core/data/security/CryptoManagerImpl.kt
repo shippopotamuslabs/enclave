@@ -18,6 +18,10 @@ import android.util.Base64
 import android.content.SharedPreferences
 import androidx.annotation.VisibleForTesting
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
 @Singleton
 class CryptoManagerImpl @VisibleForTesting internal constructor(
     private val prefsProvider: () -> SharedPreferences
@@ -40,6 +44,13 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
     private val prefs: SharedPreferences by lazy { prefsProvider() }
 
     private var inMemoryKey: SecretKeySpec? = null
+        set(value) {
+            field = value
+            _isVaultUnlocked.value = value != null
+        }
+
+    private val _isVaultUnlocked = MutableStateFlow(false)
+    override val isVaultUnlocked: StateFlow<Boolean> = _isVaultUnlocked.asStateFlow()
 
     private val cachedKey: SecretKeySpec?
         get() = inMemoryKey
@@ -118,6 +129,14 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
         val salt = ByteArray(SALT_LENGTH)
         SecureRandom().nextBytes(salt)
         return salt
+    }
+
+    override fun encodeBase64(data: ByteArray): String {
+        return Base64.encodeToString(data, Base64.NO_WRAP)
+    }
+
+    override fun decodeBase64(base64: String): ByteArray {
+        return Base64.decode(base64, Base64.NO_WRAP)
     }
 
     companion object {

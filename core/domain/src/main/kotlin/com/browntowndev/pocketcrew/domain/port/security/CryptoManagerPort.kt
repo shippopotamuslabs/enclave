@@ -17,6 +17,11 @@ interface CryptoManagerPort {
     fun hasCachedKey(): Boolean
 
     /**
+     * Flow that emits true when the vault is unlocked, false when locked.
+     */
+    val isVaultUnlocked: kotlinx.coroutines.flow.StateFlow<Boolean>
+
+    /**
      * Encrypts the plaintext using the cached key.
      */
     fun encrypt(plaintext: String): Result<ByteArray>
@@ -30,4 +35,14 @@ interface CryptoManagerPort {
      * Generates a new random salt for key derivation.
      */
     fun generateSalt(): ByteArray
+
+    /**
+     * Encodes bytes to Base64 string.
+     */
+    fun encodeBase64(data: ByteArray): String
+
+    /**
+     * Decodes Base64 string to bytes.
+     */
+    fun decodeBase64(base64: String): ByteArray
 }

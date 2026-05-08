@@ -83,16 +83,18 @@ Use MCP tools before manual execution. Manual shell commands are a last resort.
 
 ## 4. Executable Validation Before Completion
 
-Before declaring `TASK_STATUS: COMPLETE`, run the validations defined in the relevant contract(s):
+Before declaring `TASK_STATUS: COMPLETE`, run the following validations to ensure zero regressions and style compliance:
 
-- **Architecture / all:** `./gradlew :domain:assemble` (must pass with no Android/Compose deps)
-- **App compilation:** `./gradlew :app:assembleDebug`
-- **Data layer:** `./gradlew :data:assemble` + `./gradlew :app:kspDebugKotlin`
-- **Inference layer:** `./gradlew :inference:assemble`
-- **Tests:** `./gradlew testDebugUnitTest`
+- **Architecture / Domain:** `./gradlew :core:domain:assemble` (must pass with no Android/Compose deps)
+- **App Compilation:** `./gradlew :app:assembleDebug`
+- **Data Layer:** `./gradlew :core:data:assemble` + `./gradlew :app:kspDebugKotlin`
+- **Inference Layer:** `./gradlew :feature:inference:assemble`
+- **Tests:** `./gradlew test` (Runs the entire unit test suite across all modules)
 - **Style:** `./gradlew ktlintCheck`
 
-Only run the checks relevant to what was changed.
+**Note on Detekt:** Detekt is configured to run automatically during the build process and is set to fail the build (`ignoreFailures = false`) if any issues are detected. You do not need to run it manually, but you must ensure the build passes.
+
+Only run the checks relevant to what was changed, but **always** run the full test suite for any logic changes.
 
 ---
 

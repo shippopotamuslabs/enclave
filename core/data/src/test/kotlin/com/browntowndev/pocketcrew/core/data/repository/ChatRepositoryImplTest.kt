@@ -24,10 +24,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import java.util.Date
-import android.content.Context
-import androidx.work.WorkManager
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import org.junit.After
 
 class ChatRepositoryImplTest {
@@ -36,7 +33,7 @@ class ChatRepositoryImplTest {
     private lateinit var messageDao: MessageDao
     private lateinit var tavilySourceDao: WebSearchSourceDao
     private lateinit var repository: ChatRepositoryImpl
-    private val workManager = mockk<WorkManager>(relaxed = true)
+    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
     private val testDate = Date(1700_000_000_000L)
 
@@ -45,12 +42,11 @@ class ChatRepositoryImplTest {
         chatDao = mockk<ChatDao>(relaxed = true)
         messageDao = mockk<MessageDao>(relaxed = true)
         tavilySourceDao = mockk<WebSearchSourceDao>(relaxed = true)
-        repository = ChatRepositoryImpl(workManager, chatDao, messageDao, tavilySourceDao)
+        repository = ChatRepositoryImpl(syncTrigger, chatDao, messageDao, tavilySourceDao)
     }
 
     @After
     fun tearDown() {
-        // No longer need mockkStatic(WorkManager::class)
     }
 
     @Test
@@ -86,11 +82,11 @@ class ChatRepositoryImplTest {
             pinned = false
         )
         coEvery { chatDao.getChatById(ChatId("5")) } returns entity
-        coEvery { chatDao.updatePinStatus(ChatId("5")) } returns 1
+        coEvery { chatDao.updatePinStatus(ChatId("5"), any()) } returns 1
 
         repository.togglePinStatus(ChatId("5"))
 
-        coVerify { chatDao.updatePinStatus(ChatId("5")) }
+        coVerify { chatDao.updatePinStatus(ChatId("5"), any()) }
     }
 
     @Test
@@ -103,11 +99,11 @@ class ChatRepositoryImplTest {
             pinned = true
         )
         coEvery { chatDao.getChatById(ChatId("10")) } returns entity
-        coEvery { chatDao.updatePinStatus(ChatId("10")) } returns 1
+        coEvery { chatDao.updatePinStatus(ChatId("10"), any()) } returns 1
 
         repository.togglePinStatus(ChatId("10"))
 
-        coVerify { chatDao.updatePinStatus(ChatId("10")) }
+        coVerify { chatDao.updatePinStatus(ChatId("10"), any()) }
     }
 
     @Test

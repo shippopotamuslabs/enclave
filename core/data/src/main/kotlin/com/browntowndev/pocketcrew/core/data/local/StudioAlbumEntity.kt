@@ -5,7 +5,13 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "studio_albums")
 data class StudioAlbumEntity(
-    @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
+    @PrimaryKey
+    val id: String,
     val name: String,
+    @androidx.room.ColumnInfo(name = "pending_sync")
+    val pendingSync: Int = 0,
+    @androidx.room.ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis(),
+    @androidx.room.ColumnInfo(name = "deleted")
+    val deleted: Boolean = false
 )

@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationEntity
 import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelEntity
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfiguration
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelConfigurationId
@@ -24,11 +25,14 @@ import javax.inject.Singleton
 
 @Singleton
 class LocalModelRepositoryImpl @Inject constructor(
+    private val syncTrigger: CloudSyncTrigger,
     private val modelsDao: LocalModelsDao,
     private val configsDao: LocalModelConfigurationsDao,
     private val defaultModelsDao: DefaultModelsDao,
     private val transactionProvider: TransactionProvider,
 ) : LocalModelRepositoryPort {
+
+    private fun triggerSync() = syncTrigger.trigger()
 
     @OptIn(ExperimentalUuidApi::class)
     private fun generateConfigGuid(): LocalModelConfigurationId = LocalModelConfigurationId(Uuid.random().toString())
@@ -48,9 +52,9 @@ class LocalModelRepositoryImpl @Inject constructor(
 
     override suspend fun clearAll() {
         val defaults = defaultModelsDao.getAll()
-        defaults.forEach { defaultModelsDao.delete(it.modelType) }
+        defaults.forEach { defaultModelsDao.softDeleteById(it.modelType) }
         val allModels = modelsDao.getAll()
-        allModels.forEach { modelsDao.deleteById(it.id) }
+        allModels.forEach { modelsDao.softDeleteById(it.id) }
     }
 
     override suspend fun upsertLocalAsset(asset: LocalModelAsset): LocalModelId {
@@ -68,16 +72,19 @@ class LocalModelRepositoryImpl @Inject constructor(
             mmprojLocalFilename = asset.metadata.mmprojLocalFileName,
             mmprojSha256 = asset.metadata.mmprojSha256,
             mmprojSizeInBytes = asset.metadata.mmprojSizeInBytes,
+            pendingSync = 1,
         )
         modelsDao.upsert(entity)
+        triggerSync()
         return entity.id
     }
 
     override suspend fun upsertLocalConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId {
-        val configId = if (config.id.value.isNotEmpty()) {
-            config.id
-        } else {
-            generateConfigGuid()
+        val existingConfig = configsDao.getByModelIdAndName(config.localModelId, config.displayName)
+        val configId = when {
+            config.id.value.isNotEmpty() -> config.id
+            existingConfig != null -> existingConfig.id
+            else -> generateConfigGuid()
         }
         val entity = LocalModelConfigurationEntity(
             id = configId,
@@ -92,9 +99,11 @@ class LocalModelRepositoryImpl @Inject constructor(
             contextWindow = config.contextWindow,
             thinkingEnabled = config.thinkingEnabled,
             systemPrompt = config.systemPrompt,
-            isSystemPreset = config.isSystemPreset
+            isSystemPreset = config.isSystemPreset,
+            pendingSync = 1,
         )
         configsDao.upsert(entity)
+        triggerSync()
         return configId
     }
 
@@ -121,13 +130,19 @@ class LocalModelRepositoryImpl @Inject constructor(
             mmprojLocalFilename = metadata.mmprojLocalFileName,
             mmprojSha256 = metadata.mmprojSha256,
             mmprojSizeInBytes = metadata.mmprojSizeInBytes,
+            pendingSync = 1,
         )
         modelsDao.upsert(entity)
+        triggerSync()
         return entity.id
     }
 
     override suspend fun deleteLocalModelMetadata(id: LocalModelId) {
-        modelsDao.deleteById(id)
+        transactionProvider.runInTransaction {
+            configsDao.deleteAllForAsset(id)
+            modelsDao.softDeleteById(id)
+        }
+        triggerSync()
     }
 
     override suspend fun saveConfiguration(config: LocalModelConfiguration): LocalModelConfigurationId {
@@ -135,7 +150,8 @@ class LocalModelRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteConfiguration(id: LocalModelConfigurationId) {
-        configsDao.deleteById(id)
+        configsDao.softDeleteById(id)
+        triggerSync()
     }
 
     override suspend fun getConfigurationById(id: LocalModelConfigurationId): LocalModelConfiguration? {
@@ -148,6 +164,7 @@ class LocalModelRepositoryImpl @Inject constructor(
 
     override suspend fun deleteAllConfigurationsForAsset(localModelId: LocalModelId) {
         configsDao.deleteAllForAsset(localModelId)
+        triggerSync()
     }
 
     override suspend fun getSoftDeletedModels(): List<LocalModelAsset> {

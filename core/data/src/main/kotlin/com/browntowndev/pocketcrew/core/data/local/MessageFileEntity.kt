@@ -23,4 +23,10 @@ data class MessageFileEntity(
     @ColumnInfo(name = "message_id") val messageId: String,
     val name: String,
     val content: String,
+    @ColumnInfo(name = "pending_sync")
+    val pendingSync: Int = 0,
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "deleted")
+    val deleted: Boolean = false
 )

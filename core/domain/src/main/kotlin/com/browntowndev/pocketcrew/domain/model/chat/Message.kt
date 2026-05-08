@@ -11,7 +11,9 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
  * @property id Unique identifier for the message
  * @property content The content of the message (text + pipeline step for Crew mode)
  * @property role The role of the message sender (USER, ASSISTANT, or SYSTEM)
- * @property chatId The ID of the chat this message belongs to
+ * @property chatId The ID of the chat this message belongs to. Null means the message has not
+ *   yet been assigned to a chat — [com.browntowndev.pocketcrew.domain.usecase.chat.CreateUserMessageUseCase]
+ *   will create a new chat on first save.
  * @property messageState Current state of the message in the generation pipeline
  * @property thinkingDurationSeconds Duration of thinking in seconds (computed from timestamps)
  * @property thinkingRaw Raw thinking text as markdown (no chunking)
@@ -21,7 +23,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
  */
 data class Message(
     val id: MessageId,
-    val chatId: ChatId,
+    val chatId: ChatId?,
     val content: Content,
     val role: Role = Role.USER,
     val messageState: MessageState = MessageState.PROCESSING,

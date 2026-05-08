@@ -19,10 +19,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
-import android.content.Context
-import androidx.work.WorkManager
-import io.mockk.mockkStatic
-import io.mockk.unmockkStatic
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import org.junit.After
 
 class MessageRepositoryImplGetMessagesForChatTest {
@@ -32,7 +29,7 @@ class MessageRepositoryImplGetMessagesForChatTest {
     private lateinit var chatSummaryDao: ChatSummaryDao
     private lateinit var embeddingDao: EmbeddingDao
     private lateinit var repository: MessageRepositoryImpl
-    private val workManager = mockk<WorkManager>(relaxed = true)
+    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
     @BeforeEach
     fun setup() {
@@ -41,7 +38,7 @@ class MessageRepositoryImplGetMessagesForChatTest {
         chatSummaryDao = mockk(relaxed = true)
         embeddingDao = mockk(relaxed = true)
         repository = MessageRepositoryImpl(
-            workManager,
+            syncTrigger,
             messageDao,
             messageVisionAnalysisDao,
             chatSummaryDao,
@@ -51,7 +48,6 @@ class MessageRepositoryImplGetMessagesForChatTest {
 
     @After
     fun tearDown() {
-        // No longer need mockkStatic
     }
 
     // ========== Basic Functionality Tests ==========

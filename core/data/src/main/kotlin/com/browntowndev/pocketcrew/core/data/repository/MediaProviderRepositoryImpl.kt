@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderEntity
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.MediaCapability
 import com.browntowndev.pocketcrew.domain.model.config.MediaProviderAsset
 import com.browntowndev.pocketcrew.domain.model.config.MediaProviderId
@@ -16,9 +17,12 @@ import javax.inject.Singleton
 
 @Singleton
 class MediaProviderRepositoryImpl @Inject constructor(
+    private val syncTrigger: CloudSyncTrigger,
     private val mediaProviderDao: MediaProviderDao,
     private val apiKeyManager: ApiKeyManager,
 ) : MediaProviderRepositoryPort {
+
+    private fun triggerSync() = syncTrigger.trigger()
 
     override fun getMediaProviders(): Flow<List<MediaProviderAsset>> {
         return mediaProviderDao.observeAllMediaProviders().map { entities ->
@@ -54,9 +58,11 @@ class MediaProviderRepositoryImpl @Inject constructor(
                 modelName = asset.modelName,
                 baseUrl = asset.baseUrl,
                 credentialAlias = asset.credentialAlias,
+                pendingSync = 1,
             )
         )
 
+        triggerSync()
         return id
     }
 
@@ -64,7 +70,8 @@ class MediaProviderRepositoryImpl @Inject constructor(
         val asset = mediaProviderDao.getMediaProvider(id.value)
         if (asset != null) {
             apiKeyManager.delete(asset.credentialAlias)
-            mediaProviderDao.delete(id.value)
+            mediaProviderDao.softDeleteById(id.value)
+            triggerSync()
         }
     }
 

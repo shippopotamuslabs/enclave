@@ -6,7 +6,7 @@ import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
 import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
-import com.browntowndev.pocketcrew.core.data.sync.SyncWorker
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
@@ -18,13 +18,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
-import android.content.Context
-import androidx.work.Constraints
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import dagger.hilt.android.qualifiers.ApplicationContext
+
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -37,25 +31,13 @@ import kotlinx.serialization.json.Json
 
 @Singleton
 class ChatRepositoryImpl @Inject constructor(
-    private val workManager: WorkManager,
+    private val syncTrigger: CloudSyncTrigger,
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
     private val webSearchSourceDao: WebSearchSourceDao,
 ) : ChatRepository {
 
-    private fun triggerSync() {
-        workManager.enqueueUniqueWork(
-            "pocketcrew_sync",
-            ExistingWorkPolicy.REPLACE,
-            OneTimeWorkRequestBuilder<SyncWorker>()
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build()
-                )
-                .build()
-        )
-    }
+    private fun triggerSync() = syncTrigger.trigger()
 
     override fun getAllChats(): Flow<List<Chat>> {
         return chatDao.getAllChats().map { entities ->
@@ -96,12 +78,8 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override suspend fun appendMessageContent(messageId: MessageId, content: String) {
-        val existing = messageDao.getMessageById(messageId)
-        if (existing != null) {
-            val newContent = existing.message.content + content
-            messageDao.updateMessageContentText(messageId, newContent)
-            triggerSync()
-        }
+        messageDao.appendMessageContentAtomic(messageId, content)
+        triggerSync()
     }
 
     override suspend fun setThinkingStartTime(messageId: MessageId) {
@@ -116,9 +94,7 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override suspend fun appendThinkingRaw(messageId: MessageId, thinkingText: String) {
-        val existing = messageDao.getMessageById(messageId)
-        val currentRaw = existing?.message?.thinkingRaw ?: ""
-        messageDao.updateThinkingRaw(messageId, currentRaw + thinkingText)
+        messageDao.appendThinkingRawAtomic(messageId, thinkingText)
         triggerSync()
     }
 
@@ -151,7 +127,7 @@ class ChatRepositoryImpl @Inject constructor(
             messageState = MessageState.PROCESSING,
             modelType = modelType,
             pipelineStep = pipelineStep,
-            pendingSync = true
+            pendingSync = 1
         )
         messageDao.insert(entity)
         triggerSync()
@@ -257,7 +233,7 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteChat(chatId: ChatId) {
-        val rowsAffected = chatDao.deleteById(chatId)
+        val rowsAffected = chatDao.softDeleteById(chatId)
         require(rowsAffected > 0) { "Chat not found with id: $chatId" }
         triggerSync()
     }

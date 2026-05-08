@@ -7,6 +7,8 @@ import com.browntowndev.pocketcrew.domain.model.share.SharedMessage
 import com.browntowndev.pocketcrew.domain.port.repository.ShareRepositoryPort
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
+import com.google.firebase.storage.FirebaseStorage
+import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import kotlinx.coroutines.tasks.await
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -24,6 +26,8 @@ import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 class FirestoreShareRepository @Inject constructor(
     private val firestore: FirebaseFirestore,
     private val functions: FirebaseFunctions,
+    private val storage: FirebaseStorage,
+    private val studioRepository: StudioRepositoryPort,
     private val loggingPort: LoggingPort
 ) : ShareRepositoryPort {
 
@@ -32,14 +36,9 @@ class FirestoreShareRepository @Inject constructor(
     }
 
     override suspend fun shareChat(messages: List<Message>): SharedChat {
-        val sharedMessages = messages.map { message ->
-            SharedMessage(
-                role = message.role.name.lowercase(),
-                content = message.content.text,
-                timestamp = message.createdAt ?: System.currentTimeMillis(),
-                modelDisplayName = message.modelType?.name ?: ""
-            )
-        }
+        val shareId = java.util.UUID.randomUUID().toString()
+        val mediaList = mutableListOf<com.browntowndev.pocketcrew.domain.model.share.SharedMedia>()
+        val mediaPaths = mutableListOf<String>()
 
         val key = ByteArray(32)
         val iv = ByteArray(12)
@@ -48,13 +47,79 @@ class FirestoreShareRepository @Inject constructor(
         secureRandom.nextBytes(key)
         secureRandom.nextBytes(iv)
         secureRandom.nextBytes(salt)
-
-        val json = Json.encodeToString(sharedMessages)
+        
         val secretKey = SecretKeySpec(key, "AES")
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        val spec = GCMParameterSpec(128, iv)
-        cipher.init(Cipher.ENCRYPT_MODE, secretKey, spec)
-        val encryptedData = cipher.doFinal(json.toByteArray(StandardCharsets.UTF_8))
+
+        val sharedMessages = messages.map { message ->
+            val attachedImageMediaId = message.content.imageUri?.let { uri ->
+                val mediaId = java.util.UUID.randomUUID().toString()
+                val bytes = studioRepository.readMediaBytes(uri)
+                if (bytes != null) {
+                    val encryptedBytes = encryptBytes(bytes, secretKey, iv)
+                    val storagePath = "shared_chat_media/$shareId/$mediaId"
+                    storage.getReference(storagePath).putBytes(encryptedBytes).await()
+                    mediaPaths.add(storagePath)
+                    mediaList.add(
+                        com.browntowndev.pocketcrew.domain.model.share.SharedMedia(
+                            id = mediaId,
+                            mediaType = "IMAGE",
+                            storagePath = storagePath,
+                            originalMime = "image/jpeg"
+                        )
+                    )
+                    mediaId
+                } else null
+            }
+
+            val generatedMediaIds = message.content.generatedMediaUris.map { uri ->
+                val mediaId = java.util.UUID.randomUUID().toString()
+                val bytes = studioRepository.readMediaBytes(uri)
+                if (bytes != null) {
+                    val encryptedBytes = encryptBytes(bytes, secretKey, iv)
+                    val storagePath = "shared_chat_media/$shareId/$mediaId"
+                    storage.getReference(storagePath).putBytes(encryptedBytes).await()
+                    mediaPaths.add(storagePath)
+                    mediaList.add(
+                        com.browntowndev.pocketcrew.domain.model.share.SharedMedia(
+                            id = mediaId,
+                            mediaType = "IMAGE",
+                            storagePath = storagePath,
+                            originalMime = "image/jpeg"
+                        )
+                    )
+                    mediaId
+                } else ""
+            }.filter { it.isNotEmpty() }
+
+            val fileAttachments = message.content.fileAttachments.map { attachment ->
+                com.browntowndev.pocketcrew.domain.model.share.SharedFileAttachment(
+                    name = attachment.name,
+                    content = attachment.content
+                )
+            }
+
+            SharedMessage(
+                role = message.role.name.lowercase(),
+                content = message.content.text,
+                timestamp = message.createdAt ?: System.currentTimeMillis(),
+                modelDisplayName = message.modelType?.name ?: "",
+                attachedImageMediaId = attachedImageMediaId,
+                generatedMediaIds = generatedMediaIds,
+                fileAttachments = fileAttachments
+            )
+        }
+
+        val payload = com.browntowndev.pocketcrew.domain.model.share.SharedChat(
+            id = shareId,
+            messages = sharedMessages,
+            media = mediaList,
+            createdAt = System.currentTimeMillis(),
+            expiresAt = System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000L,
+            shareUrl = "" // Populated by server
+        )
+
+        val json = Json.encodeToString(payload)
+        val encryptedData = encryptBytes(json.toByteArray(StandardCharsets.UTF_8), secretKey, iv)
 
         val base64Payload = Base64.encodeToString(encryptedData, Base64.NO_WRAP)
         val base64Iv = Base64.encodeToString(iv, Base64.NO_WRAP)
@@ -64,26 +129,29 @@ class FirestoreShareRepository @Inject constructor(
         val result = functions.getHttpsCallable("uploadSharedChat")
             .call(
                 mapOf(
+                    "shareId" to shareId,
                     "encryptedPayload" to base64Payload,
                     "iv" to base64Iv,
-                    "salt" to base64Salt
+                    "salt" to base64Salt,
+                    "mediaPaths" to mediaPaths
                 )
             )
             .await()
             
         @Suppress("UNCHECKED_CAST")
         val data = result.data as Map<String, Any>
-        val shareId = data["shareId"] as String
+        val finalShareId = data["shareId"] as String
         val originalShareUrl = data["shareUrl"] as String
         val shareUrl = "$originalShareUrl#key=$base64Key"
         
-        return SharedChat(
-            id = shareId,
-            messages = sharedMessages,
-            createdAt = System.currentTimeMillis(),
-            expiresAt = System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000L,
-            shareUrl = shareUrl
-        )
+        return payload.copy(id = finalShareId, shareUrl = shareUrl)
+    }
+
+    private fun encryptBytes(data: ByteArray, secretKey: SecretKeySpec, iv: ByteArray): ByteArray {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        val spec = GCMParameterSpec(128, iv)
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey, spec)
+        return cipher.doFinal(data)
     }
 
     override suspend fun getSharedChat(shareId: String, decryptionKey: String?): SharedChat? {
@@ -97,7 +165,7 @@ class FirestoreShareRepository @Inject constructor(
         val encryptedPayload = doc.getString("encryptedPayload")
         val iv = doc.getString("iv")
 
-        val messages = if (encryptedPayload != null && iv != null && decryptionKey != null) {
+        val payload = if (encryptedPayload != null && iv != null && decryptionKey != null) {
             try {
                 val keyBytes = Base64.decode(decryptionKey, Base64.NO_WRAP)
                 val ivBytes = Base64.decode(iv, Base64.NO_WRAP)
@@ -110,18 +178,19 @@ class FirestoreShareRepository @Inject constructor(
                 
                 val decryptedBytes = cipher.doFinal(encryptedBytes)
                 val json = String(decryptedBytes, StandardCharsets.UTF_8)
-                Json.decodeFromString<List<SharedMessage>>(json)
+                Json.decodeFromString<com.browntowndev.pocketcrew.domain.model.share.SharedChat>(json)
             } catch (e: Exception) {
                 loggingPort.error(TAG, "Decryption failed", e)
-                emptyList()
+                null
             }
         } else {
-            emptyList()
+            null
         }
         
-        return SharedChat(
+        return payload ?: com.browntowndev.pocketcrew.domain.model.share.SharedChat(
             id = doc.getString("id") ?: "",
-            messages = messages,
+            messages = emptyList(),
+            media = emptyList(),
             createdAt = doc.getLong("createdAt") ?: 0L,
             expiresAt = doc.getLong("expiresAt") ?: 0L,
             shareUrl = doc.getString("shareUrl") ?: ""

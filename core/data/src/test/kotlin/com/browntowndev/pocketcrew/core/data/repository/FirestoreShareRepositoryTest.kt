@@ -12,7 +12,11 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.firebase.functions.HttpsCallableReference
 import com.google.firebase.functions.HttpsCallableResult
+import com.google.firebase.storage.FirebaseStorage
+import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
 import io.mockk.every
+import io.mockk.coEvery
+import java.util.UUID
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.mockkStatic
@@ -31,6 +35,8 @@ class FirestoreShareRepositoryTest {
 
     private val firestore = mockk<FirebaseFirestore>(relaxed = true)
     private val functions = mockk<FirebaseFunctions>(relaxed = true)
+    private val storage = mockk<FirebaseStorage>(relaxed = true)
+    private val studioRepository = mockk<StudioRepositoryPort>(relaxed = true)
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private lateinit var repository: FirestoreShareRepository
 
@@ -44,13 +50,76 @@ class FirestoreShareRepositoryTest {
         every { Base64.encodeToString(any<ByteArray>(), any<Int>()) } returns "mock-base64"
         every { Base64.decode(any<String>(), any<Int>()) } returns ByteArray(32)
 
-        repository = FirestoreShareRepository(firestore, functions, loggingPort)
+        mockkStatic(UUID::class)
+        every { UUID.randomUUID().toString() } returns "mock-uuid"
+
+        val storageRef = mockk<com.google.firebase.storage.StorageReference>(relaxed = true)
+        val uploadTask = mockk<com.google.firebase.storage.UploadTask>(relaxed = true)
+        every { storage.getReference(any<String>()) } returns storageRef
+        every { storageRef.putBytes(any<ByteArray>()) } returns uploadTask
+        every { uploadTask.isComplete } returns true
+        every { uploadTask.isSuccessful } returns true
+        every { uploadTask.exception } returns null
+        every { uploadTask.result } returns mockk(relaxed = true)
+
+        repository = FirestoreShareRepository(firestore, functions, storage, studioRepository, loggingPort)
     }
 
     @AfterEach
     fun tearDown() {
         unmockkStatic(Base64::class)
         unmockkStatic(Log::class)
+        unmockkStatic(UUID::class)
+    }
+
+    @Test
+    fun `shareChat with attached image uploads to storage and includes mediaId`() = runTest {
+        val messages = listOf(
+            Message(
+                id = MessageId("msg1"),
+                chatId = ChatId("chat1"),
+                content = Content(text = "Hello", imageUri = "file://image.jpg"),
+                role = Role.USER,
+                createdAt = 1000L
+            )
+        )
+        val imageBytes = ByteArray(100)
+        coEvery { studioRepository.readMediaBytes("file://image.jpg") } returns imageBytes
+        
+        val callable = mockk<HttpsCallableReference>(relaxed = true)
+        val result = mockk<HttpsCallableResult>(relaxed = true)
+        every { functions.getHttpsCallable("uploadSharedChat") } returns callable
+        every { callable.call(any()) } returns Tasks.forResult(result)
+        every { result.getData() } returns mapOf("shareId" to "share123", "shareUrl" to "https://pocketcrew.app/share/share123")
+
+        val sharedChat = repository.shareChat(messages)
+        
+        assertEquals("share123", sharedChat.id)
+        assertTrue(sharedChat.messages.first().attachedImageMediaId != null)
+    }
+
+    @Test
+    fun `shareChat with empty media includes no mediaIds`() = runTest {
+        val messages = listOf(
+            Message(
+                id = MessageId("msg1"),
+                chatId = ChatId("chat1"),
+                content = Content(text = "Hello"),
+                role = Role.USER,
+                createdAt = 1000L
+            )
+        )
+        
+        val callable = mockk<HttpsCallableReference>(relaxed = true)
+        val result = mockk<HttpsCallableResult>(relaxed = true)
+        every { functions.getHttpsCallable("uploadSharedChat") } returns callable
+        every { callable.call(any()) } returns Tasks.forResult(result)
+        every { result.getData() } returns mapOf("shareId" to "share123", "shareUrl" to "https://pocketcrew.app/share/share123")
+
+        val sharedChat = repository.shareChat(messages)
+        
+        assertTrue(sharedChat.messages.first().attachedImageMediaId == null)
+        assertTrue(sharedChat.messages.first().generatedMediaIds.isEmpty())
     }
 
     @Test
@@ -66,5 +135,61 @@ class FirestoreShareRepositoryTest {
 
         val result = repository.getSharedChat("share123", "key")
         assertNotNull(result)
+    }
+
+    @Test
+    fun `shareChat with generated media uploads to storage`() = runTest {
+        val messages = listOf(
+            Message(
+                id = MessageId("msg1"),
+                chatId = ChatId("chat1"),
+                content = Content(text = "Generated", generatedMediaUris = listOf("file://gen.jpg")),
+                role = Role.ASSISTANT,
+                createdAt = 1000L
+            )
+        )
+        coEvery { studioRepository.readMediaBytes("file://gen.jpg") } returns ByteArray(100)
+        
+        val callable = mockk<HttpsCallableReference>(relaxed = true)
+        val result = mockk<HttpsCallableResult>(relaxed = true)
+        every { functions.getHttpsCallable("uploadSharedChat") } returns callable
+        every { callable.call(any()) } returns Tasks.forResult(result)
+        every { result.getData() } returns mapOf("shareId" to "share123", "shareUrl" to "https://pocketcrew.app/share/share123")
+
+        val sharedChat = repository.shareChat(messages)
+        
+        assertTrue(sharedChat.messages.first().generatedMediaIds.isNotEmpty())
+    }
+
+    @Test
+    fun `shareChat with file attachment inlines content`() = runTest {
+        val messages = listOf(
+            Message(
+                id = MessageId("msg1"),
+                chatId = ChatId("chat1"),
+                content = Content(
+                    text = "Attached", 
+                    fileAttachments = listOf(
+                        com.browntowndev.pocketcrew.domain.model.chat.FileAttachment(
+                            name = "test.txt",
+                            content = "file content"
+                        )
+                    )
+                ),
+                role = Role.USER,
+                createdAt = 1000L
+            )
+        )
+        
+        val callable = mockk<HttpsCallableReference>(relaxed = true)
+        val result = mockk<HttpsCallableResult>(relaxed = true)
+        every { functions.getHttpsCallable("uploadSharedChat") } returns callable
+        every { callable.call(any()) } returns Tasks.forResult(result)
+        every { result.getData() } returns mapOf("shareId" to "share123", "shareUrl" to "https://pocketcrew.app/share/share123")
+
+        val sharedChat = repository.shareChat(messages)
+        
+        assertTrue(sharedChat.messages.first().fileAttachments.isNotEmpty())
+        assertEquals("test.txt", sharedChat.messages.first().fileAttachments.first().name)
     }
 }

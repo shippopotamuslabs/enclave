@@ -9,6 +9,7 @@ import kotlinx.serialization.Serializable
 data class SharedChat(
     val id: String,
     val messages: List<SharedMessage>,
+    val media: List<SharedMedia> = emptyList(),
     val createdAt: Long,
     val expiresAt: Long,
     val shareUrl: String
@@ -19,7 +20,25 @@ data class SharedMessage(
     val role: String,
     val content: String,
     val timestamp: Long,
-    val modelDisplayName: String = ""
+    val modelDisplayName: String = "",
+    val attachedImageMediaId: String? = null,
+    val generatedMediaIds: List<String> = emptyList(),
+    val fileAttachments: List<SharedFileAttachment> = emptyList()
+)
+
+@Serializable
+data class SharedFileAttachment(
+    val name: String,
+    val content: String
+)
+
+@Serializable
+data class SharedMedia(
+    val id: String,
+    val mediaType: String,
+    val encryptedBytes: String? = null, // base64 for small files or as a choice
+    val storagePath: String? = null,
+    val originalMime: String
 )
 
 sealed interface ShareOption {

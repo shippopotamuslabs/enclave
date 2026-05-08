@@ -22,6 +22,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
@@ -41,10 +42,10 @@ class InferenceServiceTest {
     private val activeModelProvider = mockk<ActiveModelProviderPort>(relaxed = true)
     private val inferenceEventBus = mockk<InferenceEventBus>(relaxed = true)
     private val llmInferenceService = mockk<LlmInferencePort>(relaxed = true)
-    private val testDispatcher = UnconfinedTestDispatcher()
+    private val testDispatcher = kotlinx.coroutines.test.StandardTestDispatcher()
     private var serviceCompletion = CompletableDeferred<Unit>()
 
-    private val invokedModelTypes = mutableListOf<ModelType>()
+    private val invokedModelTypes = java.util.Collections.synchronizedList(mutableListOf<ModelType>())
 
     @BeforeEach
     fun setUp() {
@@ -54,7 +55,7 @@ class InferenceServiceTest {
 
         service = spyk(InferenceService())
 
-        // Replace serviceScope with test dispatcher so pipeline runs synchronously
+        // Replace serviceScope with test dispatcher so pipeline runs synchronously under test control
         service.serviceScope = CoroutineScope(testDispatcher + SupervisorJob())
 
         // Inject mocks
@@ -115,10 +116,8 @@ class InferenceServiceTest {
         // When
         service.onStartCommand(intent, 0, 1)
 
-        // Wait for completion
-        withTimeout(15000) {
-            serviceCompletion.await()
-        }
+        // Advance dispatcher to execute the launched pipeline coroutine
+        advanceUntilIdle()
 
         // Then - verify all pipeline steps were invoked
         assertTrue(invokedModelTypes.contains(ModelType.DRAFT_ONE),
@@ -142,6 +141,8 @@ class InferenceServiceTest {
 
         // When
         service.onStartCommand(intentStop, 0, 1)
+        
+        advanceUntilIdle()
 
         // Then
         verify { service.stopForeground(any<Int>()) }

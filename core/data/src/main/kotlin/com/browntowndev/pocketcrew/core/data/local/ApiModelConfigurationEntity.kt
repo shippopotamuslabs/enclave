@@ -103,5 +103,10 @@ data class ApiModelConfigurationEntity(
     val openRouterZeroDataRetention: Boolean? = null,
 
     @ColumnInfo(name = "updated_at")
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+
+    @ColumnInfo(name = "pending_sync")
+    val pendingSync: Int = 0,
+    @ColumnInfo(name = "deleted")
+    val deleted: Boolean = false
 )
