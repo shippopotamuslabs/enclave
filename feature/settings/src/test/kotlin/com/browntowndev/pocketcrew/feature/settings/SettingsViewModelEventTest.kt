@@ -89,8 +89,17 @@ class SettingsViewModelEventTest {
             every { media } returns mockk(relaxed = true) {
                 every { getMediaProviders } returns getMediaProvidersUseCase
             }
+            every { auth } returns mockk(relaxed = true) {
+                every { getAuthState } returns mockk {
+                    every { this@mockk.invoke() } returns MutableStateFlow(com.browntowndev.pocketcrew.domain.port.auth.AuthState.Loading)
+                }
+            }
             every { getSettings } returns getSettingsUseCase
         }
+
+        val embeddingProgressPort = mockk<com.browntowndev.pocketcrew.domain.port.repository.EmbeddingProgressPort>()
+        every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
+        every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
 
         viewModel = SettingsViewModel(
             settingsUseCases = settingsUseCases,
@@ -108,6 +117,7 @@ class SettingsViewModelEventTest {
             ttsProviderAssetUiMapper = ttsProviderAssetUiMapper,
             reassignmentOptionUiMapper = reassignmentOptionUiMapper,
             errorHandler = errorHandler,
+            embeddingProgressPort = embeddingProgressPort,
         )
     }
 

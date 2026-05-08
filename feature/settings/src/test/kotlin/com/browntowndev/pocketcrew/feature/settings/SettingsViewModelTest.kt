@@ -124,6 +124,7 @@ class SettingsViewModelTest {
         every { getTtsProvidersUseCase() } returns MutableStateFlow(emptyList())
         every { getMediaProvidersUseCase() } returns MutableStateFlow(emptyList())
         every { memoriesRepository.getAllMemoriesFlow() } returns MutableStateFlow(emptyList())
+        every { getAuthStateUseCase() } returns MutableStateFlow(com.browntowndev.pocketcrew.domain.port.auth.AuthState.Loading)
         every { errorHandler.coroutineExceptionHandler(any(), any(), any()) } returns CoroutineExceptionHandler { _, _ -> }
 
         val updateSearchProviderUseCase = mockk<UpdateSearchProviderUseCase>()
@@ -193,6 +194,10 @@ class SettingsViewModelTest {
             )
         )
 
+        val embeddingProgressPort = mockk<com.browntowndev.pocketcrew.domain.port.repository.EmbeddingProgressPort>()
+        every { embeddingProgressPort.isReindexing } returns MutableStateFlow(false)
+        every { embeddingProgressPort.progress } returns MutableStateFlow(0f)
+
         viewModel = SettingsViewModel(
             settingsUseCases = settingsUseCases,
             memoriesRepository = memoriesRepository,
@@ -209,6 +214,7 @@ class SettingsViewModelTest {
             ttsProviderAssetUiMapper = ttsProviderAssetUiMapper,
             reassignmentOptionUiMapper = reassignmentOptionUiMapper,
             errorHandler = errorHandler,
+            embeddingProgressPort = embeddingProgressPort,
         )
     }
 

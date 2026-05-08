@@ -133,6 +133,8 @@ class SettingsUiStateFactory @Inject constructor(
         currentExaApiKey: String,
         currentXApiKey: String,
         xSearchState: XSearchTransientState,
+        isReindexing: Boolean,
+        reindexProgress: Float,
     ): SettingsUiState {
         val localModels = localAssets.map(localModelAssetUiMapper::map)
         val refreshedSelectedLocalAsset = localModelsState.selectedAsset?.let { selected ->
@@ -298,6 +300,8 @@ class SettingsUiStateFactory @Inject constructor(
                 isMediaProvidersSheetOpen = mediaState.isSheetOpen,
                 isSearchSkillSheetOpen = sheetVisibility.searchSkill,
                 searchSkillTabIndex = sheetVisibility.searchSkillTabIndex,
+                isReindexing = isReindexing,
+                reindexProgress = reindexProgress,
             ),
             customization = CustomizationUiState(
                 isSheetOpen = sheetVisibility.customization,

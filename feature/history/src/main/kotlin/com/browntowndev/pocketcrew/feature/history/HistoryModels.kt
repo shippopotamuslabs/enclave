@@ -6,7 +6,8 @@ data class HistoryChat(
     val id: ChatId,
     val name: String,
     val lastMessageDateTime: String,
-    val isPinned: Boolean
+    val isPinned: Boolean,
+    val isSyncing: Boolean = false
 )
 
 data class HistoryUiState(

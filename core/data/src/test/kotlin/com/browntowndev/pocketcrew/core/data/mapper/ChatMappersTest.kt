@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.mapper
 
+import com.browntowndev.pocketcrew.core.data.local.ChatEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceEntity
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
@@ -13,10 +14,86 @@ import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.encodeToString
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Date
 
 class ChatMappersTest {
+
+    // region isSyncing derivation tests
+
+    @Test
+    fun `toDomain placeholderRow setsIsSyncingTrue`() {
+        val entity = ChatEntity(
+            id = ChatId("chat-placeholder"),
+            name = "Syncing...",
+            created = Date(0),
+            lastModified = Date(0),
+            pinned = false,
+            pendingSync = 0,
+            updatedAt = 0L
+        )
+
+        val domain = entity.toDomain()
+
+        assertTrue("Expected isSyncing=true for placeholder row", domain.isSyncing)
+    }
+
+    @Test
+    fun `toDomain realLocalRow isSyncingFalse`() {
+        val entity = ChatEntity(
+            id = ChatId("chat-local"),
+            name = "My Chat",
+            created = Date(1_000_000L),
+            lastModified = Date(1_000_000L),
+            pinned = false,
+            pendingSync = 1,
+            updatedAt = 1_000_000L
+        )
+
+        val domain = entity.toDomain()
+
+        assertFalse("Expected isSyncing=false for real local row (pendingSync=1)", domain.isSyncing)
+    }
+
+    @Test
+    fun `toDomain realSyncedRow isSyncingFalse`() {
+        val entity = ChatEntity(
+            id = ChatId("chat-synced"),
+            name = "Synced Chat",
+            created = Date(2_000_000L),
+            lastModified = Date(2_000_000L),
+            pinned = false,
+            pendingSync = 0,
+            updatedAt = 2_000_000L
+        )
+
+        val domain = entity.toDomain()
+
+        assertFalse("Expected isSyncing=false for synced row (updatedAt > 0)", domain.isSyncing)
+    }
+
+    @Test
+    fun `toDomain oldSyncedRowMissingUpdatedAt isSyncingFalse`() {
+        // Edge case: old Firestore chat doc missing updated_at field, defaults to 0L
+        // But created timestamp is real, so should NOT be marked as syncing
+        val entity = ChatEntity(
+            id = ChatId("chat-old-synced"),
+            name = "Old Synced Chat",
+            created = Date(1_500_000L),
+            lastModified = Date(1_500_000L),
+            pinned = false,
+            pendingSync = 0,
+            updatedAt = 0L  // Missing field, defaulted to 0L
+        )
+
+        val domain = entity.toDomain()
+
+        assertFalse("Expected isSyncing=false for old synced row with real created timestamp (created.time > 0)", domain.isSyncing)
+    }
+
+    // endregion
 
     @Test
     fun `WebSearchSourceEntity toDomain maps extracted field`() {

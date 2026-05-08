@@ -46,6 +46,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+import com.browntowndev.pocketcrew.domain.port.repository.EmbeddingProgressPort
+
 @HiltViewModel
 @Suppress("LargeClass", "TooManyFunctions", "MagicNumber")
 class SettingsViewModel @Inject constructor(
@@ -57,6 +59,7 @@ class SettingsViewModel @Inject constructor(
     private val ttsProviderAssetUiMapper: TtsProviderAssetUiMapper,
     private val reassignmentOptionUiMapper: ReassignmentOptionUiMapper,
     private val errorHandler: ViewModelErrorHandler,
+    private val embeddingProgressPort: EmbeddingProgressPort,
 ) : ViewModel() {
 
     companion object {
@@ -126,6 +129,8 @@ class SettingsViewModel @Inject constructor(
         _xSearchState,
         _sheetVisibility,
         _currentXApiKey,
+        embeddingProgressPort.isReindexing,
+        embeddingProgressPort.progress,
     ) { args ->
         val settings = args[0] as SettingsData
         val locals = args[1] as List<com.browntowndev.pocketcrew.domain.model.config.LocalModelAsset>
@@ -150,6 +155,8 @@ class SettingsViewModel @Inject constructor(
         val xSearchState = args[20] as XSearchTransientState
         val sheetVisibility = args[21] as SheetVisibilityState
         val currentXApiKey = args[22] as String
+        val isReindexing = args[23] as Boolean
+        val reindexProgress = args[24] as Float
 
         settingsUiStateFactory.create(
             persistedSettings = settings,
@@ -163,6 +170,8 @@ class SettingsViewModel @Inject constructor(
             memories = memories,
             feedbackText = feedbackText,
             localModelsState = localModelsState,
+            isReindexing = isReindexing,
+            reindexProgress = reindexProgress,
             apiState = apiState,
             ttsState = ttsState,
             mediaState = mediaState,

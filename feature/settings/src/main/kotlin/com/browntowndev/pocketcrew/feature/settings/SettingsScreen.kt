@@ -157,6 +157,8 @@ fun SettingsScreen(
             item {
                 AccountSection(
                     authState = uiState.home.auth,
+                    isReindexing = uiState.home.isReindexing,
+                    reindexProgress = uiState.home.reindexProgress,
                     onLoginClick = onLoginClick,
                     onLogoutClick = onLogoutClick
                 )
@@ -406,60 +408,87 @@ fun SectionHeader(text: String) {
 @Composable
 fun AccountSection(
     authState: AuthStateUi,
+    isReindexing: Boolean,
+    reindexProgress: Float,
     onLoginClick: () -> Unit,
     onLogoutClick: () -> Unit
 ) {
     SectionHeader(text = "Account")
     when (authState) {
         is AuthStateUi.Authenticated -> {
-            ListItem(
-                leadingContent = {
-                    if (authState.user.photoUrl != null) {
-                        AsyncImage(
-                            model = authState.user.photoUrl,
-                            contentDescription = "Profile picture",
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(20.dp))
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.AccountCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                headlineContent = {
-                    Text(
-                        text = authState.user.displayName ?: "User",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                },
-                supportingContent = authState.user.email?.let { email ->
-                    {
-                        Text(
-                            text = email,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                trailingContent = {
-                    IconButton(onClick = onLogoutClick) {
-                        Icon(
-                            imageVector = Icons.Default.Logout,
-                            contentDescription = "Logout",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                },
+            Column(
                 modifier = Modifier
+                    .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            )
+            ) {
+                ListItem(
+                    leadingContent = {
+                        if (authState.user.photoUrl != null) {
+                            AsyncImage(
+                                model = authState.user.photoUrl,
+                                contentDescription = "Profile picture",
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.AccountCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(40.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    headlineContent = {
+                        Text(
+                            text = authState.user.displayName ?: "User",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    supportingContent = authState.user.email?.let { email ->
+                        {
+                            Text(
+                                text = email,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    trailingContent = {
+                        IconButton(onClick = onLogoutClick) {
+                            Icon(
+                                imageVector = Icons.Default.Logout,
+                                contentDescription = "Logout",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    },
+                    colors = androidx.compose.material3.ListItemDefaults.colors(
+                        containerColor = androidx.compose.ui.graphics.Color.Transparent
+                    )
+                )
+
+                if (isReindexing) {
+                    Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        Text(
+                            text = "Syncing and indexing models...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = { reindexProgress },
+                            modifier = Modifier.fillMaxWidth().height(4.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+            }
         }
         AuthStateUi.Unauthenticated -> {
             ListItem(
