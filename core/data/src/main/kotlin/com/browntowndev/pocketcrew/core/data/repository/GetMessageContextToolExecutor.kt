@@ -101,9 +101,9 @@ class GetMessageContextToolExecutor @Inject constructor(
             )
         }
 
-        // Get surrounding context
+        // Get surrounding context — anchor message comes from DB and always has a chatId
         val contextMessages = messageRepository.getMessagesAround(
-            chatId = anchorMessage.chatId,
+            chatId = anchorMessage.chatId ?: return ToolExecutionResult(toolName = request.toolName, resultJson = buildErrorResponse(messageId, "Message has no chat ID")),
             timestamp = timestamp,
             before = before,
             after = after,
@@ -155,7 +155,7 @@ class GetMessageContextToolExecutor @Inject constructor(
         return Json.encodeToString(
             GetContextResult(
                 anchor_message_id = messageId,
-                chat_id = anchorMessage.chatId.value,
+                chat_id = anchorMessage.chatId?.value ?: "",
                 total_context_messages = mappedMessages.size,
                 messages = mappedMessages
             )

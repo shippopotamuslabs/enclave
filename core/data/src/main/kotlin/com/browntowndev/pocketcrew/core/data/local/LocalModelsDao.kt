@@ -8,13 +8,13 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface LocalModelsDao {
-    @Query("SELECT * FROM local_models WHERE id = :id")
+    @Query("SELECT * FROM local_models WHERE id = :id AND deleted = 0")
     suspend fun getById(id: LocalModelId): LocalModelEntity?
 
-    @Query("SELECT * FROM local_models WHERE sha256 = :sha256")
+    @Query("SELECT * FROM local_models WHERE sha256 = :sha256 AND deleted = 0")
     suspend fun getBySha256(sha256: String): LocalModelEntity?
 
-    @Query("SELECT * FROM local_models")
+    @Query("SELECT * FROM local_models WHERE deleted = 0")
     suspend fun getAll(): List<LocalModelEntity>
 
     /**
@@ -23,7 +23,7 @@ interface LocalModelsDao {
      */
     @Query("""
         SELECT m.* FROM local_models m
-        WHERE EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id)
+        WHERE m.deleted = 0 AND EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id AND c.deleted = 0)
     """)
     suspend fun getAllActive(): List<LocalModelEntity>
 
@@ -33,7 +33,7 @@ interface LocalModelsDao {
      */
     @Query("""
         SELECT m.* FROM local_models m
-        WHERE EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id)
+        WHERE m.deleted = 0 AND EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id AND c.deleted = 0)
     """)
     fun observeAllActive(): Flow<List<LocalModelEntity>>
 
@@ -43,13 +43,25 @@ interface LocalModelsDao {
      */
     @Query("""
         SELECT m.* FROM local_models m
-        WHERE NOT EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id)
+        WHERE m.deleted = 0 AND NOT EXISTS (SELECT 1 FROM local_model_configurations c WHERE c.local_model_id = m.id AND c.deleted = 0)
     """)
     suspend fun getSoftDeletedModels(): List<LocalModelEntity>
 
     @Upsert
     suspend fun upsert(entity: LocalModelEntity): Long
 
-    @Query("DELETE FROM local_models WHERE id = :id")
-    suspend fun deleteById(id: LocalModelId)
+    @Query("UPDATE local_models SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
+    suspend fun softDeleteById(id: LocalModelId, timestamp: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM local_models WHERE id IN (:ids) AND deleted = 1")
+    suspend fun purgeDeleted(ids: List<LocalModelId>)
+
+    @Query("UPDATE local_models SET pending_sync = 2 WHERE pending_sync = 1")
+    suspend fun claimPending()
+
+    @Query("SELECT * FROM local_models WHERE pending_sync = 2")
+    suspend fun getClaimedForSync(): List<LocalModelEntity>
+
+    @Query("UPDATE local_models SET pending_sync = 0 WHERE id IN (:ids) AND pending_sync = 2")
+    suspend fun markSynced(ids: List<LocalModelId>)
 }

@@ -55,7 +55,7 @@ class ExtractToolExecutorTest {
         )
 
         assertEquals("""{"results":[]}""", result.resultJson)
-        coVerify { webSearchSourceDao.markExtracted("https://example.com") }
+        coVerify { webSearchSourceDao.markExtracted("https://example.com", any()) }
     }
 
     @Test
@@ -90,7 +90,7 @@ class ExtractToolExecutorTest {
         )
 
         assertEquals("""{"results":[]}""", result.resultJson)
-        coVerify { webSearchSourceDao.markExtracted("https://example.com") }
+        coVerify { webSearchSourceDao.markExtracted("https://example.com", any()) }
     }
 
     @Test

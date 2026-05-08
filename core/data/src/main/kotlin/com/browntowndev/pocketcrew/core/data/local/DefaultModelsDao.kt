@@ -8,10 +8,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DefaultModelsDao {
-    @Query("SELECT * FROM default_models WHERE model_type = :modelType")
+    @Query("SELECT * FROM default_models WHERE model_type = :modelType AND deleted = 0")
     suspend fun getDefault(modelType: ModelType): DefaultModelEntity?
 
-    @Query("SELECT * FROM default_models")
+    @Query("SELECT * FROM default_models WHERE deleted = 0")
     fun observeAll(): Flow<List<DefaultModelEntity>>
 
     @Query("""
@@ -39,15 +39,28 @@ interface DefaultModelsDao {
         LEFT JOIN api_credentials ac ON amc.api_credentials_id = ac.id
         LEFT JOIN tts_providers tp ON dm.tts_provider_id = tp.id
         LEFT JOIN media_providers mp ON dm.media_provider_id = mp.id
+        WHERE dm.deleted = 0
     """)
     fun observeAllWithDetails(): Flow<List<DefaultModelAssignmentView>>
 
-    @Query("SELECT * FROM default_models")
+    @Query("SELECT * FROM default_models WHERE deleted = 0")
     suspend fun getAll(): List<DefaultModelEntity>
 
     @Upsert
     suspend fun upsert(entity: DefaultModelEntity)
 
-    @Query("DELETE FROM default_models WHERE model_type = :modelType")
-    suspend fun delete(modelType: ModelType)
+    @Query("UPDATE default_models SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE model_type = :modelType")
+    suspend fun softDeleteById(modelType: ModelType, timestamp: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM default_models WHERE model_type IN (:modelTypes) AND deleted = 1")
+    suspend fun purgeDeleted(modelTypes: List<ModelType>)
+
+    @Query("UPDATE default_models SET pending_sync = 2 WHERE pending_sync = 1")
+    suspend fun claimPending()
+
+    @Query("SELECT * FROM default_models WHERE pending_sync = 2")
+    suspend fun getClaimedForSync(): List<DefaultModelEntity>
+
+    @Query("UPDATE default_models SET pending_sync = 0 WHERE model_type IN (:modelTypes) AND pending_sync = 2")
+    suspend fun markSynced(modelTypes: List<ModelType>)
 }

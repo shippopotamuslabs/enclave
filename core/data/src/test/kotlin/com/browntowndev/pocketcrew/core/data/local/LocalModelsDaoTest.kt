@@ -127,7 +127,7 @@ class LocalModelsDaoTest {
             sizeInBytes = 1000L
         )
         dao.upsert(entity)
-        dao.deleteById(entityId)
+        dao.softDeleteById(entityId)
         val retrieved = dao.getById(entityId)
         assertNull(retrieved)
     }
@@ -217,7 +217,7 @@ class LocalModelsDaoTest {
 
             assertEquals(listOf(activeId), awaitItem().map(LocalModelEntity::id))
 
-            configDao.deleteById(configId)
+            configDao.softDeleteById(configId)
 
             assertTrue(awaitItem().isEmpty())
             cancelAndIgnoreRemainingEvents()

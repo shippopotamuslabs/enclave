@@ -6,9 +6,11 @@ import androidx.work.Configuration
 import com.browntowndev.pocketcrew.domain.port.auth.AuthManager
 import com.browntowndev.pocketcrew.domain.port.auth.AuthState
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
+import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.browntowndev.pocketcrew.domain.qualifier.ApplicationScope
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -26,6 +28,9 @@ class PocketCrewApplication :
     lateinit var cloudSyncPort: CloudSyncPort
 
     @Inject
+    lateinit var cryptoManager: CryptoManagerPort
+
+    @Inject
     @ApplicationScope
     lateinit var applicationScope: CoroutineScope
 
@@ -33,10 +38,20 @@ class PocketCrewApplication :
         super.onCreate()
 
         applicationScope.launch {
-            authManager.authState.collect { state ->
-                when (state) {
-                    is AuthState.Authenticated -> cloudSyncPort.startListening()
-                    is AuthState.Unauthenticated -> cloudSyncPort.stopListening()
+            combine(authManager.authState, cryptoManager.isVaultUnlocked) { authState, isUnlocked ->
+                authState to isUnlocked
+            }.collect { (authState, _) ->
+                when (authState) {
+                    is AuthState.Authenticated -> {
+                        // Always start listening when authenticated to get non-encrypted data (configs).
+                        // If the vault was previously locked and is now unlocked, restart listeners
+                        // to ensure initial snapshots of encrypted collections are re-processed.
+                        cloudSyncPort.stopListening()
+                        cloudSyncPort.startListening()
+                    }
+                    is AuthState.Unauthenticated -> {
+                        cloudSyncPort.stopListening()
+                    }
                     else -> Unit
                 }
             }

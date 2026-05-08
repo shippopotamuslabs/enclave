@@ -20,5 +20,9 @@ data class ChatEntity(
     @ColumnInfo(name = "pinned")
     val pinned: Boolean,
     @ColumnInfo(name = "pending_sync")
-    val pendingSync: Boolean = false
+    val pendingSync: Int = 0,
+    @ColumnInfo(name = "updated_at")
+    val updatedAt: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "deleted")
+    val deleted: Boolean = false
 )

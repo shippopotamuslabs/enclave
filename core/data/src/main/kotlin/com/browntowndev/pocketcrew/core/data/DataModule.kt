@@ -33,6 +33,7 @@ import com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao
 import com.browntowndev.pocketcrew.core.data.local.LocalModelsDao
 import com.browntowndev.pocketcrew.core.data.local.MediaProviderDao
 import com.browntowndev.pocketcrew.core.data.local.MemoriesDao
+import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
@@ -185,6 +186,9 @@ object DataModule {
     fun provideMessageDao(database: PocketCrewDatabase): MessageDao = database.messageDao()
 
     @Provides
+    fun provideMessageFileDao(database: PocketCrewDatabase): MessageFileDao = database.messageFileDao()
+
+    @Provides
     fun provideChatSummaryDao(database: PocketCrewDatabase): ChatSummaryDao = database.chatSummaryDao()
 
     @Provides
@@ -256,6 +260,11 @@ object DataModule {
     @Singleton
     fun provideFirebaseFunctions(): com.google.firebase.functions.FirebaseFunctions = 
         com.google.firebase.functions.FirebaseFunctions.getInstance()
+
+    @Provides
+    @Singleton
+    fun provideFirebaseStorage(): com.google.firebase.storage.FirebaseStorage = 
+        com.google.firebase.storage.FirebaseStorage.getInstance()
 
     @Provides
     @Singleton
@@ -481,4 +490,10 @@ abstract class DataRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindToolExecutionEventPort(impl: ToolExecutionEventBus): ToolExecutionEventPort
+
+    @Binds
+    @Singleton
+    abstract fun bindEmbeddingProgressPort(
+        impl: com.browntowndev.pocketcrew.core.data.sync.EmbeddingProgressManager
+    ): com.browntowndev.pocketcrew.domain.port.repository.EmbeddingProgressPort
 }

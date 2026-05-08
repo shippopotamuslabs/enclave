@@ -92,6 +92,71 @@ class PocketCrewDatabaseMigrationTest {
     }
 
     @Test
+    fun `migration 5-6 adds pending_sync column to all syncable tables`() {
+        val db = Room.inMemoryDatabaseBuilder(
+            ApplicationProvider.getApplicationContext(),
+            PocketCrewDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val sqliteDb = db.openHelper.readableDatabase
+            val syncableTables = listOf(
+                "message_file",
+                "message_vision_analysis",
+                "studio_gallery",
+                "studio_albums",
+                "api_credentials",
+                "api_model_configurations",
+                "local_model_configurations",
+                "default_models",
+                "local_models",
+                "memories",
+                "web_search_source",
+                "tts_providers",
+                "media_providers",
+            )
+            for (table in syncableTables) {
+                val cursor = sqliteDb.query("PRAGMA table_info('$table')")
+                val columnNames = buildList {
+                    cursor.use {
+                        while (it.moveToNext()) {
+                            add(it.getString(it.getColumnIndexOrThrow("name")))
+                        }
+                    }
+                }
+                assertTrue("$table should have pending_sync column", columnNames.contains("pending_sync"))
+            }
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
+    fun `migration 5-6 pending_sync column defaults to 0`() {
+        val db = Room.inMemoryDatabaseBuilder(
+            ApplicationProvider.getApplicationContext(),
+            PocketCrewDatabase::class.java
+        ).allowMainThreadQueries().build()
+
+        try {
+            val sqliteDb = db.openHelper.readableDatabase
+            val cursor = sqliteDb.query("PRAGMA table_info('memories')")
+            val pendingSyncDefault = buildMap {
+                cursor.use {
+                    while (it.moveToNext()) {
+                        val name = it.getString(it.getColumnIndexOrThrow("name"))
+                        val dflt = it.getString(it.getColumnIndexOrThrow("dflt_value"))
+                        put(name, dflt)
+                    }
+                }
+            }
+            assertEquals("0", pendingSyncDefault["pending_sync"])
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun `web_search_source table has extracted column with default false`() {
         val db = Room.inMemoryDatabaseBuilder(
             ApplicationProvider.getApplicationContext(),

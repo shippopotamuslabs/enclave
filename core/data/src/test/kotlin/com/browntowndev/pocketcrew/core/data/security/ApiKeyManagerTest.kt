@@ -11,17 +11,36 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.preferencesDataStoreFile
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
+import org.junit.After
+import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class ApiKeyManagerTest {
     private lateinit var apiKeyManager: ApiKeyManager
+    private lateinit var testScope: CoroutineScope
 
     @Before
     fun setup() {
+        testScope = CoroutineScope(UnconfinedTestDispatcher())
         val context = ApplicationProvider.getApplicationContext<Context>()
         val prefs = context.getSharedPreferences("test_prefs", Context.MODE_PRIVATE)
-        apiKeyManager = ApiKeyManager { prefs }
+        val dataStore = PreferenceDataStoreFactory.create(
+            scope = testScope,
+            produceFile = { File(context.cacheDir, "test_datastore.preferences_pb") }
+        )
+        apiKeyManager = ApiKeyManager({ prefs }, dataStore, testScope)
+    }
+
+    @After
+    fun tearDown() {
+        testScope.cancel()
     }
 
     @Test
@@ -71,5 +90,37 @@ class ApiKeyManagerTest {
 
         assertFalse(apiKeyManager.has(ApiKeyManager.TAVILY_SEARCH_ALIAS))
         assertNull(apiKeyManager.get(ApiKeyManager.TAVILY_SEARCH_ALIAS))
+    }
+
+    @Test
+    fun `save tracks pending sync`() = runTest {
+        apiKeyManager.save("new_key", "secret")
+        apiKeyManager.claimPending()
+        assertTrue(apiKeyManager.getClaimedSyncAliases().contains("new_key"))
+        assertFalse(apiKeyManager.getClaimedDeleteAliases().contains("new_key"))
+    }
+
+    @Test
+    fun `delete tracks pending delete`() = runTest {
+        apiKeyManager.save("key_to_delete", "secret")
+        apiKeyManager.claimPending()
+        apiKeyManager.delete("key_to_delete")
+        apiKeyManager.claimPending()
+        
+        assertFalse(apiKeyManager.getClaimedSyncAliases().contains("key_to_delete"))
+        assertTrue(apiKeyManager.getClaimedDeleteAliases().contains("key_to_delete"))
+    }
+
+    @Test
+    fun `clearClaimedSync removes alias from set`() = runTest {
+        apiKeyManager.save("key1", "secret")
+        apiKeyManager.save("key2", "secret")
+        apiKeyManager.claimPending()
+        
+        apiKeyManager.clearClaimedSync(listOf("key1"))
+        
+        val claimed = apiKeyManager.getClaimedSyncAliases()
+        assertFalse(claimed.contains("key1"))
+        assertTrue(claimed.contains("key2"))
     }
 }

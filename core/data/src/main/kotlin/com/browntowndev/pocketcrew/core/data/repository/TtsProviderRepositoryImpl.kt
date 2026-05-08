@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew.core.data.repository
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderDao
 import com.browntowndev.pocketcrew.core.data.local.TtsProviderEntity
 import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderAsset
 import com.browntowndev.pocketcrew.domain.model.config.TtsProviderId
 import com.browntowndev.pocketcrew.domain.port.repository.TtsProviderRepositoryPort
@@ -14,9 +15,12 @@ import javax.inject.Singleton
 
 @Singleton
 class TtsProviderRepositoryImpl @Inject constructor(
+    private val syncTrigger: CloudSyncTrigger,
     private val ttsProviderDao: TtsProviderDao,
     private val apiKeyManager: ApiKeyManager,
 ) : TtsProviderRepositoryPort {
+
+    private fun triggerSync() = syncTrigger.trigger()
 
     override fun getTtsProviders(): Flow<List<TtsProviderAsset>> =
         ttsProviderDao.getTtsProviders().map { entities ->
@@ -47,6 +51,7 @@ class TtsProviderRepositoryImpl @Inject constructor(
             modelName = asset.modelName,
             baseUrl = asset.baseUrl,
             credentialAlias = asset.credentialAlias,
+            pendingSync = 1,
         )
 
         ttsProviderDao.upsertTtsProvider(entity)
@@ -55,14 +60,16 @@ class TtsProviderRepositoryImpl @Inject constructor(
             apiKeyManager.save(asset.credentialAlias, apiKey)
         }
 
+        triggerSync()
         return id
     }
 
     override suspend fun deleteTtsProvider(id: TtsProviderId) {
         val asset = ttsProviderDao.getTtsProvider(id.value)
         if (asset != null) {
-            ttsProviderDao.deleteTtsProvider(id.value)
+            ttsProviderDao.softDeleteById(id.value)
             apiKeyManager.delete(asset.credentialAlias)
+            triggerSync()
         }
     }
 

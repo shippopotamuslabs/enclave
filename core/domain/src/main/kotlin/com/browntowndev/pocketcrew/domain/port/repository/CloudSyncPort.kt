@@ -31,6 +31,12 @@ interface CloudSyncPort {
     ): Result<Unit>
 
     /**
+     * Fetches all locally pending-sync entities and pushes them to the cloud.
+     * Called by SyncWorker on every triggered sync. Handles vault-lock check internally.
+     */
+    suspend fun syncPendingChanges(): Result<Unit>
+
+    /**
      * Updates the user's vault salt in the cloud.
      */
     suspend fun updateVaultSalt(salt: String): Result<Unit>
@@ -48,4 +54,10 @@ interface CloudSyncPort {
      * Retrieves the user's vault verification ciphertext from the cloud.
      */
     suspend fun getVaultVerificationData(): Result<String?>
+
+    /**
+     * Enqueues a background task to regenerate all embeddings for the local corpus.
+     * Typically called after a full cloud sync.
+     */
+    fun enqueueEmbeddingRegeneration()
 }

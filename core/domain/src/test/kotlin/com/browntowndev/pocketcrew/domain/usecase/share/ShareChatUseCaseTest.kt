@@ -47,7 +47,7 @@ class ShareChatUseCaseTest {
         coEvery { chatUseCases.getChat(chatId) } returns flowOf(listOf(userMessage, assistantMessage, otherMessage))
         
         val sharedMessages = listOf(mapToShared(userMessage), mapToShared(assistantMessage))
-        val sharedChat = SharedChat("share-1", sharedMessages, 0, 0, "url")
+        val sharedChat = SharedChat("share-1", sharedMessages, createdAt = 0, expiresAt = 0, shareUrl = "url")
         coEvery { shareRepository.shareChat(listOf(userMessage, assistantMessage)) } returns sharedChat
 
         // When
@@ -71,7 +71,7 @@ class ShareChatUseCaseTest {
         
         coEvery { chatUseCases.getChat(chatId) } returns flowOf(messages)
         
-        val sharedChat = SharedChat("share-1", messages.map(::mapToShared), 0, 0, "url")
+        val sharedChat = SharedChat("share-1", messages.map(::mapToShared), createdAt = 0, expiresAt = 0, shareUrl = "url")
         coEvery { shareRepository.shareChat(messages) } returns sharedChat
 
         // When
@@ -113,7 +113,7 @@ class ShareChatUseCaseTest {
             emit(messages)
         }
         
-        val sharedChat = SharedChat("share-1", messages.map(::mapToShared), 0, 0, "url")
+        val sharedChat = SharedChat("share-1", messages.map(::mapToShared), createdAt = 0, expiresAt = 0, shareUrl = "url")
         coEvery { shareRepository.shareChat(messages) } returns sharedChat
 
         // When

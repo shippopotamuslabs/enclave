@@ -117,6 +117,8 @@ class MainActivity : androidx.fragment.app.FragmentActivity() {
                                 UnlockVaultScreen(
                                     authState = currentState.authState,
                                     errorMessage = currentState.vaultErrorMessage,
+                                    isReindexing = currentState.isReindexing,
+                                    reindexProgress = currentState.reindexProgress,
                                     onLoginClick = {
                                         loggingPort.debug(TAG, "UnlockVaultScreen: Sign in clicked")
                                         viewModel.loginWithGoogle()

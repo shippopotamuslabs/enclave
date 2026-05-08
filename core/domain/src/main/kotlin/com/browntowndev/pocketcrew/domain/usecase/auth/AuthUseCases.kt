@@ -7,7 +7,6 @@ import com.browntowndev.pocketcrew.domain.port.repository.CleanupRepository
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.browntowndev.pocketcrew.domain.usecase.settings.AutoAssignLocalModelsUseCase
-import android.util.Base64
 import kotlinx.coroutines.flow.StateFlow
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import javax.inject.Inject
@@ -35,7 +34,7 @@ class LoginWithGoogleUseCase @Inject constructor(
                 // First login, generate and store salt
                 loggingPort.info(TAG, "First login detected, generating new vault salt")
                 val newSalt = cryptoManager.generateSalt()
-                val base64Salt = Base64.encodeToString(newSalt, Base64.NO_WRAP)
+                val base64Salt = cryptoManager.encodeBase64(newSalt)
                 cloudSyncPort.updateVaultSalt(base64Salt)
 
                 // Note: We cannot save the verification data here because we don't have the 
@@ -44,6 +43,12 @@ class LoginWithGoogleUseCase @Inject constructor(
 
             loggingPort.debug(TAG, "LoginWithGoogleUseCase: Calling syncAllLocalDataToCloud")
             val syncResult = cloudSyncPort.syncAllLocalDataToCloud()
+                .onSuccess {
+                    cloudSyncPort.enqueueEmbeddingRegeneration()
+                }
+                .onFailure { e ->
+                    loggingPort.error(TAG, "Initial cloud sync failed during login", e)
+                }
             loggingPort.debug(TAG, "LoginWithGoogleUseCase: syncResult.isSuccess = ${syncResult.isSuccess}")
             if (syncResult.isFailure) {
                 return Result.failure(syncResult.exceptionOrNull() ?: Exception("Cloud sync failed"))

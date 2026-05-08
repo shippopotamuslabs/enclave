@@ -50,7 +50,7 @@ class CreateUserMessageUseCase @Inject constructor(
 
     /**
      * Processes a prompt by saving the user message to the database.
-     * If the message has no associated chat (id == -1), creates a new chat first.
+     * If the message has no associated chat (chatId == null), creates a new chat first.
      * Also creates a placeholder assistant message that will be populated after generation.
      * The save operation is wrapped in a transaction to ensure atomicity.
      *
@@ -59,8 +59,8 @@ class CreateUserMessageUseCase @Inject constructor(
      */
     suspend operator fun invoke(message: Message): PromptResult {
         return transactionProvider.runInTransaction {
-            // If message.chatId.value is empty, create a new chat and update message.chatId
-            if (message.chatId.value.isEmpty()) {
+            // If message.chatId is null, create a new chat and update message.chatId
+            if (message.chatId == null) {
                 val now = Date()
                 val chatName = generateChatName(message.content.text)
                 val newChatId = ChatId(UUID.randomUUID().toString())
@@ -85,17 +85,18 @@ class CreateUserMessageUseCase @Inject constructor(
                 val assistantMessageId = messageRepository.saveMessage(assistantMessage)
                 PromptResult(userMessageId, assistantMessageId, newChatId)
             } else {
+                val chatId = message.chatId
                 val userMessageId = messageRepository.saveMessage(message)
 
                 // Create placeholder assistant message for existing chat too
                 val assistantMessage = Message(
                     id = MessageId(UUID.randomUUID().toString()),
-                    chatId = message.chatId,
+                    chatId = chatId,
                     content = Content(text = ""),
                     role = Role.ASSISTANT
                 )
                 val assistantMessageId = messageRepository.saveMessage(assistantMessage)
-                PromptResult(userMessageId, assistantMessageId, message.chatId)
+                PromptResult(userMessageId, assistantMessageId, chatId)
             }
         }
     }

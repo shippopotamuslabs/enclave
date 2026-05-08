@@ -959,7 +959,7 @@ class HttpFileDownloaderTest {
 
     @Test
     fun downloadFile_respectsCancellation_duringDownload() = kotlinx.coroutines.test.runTest {
-        // Given: A mock response with a body that takes time to read
+        // Given: A mock response with a body that we can control the blocking of
         val testContent = "long test content"
         val testConfig = createTestConfig(testContent)
 
@@ -967,17 +967,20 @@ class HttpFileDownloaderTest {
         val mockResponse = mockk<Response>(relaxed = true)
         val mockBody = mockk<ResponseBody>(relaxed = true)
 
-        // Use a custom InputStream that blocks/waits to simulate a long download
-        val infiniteStream = object : InputStream() {
-            override fun read(): Int {
-                return 'x'.code
-            }
+        val startRead = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val proceedRead = kotlinx.coroutines.CompletableDeferred<Unit>()
+
+        // Use a custom InputStream that blocks until we signal it to proceed
+        val blockingStream = object : InputStream() {
+            override fun read(): Int = 'x'.code
             override fun read(b: ByteArray, off: Int, len: Int): Int {
-                // Simulate reading one byte then blocking
                 b[off] = 'x'.toByte()
-                // Sleep long enough to allow cancellation to be processed
-                // In a real scenario, read() would be blocking on I/O.
-                Thread.sleep(200)
+                // Signal that we've reached the read call
+                startRead.complete(Unit)
+                // Block until the test allows us to proceed
+                kotlinx.coroutines.runBlocking {
+                    proceedRead.await()
+                }
                 return 1
             }
         }
@@ -988,7 +991,7 @@ class HttpFileDownloaderTest {
         every { mockResponse.code } returns 200
         every { mockResponse.body } returns mockBody
         every { mockResponse.header("Content-Length") } returns "1000"
-        every { mockBody.byteStream() } returns infiniteStream
+        every { mockBody.byteStream() } returns blockingStream
 
         // When: Download is started and then cancelled
         val job = launch(Dispatchers.IO) {
@@ -1005,8 +1008,16 @@ class HttpFileDownloaderTest {
             }
         }
 
-        delay(100)
-        job.cancelAndJoin()
+        // Wait for the download to actually reach the read() call
+        startRead.await()
+        
+        // Cancel the job while it is blocked in read()
+        job.cancel()
+        
+        // Now let the read() call complete so the coroutine can notice the cancellation
+        proceedRead.complete(Unit)
+        
+        job.join()
 
         // Then: The target file should not exist (it was never renamed from temp)
         val targetFile = File(tempDir, "test-model.gguf")
