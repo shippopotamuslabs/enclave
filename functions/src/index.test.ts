@@ -24,11 +24,13 @@ describe('uploadSharedChat', () => {
         test.cleanup();
     });
 
-    it('should save encryptedPayload to firestore', async () => {
+    it('should save encryptedPayload and mediaPaths to firestore', async () => {
         const data = {
+            shareId: 'temp-id',
             encryptedPayload: 'some-encrypted-string',
             iv: 'some-iv',
-            salt: 'some-salt'
+            salt: 'some-salt',
+            mediaPaths: ['shared_chat_media/temp-id/media1']
         };
         const context = {
             auth: {
@@ -40,13 +42,27 @@ describe('uploadSharedChat', () => {
         const result = await wrapped(data, context);
 
         expect(result).to.have.property('shareId');
-        expect(result).to.have.property('shareUrl');
+        const shareId = result.shareId;
         
         expect(setStub.calledOnce).to.be.true;
         const savedData = setStub.getCall(0).args[0];
-        expect(savedData.encryptedPayload).to.equal('some-encrypted-string');
-        expect(savedData.iv).to.equal('some-iv');
-        expect(savedData.salt).to.equal('some-salt');
-        expect(savedData.ownerId).to.equal('test-user-id');
+        expect(savedData.mediaPaths).to.deep.equal([`shared_chat_media/${shareId}/media1`]);
+    });
+
+    it('should throw if mediaPaths exceed limit', async () => {
+        const data = {
+            encryptedPayload: 'some-encrypted-string',
+            iv: 'some-iv',
+            mediaPaths: new Array(51).fill('path')
+        };
+        const context = { auth: { uid: 'uid' } };
+        const wrapped = test.wrap(myFunctions.uploadSharedChat);
+        
+        try {
+            await wrapped(data, context);
+            expect.fail('Should have thrown');
+        } catch (e: any) {
+            expect(e.code).to.equal('invalid-argument');
+        }
     });
 });

@@ -1,6 +1,7 @@
 import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
+export { cleanupExpiredShares } from './scheduledCleanup';
 
 admin.initializeApp();
 
@@ -13,12 +14,25 @@ export const uploadSharedChat = functions.https.onCall(async (data, context) => 
         throw new functions.https.HttpsError('unauthenticated', 'User must be logged in to share chats.');
     }
 
-    const { encryptedPayload, iv, salt } = data;
+    const { shareId: requestedShareId, encryptedPayload, iv, salt, mediaPaths } = data;
     if (!encryptedPayload || !iv) {
         throw new functions.https.HttpsError('invalid-argument', 'encryptedPayload and iv must be provided.');
     }
 
-    const shareId = uuidv4();
+    const shareId = requestedShareId || uuidv4();
+    
+    // Validate mediaPaths ownership
+    const validatedMediaPaths = (mediaPaths || []).map((path: string) => {
+        if (!path.startsWith(`shared_chat_media/${shareId}/`)) {
+            throw new functions.https.HttpsError('invalid-argument', `Invalid media path: ${path}`);
+        }
+        return path;
+    });
+
+    if (validatedMediaPaths.length > 50) {
+        throw new functions.https.HttpsError('invalid-argument', 'Too many media items (max 50).');
+    }
+
     const createdAt = Date.now();
     const expiresAt = createdAt + 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -30,7 +44,8 @@ export const uploadSharedChat = functions.https.onCall(async (data, context) => 
         shareUrl: `https://${APP_DOMAIN}/share/${shareId}`,
         encryptedPayload,
         iv,
-        salt: salt || ""
+        salt: salt || "",
+        mediaPaths: validatedMediaPaths
     };
 
     await admin.firestore().collection('shared_chats').doc(shareId).set(sharedChat);
@@ -119,12 +134,13 @@ export const share = functions.https.onRequest(async (req, res) => {
         (async () => {
             const encryptedPayload = "${data.encryptedPayload}";
             const iv = "${data.iv}";
+            const projectId = "${admin.app().options.projectId}";
             
             const hash = window.location.hash;
             const keyBase64 = hash.startsWith('#key=') ? hash.substring(5) : null;
             
             if (!keyBase64) {
-                document.getElementById('messages').innerHTML = '<div style="text-align:center; padding: 40px; background: #27272A; border-radius: 12px; border: 2px solid #52525B; box-shadow: 6px 6px 0px #000000;"><p style="color:#DC2626; font-weight: 900; font-size: 1.2em; text-transform: uppercase;">Decryption Key Missing</p><p>This chat is end-to-end encrypted. You need the full link including the key to view it.</p></div>';
+                document.getElementById('messages').innerHTML = '<div class="error-box"><p class="error-title">Decryption Key Missing</p><p>This chat is end-to-end encrypted. You need the full link including the key to view it.</p></div>';
                 return;
             }
             
@@ -135,6 +151,24 @@ export const share = functions.https.onRequest(async (req, res) => {
                     bytes[i] = binaryString.charCodeAt(i);
                 }
                 return bytes;
+            }
+
+            async function fetchAndDecryptMedia(storagePath, cryptoKey, ivData) {
+                try {
+                    const url = \`https://firebasestorage.googleapis.com/v0/b/\${projectId}.appspot.com/o/\${encodeURIComponent(storagePath)}?alt=media\`;
+                    const response = await fetch(url);
+                    if (!response.ok) throw new Error('Failed to fetch media');
+                    const encryptedBuffer = await response.arrayBuffer();
+                    const decryptedBuffer = await window.crypto.subtle.decrypt(
+                        { name: "AES-GCM", iv: ivData },
+                        cryptoKey,
+                        encryptedBuffer
+                    );
+                    return URL.createObjectURL(new Blob([decryptedBuffer]));
+                } catch (e) {
+                    console.error('Media decryption failed', e);
+                    return null;
+                }
             }
 
             try {
@@ -158,27 +192,58 @@ export const share = functions.https.onRequest(async (req, res) => {
 
                 const decoder = new TextDecoder();
                 const decryptedText = decoder.decode(decryptedBuffer);
-                const messages = JSON.parse(decryptedText);
+                const sharedChat = JSON.parse(decryptedText);
+                const messages = Array.isArray(sharedChat) ? sharedChat : sharedChat.messages;
+                const media = sharedChat.media || [];
+                const mediaMap = {};
+                media.forEach(m => mediaMap[m.id] = m);
 
                 const messagesContainer = document.getElementById('messages');
-                messagesContainer.innerHTML = messages.map(m => {
-                    if (m.role.toLowerCase() === 'user') {
-                        return \`
-                            <div class="message user-message">
-                                <div class="content">\${marked.parse(m.content)}</div>
-                            </div>
-                        \`;
-                    } else {
-                        return \`
-                            <div class="message assistant-message">
-                                <div class="content">\${marked.parse(m.content)}</div>
-                            </div>
-                        \`;
+                
+                for (const m of messages) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = \`message \${m.role.toLowerCase() === 'user' ? 'user-message' : 'assistant-message'}\`;
+                    
+                    let mediaHtml = '';
+                    if (m.attachedImageMediaId && mediaMap[m.attachedImageMediaId]) {
+                        const mediaItem = mediaMap[m.attachedImageMediaId];
+                        const blobUrl = await fetchAndDecryptMedia(mediaItem.storagePath, cryptoKey, ivData);
+                        if (blobUrl) {
+                            mediaHtml += \`<img src="\${blobUrl}" class="shared-image" />\`;
+                        }
                     }
-                }).join('');
+                    
+                    if (m.generatedMediaIds) {
+                        for (const genId of m.generatedMediaIds) {
+                            if (mediaMap[genId]) {
+                                const mediaItem = mediaMap[genId];
+                                const blobUrl = await fetchAndDecryptMedia(mediaItem.storagePath, cryptoKey, ivData);
+                                if (blobUrl) {
+                                    mediaHtml += \`<img src="\${blobUrl}" class="shared-image" />\`;
+                                }
+                            }
+                        }
+                    }
+
+                    if (m.fileAttachments && m.fileAttachments.length > 0) {
+                        mediaHtml += '<div class="file-attachments">';
+                        m.fileAttachments.forEach(f => {
+                            mediaHtml += \`<div class="file-pill"><span>\${f.name}</span></div>\`;
+                        });
+                        mediaHtml += '</div>';
+                    }
+
+                    messageDiv.innerHTML = \`
+                        <div class="content">
+                            \${mediaHtml}
+                            \${marked.parse(m.content)}
+                        </div>
+                    \`;
+                    messagesContainer.appendChild(messageDiv);
+                }
             } catch (e) {
                 console.error(e);
-                document.getElementById('messages').innerHTML = '<div style="text-align:center; padding: 40px; background: #27272A; border-radius: 12px; border: 2px solid #52525B; box-shadow: 6px 6px 0px #000000;"><p style="color:#DC2626; font-weight: 900; font-size: 1.2em; text-transform: uppercase;">Decryption Failed</p><p>The key provided in the URL is incorrect or the data is corrupted.</p></div>';
+                document.getElementById('messages').innerHTML = '<div class="error-box"><p class="error-title">Decryption Failed</p><p>The key provided in the URL is incorrect or the data is corrupted.</p></div>';
             }
         })();
     </script>
@@ -249,6 +314,47 @@ export const share = functions.https.onRequest(async (req, res) => {
             .button:active { 
                 transform: translate(4px, 4px); 
                 box-shadow: 2px 2px 0px #000000; 
+            }
+            .shared-image { 
+                width: 100%; 
+                border-radius: 8px; 
+                margin-bottom: 16px; 
+                border: 2px solid #52525B;
+                box-shadow: 4px 4px 0px #000000;
+            }
+            .file-attachments { 
+                display: flex; 
+                flex-wrap: wrap; 
+                gap: 8px; 
+                margin-bottom: 16px; 
+            }
+            .file-pill { 
+                background: #3F3F46; 
+                padding: 6px 12px; 
+                border-radius: 20px; 
+                font-size: 0.9em; 
+                border: 1px solid #52525B;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .file-pill::before {
+                content: "📄";
+            }
+            .error-box {
+                text-align:center; 
+                padding: 40px; 
+                background: #27272A; 
+                border-radius: 12px; 
+                border: 2px solid #52525B; 
+                box-shadow: 6px 6px 0px #000000;
+            }
+            .error-title {
+                color:#DC2626; 
+                font-weight: 900; 
+                font-size: 1.2em; 
+                text-transform: uppercase;
+                margin-bottom: 10px;
             }
             .header { text-align: center; margin-bottom: 60px; padding-bottom: 30px; border-bottom: 4px solid #000000; }
             .logo { color: #F4A361; font-size: 2.5em; font-weight: 900; letter-spacing: -1px; text-shadow: 3px 3px 0px #000000; }
