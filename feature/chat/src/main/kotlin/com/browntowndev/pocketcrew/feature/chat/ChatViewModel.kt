@@ -611,7 +611,7 @@ class ChatViewModel @Inject constructor(
 
         return ChatMessage(
             id = message.id,
-            chatId = message.chatId,
+            chatId = requireNotNull(message.chatId) { "mapToChatMessage called with null chatId on message ${message.id.value}" },
             role = role,
             content = ContentUi(
                 text = message.content.text,
@@ -882,7 +882,7 @@ class ChatViewModel @Inject constructor(
 
             if (input.isNotBlank() || selectedImageUri != null || fileAttachments.isNotEmpty()) {
                 // Determine the chat ID: prefer currentChatId, then initialChatId, otherwise empty
-                val chatIdForMessage = _currentChatId.value ?: initialChatId ?: ChatId("")
+                val chatIdForMessage: ChatId? = _currentChatId.value ?: initialChatId
 
                 // Create domain message for persistence
                 val domainMessage = Message(

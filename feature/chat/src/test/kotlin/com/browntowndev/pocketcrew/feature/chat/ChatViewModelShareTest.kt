@@ -97,7 +97,7 @@ class ChatViewModelShareTest {
     fun `onShareTurn should transition to Success`() = runTest {
         val messageId = MessageId("msg-1")
         val shareUrl = "https://share.url/123"
-        val sharedChat = SharedChat("123", emptyList(), 0, 0, shareUrl)
+        val sharedChat = SharedChat("123", emptyList(), createdAt = 0, expiresAt = 0, shareUrl = shareUrl)
         
         coEvery { shareChatUseCase(any()) } returns Result.success(sharedChat)
         
@@ -125,7 +125,7 @@ class ChatViewModelShareTest {
     @Test
     fun `onShareFullChat should transition to Success`() = runTest {
         val shareUrl = "https://share.url/full"
-        val sharedChat = SharedChat("full", emptyList(), 0, 0, shareUrl)
+        val sharedChat = SharedChat("full", emptyList(), createdAt = 0, expiresAt = 0, shareUrl = shareUrl)
         
         coEvery { shareChatUseCase(any()) } returns Result.success(sharedChat)
         

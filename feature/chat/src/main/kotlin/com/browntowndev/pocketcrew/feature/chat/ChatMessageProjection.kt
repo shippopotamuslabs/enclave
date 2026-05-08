@@ -28,7 +28,7 @@ internal fun projectChatMessages(
         ?.messages
         .orEmpty()
 
-    val chatId = activeKey?.chatId ?: dbMessages.firstOrNull()?.chatId ?: ChatId("")
+    val chatId: ChatId? = activeKey?.chatId ?: dbMessages.firstOrNull()?.chatId
     val projectedMessages = LinkedHashMap<MessageId, Message>()
     dbMessagesMap.forEach { (id, dbMessage) ->
         val activeMessage = activeMessagesMap[id]
@@ -62,7 +62,7 @@ internal fun projectChatMessages(
 }
 
 private fun MessageSnapshot.toMessage(
-    chatId: ChatId,
+    chatId: ChatId?,
     createdAt: Long? = null,
 ): Message {
     return Message(

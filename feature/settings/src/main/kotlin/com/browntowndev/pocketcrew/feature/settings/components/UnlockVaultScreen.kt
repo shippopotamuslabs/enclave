@@ -49,10 +49,14 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import com.browntowndev.pocketcrew.domain.port.auth.AuthState
 
+import androidx.compose.material3.LinearProgressIndicator
+
 @Composable
 fun UnlockVaultScreen(
     authState: AuthState,
     errorMessage: String?,
+    isReindexing: Boolean = false,
+    reindexProgress: Float = 0f,
     onLoginClick: () -> Unit,
     onSkipClick: () -> Unit,
     onSubmitVaultPassword: (password: String, enableBiometric: Boolean) -> Unit
@@ -103,6 +107,22 @@ fun UnlockVaultScreen(
                             text = email,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    if (isReindexing) {
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Text(
+                            text = "Syncing and indexing models...",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        LinearProgressIndicator(
+                            progress = { reindexProgress },
+                            modifier = Modifier.fillMaxWidth().height(4.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
                     }
 
