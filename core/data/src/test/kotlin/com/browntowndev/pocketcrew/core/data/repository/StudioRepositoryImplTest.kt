@@ -4,6 +4,8 @@ import android.content.Context
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
+import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -23,6 +25,7 @@ class StudioRepositoryImplTest {
 
     private val studioMediaDao = mockk<StudioMediaDao>(relaxed = true)
     private val studioAlbumDao = mockk<StudioAlbumDao>(relaxed = true)
+    private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
     private val transactionProvider = FakeTransactionProvider()
     private val context = mockk<Context>()
 
@@ -47,6 +50,7 @@ class StudioRepositoryImplTest {
             studioMediaDao = studioMediaDao,
             studioAlbumDao = studioAlbumDao,
             transactionProvider = transactionProvider,
+            syncTrigger = syncTrigger,
             context = context
         )
     }
@@ -168,6 +172,27 @@ class StudioRepositoryImplTest {
     }
 
     @Test
+    fun `saveMedia maps 'default' albumId to null`() = runTest {
+        coEvery { studioMediaDao.insertMedia(any()) } returns Unit
+        coEvery { studioMediaDao.getMediaById(any()) } returns StudioMediaEntity(id = "uuid-1", prompt = "prompt", mediaUri = "uri", mediaType = "IMAGE", createdAt = 1L, albumId = null)
+
+        repository.saveMedia("uri", "prompt", "IMAGE", albumId = DEFAULT_GALLERY_ALBUM_ID)
+
+        coVerify {
+            studioMediaDao.insertMedia(match { it.albumId == null })
+        }
+    }
+
+    @Test
+    fun `moveMediaToAlbum maps 'default' albumId to null`() = runTest {
+        repository.moveMediaToAlbum(listOf("media-1"), DEFAULT_GALLERY_ALBUM_ID)
+
+        coVerify {
+            studioMediaDao.updateMediaAlbum(listOf("media-1"), null, any())
+        }
+    }
+
+    @Test
     fun `readMediaBytes reads content uri using content resolver`() = runTest {
         val uriString = "content://media/external/images/media/1"
         val mockResolver = mockk<android.content.ContentResolver>()
@@ -187,6 +212,84 @@ class StudioRepositoryImplTest {
         org.junit.jupiter.api.Assertions.assertArrayEquals(bytes, result)
 
         io.mockk.unmockkStatic(android.net.Uri::class)
+    }
+
+    @Test
+    fun `updateMedia preserves remoteUrl and syncStatus of an already-uploaded entity`() = runTest {
+        val existingEntity = StudioMediaEntity(
+            id = "media-uploaded",
+            prompt = "original",
+            mediaUri = "file:///data/files/photo.jpg",
+            mediaType = "IMAGE",
+            remoteUrl = "https://cdn.example.com/photo.jpg",
+            remoteThumbnailUrl = null,
+            syncStatus = "UPLOADED",
+            createdAt = 1_000L,
+            albumId = null
+        )
+        coEvery { studioMediaDao.getMediaById("media-uploaded") } returns existingEntity
+
+        repository.updateMedia(
+            com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset(
+                id = "media-uploaded",
+                prompt = "updated prompt",
+                localUri = "file:///data/files/photo.jpg",
+                mediaType = "IMAGE",
+                createdAt = 1_000L,
+                albumId = null
+            )
+        )
+
+        coVerify {
+            studioMediaDao.insertMedia(match { entity ->
+                entity.remoteUrl == "https://cdn.example.com/photo.jpg" &&
+                entity.syncStatus == "UPLOADED" &&
+                entity.prompt == "updated prompt"
+            })
+        }
+    }
+
+    @Test
+    fun `updateMedia uses PENDING_UPLOAD syncStatus when entity has never been uploaded`() = runTest {
+        coEvery { studioMediaDao.getMediaById("media-new") } returns null
+
+        repository.updateMedia(
+            com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset(
+                id = "media-new",
+                prompt = "brand new",
+                localUri = "file:///data/files/new.jpg",
+                mediaType = "IMAGE",
+                createdAt = 2_000L,
+                albumId = null
+            )
+        )
+
+        coVerify {
+            studioMediaDao.insertMedia(match { entity ->
+                entity.remoteUrl == null &&
+                entity.syncStatus == "PENDING_UPLOAD"
+            })
+        }
+    }
+
+    @Test
+    fun `updateMedia maps DEFAULT_GALLERY_ALBUM_ID to null albumId`() = runTest {
+        coEvery { studioMediaDao.getMediaById("media-1") } returns null
+
+        repository.updateMedia(
+            com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset(
+                id = "media-1",
+                prompt = "test",
+                localUri = "file:///data/files/test.jpg",
+                mediaType = "IMAGE",
+                createdAt = 1_000L,
+                albumId = DEFAULT_GALLERY_ALBUM_ID
+            )
+        )
+
+        coVerify {
+            studioMediaDao.insertMedia(match { it.albumId == null })
+        }
     }
 }
 
