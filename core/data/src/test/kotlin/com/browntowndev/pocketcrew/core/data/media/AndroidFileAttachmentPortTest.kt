@@ -115,15 +115,31 @@ class AndroidFileAttachmentPortTest {
         assertEquals(fileContent, result.content)
     }
 
-    @Test(expected = NotImplementedError::class)
-    fun `readFileContent throws NotImplementedError for unsupported mime type`() = runTest {
+    @Test
+    fun `readFileContent returns Base64 encoded string for unsupported mime type`() = runTest {
         val uriStr = "content://media/external/file/3"
         val uri = Uri.parse(uriStr)
         val mimeType = "application/pdf"
+        val fileContent = "PDF content"
+        val fileName = "test.pdf"
 
         every { contentResolver.getType(uri) } returns mimeType
+        
+        val cursor: Cursor = mockk()
+        every { contentResolver.query(uri, null, null, null, null) } returns cursor
+        every { cursor.moveToFirst() } returns true
+        every { cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME) } returns 0
+        every { cursor.getString(0) } returns fileName
+        every { cursor.close() } just Runs
 
-        port.readFileContent(uriStr)
+        val inputStream: InputStream = ByteArrayInputStream(fileContent.toByteArray())
+        every { contentResolver.openInputStream(uri) } returns inputStream
+
+        val result = port.readFileContent(uriStr)
+
+        assertEquals(fileName, result.name)
+        assertEquals(mimeType, result.mimeType)
+        assertEquals("BASE64:" + android.util.Base64.encodeToString(fileContent.toByteArray(), android.util.Base64.NO_WRAP), result.content)
     }
 
     @Test
