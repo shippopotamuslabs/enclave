@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.remote
 
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
+import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.sync.EmbeddingRegenerationCoordinator
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
@@ -35,6 +36,7 @@ class StudioMediaSyncMergeTest {
     private val testScope = TestScope(testDispatcher)
     private val embeddingCoordinator = mockk<EmbeddingRegenerationCoordinator>(relaxed = true)
     private val embeddingDao = mockk<com.browntowndev.pocketcrew.core.data.local.EmbeddingDao>(relaxed = true)
+    private val chatSummaryDao = mockk<ChatSummaryDao>(relaxed = true)
     
     private lateinit var dataSource: FirestoreDataSource
     private val listenerSlot = slot<EventListener<QuerySnapshot>>()
@@ -64,6 +66,7 @@ class StudioMediaSyncMergeTest {
             studioAlbumDao = mockk(relaxed = true),
             messageFileDao = mockk(relaxed = true),
             messageVisionAnalysisDao = mockk(relaxed = true),
+            chatSummaryDao = chatSummaryDao,
             embeddingDao = embeddingDao,
             apiKeyManager = mockk(relaxed = true),
             cryptoManager = cryptoManager,

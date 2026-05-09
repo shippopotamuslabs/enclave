@@ -26,10 +26,10 @@ class CloudSyncTrigger @Inject constructor(
     }
 
     fun triggerMetadata() {
-        loggingPort.debug(TAG, "Enqueuing pocketcrew_sync (REPLACE)")
+        loggingPort.debug(TAG, "Enqueuing pocketcrew_sync (APPEND_OR_REPLACE)")
         workManager.enqueueUniqueWork(
             "pocketcrew_sync",
-            ExistingWorkPolicy.REPLACE,
+            ExistingWorkPolicy.APPEND_OR_REPLACE,
             OneTimeWorkRequestBuilder<SyncWorker>()
                 .setConstraints(
                     Constraints.Builder()

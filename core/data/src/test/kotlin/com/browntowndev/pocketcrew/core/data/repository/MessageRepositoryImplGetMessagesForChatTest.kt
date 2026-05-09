@@ -28,6 +28,7 @@ class MessageRepositoryImplGetMessagesForChatTest {
     private lateinit var messageVisionAnalysisDao: MessageVisionAnalysisDao
     private lateinit var chatSummaryDao: ChatSummaryDao
     private lateinit var embeddingDao: EmbeddingDao
+    private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
     private lateinit var repository: MessageRepositoryImpl
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
@@ -37,12 +38,14 @@ class MessageRepositoryImplGetMessagesForChatTest {
         messageVisionAnalysisDao = mockk(relaxed = true)
         chatSummaryDao = mockk(relaxed = true)
         embeddingDao = mockk(relaxed = true)
+        transactionProvider = mockk(relaxed = true)
         repository = MessageRepositoryImpl(
             syncTrigger,
             messageDao,
             messageVisionAnalysisDao,
             chatSummaryDao,
             embeddingDao,
+            transactionProvider
         )
     }
 

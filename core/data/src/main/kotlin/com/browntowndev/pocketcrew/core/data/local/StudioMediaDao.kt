@@ -47,11 +47,14 @@ interface StudioMediaDao {
     @Query("UPDATE studio_gallery SET syncStatus = 'DELETED' WHERE id = :id")
     suspend fun markCloudDeleted(id: String)
 
+    @Query("UPDATE studio_gallery SET staging_remote_url = :url WHERE id = :id")
+    suspend fun updateStagingUrl(id: String, url: String?)
+
     /**
      * Sets remoteUrl and marks the upload as complete.
      * remoteThumbnailUrl is intentionally not set here — thumbnail generation is not part of this worker's upload flow.
      */
-    @Query("UPDATE studio_gallery SET remoteUrl = :remoteUrl, syncStatus = 'UPLOADED', pending_sync = 1, updated_at = :updatedAt WHERE id = :id")
+    @Query("UPDATE studio_gallery SET remoteUrl = :remoteUrl, staging_remote_url = NULL, syncStatus = 'UPLOADED', pending_sync = 1, updated_at = :updatedAt WHERE id = :id")
     suspend fun markUploaded(id: String, remoteUrl: String, updatedAt: Long = System.currentTimeMillis())
 
     @Query("UPDATE studio_gallery SET syncStatus = 'FAILED', updated_at = :updatedAt WHERE id = :id")

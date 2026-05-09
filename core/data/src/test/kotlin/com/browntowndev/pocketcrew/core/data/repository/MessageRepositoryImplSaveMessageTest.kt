@@ -25,6 +25,7 @@ class MessageRepositoryImplSaveMessageTest {
     private lateinit var messageVisionAnalysisDao: MessageVisionAnalysisDao
     private lateinit var chatSummaryDao: ChatSummaryDao
     private lateinit var embeddingDao: EmbeddingDao
+    private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
     private lateinit var repository: MessageRepositoryImpl
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
@@ -34,12 +35,21 @@ class MessageRepositoryImplSaveMessageTest {
         messageVisionAnalysisDao = mockk(relaxed = true)
         chatSummaryDao = mockk(relaxed = true)
         embeddingDao = mockk(relaxed = true)
+        transactionProvider = mockk(relaxed = true)
+
+        // Default behavior for transactionProvider to just execute the block
+        coEvery { transactionProvider.runInTransaction<Any>(any()) } coAnswers {
+            val block = firstArg<suspend () -> Any>()
+            block()
+        }
+
         repository = MessageRepositoryImpl(
             syncTrigger,
             messageDao,
             messageVisionAnalysisDao,
             chatSummaryDao,
             embeddingDao,
+            transactionProvider
         )
     }
 
@@ -86,5 +96,34 @@ class MessageRepositoryImplSaveMessageTest {
         // Then
         assert(result == messageId)
         coVerify { messageDao.upsert(any()) }
+    }
+
+    @Test
+    fun `saveMessage with attachments uses transaction and fails if file insertion fails`() = runTest {
+        // Given
+        val messageId = MessageId(UUID.randomUUID().toString())
+        val chatId = ChatId(UUID.randomUUID().toString())
+        val attachment = com.browntowndev.pocketcrew.domain.model.chat.FileAttachment(
+            name = "test.txt",
+            content = "test content"
+        )
+        val message = Message(
+            id = messageId,
+            chatId = chatId,
+            content = Content(text = "Test message", fileAttachments = listOf(attachment)),
+            role = Role.USER
+        )
+
+        coEvery { messageDao.upsert(any()) } returns 1L
+        coEvery { messageDao.insertFiles(any()) } throws RuntimeException("Database error")
+
+        // When & Then
+        assertThrows<RuntimeException> {
+            repository.saveMessage(message)
+        }
+
+        coVerify { transactionProvider.runInTransaction<Any>(any()) }
+        coVerify { messageDao.upsert(any()) }
+        coVerify { messageDao.insertFiles(any()) }
     }
 }

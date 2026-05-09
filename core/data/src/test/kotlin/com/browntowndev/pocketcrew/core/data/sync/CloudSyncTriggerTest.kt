@@ -35,7 +35,7 @@ class CloudSyncTriggerTest {
             trigger.trigger()
 
             verify {
-                workManager.enqueueUniqueWork("pocketcrew_sync", ExistingWorkPolicy.REPLACE, any<androidx.work.OneTimeWorkRequest>())
+                workManager.enqueueUniqueWork("pocketcrew_sync", ExistingWorkPolicy.APPEND_OR_REPLACE, any<androidx.work.OneTimeWorkRequest>())
                 workManager.enqueueUniqueWork("pocketcrew_media_sync", ExistingWorkPolicy.REPLACE, any<androidx.work.OneTimeWorkRequest>())
                 workManager.enqueueUniqueWork("pocketcrew_file_sync", ExistingWorkPolicy.REPLACE, any<androidx.work.OneTimeWorkRequest>())
             }
@@ -43,10 +43,10 @@ class CloudSyncTriggerTest {
     }
 
     @Test
-    @DisplayName("triggerMetadata uses REPLACE policy")
-    fun triggerMetadataUsesReplace() {
+    @DisplayName("triggerMetadata uses APPEND_OR_REPLACE policy")
+    fun triggerMetadataUsesAppendOrReplace() {
         trigger.triggerMetadata()
-        verify { workManager.enqueueUniqueWork("pocketcrew_sync", ExistingWorkPolicy.REPLACE, any<androidx.work.OneTimeWorkRequest>()) }
+        verify { workManager.enqueueUniqueWork("pocketcrew_sync", ExistingWorkPolicy.APPEND_OR_REPLACE, any<androidx.work.OneTimeWorkRequest>()) }
     }
 
     @Test

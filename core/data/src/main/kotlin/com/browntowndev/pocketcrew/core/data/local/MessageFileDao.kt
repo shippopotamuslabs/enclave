@@ -36,7 +36,10 @@ interface MessageFileDao {
     @Query("UPDATE message_file SET sync_status = :status, updated_at = :timestamp WHERE id = :id")
     suspend fun updateStatus(id: String, status: String, timestamp: Long = System.currentTimeMillis())
 
-    @Query("UPDATE message_file SET sync_status = 'UPLOADED', remote_url = :remoteUrl, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
+    @Query("UPDATE message_file SET staging_remote_url = :url WHERE id = :id")
+    suspend fun updateStagingUrl(id: String, url: String?)
+
+    @Query("UPDATE message_file SET sync_status = 'UPLOADED', remote_url = :remoteUrl, staging_remote_url = NULL, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
     suspend fun markUploaded(id: String, remoteUrl: String, timestamp: Long = System.currentTimeMillis())
 
     @Query("DELETE FROM message_file WHERE id IN (:ids) AND deleted = 1")

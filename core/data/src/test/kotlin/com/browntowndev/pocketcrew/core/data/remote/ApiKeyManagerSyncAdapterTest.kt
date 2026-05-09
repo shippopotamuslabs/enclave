@@ -52,13 +52,14 @@ class ApiKeyManagerSyncAdapterTest {
             studioAlbumDao = mockk(relaxed = true),
             messageFileDao = mockk(relaxed = true),
             messageVisionAnalysisDao = mockk(relaxed = true),
+            chatSummaryDao = mockk(relaxed = true),
+            embeddingDao = mockk(relaxed = true),
             apiKeyManager = apiKeyManager,
             cryptoManager = cryptoManager,
             loggingPort = loggingPort,
             externalScope = testScope,
             userIdProvider = { "test-user-id" },
-            embeddingCoordinator = mockk(relaxed = true),
-            embeddingDao = mockk(relaxed = true)
+            embeddingCoordinator = mockk(relaxed = true)
         )
     }
 

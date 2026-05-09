@@ -179,14 +179,20 @@ class ChatRepositoryImpl @Inject constructor(
         generatedMediaPrompts: List<String>
     ) {
         val artifactEntities = artifacts.map { artifact ->
+            val deterministicId = "${messageId.value}_${artifact.title.hashCode()}"
+            val existing = messageFileDao.getByIdIncludingDeleted(deterministicId)
+            
             com.browntowndev.pocketcrew.core.data.local.MessageFileEntity(
-                id = UUID.randomUUID().toString(),
+                id = deterministicId,
                 messageId = messageId.value,
                 name = artifact.title,
                 content = artifact.content,
                 fileType = "ARTIFACT",
-                syncStatus = "PENDING_UPLOAD",
-                pendingSync = 0
+                remoteUrl = existing?.remoteUrl,
+                syncStatus = existing?.syncStatus ?: "PENDING_UPLOAD",
+                pendingSync = existing?.pendingSync ?: 0,
+                updatedAt = System.currentTimeMillis(),
+                deleted = false
             )
         }
 
@@ -225,7 +231,17 @@ class ChatRepositoryImpl @Inject constructor(
             )
 
             if (artifactEntities.isNotEmpty()) {
-                messageFileDao.deleteArtifactsByMessageId(messageId.value)
+                val currentArtifactIds = artifactEntities.map { it.id }.toSet()
+                val existingArtifacts = messageFileDao.getByMessageId(messageId)
+                
+                // Soft-delete artifacts that are no longer in the list
+                existingArtifacts.forEach { existing ->
+                    if (existing.fileType == "ARTIFACT" && existing.id !in currentArtifactIds) {
+                        messageFileDao.softDeleteById(existing.id)
+                    }
+                }
+
+                // Upsert new/updated artifacts
                 artifactEntities.forEach { messageFileDao.insert(it) }
             }
         }
