@@ -1,0 +1,227 @@
+Reusing configuration cache.
+> Task :core:data:generateDebugUnitTestAssets UP-TO-DATE
+> Task :core:domain:generateDebugTestFixturesAssets UP-TO-DATE
+> Task :core:domain:generateDebugAssets UP-TO-DATE
+> Task :core:testing:preBuild UP-TO-DATE
+> Task :core:domain:preBuild UP-TO-DATE
+> Task :core:data:generateDebugAssets UP-TO-DATE
+> Task :core:testing:generateDebugAssets UP-TO-DATE
+> Task :core:data:preBuild UP-TO-DATE
+> Task :core:data:preDebugBuild UP-TO-DATE
+> Task :core:testing:preDebugBuild UP-TO-DATE
+> Task :core:data:preDebugUnitTestBuild UP-TO-DATE
+> Task :core:data:generateDebugBuildConfig UP-TO-DATE
+> Task :core:data:mapDebugSourceSetPaths UP-TO-DATE
+> Task :core:data:processDebugNavigationResources UP-TO-DATE
+> Task :core:data:generateDebugResources UP-TO-DATE
+> Task :core:domain:preDebugTestFixturesBuild UP-TO-DATE
+> Task :core:domain:preDebugBuild UP-TO-DATE
+> Task :core:data:mergeDebugAssets UP-TO-DATE
+> Task :core:data:javaPreCompileDebug UP-TO-DATE
+> Task :core:data:generateDebugUnitTestResources UP-TO-DATE
+> Task :core:data:mapDebugUnitTestSourceSetPaths UP-TO-DATE
+> Task :core:data:extractDeepLinksDebug UP-TO-DATE
+> Task :core:testing:extractDeepLinksDebug UP-TO-DATE
+> Task :core:data:processDebugManifest UP-TO-DATE
+> Task :core:testing:writeDebugAarMetadata UP-TO-DATE
+> Task :core:data:writeDebugAarMetadata UP-TO-DATE
+> Task :core:testing:generateDebugResources UP-TO-DATE
+> Task :core:testing:processDebugManifest UP-TO-DATE
+> Task :core:testing:mergeDebugAssets UP-TO-DATE
+> Task :core:testing:mapDebugSourceSetPaths UP-TO-DATE
+> Task :core:domain:writeDebugAarMetadata UP-TO-DATE
+> Task :core:domain:writeDebugTestFixturesAarMetadata UP-TO-DATE
+> Task :core:domain:mergeDebugTestFixturesAssets UP-TO-DATE
+> Task :core:domain:generateDebugTestFixturesEmptyResourceFiles UP-TO-DATE
+> Task :core:domain:extractDeepLinksDebug UP-TO-DATE
+> Task :core:domain:processDebugManifest UP-TO-DATE
+> Task :core:data:packageDebugResources UP-TO-DATE
+> Task :core:testing:processDebugNavigationResources UP-TO-DATE
+> Task :core:testing:packageDebugResources UP-TO-DATE
+> Task :core:domain:mapDebugSourceSetPaths UP-TO-DATE
+> Task :core:domain:processDebugTestFixturesManifest UP-TO-DATE
+> Task :core:domain:javaPreCompileDebugTestFixtures UP-TO-DATE
+> Task :core:testing:javaPreCompileDebug UP-TO-DATE
+> Task :core:data:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :core:data:compileDebugLibraryResources UP-TO-DATE
+> Task :core:testing:compileDebugLibraryResources UP-TO-DATE
+> Task :core:domain:mergeDebugAssets UP-TO-DATE
+> Task :core:domain:generateDebugResources UP-TO-DATE
+> Task :core:domain:processDebugNavigationResources UP-TO-DATE
+> Task :core:domain:javaPreCompileDebug UP-TO-DATE
+> Task :core:data:parseDebugLocalResources UP-TO-DATE
+> Task :core:testing:parseDebugLocalResources UP-TO-DATE
+> Task :core:domain:packageDebugResources UP-TO-DATE
+> Task :core:testing:generateDebugRFile UP-TO-DATE
+> Task :core:domain:parseDebugLocalResources UP-TO-DATE
+> Task :core:data:generateDebugRFile UP-TO-DATE
+> Task :core:domain:generateDebugRFile UP-TO-DATE
+> Task :core:domain:compileDebugLibraryResources UP-TO-DATE
+> Task :core:data:mergeDebugUnitTestResources UP-TO-DATE
+> Task :core:data:mergeDebugUnitTestAssets UP-TO-DATE
+> Task :core:data:processDebugUnitTestManifest UP-TO-DATE
+> Task :core:data:checkDebugUnitTestAarMetadata UP-TO-DATE
+> Task :core:domain:compileDebugKotlin UP-TO-DATE
+> Task :core:domain:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:domain:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :core:domain:processDebugJavaRes UP-TO-DATE
+> Task :core:domain:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :core:testing:compileDebugKotlin UP-TO-DATE
+> Task :core:testing:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:domain:compileDebugTestFixturesKotlin UP-TO-DATE
+> Task :core:testing:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :core:testing:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :core:testing:processDebugJavaRes UP-TO-DATE
+> Task :core:domain:compileDebugTestFixturesJavaWithJavac NO-SOURCE
+> Task :core:domain:processDebugTestFixturesJavaRes UP-TO-DATE
+> Task :core:domain:bundleLibCompileToJarDebugTestFixtures UP-TO-DATE
+> Task :core:domain:bundleLibRuntimeToJarDebugTestFixtures UP-TO-DATE
+> Task :core:data:processDebugUnitTestResources UP-TO-DATE
+> Task :core:data:packageDebugUnitTestForUnitTest UP-TO-DATE
+> Task :core:data:generateDebugUnitTestConfig UP-TO-DATE
+> Task :core:data:kspDebugKotlin
+
+> Task :core:data:compileDebugKotlin
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:89:5 This annotation is currently applied to the value parameter only, but in the future it will also be applied to field.
+- To opt in to applying to both value parameter and field, add '-Xannotation-default-target=param-property' to your compiler arguments.
+- To keep applying to the value parameter only, use the '@param:' annotation target.
+
+See https://youtrack.jetbrains.com/issue/KT-73255 for more details.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:249:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:255:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:288:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:302:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:337:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:347:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:378:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:391:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:426:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:449:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:490:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:504:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:540:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:547:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:572:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:586:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:622:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:628:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:652:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:659:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:684:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:696:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:726:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:730:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:752:42 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'local'. This may cause problems when calling this function with named arguments.
+w: file:///home/sean/Code/pocket-crew/core/data/src/main/kotlin/com/browntowndev/pocketcrew/core/data/remote/FirestoreDataSource.kt:761:36 The corresponding parameter in the supertype 'EntitySyncAdapter' is named 'doc'. This may cause problems when calling this function with named arguments.
+
+> Task :core:data:processDebugJavaRes UP-TO-DATE
+> Task :core:data:compileDebugJavaWithJavac
+> Task :core:data:transformDebugClassesWithAsm
+> Task :core:data:bundleLibCompileToJarDebug
+> Task :core:data:bundleLibRuntimeToJarDebug
+> Task :core:data:kspDebugUnitTestKotlin
+> Task :core:data:compileDebugUnitTestKotlin
+> Task :core:data:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :core:data:hiltSyncDebugUnitTest
+> Task :core:data:processDebugUnitTestJavaRes UP-TO-DATE
+> Task :core:data:hiltAggregateDepsDebugUnitTest UP-TO-DATE
+> Task :core:data:hiltJavaCompileDebugUnitTest NO-SOURCE
+> Task :core:data:transformDebugUnitTestClassesWithAsm
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :core:data:testDebugUnitTest
+
+FirestoreDataSourceTest > chats snapshot listener > MODIFIED upserts chat into local database FAILED
+    java.lang.AssertionError at FirestoreDataSourceTest.kt:306
+
+FirestoreDataSourceTest > chats snapshot listener > REMOVED deletes chat from local database FAILED
+    java.lang.AssertionError at FirestoreDataSourceTest.kt:326
+
+FirestoreDataSourceTest > chats snapshot listener > ADDED inserts new chat when not in local DB FAILED
+    java.lang.AssertionError at FirestoreDataSourceTest.kt:232
+
+FirestoreDataSourceTest > chats snapshot listener > ADDED replaces chat when it exists locally as a placeholder FAILED
+    java.lang.AssertionError at FirestoreDataSourceTest.kt:278
+
+FirestoreDataSourceTest > messages snapshot listener > REMOVED deletes message from local database FAILED
+    java.lang.AssertionError at FirestoreDataSourceTest.kt:449
+
+FirestoreDataSourceTest > messages snapshot listener > MODIFIED upserts message into local database FAILED
+    java.lang.AssertionError at FirestoreDataSourceTest.kt:427
+
+FirestoreDataSourceTest > messages snapshot listener > ADDED inserts new message and placeholder chat when chat not in local DB FAILED
+    java.lang.AssertionError at FirestoreDataSourceTest.kt:369
+
+ChatRepositoryImplTest > D2 togglePinStatus updates database from false to true() FAILED
+    java.lang.IllegalArgumentException at ChatRepositoryImplTest.kt:76
+
+ChatRepositoryImplTest > D3 togglePinStatus toggles from true to false() FAILED
+    java.lang.AssertionError at ChatRepositoryImplTest.kt:93
+
+ExtractToolExecutorTest > execute delegates to TavilySearchRepository extract when search is enabled and Tavily is selected() FAILED
+    java.lang.AssertionError at ExtractToolExecutorTest.kt:27
+
+ExtractToolExecutorTest > execute delegates to ExaSearchRepository extract when search is enabled and Exa is selected() FAILED
+    java.lang.AssertionError at ExtractToolExecutorTest.kt:62
+
+MediaProviderRepositoryImplTest > deleteMediaProvider calls triggerSync once() FAILED
+    io.mockk.MockKException at MediaProviderRepositoryImplTest.kt:85
+
+MediaProviderRepositoryImplTest > deleteMediaProvider deletes entity and removes API key() FAILED
+    io.mockk.MockKException at MediaProviderRepositoryImplTest.kt:63
+
+MemoriesRepositoryTest > deleteMemory deletes from dao and removes embedding() FAILED
+    java.lang.AssertionError at MemoriesRepositoryTest.kt:119
+
+StudioRepositoryImplTest > deleteMedia with UUID calls DAO() FAILED
+    java.lang.AssertionError at StudioRepositoryImplTest.kt:163
+
+StudioRepositoryImplTest > deleteAlbum reassigns media to null before deleting album() FAILED
+    java.lang.AssertionError at StudioRepositoryImplTest.kt:153
+
+StudioRepositoryImplTest > renameAlbum trims name and updates album row() FAILED
+    java.lang.AssertionError at StudioRepositoryImplTest.kt:135
+
+TtsProviderRepositoryImplTest > deleteTtsProvider calls triggerSync once() FAILED
+    io.mockk.MockKException at TtsProviderRepositoryImplTest.kt:92
+
+TtsProviderRepositoryImplTest > deleteTtsProvider deletes entity and removes API key() FAILED
+    io.mockk.MockKException at TtsProviderRepositoryImplTest.kt:68
+
+CloudSyncTriggerTest > trigger > uses REPLACE policy so rapid calls debounce to a single enqueue FAILED
+    org.opentest4j.AssertionFailedError at CloudSyncTriggerTest.kt:60
+
+CloudSyncTriggerTest > trigger > enqueues unique work with name pocketcrew_sync FAILED
+    java.lang.AssertionError at CloudSyncTriggerTest.kt:36
+
+SyncReconciliationTest > remoteTombstoneWins FAILED
+    java.lang.AssertionError at SyncReconciliationTest.kt:152
+
+SyncReconciliationTest > remoteNewerWins FAILED
+    java.lang.AssertionError at SyncReconciliationTest.kt:78
+
+ApiModelRepositoryImplTest > deleteConfiguration calls triggerSync once FAILED
+    java.lang.AssertionError at ApiModelRepositoryImplTest.kt:373
+
+ApiModelRepositoryImplTest > delete credentials removes both entity and key FAILED
+    java.lang.AssertionError at ApiModelRepositoryImplTest.kt:97
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :core:data:testDebugUnitTest FAILED
+
+586 tests completed, 25 failed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':core:data:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///home/sean/Code/pocket-crew/core/data/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+BUILD FAILED in 41s
+77 actionable tasks: 10 executed, 67 up-to-date
+Configuration cache entry reused.

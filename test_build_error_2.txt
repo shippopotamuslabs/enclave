@@ -1,0 +1,112 @@
+Reusing configuration cache.
+> Task :core:data:preBuild UP-TO-DATE
+> Task :core:testing:preBuild UP-TO-DATE
+> Task :core:domain:preBuild UP-TO-DATE
+> Task :core:data:preDebugBuild UP-TO-DATE
+> Task :core:domain:preDebugTestFixturesBuild UP-TO-DATE
+> Task :core:data:preDebugUnitTestBuild UP-TO-DATE
+> Task :core:data:javaPreCompileDebug UP-TO-DATE
+> Task :core:data:mapDebugUnitTestSourceSetPaths UP-TO-DATE
+> Task :core:data:generateDebugBuildConfig UP-TO-DATE
+> Task :core:domain:preDebugBuild UP-TO-DATE
+> Task :core:domain:javaPreCompileDebugTestFixtures UP-TO-DATE
+> Task :core:data:mapDebugSourceSetPaths UP-TO-DATE
+> Task :core:data:writeDebugAarMetadata UP-TO-DATE
+> Task :core:data:generateDebugResources UP-TO-DATE
+> Task :core:data:processDebugNavigationResources UP-TO-DATE
+> Task :core:domain:writeDebugTestFixturesAarMetadata UP-TO-DATE
+> Task :core:data:generateDebugUnitTestResources UP-TO-DATE
+> Task :core:data:extractDeepLinksDebug UP-TO-DATE
+> Task :core:domain:generateDebugResources UP-TO-DATE
+> Task :core:domain:generateDebugTestFixturesEmptyResourceFiles UP-TO-DATE
+> Task :core:domain:writeDebugAarMetadata UP-TO-DATE
+> Task :core:domain:processDebugNavigationResources UP-TO-DATE
+> Task :core:domain:javaPreCompileDebug UP-TO-DATE
+> Task :core:testing:preDebugBuild UP-TO-DATE
+> Task :core:domain:extractDeepLinksDebug UP-TO-DATE
+> Task :core:domain:mapDebugSourceSetPaths UP-TO-DATE
+> Task :core:domain:processDebugTestFixturesManifest UP-TO-DATE
+> Task :core:data:processDebugManifest UP-TO-DATE
+> Task :core:testing:javaPreCompileDebug UP-TO-DATE
+> Task :core:testing:processDebugNavigationResources UP-TO-DATE
+> Task :core:testing:writeDebugAarMetadata UP-TO-DATE
+> Task :core:testing:extractDeepLinksDebug UP-TO-DATE
+> Task :core:domain:processDebugManifest UP-TO-DATE
+> Task :core:data:packageDebugResources UP-TO-DATE
+> Task :core:testing:mapDebugSourceSetPaths UP-TO-DATE
+> Task :core:testing:processDebugManifest UP-TO-DATE
+> Task :core:testing:generateDebugResources UP-TO-DATE
+> Task :core:data:compileDebugLibraryResources UP-TO-DATE
+> Task :core:domain:packageDebugResources UP-TO-DATE
+> Task :core:domain:compileDebugLibraryResources UP-TO-DATE
+> Task :core:testing:packageDebugResources UP-TO-DATE
+> Task :core:domain:parseDebugLocalResources UP-TO-DATE
+> Task :core:data:parseDebugLocalResources UP-TO-DATE
+> Task :core:testing:parseDebugLocalResources UP-TO-DATE
+> Task :core:testing:compileDebugLibraryResources UP-TO-DATE
+> Task :core:testing:generateDebugRFile UP-TO-DATE
+> Task :core:data:generateDebugRFile UP-TO-DATE
+> Task :core:domain:generateDebugRFile UP-TO-DATE
+> Task :core:data:checkDebugUnitTestAarMetadata UP-TO-DATE
+> Task :core:data:mergeDebugUnitTestResources UP-TO-DATE
+> Task :core:data:processDebugUnitTestManifest UP-TO-DATE
+> Task :core:domain:compileDebugKotlin UP-TO-DATE
+> Task :core:domain:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:domain:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :core:domain:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :core:domain:compileDebugTestFixturesKotlin UP-TO-DATE
+> Task :core:domain:compileDebugTestFixturesJavaWithJavac NO-SOURCE
+> Task :core:domain:bundleLibCompileToJarDebugTestFixtures UP-TO-DATE
+> Task :core:testing:compileDebugKotlin UP-TO-DATE
+> Task :core:testing:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:testing:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :core:data:processDebugUnitTestResources UP-TO-DATE
+> Task :core:data:kspDebugKotlin
+> Task :core:data:compileDebugKotlin
+> Task :core:data:compileDebugJavaWithJavac
+> Task :core:data:transformDebugClassesWithAsm
+> Task :core:data:bundleLibCompileToJarDebug
+> Task :core:data:kspDebugUnitTestKotlin
+
+> Task :core:data:compileDebugUnitTestKotlin FAILED
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:81:9 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:81:17 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:81:18 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:81:32 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:81:33 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:81:34 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:81:35 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:81:49 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:81:50 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:81:57 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:82:51 Suspend function 'suspend fun getById(id: LocalModelId): LocalModelEntity?' can only be called from a coroutine or another suspend function.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:82:59 Unresolved reference 'modelId'.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:83:9 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:83:19 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:83:20 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:83:29 Syntax error: Expecting member declaration.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:88:22 Unresolved reference 'nextCredId'.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:89:9 Unresolved reference 'database'.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:93:9 Unresolved reference 'database'.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:94:9 Unresolved reference 'database'.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:96:9 Unresolved reference 'database'.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:97:25 Unresolved reference 'database'.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:98:9 Unresolved reference 'assertNull'.
+e: file:///home/sean/Code/pocket-crew/core/data/src/test/kotlin/com/browntowndev/pocketcrew/core/data/local/CascadeBehaviorTest.kt:100:1 Syntax error: Expecting a top level declaration.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':core:data:compileDebugUnitTestKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 6s
+58 actionable tasks: 7 executed, 51 up-to-date
+Configuration cache entry reused.
