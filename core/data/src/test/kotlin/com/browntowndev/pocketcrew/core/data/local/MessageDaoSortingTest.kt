@@ -50,7 +50,7 @@ class MessageDaoSortingTest {
         val chatId = ChatId("chat-1")
         
         // Insert parent chat to satisfy FK constraint
-        database.chatDao().insert(ChatEntity(
+        database.chatDao().upsert(ChatEntity(
             id = chatId,
             name = "Test Chat",
             created = Date(),
@@ -88,9 +88,9 @@ class MessageDaoSortingTest {
             createdAt = 2000L
         )
 
-        dao.insert(msgInFlight)
-        dao.insert(msgOld)
-        dao.insert(msgNew)
+        dao.upsert(msgInFlight)
+        dao.upsert(msgOld)
+        dao.upsert(msgNew)
 
         val messages = dao.getMessagesByChatIdFlow(chatId).first()
 
@@ -105,7 +105,7 @@ class MessageDaoSortingTest {
         val chatId = ChatId("chat-1")
         
         // Insert parent chat
-        database.chatDao().insert(ChatEntity(
+        database.chatDao().upsert(ChatEntity(
             id = chatId,
             name = "Test Chat",
             created = Date(),
@@ -113,7 +113,7 @@ class MessageDaoSortingTest {
             pinned = false
         ))
         
-        dao.insert(MessageEntity(
+        dao.upsert(MessageEntity(
             id = MessageId("3"),
             chatId = chatId,
             role = Role.ASSISTANT,
@@ -122,7 +122,7 @@ class MessageDaoSortingTest {
             createdAt = null
         ))
         
-        dao.insert(MessageEntity(
+        dao.upsert(MessageEntity(
             id = MessageId("1"),
             chatId = chatId,
             role = Role.USER,
@@ -143,14 +143,14 @@ class MessageDaoSortingTest {
         val chatId = ChatId("chat-atomic")
         val assistantMessageId = MessageId("assistant")
 
-        database.chatDao().insert(ChatEntity(
+        database.chatDao().upsert(ChatEntity(
             id = chatId,
             name = "Test Chat",
             created = Date(),
             lastModified = Date(),
             pinned = false
         ))
-        dao.insert(MessageEntity(
+        dao.upsert(MessageEntity(
             id = assistantMessageId,
             chatId = chatId,
             role = Role.ASSISTANT,

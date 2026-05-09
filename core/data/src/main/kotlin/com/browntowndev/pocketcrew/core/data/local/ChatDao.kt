@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 abstract class ChatDao {
     @Upsert
-    abstract suspend fun insert(chatEntity: ChatEntity): Long
+    abstract suspend fun upsert(chatEntity: ChatEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun insertIfAbsent(chatEntity: ChatEntity): Long

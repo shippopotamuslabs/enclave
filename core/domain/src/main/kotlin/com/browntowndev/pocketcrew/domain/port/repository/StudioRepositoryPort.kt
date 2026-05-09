@@ -6,9 +6,12 @@ interface StudioMediaId {
     val value: String
 }
 
+const val DEFAULT_GALLERY_ALBUM_ID = "default"
+
 data class StudioMediaAsset(
     val id: String,
     val localUri: String,
+    val remoteUrl: String? = null,
     val prompt: String,
     val mediaType: String, // IMAGE/VIDEO
     val createdAt: Long,

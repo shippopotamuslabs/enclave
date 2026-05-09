@@ -35,5 +35,17 @@ class CloudSyncTrigger @Inject constructor(private val workManager: WorkManager)
                 )
                 .build()
         )
+
+        workManager.enqueueUniqueWork(
+            "pocketcrew_file_sync",
+            ExistingWorkPolicy.REPLACE,
+            OneTimeWorkRequestBuilder<MessageFileCloudSyncWorker>()
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+        )
     }
 }

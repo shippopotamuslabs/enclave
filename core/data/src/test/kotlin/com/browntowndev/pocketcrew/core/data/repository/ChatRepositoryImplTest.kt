@@ -32,6 +32,8 @@ class ChatRepositoryImplTest {
     private lateinit var chatDao: ChatDao
     private lateinit var messageDao: MessageDao
     private lateinit var tavilySourceDao: WebSearchSourceDao
+    private lateinit var messageFileDao: com.browntowndev.pocketcrew.core.data.local.MessageFileDao
+    private lateinit var transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
     private lateinit var repository: ChatRepositoryImpl
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
 
@@ -42,7 +44,22 @@ class ChatRepositoryImplTest {
         chatDao = mockk<ChatDao>(relaxed = true)
         messageDao = mockk<MessageDao>(relaxed = true)
         tavilySourceDao = mockk<WebSearchSourceDao>(relaxed = true)
-        repository = ChatRepositoryImpl(syncTrigger, chatDao, messageDao, tavilySourceDao)
+        messageFileDao = mockk(relaxed = true)
+        transactionProvider = mockk(relaxed = true)
+        
+        // Mock transaction provider to run the block immediately
+        coEvery { transactionProvider.runInTransaction<Any>(any()) } answers {
+            runTest { (it.invocation.args[0] as suspend () -> Any).invoke() }
+        }
+
+        repository = ChatRepositoryImpl(
+            syncTrigger, 
+            chatDao, 
+            messageDao, 
+            tavilySourceDao,
+            messageFileDao,
+            transactionProvider
+        )
     }
 
     @After

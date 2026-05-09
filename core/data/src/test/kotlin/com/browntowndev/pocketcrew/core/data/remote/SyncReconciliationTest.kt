@@ -98,7 +98,7 @@ class SyncReconciliationTest {
         advanceUntilIdle()
 
         coVerify {
-            chatDao.insert(match { 
+            chatDao.upsert(match { 
                 it.id.value == chatId.value && it.name == "Newer Remote" && it.updatedAt == 2000L 
             })
         }
@@ -125,7 +125,7 @@ class SyncReconciliationTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) {
-            chatDao.insert(any())
+            chatDao.upsert(any())
         }
     }
 
@@ -150,7 +150,7 @@ class SyncReconciliationTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) {
-            chatDao.insert(any())
+            chatDao.upsert(any())
         }
     }
 
@@ -175,7 +175,7 @@ class SyncReconciliationTest {
 
         advanceUntilIdle()
         coVerify {
-            chatDao.insert(match { 
+            chatDao.upsert(match { 
                 it.id.value == chatId.value && it.deleted == true && it.updatedAt == 2000L 
             })
         }

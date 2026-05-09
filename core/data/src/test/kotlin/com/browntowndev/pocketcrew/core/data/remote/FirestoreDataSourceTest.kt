@@ -232,7 +232,7 @@ class FirestoreDataSourceTest {
         @Test
         @DisplayName("ADDED inserts new chat when not in local DB")
         fun addedInsertsNewChat() = testScope.runTest {
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "chat-1"
             every { mockDoc.getBlob("name") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getLong("created_at") } returns 1000L
@@ -248,14 +248,14 @@ class FirestoreDataSourceTest {
             advanceUntilIdle()
 
             coVerify {
-                chatDao.insert(any())
+                chatDao.upsert(any())
             }
         }
 
         @Test
         @DisplayName("ADDED skips insert when chat already exists and is NOT a placeholder")
         fun addedSkipsExistingChat() = testScope.runTest {
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "chat-1"
             every { mockDoc.getBlob("name") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getLong("created_at") } returns 1000L
@@ -276,7 +276,7 @@ class FirestoreDataSourceTest {
             chatsListenerSlot.captured.onEvent(snapshot, null)
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { chatDao.insert(any()) }
+            coVerify(exactly = 0) { chatDao.upsert(any()) }
         }
 
         @Test
@@ -305,14 +305,14 @@ class FirestoreDataSourceTest {
             advanceUntilIdle()
 
             coVerify {
-                chatDao.insert(match { it.id.value == "chat-1" && it.name == "encrypted" && it.created.time == 1000L })
+                chatDao.upsert(match { it.id.value == "chat-1" && it.name == "encrypted" && it.created.time == 1000L })
             }
         }
 
         @Test
         @DisplayName("MODIFIED upserts chat into local database")
         fun modifiedUpsertsChat() = testScope.runTest {
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "chat-1"
             every { mockDoc.getBlob("name") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getLong("created_at") } returns 1000L
@@ -335,7 +335,7 @@ class FirestoreDataSourceTest {
             advanceUntilIdle()
 
             coVerify {
-                chatDao.insert(match {
+                chatDao.upsert(match {
                     it.id.value == "chat-1" && it.name == "encrypted" && it.pinned
                 })
             }
@@ -344,7 +344,7 @@ class FirestoreDataSourceTest {
         @Test
         @DisplayName("REMOVED deletes chat from local database")
         fun removedDeletesChat() = testScope.runTest {
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "chat-1"
 
             val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.REMOVED)
@@ -362,7 +362,7 @@ class FirestoreDataSourceTest {
                 mockk<FirebaseFirestoreException>(relaxed = true)
             )
 
-            coVerify(exactly = 0) { chatDao.insert(any()) }
+            coVerify(exactly = 0) { chatDao.upsert(any()) }
             coVerify(exactly = 0) { chatDao.softDeleteById(any(), any()) }
         }
     }
@@ -388,7 +388,7 @@ class FirestoreDataSourceTest {
         @Test
         @DisplayName("ADDED inserts new message and placeholder chat when chat not in local DB")
         fun addedInsertsNewMessageAndPlaceholder() = testScope.runTest {
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "msg-1"
             every { mockDoc.getString("chat_id") } returns "chat-1"
             every { mockDoc.getBlob("content") } returns Blob.fromBytes("encrypted".toByteArray())
@@ -410,7 +410,7 @@ class FirestoreDataSourceTest {
                 chatDao.insertIfAbsent(match {
                     it.id.value == "chat-1" && it.created.time == 0L && it.name == "Syncing..."
                 })
-                messageDao.insert(match {
+                messageDao.upsert(match {
                     it.id.value == "msg-1" && it.chatId.value == "chat-1" && it.content == "encrypted"
                 })
             }
@@ -419,14 +419,14 @@ class FirestoreDataSourceTest {
         @Test
         @DisplayName("ADDED skips insert when message already exists locally")
         fun addedSkipsExistingMessage() = testScope.runTest {
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "msg-1"
-            every { mockDoc.getString("chatId") } returns "chat-1"
+            every { mockDoc.getString("chat_id") } returns "chat-1"
             every { mockDoc.getBlob("content") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getString("role") } returns "USER"
-            every { mockDoc.getString("messageState") } returns "COMPLETE"
-            every { mockDoc.getLong("createdAt") } returns null
-            every { mockDoc.getString("modelType") } returns null
+            every { mockDoc.getString("message_state") } returns "COMPLETE"
+            every { mockDoc.getLong("created_at") } returns null
+            every { mockDoc.getString("model_type") } returns null
 
             coEvery { messageDao.getMessageById(MessageId("msg-1")) } returns MessageWithFiles(
                 message = MessageEntity(
@@ -444,13 +444,13 @@ class FirestoreDataSourceTest {
             messagesListenerSlot.captured.onEvent(snapshot, null)
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { messageDao.insert(any<MessageEntity>()) }
+            coVerify(exactly = 0) { messageDao.upsert(any<MessageEntity>()) }
         }
 
         @Test
         @DisplayName("MODIFIED upserts message into local database")
         fun modifiedUpsertsMessage() = testScope.runTest {
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "msg-1"
             every { mockDoc.getString("chat_id") } returns "chat-1"
             every { mockDoc.getBlob("content") } returns Blob.fromBytes("encrypted".toByteArray())
@@ -466,7 +466,7 @@ class FirestoreDataSourceTest {
             advanceUntilIdle()
 
             coVerify {
-                messageDao.insert(match {
+                messageDao.upsert(match {
                     it.id.value == "msg-1" && it.content == "encrypted"
                 })
             }
@@ -475,7 +475,7 @@ class FirestoreDataSourceTest {
         @Test
         @DisplayName("REMOVED deletes message from local database")
         fun removedDeletesMessage() = testScope.runTest {
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "msg-1"
 
             val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.REMOVED)
@@ -742,12 +742,14 @@ class FirestoreDataSourceTest {
 
             val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "cred-1"
-            every { mockDoc.getString("display_name") } returns "OpenAI"
+            every { mockDoc.getBlob("display_name") } returns Blob.fromBytes("OpenAI".toByteArray())
             every { mockDoc.getString("provider") } returns "OPENAI"
+            every { mockDoc.getBlob("base_url") } returns Blob.fromBytes("https://api.openai.com".toByteArray())
             every { mockDoc.getString("model_id") } returns "gpt-4"
             every { mockDoc.getString("credential_alias") } returns "openai_main"
             every { mockDoc.getBlob("encrypted_api_key") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getLong("updated_at") } returns 1000L
+            every { mockDoc.getBoolean("deleted") } returns false
             
             coEvery { apiCredentialsDao.getById(any()) } returns null
 
@@ -757,7 +759,7 @@ class FirestoreDataSourceTest {
 
             coVerify {
                 apiCredentialsDao.upsert(match {
-                    it.id.value == "cred-1" && it.displayName == "OpenAI" && it.encryptedApiKey?.contentEquals("encrypted".toByteArray()) == true
+                    it.id.value == "cred-1" && it.displayName == "OpenAI" && it.baseUrl == "https://api.openai.com"
                 })
             }
         }
@@ -875,10 +877,10 @@ class FirestoreDataSourceTest {
         @Test
         @DisplayName("ADDED updates existing configuration when ID is different but logical key matches")
         fun addedUpdatesExistingOnIdMismatch() = testScope.runTest {
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "remote-id"
             every { mockDoc.getString("local_model_id") } returns "model-1"
-            every { mockDoc.getString("display_name") } returns "Logic Match"
+            every { mockDoc.getBlob("display_name") } returns Blob.fromBytes("Logic Match".toByteArray())
             every { mockDoc.getDouble("temperature") } returns 0.7
             every { mockDoc.getLong("top_k") } returns 40L
             every { mockDoc.getDouble("top_p") } returns 0.9
@@ -887,8 +889,9 @@ class FirestoreDataSourceTest {
             every { mockDoc.getLong("max_tokens") } returns 4096L
             every { mockDoc.getLong("context_window") } returns 4096L
             every { mockDoc.getBoolean("thinking_enabled") } returns false
-            every { mockDoc.getString("system_prompt") } returns ""
+            every { mockDoc.getBlob("system_prompt") } returns Blob.fromBytes("".toByteArray())
             every { mockDoc.getLong("updated_at") } returns 2000L
+            every { mockDoc.getBoolean("deleted") } returns false
 
             val existingEntity = LocalModelConfigurationEntity(
                 id = LocalModelConfigurationId("local-id"),
@@ -961,34 +964,59 @@ class FirestoreDataSourceTest {
         @Test
         @DisplayName("ADDED inserts vision analysis and placeholder message when message not in local DB")
         fun addedInsertsPlaceholderMessage() = testScope.runTest {
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "vision-1"
             every { mockDoc.getString("user_message_id") } returns "msg-1"
-            every { mockDoc.getString("image_uri") } returns "file://img.jpg"
+            every { mockDoc.getBlob("image_uri") } returns Blob.fromBytes("file://img.jpg".toByteArray())
             every { mockDoc.getBlob("prompt_text") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getBlob("analysis_text") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getString("model_type") } returns "VISION"
             every { mockDoc.getString("chat_id") } returns "chat-1"
             every { mockDoc.getLong("created_at") } returns 1000L
             every { mockDoc.getLong("updated_at") } returns 2000L
+            every { mockDoc.getBoolean("deleted") } returns false
 
             coEvery { messageDao.getMessageById(MessageId("msg-1")) } returns null
-            coEvery { chatDao.getChatById(any()) } returns mockk() // Assume chat exists for placeholder message
+            coEvery { chatDao.getChatById(any()) } returns mockk()
             coEvery { messageVisionAnalysisDao.getById("vision-1") } returns null
 
             val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.ADDED)
             listenerSlot.captured.onEvent(snapshot, null)
 
             coVerify {
-                // Should insert a placeholder message
                 messageDao.insertIfAbsent(match {
                     it.id.value == "msg-1" && it.content == "Syncing..."
                 })
-                // Then insert the vision analysis
                 messageVisionAnalysisDao.upsert(match {
                     it.id == "vision-1" && it.userMessageId.value == "msg-1"
                 })
             }
+        }
+
+        @Test
+        @DisplayName("decrypts image_uri from blob when syncing down")
+        fun decryptsImageUriFromBlob() = testScope.runTest {
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { mockDoc.id } returns "vision-2"
+            every { mockDoc.getString("user_message_id") } returns "msg-2"
+            every { mockDoc.getBlob("image_uri") } returns Blob.fromBytes("file:///data/img.jpg".toByteArray())
+            every { mockDoc.getBlob("prompt_text") } returns Blob.fromBytes("a cat".toByteArray())
+            every { mockDoc.getBlob("analysis_text") } returns Blob.fromBytes("analysis".toByteArray())
+            every { mockDoc.getString("model_type") } returns "VISION"
+            every { mockDoc.getString("chat_id") } returns "chat-1"
+            every { mockDoc.getLong("created_at") } returns 1000L
+            every { mockDoc.getLong("updated_at") } returns 2000L
+            every { mockDoc.getBoolean("deleted") } returns false
+
+            coEvery { messageVisionAnalysisDao.getById("vision-2") } returns null
+
+            val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.ADDED)
+            listenerSlot.captured.onEvent(snapshot, null)
+            advanceUntilIdle()
+
+            coVerify { messageVisionAnalysisDao.upsert(match {
+                it.id == "vision-2" && it.imageUri == "file:///data/img.jpg"
+            }) }
         }
     }
 
@@ -1010,7 +1038,7 @@ class FirestoreDataSourceTest {
 
             dataSource.startListening()
 
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "msg-blank"
             every { mockDoc.getString("chat_id") } returns ""
             every { mockDoc.getBlob("content") } returns Blob.fromBytes("encrypted".toByteArray())
@@ -1026,7 +1054,7 @@ class FirestoreDataSourceTest {
             advanceUntilIdle()
 
             // No message should be inserted because fromFirestore returned null
-            coVerify(exactly = 0) { messageDao.insert(any<MessageEntity>()) }
+            coVerify(exactly = 0) { messageDao.upsert(any<MessageEntity>()) }
             coVerify(exactly = 0) { messageDao.insertIfAbsent(any()) }
         }
 
@@ -1043,7 +1071,7 @@ class FirestoreDataSourceTest {
 
             dataSource.startListening()
 
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "msg-null"
             every { mockDoc.getString("chat_id") } returns null
             every { mockDoc.getBlob("content") } returns Blob.fromBytes("encrypted".toByteArray())
@@ -1058,7 +1086,7 @@ class FirestoreDataSourceTest {
             messagesListenerSlot.captured.onEvent(snapshot, null)
             advanceUntilIdle()
 
-            coVerify(exactly = 0) { messageDao.insert(any<MessageEntity>()) }
+            coVerify(exactly = 0) { messageDao.upsert(any<MessageEntity>()) }
             coVerify(exactly = 0) { messageDao.insertIfAbsent(any()) }
         }
 
@@ -1099,10 +1127,10 @@ class FirestoreDataSourceTest {
 
             localDataSource.startListening()
 
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "vision-blank"
             every { mockDoc.getString("user_message_id") } returns ""
-            every { mockDoc.getString("image_uri") } returns "file://img.jpg"
+            every { mockDoc.getBlob("image_uri") } returns Blob.fromBytes("file://img.jpg".toByteArray())
             every { mockDoc.getBlob("prompt_text") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getBlob("analysis_text") } returns Blob.fromBytes("encrypted".toByteArray())
             every { mockDoc.getString("model_type") } returns "VISION"
@@ -1154,7 +1182,7 @@ class FirestoreDataSourceTest {
 
             localDataSource.startListening()
 
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "file-blank"
             every { mockDoc.getString("message_id") } returns ""
             every { mockDoc.getBlob("name") } returns Blob.fromBytes("encrypted".toByteArray())
@@ -1205,7 +1233,7 @@ class FirestoreDataSourceTest {
 
             localDataSource.startListening()
 
-            val mockDoc = mockk<QueryDocumentSnapshot>()
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
             every { mockDoc.id } returns "search-blank"
             every { mockDoc.getString("message_id") } returns ""
             every { mockDoc.getBlob("title") } returns Blob.fromBytes("encrypted".toByteArray())
@@ -1220,6 +1248,514 @@ class FirestoreDataSourceTest {
             advanceUntilIdle()
 
             coVerify(exactly = 0) { webSearchSourceDao.upsert(any()) }
+        }
+    }
+
+    @Nested
+    @DisplayName("messageSyncAdapter")
+    inner class MessageSyncTests {
+        @Test
+        @DisplayName("correctly syncs Message with artifactsJson and userMessageId")
+        fun syncsMessage() = runTest {
+            val localDataSource = FirestoreDataSource(
+                firestore = firestore,
+                chatDao = chatDao,
+                messageDao = messageDao,
+                cryptoManager = cryptoManager,
+                loggingPort = loggingPort,
+                externalScope = testScope,
+                userIdProvider = { "test-user-id" },
+                apiCredentialsDao = apiCredentialsDao,
+                apiModelConfigurationsDao = mockk(relaxed = true),
+                localModelsDao = mockk(relaxed = true),
+                localModelConfigurationsDao = mockk(relaxed = true),
+                defaultModelsDao = mockk(relaxed = true),
+                studioMediaDao = mockk(relaxed = true),
+                studioAlbumDao = mockk(relaxed = true),
+                memoriesDao = mockk(relaxed = true),
+                ttsProviderDao = mockk(relaxed = true),
+                mediaProviderDao = mockk(relaxed = true),
+                apiKeyManager = apiKeyManager,
+                messageVisionAnalysisDao = mockk(relaxed = true),
+                messageFileDao = mockk(relaxed = true),
+                webSearchSourceDao = mockk(relaxed = true),
+                embeddingCoordinator = embeddingCoordinator,
+                embeddingDao = embeddingDao
+            )
+
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            val collection = mockk<CollectionReference>(relaxed = true)
+            every { firestore.collection("users/test-user-id/messages") } returns collection
+            every { collection.addSnapshotListener(capture(listenerSlot)) } returns mockk(relaxed = true)
+
+            localDataSource.startListening()
+
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { mockDoc.id } returns "msg-1"
+            every { mockDoc.getString("chat_id") } returns "chat-1"
+            every { mockDoc.getBlob("content") } returns Blob.fromBytes("Hello".toByteArray())
+            every { mockDoc.getString("role") } returns "assistant"
+            every { mockDoc.getString("message_state") } returns "complete"
+            every { mockDoc.getString("user_message_id") } returns "msg-user"
+            every { mockDoc.getBlob("artifacts_json") } returns Blob.fromBytes("[artifact]".toByteArray())
+            every { mockDoc.getLong("updated_at") } returns 123L
+            every { mockDoc.getBoolean("deleted") } returns false
+
+            coEvery { messageDao.getMessageById(any()) } returns null
+
+            val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.ADDED)
+            listenerSlot.captured.onEvent(snapshot, null)
+            advanceUntilIdle()
+
+            coVerify { messageDao.upsert(match {
+                it.id.value == "msg-1" &&
+                it.userMessageId?.value == "msg-user" &&
+                it.artifactsJson == "[artifact]"
+            }) }
+        }
+
+        @Test
+        @DisplayName("decrypts generatedMediaAssetIdsJson from blob when syncing down")
+        fun decryptsGeneratedMediaAssetIdsJsonFromBlob() = runTest {
+            val localDataSource = FirestoreDataSource(
+                firestore = firestore,
+                chatDao = chatDao,
+                messageDao = messageDao,
+                cryptoManager = cryptoManager,
+                loggingPort = loggingPort,
+                externalScope = testScope,
+                userIdProvider = { "test-user-id" },
+                apiCredentialsDao = apiCredentialsDao,
+                apiModelConfigurationsDao = mockk(relaxed = true),
+                localModelsDao = mockk(relaxed = true),
+                localModelConfigurationsDao = mockk(relaxed = true),
+                defaultModelsDao = mockk(relaxed = true),
+                studioMediaDao = mockk(relaxed = true),
+                studioAlbumDao = mockk(relaxed = true),
+                memoriesDao = mockk(relaxed = true),
+                ttsProviderDao = mockk(relaxed = true),
+                mediaProviderDao = mockk(relaxed = true),
+                apiKeyManager = apiKeyManager,
+                messageVisionAnalysisDao = mockk(relaxed = true),
+                messageFileDao = mockk(relaxed = true),
+                webSearchSourceDao = mockk(relaxed = true),
+                embeddingCoordinator = embeddingCoordinator,
+                embeddingDao = embeddingDao
+            )
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            val collection = mockk<CollectionReference>(relaxed = true)
+            every { firestore.collection("users/test-user-id/messages") } returns collection
+            every { collection.addSnapshotListener(capture(listenerSlot)) } returns mockk(relaxed = true)
+            localDataSource.startListening()
+
+            val assetIds = """["gs://bucket/users/uid/studio/abc.jpg"]"""
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { mockDoc.id } returns "msg-1"
+            every { mockDoc.getString("chat_id") } returns "chat-1"
+            every { mockDoc.getBlob("content") } returns Blob.fromBytes("Hello".toByteArray())
+            every { mockDoc.getString("role") } returns "user"
+            every { mockDoc.getString("message_state") } returns "complete"
+            every { mockDoc.getBlob("generated_media_asset_ids_json") } returns Blob.fromBytes(assetIds.toByteArray())
+            every { mockDoc.getLong("updated_at") } returns 123L
+            every { mockDoc.getBoolean("deleted") } returns false
+            coEvery { messageDao.getMessageById(any()) } returns null
+
+            val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.ADDED)
+            listenerSlot.captured.onEvent(snapshot, null)
+            advanceUntilIdle()
+
+            coVerify { messageDao.upsert(match {
+                it.id.value == "msg-1" && it.generatedMediaAssetIdsJson == assetIds
+            }) }
+        }
+    }
+
+    @Nested
+    @DisplayName("mediaProviderSyncAdapter")
+    inner class MediaProviderSyncTests {
+        @Test
+        @DisplayName("correctly syncs MediaProvider with modelName and baseUrl")
+        fun syncsMediaProvider() = runTest {
+            val mediaProviderDao = mockk<com.browntowndev.pocketcrew.core.data.local.MediaProviderDao>(relaxed = true)
+            val localDataSource = FirestoreDataSource(
+                firestore = firestore,
+                chatDao = chatDao,
+                messageDao = messageDao,
+                cryptoManager = cryptoManager,
+                loggingPort = loggingPort,
+                externalScope = testScope,
+                userIdProvider = { "test-user-id" },
+                apiCredentialsDao = apiCredentialsDao,
+                apiModelConfigurationsDao = mockk(relaxed = true),
+                localModelsDao = mockk(relaxed = true),
+                localModelConfigurationsDao = mockk(relaxed = true),
+                defaultModelsDao = mockk(relaxed = true),
+                studioMediaDao = mockk(relaxed = true),
+                studioAlbumDao = mockk(relaxed = true),
+                memoriesDao = mockk(relaxed = true),
+                ttsProviderDao = mockk(relaxed = true),
+                mediaProviderDao = mediaProviderDao,
+                apiKeyManager = apiKeyManager,
+                messageVisionAnalysisDao = mockk(relaxed = true),
+                messageFileDao = mockk(relaxed = true),
+                webSearchSourceDao = mockk(relaxed = true),
+                embeddingCoordinator = embeddingCoordinator,
+                embeddingDao = embeddingDao
+            )
+
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            val collection = mockk<CollectionReference>(relaxed = true)
+            every { firestore.collection("users/test-user-id/media_providers") } returns collection
+            every { collection.addSnapshotListener(capture(listenerSlot)) } returns mockk(relaxed = true)
+
+            localDataSource.startListening()
+
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { mockDoc.id } returns "media-1"
+            every { mockDoc.getBlob("display_name") } returns Blob.fromBytes("Name".toByteArray())
+            every { mockDoc.getString("provider") } returns "GOOGLE"
+            every { mockDoc.getString("capability") } returns "IMAGE"
+            every { mockDoc.getBlob("model_name") } returns Blob.fromBytes("imagen-3".toByteArray())
+            every { mockDoc.getBlob("base_url") } returns Blob.fromBytes("https://api.google.com".toByteArray())
+            every { mockDoc.getString("credential_alias") } returns "alias"
+            every { mockDoc.getLong("updated_at") } returns 123L
+            every { mockDoc.getBoolean("deleted") } returns false
+
+            coEvery { mediaProviderDao.getMediaProvider(any()) } returns null
+
+            val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.ADDED)
+            listenerSlot.captured.onEvent(snapshot, null)
+            advanceUntilIdle()
+
+            coVerify { mediaProviderDao.upsert(match { 
+                it.id == "media-1" && 
+                it.modelName == "imagen-3" && 
+                it.baseUrl == "https://api.google.com" &&
+                it.capability == com.browntowndev.pocketcrew.domain.model.config.MediaCapability.IMAGE
+            }) }
+        }
+    }
+
+    @Nested
+    @DisplayName("ttsProviderSyncAdapter")
+    inner class TtsProviderSyncTests {
+        @Test
+        @DisplayName("correctly syncs TtsProvider with modelName and baseUrl")
+        fun syncsTtsProvider() = runTest {
+            val ttsProviderDao = mockk<com.browntowndev.pocketcrew.core.data.local.TtsProviderDao>(relaxed = true)
+            val localDataSource = FirestoreDataSource(
+                firestore = firestore,
+                chatDao = chatDao,
+                messageDao = messageDao,
+                cryptoManager = cryptoManager,
+                loggingPort = loggingPort,
+                externalScope = testScope,
+                userIdProvider = { "test-user-id" },
+                apiCredentialsDao = apiCredentialsDao,
+                apiModelConfigurationsDao = mockk(relaxed = true),
+                localModelsDao = mockk(relaxed = true),
+                localModelConfigurationsDao = mockk(relaxed = true),
+                defaultModelsDao = mockk(relaxed = true),
+                studioMediaDao = mockk(relaxed = true),
+                studioAlbumDao = mockk(relaxed = true),
+                memoriesDao = mockk(relaxed = true),
+                ttsProviderDao = ttsProviderDao,
+                mediaProviderDao = mockk(relaxed = true),
+                apiKeyManager = apiKeyManager,
+                messageVisionAnalysisDao = mockk(relaxed = true),
+                messageFileDao = mockk(relaxed = true),
+                webSearchSourceDao = mockk(relaxed = true),
+                embeddingCoordinator = embeddingCoordinator,
+                embeddingDao = embeddingDao
+            )
+
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            val collection = mockk<CollectionReference>(relaxed = true)
+            every { firestore.collection("users/test-user-id/tts_providers") } returns collection
+            every { collection.addSnapshotListener(capture(listenerSlot)) } returns mockk(relaxed = true)
+
+            localDataSource.startListening()
+
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { mockDoc.id } returns "tts-1"
+            every { mockDoc.getBlob("display_name") } returns Blob.fromBytes("Name".toByteArray())
+            every { mockDoc.getString("provider") } returns "OPENAI"
+            every { mockDoc.getBlob("voice_name") } returns Blob.fromBytes("alloy".toByteArray())
+            every { mockDoc.getBlob("model_name") } returns Blob.fromBytes("tts-1".toByteArray())
+            every { mockDoc.getBlob("base_url") } returns Blob.fromBytes("https://api.openai.com".toByteArray())
+            every { mockDoc.getString("credential_alias") } returns "alias"
+            every { mockDoc.getLong("updated_at") } returns 123L
+            every { mockDoc.getBoolean("deleted") } returns false
+
+            coEvery { ttsProviderDao.getTtsProvider(any()) } returns null
+
+            val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.ADDED)
+            listenerSlot.captured.onEvent(snapshot, null)
+            advanceUntilIdle()
+
+            coVerify { ttsProviderDao.upsertTtsProvider(match { 
+                it.id == "tts-1" && 
+                it.modelName == "tts-1" && 
+                it.baseUrl == "https://api.openai.com" &&
+                it.voiceName == "alloy"
+            }) }
+        }
+    }
+
+    @Nested
+    @DisplayName("apiModelConfigSyncAdapter")
+    inner class ApiModelConfigSyncTests {
+        @Test
+        @DisplayName("correctly syncs ApiModelConfiguration with OpenRouter fields")
+        fun syncsApiModelConfig() = runTest {
+            val apiModelConfigurationsDao = mockk<com.browntowndev.pocketcrew.core.data.local.ApiModelConfigurationsDao>(relaxed = true)
+            val localDataSource = FirestoreDataSource(
+                firestore = firestore,
+                chatDao = chatDao,
+                messageDao = messageDao,
+                cryptoManager = cryptoManager,
+                loggingPort = loggingPort,
+                externalScope = testScope,
+                userIdProvider = { "test-user-id" },
+                apiCredentialsDao = apiCredentialsDao,
+                apiModelConfigurationsDao = apiModelConfigurationsDao,
+                localModelsDao = mockk(relaxed = true),
+                localModelConfigurationsDao = mockk(relaxed = true),
+                defaultModelsDao = mockk(relaxed = true),
+                studioMediaDao = mockk(relaxed = true),
+                studioAlbumDao = mockk(relaxed = true),
+                memoriesDao = mockk(relaxed = true),
+                ttsProviderDao = mockk(relaxed = true),
+                mediaProviderDao = mockk(relaxed = true),
+                apiKeyManager = apiKeyManager,
+                messageVisionAnalysisDao = mockk(relaxed = true),
+                messageFileDao = mockk(relaxed = true),
+                webSearchSourceDao = mockk(relaxed = true),
+                embeddingCoordinator = embeddingCoordinator,
+                embeddingDao = embeddingDao
+            )
+
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            val collection = mockk<CollectionReference>(relaxed = true)
+            every { firestore.collection("users/test-user-id/api_model_configs") } returns collection
+            every { collection.addSnapshotListener(capture(listenerSlot)) } returns mockk(relaxed = true)
+
+            localDataSource.startListening()
+
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { mockDoc.id } returns "config-1"
+            every { mockDoc.getString("api_credentials_id") } returns "cred-1"
+            every { mockDoc.getBlob("display_name") } returns Blob.fromBytes("Name".toByteArray())
+            every { mockDoc.getString("openrouter_provider_sort") } returns "throughput"
+            every { mockDoc.getBoolean("openrouter_allow_fallbacks") } returns true
+            every { mockDoc.getBoolean("openrouter_require_parameters") } returns false
+            every { mockDoc.getString("openrouter_data_collection") } returns "allow"
+            every { mockDoc.getBoolean("openrouter_zdr") } returns true
+            every { mockDoc.getLong("updated_at") } returns 123L
+            every { mockDoc.getBoolean("deleted") } returns false
+
+            coEvery { apiModelConfigurationsDao.getById(any()) } returns null
+
+            val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.ADDED)
+            listenerSlot.captured.onEvent(snapshot, null)
+            advanceUntilIdle()
+
+            coVerify { apiModelConfigurationsDao.upsert(match { 
+                it.id.value == "config-1" && 
+                it.openRouterProviderSort == "throughput" && 
+                it.openRouterAllowFallbacks == true &&
+                it.openRouterRequireParameters == false &&
+                it.openRouterDataCollectionPolicy == "allow" &&
+                it.openRouterZeroDataRetention == true
+            }) }
+        }
+    }
+
+    @Nested
+    @DisplayName("localModelConfigSyncAdapter")
+    inner class LocalModelConfigSyncTests {
+        @Test
+        @DisplayName("correctly syncs LocalModelConfiguration with isSystemPreset")
+        fun syncsLocalModelConfig() = runTest {
+            val localModelConfigurationsDao = mockk<com.browntowndev.pocketcrew.core.data.local.LocalModelConfigurationsDao>(relaxed = true)
+            val localDataSource = FirestoreDataSource(
+                firestore = firestore,
+                chatDao = chatDao,
+                messageDao = messageDao,
+                cryptoManager = cryptoManager,
+                loggingPort = loggingPort,
+                externalScope = testScope,
+                userIdProvider = { "test-user-id" },
+                apiCredentialsDao = apiCredentialsDao,
+                apiModelConfigurationsDao = mockk(relaxed = true),
+                localModelsDao = mockk(relaxed = true),
+                localModelConfigurationsDao = localModelConfigurationsDao,
+                defaultModelsDao = mockk(relaxed = true),
+                studioMediaDao = mockk(relaxed = true),
+                studioAlbumDao = mockk(relaxed = true),
+                memoriesDao = mockk(relaxed = true),
+                ttsProviderDao = mockk(relaxed = true),
+                mediaProviderDao = mockk(relaxed = true),
+                apiKeyManager = apiKeyManager,
+                messageVisionAnalysisDao = mockk(relaxed = true),
+                messageFileDao = mockk(relaxed = true),
+                webSearchSourceDao = mockk(relaxed = true),
+                embeddingCoordinator = embeddingCoordinator,
+                embeddingDao = embeddingDao
+            )
+
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            val collection = mockk<CollectionReference>(relaxed = true)
+            every { firestore.collection("users/test-user-id/local_model_configs") } returns collection
+            every { collection.addSnapshotListener(capture(listenerSlot)) } returns mockk(relaxed = true)
+
+            localDataSource.startListening()
+
+            val mockDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { mockDoc.id } returns "config-1"
+            every { mockDoc.getString("local_model_id") } returns "model-1"
+            every { mockDoc.getBlob("display_name") } returns Blob.fromBytes("Name".toByteArray())
+            every { mockDoc.getBoolean("is_system_preset") } returns true
+            every { mockDoc.getLong("updated_at") } returns 123L
+            every { mockDoc.getBoolean("deleted") } returns false
+
+            coEvery { localModelConfigurationsDao.getById(any()) } returns null
+            coEvery { localModelConfigurationsDao.getByModelIdAndName(any(), any()) } returns null
+
+            val snapshot = mockSnapshot(listOf(mockDoc), DocumentChange.Type.ADDED)
+            listenerSlot.captured.onEvent(snapshot, null)
+            advanceUntilIdle()
+
+            coVerify { localModelConfigurationsDao.upsert(match { 
+                it.id.value == "config-1" && 
+                it.isSystemPreset == true
+            }) }
+        }
+    }
+
+    @Nested
+    @DisplayName("per-document error isolation")
+    inner class PerDocumentErrorIsolationTests {
+
+        @Test
+        @DisplayName("chat snapshot: remaining documents are processed when one document throws")
+        fun chatSnapshot_continuesAfterDocumentError() = testScope.runTest {
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            val chatsCollection = mockk<CollectionReference>(relaxed = true)
+            every { firestore.collection("users/test-user-id/chats") } returns chatsCollection
+            every { chatsCollection.addSnapshotListener(capture(listenerSlot)) } returns mockk(relaxed = true)
+            dataSource.startListening()
+
+            val badDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { badDoc.id } returns "chat-bad"
+            every { badDoc.getBlob("name") } throws RuntimeException("Field 'name' is not a Blob")
+
+            val goodDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { goodDoc.id } returns "chat-good"
+            every { goodDoc.getBlob("name") } returns Blob.fromBytes("Valid Chat".toByteArray())
+            every { goodDoc.getLong("created_at") } returns 1000L
+            every { goodDoc.getLong("last_modified") } returns 2000L
+            every { goodDoc.getBoolean("pinned") } returns false
+            every { goodDoc.getLong("updated_at") } returns 3000L
+            every { goodDoc.getBoolean("deleted") } returns false
+            coEvery { chatDao.getChatById(ChatId("chat-good")) } returns null
+
+            val snapshot = mockSnapshot(listOf(badDoc, goodDoc), DocumentChange.Type.ADDED)
+            listenerSlot.captured.onEvent(snapshot, null)
+            advanceUntilIdle()
+
+            coVerify { chatDao.upsert(match { it.id.value == "chat-good" }) }
+        }
+
+        @Test
+        @DisplayName("studio_gallery snapshot: remaining documents are processed when one document throws")
+        fun studioGallerySnapshot_continuesAfterDocumentError() = testScope.runTest {
+            val studioMediaDao = mockk<com.browntowndev.pocketcrew.core.data.local.StudioMediaDao>(relaxed = true)
+            val localDataSource = FirestoreDataSource(
+                firestore = firestore,
+                chatDao = chatDao,
+                messageDao = messageDao,
+                cryptoManager = cryptoManager,
+                loggingPort = loggingPort,
+                externalScope = testScope,
+                userIdProvider = { "test-user-id" },
+                apiCredentialsDao = apiCredentialsDao,
+                apiModelConfigurationsDao = mockk(relaxed = true),
+                localModelsDao = mockk(relaxed = true),
+                localModelConfigurationsDao = mockk(relaxed = true),
+                defaultModelsDao = mockk(relaxed = true),
+                studioMediaDao = studioMediaDao,
+                studioAlbumDao = mockk(relaxed = true),
+                memoriesDao = mockk(relaxed = true),
+                ttsProviderDao = mockk(relaxed = true),
+                mediaProviderDao = mockk(relaxed = true),
+                apiKeyManager = apiKeyManager,
+                messageVisionAnalysisDao = mockk(relaxed = true),
+                messageFileDao = mockk(relaxed = true),
+                webSearchSourceDao = mockk(relaxed = true),
+                embeddingCoordinator = embeddingCoordinator,
+                embeddingDao = embeddingDao
+            )
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            val galleryCollection = mockk<CollectionReference>(relaxed = true)
+            every { firestore.collection("users/test-user-id/studio_gallery") } returns galleryCollection
+            every { galleryCollection.addSnapshotListener(capture(listenerSlot)) } returns mockk(relaxed = true)
+            localDataSource.startListening()
+
+            val badDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { badDoc.id } returns "media-bad"
+            every { badDoc.getBlob("prompt") } throws RuntimeException("Field 'prompt' is not a Blob")
+
+            val goodDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { goodDoc.id } returns "media-good"
+            every { goodDoc.getBlob("prompt") } returns Blob.fromBytes("a dog in the park".toByteArray())
+            every { goodDoc.getBlob("remote_url") } returns Blob.fromBytes("https://example.com/img.jpg".toByteArray())
+            every { goodDoc.getBlob("remote_thumbnail_url") } returns null
+            every { goodDoc.getString("media_type") } returns "IMAGE"
+            every { goodDoc.getLong("created_at") } returns 1000L
+            every { goodDoc.getString("album_id") } returns null
+            every { goodDoc.getLong("updated_at") } returns 2000L
+            every { goodDoc.getBoolean("deleted") } returns false
+            coEvery { studioMediaDao.getMediaById("media-good") } returns null
+
+            val snapshot = mockSnapshot(listOf(badDoc, goodDoc), DocumentChange.Type.ADDED)
+            listenerSlot.captured.onEvent(snapshot, null)
+            advanceUntilIdle()
+
+            coVerify { studioMediaDao.insertMedia(match { it.id == "media-good" }) }
+        }
+
+        @Test
+        @DisplayName("messages snapshot: remaining documents are processed when one document throws")
+        fun messagesSnapshot_continuesAfterDocumentError() = testScope.runTest {
+            val listenerSlot = slot<EventListener<QuerySnapshot>>()
+            val messagesCollection = mockk<CollectionReference>(relaxed = true)
+            every { firestore.collection("users/test-user-id/messages") } returns messagesCollection
+            every { messagesCollection.addSnapshotListener(capture(listenerSlot)) } returns mockk(relaxed = true)
+            dataSource.startListening()
+
+            val badDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { badDoc.id } returns "msg-bad"
+            every { badDoc.getString("chat_id") } returns "chat-1"
+            every { badDoc.getBlob("content") } throws RuntimeException("Field 'content' is not a Blob")
+
+            val goodDoc = mockk<QueryDocumentSnapshot>(relaxed = true)
+            every { goodDoc.id } returns "msg-good"
+            every { goodDoc.getString("chat_id") } returns "chat-1"
+            every { goodDoc.getBlob("content") } returns Blob.fromBytes("encrypted".toByteArray())
+            every { goodDoc.getString("role") } returns "user"
+            every { goodDoc.getString("message_state") } returns "COMPLETE"
+            every { goodDoc.getLong("created_at") } returns 1000L
+            every { goodDoc.getString("model_type") } returns null
+            every { goodDoc.getLong("updated_at") } returns 2000L
+            every { goodDoc.getBoolean("deleted") } returns false
+            coEvery { messageDao.getMessageById(MessageId("msg-good")) } returns null
+
+            val snapshot = mockSnapshot(listOf(badDoc, goodDoc), DocumentChange.Type.ADDED)
+            listenerSlot.captured.onEvent(snapshot, null)
+            advanceUntilIdle()
+
+            coVerify { messageDao.upsert(match { it.id.value == "msg-good" }) }
         }
     }
 

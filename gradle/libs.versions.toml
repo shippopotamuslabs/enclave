@@ -136,6 +136,7 @@ openai-java = { group = "com.openai", name = "openai-java", version.ref = "opena
 anthropic-java = { group = "com.anthropic", name = "anthropic-java", version.ref = "anthropic" }
 google-genai = { group = "com.google.genai", name = "google-genai", version.ref = "googleGenai" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
+coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 telephoto-zoomable-image-coil3 = { group = "me.saket.telephoto", name = "zoomable-image-coil3", version.ref = "telephoto" }
 commonmark = { group = "org.commonmark", name = "commonmark", version.ref = "commonmark" }
 commonmark-ext-tables = { group = "org.commonmark", name = "commonmark-ext-gfm-tables", version.ref = "commonmark" }

@@ -63,7 +63,7 @@ class MessageRepositoryImplSaveMessageTest {
         assert(exception.message?.contains("CreateUserMessageUseCase") == true)
 
         // Verify DAO was never called
-        coVerify(exactly = 0) { messageDao.insert(any()) }
+        coVerify(exactly = 0) { messageDao.upsert(any()) }
     }
 
     @Test
@@ -78,13 +78,13 @@ class MessageRepositoryImplSaveMessageTest {
             role = Role.USER
         )
 
-        coEvery { messageDao.insert(any()) } returns 1L
+        coEvery { messageDao.upsert(any()) } returns 1L
 
         // When
         val result = repository.saveMessage(message)
 
         // Then
         assert(result == messageId)
-        coVerify { messageDao.insert(any()) }
+        coVerify { messageDao.upsert(any()) }
     }
 }

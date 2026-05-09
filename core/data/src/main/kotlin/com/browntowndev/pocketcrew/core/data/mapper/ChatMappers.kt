@@ -41,12 +41,6 @@ fun MessageEntity.toDomain(
     webSearchSources: List<WebSearchSourceEntity> = emptyList(),
     files: List<MessageFileEntity> = emptyList()
 ): Message {
-    val artifacts = try {
-        artifactsJson?.let { Json.decodeFromString<List<ArtifactGenerationRequest>>(it) } ?: emptyList()
-    } catch (_: Exception) {
-        emptyList()
-    }
-
     val mediaUris = try {
         generatedMediaUrisJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
     } catch (_: Exception) {
@@ -78,8 +72,10 @@ fun MessageEntity.toDomain(
             pipelineStep = pipelineStep,
             imageUri = imageUri,
             webSearchSources = webSearchSources.map { it.toDomain() },
-            artifacts = artifacts,
-            fileAttachments = files.map { it.toDomain() },
+            artifacts = files.filter { it.fileType == "ARTIFACT" }.map { 
+                ArtifactGenerationRequest(title = it.name, content = it.content)
+            },
+            fileAttachments = files.filter { it.fileType == "ATTACHMENT" }.map { it.toDomain() },
             generatedMediaUris = mediaUris,
             generatedMediaAssetIds = mediaAssetIds,
             generatedMediaTypes = mediaTypes,
@@ -99,10 +95,6 @@ fun MessageEntity.toDomain(
 }
 
 fun Message.toEntity(): MessageEntity {
-    val artifactsJson = if (content.artifacts.isNotEmpty()) {
-        Json.encodeToString(content.artifacts)
-    } else null
-
     val mediaUrisJson = if (content.generatedMediaUris.isNotEmpty()) {
         Json.encodeToString(content.generatedMediaUris)
     } else null
@@ -129,7 +121,7 @@ fun Message.toEntity(): MessageEntity {
         createdAt = createdAt,
         modelType = modelType,
         pipelineStep = content.pipelineStep,
-        artifactsJson = artifactsJson,
+        artifactsJson = null, // Moved to message_file table
         generatedMediaUrisJson = mediaUrisJson,
         generatedMediaAssetIdsJson = mediaAssetIdsJson,
         generatedMediaTypesJson = mediaTypesJson,
@@ -148,7 +140,9 @@ fun FileAttachment.toEntity(id: String, messageId: String): MessageFileEntity = 
     messageId = messageId,
     name = name,
     content = content,
-    pendingSync = 1
+    fileType = "ATTACHMENT",
+    syncStatus = "PENDING_UPLOAD",
+    pendingSync = 0 // Will be set to 1 by the worker after binary upload
 )
 
 fun WebSearchSourceEntity.toDomain(): WebSearchSource = WebSearchSource(

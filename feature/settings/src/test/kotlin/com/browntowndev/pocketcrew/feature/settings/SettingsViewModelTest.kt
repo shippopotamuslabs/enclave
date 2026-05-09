@@ -583,6 +583,46 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `onFetchMediaModels for xAI and IMAGE should return grok models`() = runTest {
+        val xaiModels = listOf(
+            DiscoveredApiModel(id = "grok-2", isImageGenerationCapable = true, isVideoGenerationCapable = true),
+            DiscoveredApiModel(id = "grok-2-1212", isImageGenerationCapable = true, isVideoGenerationCapable = true),
+            DiscoveredApiModel(id = "grok-beta", isImageGenerationCapable = true, isVideoGenerationCapable = true),
+            DiscoveredApiModel(id = "gpt-4o", isChatCapable = true), // Should be filtered out
+        )
+
+        coEvery { discoverApiModelsUseCase(any()) } returns ApiModelDiscoveryResult(
+            models = xaiModels,
+            scope = ApiModelDiscoveryScope(
+                provider = ApiProvider.XAI,
+                baseUrl = "",
+                credentialAlias = "xai-alias",
+            ),
+        )
+
+        // Mock starting media creation for xAI IMAGE
+        viewModel.onStartCreateMediaProviderAsset()
+        viewModel.onMediaAssetFieldChange(
+            MediaProviderAssetUi(
+                displayName = "xAI Images",
+                provider = ApiProvider.XAI,
+                capability = MediaCapability.IMAGE,
+                credentialAlias = "xai-alias"
+            )
+        )
+        viewModel.onApiKeyChange("xai-key")
+
+        viewModel.onFetchMediaModels()
+        advanceUntilIdle()
+
+        val discoveredModels = viewModel.uiState.value.mediaProviderEditor.discovery.models
+
+        assertTrue(discoveredModels.any { it.modelId.contains("grok") },
+            "Expected grok models to be discovered, but found: ${discoveredModels.map { it.modelId }}")
+        assertEquals(3, discoveredModels.size)
+    }
+
+    @Test
     fun `onSelectApiModelAsset updates state and resets discovery if scope changes`() = runTest {
         val asset1 = MockSettingsData.apiModels[0] // OpenAI
         val asset2 = MockSettingsData.apiModels[1] // Anthropic
