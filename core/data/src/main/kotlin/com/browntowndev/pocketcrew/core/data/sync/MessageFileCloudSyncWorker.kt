@@ -8,6 +8,7 @@ import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
 import com.google.firebase.storage.FirebaseStorage
+import android.util.Base64
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.tasks.await
@@ -50,7 +51,11 @@ class MessageFileCloudSyncWorker @AssistedInject constructor(
                 if (file.content.isNotBlank()) {
                     val storageRef = storage.reference.child("users/$userId/files/${file.id}")
                     
-                    val fileBytes = file.content.toByteArray(Charsets.UTF_8)
+                    val fileBytes = if (file.content.startsWith("BASE64:")) {
+                        Base64.decode(file.content.substring(7), Base64.NO_WRAP)
+                    } else {
+                        file.content.toByteArray(Charsets.UTF_8)
+                    }
                     val encryptionResult = cryptoManager.encryptBytes(fileBytes)
                     
                     if (encryptionResult.isFailure) {
@@ -60,12 +65,12 @@ class MessageFileCloudSyncWorker @AssistedInject constructor(
                     }
                     
                     val encryptedBytes = encryptionResult.getOrThrow()
+                    loggingPort.debug(TAG, "Uploading to bucket: ${storage.reference.bucket}, path: users/$userId/files/${file.id}")
                     storageRef.putBytes(encryptedBytes).await()
                     
                     val downloadUrl = storageRef.downloadUrl.await().toString()
                     
                     messageFileDao.markUploaded(file.id, downloadUrl)
-                    syncTrigger.trigger()
                     loggingPort.debug(TAG, "Uploaded file ${file.id} to $downloadUrl")
                 }
             } catch (e: Exception) {
@@ -92,6 +97,12 @@ class MessageFileCloudSyncWorker @AssistedInject constructor(
             }
         }
 
+        // Trigger metadata sync once at the end if we made progress
+        if (!hasFailure) {
+            syncTrigger.triggerMetadata()
+        }
+
         return if (hasFailure) Result.retry() else Result.success()
     }
 }
+

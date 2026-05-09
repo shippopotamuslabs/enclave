@@ -60,12 +60,12 @@ class MediaCloudSyncWorker @AssistedInject constructor(
                 }
 
                 val encryptedBytes = encryptionResult.getOrThrow()
+                loggingPort.debug(TAG, "Uploading to bucket: ${storage.reference.bucket}, path: users/$userId/media/${media.id}")
                 storageRef.putBytes(encryptedBytes).await()
 
                 val downloadUrl = storageRef.downloadUrl.await().toString()
 
                 studioMediaDao.markUploaded(media.id, downloadUrl)
-                syncTrigger.trigger()
                 loggingPort.debug(TAG, "Uploaded media ${media.id} to $downloadUrl")
             } catch (e: Exception) {
                 loggingPort.error(TAG, "Failed to upload media ${media.id}", e)
@@ -88,6 +88,11 @@ class MediaCloudSyncWorker @AssistedInject constructor(
                 loggingPort.error(TAG, "Failed to delete cloud media ${media.id}", e)
                 hasFailure = true
             }
+        }
+
+        // Trigger metadata sync once at the end if we made progress
+        if (!hasFailure) {
+            syncTrigger.triggerMetadata()
         }
 
         return if (hasFailure) Result.retry() else Result.success()

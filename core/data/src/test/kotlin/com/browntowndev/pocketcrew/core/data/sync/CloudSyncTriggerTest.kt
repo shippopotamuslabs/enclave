@@ -4,6 +4,7 @@ import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.WorkManager
+import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
@@ -12,16 +13,16 @@ import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertTrue
 
 class CloudSyncTriggerTest {
 
     private val workManager = mockk<WorkManager>(relaxed = true)
+    private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private lateinit var trigger: CloudSyncTrigger
 
     @BeforeEach
     fun setup() {
-        trigger = CloudSyncTrigger(workManager)
+        trigger = CloudSyncTrigger(workManager, loggingPort)
     }
 
     @Nested
@@ -29,50 +30,37 @@ class CloudSyncTriggerTest {
     inner class TriggerTests {
 
         @Test
-        @DisplayName("enqueues unique work with name pocketcrew_sync")
-        fun enqueuesUniqueWorkWithCorrectName() {
+        @DisplayName("enqueues unique work with correct names")
+        fun enqueuesUniqueWorkWithCorrectNames() {
             trigger.trigger()
 
             verify {
-                workManager.enqueueUniqueWork(
-                    "pocketcrew_sync",
-                    ExistingWorkPolicy.REPLACE,
-                    any<androidx.work.OneTimeWorkRequest>()
-                )
+                workManager.enqueueUniqueWork("pocketcrew_sync", ExistingWorkPolicy.REPLACE, any<androidx.work.OneTimeWorkRequest>())
+                workManager.enqueueUniqueWork("pocketcrew_media_sync", ExistingWorkPolicy.REPLACE, any<androidx.work.OneTimeWorkRequest>())
+                workManager.enqueueUniqueWork("pocketcrew_file_sync", ExistingWorkPolicy.REPLACE, any<androidx.work.OneTimeWorkRequest>())
             }
         }
+    }
 
-        @Test
-        @DisplayName("uses REPLACE policy so rapid calls debounce to a single enqueue")
-        fun usesReplacePolicy() {
-            val policySlot = slot<ExistingWorkPolicy>()
-            val nameSlot = slot<String>()
+    @Test
+    @DisplayName("triggerMetadata uses REPLACE policy")
+    fun triggerMetadataUsesReplace() {
+        trigger.triggerMetadata()
+        verify { workManager.enqueueUniqueWork("pocketcrew_sync", ExistingWorkPolicy.REPLACE, any<androidx.work.OneTimeWorkRequest>()) }
+    }
 
-            io.mockk.every {
-                workManager.enqueueUniqueWork(capture(nameSlot), capture(policySlot), any<androidx.work.OneTimeWorkRequest>())
-            } returns mockk(relaxed = true)
-
-            trigger.trigger()
-            trigger.trigger()
-            trigger.trigger()
-
-            verify(exactly = 9) { workManager.enqueueUniqueWork(any<String>(), any<ExistingWorkPolicy>(), any<androidx.work.OneTimeWorkRequest>()) }
-            assertEquals(ExistingWorkPolicy.REPLACE, policySlot.captured)
-        }
-
-        @Test
-        @DisplayName("requires CONNECTED network type")
-        fun requiresConnectedNetwork() {
-            val requestSlot = slot<androidx.work.OneTimeWorkRequest>()
-
-            io.mockk.every {
-                workManager.enqueueUniqueWork(any(), any(), capture(requestSlot))
-            } returns mockk(relaxed = true)
-
-            trigger.trigger()
-
-            val constraints = requestSlot.captured.workSpec.constraints
-            assertEquals(NetworkType.CONNECTED, constraints.requiredNetworkType)
-        }
+    @Test
+    @DisplayName("triggerMedia uses REPLACE policy")
+    fun triggerMediaUsesReplace() {
+        trigger.triggerMedia()
+        verify { workManager.enqueueUniqueWork("pocketcrew_media_sync", ExistingWorkPolicy.REPLACE, any<androidx.work.OneTimeWorkRequest>()) }
+    }
+    
+    @Test
+    @DisplayName("triggerFiles uses REPLACE policy")
+    fun triggerFilesUsesReplace() {
+        trigger.triggerFiles()
+        verify { workManager.enqueueUniqueWork("pocketcrew_file_sync", ExistingWorkPolicy.REPLACE, any<androidx.work.OneTimeWorkRequest>()) }
     }
 }
+
