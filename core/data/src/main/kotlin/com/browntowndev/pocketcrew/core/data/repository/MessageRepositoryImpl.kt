@@ -17,6 +17,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.ResolvedImageTarget
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.port.repository.MessageRepository
+import com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider
 import androidx.sqlite.db.SimpleSQLiteQuery
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import kotlinx.coroutines.flow.first
@@ -43,6 +44,7 @@ class MessageRepositoryImpl @Inject constructor(
     private val messageVisionAnalysisDao: MessageVisionAnalysisDao,
     private val chatSummaryDao: ChatSummaryDao,
     private val embeddingDao: EmbeddingDao,
+    private val transactionProvider: TransactionProvider,
 ) : MessageRepository {
 
     private fun triggerSync() = syncTrigger.trigger()
@@ -61,18 +63,23 @@ class MessageRepositoryImpl @Inject constructor(
      */
     override suspend fun saveMessage(message: Message): MessageId {
         require(message.chatId != null) { "Message(id=${message.id.value}) must have a chatId before persisting — route through CreateUserMessageUseCase" }
-        val entity = message.toEntity()
-        messageDao.upsert(entity)
+        
+        val messageId = transactionProvider.runInTransaction {
+            val entity = message.toEntity()
+            messageDao.upsert(entity)
 
-        if (message.content.fileAttachments.isNotEmpty()) {
-            val fileEntities = message.content.fileAttachments.map { 
-                it.toEntity(id = UUID.randomUUID().toString(), messageId = entity.id.value)
+            if (message.content.fileAttachments.isNotEmpty()) {
+                val fileEntities = message.content.fileAttachments.map { 
+                    it.toEntity(id = UUID.randomUUID().toString(), messageId = entity.id.value)
+                }
+                messageDao.insertFiles(fileEntities)
             }
-            messageDao.insertFiles(fileEntities)
-        }
 
+            entity.id
+        }
+        
         triggerSync()
-        return entity.id
+        return messageId
     }
 
     override suspend fun saveEmbedding(messageId: MessageId, embedding: FloatArray) {

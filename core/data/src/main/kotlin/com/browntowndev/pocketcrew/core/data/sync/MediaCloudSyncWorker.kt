@@ -40,30 +40,49 @@ class MediaCloudSyncWorker @AssistedInject constructor(
 
         for (media in pendingUploads) {
             try {
-                val localFile = File(media.mediaUri.replace("file://", ""))
-                if (!localFile.exists()) {
-                    loggingPort.error(TAG, "Local file not found for media ${media.id}: ${media.mediaUri}")
-                    // File is permanently gone — mark FAILED without setting hasFailure so we don't retry uselessly
-                    studioMediaDao.markUploadFailed(media.id)
-                    continue
-                }
-
                 val storageRef = storage.reference.child("users/$userId/media/${media.id}")
+                var downloadUrl: String? = null
 
-                val fileBytes = localFile.readBytes()
-                val encryptionResult = cryptoManager.encryptBytes(fileBytes)
-
-                if (encryptionResult.isFailure) {
-                    loggingPort.error(TAG, "Encryption failed for media ${media.id}", encryptionResult.exceptionOrNull())
-                    hasFailure = true
-                    continue
+                if (!media.stagingRemoteUrl.isNullOrBlank()) {
+                    try {
+                        storageRef.metadata.await()
+                        downloadUrl = media.stagingRemoteUrl
+                        loggingPort.debug(TAG, "Recovered from stagingRemoteUrl for media ${media.id}: $downloadUrl")
+                    } catch (e: Exception) {
+                        loggingPort.debug(TAG, "Staging URL present but metadata check failed for media ${media.id}, re-uploading. ${e.message}")
+                    }
                 }
 
-                val encryptedBytes = encryptionResult.getOrThrow()
-                loggingPort.debug(TAG, "Uploading to bucket: ${storage.reference.bucket}, path: users/$userId/media/${media.id}")
-                storageRef.putBytes(encryptedBytes).await()
+                if (downloadUrl == null) {
+                    val fileBytes = if (media.mediaUri.startsWith("content://")) {
+                        val androidUri = android.net.Uri.parse(media.mediaUri)
+                        applicationContext.contentResolver.openInputStream(androidUri)?.use { it.readBytes() }
+                            ?: throw IllegalStateException("Unable to open content stream for ${media.mediaUri}")
+                    } else {
+                        val localFile = File(media.mediaUri.replace("file://", ""))
+                        if (!localFile.exists()) {
+                            loggingPort.error(TAG, "Local file not found for media ${media.id}: ${media.mediaUri}")
+                            studioMediaDao.markUploadFailed(media.id)
+                            continue
+                        }
+                        localFile.readBytes()
+                    }
 
-                val downloadUrl = storageRef.downloadUrl.await().toString()
+                    val encryptionResult = cryptoManager.encryptBytes(fileBytes)
+
+                    if (encryptionResult.isFailure) {
+                        loggingPort.error(TAG, "Encryption failed for media ${media.id}", encryptionResult.exceptionOrNull())
+                        hasFailure = true
+                        continue
+                    }
+
+                    val encryptedBytes = encryptionResult.getOrThrow()
+                    loggingPort.debug(TAG, "Uploading to bucket: ${storage.reference.bucket}, path: users/$userId/media/${media.id}")
+                    storageRef.putBytes(encryptedBytes).await()
+
+                    downloadUrl = storageRef.downloadUrl.await().toString()
+                    studioMediaDao.updateStagingUrl(media.id, downloadUrl)
+                }
 
                 studioMediaDao.markUploaded(media.id, downloadUrl)
                 loggingPort.debug(TAG, "Uploaded media ${media.id} to $downloadUrl")

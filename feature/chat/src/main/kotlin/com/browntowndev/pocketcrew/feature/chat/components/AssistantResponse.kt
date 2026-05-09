@@ -175,6 +175,10 @@ fun AssistantResponse(
                 )
             }
 
+            val isComplete = message.indicatorState is IndicatorState.Complete || 
+                            message.indicatorState is IndicatorState.None || 
+                            isPreview
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -186,10 +190,6 @@ fun AssistantResponse(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
-                    val isComplete = message.indicatorState is IndicatorState.Complete || 
-                                    message.indicatorState is IndicatorState.None || 
-                                    isPreview
-                    
                     if (isComplete) {
                         // Share Button
                         IconButton(
@@ -278,7 +278,7 @@ fun AssistantResponse(
                 }
 
                 // Timestamp
-                if (message.formattedTimestamp.isNotBlank()) {
+                if (isComplete && message.formattedTimestamp.isNotBlank()) {
                     Text(
                         text = message.formattedTimestamp,
                         style = MaterialTheme.typography.bodySmall,

@@ -42,15 +42,26 @@ class MessageFileCloudSyncWorker @AssistedInject constructor(
 
         for (file in pendingUploads) {
             try {
-                if (file.content.isBlank() && file.remoteUrl == null) {
+                if (file.content.isBlank() && file.remoteUrl == null && file.stagingRemoteUrl == null) {
                     loggingPort.error(TAG, "Empty content for file ${file.id}")
                     messageFileDao.updateStatus(file.id, "FAILED")
                     continue
                 }
 
-                if (file.content.isNotBlank()) {
-                    val storageRef = storage.reference.child("users/$userId/files/${file.id}")
-                    
+                val storageRef = storage.reference.child("users/$userId/files/${file.id}")
+                var downloadUrl: String? = null
+
+                if (!file.stagingRemoteUrl.isNullOrBlank()) {
+                    try {
+                        storageRef.metadata.await()
+                        downloadUrl = file.stagingRemoteUrl
+                        loggingPort.debug(TAG, "Recovered from stagingRemoteUrl for file ${file.id}: $downloadUrl")
+                    } catch (e: Exception) {
+                        loggingPort.debug(TAG, "Staging URL present but metadata check failed for file ${file.id}, re-uploading. ${e.message}")
+                    }
+                }
+
+                if (downloadUrl == null && file.content.isNotBlank()) {
                     val fileBytes = if (file.content.startsWith("BASE64:")) {
                         Base64.decode(file.content.substring(7), Base64.NO_WRAP)
                     } else {
@@ -68,10 +79,17 @@ class MessageFileCloudSyncWorker @AssistedInject constructor(
                     loggingPort.debug(TAG, "Uploading to bucket: ${storage.reference.bucket}, path: users/$userId/files/${file.id}")
                     storageRef.putBytes(encryptedBytes).await()
                     
-                    val downloadUrl = storageRef.downloadUrl.await().toString()
-                    
+                    downloadUrl = storageRef.downloadUrl.await().toString()
+                    messageFileDao.updateStagingUrl(file.id, downloadUrl)
+                }
+
+                if (downloadUrl != null) {
                     messageFileDao.markUploaded(file.id, downloadUrl)
                     loggingPort.debug(TAG, "Uploaded file ${file.id} to $downloadUrl")
+                } else if (file.content.isBlank() && file.remoteUrl == null) {
+                    // This should have been caught by the first check, but just in case
+                    loggingPort.error(TAG, "Nothing to upload and no staging URL for file ${file.id}")
+                    hasFailure = true
                 }
             } catch (e: Exception) {
                 loggingPort.error(TAG, "Failed to upload file ${file.id}", e)

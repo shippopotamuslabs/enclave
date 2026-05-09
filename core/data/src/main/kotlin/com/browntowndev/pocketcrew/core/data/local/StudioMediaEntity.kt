@@ -1,5 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.PrimaryKey
@@ -26,10 +27,12 @@ data class StudioMediaEntity(
     val remoteUrl: String? = null,
     val remoteThumbnailUrl: String? = null,
     val syncStatus: String = "PENDING_UPLOAD",
-    @androidx.room.ColumnInfo(name = "pending_sync")
+    @ColumnInfo(name = "pending_sync")
     val pendingSync: Int = 0,
-    @androidx.room.ColumnInfo(name = "updated_at")
+    @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis(),
-    @androidx.room.ColumnInfo(name = "deleted")
-    val deleted: Boolean = false
+    @ColumnInfo(name = "deleted")
+    val deleted: Boolean = false,
+    @ColumnInfo(name = "staging_remote_url")
+    val stagingRemoteUrl: String? = null,
 )

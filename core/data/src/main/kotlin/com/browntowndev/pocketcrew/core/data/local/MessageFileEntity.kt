@@ -34,5 +34,7 @@ data class MessageFileEntity(
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "deleted")
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
+    @ColumnInfo(name = "staging_remote_url")
+    val stagingRemoteUrl: String? = null,
 )

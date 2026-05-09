@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.remote
 
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
+import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.PocketCrewDatabase
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
@@ -34,6 +35,7 @@ class SyncReconciliationTest {
     private val messageDao = mockk<MessageDao>(relaxed = true)
     private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
+    private val chatSummaryDao = mockk<ChatSummaryDao>(relaxed = true)
     private val testDispatcher = UnconfinedTestDispatcher()
     private val testScope = TestScope(testDispatcher)
     
@@ -66,6 +68,7 @@ class SyncReconciliationTest {
             messageVisionAnalysisDao = mockk(relaxed = true),
             messageFileDao = mockk(relaxed = true),
             webSearchSourceDao = mockk(relaxed = true),
+            chatSummaryDao = chatSummaryDao,
             embeddingCoordinator = mockk(relaxed = true),
             embeddingDao = mockk(relaxed = true)
         )

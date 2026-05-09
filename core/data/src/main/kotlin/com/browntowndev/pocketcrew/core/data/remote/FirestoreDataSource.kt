@@ -30,6 +30,8 @@ import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
 import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisEntity
+import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
+import com.browntowndev.pocketcrew.core.data.local.ChatSummaryEntity
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -81,6 +83,7 @@ class FirestoreDataSource @Inject constructor(
     private val studioAlbumDao: StudioAlbumDao,
     private val messageFileDao: MessageFileDao,
     private val messageVisionAnalysisDao: MessageVisionAnalysisDao,
+    private val chatSummaryDao: ChatSummaryDao,
     private val embeddingDao: com.browntowndev.pocketcrew.core.data.local.EmbeddingDao,
     private val apiKeyManager: com.browntowndev.pocketcrew.core.data.security.ApiKeyManager,
     private val cryptoManager: CryptoManagerPort,
@@ -96,6 +99,7 @@ class FirestoreDataSource @Inject constructor(
 
     private val listenerRegistrations = mutableListOf<ListenerRegistration>()
     private val listenerMutex = Mutex()
+    private val syncMutex = Mutex()
 
     private interface EntitySyncAdapter<RoomT> {
         val collectionPath: String
@@ -114,6 +118,7 @@ class FirestoreDataSource @Inject constructor(
         listOf(
             chatSyncAdapter,
             messageSyncAdapter,
+            chatSummarySyncAdapter,
             memoriesSyncAdapter,
             visionAnalysisSyncAdapter,
             messageFileSyncAdapter,
@@ -263,6 +268,57 @@ class FirestoreDataSource @Inject constructor(
         }
 
         override suspend fun deleteLocal(id: String) = messageDao.softDeleteById(MessageId(id))
+    }
+
+    private val chatSummarySyncAdapter = object : EntitySyncAdapter<ChatSummaryEntity> {
+        override val collectionPath: String = "chat_summaries"
+        override suspend fun claimPending() = chatSummaryDao.claimPending()
+        override suspend fun getClaimedForSync() = chatSummaryDao.getClaimedForSync()
+        override suspend fun markSynced(entities: List<ChatSummaryEntity>) = chatSummaryDao.markSynced(entities.map { it.id })
+        override fun getEntityId(entity: ChatSummaryEntity): String = entity.chatId.value
+        
+        override suspend fun toFirestore(local: ChatSummaryEntity): Map<String, Any?> {
+            return mapOf(
+                "chat_id" to local.chatId.value,
+                "content" to local.content.encrypt(),
+                "last_summarized_message_id" to local.lastSummarizedMessageId?.value,
+                "created_at" to local.createdAt,
+                "updated_at" to local.updatedAt,
+                "deleted" to local.deleted
+            )
+        }
+
+        override fun fromFirestore(doc: DocumentSnapshot): ChatSummaryEntity? {
+            val chatIdStr = doc.getString("chat_id") ?: return null
+            val content = doc.getBlob("content")?.decrypt() ?: return null
+            return ChatSummaryEntity(
+                chatId = ChatId(chatIdStr),
+                content = content,
+                lastSummarizedMessageId = doc.getString("last_summarized_message_id")?.let { MessageId(it) },
+                createdAt = doc.getLong("created_at") ?: 0L,
+                updatedAt = doc.getLong("updated_at") ?: 0L,
+                deleted = doc.getBoolean("deleted") ?: false,
+                pendingSync = 0
+            )
+        }
+        
+        override suspend fun upsertLocal(entity: ChatSummaryEntity, doc: DocumentSnapshot, overwrite: Boolean) {
+            val existing = chatSummaryDao.getSummaryByChatIdIncludingDeletedSync(entity.chatId)
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
+                val merged = if (existing != null) {
+                    entity.copy(id = existing.id, pendingSync = 0)
+                } else {
+                    entity.copy(pendingSync = 0)
+                }
+                chatSummaryDao.insertOrUpdateSummary(merged)
+            } else {
+                loggingPort.debug(TAG, "ChatSummary ${entity.chatId.value} local is newer or same age, skipping remote update")
+            }
+        }
+
+        override suspend fun deleteLocal(id: String) {
+            chatSummaryDao.deleteSummaryForChat(ChatId(id))
+        }
     }
 
     private val memoriesSyncAdapter = object : EntitySyncAdapter<MemoriesEntity> {
@@ -1057,13 +1113,13 @@ class FirestoreDataSource @Inject constructor(
         }
     }
 
-    override suspend fun syncAllLocalDataToCloud(): Result<Unit> {
+    override suspend fun syncAllLocalDataToCloud(): Result<Unit> = syncMutex.withLock {
         val userId = userIdProvider() ?: return Result.failure(IllegalStateException("Not signed in"))
         if (!cryptoManager.hasCachedKey()) return Result.failure(IllegalStateException("Vault locked"))
 
         return try {
             adapters.forEach { it.claimPending() }
-            syncPendingChanges()
+            syncPendingChangesInternal(userId)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1072,7 +1128,7 @@ class FirestoreDataSource @Inject constructor(
     override suspend fun syncEntitiesToCloud(
         chats: List<Chat>,
         messages: List<Message>
-    ): Result<Unit> {
+    ): Result<Unit> = syncMutex.withLock {
         val userId = userIdProvider() ?: return Result.failure(IllegalStateException("Not signed in"))
         if (!cryptoManager.hasCachedKey()) return Result.failure(IllegalStateException("Vault locked"))
 
@@ -1130,10 +1186,14 @@ class FirestoreDataSource @Inject constructor(
         }
     }
 
-    override suspend fun syncPendingChanges(): Result<Unit> {
+    override suspend fun syncPendingChanges(): Result<Unit> = syncMutex.withLock {
         val userId = userIdProvider() ?: return Result.failure(IllegalStateException("Not signed in"))
         if (!cryptoManager.hasCachedKey()) return Result.failure(IllegalStateException("Vault locked"))
 
+        return syncPendingChangesInternal(userId)
+    }
+
+    private suspend fun syncPendingChangesInternal(userId: String): Result<Unit> {
         return try {
             for (adapter in adapters) {
                 syncAdapterPendingChanges(adapter, userId)

@@ -2,6 +2,7 @@ package com.browntowndev.pocketcrew.core.data.remote
 
 import com.browntowndev.pocketcrew.core.data.local.ChatDao
 import com.browntowndev.pocketcrew.core.data.local.ChatEntity
+import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.MessageDao
 import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.MessageWithFiles
@@ -68,6 +69,7 @@ class FirestoreDataSourceTest {
     private val testScope = TestScope(testDispatcher)
     private val embeddingCoordinator = mockk<com.browntowndev.pocketcrew.core.data.sync.EmbeddingRegenerationCoordinator>(relaxed = true)
     private val embeddingDao = mockk<com.browntowndev.pocketcrew.core.data.local.EmbeddingDao>(relaxed = true)
+    private val chatSummaryDao = mockk<ChatSummaryDao>(relaxed = true)
     private lateinit var dataSource: FirestoreDataSource
 
     @BeforeEach
@@ -89,26 +91,27 @@ class FirestoreDataSourceTest {
             firestore = firestore,
             chatDao = chatDao,
             messageDao = messageDao,
-            cryptoManager = cryptoManager,
-            loggingPort = loggingPort,
-            externalScope = testScope,
-            userIdProvider = { "test-user-id" },
-            apiCredentialsDao = apiCredentialsDao,
+            memoriesDao = mockk(relaxed = true),
+            webSearchSourceDao = mockk(relaxed = true),
+            ttsProviderDao = mockk(relaxed = true),
+            mediaProviderDao = mockk(relaxed = true),
             apiModelConfigurationsDao = mockk(relaxed = true),
             localModelsDao = mockk(relaxed = true),
+            apiCredentialsDao = apiCredentialsDao,
             localModelConfigurationsDao = mockk(relaxed = true),
             defaultModelsDao = mockk(relaxed = true),
             studioMediaDao = mockk(relaxed = true),
             studioAlbumDao = mockk(relaxed = true),
-            memoriesDao = mockk(relaxed = true),
-            ttsProviderDao = mockk(relaxed = true),
-            mediaProviderDao = mockk(relaxed = true),
-            apiKeyManager = apiKeyManager,
-            messageVisionAnalysisDao = mockk(relaxed = true),
             messageFileDao = mockk(relaxed = true),
-            webSearchSourceDao = mockk(relaxed = true),
-            embeddingCoordinator = embeddingCoordinator,
-            embeddingDao = embeddingDao
+            messageVisionAnalysisDao = mockk(relaxed = true),
+            chatSummaryDao = chatSummaryDao,
+            embeddingDao = embeddingDao,
+            apiKeyManager = apiKeyManager,
+            cryptoManager = cryptoManager,
+            loggingPort = loggingPort,
+            externalScope = testScope,
+            userIdProvider = { "test-user-id" },
+            embeddingCoordinator = embeddingCoordinator
         )
     }
 
@@ -160,6 +163,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -515,6 +519,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -597,6 +602,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -863,6 +869,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -950,6 +957,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = messageVisionAnalysisDao,
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -1116,6 +1124,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = messageVisionAnalysisDao,
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -1171,6 +1180,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = messageFileDao,
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -1222,6 +1232,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = webSearchSourceDao,
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -1279,6 +1290,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -1339,6 +1351,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -1399,6 +1412,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -1465,6 +1479,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -1531,6 +1546,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -1600,6 +1616,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
@@ -1693,6 +1710,7 @@ class FirestoreDataSourceTest {
                 messageVisionAnalysisDao = mockk(relaxed = true),
                 messageFileDao = mockk(relaxed = true),
                 webSearchSourceDao = mockk(relaxed = true),
+                chatSummaryDao = chatSummaryDao,
                 embeddingCoordinator = embeddingCoordinator,
                 embeddingDao = embeddingDao
             )
