@@ -5,6 +5,8 @@ import com.browntowndev.pocketcrew.core.data.local.StudioAlbumDao
 import com.browntowndev.pocketcrew.core.data.local.StudioAlbumEntity
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaDao
 import com.browntowndev.pocketcrew.core.data.local.StudioMediaEntity
+import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
+import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import com.browntowndev.pocketcrew.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
@@ -22,8 +24,11 @@ class StudioRepositoryImpl @Inject constructor(
     private val studioMediaDao: StudioMediaDao,
     private val studioAlbumDao: StudioAlbumDao,
     private val transactionProvider: TransactionProvider,
+    private val syncTrigger: CloudSyncTrigger,
     @ApplicationContext private val context: Context
 ) : StudioRepositoryPort {
+
+    private fun triggerSync() = syncTrigger.trigger()
 
     private val ephemeralMedia = MutableStateFlow<List<StudioMediaAsset>>(emptyList())
     private val generationError = MutableStateFlow<String?>(null)
@@ -96,9 +101,11 @@ class StudioRepositoryImpl @Inject constructor(
                 mediaUri = finalUri,
                 mediaType = mediaType,
                 createdAt = createdAt ?: System.currentTimeMillis(),
-                albumId = albumId
+                albumId = albumId.toPersistentAlbumId(),
+                pendingSync = 1
             )
         )
+        triggerSync()
         return getMediaById(newId)!!
     }
 
@@ -118,6 +125,7 @@ class StudioRepositoryImpl @Inject constructor(
     }
     
     override suspend fun updateMedia(asset: StudioMediaAsset) {
+        val existing = studioMediaDao.getMediaById(asset.id)
         studioMediaDao.insertMedia(
             StudioMediaEntity(
                 id = asset.id,
@@ -125,9 +133,14 @@ class StudioRepositoryImpl @Inject constructor(
                 mediaUri = asset.localUri,
                 mediaType = asset.mediaType,
                 createdAt = asset.createdAt,
-                albumId = asset.albumId
+                albumId = asset.albumId.toPersistentAlbumId(),
+                remoteUrl = existing?.remoteUrl,
+                remoteThumbnailUrl = existing?.remoteThumbnailUrl,
+                syncStatus = existing?.syncStatus ?: "PENDING_UPLOAD",
+                pendingSync = 1
             )
         )
+        triggerSync()
     }
 
     override suspend fun promoteEphemeralMedia(id: String, albumId: String?): StudioMediaAsset {
@@ -172,6 +185,7 @@ class StudioRepositoryImpl @Inject constructor(
 
     override suspend fun deleteMedia(id: String) {
         studioMediaDao.softDeleteById(id)
+        triggerSync()
     }
 
     override suspend fun getMediaById(id: String): StudioMediaAsset? {
@@ -180,7 +194,8 @@ class StudioRepositoryImpl @Inject constructor(
 
     override suspend fun createAlbum(name: String): String {
         val id = java.util.UUID.randomUUID().toString()
-        studioAlbumDao.insertAlbum(StudioAlbumEntity(id = id, name = name))
+        studioAlbumDao.insertAlbum(StudioAlbumEntity(id = id, name = name, pendingSync = 1))
+        triggerSync()
         return id
     }
 
@@ -188,6 +203,7 @@ class StudioRepositoryImpl @Inject constructor(
         val trimmedName = name.trim()
         if (trimmedName.isEmpty()) return
         studioAlbumDao.updateAlbumName(id, trimmedName)
+        triggerSync()
     }
 
     override suspend fun deleteAlbum(id: String) {
@@ -195,13 +211,15 @@ class StudioRepositoryImpl @Inject constructor(
             studioMediaDao.reassignMediaToDefault(id)
             studioAlbumDao.softDeleteById(id)
         }
+        triggerSync()
     }
 
     override suspend fun moveMediaToAlbum(mediaIds: List<String>, albumId: String) {
         studioMediaDao.updateMediaAlbum(
             mediaIds = mediaIds,
-            albumId = albumId
+            albumId = albumId.toPersistentAlbumId()
         )
+        triggerSync()
     }
 
     override suspend fun readMediaBytes(localUri: String): ByteArray? {
@@ -221,6 +239,7 @@ class StudioRepositoryImpl @Inject constructor(
     private fun StudioMediaEntity.toDomain() = StudioMediaAsset(
         id = id.toString(),
         localUri = mediaUri,
+        remoteUrl = remoteUrl,
         prompt = prompt,
         mediaType = mediaType,
         createdAt = createdAt,
@@ -231,4 +250,6 @@ class StudioRepositoryImpl @Inject constructor(
         id = id.toString(),
         name = name
     )
+
+    private fun String?.toPersistentAlbumId(): String? = if (this == DEFAULT_GALLERY_ALBUM_ID) null else this
 }
