@@ -15,14 +15,35 @@ interface MessageFileDao {
     @Query("SELECT * FROM message_file WHERE id = :id AND deleted = 0")
     suspend fun getById(id: String): MessageFileEntity?
 
+    @Query("SELECT * FROM message_file WHERE id = :id")
+    suspend fun getByIdIncludingDeleted(id: String): MessageFileEntity?
+
     @Query("SELECT * FROM message_file WHERE message_id = :messageId AND deleted = 0")
     suspend fun getByMessageId(messageId: MessageId): List<MessageFileEntity>
 
-    @Query("UPDATE message_file SET deleted = 1, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
+    @Query("UPDATE message_file SET deleted = 1, sync_status = 'PENDING_UPLOAD', updated_at = :timestamp WHERE id = :id")
     suspend fun softDeleteById(id: String, timestamp: Long = System.currentTimeMillis())
+
+    @Query("SELECT * FROM message_file WHERE sync_status = 'PENDING_UPLOAD' AND deleted = 0")
+    suspend fun getPendingUploads(): List<MessageFileEntity>
+
+    @Query("SELECT * FROM message_file WHERE deleted = 1 AND sync_status != 'DELETED'")
+    suspend fun getPendingDeletions(): List<MessageFileEntity>
+
+    @Query("UPDATE message_file SET sync_status = 'DELETED', updated_at = :timestamp WHERE id = :id")
+    suspend fun markCloudDeleted(id: String, timestamp: Long = System.currentTimeMillis())
+
+    @Query("UPDATE message_file SET sync_status = :status, updated_at = :timestamp WHERE id = :id")
+    suspend fun updateStatus(id: String, status: String, timestamp: Long = System.currentTimeMillis())
+
+    @Query("UPDATE message_file SET sync_status = 'UPLOADED', remote_url = :remoteUrl, pending_sync = 1, updated_at = :timestamp WHERE id = :id")
+    suspend fun markUploaded(id: String, remoteUrl: String, timestamp: Long = System.currentTimeMillis())
 
     @Query("DELETE FROM message_file WHERE id IN (:ids) AND deleted = 1")
     suspend fun purgeDeleted(ids: List<String>)
+
+    @Query("DELETE FROM message_file WHERE message_id = :messageId AND file_type = 'ARTIFACT'")
+    suspend fun deleteArtifactsByMessageId(messageId: String)
 
     @Query("UPDATE message_file SET pending_sync = 2 WHERE pending_sync = 1")
     suspend fun claimPending()

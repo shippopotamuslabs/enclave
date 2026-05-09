@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.port.repository.DefaultModelRepository
 import com.browntowndev.pocketcrew.domain.port.repository.MediaProviderRepositoryPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import com.browntowndev.pocketcrew.domain.usecase.media.GenerateMusicUseCase
 import com.browntowndev.pocketcrew.domain.usecase.media.GenerateVideoUseCase

@@ -65,7 +65,7 @@ class SyncDaoTest {
             pinned = false,
             pendingSync = 0
         )
-        chatDao.insert(chat)
+        chatDao.upsert(chat)
         
         // Initial state
         var savedChat = chatDao.getChatById(chatId)!!
@@ -91,7 +91,7 @@ class SyncDaoTest {
             pinned = false,
             pendingSync = 0
         )
-        chatDao.insert(chat)
+        chatDao.upsert(chat)
 
         // Action
         chatDao.updateName(chatId, "New Name")
@@ -108,7 +108,7 @@ class SyncDaoTest {
         val messageId = MessageId(UUID.randomUUID().toString())
         
         // Need a chat first due to foreign key
-        chatDao.insert(ChatEntity(chatId, "Chat", Date(), Date(), false))
+        chatDao.upsert(ChatEntity(chatId, "Chat", Date(), Date(), false))
         
         val message = MessageEntity(
             id = messageId,
@@ -117,7 +117,7 @@ class SyncDaoTest {
             role = Role.USER,
             pendingSync = 0
         )
-        messageDao.insert(message)
+        messageDao.upsert(message)
 
         // Action
         messageDao.updateMessageContent(messageId, "New Content", 10, "thinking")
@@ -132,9 +132,9 @@ class SyncDaoTest {
     fun `MessageDao updateMessageState sets pending_sync to true`() = runTest {
         val chatId = ChatId(UUID.randomUUID().toString())
         val messageId = MessageId(UUID.randomUUID().toString())
-        chatDao.insert(ChatEntity(chatId, "Chat", Date(), Date(), false))
+        chatDao.upsert(ChatEntity(chatId, "Chat", Date(), Date(), false))
         
-        messageDao.insert(MessageEntity(
+        messageDao.upsert(MessageEntity(
             id = messageId,
             chatId = chatId,
             content = "Content",
@@ -153,8 +153,8 @@ class SyncDaoTest {
 
     @Test
     fun `ChatDao getClaimedForSync returns only chats with pending_sync claimed`() = runTest {
-        chatDao.insert(ChatEntity(ChatId("1"), "Chat 1", Date(), Date(), false, pendingSync = 1))
-        chatDao.insert(ChatEntity(ChatId("2"), "Chat 2", Date(), Date(), false, pendingSync = 0))
+        chatDao.upsert(ChatEntity(ChatId("1"), "Chat 1", Date(), Date(), false, pendingSync = 1))
+        chatDao.upsert(ChatEntity(ChatId("2"), "Chat 2", Date(), Date(), false, pendingSync = 0))
 
         chatDao.claimPending()
         val pending = chatDao.getClaimedForSync()
@@ -166,16 +166,16 @@ class SyncDaoTest {
     @Test
     fun `MessageDao getClaimedForSync returns only messages with pending_sync claimed`() = runTest {
         val chatId = ChatId("chat")
-        chatDao.insert(ChatEntity(chatId, "Chat", Date(), Date(), false))
+        chatDao.upsert(ChatEntity(chatId, "Chat", Date(), Date(), false))
         
-        messageDao.insert(MessageEntity(
+        messageDao.upsert(MessageEntity(
             id = MessageId("1"),
             chatId = chatId,
             content = "C1",
             role = Role.USER,
             pendingSync = 1
         ))
-        messageDao.insert(MessageEntity(
+        messageDao.upsert(MessageEntity(
             id = MessageId("2"),
             chatId = chatId,
             content = "C2",
@@ -219,7 +219,7 @@ class SyncDaoTest {
     @Test
     fun `Chat markSynced resets pending_sync`() = runTest {
         val id = ChatId("1")
-        chatDao.insert(ChatEntity(id, "Chat 1", Date(), Date(), false, pendingSync = 1))
+        chatDao.upsert(ChatEntity(id, "Chat 1", Date(), Date(), false, pendingSync = 1))
 
         chatDao.claimPending()
         chatDao.markSynced(listOf(id))
@@ -232,8 +232,8 @@ class SyncDaoTest {
     fun `MessageDao markSynced resets pending_sync`() = runTest {
         val chatId = ChatId("chat")
         val messageId = MessageId("1")
-        chatDao.insert(ChatEntity(chatId, "Chat", Date(), Date(), false))
-        messageDao.insert(MessageEntity(
+        chatDao.upsert(ChatEntity(chatId, "Chat", Date(), Date(), false))
+        messageDao.upsert(MessageEntity(
             id = messageId,
             chatId = chatId,
             content = "C1",
@@ -424,9 +424,9 @@ class SyncDaoTest {
     @Test
     fun `WebSearchSourceDao getClaimedForSync returns only claimed rows`() = runTest {
         val chatId = ChatId("chat-ws")
-        chatDao.insert(ChatEntity(chatId, "Chat", Date(), Date(), false))
+        chatDao.upsert(ChatEntity(chatId, "Chat", Date(), Date(), false))
         val msgId = MessageId("msg-ws-1")
-        messageDao.insert(MessageEntity(id = msgId, chatId = chatId, content = "C", role = Role.USER))
+        messageDao.upsert(MessageEntity(id = msgId, chatId = chatId, content = "C", role = Role.USER))
         val wsDao = database.webSearchSourceDao()
         wsDao.insertAll(listOf(
             WebSearchSourceEntity("ws-1", msgId, "Title A", "https://a.com", "Content A", 0.9, false, pendingSync = 1),
@@ -443,9 +443,9 @@ class SyncDaoTest {
     @Test
     fun `WebSearchSourceDao markSynced resets pending_sync`() = runTest {
         val chatId = ChatId("chat-ws-sync")
-        chatDao.insert(ChatEntity(chatId, "Chat", Date(), Date(), false))
+        chatDao.upsert(ChatEntity(chatId, "Chat", Date(), Date(), false))
         val msgId = MessageId("msg-ws-sync-1")
-        messageDao.insert(MessageEntity(id = msgId, chatId = chatId, content = "C", role = Role.USER))
+        messageDao.upsert(MessageEntity(id = msgId, chatId = chatId, content = "C", role = Role.USER))
         val wsDao = database.webSearchSourceDao()
         wsDao.insertAll(listOf(
             WebSearchSourceEntity("ws-sync-1", msgId, "Title", "https://c.com", "Content", 0.9, false, pendingSync = 1),
@@ -463,9 +463,9 @@ class SyncDaoTest {
     @Test
     fun `MessageFileDao getClaimedForSync returns only claimed rows`() = runTest {
         val chatId = ChatId("chat-f")
-        chatDao.insert(ChatEntity(chatId, "Chat", Date(), Date(), false))
+        chatDao.upsert(ChatEntity(chatId, "Chat", Date(), Date(), false))
         val msgId = MessageId("msg-f-1")
-        messageDao.insert(MessageEntity(id = msgId, chatId = chatId, content = "C", role = Role.USER))
+        messageDao.upsert(MessageEntity(id = msgId, chatId = chatId, content = "C", role = Role.USER))
         val fileDao = database.messageFileDao()
         fileDao.insert(MessageFileEntity("f-1", msgId.value, "file1.txt", "content1", pendingSync = 1))
         fileDao.insert(MessageFileEntity("f-2", msgId.value, "file2.txt", "content2", pendingSync = 0))
@@ -480,9 +480,9 @@ class SyncDaoTest {
     @Test
     fun `MessageFileDao markSynced resets pending_sync`() = runTest {
         val chatId = ChatId("chat-f-sync")
-        chatDao.insert(ChatEntity(chatId, "Chat", Date(), Date(), false))
+        chatDao.upsert(ChatEntity(chatId, "Chat", Date(), Date(), false))
         val msgId = MessageId("msg-f-sync-1")
-        messageDao.insert(MessageEntity(id = msgId, chatId = chatId, content = "C", role = Role.USER))
+        messageDao.upsert(MessageEntity(id = msgId, chatId = chatId, content = "C", role = Role.USER))
         val fileDao = database.messageFileDao()
         fileDao.insert(MessageFileEntity("f-sync-1", msgId.value, "file.txt", "content", pendingSync = 1))
 

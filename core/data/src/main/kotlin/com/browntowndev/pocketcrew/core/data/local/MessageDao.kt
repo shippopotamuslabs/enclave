@@ -118,7 +118,7 @@ abstract class MessageDao {
     abstract suspend fun appendThinkingRawAtomic(id: MessageId, suffix: String, timestamp: Long = System.currentTimeMillis())
 
     @Upsert
-    abstract suspend fun insert(messageEntity: MessageEntity): Long
+    abstract suspend fun upsert(messageEntity: MessageEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun insertIfAbsent(messageEntity: MessageEntity): Long
@@ -182,7 +182,6 @@ abstract class MessageDao {
         messageState: MessageState,
         pipelineStep: PipelineStep?,
         webSearchSources: List<WebSearchSourceEntity> = emptyList(),
-        artifactsJson: String? = null,
         mediaUrisJson: String? = null,
         mediaAssetIdsJson: String? = null,
         mediaTypesJson: String? = null,
@@ -203,7 +202,7 @@ abstract class MessageDao {
         updateMessageContentText(messageId, content, timestamp)
         updateMessagePipelineStep(messageId, pipelineStep, timestamp)
         updateMessageState(messageId, messageState, timestamp)
-        updateMessageArtifacts(messageId, artifactsJson, timestamp)
+
         updateMessageMedia(
             id = messageId, 
             mediaUrisJson = mediaUrisJson,

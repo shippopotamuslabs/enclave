@@ -23,6 +23,12 @@ data class MessageFileEntity(
     @ColumnInfo(name = "message_id") val messageId: String,
     val name: String,
     val content: String,
+    @ColumnInfo(name = "file_type")
+    val fileType: String = "ATTACHMENT",
+    @ColumnInfo(name = "remote_url")
+    val remoteUrl: String? = null,
+    @ColumnInfo(name = "sync_status")
+    val syncStatus: String = "PENDING_UPLOAD",
     @ColumnInfo(name = "pending_sync")
     val pendingSync: Int = 0,
     @ColumnInfo(name = "updated_at")

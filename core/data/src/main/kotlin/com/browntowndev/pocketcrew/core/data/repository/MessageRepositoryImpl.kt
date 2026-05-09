@@ -8,9 +8,7 @@ import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisDao
 import com.browntowndev.pocketcrew.core.data.local.MessageVisionAnalysisEntity
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
-import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
-import com.browntowndev.pocketcrew.domain.model.chat.ChatMessage
 import com.browntowndev.pocketcrew.domain.model.chat.ChatSummary
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
@@ -64,7 +62,7 @@ class MessageRepositoryImpl @Inject constructor(
     override suspend fun saveMessage(message: Message): MessageId {
         require(message.chatId != null) { "Message(id=${message.id.value}) must have a chatId before persisting — route through CreateUserMessageUseCase" }
         val entity = message.toEntity()
-        messageDao.insert(entity)
+        messageDao.upsert(entity)
 
         if (message.content.fileAttachments.isNotEmpty()) {
             val fileEntities = message.content.fileAttachments.map { 

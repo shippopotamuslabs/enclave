@@ -1318,7 +1318,7 @@ class SettingsViewModel @Inject constructor(
                 )
                 _apiState.update { state ->
                     state.copy(
-                        discoveredApiModels = result.models,
+                        discoveredApiModels = result.models.filterChatModels(),
                         discoveredApiModelScope = result.scope,
                         assetDraft = state.normalizeVisionCapability(state.assetDraft, result.models),
                     )
@@ -1704,21 +1704,16 @@ class SettingsViewModel @Inject constructor(
     private fun List<DiscoveredApiModel>.filterGoogleTtsModels(): List<DiscoveredApiModel> =
         filter { it.id.isGoogleTtsModelCandidate() }
 
+    private fun List<DiscoveredApiModel>.filterChatModels(): List<DiscoveredApiModel> {
+        return filter { it.isChatCapable }
+    }
+
     private fun List<DiscoveredApiModel>.filterMediaModels(capability: MediaCapability): List<DiscoveredApiModel> {
         return filter { model ->
             when (capability) {
-                MediaCapability.IMAGE -> {
-                    (model.id.contains("gpt-image-", ignoreCase = true) ||
-                            model.id.contains("gemini-3.1", ignoreCase = true) ||
-                            model.id.contains("dall-e-3", ignoreCase = true)) &&
-                            !model.id.contains("dall-e-2", ignoreCase = true)
-                }
-                MediaCapability.VIDEO -> {
-                    model.id.contains("veo-3", ignoreCase = true)
-                }
-                MediaCapability.MUSIC -> {
-                    model.id.contains("lyria-3", ignoreCase = true)
-                }
+                MediaCapability.IMAGE -> model.isImageGenerationCapable
+                MediaCapability.VIDEO -> model.isVideoGenerationCapable
+                MediaCapability.MUSIC -> model.isAudioGenerationCapable
             }
         }
     }

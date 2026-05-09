@@ -27,9 +27,19 @@ interface CryptoManagerPort {
     fun encrypt(plaintext: String): Result<ByteArray>
 
     /**
+     * Encrypts the raw bytes using the cached key.
+     */
+    fun encryptBytes(data: ByteArray): Result<ByteArray>
+
+    /**
      * Decrypts the ciphertext using the cached key.
      */
     fun decrypt(ciphertext: ByteArray): Result<String>
+
+    /**
+     * Decrypts the raw bytes using the cached key.
+     */
+    fun decryptBytes(ciphertext: ByteArray): Result<ByteArray>
 
     /**
      * Generates a new random salt for key derivation.

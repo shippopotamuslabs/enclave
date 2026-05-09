@@ -15,6 +15,9 @@ enum class Role(val apiValue: String) {
          * Defaults to USER if the value doesn't match any role.
          */
         fun fromApiValue(value: String): Role =
-            entries.firstOrNull { it.apiValue == value } ?: USER
+            entries.firstOrNull { 
+                it.apiValue.equals(value, ignoreCase = true) || 
+                it.name.equals(value, ignoreCase = true) 
+            } ?: USER
     }
 }

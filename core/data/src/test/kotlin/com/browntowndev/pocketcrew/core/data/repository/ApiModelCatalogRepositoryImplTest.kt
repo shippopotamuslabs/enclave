@@ -78,8 +78,10 @@ class ApiModelCatalogRepositoryImplTest {
         every { googleModelB.name() } returns Optional.of("publishers/google/models/gemini-2.5-pro")
         every { googleModelA.inputTokenLimit() } returns Optional.of(1_048_576)
         every { googleModelA.outputTokenLimit() } returns Optional.of(8_192)
+        every { googleModelA.supportedActions() } returns Optional.of(listOf("generateContent"))
         every { googleModelB.inputTokenLimit() } returns Optional.of(2_097_152)
         every { googleModelB.outputTokenLimit() } returns Optional.of(65_536)
+        every { googleModelB.supportedActions() } returns Optional.of(listOf("generateContent"))
     }
 
     @Test
@@ -93,12 +95,14 @@ class ApiModelCatalogRepositoryImplTest {
                     name = "Claude Haiku 4.5",
                     created = OffsetDateTime.of(2025, 10, 1, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond(),
                     isMultimodal = false,
+                    isChatCapable = true,
                 ),
                 DiscoveredApiModel(
                     id = "claude-sonnet-4-20250514",
                     name = "Claude Sonnet 4",
                     created = OffsetDateTime.of(2025, 5, 14, 0, 0, 0, 0, ZoneOffset.UTC).toEpochSecond(),
                     isMultimodal = true,
+                    isChatCapable = true,
                 ),
             ),
             models,
@@ -115,11 +119,13 @@ class ApiModelCatalogRepositoryImplTest {
                     id = "gemini-2.5-flash",
                     contextWindowTokens = 1_048_576,
                     maxOutputTokens = 8_192,
+                    isChatCapable = true,
                 ),
                 DiscoveredApiModel(
                     id = "gemini-2.5-pro",
                     contextWindowTokens = 2_097_152,
                     maxOutputTokens = 65_536,
+                    isChatCapable = true,
                 ),
             ),
             models,
@@ -174,6 +180,7 @@ class ApiModelCatalogRepositoryImplTest {
                     id = "anthropic/claude-sonnet-4",
                     contextWindowTokens = 200_000,
                     isMultimodal = false,
+                    isChatCapable = true,
                 ),
                 DiscoveredApiModel(
                     id = "openai/gpt-5.2",
@@ -184,6 +191,7 @@ class ApiModelCatalogRepositoryImplTest {
                     contextWindowTokens = 400_000,
                     maxOutputTokens = 128_000,
                     isMultimodal = true,
+                    isChatCapable = true,
                 ),
             ),
             models,
@@ -193,7 +201,7 @@ class ApiModelCatalogRepositoryImplTest {
     @Test
     fun `parseXaiModels extracts correct fields`() {
         val models = repo.parseXaiModels(
-            """
+            responseBody = """
             {
               "data": [
                 {
@@ -205,7 +213,8 @@ class ApiModelCatalogRepositoryImplTest {
                 }
               ]
             }
-            """.trimIndent()
+            """.trimIndent(),
+            isChat = true
         )
 
         assertEquals(
@@ -217,6 +226,9 @@ class ApiModelCatalogRepositoryImplTest {
                     promptPrice = 0.2,
                     completionPrice = 0.4,
                     isMultimodal = true,
+                    isChatCapable = true,
+                    isImageGenerationCapable = false,
+                    isVideoGenerationCapable = false,
                 )
             ),
             models,
@@ -226,7 +238,7 @@ class ApiModelCatalogRepositoryImplTest {
     @Test
     fun `parseXaiModels supports language-models payload`() {
         val models = repo.parseXaiModels(
-            """
+            responseBody = """
             {
               "models": [
                 {
@@ -239,7 +251,8 @@ class ApiModelCatalogRepositoryImplTest {
                 }
               ]
             }
-            """.trimIndent()
+            """.trimIndent(),
+            isChat = true
         )
 
         assertEquals(
@@ -252,6 +265,9 @@ class ApiModelCatalogRepositoryImplTest {
                     completionPrice = 0.5,
                     contextWindowTokens = 131_072,
                     isMultimodal = false,
+                    isChatCapable = true,
+                    isImageGenerationCapable = false,
+                    isVideoGenerationCapable = false,
                 )
             ),
             models,
@@ -274,6 +290,7 @@ class ApiModelCatalogRepositoryImplTest {
             }
             """.trimIndent(),
             requestedModelId = "grok-4-fast-reasoning",
+            isChat = true
         )
 
         assertEquals(
@@ -285,8 +302,80 @@ class ApiModelCatalogRepositoryImplTest {
                 completionPrice = 0.5,
                 contextWindowTokens = 256_000,
                 isMultimodal = true,
+                isChatCapable = true,
+                isImageGenerationCapable = false,
+                isVideoGenerationCapable = false,
             ),
             model,
         )
+    }
+
+    @Test
+    fun `parseXaiModels marks models from image-generation-models as image generation capable`() {
+        val models = repo.parseXaiModels(
+            responseBody = """
+            {
+              "models": [
+                {
+                  "id": "grok-imagine-image",
+                  "created": 1743465600,
+                  "input_modalities": ["text"],
+                  "image_price": 200
+                }
+              ]
+            }
+            """.trimIndent(),
+            isImageGen = true
+        )
+
+        assertEquals(1, models.size)
+        val model = models[0]
+        assertEquals(false, model.isChatCapable)
+        assertEquals(true, model.isImageGenerationCapable)
+        assertEquals(false, model.isVideoGenerationCapable)
+    }
+
+    @Test
+    fun `parseXaiModels marks models from video-generation-models as video generation capable`() {
+        val models = repo.parseXaiModels(
+            responseBody = """
+            {
+              "models": [
+                {
+                  "id": "grok-imagine-video",
+                  "created": 1743465600,
+                  "input_modalities": ["text"]
+                }
+              ]
+            }
+            """.trimIndent(),
+            isVideoGen = true
+        )
+
+        assertEquals(1, models.size)
+        val model = models[0]
+        assertEquals(false, model.isChatCapable)
+        assertEquals(false, model.isImageGenerationCapable)
+        assertEquals(true, model.isVideoGenerationCapable)
+    }
+
+    @Test
+    fun `fetchModels filters out blacklisted OpenAI models`() = runTest {
+        every { openAiClientProvider.getClient(any(), any(), any()) } returns mockk {
+            every { models() } returns mockk {
+                every { list() } returns mockk {
+                    every { data() } returns listOf(
+                        mockk { every { id() } returns "gpt-4o"; every { created() } returns 123L },
+                        mockk { every { id() } returns "dall-e-2"; every { created() } returns 123L },
+                        mockk { every { id() } returns "whisper-1"; every { created() } returns 123L },
+                    )
+                }
+            }
+        }
+
+        val models = repo.fetchModels(ApiProvider.OPENAI, apiKey = "key", baseUrl = null)
+
+        assertEquals(1, models.size)
+        assertEquals("gpt-4o", models[0].id)
     }
 }

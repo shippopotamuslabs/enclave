@@ -133,25 +133,6 @@ private val Context.pipelineDataStore: DataStore<Preferences> by preferencesData
 @InstallIn(SingletonComponent::class)
 @Suppress("TooManyFunctions")
 object DataModule {
-
-    private val MIGRATION_1_2 = object : Migration(1, 2) {
-        override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN max_tokens_disabled INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN temperature_disabled INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN top_p_disabled INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN top_k_disabled INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN min_p_disabled INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN frequency_penalty_disabled INTEGER NOT NULL DEFAULT 0")
-            db.execSQL("ALTER TABLE api_model_configurations ADD COLUMN presence_penalty_disabled INTEGER NOT NULL DEFAULT 0")
-        }
-    }
-
-    private val MIGRATION_2_3 = object : Migration(2, 3) {
-        override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL("ALTER TABLE tavily_source RENAME TO web_search_source")
-        }
-    }
-
     @Provides
     @Singleton
     fun providePocketCrewDatabase(@ApplicationContext context: Context): PocketCrewDatabase {
@@ -160,8 +141,7 @@ object DataModule {
             PocketCrewDatabase::class.java,
             "pocketcrew.db"
         )
-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
-        .fallbackToDestructiveMigration()
+        .fallbackToDestructiveMigration(dropAllTables = true)
         .openHelperFactory(SQLiteVecInstaller.createOpenHelperFactory(context))
         .addCallback(object : RoomDatabase.Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {

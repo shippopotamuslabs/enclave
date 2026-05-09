@@ -187,6 +187,10 @@ dependencies {
     kspAndroidTest(libs.hilt.compiler)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+
+    // Coil 3 for Image Loading and Custom Decryption
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
 }
 
 // =============================================================================

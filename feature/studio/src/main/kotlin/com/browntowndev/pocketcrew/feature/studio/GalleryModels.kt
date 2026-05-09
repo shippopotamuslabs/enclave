@@ -3,7 +3,7 @@ package com.browntowndev.pocketcrew.feature.studio
 import androidx.compose.runtime.Immutable
 import com.browntowndev.pocketcrew.core.ui.model.AlbumSelectionItem
 
-internal const val DEFAULT_GALLERY_ALBUM_ID = "default"
+import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 
 @Immutable
 data class GalleryUiState(

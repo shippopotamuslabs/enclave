@@ -3,6 +3,7 @@ package com.browntowndev.pocketcrew
 import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import coil3.ImageLoader
 import com.browntowndev.pocketcrew.domain.port.auth.AuthManager
 import com.browntowndev.pocketcrew.domain.port.auth.AuthState
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
@@ -17,7 +18,8 @@ import javax.inject.Inject
 @HiltAndroidApp
 class PocketCrewApplication :
     Application(),
-    Configuration.Provider {
+    Configuration.Provider,
+    coil3.SingletonImageLoader.Factory {
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
@@ -33,6 +35,11 @@ class PocketCrewApplication :
     @Inject
     @ApplicationScope
     lateinit var applicationScope: CoroutineScope
+
+    @Inject
+    lateinit var imageLoader: ImageLoader
+
+    override fun newImageLoader(context: android.content.Context): ImageLoader = imageLoader
 
     override fun onCreate() {
         super.onCreate()

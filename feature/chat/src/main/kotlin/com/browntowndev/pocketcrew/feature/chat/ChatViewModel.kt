@@ -894,6 +894,7 @@ class ChatViewModel @Inject constructor(
                         fileAttachments = fileAttachments
                     ),
                     role = Role.USER,
+                    messageState = MessageState.COMPLETE,
                     createdAt = System.currentTimeMillis()
                 )
 

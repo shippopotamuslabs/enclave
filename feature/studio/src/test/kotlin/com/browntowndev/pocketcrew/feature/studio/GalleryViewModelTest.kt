@@ -6,6 +6,7 @@ import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import com.browntowndev.pocketcrew.domain.port.repository.StudioAlbumAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioMediaAsset
 import com.browntowndev.pocketcrew.domain.port.repository.StudioRepositoryPort
+import com.browntowndev.pocketcrew.domain.port.repository.DEFAULT_GALLERY_ALBUM_ID
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.Dispatchers

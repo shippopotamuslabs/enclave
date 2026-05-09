@@ -72,7 +72,7 @@ class CreateUserMessageUseCase @Inject constructor(
                     pinned = false
                 )
                 chatRepository.createChat(newChat)
-                val updatedMessage = message.copy(chatId = newChatId)
+                val updatedMessage = message.copy(chatId = newChatId, createdAt = now.time)
                 val userMessageId = messageRepository.saveMessage(updatedMessage)
 
                 // Create placeholder assistant message (empty content, will be updated after generation)
@@ -80,20 +80,24 @@ class CreateUserMessageUseCase @Inject constructor(
                     id = MessageId(UUID.randomUUID().toString()),
                     chatId = newChatId,
                     content = Content(text = ""),
-                    role = Role.ASSISTANT
+                    role = Role.ASSISTANT,
+                    createdAt = now.time + 1
                 )
                 val assistantMessageId = messageRepository.saveMessage(assistantMessage)
                 PromptResult(userMessageId, assistantMessageId, newChatId)
             } else {
                 val chatId = message.chatId
-                val userMessageId = messageRepository.saveMessage(message)
+                val now = System.currentTimeMillis()
+                val updatedMessage = message.copy(createdAt = now)
+                val userMessageId = messageRepository.saveMessage(updatedMessage)
 
                 // Create placeholder assistant message for existing chat too
                 val assistantMessage = Message(
                     id = MessageId(UUID.randomUUID().toString()),
                     chatId = chatId,
                     content = Content(text = ""),
-                    role = Role.ASSISTANT
+                    role = Role.ASSISTANT,
+                    createdAt = now + 1
                 )
                 val assistantMessageId = messageRepository.saveMessage(assistantMessage)
                 PromptResult(userMessageId, assistantMessageId, chatId)

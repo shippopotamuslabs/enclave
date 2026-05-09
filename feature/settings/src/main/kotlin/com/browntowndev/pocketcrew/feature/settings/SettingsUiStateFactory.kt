@@ -267,6 +267,7 @@ class SettingsUiStateFactory @Inject constructor(
             query = apiState.modelSearchQuery,
             providerFilters = apiState.modelProviderFilters,
             sortOption = apiState.modelSortOption,
+            requireChatCapability = true,
         )
 
         val discoveredMediaModels = mediaState.discoveredApiModels.map(DiscoveredApiModel::toUi)

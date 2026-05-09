@@ -62,7 +62,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.Mutex
 import javax.inject.Inject
 import javax.inject.Singleton
-import java.util.Date
 
 @Singleton
 class FirestoreDataSource @Inject constructor(
@@ -133,7 +132,12 @@ class FirestoreDataSource @Inject constructor(
     }
 
     private fun String.encrypt(): Blob = Blob.fromBytes(cryptoManager.encrypt(this).getOrThrow())
-    private fun Blob.decrypt(): String? = cryptoManager.decrypt(this.toBytes()).getOrNull()
+    private fun Blob.decrypt(): String? {
+        val bytes = this.toBytes()
+        return if (bytes != null && bytes.isNotEmpty()) {
+            cryptoManager.decrypt(bytes).getOrNull()
+        } else null
+    }
 
     private suspend fun ensurePlaceholderMessage(messageId: MessageId, chatId: ChatId) {
         if (chatId.value.isBlank()) return
@@ -189,7 +193,7 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun upsertLocal(entity: ChatEntity, doc: DocumentSnapshot, overwrite: Boolean) {
             val existing = chatDao.getChatById(entity.id)
             if (existing == null || entity.updatedAt >= existing.updatedAt) {
-                chatDao.insert(entity.copy(pendingSync = 0)) // 0 = clean
+                chatDao.upsert(entity.copy(pendingSync = 0)) // 0 = clean
             } else {
                 loggingPort.debug(TAG, "Chat ${entity.id.value} local is newer or same age, skipping remote update")
             }
@@ -208,17 +212,29 @@ class FirestoreDataSource @Inject constructor(
         override fun getEntityId(entity: MessageEntity): String = entity.id.value
 
         override suspend fun toFirestore(local: MessageEntity): Map<String, Any?> {
-            val encryptedContent = cryptoManager.encrypt(local.content).getOrThrow()
             val msgData = mutableMapOf<String, Any?>(
                 "chat_id" to local.chatId.value,
-                "content" to Blob.fromBytes(encryptedContent),
-                "role" to local.role.name,
-                "message_state" to local.messageState.name,
+                "content" to local.content.encrypt(),
+                "role" to local.role.apiValue,
+                "message_state" to local.messageState.apiValue,
                 "updated_at" to local.updatedAt,
                 "deleted" to local.deleted
             )
             local.createdAt?.let { msgData["created_at"] = it }
             local.modelType?.let { msgData["model_type"] = it.name }
+            local.userMessageId?.let { msgData["user_message_id"] = it.value }
+            local.imageUri?.let { msgData["image_uri"] = it.encrypt() }
+            local.thinkingDurationSeconds?.let { msgData["thinking_duration_seconds"] = it }
+            local.thinkingRaw?.let { msgData["thinking_raw"] = it.encrypt() }
+            local.thinkingStartTime?.let { msgData["thinking_start_time"] = it }
+            local.thinkingEndTime?.let { msgData["thinking_end_time"] = it }
+            local.pipelineStep?.let { msgData["pipeline_step"] = it.name }
+            local.artifactsJson?.let { msgData["artifacts_json"] = it.encrypt() }
+            local.generatedMediaUrisJson?.let { msgData["generated_media_uris_json"] = it.encrypt() }
+            local.generatedMediaAssetIdsJson?.let { msgData["generated_media_asset_ids_json"] = it.encrypt() }
+            local.generatedMediaTypesJson?.let { msgData["generated_media_types_json"] = it }
+            local.generatedMediaPromptsJson?.let { msgData["generated_media_prompts_json"] = it.encrypt() }
+
             return msgData
         }
 
@@ -228,7 +244,13 @@ class FirestoreDataSource @Inject constructor(
             val existing = messageDao.getMessageById(entity.id)?.message
             if (existing == null || entity.updatedAt >= existing.updatedAt) {
                 ensurePlaceholderMessage(entity.id, entity.chatId)
-                messageDao.insert(entity.copy(pendingSync = 0))
+                
+                // Preserve local artifacts_json until Task 4 migration is complete
+                val merged = entity.copy(
+                    artifactsJson = if (entity.artifactsJson.isNullOrBlank()) existing?.artifactsJson else entity.artifactsJson,
+                    pendingSync = 0
+                )
+                messageDao.upsert(merged)
                 
                 val hash = entity.content.sha256()
                 val existingMeta = embeddingDao.getEmbeddingMetadata(entity.id.value)
@@ -249,25 +271,27 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = memoriesDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<MemoriesEntity>) = memoriesDao.markSynced(entities.map { it.id })
         override fun getEntityId(entity: MemoriesEntity) = entity.id
-        override suspend fun toFirestore(entity: MemoriesEntity) = mapOf(
-            "category" to entity.category.name,
-            "content" to entity.content.encrypt(),
-            "created_at" to entity.createdAt,
-            "updated_at" to entity.updatedAt
+        override suspend fun toFirestore(local: MemoriesEntity) = mapOf(
+            "category" to local.category.name,
+            "content" to local.content.encrypt(),
+            "created_at" to local.createdAt,
+            "updated_at" to local.updatedAt,
+            "deleted" to local.deleted
         )
-        override fun fromFirestore(snapshot: DocumentSnapshot): MemoriesEntity? {
-            val content = snapshot.getBlob("content")?.decrypt() ?: return null
+        override fun fromFirestore(doc: DocumentSnapshot): MemoriesEntity? {
+            val content = doc.getBlob("content")?.decrypt() ?: return null
             return MemoriesEntity(
-                id = snapshot.id,
-                category = com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory.valueOf(snapshot.getString("category") ?: "CONVERSATION"),
+                id = doc.id,
+                category = com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory.valueOf(doc.getString("category") ?: "CONVERSATION"),
                 content = content,
-                createdAt = snapshot.getLong("created_at") ?: 0L,
-                updatedAt = snapshot.getLong("updated_at") ?: 0L
+                createdAt = doc.getLong("created_at") ?: 0L,
+                updatedAt = doc.getLong("updated_at") ?: 0L,
+                deleted = doc.getBoolean("deleted") ?: false
             )
         }
         override suspend fun upsertLocal(entity: MemoriesEntity, doc: DocumentSnapshot, overwrite: Boolean) {
             val existing = memoriesDao.getMemoryById(entity.id)
-            if (existing == null || (overwrite && existing != entity.copy(pendingSync = existing.pendingSync))) {
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
                 memoriesDao.insertMemory(entity.copy(pendingSync = 0))
                 
                 val hash = entity.content.sha256()
@@ -275,6 +299,8 @@ class FirestoreDataSource @Inject constructor(
                 if (existingMeta?.contentHash != hash) {
                     embeddingCoordinator.enqueueMemory(entity.id)
                 }
+            } else {
+                loggingPort.debug(TAG, "Memory ${entity.id} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
@@ -288,36 +314,38 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = messageVisionAnalysisDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<MessageVisionAnalysisEntity>) = messageVisionAnalysisDao.markSynced(entities.map { it.id })
         override fun getEntityId(entity: MessageVisionAnalysisEntity) = entity.id
-        override suspend fun toFirestore(entity: MessageVisionAnalysisEntity): Map<String, Any?> {
-            val message = messageDao.getMessageById(entity.userMessageId)?.message ?: return emptyMap()
+        override suspend fun toFirestore(local: MessageVisionAnalysisEntity): Map<String, Any?> {
+            val message = messageDao.getMessageById(local.userMessageId)?.message ?: return emptyMap()
             val chatId = message.chatId.value
             return mapOf(
-                "user_message_id" to entity.userMessageId.value,
+                "user_message_id" to local.userMessageId.value,
                 "chat_id" to chatId,
-                "image_uri" to entity.imageUri,
-                "prompt_text" to entity.promptText.encrypt(),
-                "analysis_text" to entity.analysisText.encrypt(),
-                "model_type" to entity.modelType.name,
-                "created_at" to entity.createdAt,
-                "updated_at" to entity.updatedAt
+                "image_uri" to local.imageUri.encrypt(),
+                "prompt_text" to local.promptText.encrypt(),
+                "analysis_text" to local.analysisText.encrypt(),
+                "model_type" to local.modelType.name,
+                "created_at" to local.createdAt,
+                "updated_at" to local.updatedAt,
+                "deleted" to local.deleted
             )
         }
-        override fun fromFirestore(snapshot: DocumentSnapshot): MessageVisionAnalysisEntity? {
-            val chatIdStr = snapshot.getString("chat_id")
+        override fun fromFirestore(doc: DocumentSnapshot): MessageVisionAnalysisEntity? {
+            val chatIdStr = doc.getString("chat_id")
             if (chatIdStr.isNullOrBlank()) return null
-            val userMessageIdStr = snapshot.getString("user_message_id")
+            val userMessageIdStr = doc.getString("user_message_id")
             if (userMessageIdStr.isNullOrBlank()) return null
-            val promptText = snapshot.getBlob("prompt_text")?.decrypt() ?: return null
-            val analysisText = snapshot.getBlob("analysis_text")?.decrypt() ?: return null
+            val promptText = doc.getBlob("prompt_text")?.decrypt() ?: return null
+            val analysisText = doc.getBlob("analysis_text")?.decrypt() ?: return null
             return MessageVisionAnalysisEntity(
-                id = snapshot.id,
+                id = doc.id,
                 userMessageId = MessageId(userMessageIdStr),
-                imageUri = snapshot.getString("image_uri") ?: "",
+                imageUri = doc.getBlob("image_uri")?.decrypt() ?: "",
                 promptText = promptText,
                 analysisText = analysisText,
-                modelType = ModelType.valueOf(snapshot.getString("model_type") ?: "LLM"),
-                createdAt = snapshot.getLong("created_at") ?: 0L,
-                updatedAt = snapshot.getLong("updated_at") ?: 0L
+                modelType = ModelType.valueOf(doc.getString("model_type") ?: "LLM"),
+                createdAt = doc.getLong("created_at") ?: 0L,
+                updatedAt = doc.getLong("updated_at") ?: 0L,
+                deleted = doc.getBoolean("deleted") ?: false
             )
         }
         override suspend fun upsertLocal(entity: MessageVisionAnalysisEntity, doc: DocumentSnapshot, overwrite: Boolean) {
@@ -326,8 +354,10 @@ class FirestoreDataSource @Inject constructor(
                 ensurePlaceholderMessage(entity.userMessageId, chatId)
             }
             val existing = messageVisionAnalysisDao.getById(entity.id)
-            if (existing == null || (overwrite && existing != entity.copy(pendingSync = existing.pendingSync))) {
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
                 messageVisionAnalysisDao.upsert(entity.copy(pendingSync = 0))
+            } else {
+                loggingPort.debug(TAG, "VisionAnalysis ${entity.id} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
@@ -341,28 +371,39 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = messageFileDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<MessageFileEntity>) = messageFileDao.markSynced(entities.map { it.id })
         override fun getEntityId(entity: MessageFileEntity) = entity.id
-        override suspend fun toFirestore(entity: MessageFileEntity): Map<String, Any?> {
-            val message = messageDao.getMessageById(MessageId(entity.messageId))?.message ?: return emptyMap()
+        override suspend fun toFirestore(local: MessageFileEntity): Map<String, Any?> {
+            val message = messageDao.getMessageById(MessageId(local.messageId))?.message ?: return emptyMap()
             val chatId = message.chatId.value
             return mapOf(
-                "message_id" to entity.messageId,
+                "message_id" to local.messageId,
                 "chat_id" to chatId,
-                "name" to entity.name.encrypt(),
-                "content" to entity.content.encrypt()
+                "name" to local.name.encrypt(),
+                "file_type" to local.fileType,
+                "remote_url" to local.remoteUrl?.encrypt(),
+                "sync_status" to local.syncStatus,
+                "updated_at" to local.updatedAt,
+                "deleted" to local.deleted
             )
         }
-        override fun fromFirestore(snapshot: DocumentSnapshot): MessageFileEntity? {
-            val chatIdStr = snapshot.getString("chat_id")
+        override fun fromFirestore(doc: DocumentSnapshot): MessageFileEntity? {
+            val chatIdStr = doc.getString("chat_id")
             if (chatIdStr.isNullOrBlank()) return null
-            val messageIdStr = snapshot.getString("message_id")
+            val messageIdStr = doc.getString("message_id")
             if (messageIdStr.isNullOrBlank()) return null
-            val name = snapshot.getBlob("name")?.decrypt() ?: return null
-            val content = snapshot.getBlob("content")?.decrypt() ?: return null
+            val name = doc.getBlob("name")?.decrypt() ?: return null
+            val remoteUrl = doc.getBlob("remote_url")?.decrypt()
+            
             return MessageFileEntity(
-                id = snapshot.id,
+                id = doc.id,
                 messageId = messageIdStr,
                 name = name,
-                content = content
+                content = "", // Content will be downloaded from Storage if remoteUrl exists
+                fileType = doc.getString("file_type") ?: "ATTACHMENT",
+                remoteUrl = remoteUrl,
+                syncStatus = doc.getString("sync_status") ?: "PENDING_UPLOAD",
+                updatedAt = doc.getLong("updated_at") ?: 0L,
+                deleted = doc.getBoolean("deleted") ?: false,
+                pendingSync = 0
             )
         }
         override suspend fun upsertLocal(entity: MessageFileEntity, doc: DocumentSnapshot, overwrite: Boolean) {
@@ -371,8 +412,19 @@ class FirestoreDataSource @Inject constructor(
                 ensurePlaceholderMessage(MessageId(entity.messageId), chatId)
             }
             val existing = messageFileDao.getById(entity.id)
-            if (existing == null || (overwrite && existing != entity.copy(pendingSync = existing.pendingSync))) {
-                messageFileDao.insert(entity.copy(pendingSync = 0))
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
+                // Preserve local content if we already have it
+                val merged = if (existing != null) {
+                    entity.copy(
+                        content = if (entity.content.isBlank()) existing.content else entity.content,
+                        pendingSync = 0
+                    )
+                } else {
+                    entity.copy(pendingSync = 0)
+                }
+                messageFileDao.insert(merged)
+            } else {
+                loggingPort.debug(TAG, "MessageFile ${entity.id} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
@@ -386,35 +438,39 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = webSearchSourceDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<WebSearchSourceEntity>) = webSearchSourceDao.markSynced(entities.map { it.id })
         override fun getEntityId(entity: WebSearchSourceEntity) = entity.id
-        override suspend fun toFirestore(entity: WebSearchSourceEntity): Map<String, Any?> {
-            val message = messageDao.getMessageById(entity.messageId)?.message ?: return emptyMap()
+        override suspend fun toFirestore(local: WebSearchSourceEntity): Map<String, Any?> {
+            val message = messageDao.getMessageById(local.messageId)?.message ?: return emptyMap()
             val chatId = message.chatId.value
             return mapOf(
-                "message_id" to entity.messageId.value,
+                "message_id" to local.messageId.value,
                 "chat_id" to chatId,
-                "title" to entity.title.encrypt(),
-                "url" to entity.url.encrypt(),
-                "content" to entity.content.encrypt(),
-                "score" to entity.score,
-                "extracted" to entity.extracted
+                "title" to local.title.encrypt(),
+                "url" to local.url.encrypt(),
+                "content" to local.content.encrypt(),
+                "score" to local.score,
+                "extracted" to local.extracted,
+                "updated_at" to local.updatedAt,
+                "deleted" to local.deleted
             )
         }
-        override fun fromFirestore(snapshot: DocumentSnapshot): WebSearchSourceEntity? {
-            val chatIdStr = snapshot.getString("chat_id")
+        override fun fromFirestore(doc: DocumentSnapshot): WebSearchSourceEntity? {
+            val chatIdStr = doc.getString("chat_id")
             if (chatIdStr.isNullOrBlank()) return null
-            val messageIdStr = snapshot.getString("message_id")
+            val messageIdStr = doc.getString("message_id")
             if (messageIdStr.isNullOrBlank()) return null
-            val title = snapshot.getBlob("title")?.decrypt() ?: return null
-            val url = snapshot.getBlob("url")?.decrypt() ?: return null
-            val content = snapshot.getBlob("content")?.decrypt() ?: return null
+            val title = doc.getBlob("title")?.decrypt() ?: return null
+            val url = doc.getBlob("url")?.decrypt() ?: return null
+            val content = doc.getBlob("content")?.decrypt() ?: return null
             return WebSearchSourceEntity(
-                id = snapshot.id,
+                id = doc.id,
                 messageId = MessageId(messageIdStr),
                 title = title,
                 url = url,
                 content = content,
-                score = snapshot.getDouble("score") ?: 0.0,
-                extracted = snapshot.getBoolean("extracted") ?: false
+                score = doc.getDouble("score") ?: 0.0,
+                extracted = doc.getBoolean("extracted") ?: false,
+                updatedAt = doc.getLong("updated_at") ?: 0L,
+                deleted = doc.getBoolean("deleted") ?: false
             )
         }
         override suspend fun upsertLocal(entity: WebSearchSourceEntity, doc: DocumentSnapshot, overwrite: Boolean) {
@@ -423,8 +479,10 @@ class FirestoreDataSource @Inject constructor(
                 ensurePlaceholderMessage(entity.messageId, chatId)
             }
             val existing = webSearchSourceDao.getById(entity.id)
-            if (existing == null || (overwrite && existing != entity.copy(pendingSync = existing.pendingSync))) {
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
                 webSearchSourceDao.upsert(entity.copy(pendingSync = 0))
+            } else {
+                loggingPort.debug(TAG, "WebSearchSource ${entity.id} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
@@ -438,57 +496,71 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = apiModelConfigurationsDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<ApiModelConfigurationEntity>) = apiModelConfigurationsDao.markSynced(entities.map { it.id })
         override fun getEntityId(entity: ApiModelConfigurationEntity) = entity.id.value
-        override suspend fun toFirestore(entity: ApiModelConfigurationEntity) = mapOf(
-            "api_credentials_id" to entity.apiCredentialsId.value,
-            "display_name" to entity.displayName,
-            "custom_headers" to entity.customHeaders,
-            "max_tokens" to entity.maxTokens,
-            "context_window" to entity.contextWindow,
-            "temperature" to entity.temperature,
-            "top_p" to entity.topP,
-            "top_k" to entity.topK,
-            "min_p" to entity.minP,
-            "frequency_penalty" to entity.frequencyPenalty,
-            "presence_penalty" to entity.presencePenalty,
-            "system_prompt" to entity.systemPrompt,
-            "max_tokens_disabled" to entity.maxTokensDisabled,
-            "temperature_disabled" to entity.temperatureDisabled,
-            "top_p_disabled" to entity.topPDisabled,
-            "top_k_disabled" to entity.topKDisabled,
-            "min_p_disabled" to entity.minPDisabled,
-            "frequency_penalty_disabled" to entity.frequencyPenaltyDisabled,
-            "presence_penalty_disabled" to entity.presencePenaltyDisabled,
-            "reasoning_effort" to entity.reasoningEffort,
-            "updated_at" to entity.updatedAt
+        override suspend fun toFirestore(local: ApiModelConfigurationEntity) = mapOf(
+            "api_credentials_id" to local.apiCredentialsId.value,
+            "display_name" to local.displayName.encrypt(),
+            "custom_headers" to local.customHeaders.encrypt(),
+            "max_tokens" to local.maxTokens,
+            "context_window" to local.contextWindow,
+            "temperature" to local.temperature,
+            "top_p" to local.topP,
+            "top_k" to local.topK,
+            "min_p" to local.minP,
+            "frequency_penalty" to local.frequencyPenalty,
+            "presence_penalty" to local.presencePenalty,
+            "system_prompt" to local.systemPrompt.encrypt(),
+            "max_tokens_disabled" to local.maxTokensDisabled,
+            "temperature_disabled" to local.temperatureDisabled,
+            "top_p_disabled" to local.topPDisabled,
+            "top_k_disabled" to local.topKDisabled,
+            "min_p_disabled" to local.minPDisabled,
+            "frequency_penalty_disabled" to local.frequencyPenaltyDisabled,
+            "presence_penalty_disabled" to local.presencePenaltyDisabled,
+            "reasoning_effort" to local.reasoningEffort,
+            "openrouter_provider_sort" to local.openRouterProviderSort,
+            "openrouter_allow_fallbacks" to local.openRouterAllowFallbacks,
+            "openrouter_require_parameters" to local.openRouterRequireParameters,
+            "openrouter_data_collection" to local.openRouterDataCollectionPolicy,
+            "openrouter_zdr" to local.openRouterZeroDataRetention,
+            "updated_at" to local.updatedAt,
+            "deleted" to local.deleted
         )
-        override fun fromFirestore(snapshot: DocumentSnapshot) = ApiModelConfigurationEntity(
-            id = ApiModelConfigurationId(snapshot.id),
-            apiCredentialsId = ApiCredentialsId(snapshot.getString("api_credentials_id") ?: ""),
-            displayName = snapshot.getString("display_name") ?: "",
-            customHeaders = snapshot.getString("custom_headers") ?: "{}",
-            maxTokens = snapshot.getLong("max_tokens")?.toInt() ?: 4096,
-            contextWindow = snapshot.getLong("context_window")?.toInt() ?: 4096,
-            temperature = snapshot.getDouble("temperature") ?: 0.7,
-            topP = snapshot.getDouble("top_p") ?: 0.95,
-            topK = snapshot.getLong("top_k")?.toInt(),
-            minP = snapshot.getDouble("min_p") ?: 0.05,
-            frequencyPenalty = snapshot.getDouble("frequency_penalty") ?: 0.0,
-            presencePenalty = snapshot.getDouble("presence_penalty") ?: 0.0,
-            systemPrompt = snapshot.getString("system_prompt") ?: "",
-            maxTokensDisabled = snapshot.getBoolean("max_tokens_disabled") ?: false,
-            temperatureDisabled = snapshot.getBoolean("temperature_disabled") ?: false,
-            topPDisabled = snapshot.getBoolean("top_p_disabled") ?: false,
-            topKDisabled = snapshot.getBoolean("top_k_disabled") ?: false,
-            minPDisabled = snapshot.getBoolean("min_p_disabled") ?: false,
-            frequencyPenaltyDisabled = snapshot.getBoolean("frequency_penalty_disabled") ?: false,
-            presencePenaltyDisabled = snapshot.getBoolean("presence_penalty_disabled") ?: false,
-            reasoningEffort = snapshot.getString("reasoning_effort"),
-            updatedAt = snapshot.getLong("updated_at") ?: 0L
+        override fun fromFirestore(doc: DocumentSnapshot) = ApiModelConfigurationEntity(
+            id = ApiModelConfigurationId(doc.id),
+            apiCredentialsId = ApiCredentialsId(doc.getString("api_credentials_id") ?: ""),
+            displayName = doc.getBlob("display_name")?.decrypt() ?: "",
+            customHeaders = doc.getBlob("custom_headers")?.decrypt() ?: "{}",
+            maxTokens = doc.getLong("max_tokens")?.toInt() ?: 4096,
+            contextWindow = doc.getLong("context_window")?.toInt() ?: 4096,
+            temperature = doc.getDouble("temperature") ?: 0.7,
+            topP = doc.getDouble("top_p") ?: 0.95,
+            topK = doc.getLong("top_k")?.toInt(),
+            minP = doc.getDouble("min_p") ?: 0.05,
+            frequencyPenalty = doc.getDouble("frequency_penalty") ?: 0.0,
+            presencePenalty = doc.getDouble("presence_penalty") ?: 0.0,
+            systemPrompt = doc.getBlob("system_prompt")?.decrypt() ?: "",
+            maxTokensDisabled = doc.getBoolean("max_tokens_disabled") ?: false,
+            temperatureDisabled = doc.getBoolean("temperature_disabled") ?: false,
+            topPDisabled = doc.getBoolean("top_p_disabled") ?: false,
+            topKDisabled = doc.getBoolean("top_k_disabled") ?: false,
+            minPDisabled = doc.getBoolean("min_p_disabled") ?: false,
+            frequencyPenaltyDisabled = doc.getBoolean("frequency_penalty_disabled") ?: false,
+            presencePenaltyDisabled = doc.getBoolean("presence_penalty_disabled") ?: false,
+            reasoningEffort = doc.getString("reasoning_effort"),
+            openRouterProviderSort = doc.getString("openrouter_provider_sort"),
+            openRouterAllowFallbacks = doc.getBoolean("openrouter_allow_fallbacks"),
+            openRouterRequireParameters = doc.getBoolean("openrouter_require_parameters"),
+            openRouterDataCollectionPolicy = doc.getString("openrouter_data_collection"),
+            openRouterZeroDataRetention = doc.getBoolean("openrouter_zdr"),
+            updatedAt = doc.getLong("updated_at") ?: 0L,
+            deleted = doc.getBoolean("deleted") ?: false
         )
         override suspend fun upsertLocal(entity: ApiModelConfigurationEntity, doc: DocumentSnapshot, overwrite: Boolean) {
             val existing = apiModelConfigurationsDao.getById(entity.id)
-            if (existing == null || (overwrite && existing != entity.copy(pendingSync = existing.pendingSync))) {
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
                 apiModelConfigurationsDao.upsert(entity.copy(pendingSync = 0))
+            } else {
+                loggingPort.debug(TAG, "ApiModelConfig ${entity.id.value} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
@@ -502,43 +574,49 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = localModelConfigurationsDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<LocalModelConfigurationEntity>) = localModelConfigurationsDao.markSynced(entities.map { it.id })
         override fun getEntityId(entity: LocalModelConfigurationEntity) = entity.id.value
-        override suspend fun toFirestore(entity: LocalModelConfigurationEntity) = mapOf(
-            "local_model_id" to entity.localModelId.value,
-            "display_name" to entity.displayName,
-            "temperature" to entity.temperature,
-            "top_k" to entity.topK,
-            "top_p" to entity.topP,
-            "min_p" to entity.minP,
-            "repetition_penalty" to entity.repetitionPenalty,
-            "max_tokens" to entity.maxTokens,
-            "context_window" to entity.contextWindow,
-            "thinking_enabled" to entity.thinkingEnabled,
-            "system_prompt" to entity.systemPrompt,
-            "updated_at" to entity.updatedAt
+        override suspend fun toFirestore(local: LocalModelConfigurationEntity) = mapOf(
+            "local_model_id" to local.localModelId.value,
+            "display_name" to local.displayName.encrypt(),
+            "temperature" to local.temperature,
+            "top_k" to local.topK,
+            "top_p" to local.topP,
+            "min_p" to local.minP,
+            "repetition_penalty" to local.repetitionPenalty,
+            "max_tokens" to local.maxTokens,
+            "context_window" to local.contextWindow,
+            "thinking_enabled" to local.thinkingEnabled,
+            "is_system_preset" to local.isSystemPreset,
+            "system_prompt" to local.systemPrompt?.encrypt(),
+            "updated_at" to local.updatedAt,
+            "deleted" to local.deleted
         )
-        override fun fromFirestore(snapshot: DocumentSnapshot) = LocalModelConfigurationEntity(
-            id = LocalModelConfigurationId(snapshot.id),
-            localModelId = LocalModelId(snapshot.getString("local_model_id") ?: ""),
-            displayName = snapshot.getString("display_name") ?: "",
-            temperature = snapshot.getDouble("temperature") ?: 0.7,
-            topK = snapshot.getLong("top_k")?.toInt() ?: 40,
-            topP = snapshot.getDouble("top_p") ?: 0.95,
-            minP = snapshot.getDouble("min_p") ?: 0.05,
-            repetitionPenalty = snapshot.getDouble("repetition_penalty") ?: 1.1,
-            maxTokens = snapshot.getLong("max_tokens")?.toInt() ?: 4096,
-            contextWindow = snapshot.getLong("context_window")?.toInt() ?: 4096,
-            thinkingEnabled = snapshot.getBoolean("thinking_enabled") ?: false,
-            systemPrompt = snapshot.getString("system_prompt"),
-            updatedAt = snapshot.getLong("updated_at") ?: 0L
+        override fun fromFirestore(doc: DocumentSnapshot) = LocalModelConfigurationEntity(
+            id = LocalModelConfigurationId(doc.id),
+            localModelId = LocalModelId(doc.getString("local_model_id") ?: ""),
+            displayName = doc.getBlob("display_name")?.decrypt() ?: "",
+            temperature = doc.getDouble("temperature") ?: 0.7,
+            topK = doc.getLong("top_k")?.toInt() ?: 40,
+            topP = doc.getDouble("top_p") ?: 0.95,
+            minP = doc.getDouble("min_p") ?: 0.05,
+            repetitionPenalty = doc.getDouble("repetition_penalty") ?: 1.1,
+            maxTokens = doc.getLong("max_tokens")?.toInt() ?: 4096,
+            contextWindow = doc.getLong("context_window")?.toInt() ?: 4096,
+            thinkingEnabled = doc.getBoolean("thinking_enabled") ?: false,
+            isSystemPreset = doc.getBoolean("is_system_preset") ?: false,
+            systemPrompt = doc.getBlob("system_prompt")?.decrypt(),
+            updatedAt = doc.getLong("updated_at") ?: 0L,
+            deleted = doc.getBoolean("deleted") ?: false
         )
         override suspend fun upsertLocal(entity: LocalModelConfigurationEntity, doc: DocumentSnapshot, overwrite: Boolean) {
             val existingById = localModelConfigurationsDao.getById(entity.id)
             val existingByKey = localModelConfigurationsDao.getByModelIdAndName(entity.localModelId, entity.displayName)
             val existing = existingById ?: existingByKey
-            
-            val newEntity = entity.copy(id = existing?.id ?: entity.id, pendingSync = 0)
-            if (existing == null || existing.id != entity.id || (overwrite && existing != newEntity)) {
+
+            if (existing == null || existing.id != entity.id || entity.updatedAt >= existing.updatedAt) {
+                val newEntity = entity.copy(id = existing?.id ?: entity.id, pendingSync = 0)
                 localModelConfigurationsDao.upsert(newEntity)
+            } else {
+                loggingPort.debug(TAG, "LocalModelConfig ${entity.id.value} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
@@ -552,25 +630,29 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = defaultModelsDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<DefaultModelEntity>) = defaultModelsDao.markSynced(entities.map { it.modelType })
         override fun getEntityId(entity: DefaultModelEntity) = entity.modelType.name
-        override suspend fun toFirestore(entity: DefaultModelEntity) = mapOf(
-            "local_config_id" to entity.localConfigId?.value,
-            "api_config_id" to entity.apiConfigId?.value,
-            "tts_provider_id" to entity.ttsProviderId?.value,
-            "media_provider_id" to entity.mediaProviderId?.value,
-            "updated_at" to entity.updatedAt
+        override suspend fun toFirestore(local: DefaultModelEntity) = mapOf(
+            "local_config_id" to local.localConfigId?.value,
+            "api_config_id" to local.apiConfigId?.value,
+            "tts_provider_id" to local.ttsProviderId?.value,
+            "media_provider_id" to local.mediaProviderId?.value,
+            "updated_at" to local.updatedAt,
+            "deleted" to local.deleted
         )
-        override fun fromFirestore(snapshot: DocumentSnapshot) = DefaultModelEntity(
-            modelType = ModelType.valueOf(snapshot.id),
-            localConfigId = snapshot.getString("local_config_id")?.let { LocalModelConfigurationId(it) },
-            apiConfigId = snapshot.getString("api_config_id")?.let { ApiModelConfigurationId(it) },
-            ttsProviderId = snapshot.getString("tts_provider_id")?.let { TtsProviderId(it) },
-            mediaProviderId = snapshot.getString("media_provider_id")?.let { MediaProviderId(it) },
-            updatedAt = snapshot.getLong("updated_at") ?: 0L
+        override fun fromFirestore(doc: DocumentSnapshot) = DefaultModelEntity(
+            modelType = ModelType.valueOf(doc.id),
+            localConfigId = doc.getString("local_config_id")?.let { LocalModelConfigurationId(it) },
+            apiConfigId = doc.getString("api_config_id")?.let { ApiModelConfigurationId(it) },
+            ttsProviderId = doc.getString("tts_provider_id")?.let { TtsProviderId(it) },
+            mediaProviderId = doc.getString("media_provider_id")?.let { MediaProviderId(it) },
+            updatedAt = doc.getLong("updated_at") ?: 0L,
+            deleted = doc.getBoolean("deleted") ?: false
         )
         override suspend fun upsertLocal(entity: DefaultModelEntity, doc: DocumentSnapshot, overwrite: Boolean) {
             val existing = defaultModelsDao.getDefault(entity.modelType)
-            if (existing == null || (overwrite && existing != entity.copy(pendingSync = existing.pendingSync))) {
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
                 defaultModelsDao.upsert(entity.copy(pendingSync = 0))
+            } else {
+                loggingPort.debug(TAG, "DefaultModel ${entity.modelType.name} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
@@ -584,43 +666,47 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = localModelsDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<LocalModelEntity>) = localModelsDao.markSynced(entities.map { it.id })
         override fun getEntityId(entity: LocalModelEntity) = entity.id.value
-        override suspend fun toFirestore(entity: LocalModelEntity) = mapOf(
-            "model_file_format" to entity.modelFileFormat.name,
-            "huggingface_model_name" to entity.huggingFaceModelName,
-            "remote_filename" to entity.remoteFilename,
-            "local_filename" to entity.localFilename,
-            "sha256" to entity.sha256,
-            "size_in_bytes" to entity.sizeInBytes,
-            "is_multimodal" to entity.isMultimodal,
-            "mmproj_remote_filename" to entity.mmprojRemoteFilename,
-            "mmproj_local_filename" to entity.mmprojLocalFilename,
-            "mmproj_sha256" to entity.mmprojSha256,
-            "mmproj_size_in_bytes" to entity.mmprojSizeInBytes,
-            "updated_at" to entity.updatedAt
+        override suspend fun toFirestore(local: LocalModelEntity) = mapOf(
+            "model_file_format" to local.modelFileFormat.name,
+            "huggingface_model_name" to local.huggingFaceModelName,
+            "remote_filename" to local.remoteFilename,
+            "local_filename" to local.localFilename,
+            "sha256" to local.sha256,
+            "size_in_bytes" to local.sizeInBytes,
+            "is_multimodal" to local.isMultimodal,
+            "mmproj_remote_filename" to local.mmprojRemoteFilename,
+            "mmproj_local_filename" to local.mmprojLocalFilename,
+            "mmproj_sha256" to local.mmprojSha256,
+            "mmproj_size_in_bytes" to local.mmprojSizeInBytes,
+            "updated_at" to local.updatedAt,
+            "deleted" to local.deleted
         )
-        override fun fromFirestore(snapshot: DocumentSnapshot) = LocalModelEntity(
-            id = LocalModelId(snapshot.id),
-            modelFileFormat = ModelFileFormat.valueOf(snapshot.getString("model_file_format") ?: "GGUF"),
-            huggingFaceModelName = snapshot.getString("huggingface_model_name") ?: "",
-            remoteFilename = snapshot.getString("remote_filename") ?: "",
-            localFilename = snapshot.getString("local_filename") ?: "",
-            sha256 = snapshot.getString("sha256") ?: "",
-            sizeInBytes = snapshot.getLong("size_in_bytes") ?: 0L,
-            isMultimodal = snapshot.getBoolean("is_multimodal") ?: false,
-            mmprojRemoteFilename = snapshot.getString("mmproj_remote_filename"),
-            mmprojLocalFilename = snapshot.getString("mmproj_local_filename"),
-            mmprojSha256 = snapshot.getString("mmproj_sha256"),
-            mmprojSizeInBytes = snapshot.getLong("mmproj_size_in_bytes"),
-            updatedAt = snapshot.getLong("updated_at") ?: 0L
+        override fun fromFirestore(doc: DocumentSnapshot) = LocalModelEntity(
+            id = LocalModelId(doc.id),
+            modelFileFormat = ModelFileFormat.valueOf(doc.getString("model_file_format") ?: "GGUF"),
+            huggingFaceModelName = doc.getString("huggingface_model_name") ?: "",
+            remoteFilename = doc.getString("remote_filename") ?: "",
+            localFilename = doc.getString("local_filename") ?: "",
+            sha256 = doc.getString("sha256") ?: "",
+            sizeInBytes = doc.getLong("size_in_bytes") ?: 0L,
+            isMultimodal = doc.getBoolean("is_multimodal") ?: false,
+            mmprojRemoteFilename = doc.getString("mmproj_remote_filename"),
+            mmprojLocalFilename = doc.getString("mmproj_local_filename"),
+            mmprojSha256 = doc.getString("mmproj_sha256"),
+            mmprojSizeInBytes = doc.getLong("mmproj_size_in_bytes"),
+            updatedAt = doc.getLong("updated_at") ?: 0L,
+            deleted = doc.getBoolean("deleted") ?: false
         )
         override suspend fun upsertLocal(entity: LocalModelEntity, doc: DocumentSnapshot, overwrite: Boolean) {
             val existingById = localModelsDao.getById(entity.id)
             val existingByKey = localModelsDao.getBySha256(entity.sha256)
             val existing = existingById ?: existingByKey
 
-            val newEntity = entity.copy(id = existing?.id ?: entity.id, pendingSync = 0)
-            if (existing == null || existing.id != entity.id || (overwrite && existing != newEntity)) {
+            if (existing == null || existing.id != entity.id || entity.updatedAt >= existing.updatedAt) {
+                val newEntity = entity.copy(id = existing?.id ?: entity.id, pendingSync = 0)
                 localModelsDao.upsert(newEntity)
+            } else {
+                loggingPort.debug(TAG, "LocalModel ${entity.id.value} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
@@ -634,23 +720,33 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = ttsProviderDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<TtsProviderEntity>) = ttsProviderDao.markSynced(entities.map { it.id })
         override fun getEntityId(entity: TtsProviderEntity) = entity.id
-        override suspend fun toFirestore(entity: TtsProviderEntity) = mapOf(
-            "display_name" to entity.displayName,
-            "provider" to entity.provider.name,
-            "voice_name" to entity.voiceName,
-            "credential_alias" to entity.credentialAlias
+        override suspend fun toFirestore(local: TtsProviderEntity) = mapOf(
+            "display_name" to local.displayName.encrypt(),
+            "provider" to local.provider.name,
+            "voice_name" to local.voiceName.encrypt(),
+            "model_name" to local.modelName?.encrypt(),
+            "base_url" to local.baseUrl?.encrypt(),
+            "credential_alias" to local.credentialAlias,
+            "updated_at" to local.updatedAt,
+            "deleted" to local.deleted
         )
-        override fun fromFirestore(snapshot: DocumentSnapshot) = TtsProviderEntity(
-            id = snapshot.id,
-            displayName = snapshot.getString("display_name") ?: "",
-            provider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.valueOf(snapshot.getString("provider") ?: "OPENAI"),
-            voiceName = snapshot.getString("voice_name") ?: "",
-            credentialAlias = snapshot.getString("credential_alias") ?: ""
+        override fun fromFirestore(doc: DocumentSnapshot) = TtsProviderEntity(
+            id = doc.id,
+            displayName = doc.getBlob("display_name")?.decrypt() ?: "",
+            provider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.valueOf(doc.getString("provider") ?: "OPENAI"),
+            voiceName = doc.getBlob("voice_name")?.decrypt() ?: "",
+            modelName = doc.getBlob("model_name")?.decrypt(),
+            baseUrl = doc.getBlob("base_url")?.decrypt(),
+            credentialAlias = doc.getString("credential_alias") ?: "",
+            updatedAt = doc.getLong("updated_at") ?: 0L,
+            deleted = doc.getBoolean("deleted") ?: false
         )
         override suspend fun upsertLocal(entity: TtsProviderEntity, doc: DocumentSnapshot, overwrite: Boolean) {
             val existing = ttsProviderDao.getTtsProvider(entity.id)
-            if (existing == null || (overwrite && existing != entity.copy(pendingSync = existing.pendingSync))) {
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
                 ttsProviderDao.upsertTtsProvider(entity.copy(pendingSync = 0))
+            } else {
+                loggingPort.debug(TAG, "TtsProvider ${entity.id} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
@@ -664,25 +760,33 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = mediaProviderDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<MediaProviderEntity>) = mediaProviderDao.markSynced(entities.map { it.id })
         override fun getEntityId(entity: MediaProviderEntity) = entity.id
-        override suspend fun toFirestore(entity: MediaProviderEntity) = mapOf(
-            "display_name" to entity.displayName,
-            "provider" to entity.provider.name,
-            "capability" to entity.capability.name,
-            "credential_alias" to entity.credentialAlias,
-            "updated_at" to entity.updatedAt
+        override suspend fun toFirestore(local: MediaProviderEntity) = mapOf(
+            "display_name" to local.displayName.encrypt(),
+            "provider" to local.provider.name,
+            "capability" to local.capability.name,
+            "model_name" to local.modelName?.encrypt(),
+            "base_url" to local.baseUrl?.encrypt(),
+            "credential_alias" to local.credentialAlias,
+            "updated_at" to local.updatedAt,
+            "deleted" to local.deleted
         )
-        override fun fromFirestore(snapshot: DocumentSnapshot) = MediaProviderEntity(
-            id = snapshot.id,
-            displayName = snapshot.getString("display_name") ?: "",
-            provider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.valueOf(snapshot.getString("provider") ?: "OPENAI"),
-            capability = com.browntowndev.pocketcrew.domain.model.config.MediaCapability.valueOf(snapshot.getString("capability") ?: "IMAGE_GENERATION"),
-            credentialAlias = snapshot.getString("credential_alias") ?: "",
-            updatedAt = snapshot.getLong("updated_at") ?: 0L
+        override fun fromFirestore(doc: DocumentSnapshot) = MediaProviderEntity(
+            id = doc.id,
+            displayName = doc.getBlob("display_name")?.decrypt() ?: "",
+            provider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.valueOf(doc.getString("provider") ?: "OPENAI"),
+            capability = com.browntowndev.pocketcrew.domain.model.config.MediaCapability.valueOf(doc.getString("capability") ?: "IMAGE"),
+            modelName = doc.getBlob("model_name")?.decrypt(),
+            baseUrl = doc.getBlob("base_url")?.decrypt(),
+            credentialAlias = doc.getString("credential_alias") ?: "",
+            updatedAt = doc.getLong("updated_at") ?: 0L,
+            deleted = doc.getBoolean("deleted") ?: false
         )
         override suspend fun upsertLocal(entity: MediaProviderEntity, doc: DocumentSnapshot, overwrite: Boolean) {
             val existing = mediaProviderDao.getMediaProvider(entity.id)
-            if (existing == null || (overwrite && existing != entity.copy(pendingSync = existing.pendingSync))) {
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
                 mediaProviderDao.upsert(entity.copy(pendingSync = 0))
+            } else {
+                loggingPort.debug(TAG, "MediaProvider ${entity.id} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
@@ -696,35 +800,39 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = apiCredentialsDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<ApiCredentialsEntity>) = apiCredentialsDao.markSynced(entities.map { it.id })
         override fun getEntityId(entity: ApiCredentialsEntity) = entity.id.value
-        override suspend fun toFirestore(entity: ApiCredentialsEntity) = mapOf(
-            "display_name" to entity.displayName,
-            "provider" to entity.provider.name,
-            "base_url" to entity.baseUrl,
-            "model_id" to entity.modelId,
-            "is_multimodal" to entity.isMultimodal,
-            "credential_alias" to entity.credentialAlias,
-            "encrypted_api_key" to (entity.encryptedApiKey?.let { Blob.fromBytes(it) }),
-            "api_key_signature" to entity.apiKeySignature,
-            "created_at" to entity.createdAt,
-            "updated_at" to entity.updatedAt
+        override suspend fun toFirestore(local: ApiCredentialsEntity) = mapOf(
+            "display_name" to local.displayName.encrypt(),
+            "provider" to local.provider.name,
+            "base_url" to local.baseUrl?.encrypt(),
+            "model_id" to local.modelId,
+            "is_multimodal" to local.isMultimodal,
+            "credential_alias" to local.credentialAlias,
+            "encrypted_api_key" to (local.encryptedApiKey?.let { Blob.fromBytes(it) }),
+            "api_key_signature" to local.apiKeySignature,
+            "created_at" to local.createdAt,
+            "updated_at" to local.updatedAt,
+            "deleted" to local.deleted
         )
-        override fun fromFirestore(snapshot: DocumentSnapshot) = ApiCredentialsEntity(
-            id = ApiCredentialsId(snapshot.id),
-            displayName = snapshot.getString("display_name") ?: "",
-            provider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.valueOf(snapshot.getString("provider") ?: "OPENAI"),
-            baseUrl = snapshot.getString("base_url"),
-            modelId = snapshot.getString("model_id") ?: "",
-            isMultimodal = snapshot.getBoolean("is_multimodal") ?: false,
-            credentialAlias = snapshot.getString("credential_alias") ?: "",
-            encryptedApiKey = snapshot.getBlob("encrypted_api_key")?.toBytes(),
-            apiKeySignature = snapshot.getString("api_key_signature"),
-            createdAt = snapshot.getLong("created_at") ?: 0L,
-            updatedAt = snapshot.getLong("updated_at") ?: 0L
+        override fun fromFirestore(doc: DocumentSnapshot) = ApiCredentialsEntity(
+            id = ApiCredentialsId(doc.id),
+            displayName = doc.getBlob("display_name")?.decrypt() ?: "",
+            provider = com.browntowndev.pocketcrew.domain.model.inference.ApiProvider.valueOf(doc.getString("provider") ?: "OPENAI"),
+            baseUrl = doc.getBlob("base_url")?.decrypt(),
+            modelId = doc.getString("model_id") ?: "",
+            isMultimodal = doc.getBoolean("is_multimodal") ?: false,
+            credentialAlias = doc.getString("credential_alias") ?: "",
+            encryptedApiKey = doc.getBlob("encrypted_api_key")?.toBytes(),
+            apiKeySignature = doc.getString("api_key_signature"),
+            createdAt = doc.getLong("created_at") ?: 0L,
+            updatedAt = doc.getLong("updated_at") ?: 0L,
+            deleted = doc.getBoolean("deleted") ?: false
         )
         override suspend fun upsertLocal(entity: ApiCredentialsEntity, doc: DocumentSnapshot, overwrite: Boolean) {
             val existing = apiCredentialsDao.getById(entity.id)
-            if (existing == null || (overwrite && existing != entity.copy(pendingSync = existing.pendingSync))) {
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
                 apiCredentialsDao.upsert(entity.copy(pendingSync = 0))
+            } else {
+                loggingPort.debug(TAG, "ApiCredentials ${entity.id.value} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
@@ -738,24 +846,30 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = studioAlbumDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<StudioAlbumEntity>) = studioAlbumDao.markSynced(entities.map { it.id })
         override fun getEntityId(entity: StudioAlbumEntity) = entity.id
-        override suspend fun toFirestore(entity: StudioAlbumEntity) = mapOf(
-            "name" to entity.name,
-            "updated_at" to System.currentTimeMillis()
+        override suspend fun toFirestore(local: StudioAlbumEntity) = mapOf(
+            "name" to local.name.encrypt(),
+            "updated_at" to local.updatedAt,
+            "deleted" to local.deleted
         )
-        override fun fromFirestore(snapshot: DocumentSnapshot) = StudioAlbumEntity(
-            id = snapshot.id,
-            name = snapshot.getString("name") ?: "",
+        override fun fromFirestore(doc: DocumentSnapshot) = StudioAlbumEntity(
+            id = doc.id,
+            name = doc.getBlob("name")?.decrypt() ?: "",
+            updatedAt = doc.getLong("updated_at") ?: 0L,
+            deleted = doc.getBoolean("deleted") ?: false,
             pendingSync = 0
         )
         override suspend fun upsertLocal(entity: StudioAlbumEntity, doc: DocumentSnapshot, overwrite: Boolean) {
             val existing = studioAlbumDao.getAlbumById(entity.id)
-            if (existing == null || overwrite) {
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
                 studioAlbumDao.insertAlbum(entity.copy(pendingSync = 0))
+            } else {
+                loggingPort.debug(TAG, "StudioAlbum ${entity.id} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
             studioAlbumDao.softDeleteById(id)
         }
+        override fun shouldDelete(entity: StudioAlbumEntity): Boolean = false
     }
 
     private val studioMediaSyncAdapter = object : EntitySyncAdapter<StudioMediaEntity> {
@@ -764,36 +878,57 @@ class FirestoreDataSource @Inject constructor(
         override suspend fun getClaimedForSync() = studioMediaDao.getClaimedForSync()
         override suspend fun markSynced(entities: List<StudioMediaEntity>) = studioMediaDao.markSynced(entities.map { it.id })
         override fun getEntityId(entity: StudioMediaEntity) = entity.id
-        override suspend fun toFirestore(entity: StudioMediaEntity) = mapOf(
-            "prompt" to entity.prompt,
-            "media_type" to entity.mediaType,
-            "created_at" to entity.createdAt,
-            "album_id" to entity.albumId,
-            "remote_url" to entity.remoteUrl,
-            "remote_thumbnail_url" to entity.remoteThumbnailUrl,
-            "updated_at" to System.currentTimeMillis()
+        override suspend fun toFirestore(local: StudioMediaEntity) = mapOf(
+            "prompt" to local.prompt.encrypt(),
+            "media_type" to local.mediaType,
+            "created_at" to local.createdAt,
+            "album_id" to local.albumId,
+            "remote_url" to local.remoteUrl?.encrypt(),
+            "remote_thumbnail_url" to local.remoteThumbnailUrl?.encrypt(),
+            "updated_at" to local.updatedAt,
+            "deleted" to local.deleted
         )
-        override fun fromFirestore(snapshot: DocumentSnapshot) = StudioMediaEntity(
-            id = snapshot.id,
-            prompt = snapshot.getString("prompt") ?: "",
-            mediaUri = snapshot.getString("remote_url") ?: "", 
-            mediaType = snapshot.getString("media_type") ?: "IMAGE",
-            createdAt = snapshot.getLong("created_at") ?: System.currentTimeMillis(),
-            albumId = snapshot.getString("album_id"),
-            remoteUrl = snapshot.getString("remote_url"),
-            remoteThumbnailUrl = snapshot.getString("remote_thumbnail_url"),
-            syncStatus = if (snapshot.getString("remote_url") != null) "UPLOADED" else "PENDING_UPLOAD",
-            pendingSync = 0
-        )
+        override fun fromFirestore(doc: DocumentSnapshot): StudioMediaEntity {
+            val remoteUrl = doc.getBlob("remote_url")?.decrypt()
+            val remoteThumbnailUrl = doc.getBlob("remote_thumbnail_url")?.decrypt()
+            val prompt = doc.getBlob("prompt")?.decrypt() ?: ""
+
+            return StudioMediaEntity(
+                id = doc.id,
+                prompt = prompt,
+                mediaUri = remoteUrl ?: "",
+                mediaType = doc.getString("media_type") ?: "IMAGE",
+                createdAt = doc.getLong("created_at") ?: System.currentTimeMillis(),
+                albumId = doc.getString("album_id"),
+                remoteUrl = remoteUrl,
+                remoteThumbnailUrl = remoteThumbnailUrl,
+                syncStatus = if (remoteUrl != null) "UPLOADED" else "PENDING_UPLOAD",
+                updatedAt = doc.getLong("updated_at") ?: 0L,
+                deleted = doc.getBoolean("deleted") ?: false,
+                pendingSync = 0
+            )
+        }
         override suspend fun upsertLocal(entity: StudioMediaEntity, doc: DocumentSnapshot, overwrite: Boolean) {
             val existing = studioMediaDao.getMediaById(entity.id)
-            if (existing == null || overwrite) {
-                studioMediaDao.insertMedia(entity.copy(pendingSync = 0))
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
+                // Preserve local path if remote doesn't have a URL yet
+                val merged = if (existing != null) {
+                    entity.copy(
+                        mediaUri = if (entity.mediaUri.isBlank()) existing.mediaUri else entity.mediaUri,
+                        pendingSync = 0
+                    )
+                } else {
+                    entity.copy(pendingSync = 0)
+                }
+                studioMediaDao.insertMedia(merged)
+            } else {
+                loggingPort.debug(TAG, "StudioMedia ${entity.id} local is newer or same age, skipping remote update")
             }
         }
         override suspend fun deleteLocal(id: String) {
             studioMediaDao.softDeleteById(id)
         }
+        override fun shouldDelete(entity: StudioMediaEntity): Boolean = false
     }
 
     private inner class ApiKeySyncAdapter : EntitySyncAdapter<Pair<String, String>> {
@@ -878,12 +1013,12 @@ class FirestoreDataSource @Inject constructor(
                             if (snapshots == null) return@addSnapshotListener
 
                             externalScope.launch {
-                                try {
-                                    for (dc in snapshots.documentChanges) {
+                                for (dc in snapshots.documentChanges) {
+                                    try {
                                         processDocumentChange(adapter, dc)
+                                    } catch (e: Exception) {
+                                        loggingPort.error(TAG, "Error processing document ${dc.document.id} in ${adapter.collectionPath}", e)
                                     }
-                                } catch (e: Exception) {
-                                    loggingPort.error(TAG, "Error processing ${adapter.collectionPath} snapshot", e)
                                 }
                             }
                         }
@@ -1127,18 +1262,30 @@ class FirestoreDataSource @Inject constructor(
     private fun messageEntityFromDoc(doc: DocumentSnapshot): MessageEntity? {
         val chatIdStr = doc.getString("chat_id")
         if (chatIdStr.isNullOrBlank()) return null
-        val contentBlob = doc.getBlob("content")
-        val content = contentBlob?.decrypt() ?: ""
+        val content = doc.getBlob("content")?.decrypt() ?: ""
+        
         return MessageEntity(
             id = MessageId(doc.id),
             chatId = ChatId(chatIdStr),
             content = content,
             role = Role.fromApiValue(doc.getString("role") ?: "user"),
-            messageState = doc.getString("message_state")?.uppercase()?.let { 
-                try { MessageState.valueOf(it) } catch(e: Exception) { MessageState.COMPLETE }
-            } ?: MessageState.COMPLETE,
+            userMessageId = doc.getString("user_message_id")?.takeIf { it.isNotBlank() }?.let { MessageId(it) },
+            imageUri = doc.getBlob("image_uri")?.decrypt(),
+            messageState = doc.getString("message_state")?.let { MessageState.fromApiValue(it) } ?: MessageState.COMPLETE,
             createdAt = doc.getLong("created_at") ?: 0L,
             modelType = doc.getString("model_type")?.let { ModelType.fromApiValue(it) },
+            thinkingDurationSeconds = doc.getLong("thinking_duration_seconds"),
+            thinkingRaw = doc.getBlob("thinking_raw")?.decrypt(),
+            thinkingStartTime = doc.getLong("thinking_start_time"),
+            thinkingEndTime = doc.getLong("thinking_end_time"),
+            pipelineStep = doc.getString("pipeline_step")?.let { stepStr ->
+                com.browntowndev.pocketcrew.domain.model.inference.PipelineStep.entries.find { it.name == stepStr }
+            },
+            artifactsJson = doc.getBlob("artifacts_json")?.decrypt(),
+            generatedMediaUrisJson = doc.getBlob("generated_media_uris_json")?.decrypt(),
+            generatedMediaAssetIdsJson = doc.getBlob("generated_media_asset_ids_json")?.decrypt(),
+            generatedMediaTypesJson = doc.getString("generated_media_types_json"),
+            generatedMediaPromptsJson = doc.getBlob("generated_media_prompts_json")?.decrypt(),
             updatedAt = doc.getLong("updated_at") ?: 0L,
             deleted = doc.getBoolean("deleted") ?: false,
             pendingSync = 0

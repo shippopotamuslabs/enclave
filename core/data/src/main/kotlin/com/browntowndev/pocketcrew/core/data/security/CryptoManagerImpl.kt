@@ -76,6 +76,10 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
     }
 
     override fun encrypt(plaintext: String): Result<ByteArray> {
+        return encryptBytes(plaintext.toByteArray(Charsets.UTF_8))
+    }
+
+    override fun encryptBytes(data: ByteArray): Result<ByteArray> {
         val key = cachedKey ?: return Result.failure(IllegalStateException("No key cached. Call deriveAndCacheKey first."))
         
         return try {
@@ -86,7 +90,7 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
             val parameterSpec = GCMParameterSpec(TAG_LENGTH, iv)
             cipher.init(Cipher.ENCRYPT_MODE, key, parameterSpec)
             
-            val ciphertext = cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8))
+            val ciphertext = cipher.doFinal(data)
             
             // Prepend IV to ciphertext
             val result = ByteArray(IV_LENGTH + ciphertext.size)
@@ -100,6 +104,10 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
     }
 
     override fun decrypt(ciphertext: ByteArray): Result<String> {
+        return decryptBytes(ciphertext).map { String(it, Charsets.UTF_8) }
+    }
+
+    override fun decryptBytes(ciphertext: ByteArray): Result<ByteArray> {
         val key = cachedKey ?: return Result.failure(IllegalStateException("No key cached. Call deriveAndCacheKey first."))
         
         if (ciphertext.size < IV_LENGTH) {
@@ -119,7 +127,7 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
             // Decrypt the rest
             val plaintextBytes = cipher.doFinal(ciphertext, IV_LENGTH, ciphertext.size - IV_LENGTH)
             
-            Result.success(String(plaintextBytes, Charsets.UTF_8))
+            Result.success(plaintextBytes)
         } catch (e: Exception) {
             Result.failure(e)
         }

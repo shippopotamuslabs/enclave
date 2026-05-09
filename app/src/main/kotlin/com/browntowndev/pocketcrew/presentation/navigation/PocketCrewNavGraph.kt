@@ -8,7 +8,10 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -432,6 +435,8 @@ fun PocketCrewNavGraph(
             val rehydrateUris = backStackEntry.arguments?.getString("rehydrateUris")
             val rehydrateTypes = backStackEntry.arguments?.getString("rehydrateTypes")
             val rehydratePrompts = backStackEntry.arguments?.getString("rehydratePrompts")
+            
+            var isStudioInitialized by rememberSaveable { mutableStateOf(false) }
 
             LaunchedEffect(
                 editAssetId,
@@ -457,10 +462,13 @@ fun PocketCrewNavGraph(
                         rehydrateTypes = types,
                         rehydratePrompts = prompts
                     )
+                    isStudioInitialized = true
                 } else if (animateAssetId != null) {
                     studioViewModel.onAnimateMedia(animateAssetId, autoAnimate, animatePrompt)
-                } else {
+                    isStudioInitialized = true
+                } else if (!isStudioInitialized) {
                     studioViewModel.clearSession()
+                    isStudioInitialized = true
                 }
             }
 
@@ -729,7 +737,7 @@ fun PocketCrewNavGraph(
             // Use the studio's backstack entry to share the ViewModel
             val studioBackStackEntry =
                 remember(backStackEntry) {
-                    navController.getBackStackEntry(Routes.STUDIO)
+                    navController.getBackStackEntry(Routes.STUDIO_WITH_ARGS)
                 }
             val studioViewModel = hiltViewModel<MultimodalViewModel>(studioBackStackEntry)
             val studioUiState by studioViewModel.uiState.collectAsStateWithLifecycle()

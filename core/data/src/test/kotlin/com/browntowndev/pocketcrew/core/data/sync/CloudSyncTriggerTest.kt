@@ -56,7 +56,7 @@ class CloudSyncTriggerTest {
             trigger.trigger()
             trigger.trigger()
 
-            verify(exactly = 6) { workManager.enqueueUniqueWork(any<String>(), any<ExistingWorkPolicy>(), any<androidx.work.OneTimeWorkRequest>()) }
+            verify(exactly = 9) { workManager.enqueueUniqueWork(any<String>(), any<ExistingWorkPolicy>(), any<androidx.work.OneTimeWorkRequest>()) }
             assertEquals(ExistingWorkPolicy.REPLACE, policySlot.captured)
         }
 

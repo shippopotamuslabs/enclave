@@ -5,7 +5,6 @@ import com.browntowndev.pocketcrew.core.data.local.MessageEntity
 import com.browntowndev.pocketcrew.core.data.local.WebSearchSourceDao
 import com.browntowndev.pocketcrew.core.data.mapper.toDomain
 import com.browntowndev.pocketcrew.core.data.mapper.toEntity
-import com.browntowndev.pocketcrew.core.data.util.FtsSanitizer
 import com.browntowndev.pocketcrew.core.data.sync.CloudSyncTrigger
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.Chat
@@ -25,7 +24,6 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 
@@ -35,6 +33,8 @@ class ChatRepositoryImpl @Inject constructor(
     private val chatDao: ChatDao,
     private val messageDao: MessageDao,
     private val webSearchSourceDao: WebSearchSourceDao,
+    private val messageFileDao: com.browntowndev.pocketcrew.core.data.local.MessageFileDao,
+    private val transactionProvider: com.browntowndev.pocketcrew.domain.port.repository.TransactionProvider,
 ) : ChatRepository {
 
     private fun triggerSync() = syncTrigger.trigger()
@@ -129,14 +129,14 @@ class ChatRepositoryImpl @Inject constructor(
             pipelineStep = pipelineStep,
             pendingSync = 1
         )
-        messageDao.insert(entity)
+        messageDao.upsert(entity)
         triggerSync()
         return entity.id
     }
 
     override suspend fun createChat(chat: Chat): ChatId {
         val entity = chat.toEntity()
-        chatDao.insert(entity)
+        chatDao.upsert(entity)
         triggerSync()
         return entity.id
     }
@@ -178,9 +178,17 @@ class ChatRepositoryImpl @Inject constructor(
         generatedMediaTypes: List<String>,
         generatedMediaPrompts: List<String>
     ) {
-        val artifactsJson = if (artifacts.isNotEmpty()) {
-            Json.encodeToString(artifacts)
-        } else null
+        val artifactEntities = artifacts.map { artifact ->
+            com.browntowndev.pocketcrew.core.data.local.MessageFileEntity(
+                id = UUID.randomUUID().toString(),
+                messageId = messageId.value,
+                name = artifact.title,
+                content = artifact.content,
+                fileType = "ARTIFACT",
+                syncStatus = "PENDING_UPLOAD",
+                pendingSync = 0
+            )
+        }
 
         val mediaUrisJson = if (generatedMediaUris.isNotEmpty()) {
             Json.encodeToString(generatedMediaUris)
@@ -198,23 +206,29 @@ class ChatRepositoryImpl @Inject constructor(
             Json.encodeToString(generatedMediaPrompts)
         } else null
 
-        messageDao.persistAllMessageData(
-            messageId = messageId,
-            modelType = modelType,
-            thinkingStartTime = thinkingStartTime,
-            thinkingEndTime = thinkingEndTime,
-            thinkingDuration = thinkingDuration,
-            thinkingRaw = thinkingRaw,
-            content = content,
-            messageState = messageState,
-            pipelineStep = pipelineStep,
-            webSearchSources = webSearchSources.map { it.toEntity() },
-            artifactsJson = artifactsJson,
-            mediaUrisJson = mediaUrisJson,
-            mediaAssetIdsJson = mediaAssetIdsJson,
-            mediaTypesJson = mediaTypesJson,
-            mediaPromptsJson = mediaPromptsJson
-        )
+        transactionProvider.runInTransaction {
+            messageDao.persistAllMessageData(
+                messageId = messageId,
+                modelType = modelType,
+                thinkingStartTime = thinkingStartTime,
+                thinkingEndTime = thinkingEndTime,
+                thinkingDuration = thinkingDuration,
+                thinkingRaw = thinkingRaw,
+                content = content,
+                messageState = messageState,
+                pipelineStep = pipelineStep,
+                webSearchSources = webSearchSources.map { it.toEntity() },
+                mediaUrisJson = mediaUrisJson,
+                mediaAssetIdsJson = mediaAssetIdsJson,
+                mediaTypesJson = mediaTypesJson,
+                mediaPromptsJson = mediaPromptsJson
+            )
+
+            if (artifactEntities.isNotEmpty()) {
+                messageFileDao.deleteArtifactsByMessageId(messageId.value)
+                artifactEntities.forEach { messageFileDao.insert(it) }
+            }
+        }
         triggerSync()
     }
 

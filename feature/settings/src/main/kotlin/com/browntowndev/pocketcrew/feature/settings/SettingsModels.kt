@@ -337,6 +337,10 @@ data class DiscoveredApiModelUi(
     val completionPrice: Double? = null,
     val providerName: String? = null,
     val isMultimodal: Boolean? = null,
+    val isChatCapable: Boolean = true,
+    val isImageGenerationCapable: Boolean = false,
+    val isVideoGenerationCapable: Boolean = false,
+    val isAudioGenerationCapable: Boolean = false,
 )
 
 @Immutable
