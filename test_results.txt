@@ -1,0 +1,195 @@
+Calculating task graph as configuration cache cannot be reused because JVM has changed.
+> Task :core:domain:generateDebugAssets UP-TO-DATE
+> Task :core:domain:preBuild UP-TO-DATE
+> Task :core:domain:generateDebugTestFixturesAssets UP-TO-DATE
+> Task :core:testing:preBuild UP-TO-DATE
+> Task :core:domain:preDebugBuild UP-TO-DATE
+> Task :core:domain:preDebugTestFixturesBuild UP-TO-DATE
+> Task :core:testing:generateDebugAssets UP-TO-DATE
+> Task :core:domain:javaPreCompileDebugTestFixtures UP-TO-DATE
+> Task :core:domain:writeDebugTestFixturesAarMetadata UP-TO-DATE
+> Task :core:domain:mergeDebugTestFixturesAssets UP-TO-DATE
+> Task :core:domain:generateDebugResources UP-TO-DATE
+> Task :core:domain:javaPreCompileDebug UP-TO-DATE
+> Task :core:data:preBuild UP-TO-DATE
+> Task :core:data:preDebugBuild UP-TO-DATE
+> Task :core:domain:processDebugNavigationResources UP-TO-DATE
+> Task :core:data:generateDebugAssets UP-TO-DATE
+> Task :core:domain:writeDebugAarMetadata UP-TO-DATE
+> Task :core:domain:mergeDebugAssets UP-TO-DATE
+> Task :core:domain:extractDeepLinksDebug UP-TO-DATE
+> Task :core:domain:processDebugTestFixturesManifest UP-TO-DATE
+> Task :core:domain:mapDebugSourceSetPaths UP-TO-DATE
+> Task :core:data:generateDebugResources UP-TO-DATE
+> Task :core:domain:generateDebugTestFixturesEmptyResourceFiles UP-TO-DATE
+> Task :core:data:generateDebugUnitTestAssets UP-TO-DATE
+> Task :core:testing:preDebugBuild UP-TO-DATE
+> Task :core:data:processDebugNavigationResources UP-TO-DATE
+> Task :core:domain:processDebugManifest UP-TO-DATE
+> Task :core:domain:packageDebugResources UP-TO-DATE
+> Task :core:data:javaPreCompileDebug UP-TO-DATE
+> Task :core:data:preDebugUnitTestBuild UP-TO-DATE
+> Task :core:domain:parseDebugLocalResources UP-TO-DATE
+> Task :core:data:writeDebugAarMetadata UP-TO-DATE
+> Task :core:data:mapDebugSourceSetPaths UP-TO-DATE
+> Task :core:data:mergeDebugAssets UP-TO-DATE
+> Task :core:data:mapDebugUnitTestSourceSetPaths UP-TO-DATE
+> Task :core:data:generateDebugUnitTestResources UP-TO-DATE
+> Task :core:data:extractDeepLinksDebug UP-TO-DATE
+> Task :core:domain:generateDebugRFile UP-TO-DATE
+> Task :core:data:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :core:data:processDebugManifest UP-TO-DATE
+> Task :core:testing:writeDebugAarMetadata UP-TO-DATE
+> Task :core:testing:mergeDebugAssets UP-TO-DATE
+> Task :core:data:packageDebugResources UP-TO-DATE
+> Task :core:testing:generateDebugResources UP-TO-DATE
+> Task :core:data:generateDebugBuildConfig UP-TO-DATE
+> Task :core:data:parseDebugLocalResources UP-TO-DATE
+> Task :core:data:compileDebugLibraryResources UP-TO-DATE
+> Task :core:testing:processDebugManifest UP-TO-DATE
+> Task :core:testing:packageDebugResources UP-TO-DATE
+> Task :core:testing:javaPreCompileDebug UP-TO-DATE
+> Task :core:testing:processDebugNavigationResources UP-TO-DATE
+> Task :core:testing:mapDebugSourceSetPaths UP-TO-DATE
+> Task :core:testing:extractDeepLinksDebug UP-TO-DATE
+> Task :core:testing:compileDebugLibraryResources UP-TO-DATE
+> Task :core:data:mergeDebugUnitTestAssets UP-TO-DATE
+> Task :core:domain:compileDebugLibraryResources UP-TO-DATE
+> Task :core:data:generateDebugRFile UP-TO-DATE
+> Task :core:testing:parseDebugLocalResources UP-TO-DATE
+> Task :core:data:mergeDebugUnitTestResources UP-TO-DATE
+> Task :core:testing:generateDebugRFile UP-TO-DATE
+> Task :core:data:checkDebugUnitTestAarMetadata UP-TO-DATE
+> Task :core:data:processDebugUnitTestManifest UP-TO-DATE
+> Task :core:domain:compileDebugKotlin UP-TO-DATE
+> Task :core:domain:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:domain:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :core:domain:processDebugJavaRes UP-TO-DATE
+> Task :core:domain:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :core:testing:compileDebugKotlin UP-TO-DATE
+> Task :core:testing:compileDebugJavaWithJavac NO-SOURCE
+> Task :core:testing:processDebugJavaRes UP-TO-DATE
+> Task :core:domain:compileDebugTestFixturesKotlin UP-TO-DATE
+> Task :core:data:kspDebugKotlin UP-TO-DATE
+> Task :core:testing:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :core:testing:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :core:domain:compileDebugTestFixturesJavaWithJavac NO-SOURCE
+> Task :core:domain:processDebugTestFixturesJavaRes UP-TO-DATE
+> Task :core:domain:bundleLibCompileToJarDebugTestFixtures UP-TO-DATE
+> Task :core:domain:bundleLibRuntimeToJarDebugTestFixtures UP-TO-DATE
+> Task :core:data:processDebugUnitTestResources UP-TO-DATE
+> Task :core:data:packageDebugUnitTestForUnitTest UP-TO-DATE
+> Task :core:data:generateDebugUnitTestConfig UP-TO-DATE
+> Task :core:data:compileDebugKotlin UP-TO-DATE
+> Task :core:data:processDebugJavaRes UP-TO-DATE
+> Task :core:data:compileDebugJavaWithJavac UP-TO-DATE
+> Task :core:data:transformDebugClassesWithAsm UP-TO-DATE
+> Task :core:data:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :core:data:kspDebugUnitTestKotlin UP-TO-DATE
+> Task :core:data:compileDebugUnitTestKotlin UP-TO-DATE
+> Task :core:data:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :core:data:hiltSyncDebugUnitTest UP-TO-DATE
+> Task :core:data:processDebugUnitTestJavaRes UP-TO-DATE
+> Task :core:data:bundleLibRuntimeToJarDebug
+> Task :core:data:hiltAggregateDepsDebugUnitTest UP-TO-DATE
+> Task :core:data:hiltJavaCompileDebugUnitTest NO-SOURCE
+> Task :core:data:transformDebugUnitTestClassesWithAsm
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :core:data:testDebugUnitTest
+
+FirestoreDataSourceTest > chats snapshot listener > REMOVED deletes chat from local database FAILED
+    java.lang.AssertionError at FirestoreDataSourceTest.kt:326
+
+FirestoreDataSourceTest > messages snapshot listener > REMOVED deletes message from local database FAILED
+    java.lang.AssertionError at FirestoreDataSourceTest.kt:449
+
+SyncReconciliationTest > LWW: Remote update with older timestamp is ignored FAILED
+    java.lang.IllegalStateException at SyncReconciliationTest.kt:106
+
+SyncReconciliationTest > Tombstone: Remote deletion wins if newer than local state FAILED
+    java.lang.IllegalStateException at SyncReconciliationTest.kt:156
+
+SyncReconciliationTest > LWW: Remote update with newer timestamp overwrites local FAILED
+    java.lang.IllegalStateException at SyncReconciliationTest.kt:79
+
+SyncReconciliationTest > Tombstone: Newer local deletion wins over older remote update FAILED
+    java.lang.IllegalStateException at SyncReconciliationTest.kt:131
+
+ChatRepositoryImplTest > D2 togglePinStatus updates database from false to true() FAILED
+    java.lang.IllegalArgumentException at ChatRepositoryImplTest.kt:76
+
+ChatRepositoryImplTest > D3 togglePinStatus toggles from true to false() FAILED
+    java.lang.AssertionError at ChatRepositoryImplTest.kt:93
+
+ExtractToolExecutorTest > execute delegates to TavilySearchRepository extract when search is enabled and Tavily is selected() FAILED
+    java.lang.AssertionError at ExtractToolExecutorTest.kt:27
+
+ExtractToolExecutorTest > execute delegates to ExaSearchRepository extract when search is enabled and Exa is selected() FAILED
+    java.lang.AssertionError at ExtractToolExecutorTest.kt:62
+
+MediaProviderRepositoryImplTest > deleteMediaProvider calls triggerSync once() FAILED
+    io.mockk.MockKException at MediaProviderRepositoryImplTest.kt:85
+
+MediaProviderRepositoryImplTest > deleteMediaProvider deletes entity and removes API key() FAILED
+    io.mockk.MockKException at MediaProviderRepositoryImplTest.kt:63
+
+MemoriesRepositoryTest > deleteMemory deletes from dao and removes embedding() FAILED
+    java.lang.AssertionError at MemoriesRepositoryTest.kt:119
+
+StudioRepositoryImplTest > deleteMedia with UUID calls DAO() FAILED
+    java.lang.AssertionError at StudioRepositoryImplTest.kt:163
+
+StudioRepositoryImplTest > deleteAlbum reassigns media to null before deleting album() FAILED
+    java.lang.AssertionError at StudioRepositoryImplTest.kt:153
+
+StudioRepositoryImplTest > renameAlbum trims name and updates album row() FAILED
+    java.lang.AssertionError at StudioRepositoryImplTest.kt:135
+
+TtsProviderRepositoryImplTest > deleteTtsProvider calls triggerSync once() FAILED
+    io.mockk.MockKException at TtsProviderRepositoryImplTest.kt:92
+
+TtsProviderRepositoryImplTest > deleteTtsProvider deletes entity and removes API key() FAILED
+    io.mockk.MockKException at TtsProviderRepositoryImplTest.kt:68
+
+CloudSyncTriggerTest > trigger > uses REPLACE policy so rapid calls debounce to a single enqueue FAILED
+    org.opentest4j.AssertionFailedError at CloudSyncTriggerTest.kt:60
+
+CloudSyncTriggerTest > trigger > enqueues unique work with name pocketcrew_sync FAILED
+    java.lang.AssertionError at CloudSyncTriggerTest.kt:36
+
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :core:data:testDebugUnitTest
+
+ApiModelRepositoryImplTest > deleteConfiguration calls triggerSync once FAILED
+    java.lang.AssertionError at ApiModelRepositoryImplTest.kt:373
+
+ApiModelRepositoryImplTest > delete credentials removes both entity and key FAILED
+    java.lang.AssertionError at ApiModelRepositoryImplTest.kt:97
+
+586 tests completed, 22 failed
+
+> Task :core:data:testDebugUnitTest FAILED
+
+[Incubating] Problems report is available at: file:///home/sean/Code/pocket-crew/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':core:data:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///home/sean/Code/pocket-crew/core/data/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 10.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/9.4.1/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 39s
+77 actionable tasks: 3 executed, 74 up-to-date
+Configuration cache entry stored.
