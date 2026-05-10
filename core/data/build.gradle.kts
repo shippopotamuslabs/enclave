@@ -40,6 +40,7 @@ ksp {
 
 dependencies {
     implementation(project(":core:domain"))
+    implementation(project(":core:docgen"))
     implementation(platform(libs.firebase.bom))
 
     // ONNX Runtime

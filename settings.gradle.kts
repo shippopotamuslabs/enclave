@@ -20,6 +20,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
+        maven { url = uri("https://maven.mozilla.org/maven2/") }
     }
 }
 
@@ -33,6 +34,7 @@ include(":core:domain")
 include(":core:data")
 include(":core:ui")
 include(":core:testing")
+include(":core:docgen")
 
 // Feature modules
 include(":feature:chat")

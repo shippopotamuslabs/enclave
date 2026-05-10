@@ -1,3 +1,6 @@
 [submodule "third_party/whisper.cpp"]
 	path = third_party/whisper.cpp
 	url = https://github.com/ggml-org/whisper.cpp
+[submodule "third_party/docgen_core"]
+	path = third_party/docgen_core
+	url = ./third_party/docgen_core

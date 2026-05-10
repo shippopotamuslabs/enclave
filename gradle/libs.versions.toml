@@ -41,6 +41,7 @@ jacocoVersion = "0.8.14"
 firebaseCrashlyticsPluginVersion = "3.0.7"
 firebaseBomVersion = "34.12.0"
 grpc = "1.70.0"
+uniffi = "0.29.0"
 
 kotlinx-serialization = "1.11.0"
 openai = "4.32.0"
@@ -54,6 +55,7 @@ media3 = "1.10.0"
 commonmark = "0.22.0"
 
 [libraries]
+uniffi-kotlin-runtime = { group = "ch.ubique.uniffi", name = "runtime", version = "1.0.7" }
 jtokkit = { group = "com.knuddels", name = "jtokkit", version.ref = "jtokkit" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
 kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", version.ref = "kotlin" }
