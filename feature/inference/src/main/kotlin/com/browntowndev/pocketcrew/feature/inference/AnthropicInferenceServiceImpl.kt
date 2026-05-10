@@ -36,6 +36,9 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runInterruptible
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 class AnthropicInferenceServiceImpl(
     private val client: AnthropicClient,
@@ -252,13 +255,33 @@ class AnthropicInferenceServiceImpl(
                     )
                     .build()
             },
-            onContextExceeded = { params, results ->
-                estimateContextExceeded(
+            onContextExceeded = { _, results ->
+                val result = estimateContextExceeded(
                     requestHistory = requestHistory,
                     prompt = prompt,
                     options = options,
                     toolResultPayloads = toolLoopPayloads,
                 )
+
+                if (result.contextExceeded && 
+                    results.any { it.first.toolName == ToolDefinition.APPEND_BLOCKS.name }) {
+                    // Try to compress history specifically for artifact loop
+                    loggingPort.info(TAG, "Attempting artifact context compression provider=$PROVIDER")
+                    val compressedHistory = com.browntowndev.pocketcrew.domain.util.ArtifactContextCompressor.compress(
+                        requestHistory
+                    )
+                    
+                    // Rebuild params with compressed history
+                    val rebuiltParams = AnthropicRequestMapper.mapToMessageParams(
+                        modelId = modelId,
+                        prompt = prompt,
+                        history = compressedHistory,
+                        options = options,
+                    )
+                    ContextExceededResult(contextExceeded = false, rebuiltParams = rebuiltParams)
+                } else {
+                    ContextExceededResult(contextExceeded = result.contextExceeded, rebuiltParams = null)
+                }
             },
             onToolResult = { toolCall, resultJson ->
                 if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name || 
@@ -272,15 +295,32 @@ class AnthropicInferenceServiceImpl(
                     }
                 }
 
-                if (toolCall.toolName == ToolDefinition.GENERATE_ARTIFACT.name) {
-                    val artifactParams = toolCall.parameters as? com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
-                    if (artifactParams != null) {
-                        emitEvent(
-                            InferenceEvent.Artifacts(
-                                artifacts = listOf(artifactParams.toRequest()),
-                                modelType = modelType
-                            )
-                        )
+                if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
+                    try {
+                        val payload = Json.parseToJsonElement(resultJson).jsonObject
+                        val isComplete = payload["isComplete"]?.jsonPrimitive?.content == "true"
+                        if (isComplete) {
+                            val fullDoc = payload["fullDocument"]?.jsonObject
+                            val title = payload["title"]?.jsonPrimitive?.content ?: "Document"
+                            val targetFormat = payload["targetFormat"]?.jsonPrimitive?.content ?: "PDF"
+                            
+                            if (fullDoc != null) {
+                                emitEvent(
+                                    InferenceEvent.Artifacts(
+                                        artifacts = listOf(
+                                            com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+                                                title = title,
+                                                targetFormat = com.browntowndev.pocketcrew.domain.model.artifact.MimeType.valueOf(targetFormat),
+                                                content = fullDoc.toString()
+                                            )
+                                        ),
+                                        modelType = modelType
+                                    )
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        loggingPort.error(TAG, "Failed to parse append_blocks result", e)
                     }
                 }
 

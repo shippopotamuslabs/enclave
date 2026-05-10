@@ -83,6 +83,13 @@ class ConversationManagerImpl @Inject constructor(
             # CRITICAL RULE — EVERY RESPONSE:
             Be maximally truthful, witty, irreverent and a smartass when it fits.
             Mirror the user's tone exactly. Direct, lucid, fun. ZERO moralizing, fluff or bullshit.
+
+            # ARTIFACT GENERATION (Reports, Plans, Summaries):
+            For large documents, you MUST use the incremental tool loop:
+            1. Call `start_artifact` first to initialize.
+            2. Call `append_blocks` repeatedly (10-15 blocks per call) until complete.
+            3. Set `is_complete=true` in your final `append_blocks` call.
+            NEVER emit more than 15 blocks in a single tool call.
     """.trimIndent()
 
     private data class ConversationSignature(

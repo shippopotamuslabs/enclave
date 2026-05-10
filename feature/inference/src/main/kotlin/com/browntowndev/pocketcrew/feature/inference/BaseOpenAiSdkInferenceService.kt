@@ -32,6 +32,9 @@ import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import java.util.Optional
 import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.CancellationException
@@ -275,13 +278,32 @@ abstract class BaseOpenAiSdkInferenceService(
                     appendStopToolsWarning = contextExceeded,
                 )
             },
-            onContextExceeded = { _, _ ->
-                estimateContextExceeded(
+            onContextExceeded = { _, results ->
+                val result = estimateContextExceeded(
                     requestHistory = requestHistory,
                     prompt = prompt,
                     options = options,
                     toolResultPayloads = toolLoopPayloads,
                 )
+
+                if (result.contextExceeded && 
+                    results.any { it.first.toolName == ToolDefinition.APPEND_BLOCKS.name }) {
+                    // Try to compress history specifically for artifact loop
+                    loggingPort.info(tag, "Attempting artifact context compression provider=$provider")
+                    val compressedHistory = com.browntowndev.pocketcrew.domain.util.ArtifactContextCompressor.compress(
+                        requestHistory
+                    )
+                    
+                    // Rebuild params with compressed history
+                    val rebuiltParams = mapToolingResponseParams(
+                        prompt = prompt,
+                        options = options,
+                        requestHistory = compressedHistory,
+                    )
+                    ContextExceededResult(contextExceeded = false, rebuiltParams = rebuiltParams)
+                } else {
+                    ContextExceededResult(contextExceeded = result.contextExceeded, rebuiltParams = null)
+                }
             },
             onToolResult = { toolCall, resultJson ->
                 if (toolCall.toolName == ToolDefinition.WEB_SEARCH.name || 
@@ -295,15 +317,32 @@ abstract class BaseOpenAiSdkInferenceService(
                     }
                 }
 
-                if (toolCall.toolName == ToolDefinition.GENERATE_ARTIFACT.name) {
-                    val artifactParams = toolCall.parameters as? com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
-                    if (artifactParams != null) {
-                        emitEvent(
-                            InferenceEvent.Artifacts(
-                                artifacts = listOf(artifactParams.toRequest()),
-                                modelType = modelType
-                            )
-                        )
+                if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
+                    try {
+                        val payload = Json.parseToJsonElement(resultJson).jsonObject
+                        val isComplete = payload["isComplete"]?.jsonPrimitive?.content == "true"
+                        if (isComplete) {
+                            val fullDoc = payload["fullDocument"]?.jsonObject
+                            val title = payload["title"]?.jsonPrimitive?.content ?: "Document"
+                            val targetFormat = payload["targetFormat"]?.jsonPrimitive?.content ?: "PDF"
+                            
+                            if (fullDoc != null) {
+                                emitEvent(
+                                    InferenceEvent.Artifacts(
+                                        artifacts = listOf(
+                                            com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+                                                title = title,
+                                                targetFormat = com.browntowndev.pocketcrew.domain.model.artifact.MimeType.valueOf(targetFormat),
+                                                content = fullDoc.toString()
+                                            )
+                                        ),
+                                        modelType = modelType
+                                    )
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        loggingPort.error(tag, "Failed to parse append_blocks result", e)
                     }
                 }
 
@@ -515,15 +554,32 @@ abstract class BaseOpenAiSdkInferenceService(
                     }
                 }
 
-                if (toolCall.toolName == ToolDefinition.GENERATE_ARTIFACT.name) {
-                    val artifactParams = toolCall.parameters as? GenerateArtifactParams
-                    if (artifactParams != null) {
-                        emitEvent(
-                            InferenceEvent.Artifacts(
-                                artifacts = listOf(artifactParams.toRequest()),
-                                modelType = modelType
-                            )
-                        )
+                if (toolCall.toolName == ToolDefinition.APPEND_BLOCKS.name) {
+                    try {
+                        val payload = Json.parseToJsonElement(resultJson).jsonObject
+                        val isComplete = payload["isComplete"]?.jsonPrimitive?.content == "true"
+                        if (isComplete) {
+                            val fullDoc = payload["fullDocument"]?.jsonObject
+                            val title = payload["title"]?.jsonPrimitive?.content ?: "Document"
+                            val targetFormat = payload["targetFormat"]?.jsonPrimitive?.content ?: "PDF"
+                            
+                            if (fullDoc != null) {
+                                emitEvent(
+                                    InferenceEvent.Artifacts(
+                                        artifacts = listOf(
+                                            com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+                                                title = title,
+                                                targetFormat = com.browntowndev.pocketcrew.domain.model.artifact.MimeType.valueOf(targetFormat),
+                                                content = fullDoc.toString()
+                                            )
+                                        ),
+                                        modelType = modelType
+                                    )
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        loggingPort.error(tag, "Failed to parse append_blocks result", e)
                     }
                 }
 

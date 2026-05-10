@@ -18,6 +18,7 @@ fun ArtifactRoute(
         uiState = uiState,
         onBackClick = onNavigateBack,
         onExportPdf = viewModel::exportToPdf,
+        onExportWord = viewModel::exportToWord,
         modifier = modifier
     )
 }

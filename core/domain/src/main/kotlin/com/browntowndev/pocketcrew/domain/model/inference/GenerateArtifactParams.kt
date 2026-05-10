@@ -11,7 +11,7 @@ import kotlinx.serialization.Serializable
  */
 @Serializable
 data class GenerateArtifactParams(
-    @property:ToolParam(description = "The type of document to generate. Phase 1 only supports 'PDF'.")
+    @property:ToolParam(description = "The type of document to generate. Currently supports 'PDF' and 'WORD'.")
     val targetFormat: MimeType = MimeType.PDF,
 
     @property:ToolParam(description = "The title of the generated document.")

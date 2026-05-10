@@ -1,11 +1,14 @@
 package com.browntowndev.pocketcrew.feature.artifact
 
 import androidx.lifecycle.SavedStateHandle
+import android.content.Context
 import com.browntowndev.pocketcrew.core.data.artifact.PdfArtifactRenderer
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
+import com.browntowndev.pocketcrew.domain.port.docgen.DocumentGeneratorPort
 import com.browntowndev.pocketcrew.domain.port.media.ShareMediaPort
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -29,6 +32,8 @@ class ArtifactViewModelTest {
 
     private val pdfRenderer = mockk<PdfArtifactRenderer>(relaxed = true)
     private val shareMediaPort = mockk<ShareMediaPort>(relaxed = true)
+    private val documentGeneratorPort = mockk<DocumentGeneratorPort>(relaxed = true)
+    private val context = mockk<Context>(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
     private val artifactRequest = ArtifactGenerationRequest(
@@ -50,7 +55,7 @@ class ArtifactViewModelTest {
             "content" to encodedContent
         ))
 
-        val viewModel = ArtifactViewModel(pdfRenderer, shareMediaPort, savedStateHandle)
+        val viewModel = ArtifactViewModel(pdfRenderer, documentGeneratorPort, shareMediaPort, context, savedStateHandle)
         advanceUntilIdle()
 
         val uiState = viewModel.uiState.value
@@ -68,7 +73,7 @@ class ArtifactViewModelTest {
             "content" to encodedContent
         ))
 
-        val viewModel = ArtifactViewModel(pdfRenderer, shareMediaPort, savedStateHandle)
+        val viewModel = ArtifactViewModel(pdfRenderer, documentGeneratorPort, shareMediaPort, context, savedStateHandle)
         advanceUntilIdle()
 
         val uiState = viewModel.uiState.value
@@ -88,12 +93,32 @@ class ArtifactViewModelTest {
         every { mockFile.absolutePath } returns "/path/to/artifact.pdf"
         coEvery { pdfRenderer.renderToPdf(any(), any()) } returns mockFile
 
-        val viewModel = ArtifactViewModel(pdfRenderer, shareMediaPort, savedStateHandle)
+        val viewModel = ArtifactViewModel(pdfRenderer, documentGeneratorPort, shareMediaPort, context, savedStateHandle)
         advanceUntilIdle()
         
         viewModel.exportToPdf()
         advanceUntilIdle()
 
         verify { shareMediaPort.shareMedia(listOf("/path/to/artifact.pdf"), "application/pdf") }
+    }
+
+    @Test
+    fun `exportToWord calls use case and share port`() = runTest {
+        val savedStateHandle = SavedStateHandle(mapOf(
+            "title" to artifactRequest.title,
+            "content" to URLEncoder.encode(artifactRequest.content, "UTF-8")
+        ))
+        val mockBytes = "WordContent".toByteArray()
+        coEvery { documentGeneratorPort.generateWordDocument(any()) } returns Result.success(mockBytes)
+        every { context.getExternalFilesDir(any()) } returns File("/tmp")
+
+        val viewModel = ArtifactViewModel(pdfRenderer, documentGeneratorPort, shareMediaPort, context, savedStateHandle)
+        advanceUntilIdle()
+        
+        viewModel.exportToWord()
+        advanceUntilIdle()
+
+        coVerify { documentGeneratorPort.generateWordDocument(artifactRequest.content) }
+        verify { shareMediaPort.shareMedia(any(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document") }
     }
 }

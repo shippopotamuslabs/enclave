@@ -152,7 +152,9 @@ class ChatInferenceRequestPreparer(
             add(ToolDefinition.SEARCH_CHAT)
             add(ToolDefinition.GET_MESSAGE_CONTEXT)
             add(ToolDefinition.MANAGE_MEMORIES)
-            add(ToolDefinition.GENERATE_ARTIFACT)
+            add(ToolDefinition.START_ARTIFACT)
+            add(ToolDefinition.APPEND_BLOCKS)
+            add(ToolDefinition.SEARCH_CURRENT_ARTIFACT)
             imageTool?.let { add(it) }
             videoTool?.let { add(it) }
             musicTool?.let { add(it) }
