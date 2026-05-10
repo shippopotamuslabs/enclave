@@ -20,7 +20,17 @@ service firebase.storage {
                    && request.resource.size < 50 * 1024 * 1024; // 50MB Limit
     }
 
-    // 3. Global Safety: Deny everything else
+    // 3. Temporary Extraction Data
+    // Users can upload their documents for cloud processing.
+    // Only the owner can write or delete.
+    // Nobody can read (only Cloud Functions/Admin can).
+    match /temp_extractions/{userId}/{fileId} {
+      allow write, delete: if request.auth != null && request.auth.uid == userId
+                          && request.resource.size < 10 * 1024 * 1024; // 10MB Limit
+      allow read: if false;
+    }
+
+    // 4. Global Safety: Deny everything else
     match /{allPaths=**} {
       allow read, write: if false;
     }

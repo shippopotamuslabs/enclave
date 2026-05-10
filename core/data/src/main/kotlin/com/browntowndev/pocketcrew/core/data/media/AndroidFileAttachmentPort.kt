@@ -70,4 +70,10 @@ class AndroidFileAttachmentPort @Inject constructor(
             if (index != -1) path.substring(index + 1) else path
         }
     }
+
+    override suspend fun readBytes(uri: String): ByteArray = withContext(Dispatchers.IO) {
+        val androidUri = Uri.parse(uri)
+        context.contentResolver.openInputStream(androidUri)?.use { it.readBytes() }
+            ?: throw IllegalStateException("Unable to open file stream for $uri")
+    }
 }

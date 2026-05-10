@@ -111,4 +111,30 @@ class CryptoManagerImplTest {
         val decryptedResult = cryptoManager.decrypt(ciphertext)
         assertTrue(decryptedResult.isFailure)
     }
+
+    @Test
+    fun `generateRandomKey returns correct size`() {
+        val key = cryptoManager.generateRandomKey(32)
+        assertEquals(32, key.size)
+    }
+
+    @Test
+    fun `generateRandomIv returns correct size`() {
+        val iv = cryptoManager.generateRandomIv(12)
+        assertEquals(12, iv.size)
+    }
+
+    @Test
+    fun `encryptWithKey uses provided key and iv`() {
+        val key = cryptoManager.generateRandomKey(32)
+        val iv = cryptoManager.generateRandomIv(12)
+        val data = "test-data".toByteArray()
+        
+        val result = cryptoManager.encryptWithKey(data, key, iv)
+        assertTrue(result.isSuccess)
+        
+        // We can't easily decrypt without adding decryptWithKey to the port,
+        // but we can verify it doesn't crash and returns data.
+        assertTrue(result.getOrNull()!!.isNotEmpty())
+    }
 }
