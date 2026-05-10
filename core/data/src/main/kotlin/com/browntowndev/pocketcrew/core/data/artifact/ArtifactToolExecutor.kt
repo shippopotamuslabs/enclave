@@ -1,6 +1,6 @@
 package com.browntowndev.pocketcrew.core.data.artifact
 
-import com.browntowndev.pocketcrew.domain.model.artifact.DocumentType
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
 import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
@@ -26,11 +26,11 @@ class ArtifactToolExecutor @Inject constructor() : ArtifactToolExecutorPort, Too
     }
 
     override suspend fun execute(params: GenerateArtifactParams): ToolExecutionResult {
-        val documentType = params.documentType
+        val targetFormat = params.targetFormat
 
-        if (documentType != DocumentType.PDF) {
+        if (targetFormat != MimeType.PDF) {
             throw IllegalArgumentException(
-                "Document type ${params.documentType} is not supported in Phase 1. " +
+                "Document type ${params.targetFormat} is not supported in Phase 1. " +
                 "Only PDF is available on-device. Other formats (Word, Excel, PowerPoint) will be supported via server in a future update."
             )
         }

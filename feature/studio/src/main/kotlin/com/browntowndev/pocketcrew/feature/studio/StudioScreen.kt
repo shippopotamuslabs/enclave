@@ -92,6 +92,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlin.random.Random
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
@@ -1080,17 +1081,38 @@ private fun GeneratingPlaceholderItem(
     modifier: Modifier = Modifier
 ) {
     val localHazeState = remember { HazeState() }
-    val infiniteTransition = rememberInfiniteTransition(label = "studio_lavalamp")
     
-    val time by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 2f * Math.PI.toFloat(),
-        animationSpec = infiniteRepeatable(
-            animation = tween(12000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "time"
-    )
+    // Use a monotonic time that never resets to avoid jagged jumps
+    var time by remember { mutableStateOf(0f) }
+    
+    // Each instance gets a slightly different speed and phase to ensure variety
+    val personalitySeed = remember { Random.nextInt() }
+    val personalities = remember(personalitySeed) {
+        val random = Random(personalitySeed)
+        // [speedMultiplier, initialPhase] for each of the 4 blobs
+        List(4) { 
+            floatArrayOf(
+                random.nextFloat() * 0.3f + 0.85f, // 0.85 to 1.15 speed
+                random.nextFloat() * 2f * Math.PI.toFloat() // 0 to 2pi phase
+            )
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        var lastFrameNanos = withFrameNanos { it }
+        while (true) {
+            withFrameNanos { frameTimeNanos ->
+                val dt = (frameTimeNanos - lastFrameNanos) / 1_000_000_000f
+                lastFrameNanos = frameTimeNanos
+                
+                // Add a tiny bit of random drift to the time increment 
+                // to fulfill the "random incremental changes" request.
+                // This makes the motion feel more organic and less mechanical.
+                val jitter = 1f + (Random.nextFloat() - 0.5f) * 0.03f
+                time += dt * jitter
+            }
+        }
+    }
 
     Box(
         modifier = modifier
@@ -1132,9 +1154,15 @@ private fun GeneratingPlaceholderItem(
                         val h = size.height
                         val minD = size.minDimension
 
+                        // Apply personalities to create unique motion paths
+                        val t1 = time * personalities[0][0] + personalities[0][1]
+                        val t2 = time * personalities[1][0] + personalities[1][1]
+                        val t3 = time * personalities[2][0] + personalities[2][1]
+                        val t4 = time * personalities[3][0] + personalities[3][1]
+
                         // Blob 1: Purple base, orbits slowly
-                        val x1 = w / 2 + (w * 0.2f) * kotlin.math.cos(time)
-                        val y1 = h / 2 + (h * 0.2f) * kotlin.math.sin(time)
+                        val x1 = w / 2 + (w * 0.2f) * kotlin.math.cos(t1)
+                        val y1 = h / 2 + (h * 0.2f) * kotlin.math.sin(t1)
                         drawCircle(
                             color = PurpleLightPrimary,
                             radius = minD * 0.35f,
@@ -1142,8 +1170,8 @@ private fun GeneratingPlaceholderItem(
                         )
 
                         // Blob 2: Peach, dramatic vertical motion
-                        val y2 = h * 0.5f + (h * 0.4f) * kotlin.math.sin(time * 1.5f)
-                        val x2 = w * 0.3f + (w * 0.15f) * kotlin.math.cos(time * 0.8f)
+                        val y2 = h * 0.5f + (h * 0.4f) * kotlin.math.sin(t2 * 1.5f)
+                        val x2 = w * 0.3f + (w * 0.15f) * kotlin.math.cos(t2 * 0.8f)
                         drawCircle(
                             color = PeachAccent,
                             radius = minD * 0.25f,
@@ -1151,8 +1179,8 @@ private fun GeneratingPlaceholderItem(
                         )
 
                         // Blob 3: Gold, counter-orbit and vertical
-                        val y3 = h * 0.5f + (h * 0.35f) * kotlin.math.cos(time * 1.2f)
-                        val x3 = w * 0.7f + (w * 0.15f) * kotlin.math.sin(time * 1.1f)
+                        val y3 = h * 0.5f + (h * 0.35f) * kotlin.math.cos(t3 * 1.2f)
+                        val x3 = w * 0.7f + (w * 0.15f) * kotlin.math.sin(t3 * 1.1f)
                         drawCircle(
                             color = GoldVariant,
                             radius = minD * 0.2f,
@@ -1160,8 +1188,8 @@ private fun GeneratingPlaceholderItem(
                         )
                         
                         // Blob 4: Small Peach accent, fast orbit
-                        val y4 = h * 0.5f - (h * 0.3f) * kotlin.math.cos(time * 2f)
-                        val x4 = w * 0.5f + (w * 0.25f) * kotlin.math.sin(time * 1.7f)
+                        val y4 = h * 0.5f - (h * 0.3f) * kotlin.math.cos(t4 * 2f)
+                        val x4 = w * 0.5f + (w * 0.25f) * kotlin.math.sin(t4 * 1.7f)
                         drawCircle(
                             color = PeachAccent,
                             radius = minD * 0.15f,
