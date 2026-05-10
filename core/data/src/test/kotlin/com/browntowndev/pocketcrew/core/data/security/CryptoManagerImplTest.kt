@@ -137,4 +137,20 @@ class CryptoManagerImplTest {
         // but we can verify it doesn't crash and returns data.
         assertTrue(result.getOrNull()!!.isNotEmpty())
     }
+
+    @Test
+    fun `encryptWithKey and decryptWithKey cycle returns original plaintext`() {
+        val key = cryptoManager.generateRandomKey(32)
+        val iv = cryptoManager.generateRandomIv(12)
+        val data = "test-data-for-cloud-generation".toByteArray()
+        
+        val encryptedResult = cryptoManager.encryptWithKey(data, key, iv)
+        assertTrue(encryptedResult.isSuccess)
+        
+        val ciphertext = encryptedResult.getOrNull()!!
+        
+        val decryptedResult = cryptoManager.decryptWithKey(ciphertext, key, iv)
+        assertTrue(decryptedResult.isSuccess)
+        assertEquals("test-data-for-cloud-generation", String(decryptedResult.getOrNull()!!))
+    }
 }

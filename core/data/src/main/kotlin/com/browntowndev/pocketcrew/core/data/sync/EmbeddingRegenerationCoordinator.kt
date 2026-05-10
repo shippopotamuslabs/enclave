@@ -17,6 +17,7 @@ class EmbeddingRegenerationCoordinator @Inject constructor(
 ) {
     private val pendingMessageIds = mutableSetOf<String>()
     private val pendingMemoryIds = mutableSetOf<String>()
+    private val pendingDocumentIds = mutableSetOf<String>()
     private var fullScanPending = false
     private val mutex = kotlinx.coroutines.sync.Mutex()
 
@@ -33,6 +34,15 @@ class EmbeddingRegenerationCoordinator @Inject constructor(
         externalScope.launch {
             mutex.withLock {
                 pendingMemoryIds.add(memoryId)
+                triggerWorker()
+            }
+        }
+    }
+
+    fun enqueueDocument(documentId: String) {
+        externalScope.launch {
+            mutex.withLock {
+                pendingDocumentIds.add(documentId)
                 triggerWorker()
             }
         }
@@ -69,13 +79,15 @@ class EmbeddingRegenerationCoordinator @Inject constructor(
         return mutex.withLock {
             val messages = pendingMessageIds.toList()
             val memories = pendingMemoryIds.toList()
+            val documents = pendingDocumentIds.toList()
             val full = fullScanPending
             
             pendingMessageIds.clear()
             pendingMemoryIds.clear()
+            pendingDocumentIds.clear()
             fullScanPending = false
             
-            PendingWork(messages, memories, full)
+            PendingWork(messages, memories, documents, full)
         }
     }
 
@@ -83,6 +95,7 @@ class EmbeddingRegenerationCoordinator @Inject constructor(
         mutex.withLock {
             pendingMessageIds.addAll(work.messageIds)
             pendingMemoryIds.addAll(work.memoryIds)
+            pendingDocumentIds.addAll(work.documentIds)
             if (work.fullScanPending) fullScanPending = true
         }
     }
@@ -91,7 +104,8 @@ class EmbeddingRegenerationCoordinator @Inject constructor(
 data class PendingWork(
     val messageIds: List<String>,
     val memoryIds: List<String>,
+    val documentIds: List<String>,
     val fullScanPending: Boolean = false
 ) {
-    fun isEmpty() = messageIds.isEmpty() && memoryIds.isEmpty() && !fullScanPending
+    fun isEmpty() = messageIds.isEmpty() && memoryIds.isEmpty() && documentIds.isEmpty() && !fullScanPending
 }

@@ -11,9 +11,9 @@ enum class MimeType(val value: String) {
     PDF("application/pdf"),
     MARKDOWN("text/markdown"),
     PLAIN_TEXT("text/plain"),
-    WORD("application/msword"),
-    EXCEL("application/vnd.ms-excel"),
-    POWERPOINT("application/vnd.ms-powerpoint")
+    WORD("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    EXCEL("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    POWERPOINT("application/vnd.openxmlformats-officedocument.presentationml.presentation")
 }
 
 /**

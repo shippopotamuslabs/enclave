@@ -173,6 +173,19 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
         }
     }
 
+    override fun decryptWithKey(ciphertext: ByteArray, key: ByteArray, iv: ByteArray): Result<ByteArray> {
+        return try {
+            val secretKey = SecretKeySpec(key, "AES")
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            val spec = GCMParameterSpec(128, iv)
+            cipher.init(Cipher.DECRYPT_MODE, secretKey, spec)
+            
+            Result.success(cipher.doFinal(ciphertext))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     companion object {
         private const val PREF_CACHED_KEY = "cached_derived_key"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
