@@ -359,6 +359,12 @@ abstract class DataRepositoryModule {
 
     @Binds
     @Singleton
+    abstract fun bindCloudDocumentExtractor(
+        impl: com.browntowndev.pocketcrew.core.data.cloud.FirebaseCloudDocumentExtractor
+    ): com.browntowndev.pocketcrew.domain.port.cloud.CloudDocumentExtractorPort
+
+    @Binds
+    @Singleton
     abstract fun bindAudioCapture(impl: AndroidAudioCapture): AudioCapturePort
 
     @Binds

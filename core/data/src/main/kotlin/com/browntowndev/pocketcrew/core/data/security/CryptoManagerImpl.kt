@@ -147,6 +147,32 @@ class CryptoManagerImpl @VisibleForTesting internal constructor(
         return Base64.decode(base64, Base64.NO_WRAP)
     }
 
+    override fun generateRandomKey(size: Int): ByteArray {
+        val key = ByteArray(size)
+        SecureRandom().nextBytes(key)
+        return key
+    }
+
+    override fun generateRandomIv(size: Int): ByteArray {
+        val iv = ByteArray(size)
+        SecureRandom().nextBytes(iv)
+        return iv
+    }
+
+    override fun encryptWithKey(data: ByteArray, key: ByteArray, iv: ByteArray): Result<ByteArray> {
+        return try {
+            val secretKey = SecretKeySpec(key, "AES")
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            val parameterSpec = GCMParameterSpec(TAG_LENGTH, iv)
+            cipher.init(Cipher.ENCRYPT_MODE, secretKey, parameterSpec)
+            
+            val ciphertext = cipher.doFinal(data)
+            Result.success(ciphertext)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     companion object {
         private const val PREF_CACHED_KEY = "cached_derived_key"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"

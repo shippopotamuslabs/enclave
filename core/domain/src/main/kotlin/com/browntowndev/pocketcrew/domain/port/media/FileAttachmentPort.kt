@@ -18,4 +18,9 @@ interface FileAttachmentPort {
      * @throws NotImplementedError if the MIME type is not supported.
      */
     suspend fun readFileContent(uri: String): FileAttachmentMetadata
+
+    /**
+     * Reads the raw bytes of the file at the given URI.
+     */
+    suspend fun readBytes(uri: String): ByteArray
 }

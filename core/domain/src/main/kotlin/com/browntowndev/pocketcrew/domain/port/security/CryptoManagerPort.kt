@@ -55,4 +55,20 @@ interface CryptoManagerPort {
      * Decodes Base64 string to bytes.
      */
     fun decodeBase64(base64: String): ByteArray
+
+    /**
+     * Generates a random key of the specified size in bytes.
+     */
+    fun generateRandomKey(size: Int = 32): ByteArray
+
+    /**
+     * Generates a random IV of the specified size in bytes.
+     */
+    fun generateRandomIv(size: Int = 12): ByteArray
+
+    /**
+     * Encrypts the raw bytes using a provided transient key and IV.
+     * This is used for cloud-based extraction where the key is generated on the fly.
+     */
+    fun encryptWithKey(data: ByteArray, key: ByteArray, iv: ByteArray): Result<ByteArray>
 }
