@@ -34,6 +34,8 @@ import com.browntowndev.pocketcrew.core.data.local.ChatSummaryDao
 import com.browntowndev.pocketcrew.core.data.local.ChatSummaryEntity
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
+import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
@@ -228,7 +230,7 @@ class FirestoreDataSource @Inject constructor(
             local.createdAt?.let { msgData["created_at"] = it }
             local.modelType?.let { msgData["model_type"] = it.name }
             local.userMessageId?.let { msgData["user_message_id"] = it.value }
-            local.imageUri?.let { msgData["image_uri"] = it.encrypt() }
+            local.imageUrisJson?.let { msgData["image_uris_json"] = it.encrypt() }
             local.thinkingDurationSeconds?.let { msgData["thinking_duration_seconds"] = it }
             local.thinkingRaw?.let { msgData["thinking_raw"] = it.encrypt() }
             local.thinkingStartTime?.let { msgData["thinking_start_time"] = it }
@@ -432,9 +434,10 @@ class FirestoreDataSource @Inject constructor(
             val chatId = message.chatId.value
             return mapOf(
                 "message_id" to local.messageId,
-                "chat_id" to chatId,
                 "name" to local.name.encrypt(),
-                "file_type" to local.fileType,
+                "mime_type" to local.mimeType.name,
+                "file_source" to local.fileSource.name,
+                "target_format" to local.targetFormat?.name,
                 "remote_url" to local.remoteUrl?.encrypt(),
                 "sync_status" to local.syncStatus,
                 "updated_at" to local.updatedAt,
@@ -449,12 +452,37 @@ class FirestoreDataSource @Inject constructor(
             val name = doc.getBlob("name")?.decrypt() ?: return null
             val remoteUrl = doc.getBlob("remote_url")?.decrypt()
             
+            val mimeTypeStr = doc.getString("mime_type") ?: MimeType.PLAIN_TEXT.name
+            val mimeType = try {
+                MimeType.valueOf(mimeTypeStr)
+            } catch (e: Exception) {
+                MimeType.PLAIN_TEXT
+            }
+
+            val fileSourceStr = doc.getString("file_source") ?: FileSource.ATTACHMENT.name
+            val fileSource = try {
+                FileSource.valueOf(fileSourceStr)
+            } catch (e: Exception) {
+                FileSource.ATTACHMENT
+            }
+
+            val targetFormatStr = doc.getString("target_format")
+            val targetFormat = targetFormatStr?.let {
+                try {
+                    MimeType.valueOf(it)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+
             return MessageFileEntity(
                 id = doc.id,
                 messageId = messageIdStr,
                 name = name,
                 content = "", // Content will be downloaded from Storage if remoteUrl exists
-                fileType = doc.getString("file_type") ?: "ATTACHMENT",
+                mimeType = mimeType,
+                fileSource = fileSource,
+                targetFormat = targetFormat,
                 remoteUrl = remoteUrl,
                 syncStatus = doc.getString("sync_status") ?: "PENDING_UPLOAD",
                 updatedAt = doc.getLong("updated_at") ?: 0L,
@@ -1330,7 +1358,7 @@ class FirestoreDataSource @Inject constructor(
             content = content,
             role = Role.fromApiValue(doc.getString("role") ?: "user"),
             userMessageId = doc.getString("user_message_id")?.takeIf { it.isNotBlank() }?.let { MessageId(it) },
-            imageUri = doc.getBlob("image_uri")?.decrypt(),
+            imageUrisJson = doc.getBlob("image_uris_json")?.decrypt(),
             messageState = doc.getString("message_state")?.let { MessageState.fromApiValue(it) } ?: MessageState.COMPLETE,
             createdAt = doc.getLong("created_at") ?: 0L,
             modelType = doc.getString("model_type")?.let { ModelType.fromApiValue(it) },

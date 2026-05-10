@@ -29,7 +29,7 @@ class ChatHistoryRehydratorTest {
         val priorUser = Message(
             id = MessageId("prior-user"),
             chatId = ChatId("chat"),
-            content = Content(text = "", imageUri = "file:///prior.jpg"),
+            content = Content(text = "", imageUris = listOf("file:///prior.jpg")),
             role = Role.USER,
         )
         val priorAssistant = Message(
@@ -86,7 +86,7 @@ class ChatHistoryRehydratorTest {
         val history = service.getHistory()
         assertEquals(2, history.size)
         assertTrue(history.first().content.contains("A cracked pipe joint under the sink."))
-        assertFalse(history.first().content.contains("[User attached an image]"))
+        assertFalse(history.first().content.contains("[User attached one or more images]"))
         assertEquals("Previous answer", history[1].content)
     }
 
@@ -95,7 +95,7 @@ class ChatHistoryRehydratorTest {
         val priorUser = Message(
             id = MessageId("prior-user"),
             chatId = ChatId("chat"),
-            content = Content(text = "", imageUri = "file:///prior.jpg"),
+            content = Content(text = "", imageUris = listOf("file:///prior.jpg")),
             role = Role.USER,
         )
         val repository = mockk<MessageRepository> {
@@ -116,7 +116,7 @@ class ChatHistoryRehydratorTest {
             service = service,
         )
 
-        assertEquals("[User attached an image]", service.getHistory().single().content)
+        assertEquals("[User attached one or more images]", service.getHistory().single().content)
     }
 
     @Test

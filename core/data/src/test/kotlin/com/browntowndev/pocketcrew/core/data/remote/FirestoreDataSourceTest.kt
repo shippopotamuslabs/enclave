@@ -1310,6 +1310,7 @@ class FirestoreDataSourceTest {
             every { mockDoc.getString("message_state") } returns "complete"
             every { mockDoc.getString("user_message_id") } returns "msg-user"
             every { mockDoc.getBlob("artifacts_json") } returns Blob.fromBytes("[artifact]".toByteArray())
+            every { mockDoc.getBlob("image_uris_json") } returns Blob.fromBytes("""["file:///1.jpg"]""".toByteArray())
             every { mockDoc.getLong("updated_at") } returns 123L
             every { mockDoc.getBoolean("deleted") } returns false
 
@@ -1322,7 +1323,8 @@ class FirestoreDataSourceTest {
             coVerify { messageDao.upsert(match {
                 it.id.value == "msg-1" &&
                 it.userMessageId?.value == "msg-user" &&
-                it.artifactsJson == "[artifact]"
+                it.artifactsJson == "[artifact]" &&
+                it.imageUrisJson == """["file:///1.jpg"]"""
             }) }
         }
 

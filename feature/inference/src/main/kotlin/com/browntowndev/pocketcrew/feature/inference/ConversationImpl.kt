@@ -66,7 +66,11 @@ class ConversationImpl @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     private suspend fun buildUserMessage(message: String, options: GenerationOptions?): Message {
-        val imageUris = options?.imageUris.orEmpty()
+        var imageUris = options?.imageUris.orEmpty()
+        if (imageUris.size > 1) {
+            Log.w(TAG, "LiteRT supports only 1 image per request. Ignoring extra images.")
+            imageUris = listOf(imageUris.first())
+        }
         if (imageUris.isEmpty()) {
             return Message.user(message)
         }

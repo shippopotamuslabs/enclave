@@ -11,6 +11,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 import com.browntowndev.pocketcrew.domain.model.chat.Message
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
+import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
 import kotlinx.serialization.json.Json
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
 import kotlinx.serialization.encodeToString
@@ -65,17 +67,23 @@ fun MessageEntity.toDomain(
         emptyList()
     }
 
+    val imageUris = try {
+        imageUrisJson?.let { Json.decodeFromString<List<String>>(it) } ?: emptyList()
+    } catch (_: Exception) {
+        emptyList()
+    }
+
     return Message(
         id = id,
         content = Content(
             text = content,
             pipelineStep = pipelineStep,
-            imageUri = imageUri,
+            imageUris = imageUris,
             webSearchSources = webSearchSources.map { it.toDomain() },
-            artifacts = files.filter { it.fileType == "ARTIFACT" }.map { 
-                ArtifactGenerationRequest(title = it.name, content = it.content)
+            artifacts = files.filter { it.fileSource == FileSource.GENERATED }.map { 
+                ArtifactGenerationRequest(targetFormat = it.targetFormat ?: MimeType.PDF, title = it.name, content = it.content)
             },
-            fileAttachments = files.filter { it.fileType == "ATTACHMENT" }.map { it.toDomain() },
+            fileAttachments = files.filter { it.fileSource == FileSource.ATTACHMENT }.map { it.toDomain() },
             generatedMediaUris = mediaUris,
             generatedMediaAssetIds = mediaAssetIds,
             generatedMediaTypes = mediaTypes,
@@ -111,10 +119,14 @@ fun Message.toEntity(): MessageEntity {
         Json.encodeToString(content.generatedMediaPrompts)
     } else null
 
+    val imageUrisJson = if (content.imageUris.isNotEmpty()) {
+        Json.encodeToString(content.imageUris)
+    } else null
+
     return MessageEntity(
         id = id,
         content = content.text,
-        imageUri = content.imageUri,
+        imageUrisJson = imageUrisJson,
         role = role,
         chatId = requireNotNull(chatId) { "Cannot persist Message(id=${id.value}) with null chatId — must go through CreateUserMessageUseCase" },
         messageState = messageState,
@@ -140,7 +152,9 @@ fun FileAttachment.toEntity(id: String, messageId: String): MessageFileEntity = 
     messageId = messageId,
     name = name,
     content = content,
-    fileType = "ATTACHMENT",
+    mimeType = MimeType.PLAIN_TEXT,
+    fileSource = FileSource.ATTACHMENT,
+    targetFormat = null,
     syncStatus = "PENDING_UPLOAD",
     pendingSync = 0 // Will be set to 1 by the worker after binary upload
 )

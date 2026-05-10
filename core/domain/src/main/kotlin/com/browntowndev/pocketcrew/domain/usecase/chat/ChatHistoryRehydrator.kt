@@ -68,7 +68,7 @@ class ChatHistoryRehydrator(
         }
 
         var filteredMessages = relevantMessages
-            .filter { it.content.text.isNotBlank() || it.content.imageUri != null || it.content.fileAttachments.isNotEmpty() }
+            .filter { it.content.text.isNotBlank() || it.content.imageUris.isNotEmpty() || it.content.fileAttachments.isNotEmpty() }
             .filter { it.id != userMessageId }
             .filter { it.id != assistantMessageId }
 
@@ -150,7 +150,7 @@ class ChatHistoryRehydrator(
                     } else refreshedAllMessages
 
                     val refreshedFilteredMessages = refreshedRelevantMessages
-                        .filter { it.content.text.isNotBlank() || it.content.imageUri != null || it.content.fileAttachments.isNotEmpty() }
+                        .filter { it.content.text.isNotBlank() || it.content.imageUris.isNotEmpty() || it.content.fileAttachments.isNotEmpty() }
                         .filter { it.id != userMessageId }
                         .filter { it.id != assistantMessageId }
 
@@ -259,7 +259,7 @@ class ChatHistoryRehydrator(
             .filter { it.isNotBlank() }
             .joinToString(separator = "\n\n")
             .ifBlank {
-                if (message.content.imageUri != null) "[User attached an image]" else ""
+                if (message.content.imageUris.isNotEmpty()) "[User attached one or more images]" else ""
             }
     }
 

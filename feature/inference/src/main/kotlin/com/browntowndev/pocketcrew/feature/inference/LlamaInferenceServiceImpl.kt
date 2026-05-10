@@ -271,9 +271,15 @@ class LlamaInferenceServiceImpl @Inject constructor(
         val targetModelType = options.modelType ?: ModelType.FAST
         transientToolResultTokens = 0
 
+        var imageUrisToProcess = options.imageUris
+        if (imageUrisToProcess.size > 1) {
+            Log.w(TAG, "Llama supports only 1 image per request. Ignoring extra images.")
+            imageUrisToProcess = listOf(imageUrisToProcess.first())
+        }
+
         // Downscale images and save them to temporary files for the JNI engine
-        val processedOptions = if (options.imageUris.isNotEmpty()) {
-            val downscaledUris = options.imageUris.map { uri ->
+        val processedOptions = if (imageUrisToProcess.isNotEmpty()) {
+            val downscaledUris = imageUrisToProcess.map { uri ->
                 try {
                     "file://" + ImageDownscaler.downscaleToTempFile(context, uri)
                 } catch (e: Exception) {

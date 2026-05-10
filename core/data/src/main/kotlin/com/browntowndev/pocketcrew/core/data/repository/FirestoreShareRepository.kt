@@ -51,7 +51,7 @@ class FirestoreShareRepository @Inject constructor(
         val secretKey = SecretKeySpec(key, "AES")
 
         val sharedMessages = messages.map { message ->
-            val attachedImageMediaId = message.content.imageUri?.let { uri ->
+            val attachedImageMediaIds = message.content.imageUris.map { uri ->
                 val mediaId = java.util.UUID.randomUUID().toString()
                 val bytes = studioRepository.readMediaBytes(uri)
                 if (bytes != null) {
@@ -68,8 +68,8 @@ class FirestoreShareRepository @Inject constructor(
                         )
                     )
                     mediaId
-                } else null
-            }
+                } else ""
+            }.filter { it.isNotEmpty() }
 
             val generatedMediaIds = message.content.generatedMediaUris.map { uri ->
                 val mediaId = java.util.UUID.randomUUID().toString()
@@ -103,7 +103,7 @@ class FirestoreShareRepository @Inject constructor(
                 content = message.content.text,
                 timestamp = message.createdAt ?: System.currentTimeMillis(),
                 modelDisplayName = message.modelType?.name ?: "",
-                attachedImageMediaId = attachedImageMediaId,
+                attachedImageMediaIds = attachedImageMediaIds,
                 generatedMediaIds = generatedMediaIds,
                 fileAttachments = fileAttachments
             )

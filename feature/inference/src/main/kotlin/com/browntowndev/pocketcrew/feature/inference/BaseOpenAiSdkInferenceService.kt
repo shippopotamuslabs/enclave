@@ -67,6 +67,8 @@ abstract class BaseOpenAiSdkInferenceService(
 
     protected abstract val tag: String
 
+    protected open val maxImages: Int = 20
+
     private val conversationHistory = CopyOnWriteArrayList<ChatMessage>()
 
     override fun sendPrompt(prompt: String, closeConversation: Boolean): Flow<InferenceEvent> {
@@ -79,6 +81,9 @@ abstract class BaseOpenAiSdkInferenceService(
         closeConversation: Boolean
     ): Flow<InferenceEvent> = flow {
         try {
+            if (options.imageUris.size > maxImages) {
+                throw IllegalArgumentException("$provider API supports a maximum of $maxImages images per request.")
+            }
             val requestHistory = buildRequestHistory(options)
             loggingPort.debug(
                 tag,

@@ -175,7 +175,7 @@ class ChatInferenceRequestPreparer(
                 apiProvider = config?.apiProvider,
                 systemPrompt = systemPrompt,
                 imageUris = if (imageHandling == ChatImageHandling.DIRECT) {
-                    resolvedImageTarget?.imageUri?.let { listOf(it) }.orEmpty()
+                    resolvedImageTarget?.imageUris.orEmpty()
                 } else {
                     emptyList()
                 },
@@ -257,9 +257,9 @@ internal fun prepareChatPrompt(
 
     val imagePrefix = if (hasImageContext && imageHandling != ChatImageHandling.NONE) {
         when (imageHandling) {
-            ChatImageHandling.DIRECT -> "The user attached an image."
-            ChatImageHandling.TOOL -> "The user attached an image. If you need to inspect it, use attached_image_inspect."
-            ChatImageHandling.NONE -> "The user attached an image."
+            ChatImageHandling.DIRECT -> "The user attached one or more images."
+            ChatImageHandling.TOOL -> "The user attached one or more images. If you need to inspect them, use attached_image_inspect."
+            ChatImageHandling.NONE -> "The user attached one or more images."
         }
     } else null
 

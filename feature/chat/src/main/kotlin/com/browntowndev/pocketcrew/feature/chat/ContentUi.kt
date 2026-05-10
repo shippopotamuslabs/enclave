@@ -15,7 +15,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.FileAttachment
 data class ContentUi(
     val text: String,
     val pipelineStep: PipelineStep? = null,
-    val imageUri: String? = null,
+    val imageUris: List<String> = emptyList(),
     val webSearchSources: List<WebSearchSource> = emptyList(),
     val artifacts: List<ArtifactGenerationRequest> = emptyList(),
     val fileAttachments: List<FileAttachment> = emptyList(),
