@@ -4,6 +4,8 @@ import android.app.Application
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import coil3.ImageLoader
+import com.browntowndev.pocketcrew.core.docgen.RustDocGenSchemaProvider
+import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
 import com.browntowndev.pocketcrew.domain.port.auth.AuthManager
 import com.browntowndev.pocketcrew.domain.port.auth.AuthState
 import com.browntowndev.pocketcrew.domain.port.repository.CloudSyncPort
@@ -43,6 +45,8 @@ class PocketCrewApplication :
 
     override fun onCreate() {
         super.onCreate()
+
+        ToolDefinition.schemaProvider = RustDocGenSchemaProvider()
 
         applicationScope.launch {
             combine(authManager.authState, cryptoManager.isVaultUnlocked) { authState, isUnlocked ->

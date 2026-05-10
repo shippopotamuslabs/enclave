@@ -83,8 +83,11 @@ class LlmToolingOrchestrator @Inject constructor(
         var lastResponse: TResponse? = null
         var contextFullWarned = false
 
-        while (toolCallCount <= maxToolCalls + 1) {
-            val response = onInferencePass(currentParams, toolCallCount < maxToolCalls && !contextFullWarned)
+        // Effective limit that can expand for greedy tools
+        var effectiveMaxToolCalls = maxToolCalls
+
+        while (toolCallCount <= effectiveMaxToolCalls + 1) {
+            val response = onInferencePass(currentParams, toolCallCount < effectiveMaxToolCalls && !contextFullWarned)
             lastResponse = response
             
             val toolCalls = try {
@@ -115,9 +118,14 @@ class LlmToolingOrchestrator @Inject constructor(
                 break
             }
 
+            // Expand limit for incremental generation tools
+            if (toolCalls.any { it.toolName == ToolDefinition.APPEND_BLOCKS.name }) {
+                effectiveMaxToolCalls = maxOf(effectiveMaxToolCalls, toolCallCount + 20)
+            }
+
             // If we are already beyond the limit and the model is STILL calling tools,
             // then we have a loop and must throw a hard error.
-            if (toolCallCount > maxToolCalls) {
+            if (toolCallCount > effectiveMaxToolCalls) {
                 loggingPort.error(tag, "Model ignored recursion limit warning provider=$providerName. Termination forced.")
                 throw IllegalStateException("Search skill recursion limit exceeded: Model ignored warning to stop calling tools.")
             }
@@ -139,7 +147,7 @@ class LlmToolingOrchestrator @Inject constructor(
             val turnResults = mutableListOf<Pair<ToolCallRequest, String>>()
             for (toolCall in toolCalls) {
                 val toolResult = try {
-                    if (toolCallCount >= maxToolCalls) {
+                    if (toolCallCount >= effectiveMaxToolCalls) {
                         loggingPort.warning(
                             tag,
                             "Recursive tool call limit reached provider=$providerName tool=${toolCall.toolName}"

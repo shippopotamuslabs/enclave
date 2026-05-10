@@ -127,23 +127,22 @@ ${ToolDefinition.ATTACHED_IMAGE_INSPECT.toExample(strategy)}
 
         @Suppress("MaxLineLength")
         private fun artifactContract(strategy: ToolCallStrategy): String = """
-# ARTIFACT STUDIO MANDATE:
-You have access to '${ToolDefinition.GENERATE_ARTIFACT.name}' to create professional, structured documents (PDFs).
-If the user's request involves creating a report, document, list, or structured summary that should be "exported" or "rendered nicely", you MUST use this tool.
-The tool produces a deterministic interactive preview and allows native PDF export.
+# ARTIFACT STUDIO MANDATE (Incremental Generation):
+You MUST use the Artifact tools to create professional, structured documents (PDF or Word).
+For large documents (reports, plans, books), you MUST generate the document incrementally using this loop:
 
-To generate an artifact:
-${ToolDefinition.GENERATE_ARTIFACT.toExample(strategy)}
+1. **Initialize**: Call '${ToolDefinition.START_ARTIFACT.name}' first. It returns an 'artifactId'.
+   Example: ${ToolDefinition.START_ARTIFACT.toExample(strategy)}
 
-CONTENT FORMAT:
-Provide the full content of the document as standard Markdown in the 'content' field.
-Use standard Markdown syntax for:
-- Headers (# for H1, ## for H2, etc.)
-- Lists (ordered and unordered)
-- Tables
-- Bold and Italic text
-- Code blocks with language labels
-- Blockquotes
+2. **Append content**: Call '${ToolDefinition.APPEND_BLOCKS.name}' repeatedly to add content.
+   - You MUST emit 10-15 blocks per call. NEVER exceed 15 blocks in a single call.
+   - 'blocks' is a list of JSON objects (headings, paragraphs, lists, tables, etc.).
+3. **Set complete**: Set 'isComplete' to true ONLY in your very last call.
+
+4. **Recall context**: If you need to recall specific details, names, or sections from earlier parts of the document that are no longer in your immediate context window, call '${ToolDefinition.SEARCH_CURRENT_ARTIFACT.name}'.
+   Example: ${ToolDefinition.SEARCH_CURRENT_ARTIFACT.toExample(strategy)}
+
+The tool produces a deterministic interactive preview and allows native PDF/Word export.
 """.trimIndent()
 
         @Suppress("MaxLineLength")

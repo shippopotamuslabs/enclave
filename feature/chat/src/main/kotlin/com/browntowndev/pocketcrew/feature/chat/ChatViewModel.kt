@@ -336,7 +336,8 @@ class ChatViewModel @Inject constructor(
                             ATTACHED_IMAGE_INSPECT.name -> ToolCallBannerKind.IMAGE
                             ToolDefinition.SEARCH_CHAT_HISTORY.name -> ToolCallBannerKind.MEMORY
                             ToolDefinition.SEARCH_CHAT.name -> ToolCallBannerKind.MEMORY
-                            ToolDefinition.GENERATE_ARTIFACT.name -> ToolCallBannerKind.ARTIFACT
+                            ToolDefinition.START_ARTIFACT.name -> ToolCallBannerKind.ARTIFACT
+                            ToolDefinition.APPEND_BLOCKS.name -> ToolCallBannerKind.ARTIFACT
                             ToolDefinition.X_SEARCH.name -> ToolCallBannerKind.X_SEARCH
                             ToolDefinition.GENERATE_IMAGE.name -> ToolCallBannerKind.MEDIA
                             ToolDefinition.GENERATE_VIDEO.name -> ToolCallBannerKind.MEDIA
@@ -349,7 +350,8 @@ class ChatViewModel @Inject constructor(
                             ATTACHED_IMAGE_INSPECT.name.lowercase() -> "Inspecting image"
                             ToolDefinition.SEARCH_CHAT_HISTORY.name.lowercase() -> "Searching chat history"
                             ToolDefinition.SEARCH_CHAT.name.lowercase() -> "Searching chat"
-                            ToolDefinition.GENERATE_ARTIFACT.name.lowercase() -> "Generating Artifact"
+                            ToolDefinition.START_ARTIFACT.name.lowercase() -> "Starting Artifact"
+                            ToolDefinition.APPEND_BLOCKS.name.lowercase() -> "Writing Artifact"
                             ToolDefinition.X_SEARCH.name.lowercase() -> "Searching X"
                             ToolDefinition.GENERATE_IMAGE.name.lowercase() -> "Generating Image"
                             ToolDefinition.GENERATE_VIDEO.name.lowercase() -> "Generating Video"
@@ -358,14 +360,31 @@ class ChatViewModel @Inject constructor(
                         }
                     )
 
-                    if (toolName == ToolDefinition.GENERATE_ARTIFACT.name.lowercase()) {
+                    if (toolName == ToolDefinition.START_ARTIFACT.name.lowercase()) {
                         try {
                             val params = jsonParser.decodeFromString<
-                                com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
+                                com.browntowndev.pocketcrew.domain.model.inference.StartArtifactParams
                                 >(event.argumentsJson)
-                            activeArtifacts[event.eventId] = params.toRequest()
+                            // Initial artifact with no content yet
+                            activeArtifacts[event.eventId] = com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest(
+                                title = params.title,
+                                targetFormat = params.targetFormat,
+                                content = ""
+                            )
                         } catch (e: Exception) {
-                            loggingPort.error(TAG, "Failed to parse artifact request", e)
+                            loggingPort.error(TAG, "Failed to parse start_artifact request", e)
+                        }
+                    }
+
+                    if (toolName == ToolDefinition.APPEND_BLOCKS.name.lowercase()) {
+                        try {
+                            val params = jsonParser.decodeFromString<
+                                com.browntowndev.pocketcrew.domain.model.inference.AppendBlocksParams
+                                >(event.argumentsJson)
+                            // We don't necessarily need to update activeArtifacts here 
+                            // because it will be emitted as a final result when complete.
+                        } catch (e: Exception) {
+                            loggingPort.error(TAG, "Failed to parse append_blocks request", e)
                         }
                     }
                 }
@@ -399,7 +418,7 @@ class ChatViewModel @Inject constructor(
                         }
                         delay(remaining)
                         val toolName = (activeToolNames[event.eventId] ?: "").lowercase()
-                        if (toolName == ToolDefinition.GENERATE_ARTIFACT.name.lowercase()) {
+                        if (toolName == ToolDefinition.START_ARTIFACT.name.lowercase()) {
                             if (capturedKey != null && capturedArtifact != null) {
                                 viewModelScope.launch {
                                     activeChatTurnSnapshotPort.attachArtifact(

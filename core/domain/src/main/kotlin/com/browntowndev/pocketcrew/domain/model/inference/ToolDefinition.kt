@@ -26,7 +26,9 @@ data class ToolDefinition(
     val schemaOverride: ToolSchema? = null,
 ) {
     val schema: ToolSchema by lazy {
-        schemaOverride ?: ToolSchemaGenerator.generateSchema(parametersClass)
+        schemaProvider?.getSchema(name)?.let { ToolSchema.fromFullSchema(it) }
+            ?: schemaOverride 
+            ?: ToolSchemaGenerator.generateSchema(parametersClass)
     }
 
     val parametersJson: String by lazy {
@@ -109,6 +111,8 @@ data class ToolDefinition(
     }
 
     companion object {
+        var schemaProvider: DynamicToolSchemaProvider? = null
+
         private val json = Json {
             ignoreUnknownKeys = true
             encodeDefaults = true
@@ -164,15 +168,31 @@ data class ToolDefinition(
             parametersClass = GetMessageContextParams::class,
         )
 
-        @Suppress("MaxLineLength")
-        val GENERATE_ARTIFACT = ToolDefinition(
-            name = "generate_artifact",
-            description = "Generate a professional PDF document from Markdown content. " +
-                "Use this when the user wants a report, plan, summary, or other deliverable " +
-                "exported as a downloadable PDF. The content must be formatted as standard " +
-                "Markdown (headers, lists, tables, code blocks, etc.).",
-            parametersClass = GenerateArtifactParams::class,
-            displayName = "Generating Artifact...",
+        val START_ARTIFACT = ToolDefinition(
+            name = "start_artifact",
+            description = "Initialize a new professional document (PDF or Word). " +
+                "Returns an artifact_id to be used with append_blocks. " +
+                "Use this as the first step for generating any report, plan, or summary.",
+            parametersClass = StartArtifactParams::class,
+            displayName = "Starting Artifact...",
+        )
+
+        val APPEND_BLOCKS = ToolDefinition(
+            name = "append_blocks",
+            description = "Append content blocks to an existing artifact. " +
+                "Emit 10-15 blocks per call to respect token limits. " +
+                "Set isComplete to true only when the entire document is finished.",
+            parametersClass = AppendBlocksParams::class,
+            displayName = "Appending blocks...",
+        )
+
+        val SEARCH_CURRENT_ARTIFACT = ToolDefinition(
+            name = "search_current_artifact",
+            description = "Semantically search for specific details, names, or sections " +
+                "in the artifact currently being generated. Use this to recall context " +
+                "that might have been compressed away.",
+            parametersClass = SearchArtifactParams::class,
+            displayName = "Searching artifact...",
         )
 
         @Suppress("MaxLineLength")
@@ -222,7 +242,9 @@ data class ToolDefinition(
             SEARCH_CHAT,
             GET_MESSAGE_CONTEXT,
             MANAGE_MEMORIES,
-            GENERATE_ARTIFACT,
+            START_ARTIFACT,
+            APPEND_BLOCKS,
+            SEARCH_CURRENT_ARTIFACT,
             X_SEARCH,
             GENERATE_IMAGE,
             GENERATE_VIDEO,

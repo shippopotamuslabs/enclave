@@ -12,6 +12,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import kotlinx.serialization.json.JsonClassDiscriminator
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.reflect.KClass
 import kotlin.reflect.full.findAnnotation
 import kotlin.reflect.full.memberProperties
@@ -32,9 +33,10 @@ annotation class ToolParam(val description: String = "", val required: Boolean =
 
 data class ToolSchema(
     val properties: JsonObject,
-    val required: List<String>
+    val required: List<String>,
+    val fullSchemaOverride: JsonObject? = null
 ) {
-    fun toJsonObject(): JsonObject = buildJsonObject {
+    fun toJsonObject(): JsonObject = fullSchemaOverride ?: buildJsonObject {
         put("type", "object")
         put("properties", properties)
         if (required.isNotEmpty()) {
@@ -45,6 +47,17 @@ data class ToolSchema(
     }
 
     override fun toString(): String = toJsonObject().toString()
+
+    companion object {
+        fun fromFullSchema(json: String): ToolSchema {
+            val jsonObject = kotlinx.serialization.json.Json.parseToJsonElement(json) as JsonObject
+            return ToolSchema(
+                properties = (jsonObject["properties"] ?: buildJsonObject { }) as JsonObject,
+                required = (jsonObject["required"] as? JsonArray)?.map { it.jsonPrimitive.content } ?: emptyList(),
+                fullSchemaOverride = jsonObject
+            )
+        }
+    }
 }
 
 object ToolSchemaGenerator {
