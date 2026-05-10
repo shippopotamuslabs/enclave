@@ -74,7 +74,7 @@ class DownloadViewModelActionsTest {
     fun setup() {
         every { orchestrator.downloadState } returns downloadStateFlow
         every { orchestrator.snackbarMessages } returns flowOf()
-        every { workRepo.observeDownloadProgress(any()) } returns flowOf()
+        every { workRepo.observeDownloadProgress() } returns flowOf()
     }
 
     private fun createViewModel(

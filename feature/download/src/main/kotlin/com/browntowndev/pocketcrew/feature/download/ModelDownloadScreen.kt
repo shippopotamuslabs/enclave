@@ -78,6 +78,7 @@ import com.browntowndev.pocketcrew.core.ui.theme.PocketCrewTheme
 import com.browntowndev.pocketcrew.core.ui.util.FeatureFlags
 import com.browntowndev.pocketcrew.domain.model.download.DownloadModelsResult
 import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
+import com.browntowndev.pocketcrew.domain.model.download.ModelScanResult
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.domain.model.inference.ModelFile
 import com.browntowndev.pocketcrew.feature.download.DownloadViewModel.FileProgressUiModel
@@ -97,7 +98,16 @@ fun ModelDownloadScreen(
     viewModel: DownloadViewModel = hiltViewModel<DownloadViewModel, DownloadViewModel.Factory>(
         key = (modelsResult?.modelsToDownload ?: emptyList()).hashCode().toString(),
         creationCallback = { factory ->
-            factory.create(modelsResult, errorMessage, autoStartDownloads = true)
+            val safeModelsResult = modelsResult ?: DownloadModelsResult(
+                allModels = emptyMap(),
+                modelsToDownload = emptyList(),
+                scanResult = ModelScanResult(
+                    missingModels = emptyList(),
+                    partialDownloads = emptyMap(),
+                    allValid = true
+                )
+            )
+            factory.create(safeModelsResult, errorMessage, autoStartDownloads = true)
         }
     )
 ) {

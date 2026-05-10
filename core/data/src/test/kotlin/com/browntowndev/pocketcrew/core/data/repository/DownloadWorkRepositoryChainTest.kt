@@ -4,8 +4,10 @@ import android.util.Log
 import androidx.work.Data
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
+import com.browntowndev.pocketcrew.core.data.download.DownloadFinalizeWorker
 import com.browntowndev.pocketcrew.core.data.download.DownloadWorkKeys
+import com.browntowndev.pocketcrew.core.data.download.ModelDownloadWorker
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import io.mockk.every
@@ -267,8 +269,8 @@ class DownloadWorkRepositoryChainTest {
             mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
         } returns flowOf(listOf(downloadWork))
 
-        // When: Observe progress for the download work ID
-        val result = repository.observeDownloadProgress(downloadWorkId).first()
+        // When: Observe progress for the chain
+        val result = repository.observeDownloadProgress().first()
 
         // Then: Should receive the work info
         assertNotNull(result)
@@ -314,7 +316,7 @@ class DownloadWorkRepositoryChainTest {
         // When: Observe progress starting with downloadWorkId
         val results = mutableListOf<WorkInfo>()
         val job = launch {
-            repository.observeDownloadProgress(downloadWorkId).collect {
+            repository.observeDownloadProgress().collect {
                 if (it != null) results.add(it)
             }
         }
@@ -334,6 +336,55 @@ class DownloadWorkRepositoryChainTest {
         assertEquals(WorkInfo.State.RUNNING, results[1].state)
 
         job.cancel()
+    }
+
+    // ===== REPO_09: Initial enqueue — downloader returned even if finalizer is listed first =====
+
+    @Test
+    fun `REPO_09 - getWorkId returns downloader when finalizer listed first at initial enqueue`() = runTest {
+        // Both workers identified by class-name tags; no outputData stage set yet (initial enqueue)
+        val finalizeBlocked = createMockWorkInfoWithTags(
+            id = finalizeWorkId,
+            state = WorkInfo.State.BLOCKED,
+            tags = setOf(DownloadFinalizeWorker::class.java.name, ModelConfig.WORK_TAG)
+        )
+        val downloadEnqueued = createMockWorkInfoWithTags(
+            id = downloadWorkId,
+            state = WorkInfo.State.ENQUEUED,
+            tags = setOf(ModelDownloadWorker::class.java.name, ModelConfig.WORK_TAG)
+        )
+
+        // Finalizer listed FIRST — this is the ordering that previously caused the bug
+        mockListenableFuture(listOf(finalizeBlocked, downloadEnqueued))
+
+        val result = repository.getWorkId()
+
+        assertEquals(downloadWorkId, result)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `REPO_10 - observeDownloadProgress emits downloader at initial enqueue regardless of list order`() = runTest {
+        val finalizeBlocked = createMockWorkInfoWithTags(
+            id = finalizeWorkId,
+            state = WorkInfo.State.BLOCKED,
+            tags = setOf(DownloadFinalizeWorker::class.java.name, ModelConfig.WORK_TAG)
+        )
+        val downloadEnqueued = createMockWorkInfoWithTags(
+            id = downloadWorkId,
+            state = WorkInfo.State.ENQUEUED,
+            tags = setOf(ModelDownloadWorker::class.java.name, ModelConfig.WORK_TAG)
+        )
+
+        every {
+            mockWorkManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
+        } returns flowOf(listOf(finalizeBlocked, downloadEnqueued))
+
+        val result = repository.observeDownloadProgress().first()
+
+        assertNotNull(result)
+        assertEquals(downloadWorkId, result!!.id)
+        assertEquals(WorkInfo.State.ENQUEUED, result.state)
     }
 
     // ===== Helper methods =====
@@ -361,6 +412,21 @@ class DownloadWorkRepositoryChainTest {
             every { this@mockk.id } returns id
             every { this@mockk.state } returns state
             every { this@mockk.outputData } returns outputData
+            every { progress } returns Data.EMPTY
+            every { tags } returns setOf(ModelConfig.WORK_TAG)
+        }
+    }
+
+    private fun createMockWorkInfoWithTags(
+        id: UUID,
+        state: WorkInfo.State,
+        tags: Set<String>
+    ): WorkInfo {
+        return mockk {
+            every { this@mockk.id } returns id
+            every { this@mockk.state } returns state
+            every { this@mockk.tags } returns tags
+            every { outputData } returns Data.EMPTY
             every { progress } returns Data.EMPTY
         }
     }

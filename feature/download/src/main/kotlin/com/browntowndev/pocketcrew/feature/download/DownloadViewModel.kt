@@ -22,7 +22,6 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -56,7 +55,7 @@ class DownloadViewModel @AssistedInject constructor(
     @AssistedFactory
     interface Factory {
         fun create(
-            modelsResult: DownloadModelsResult?,
+            modelsResult: DownloadModelsResult,
             initialErrorMessage: String? = null,
             autoStartDownloads: Boolean = true
         ): DownloadViewModel
@@ -321,49 +320,19 @@ class DownloadViewModel @AssistedInject constructor(
 
     private fun observeWorkProgress() {
         // Cancel any existing observation to prevent concurrent flow collections
-        // This is the fix for "Channel was consumed, consumer had failed" error
         workObservationJob?.cancel()
         workObservationJob = viewModelScope.launch {
-            // Step 1: Wait for work to be created (handles race condition)
-            // The work might not exist yet when init runs - poll until it appears
-            var workId = downloadWorkRepository.getWorkId()
-            
-            // Track previous state for change detection
             var previousState: WorkInfo.State? = null
-            
-            if (workId == null) {
-                Log.d(TAG, "[TRACE] observeWorkProgress: No work ID yet, waiting for work to be created...")
-                // Poll for work ID - max 30 seconds (60 x 500ms)
-                var attempts = 0
-                val maxAttempts = 60
-                while (workId == null && attempts < maxAttempts) {
-                    delay(500)
-                    workId = downloadWorkRepository.getWorkId()
-                    attempts++
-                }
-                
-                if (workId == null) {
-                    Log.w(TAG, "[TRACE] observeWorkProgress: No work ID found after 30s, giving up")
-                    return@launch
-                }
-            }
-            
-            Log.d(TAG, "[TRACE] observeWorkProgress: Work ID found: $workId, starting polling")
-            
-            // Step 2: Use the repository's Flow which handles waiting for work + progress
-            downloadWorkRepository.observeDownloadProgress(workId)
-                .collect { workInfo ->
-                    // Handle null workInfo (work not found or error)
-                    if (workInfo == null) {
-                        Log.w(TAG, "[TRACE] observeWorkProgress: Work info is null, skipping update")
-                        return@collect
-                    }
 
-                    // Throttle logging to prevent Logcat spam (every 5 seconds)
+            // Subscribe directly to the chain-aware flow. No UUID polling needed —
+            // the repository's selectBestWorkInfo always picks the active worker.
+            downloadWorkRepository.observeDownloadProgress()
+                .collect { workInfo ->
+                    if (workInfo == null) return@collect
+
                     val currentTime = System.currentTimeMillis()
                     val shouldLog = currentTime - lastTraceLogTime >= THROTTLE_MS
 
-                    // Log state changes
                     if (previousState != workInfo.state) {
                         Log.d(TAG, "[TRACE] observeWorkProgress: State changed ${previousState?.name ?: "NULL"} -> ${workInfo.state.name}")
                         previousState = workInfo.state
@@ -378,7 +347,6 @@ class DownloadViewModel @AssistedInject constructor(
                             "id=${workInfo.id}, progress=$progress, totalBytes=$totalBytes, downloadedBytes=$downloadedBytes")
                     }
 
-                    // Step 3: Parse workInfo to domain progress update
                     val currentDownloads = modelDownloadOrchestrator.downloadState.value.currentDownloads
                     val progressUpdate = progressParser.parse(workInfo, currentDownloads)
 
