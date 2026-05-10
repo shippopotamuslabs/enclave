@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 3,
-    "identityHash": "f4757771ef4de6b9ffbd33e4ee61687e",
+    "identityHash": "c923661753d9d2c8b2325abd6535a837",
     "entities": [
       {
         "tableName": "chat",
@@ -1607,7 +1607,7 @@
       },
       {
         "tableName": "message_file",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `message_id` TEXT NOT NULL, `name` TEXT NOT NULL, `content` TEXT NOT NULL, `file_type` TEXT NOT NULL, `remote_url` TEXT, `sync_status` TEXT NOT NULL, `pending_sync` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `staging_remote_url` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `message_id` TEXT NOT NULL, `name` TEXT NOT NULL, `content` TEXT NOT NULL, `mime_type` TEXT NOT NULL, `file_source` TEXT NOT NULL, `target_format` TEXT, `remote_url` TEXT, `sync_status` TEXT NOT NULL, `pending_sync` INTEGER NOT NULL, `updated_at` INTEGER NOT NULL, `deleted` INTEGER NOT NULL, `staging_remote_url` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`message_id`) REFERENCES `message`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -1634,10 +1634,21 @@
             "notNull": true
           },
           {
-            "fieldPath": "fileType",
-            "columnName": "file_type",
+            "fieldPath": "mimeType",
+            "columnName": "mime_type",
             "affinity": "TEXT",
             "notNull": true
+          },
+          {
+            "fieldPath": "fileSource",
+            "columnName": "file_source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetFormat",
+            "columnName": "target_format",
+            "affinity": "TEXT"
           },
           {
             "fieldPath": "remoteUrl",
@@ -1708,7 +1719,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f4757771ef4de6b9ffbd33e4ee61687e')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c923661753d9d2c8b2325abd6535a837')"
     ]
   }
 }
