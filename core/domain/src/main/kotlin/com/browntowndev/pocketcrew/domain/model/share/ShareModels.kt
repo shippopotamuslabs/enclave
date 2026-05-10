@@ -21,7 +21,7 @@ data class SharedMessage(
     val content: String,
     val timestamp: Long,
     val modelDisplayName: String = "",
-    val attachedImageMediaId: String? = null,
+    val attachedImageMediaIds: List<String> = emptyList(),
     val generatedMediaIds: List<String> = emptyList(),
     val fileAttachments: List<SharedFileAttachment> = emptyList()
 )

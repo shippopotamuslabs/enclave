@@ -178,7 +178,7 @@ class CompositeToolExecutorTest {
             chatId = ChatId("chat-abc"),
             userMessageId = MessageId("msg-abc"),
             toolName = ToolDefinition.GENERATE_ARTIFACT.name,
-            argumentsJson = "{\"documentType\":\"PDF\",\"title\":\"Report\",\"content\":\"{}\"}",
+            argumentsJson = "{\"targetFormat\":\"PDF\",\"title\":\"Report\",\"content\":\"{}\"}",
             provider = "xai",
             modelType = ModelType.FAST
         )

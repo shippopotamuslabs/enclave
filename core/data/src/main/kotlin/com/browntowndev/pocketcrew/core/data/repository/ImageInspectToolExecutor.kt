@@ -20,7 +20,7 @@ import javax.inject.Singleton
 @Serializable
 private data class ImageInspectResult(
     val resolved_message_id: String,
-    val image_uri: String,
+    val image_uris: List<String>,
     val question: String,
     val analysis: String
 )
@@ -29,7 +29,7 @@ private data class ImageInspectResult(
 private data class ImageInspectError(
     val error: String,
     val resolved_message_id: String,
-    val image_uri: String,
+    val image_uris: List<String>,
     val question: String,
     val exception: String,
     val message: String
@@ -88,11 +88,11 @@ class ImageInspectToolExecutor @Inject constructor(
             TAG,
             "Image inspect tool resolved target chatId=${chatId.value} " +
                 "userMessageId=${resolvedTarget.userMessageId.value} " +
-                "imageUri=${resolvedTarget.imageUri}"
+                "imageUrisCount=${resolvedTarget.imageUris.size}"
         )
 
         val analysis = try {
-            analyzeImageUseCase(resolvedTarget.imageUri, question)
+            analyzeImageUseCase(resolvedTarget.imageUris, question)
         } catch (t: Throwable) {
             val rootCause = t.rootCause()
             loggingPort.error(
@@ -137,14 +137,14 @@ class ImageInspectToolExecutor @Inject constructor(
 
         val latestImageMessage = messageRepository.getMessagesForChat(chatId)
             .filter { message ->
-                message.role == Role.USER && message.content.imageUri != null
+                message.role == Role.USER && message.content.imageUris.isNotEmpty()
             }
             .maxByOrNull { it.createdAt ?: 0L }
 
         return latestImageMessage?.let { message ->
             ResolvedImageTarget(
                 userMessageId = message.id,
-                imageUri = requireNotNull(message.content.imageUri),
+                imageUris = message.content.imageUris,
             )
         }
     }
@@ -162,7 +162,7 @@ class ImageInspectToolExecutor @Inject constructor(
     ): String = Json.encodeToString(
         ImageInspectResult(
             resolved_message_id = target.userMessageId.value,
-            image_uri = target.imageUri,
+            image_uris = target.imageUris,
             question = question,
             analysis = analysis
         )
@@ -176,7 +176,7 @@ class ImageInspectToolExecutor @Inject constructor(
         ImageInspectError(
             error = "vision_tool_failed",
             resolved_message_id = target.userMessageId.value,
-            image_uri = target.imageUri,
+            image_uris = target.imageUris,
             question = question,
             exception = throwable::class.java.simpleName,
             message = throwable.message ?: "Unknown error"

@@ -3,18 +3,26 @@ package com.browntowndev.pocketcrew.domain.model.artifact
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-import kotlinx.serialization.json.JsonClassDiscriminator
-
 /**
- * Represents the type of document to generate.
- * Phase 1 supports only "PDF". Other values are reserved for future server routing.
+ * Represents the standard MIME types supported by the system.
  */
 @Serializable
-enum class DocumentType {
-    PDF,
-    WORD,
-    EXCEL,
-    POWERPOINT
+enum class MimeType(val value: String) {
+    PDF("application/pdf"),
+    MARKDOWN("text/markdown"),
+    PLAIN_TEXT("text/plain"),
+    WORD("application/msword"),
+    EXCEL("application/vnd.ms-excel"),
+    POWERPOINT("application/vnd.ms-powerpoint")
+}
+
+/**
+ * Represents the source/role of a file record.
+ */
+@Serializable
+enum class FileSource {
+    GENERATED,
+    ATTACHMENT
 }
 
 /**
@@ -22,7 +30,7 @@ enum class DocumentType {
  */
 @Serializable
 data class ArtifactGenerationRequest(
-    val documentType: DocumentType = DocumentType.PDF,
+    val targetFormat: MimeType = MimeType.PDF,
     val title: String,
     val content: String
 )
@@ -35,5 +43,5 @@ data class ArtifactGenerationResult(
     val request: ArtifactGenerationRequest,
     val generatedAt: Long = System.currentTimeMillis()
 ) {
-    val isPdf: Boolean get() = request.documentType == DocumentType.PDF
+    val isPdf: Boolean get() = request.targetFormat == MimeType.PDF
 }

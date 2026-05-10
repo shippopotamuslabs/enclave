@@ -38,7 +38,7 @@ import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackControllerPort
 import com.browntowndev.pocketcrew.domain.port.media.TtsPlaybackStatus
 import com.browntowndev.pocketcrew.domain.port.media.SpeechState
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
-import com.browntowndev.pocketcrew.domain.model.artifact.DocumentType
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.chat.MessageSnapshot
 import com.browntowndev.pocketcrew.domain.port.inference.ActiveChatTurnSnapshotPort
 import com.browntowndev.pocketcrew.domain.usecase.byok.GetDefaultModelsUseCase
@@ -460,12 +460,12 @@ class ChatViewModelTest {
         // Simulate a snapshot with two artifacts
         val artifact1 = ArtifactGenerationRequest(
             title = "Doc 1",
-            documentType = DocumentType.PDF,
+            targetFormat = MimeType.PDF,
             content = ""
         )
         val artifact2 = ArtifactGenerationRequest(
             title = "Doc 2",
-            documentType = DocumentType.PDF,
+            targetFormat = MimeType.PDF,
             content = ""
         )
         

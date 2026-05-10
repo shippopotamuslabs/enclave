@@ -19,6 +19,7 @@ import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.chat.AccumulatedMessages
+import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.model.inference.ToolDefinition
@@ -125,7 +126,7 @@ class ChatViewModel @Inject constructor(
     // Mutable state for selected mode (not persisted, managed locally)
     private val _selectedMode = MutableStateFlow(ChatModeUi.FAST)
 
-    private val _selectedImageUri = MutableStateFlow<String?>(null)
+    private val _selectedImageUris = MutableStateFlow<List<String>>(emptyList())
 
     private val _selectedFileName = MutableStateFlow<String?>(null)
     private val _selectedFileText = MutableStateFlow<String?>(null)
@@ -434,7 +435,7 @@ class ChatViewModel @Inject constructor(
         settingsUseCases.getSettings(),
         _inputText,
         _selectedMode,
-        _selectedImageUri,
+        _selectedImageUris,
         _selectedFileName,
         _speechState,
     ) { args: Array<Any?> ->
@@ -442,7 +443,7 @@ class ChatViewModel @Inject constructor(
             settings = args[0] as SettingsData,
             inputText = args[1] as String,
             selectedMode = args[2] as ChatModeUi,
-            selectedImageUri = args[3] as String?,
+            selectedImageUris = args[3] as List<String>,
             selectedFileName = args[4] as String?,
             speechState = args[5] as SpeechState
         )
@@ -557,9 +558,10 @@ class ChatViewModel @Inject constructor(
             messages = chatMessages,
             inputText = inputText,
             speechState = speechState,
-            selectedImageUri = inputs.selectedImageUri,
+            selectedImageUris = inputs.selectedImageUris,
             selectedFileName = inputs.selectedFileName,
             isPhotoAttachmentEnabled = attachmentPolicy.isEnabled,
+            photoAttachmentMaxItems = attachmentPolicy.maxItems,
             photoAttachmentDisabledReason = attachmentPolicy.disabledReason,
             selectedMode = selectedMode,
             isGlobalInferenceBlocked = isBlocked,
@@ -616,7 +618,7 @@ class ChatViewModel @Inject constructor(
             content = ContentUi(
                 text = message.content.text,
                 pipelineStep = message.content.pipelineStep,
-                imageUri = message.content.imageUri,
+                imageUris = message.content.imageUris,
                 webSearchSources = message.webSearchSources,
                 artifacts = message.content.artifacts,
                 fileAttachments = message.content.fileAttachments,
@@ -757,38 +759,52 @@ class ChatViewModel @Inject constructor(
                 "Could not update the selected mode.",
             )
         ) {
-            val settings = settingsUseCases.getSettings().first()
-            if (!resolvePhotoAttachmentPolicy(mode).isEnabled) {
-                _selectedImageUri.value = null
+            val policy = resolvePhotoAttachmentPolicy(mode)
+            if (!policy.isEnabled) {
+                _selectedImageUris.value = emptyList()
+            } else if (_selectedImageUris.value.size > policy.maxItems) {
+                _selectedImageUris.value = _selectedImageUris.value.take(policy.maxItems)
             }
         }
     }
 
-    fun onImageSelected(uri: String?) {
-        if (uri == null) {
-            _selectedImageUri.value = null
+    fun onImagesSelected(uris: List<String>) {
+        if (uris.isEmpty()) {
             return
         }
 
         viewModelScope.launch(
             errorHandler.coroutineExceptionHandler(
                 TAG,
-                "Failed to prepare image",
-                "Could not attach the selected image. Please try again.",
+                "Failed to prepare images",
+                "Could not attach the selected images. Please try again.",
             )
         ) {
-            val settings = settingsUseCases.getSettings().first()
             val policy = resolvePhotoAttachmentPolicy(_selectedMode.value)
             if (!policy.isEnabled) {
-                _selectedImageUri.value = null
+                _selectedImageUris.value = emptyList()
                 return@launch
             }
-            _selectedImageUri.value = stageImageAttachmentUseCase(uri)
+            
+            // We append new staged URIs to the existing list, up to the max limit
+            val currentStagedUris = _selectedImageUris.value
+            val availableSlots = policy.maxItems - currentStagedUris.size
+            
+            if (availableSlots <= 0) return@launch
+            
+            val limitedNewUris = uris.take(availableSlots)
+            val newlyStagedUris = limitedNewUris.map { stageImageAttachmentUseCase(it) }
+            
+            _selectedImageUris.value = currentStagedUris + newlyStagedUris
         }
     }
 
-    fun clearSelectedImage() {
-        _selectedImageUri.value = null
+    fun removeImage(uri: String) {
+        _selectedImageUris.update { current -> current.filter { it != uri } }
+    }
+
+    fun clearSelectedImages() {
+        _selectedImageUris.value = emptyList()
     }
 
     fun onFileSelected(uri: String?) {
@@ -848,7 +864,7 @@ class ChatViewModel @Inject constructor(
         }
         _currentChatId.value = null
         _inputText.value = ""
-        _selectedImageUri.value = null
+        _selectedImageUris.value = emptyList()
         _requestedTurnKey.value = null
         inferenceJob?.cancel()
         // Ensure SavedStateHandle is also cleared so chatId doesn't persist on recreation
@@ -868,10 +884,10 @@ class ChatViewModel @Inject constructor(
             )
         ) {
             val settings = settingsUseCases.getSettings().first()
-            val selectedImageUri = if (resolvePhotoAttachmentPolicy(_selectedMode.value).isEnabled) {
-                _selectedImageUri.value
+            val selectedImageUris = if (resolvePhotoAttachmentPolicy(_selectedMode.value).isEnabled) {
+                _selectedImageUris.value
             } else {
-                null
+                emptyList()
             }
 
             val fileAttachments = if (fileText != null && fileName != null) {
@@ -880,7 +896,7 @@ class ChatViewModel @Inject constructor(
                 emptyList()
             }
 
-            if (input.isNotBlank() || selectedImageUri != null || fileAttachments.isNotEmpty()) {
+            if (input.isNotBlank() || selectedImageUris.isNotEmpty() || fileAttachments.isNotEmpty()) {
                 // Determine the chat ID: prefer currentChatId, then initialChatId, otherwise empty
                 val chatIdForMessage: ChatId? = _currentChatId.value ?: initialChatId
 
@@ -890,7 +906,7 @@ class ChatViewModel @Inject constructor(
                     chatId = chatIdForMessage,
                     content = Content(
                         text = input,
-                        imageUri = selectedImageUri,
+                        imageUris = selectedImageUris,
                         fileAttachments = fileAttachments
                     ),
                     role = Role.USER,
@@ -914,7 +930,7 @@ class ChatViewModel @Inject constructor(
 
                 // Clear input text
                 _inputText.value = ""
-                _selectedImageUri.value = null
+                _selectedImageUris.value = emptyList()
                 _selectedFileName.value = null
                 _selectedFileText.value = null
 
@@ -1100,13 +1116,14 @@ class ChatViewModel @Inject constructor(
         val settings: SettingsData,
         val inputText: String,
         val selectedMode: ChatModeUi,
-        val selectedImageUri: String?,
+        val selectedImageUris: List<String>,
         val selectedFileName: String?,
         val speechState: SpeechState,
     )
 
     private data class PhotoAttachmentPolicy(
         val isEnabled: Boolean,
+        val maxItems: Int = 1,
         val disabledReason: String? = null,
     )
 
@@ -1134,32 +1151,47 @@ class ChatViewModel @Inject constructor(
     private suspend fun resolvePhotoAttachmentPolicy(
         selectedMode: ChatModeUi,
     ): PhotoAttachmentPolicy {
-        val apiVisionConfigured = activeModelProvider.getActiveConfiguration(ModelType.VISION)
-            ?.let { config -> config.isLocal == false && config.isMultimodal }
-            ?: false
-        val activeVisionCapable = when (selectedMode) {
-            ChatModeUi.FAST -> activeModelProvider.getActiveConfiguration(ModelType.FAST)?.isMultimodal == true
-            ChatModeUi.THINKING -> activeModelProvider.getActiveConfiguration(ModelType.THINKING)?.isMultimodal == true
-            ChatModeUi.CREW -> false
+        val activeConfig = when (selectedMode) {
+            ChatModeUi.FAST -> activeModelProvider.getActiveConfiguration(ModelType.FAST)
+            ChatModeUi.THINKING -> activeModelProvider.getActiveConfiguration(ModelType.THINKING)
+            ChatModeUi.CREW -> null
+        }
+        val visionConfig = activeModelProvider.getActiveConfiguration(ModelType.VISION)
+        val apiVisionConfigured = visionConfig?.let { it.isLocal == false && it.isMultimodal } ?: false
+        val activeVisionCapable = activeConfig?.isMultimodal == true
+
+        val maxItems = when {
+            activeVisionCapable -> when {
+                activeConfig?.isLocal == true -> 1
+                activeConfig?.apiProvider == ApiProvider.GOOGLE -> 3600
+                else -> 20
+            }
+            apiVisionConfigured -> when {
+                visionConfig?.apiProvider == ApiProvider.GOOGLE -> 3600
+                else -> 20
+            }
+            else -> 0
         }
 
         return when (selectedMode) {
             ChatModeUi.FAST, ChatModeUi.THINKING -> {
                 if (activeVisionCapable || apiVisionConfigured) {
-                    PhotoAttachmentPolicy(isEnabled = true)
+                    PhotoAttachmentPolicy(isEnabled = true, maxItems = maxItems)
                 } else {
                     PhotoAttachmentPolicy(
                         isEnabled = false,
+                        maxItems = 0,
                         disabledReason = "Photo attachments require a vision-capable Fast/Thinking model or a configured API vision model.",
                     )
                 }
             }
             ChatModeUi.CREW -> {
                 if (apiVisionConfigured) {
-                    PhotoAttachmentPolicy(isEnabled = true)
+                    PhotoAttachmentPolicy(isEnabled = true, maxItems = maxItems)
                 } else {
                     PhotoAttachmentPolicy(
                         isEnabled = false,
+                        maxItems = 0,
                         disabledReason = "Crew mode requires a configured API vision model for photo attachments.",
                     )
                 }

@@ -178,7 +178,7 @@ class ChatViewModelActionsTest {
 
         // First, set an image
         coEvery { stageImageAttachmentUseCase("test-uri") } returns "test-uri"
-        chatViewModel.onImageSelected("test-uri")
+        chatViewModel.onImagesSelected(listOf("test-uri"))
         runCurrent()
 
         // Switch to CREW mode - photo attachment should be disabled for crew without API vision
@@ -186,50 +186,55 @@ class ChatViewModelActionsTest {
         chatViewModel.onModeChange(ChatModeUi.CREW)
         advanceUntilIdle()
 
-        // Photo attachment should be disabled, so image should be cleared
-        assertNull(chatViewModel.uiState.value.selectedImageUri)
+        // Photo attachment should be disabled, so images should be cleared
+        assertTrue(chatViewModel.uiState.value.selectedImageUris.isEmpty())
         collectJob.cancel()
     }
 
     @Test
-    fun `onImageSelected updates selectedImageUri when photo attachment enabled`() = runTest {
+    fun `onImagesSelected updates selectedImageUris when photo attachment enabled`() = runTest {
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
         runCurrent()
 
         coEvery { stageImageAttachmentUseCase("content://image") } returns "content://image"
 
-        chatViewModel.onImageSelected("content://image")
+        chatViewModel.onImagesSelected(listOf("content://image"))
         advanceUntilIdle()
 
-        assertEquals("content://image", chatViewModel.uiState.value.selectedImageUri)
+        assertEquals(listOf("content://image"), chatViewModel.uiState.value.selectedImageUris)
         collectJob.cancel()
     }
 
     @Test
-    fun `onImageSelected with null clears selectedImageUri`() = runTest {
-        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
-        runCurrent()
-
-        chatViewModel.onImageSelected(null)
-        runCurrent()
-
-        assertNull(chatViewModel.uiState.value.selectedImageUri)
-        collectJob.cancel()
-    }
-
-    @Test
-    fun `clearSelectedImage clears selectedImageUri`() = runTest {
+    fun `onImagesSelected with empty list does not clear selectedImageUris`() = runTest {
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
         runCurrent()
 
         coEvery { stageImageAttachmentUseCase("content://image") } returns "content://image"
-        chatViewModel.onImageSelected("content://image")
+        chatViewModel.onImagesSelected(listOf("content://image"))
         advanceUntilIdle()
-        assertEquals("content://image", chatViewModel.uiState.value.selectedImageUri)
-
-        chatViewModel.clearSelectedImage()
+        
+        chatViewModel.onImagesSelected(emptyList())
         runCurrent()
-        assertNull(chatViewModel.uiState.value.selectedImageUri)
+
+        assertFalse(chatViewModel.uiState.value.selectedImageUris.isEmpty())
+        assertEquals(listOf("content://image"), chatViewModel.uiState.value.selectedImageUris)
+        collectJob.cancel()
+    }
+
+    @Test
+    fun `clearSelectedImages clears selectedImageUris`() = runTest {
+        val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
+        runCurrent()
+
+        coEvery { stageImageAttachmentUseCase("content://image") } returns "content://image"
+        chatViewModel.onImagesSelected(listOf("content://image"))
+        advanceUntilIdle()
+        assertEquals(listOf("content://image"), chatViewModel.uiState.value.selectedImageUris)
+
+        chatViewModel.clearSelectedImages()
+        runCurrent()
+        assertTrue(chatViewModel.uiState.value.selectedImageUris.isEmpty())
         collectJob.cancel()
     }
 
@@ -278,7 +283,7 @@ class ChatViewModelActionsTest {
         runCurrent()
 
         assertEquals("", chatViewModel.uiState.value.inputText)
-        assertNull(chatViewModel.uiState.value.selectedImageUri)
+        assertTrue(chatViewModel.uiState.value.selectedImageUris.isEmpty())
         assertNull(chatViewModel.uiState.value.chatId)
         collectJob.cancel()
     }
@@ -388,18 +393,18 @@ class ChatViewModelActionsTest {
     }
 
     @Test
-    fun `onImageSelected clears image when photo attachment is disabled`() = runTest {
+    fun `onImagesSelected clears images when photo attachment is disabled`() = runTest {
         // No vision model configured
         coEvery { activeModelProvider.getActiveConfiguration(any()) } returns null
 
         val collectJob = backgroundScope.launch { chatViewModel.uiState.collect { } }
         runCurrent()
 
-        chatViewModel.onImageSelected("content://image")
+        chatViewModel.onImagesSelected(listOf("content://image"))
         advanceUntilIdle()
 
-        // Image should be cleared since photo attachment is disabled
-        assertNull(chatViewModel.uiState.value.selectedImageUri)
+        // Images should be cleared since photo attachment is disabled
+        assertTrue(chatViewModel.uiState.value.selectedImageUris.isEmpty())
         collectJob.cancel()
     }
 

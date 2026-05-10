@@ -75,7 +75,7 @@ class GenerateChatResponseUseCase @Inject constructor(
                 userMessageId = userMessageId,
                 assistantMessageId = assistantMessageId,
                 chatId = chatId,
-                userHasImage = userMessage.content.imageUri != null,
+                userHasImage = userMessage.content.imageUris.isNotEmpty(),
                 fileAttachments = userMessage.content.fileAttachments,
                 backgroundInferenceEnabled = backgroundInferenceEnabled,
             )

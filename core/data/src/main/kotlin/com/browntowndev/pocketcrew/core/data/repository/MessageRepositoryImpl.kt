@@ -167,20 +167,20 @@ class MessageRepositoryImpl @Inject constructor(
         currentUserMessageId: MessageId,
     ): ResolvedImageTarget? {
         val currentUserMessage = messageDao.getMessageById(currentUserMessageId)?.toDomain()
-        if (currentUserMessage != null && currentUserMessage.content.imageUri != null) {
+        if (currentUserMessage != null && currentUserMessage.content.imageUris.isNotEmpty()) {
             return ResolvedImageTarget(
                 userMessageId = currentUserMessage.id,
-                imageUri = currentUserMessage.content.imageUri!!,
+                imageUris = currentUserMessage.content.imageUris,
             )
         }
         val messages = messageDao.getMessagesByChatId(chatId).map { it.toDomain() }
         val latestImageMessage = messages
-            .filter { it.role == Role.USER && it.content.imageUri != null && it.id != currentUserMessageId }
+            .filter { it.role == Role.USER && it.content.imageUris.isNotEmpty() && it.id != currentUserMessageId }
             .maxByOrNull { it.createdAt ?: 0L }
         return latestImageMessage?.let {
             ResolvedImageTarget(
                 userMessageId = it.id,
-                imageUri = it.content.imageUri!!,
+                imageUris = it.content.imageUris,
             )
         }
     }
