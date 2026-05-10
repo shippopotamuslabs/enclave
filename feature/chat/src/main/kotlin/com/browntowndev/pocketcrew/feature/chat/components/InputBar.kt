@@ -116,9 +116,10 @@ import kotlinx.coroutines.launch
 fun InputBar(
     inputText: String,
     speechState: SpeechState,
-    selectedImageUri: String?,
+    selectedImageUris: List<String>,
     selectedFileName: String?,
     isPhotoAttachmentEnabled: Boolean,
+    photoAttachmentMaxItems: Int,
     photoAttachmentDisabledReason: String?,
     selectedMode: ChatModeUi,
     isGenerating: Boolean,
@@ -130,7 +131,7 @@ fun InputBar(
     onStopGenerating: () -> Unit,
     onImageAttach: () -> Unit,
     onFileAttach: () -> Unit,
-    onClearImage: () -> Unit,
+    onClearImage: (String) -> Unit,
     onClearFile: () -> Unit,
     onMicClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -192,12 +193,20 @@ fun InputBar(
             } else Modifier
         ),
         attachmentContent = {
-            AnimatedVisibility(visible = selectedImageUri != null && speechState == SpeechState.Idle) {
-                UniversalImageAttachment(
-                    uri = selectedImageUri ?: "",
-                    onClear = onClearImage,
-                    modifier = Modifier.padding(start = 16.dp, top = 8.dp)
-                )
+            AnimatedVisibility(visible = selectedImageUris.isNotEmpty() && speechState == SpeechState.Idle) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    selectedImageUris.forEach { uri ->
+                        UniversalImageAttachment(
+                            uri = uri,
+                            onClear = { onClearImage(uri) },
+                        )
+                    }
+                }
             }
 
             AnimatedVisibility(visible = selectedFileName != null && speechState == SpeechState.Idle) {
@@ -424,9 +433,10 @@ fun PreviewChatInputBar() {
             InputBar(
                 inputText = "Hello World",
                 speechState = SpeechState.Idle,
-                selectedImageUri = null,
+                selectedImageUris = emptyList(),
                 selectedFileName = "test_file.txt",
                 isPhotoAttachmentEnabled = true,
+                photoAttachmentMaxItems = 1,
                 photoAttachmentDisabledReason = null,
                 selectedMode = ChatModeUi.FAST,
                 isGenerating = false,

@@ -14,6 +14,8 @@ import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.Role
 import com.browntowndev.pocketcrew.domain.model.chat.WebSearchSource
 import com.browntowndev.pocketcrew.domain.model.chat.ThinkingData
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
+import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.model.inference.PipelineStep
 import com.browntowndev.pocketcrew.domain.port.repository.ChatRepository
@@ -187,7 +189,9 @@ class ChatRepositoryImpl @Inject constructor(
                 messageId = messageId.value,
                 name = artifact.title,
                 content = artifact.content,
-                fileType = "ARTIFACT",
+                mimeType = MimeType.MARKDOWN,
+                fileSource = FileSource.GENERATED,
+                targetFormat = artifact.targetFormat,
                 remoteUrl = existing?.remoteUrl,
                 syncStatus = existing?.syncStatus ?: "PENDING_UPLOAD",
                 pendingSync = existing?.pendingSync ?: 0,
@@ -236,7 +240,7 @@ class ChatRepositoryImpl @Inject constructor(
                 
                 // Soft-delete artifacts that are no longer in the list
                 existingArtifacts.forEach { existing ->
-                    if (existing.fileType == "ARTIFACT" && existing.id !in currentArtifactIds) {
+                    if (existing.fileSource != FileSource.ATTACHMENT && existing.id !in currentArtifactIds) {
                         messageFileDao.softDeleteById(existing.id)
                     }
                 }

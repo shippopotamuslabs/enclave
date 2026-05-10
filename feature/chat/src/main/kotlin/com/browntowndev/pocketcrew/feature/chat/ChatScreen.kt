@@ -35,8 +35,8 @@ fun ChatScreen(
     onInputChange: (String) -> Unit,
     onEditMessage: (String) -> Unit,
     onPlayAudio: (String) -> Unit,
-    onImageSelected: (String?) -> Unit,
-    onClearImage: () -> Unit,
+    onImagesSelected: (List<String>) -> Unit,
+    onRemoveImage: (String) -> Unit,
     onFileSelected: (String?) -> Unit,
     onClearFile: () -> Unit,
     onShieldTap: () -> Unit,
@@ -48,10 +48,18 @@ fun ChatScreen(
     onShareFullChat: () -> Unit = {},
     onDismissShareSheet: () -> Unit = {},
 ) {
-    val imagePickerLauncher = rememberLauncherForActivityResult(
+    val singleImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
-        onImageSelected(uri?.toString())
+        onImagesSelected(listOfNotNull(uri?.toString()))
+    }
+
+    val multipleImagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickMultipleVisualMedia(
+            maxItems = uiState.photoAttachmentMaxItems.coerceAtLeast(2)
+        )
+    ) { uris ->
+        onImagesSelected(uris.map { it.toString() })
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -115,9 +123,10 @@ fun ChatScreen(
                     modifier = Modifier.fillMaxWidth(),
                     inputText = uiState.inputText,
                     speechState = uiState.speechState,
-                    selectedImageUri = uiState.selectedImageUri,
+                    selectedImageUris = uiState.selectedImageUris,
                     selectedFileName = uiState.selectedFileName,
                     isPhotoAttachmentEnabled = uiState.isPhotoAttachmentEnabled,
+                    photoAttachmentMaxItems = uiState.photoAttachmentMaxItems,
                     photoAttachmentDisabledReason = uiState.photoAttachmentDisabledReason,
                     selectedMode = uiState.selectedMode,
                     isGenerating = uiState.isGenerating,
@@ -128,9 +137,15 @@ fun ChatScreen(
                     onSend = onSendMessage,
                     onStopGenerating = onStopGenerating,
                     onImageAttach = {
-                        imagePickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                        )
+                        if (uiState.photoAttachmentMaxItems > 1) {
+                            multipleImagePickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        } else {
+                            singleImagePickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        }
                     },
                     onFileAttach = {
                         filePickerLauncher.launch(
@@ -144,7 +159,7 @@ fun ChatScreen(
                             )
                         )
                     },
-                    onClearImage = onClearImage,
+                    onClearImage = onRemoveImage,
                     onClearFile = onClearFile,
                     onMicClick = onMicClick,
                 )
@@ -168,8 +183,8 @@ private fun PreviewChatScreenLight() {
             onInputChange = {},
             onEditMessage = {},
             onPlayAudio = {},
-            onImageSelected = {},
-            onClearImage = {},
+            onImagesSelected = {},
+            onRemoveImage = {},
             onFileSelected = {},
             onClearFile = {},
             onShieldTap = {},

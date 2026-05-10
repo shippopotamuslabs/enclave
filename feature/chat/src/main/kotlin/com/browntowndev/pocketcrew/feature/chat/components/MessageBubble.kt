@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -73,7 +74,7 @@ fun MessageBubble(
     val clipboardManager = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
     var showActions by remember { mutableStateOf(false) }
-    var showFullscreenPreview by remember { mutableStateOf(false) }
+    var fullscreenImageUri by remember { mutableStateOf<String?>(null) }
 
     val copyToClipboard: (String) -> Unit = { content ->
         coroutineScope.launch {
@@ -83,9 +84,9 @@ fun MessageBubble(
         }
     }
 
-    if (showFullscreenPreview && message.content.imageUri != null) {
+    if (fullscreenImageUri != null) {
         Dialog(
-            onDismissRequest = { showFullscreenPreview = false },
+            onDismissRequest = { fullscreenImageUri = null },
             properties = DialogProperties(
                 usePlatformDefaultWidth = false,
                 decorFitsSystemWindows = false
@@ -98,7 +99,7 @@ fun MessageBubble(
                     .systemBarsPadding()
             ) {
                 AsyncImage(
-                    model = message.content.imageUri,
+                    model = fullscreenImageUri,
                     contentDescription = "Fullscreen preview",
                     modifier = Modifier
                         .fillMaxSize()
@@ -106,7 +107,7 @@ fun MessageBubble(
                     contentScale = ContentScale.Fit
                 )
                 IconButton(
-                    onClick = { showFullscreenPreview = false },
+                    onClick = { fullscreenImageUri = null },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(16.dp)
@@ -128,18 +129,26 @@ fun MessageBubble(
         Column(
             horizontalAlignment = Alignment.End,
         ) {
-            // Image Preview (above the bubble)
-            message.content.imageUri?.let { imageUri ->
-                AsyncImage(
-                    model = imageUri,
-                    contentDescription = "Attached image",
+            // Image Previews (above the bubble)
+            if (message.content.imageUris.isNotEmpty()) {
+                Row(
                     modifier = Modifier
-                        .fillMaxWidth(fraction = 0.375f)
-                        .heightIn(max = 120.dp)
                         .padding(bottom = 4.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { showFullscreenPreview = true }
-                )
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    message.content.imageUris.forEach { imageUri ->
+                        AsyncImage(
+                            model = imageUri,
+                            contentDescription = "Attached image",
+                            modifier = Modifier
+                                .widthIn(max = 120.dp)
+                                .heightIn(max = 120.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { fullscreenImageUri = imageUri }
+                        )
+                    }
+                }
             }
 
             // Bubble
@@ -198,7 +207,7 @@ fun MessageBubble(
                     SelectionContainer(modifier = Modifier.fillMaxWidth()) {
                         val contentText = message.content.text
                         if (contentText.isBlank()) {
-                            if (message.content.imageUri == null) {
+                            if (message.content.imageUris.isEmpty()) {
                                 Text(
                                     text = "",
                                     style = MaterialTheme.typography.bodyLarge,

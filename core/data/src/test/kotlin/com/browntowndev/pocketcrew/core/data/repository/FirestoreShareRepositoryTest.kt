@@ -78,7 +78,7 @@ class FirestoreShareRepositoryTest {
             Message(
                 id = MessageId("msg1"),
                 chatId = ChatId("chat1"),
-                content = Content(text = "Hello", imageUri = "file://image.jpg"),
+                content = Content(text = "Hello", imageUris = listOf("file://image.jpg")),
                 role = Role.USER,
                 createdAt = 1000L
             )
@@ -95,7 +95,7 @@ class FirestoreShareRepositoryTest {
         val sharedChat = repository.shareChat(messages)
         
         assertEquals("share123", sharedChat.id)
-        assertTrue(sharedChat.messages.first().attachedImageMediaId != null)
+        assertTrue(sharedChat.messages.first().attachedImageMediaIds.isNotEmpty())
     }
 
     @Test
@@ -118,7 +118,7 @@ class FirestoreShareRepositoryTest {
 
         val sharedChat = repository.shareChat(messages)
         
-        assertTrue(sharedChat.messages.first().attachedImageMediaId == null)
+        assertTrue(sharedChat.messages.first().attachedImageMediaIds.isEmpty())
         assertTrue(sharedChat.messages.first().generatedMediaIds.isEmpty())
     }
 

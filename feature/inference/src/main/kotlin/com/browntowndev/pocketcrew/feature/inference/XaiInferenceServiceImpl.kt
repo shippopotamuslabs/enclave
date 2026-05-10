@@ -37,6 +37,8 @@ class XaiInferenceServiceImpl(
 
     override val tag: String = "XaiInferenceService"
 
+    override val maxImages: Int = 20
+
     override fun mapToolingResponseParams(
         prompt: String,
         options: GenerationOptions,

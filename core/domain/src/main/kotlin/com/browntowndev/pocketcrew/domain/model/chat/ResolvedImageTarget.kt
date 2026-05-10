@@ -11,5 +11,5 @@ package com.browntowndev.pocketcrew.domain.model.chat
  */
 data class ResolvedImageTarget(
     val userMessageId: MessageId,
-    val imageUri: String,
+    val imageUris: List<String>,
 )

@@ -37,8 +37,8 @@ data class MessageEntity(
     val chatId: ChatId,
     @ColumnInfo(name = "content")
     val content: String,
-    @ColumnInfo(name = "image_uri")
-    val imageUri: String? = null,
+    @ColumnInfo(name = "image_uris_json")
+    val imageUrisJson: String? = null,
     @ColumnInfo(name = "role")
     val role: Role,
     @ColumnInfo(name = "user_message_id")

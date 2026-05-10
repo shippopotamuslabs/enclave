@@ -41,7 +41,7 @@ class ChatInferenceRequestPreparerTest {
             messageRepository = mockMessageRepository(
                 resolvedImageTarget = ResolvedImageTarget(
                     userMessageId = MessageId("user"),
-                    imageUri = "file:///tmp/direct.jpg",
+                    imageUris = listOf("file:///tmp/direct.jpg"),
                 )
             ),
             memoriesRepository = mockMemoriesRepository(),
@@ -69,7 +69,7 @@ class ChatInferenceRequestPreparerTest {
         assertTrue(request.options.availableTools.contains(ToolDefinition.SEARCH_CHAT))
         assertTrue(request.options.availableTools.contains(ToolDefinition.MANAGE_MEMORIES))
         assertTrue(request.options.toolingEnabled)
-        assertTrue(request.prompt.contains("The user attached an image."))
+        assertTrue(request.prompt.contains("The user attached one or more images."))
     }
 
     @Test
@@ -83,7 +83,7 @@ class ChatInferenceRequestPreparerTest {
             messageRepository = mockMessageRepository(
                 resolvedImageTarget = ResolvedImageTarget(
                     userMessageId = MessageId("user"),
-                    imageUri = "file:///tmp/tool.jpg",
+                    imageUris = listOf("file:///tmp/tool.jpg"),
                 )
             ),
             memoriesRepository = mockMemoriesRepository(),
@@ -110,7 +110,7 @@ class ChatInferenceRequestPreparerTest {
         assertTrue(request.options.availableTools.contains(ToolDefinition.ATTACHED_IMAGE_INSPECT))
         assertTrue(request.options.systemPrompt?.contains("Be concise.") == true)
         assertTrue(request.options.systemPrompt?.contains("attached_image_inspect") == true)
-        assertTrue(request.prompt.contains("use attached_image_inspect"))
+        assertTrue(request.prompt.contains("The user attached one or more images."))
     }
 
     @Test
@@ -361,7 +361,7 @@ class ChatInferenceRequestPreparerTest {
         )
 
         assertTrue(prompt.contains("Respond helpfully based on the context"))
-        assertTrue(prompt.contains("The user attached an image."))
+        assertTrue(prompt.contains("The user attached one or more images."))
     }
 
     private fun mockActiveModelProvider(

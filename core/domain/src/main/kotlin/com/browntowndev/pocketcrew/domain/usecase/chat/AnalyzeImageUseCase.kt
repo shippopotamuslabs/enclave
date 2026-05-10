@@ -34,16 +34,16 @@ class AnalyzeImageUseCase @Inject constructor(
                 "any visible text, and details that matter for answering the user's request."
     }
 
-    suspend operator fun invoke(imageUri: String, prompt: String): String =
+    suspend operator fun invoke(imageUris: List<String>, prompt: String): String =
         withContext(Dispatchers.IO) {
             val effectivePrompt = buildPrompt(prompt)
             loggingPort.info(
                 TAG,
-                "Starting vision analysis imageUri=$imageUri promptChars=${effectivePrompt.length}"
+                "Starting vision analysis imageUrisCount=${imageUris.size} promptChars=${effectivePrompt.length}"
             )
             try {
                 inferenceFactoryProvider.get().withInferenceService(ModelType.VISION) { service ->
-                    loggingPort.info(TAG, "Resolved vision inference service for imageUri=$imageUri")
+                    loggingPort.info(TAG, "Resolved vision inference service for imageUrisCount=${imageUris.size}")
                     service.setHistory(emptyList())
 
                     val description = StringBuilder()
@@ -53,7 +53,7 @@ class AnalyzeImageUseCase @Inject constructor(
                             reasoningBudget = 0,
                             modelType = ModelType.VISION,
                             systemPrompt = SystemPromptTemplates.VISION,
-                            imageUris = listOf(imageUri),
+                            imageUris = imageUris,
                         ),
                         closeConversation = true,
                     ).collect { event ->
@@ -68,20 +68,20 @@ class AnalyzeImageUseCase @Inject constructor(
                             is InferenceEvent.Finished -> {
                                 loggingPort.info(
                                     TAG,
-                                    "Vision analysis finished imageUri=$imageUri responseChars=${description.length}"
+                                    "Vision analysis finished imageUrisCount=${imageUris.size} responseChars=${description.length}"
                                 )
                             }
                             is InferenceEvent.SafetyBlocked -> {
                                 loggingPort.error(
                                     TAG,
-                                    "Vision analysis safety blocked imageUri=$imageUri reason=${event.reason}"
+                                    "Vision analysis safety blocked imageUrisCount=${imageUris.size} reason=${event.reason}"
                                 )
                                 throw IllegalStateException("Vision analysis blocked: ${event.reason}")
                             }
                             is InferenceEvent.Error -> {
                                 loggingPort.error(
                                     TAG,
-                                    "Vision analysis inference error imageUri=$imageUri " +
+                                    "Vision analysis inference error imageUrisCount=${imageUris.size} " +
                                         "cause=${event.cause::class.java.simpleName}: ${event.cause.message}",
                                     event.cause
                                 )
@@ -92,7 +92,7 @@ class AnalyzeImageUseCase @Inject constructor(
 
                     description.toString().trim().also { result ->
                         if (result.isBlank()) {
-                            loggingPort.warning(TAG, "Vision model returned an empty description imageUri=$imageUri")
+                            loggingPort.warning(TAG, "Vision model returned an empty description imageUrisCount=${imageUris.size}")
                             throw IllegalStateException("Vision model returned an empty description")
                         }
                     }
@@ -100,7 +100,7 @@ class AnalyzeImageUseCase @Inject constructor(
             } catch (t: Throwable) {
                 loggingPort.error(
                     TAG,
-                    "Vision analysis failed imageUri=$imageUri cause=${t::class.java.simpleName}: ${t.message}",
+                    "Vision analysis failed imageUrisCount=${imageUris.size} cause=${t::class.java.simpleName}: ${t.message}",
                     t
                 )
                 throw t

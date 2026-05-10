@@ -664,6 +664,10 @@ Java_com_browntowndev_pocketcrew_feature_inference_llama_JniLlamaEngine_nativeSt
     }
 
     if (!image_paths.empty()) {
+        if (image_paths.size() > 1) {
+            __android_log_print(ANDROID_LOG_WARN, "llama-jni", "Multimodal Llama CPP supports only 1 image per request. Ignoring extra images.");
+            image_paths.resize(1);
+        }
         if (!g_mtmd) {
             g_generating = false;
             env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), "Multimodal projector is not loaded for this GGUF model.");

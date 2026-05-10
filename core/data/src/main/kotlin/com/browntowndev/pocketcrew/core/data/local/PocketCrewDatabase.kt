@@ -25,11 +25,7 @@ import androidx.room.TypeConverters
         StudioAlbumEntity::class,
         MessageFileEntity::class,
     ],
-    version = 3,
-    autoMigrations = [
-        AutoMigration(from = 1, to = 2),
-        AutoMigration(from = 2, to = 3)
-    ]
+    version = 4
 )
 @TypeConverters(ModelTypeConverters::class)
 abstract class PocketCrewDatabase : RoomDatabase() {
