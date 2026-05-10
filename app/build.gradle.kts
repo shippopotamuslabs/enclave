@@ -129,6 +129,7 @@ dependencies {
     implementation(project(":feature:inference"))
     implementation(project(":feature:studio"))
     implementation(project(":feature:artifact"))
+    implementation(project(":core:docgen"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.biometric)

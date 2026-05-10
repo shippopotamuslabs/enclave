@@ -44,6 +44,7 @@ llama-android/src/main/cpp/CMakeFiles/
 # Third-party dependencies
 third_party/*
 !third_party/whisper.cpp/
+!third_party/docgen_core/
 
 bin/
 
