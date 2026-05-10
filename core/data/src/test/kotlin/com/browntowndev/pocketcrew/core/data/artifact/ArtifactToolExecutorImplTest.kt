@@ -22,13 +22,15 @@ class ArtifactToolExecutorImplTest {
         assertTrue(result.resultJson.contains("\"document_type\":\"PDF\""))
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun `execute throws for Word`() = runTest {
+    @Test
+    fun `execute returns success for Word`() = runTest {
         val params = GenerateArtifactParams(
             targetFormat = MimeType.WORD,
             title = "Report",
             content = "# Content"
         )
-        executor.execute(params)
+        val result = executor.execute(params)
+        assertTrue(result.resultJson.contains("\"status\":\"success\""))
+        assertTrue(result.resultJson.contains("\"document_type\":\"WORD\""))
     }
 }

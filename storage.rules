@@ -30,6 +30,13 @@ service firebase.storage {
       allow read: if false;
     }
 
+    // 4. Temporary Generation Data
+    // Users can upload markdown and read the generated result.
+    match /temp_generations/{userId}/{fileId} {
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId
+                          && (request.method == 'GET' || request.resource.size < 10 * 1024 * 1024); // 10MB Limit
+    }
+
     // 4. Global Safety: Deny everything else
     match /{allPaths=**} {
       allow read, write: if false;

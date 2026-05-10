@@ -22,7 +22,9 @@ import javax.inject.Singleton
  * - [ToolDefinition.SEARCH_CHAT] → [SearchChatToolExecutor]
  * - [ToolDefinition.GET_MESSAGE_CONTEXT] → [GetMessageContextToolExecutor]
  * - [ToolDefinition.MANAGE_MEMORIES] → [ManageMemoriesToolExecutor]
- * - [ToolDefinition.GENERATE_ARTIFACT] → [ArtifactToolExecutor]
+ * - [ToolDefinition.START_ARTIFACT] → [ArtifactToolExecutor]
+ * - [ToolDefinition.APPEND_BLOCKS] → [ArtifactToolExecutor]
+ * - [ToolDefinition.SEARCH_CURRENT_ARTIFACT] → [SearchArtifactToolExecutor]
  * - [ToolDefinition.X_SEARCH] → [XSearchToolExecutorImpl]
  */
 @Singleton
@@ -35,6 +37,7 @@ class CompositeToolExecutor @Inject constructor(
     private val getMessageContextToolExecutor: GetMessageContextToolExecutor,
     private val manageMemoriesToolExecutor: ManageMemoriesToolExecutor,
     private val artifactToolExecutor: ArtifactToolExecutor,
+    private val searchArtifactToolExecutor: com.browntowndev.pocketcrew.core.data.artifact.SearchArtifactToolExecutor,
     private val xSearchToolExecutor: XSearchToolExecutorImpl,
     private val mediaToolExecutor: MediaToolExecutor,
     private val eventBus: ToolExecutionEventBus,
@@ -63,7 +66,9 @@ class CompositeToolExecutor @Inject constructor(
                 ToolDefinition.SEARCH_CHAT.name -> searchChatToolExecutor.execute(request)
                 ToolDefinition.GET_MESSAGE_CONTEXT.name -> getMessageContextToolExecutor.execute(request)
                 ToolDefinition.MANAGE_MEMORIES.name -> manageMemoriesToolExecutor.execute(request)
-                ToolDefinition.GENERATE_ARTIFACT.name -> artifactToolExecutor.execute(request)
+                ToolDefinition.START_ARTIFACT.name -> artifactToolExecutor.execute(request)
+                ToolDefinition.APPEND_BLOCKS.name -> artifactToolExecutor.execute(request)
+                ToolDefinition.SEARCH_CURRENT_ARTIFACT.name -> searchArtifactToolExecutor.execute(request)
                 ToolDefinition.X_SEARCH.name -> xSearchToolExecutor.execute(request)
                 ToolDefinition.GENERATE_IMAGE.name -> mediaToolExecutor.execute(request)
                 ToolDefinition.GENERATE_VIDEO.name -> mediaToolExecutor.execute(request)

@@ -1,6 +1,5 @@
 package com.browntowndev.pocketcrew.core.data.local
 
-import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
@@ -24,8 +23,9 @@ import androidx.room.TypeConverters
         StudioMediaEntity::class,
         StudioAlbumEntity::class,
         MessageFileEntity::class,
+        DocumentEntity::class,
     ],
-    version = 4
+    version = 5
 )
 @TypeConverters(ModelTypeConverters::class)
 abstract class PocketCrewDatabase : RoomDatabase() {
@@ -47,4 +47,5 @@ abstract class PocketCrewDatabase : RoomDatabase() {
     abstract fun studioAlbumDao(): StudioAlbumDao
     abstract fun messageFileDao(): MessageFileDao
     abstract fun cleanupDao(): CleanupDao
+    abstract fun documentDao(): DocumentDao
 }

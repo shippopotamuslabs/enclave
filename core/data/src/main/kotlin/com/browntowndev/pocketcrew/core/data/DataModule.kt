@@ -148,12 +148,14 @@ object DataModule {
                 super.onCreate(db)
                 SQLiteVecInstaller.createEmbeddingTable(db)
                 SQLiteVecInstaller.createMemoryEmbeddingTable(db)
+                SQLiteVecInstaller.createArtifactBlockEmbeddingTable(db)
             }
 
             override fun onOpen(db: SupportSQLiteDatabase) {
                 super.onOpen(db)
                 SQLiteVecInstaller.createEmbeddingTable(db)
                 SQLiteVecInstaller.createMemoryEmbeddingTable(db)
+                SQLiteVecInstaller.createArtifactBlockEmbeddingTable(db)
             }
         })
         .build()
@@ -356,12 +358,6 @@ abstract class DataRepositoryModule {
     abstract fun bindFileAttachmentPort(
         impl: com.browntowndev.pocketcrew.core.data.media.AndroidFileAttachmentPort
     ): com.browntowndev.pocketcrew.domain.port.media.FileAttachmentPort
-
-    @Binds
-    @Singleton
-    abstract fun bindCloudDocumentExtractor(
-        impl: com.browntowndev.pocketcrew.core.data.cloud.FirebaseCloudDocumentExtractor
-    ): com.browntowndev.pocketcrew.domain.port.cloud.CloudDocumentExtractorPort
 
     @Binds
     @Singleton

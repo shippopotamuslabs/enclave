@@ -14,6 +14,7 @@ import com.browntowndev.pocketcrew.core.data.local.EmbeddingEntity
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.json.Json
 import java.security.MessageDigest
 
 @HiltWorker
@@ -25,6 +26,7 @@ class EmbeddingRegenerationWorker @AssistedInject constructor(
     private val memoriesRepository: MemoriesRepository,
     private val messageDao: com.browntowndev.pocketcrew.core.data.local.MessageDao,
     private val memoriesDao: com.browntowndev.pocketcrew.core.data.local.MemoriesDao,
+    private val documentDao: com.browntowndev.pocketcrew.core.data.local.DocumentDao,
     private val embeddingDao: com.browntowndev.pocketcrew.core.data.local.EmbeddingDao,
     private val embeddingEngine: EmbeddingEnginePort,
     private val progressManager: EmbeddingProgressManager,
@@ -41,7 +43,8 @@ class EmbeddingRegenerationWorker @AssistedInject constructor(
 
         progressManager.setReindexing(true)
         return try {
-            val total = (if (pending.fullScanPending) 100 else 0) + pending.messageIds.size + pending.memoryIds.size
+            val total = (if (pending.fullScanPending) 100 else 0) + 
+                pending.messageIds.size + pending.memoryIds.size + pending.documentIds.size
             var processed = 0
 
             if (pending.fullScanPending) {
@@ -63,6 +66,12 @@ class EmbeddingRegenerationWorker @AssistedInject constructor(
                 progressManager.updateProgress(processed, total)
             }
 
+            pending.documentIds.forEach { id ->
+                processDocument(id)
+                processed++
+                progressManager.updateProgress(processed, total)
+            }
+
             Result.success()
         } catch (e: Exception) {
             loggingPort.error(TAG, "Embedding regeneration failed", e)
@@ -78,8 +87,9 @@ class EmbeddingRegenerationWorker @AssistedInject constructor(
         
         val messageIds = messageDao.getAllIds().map { it.value }
         val memoryIds = memoriesDao.getAllIds()
+        val documentIds = documentDao.getAllIds()
         
-        val total = messageIds.size + memoryIds.size
+        val total = messageIds.size + memoryIds.size + documentIds.size
         if (total == 0) return
 
         var current = 0
@@ -90,6 +100,11 @@ class EmbeddingRegenerationWorker @AssistedInject constructor(
         }
         memoryIds.forEach { id ->
             processMemory(id)
+            current++
+            onProgress(current, total)
+        }
+        documentIds.forEach { id ->
+            processDocument(id)
             current++
             onProgress(current, total)
         }
@@ -129,6 +144,46 @@ class EmbeddingRegenerationWorker @AssistedInject constructor(
             )
             embeddingDao.insertEmbeddingMetadata(EmbeddingEntity(id, hash))
             loggingPort.debug(TAG, "Re-embedded memory $id")
+        }
+    }
+
+    private suspend fun processDocument(id: String) {
+        val entity = documentDao.getDocumentById(id) ?: return
+        
+        val json = Json { ignoreUnknownKeys = true }
+        val doc: kotlinx.serialization.json.JsonObject = try {
+            json.parseToJsonElement(entity.json) as kotlinx.serialization.json.JsonObject
+        } catch (e: Exception) {
+            loggingPort.error(TAG, "Failed to parse document JSON for re-embedding $id", e)
+            return
+        }
+
+        val blocks = doc["blocks"] as? kotlinx.serialization.json.JsonArray ?: return
+        
+        blocks.forEachIndexed { index, blockElement ->
+            val blockText = com.browntowndev.pocketcrew.domain.util.ArtifactBlockUtil.getVisibleText(blockElement)
+            if (blockText.isBlank()) return@forEachIndexed
+
+            val compositeId = "${id}_$index"
+            val hash = blockText.sha256()
+            
+            val existing = embeddingDao.getEmbeddingMetadata(compositeId)
+            if (existing?.contentHash != hash) {
+                try {
+                    val embedding = embeddingEngine.getEmbedding(blockText)
+                    val vectorBlob = floatArrayToByteArray(embedding)
+                    
+                    documentDao.insertBlockEmbedding(
+                        androidx.sqlite.db.SimpleSQLiteQuery(
+                            "INSERT OR REPLACE INTO artifact_block_embeddings(id, vector) VALUES (?, ?)",
+                            arrayOf(compositeId, vectorBlob)
+                        )
+                    )
+                    embeddingDao.insertEmbeddingMetadata(EmbeddingEntity(compositeId, hash))
+                } catch (e: Exception) {
+                    loggingPort.error(TAG, "Failed to embed block $index for document $id", e)
+                }
+            }
         }
     }
 

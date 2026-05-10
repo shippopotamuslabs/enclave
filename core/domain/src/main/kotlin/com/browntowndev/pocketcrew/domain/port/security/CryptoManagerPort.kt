@@ -71,4 +71,13 @@ interface CryptoManagerPort {
      * This is used for cloud-based extraction where the key is generated on the fly.
      */
     fun encryptWithKey(data: ByteArray, key: ByteArray, iv: ByteArray): Result<ByteArray>
+    /**
+     * Decrypts raw data using a provided key and IV.
+     * 
+     * @param ciphertext The data to decrypt (includes auth tag).
+     * @param key The AES-256 key.
+     * @param iv The GCM initialization vector.
+     * @return A Result containing the decrypted bytes.
+     */
+    fun decryptWithKey(ciphertext: ByteArray, key: ByteArray, iv: ByteArray): Result<ByteArray>
 }

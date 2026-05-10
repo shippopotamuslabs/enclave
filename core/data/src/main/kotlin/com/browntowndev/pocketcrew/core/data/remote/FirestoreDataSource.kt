@@ -86,6 +86,7 @@ class FirestoreDataSource @Inject constructor(
     private val messageFileDao: MessageFileDao,
     private val messageVisionAnalysisDao: MessageVisionAnalysisDao,
     private val chatSummaryDao: ChatSummaryDao,
+    private val documentDao: com.browntowndev.pocketcrew.core.data.local.DocumentDao,
     private val embeddingDao: com.browntowndev.pocketcrew.core.data.local.EmbeddingDao,
     private val apiKeyManager: com.browntowndev.pocketcrew.core.data.security.ApiKeyManager,
     private val cryptoManager: CryptoManagerPort,
@@ -134,7 +135,8 @@ class FirestoreDataSource @Inject constructor(
             apiCredentialsSyncAdapter,
             ApiKeySyncAdapter(),
             studioAlbumSyncAdapter,
-            studioMediaSyncAdapter
+            studioMediaSyncAdapter,
+            documentSyncAdapter
         )
     }
 
@@ -1330,6 +1332,60 @@ class FirestoreDataSource @Inject constructor(
         return java.security.MessageDigest.getInstance("SHA-256")
             .digest(toByteArray())
             .joinToString("") { "%02x".format(it) }
+    }
+
+    private val documentSyncAdapter = object : EntitySyncAdapter<com.browntowndev.pocketcrew.core.data.local.DocumentEntity> {
+        override val collectionPath = "documents"
+        override suspend fun claimPending() = documentDao.claimPending()
+        override suspend fun getClaimedForSync() = documentDao.getClaimedForSync()
+        override suspend fun markSynced(entities: List<com.browntowndev.pocketcrew.core.data.local.DocumentEntity>) = documentDao.markSynced(entities.map { it.id })
+        override fun getEntityId(entity: com.browntowndev.pocketcrew.core.data.local.DocumentEntity) = entity.id
+        
+        override suspend fun toFirestore(local: com.browntowndev.pocketcrew.core.data.local.DocumentEntity) = mapOf(
+            "json" to local.json.encrypt(),
+            "title" to local.title.encrypt(),
+            "author" to local.author?.encrypt(),
+            "target_format" to local.targetFormat,
+            "created_at" to local.createdAt,
+            "updated_at" to local.updatedAt,
+            "deleted" to local.deleted
+        )
+
+        override fun fromFirestore(doc: DocumentSnapshot) = documentEntityFromDoc(doc)
+
+        override suspend fun upsertLocal(entity: com.browntowndev.pocketcrew.core.data.local.DocumentEntity, doc: DocumentSnapshot, overwrite: Boolean) {
+            val existing = documentDao.getDocumentById(entity.id)
+            if (existing == null || entity.updatedAt >= existing.updatedAt) {
+                documentDao.insertDocument(entity.copy(pendingSync = 0))
+                
+                // Enqueue re-embedding for all blocks if content changed
+                if (existing?.json != entity.json) {
+                    embeddingCoordinator.enqueueDocument(entity.id)
+                }
+            } else {
+                loggingPort.debug(TAG, "Document ${entity.id} local is newer or same age, skipping remote update")
+            }
+        }
+
+        override suspend fun deleteLocal(id: String) {
+            documentDao.deleteDocument(id)
+        }
+    }
+
+    private fun documentEntityFromDoc(doc: DocumentSnapshot): com.browntowndev.pocketcrew.core.data.local.DocumentEntity? {
+        val json = doc.getBlob("json")?.decrypt() ?: return null
+        val title = doc.getBlob("title")?.decrypt() ?: ""
+        return com.browntowndev.pocketcrew.core.data.local.DocumentEntity(
+            id = doc.id,
+            json = json,
+            title = title,
+            author = doc.getBlob("author")?.decrypt(),
+            targetFormat = doc.getString("target_format") ?: "PDF",
+            createdAt = doc.getLong("created_at") ?: 0L,
+            updatedAt = doc.getLong("updated_at") ?: 0L,
+            deleted = doc.getBoolean("deleted") ?: false,
+            pendingSync = 0
+        )
     }
 
     private fun chatEntityFromDoc(doc: DocumentSnapshot): ChatEntity? {
