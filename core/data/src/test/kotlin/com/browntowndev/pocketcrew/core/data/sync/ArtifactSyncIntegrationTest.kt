@@ -30,6 +30,8 @@ import com.browntowndev.pocketcrew.core.data.security.ApiKeyManager
 import com.browntowndev.pocketcrew.core.data.remote.FirestoreDataSource
 import com.browntowndev.pocketcrew.core.data.repository.ChatRepositoryImpl
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
+import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
 import com.browntowndev.pocketcrew.domain.model.chat.ChatId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageId
 import com.browntowndev.pocketcrew.domain.model.chat.MessageState
@@ -181,7 +183,9 @@ class ArtifactSyncIntegrationTest {
         val savedFile = capturedFiles[0]
         assertEquals("Report", savedFile.name)
         assertEquals("# Markdown", savedFile.content)
-        assertEquals("ARTIFACT", savedFile.fileType)
+        assertEquals(MimeType.MARKDOWN, savedFile.mimeType)
+        assertEquals(FileSource.GENERATED, savedFile.fileSource)
+        assertEquals(MimeType.PDF, savedFile.targetFormat)
         assertEquals("PENDING_UPLOAD", savedFile.syncStatus)
 
         // 2. Run worker to upload to Storage
@@ -252,7 +256,8 @@ class ArtifactSyncIntegrationTest {
             messageId = "msg1",
             name = "file.txt",
             content = "Hello",
-            fileType = "ATTACHMENT",
+            mimeType = MimeType.PLAIN_TEXT,
+            fileSource = FileSource.ATTACHMENT,
             remoteUrl = "https://example.com/file.txt",
             syncStatus = "UPLOADED",
             pendingSync = 1,

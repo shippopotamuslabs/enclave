@@ -57,12 +57,12 @@ class GenerateChatResponseUseCaseImageToolTest {
             currentMessage = Message(
                 id = MessageId("1"),
                 chatId = ChatId("chat"),
-                content = Content(text = "What should I fix?", imageUri = "file:///tmp/image.jpg"),
+                content = Content(text = "What should I fix?", imageUris = listOf("file:///tmp/image.jpg")),
                 role = Role.USER,
             ),
             resolvedImageTarget = ResolvedImageTarget(
                 userMessageId = MessageId("1"),
-                imageUri = "file:///tmp/image.jpg",
+                imageUris = listOf("file:///tmp/image.jpg"),
             ),
         )
 
@@ -87,7 +87,7 @@ class GenerateChatResponseUseCaseImageToolTest {
 
         assertEquals(listOf(ModelType.FAST), inferenceFactory.resolvedTypes)
         assertEquals(listOf("file:///tmp/image.jpg"), fastService.getSentOptions().single().imageUris)
-        assertTrue(fastService.getSentPrompts().single().contains("The user attached an image."))
+        assertTrue(fastService.getSentPrompts().single().contains("The user attached one or more images."))
         assertFalse(fastService.getSentPrompts().single().contains("attached_image_inspect"))
         assertFalse(fastService.getSentPrompts().single().contains("Attached image description:"))
     }
@@ -111,7 +111,7 @@ class GenerateChatResponseUseCaseImageToolTest {
             currentMessage = currentMessage,
             resolvedImageTarget = ResolvedImageTarget(
                 userMessageId = MessageId("1"), // Resolved from PREVIOUS message
-                imageUri = "file:///tmp/image.jpg",
+                imageUris = listOf("file:///tmp/image.jpg"),
             ),
         )
 
@@ -135,7 +135,7 @@ class GenerateChatResponseUseCaseImageToolTest {
         ).toList()
 
         assertEquals(listOf("file:///tmp/image.jpg"), fastService.getSentOptions().single().imageUris)
-        assertTrue(fastService.getSentPrompts().single().contains("The user attached an image."))
+        assertTrue(fastService.getSentPrompts().single().contains("The user attached one or more images."))
     }
 
     @Test
@@ -149,12 +149,12 @@ class GenerateChatResponseUseCaseImageToolTest {
             currentMessage = Message(
                 id = MessageId("1"),
                 chatId = ChatId("chat"),
-                content = Content(text = "Inspect this", imageUri = "file:///photo.jpg"),
+                content = Content(text = "Inspect this", imageUris = listOf("file:///photo.jpg")),
                 role = Role.USER,
             ),
             resolvedImageTarget = ResolvedImageTarget(
                 userMessageId = MessageId("1"),
-                imageUri = "file:///photo.jpg",
+                imageUris = listOf("file:///photo.jpg"),
             ),
         )
 
@@ -194,12 +194,12 @@ class GenerateChatResponseUseCaseImageToolTest {
             currentMessage = Message(
                 id = MessageId("1"),
                 chatId = ChatId("chat"),
-                content = Content(text = "What color is the bicycle?", imageUri = "file:///photo.jpg"),
+                content = Content(text = "What color is the bicycle?", imageUris = listOf("file:///photo.jpg")),
                 role = Role.USER,
             ),
             resolvedImageTarget = ResolvedImageTarget(
                 userMessageId = MessageId("1"),
-                imageUri = "file:///photo.jpg",
+                imageUris = listOf("file:///photo.jpg"),
             ),
         )
 
@@ -269,12 +269,12 @@ class GenerateChatResponseUseCaseImageToolTest {
             currentMessage = Message(
                 id = MessageId("1"),
                 chatId = ChatId("chat"),
-                content = Content(text = "What color is the bicycle?", imageUri = "file:///photo.jpg"),
+                content = Content(text = "What color is the bicycle?", imageUris = listOf("file:///photo.jpg")),
                 role = Role.USER,
             ),
             resolvedImageTarget = ResolvedImageTarget(
                 userMessageId = MessageId("1"),
-                imageUri = "file:///photo.jpg",
+                imageUris = listOf("file:///photo.jpg"),
             ),
         )
 
@@ -315,7 +315,7 @@ class GenerateChatResponseUseCaseImageToolTest {
         val priorUser = Message(
             id = MessageId("prior-user"),
             chatId = ChatId("chat"),
-            content = Content(text = "", imageUri = "file:///prior.jpg"),
+            content = Content(text = "", imageUris = listOf("file:///prior.jpg")),
             role = Role.USER,
             messageState = MessageState.COMPLETE,
         )
@@ -362,7 +362,7 @@ class GenerateChatResponseUseCaseImageToolTest {
         ).toList()
 
         assertTrue(fastService.getHistory().single().content.contains("A cracked pipe joint under the sink."))
-        assertFalse(fastService.getHistory().single().content.contains("[User attached an image]"))
+        assertFalse(fastService.getHistory().single().content.contains("[User attached one or more images]"))
     }
 
     private fun createUseCase(

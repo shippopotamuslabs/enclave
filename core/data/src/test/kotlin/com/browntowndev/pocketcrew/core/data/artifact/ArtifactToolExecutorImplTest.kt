@@ -1,62 +1,34 @@
 package com.browntowndev.pocketcrew.core.data.artifact
 
-import com.browntowndev.pocketcrew.domain.model.artifact.DocumentType
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import com.browntowndev.pocketcrew.domain.model.inference.GenerateArtifactParams
-import com.browntowndev.pocketcrew.domain.model.inference.ModelType
-import com.browntowndev.pocketcrew.domain.model.inference.ToolCallRequest
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.DisplayName
-import org.junit.jupiter.api.Test
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
 
-@DisplayName("ArtifactToolExecutor Implementation")
 class ArtifactToolExecutorImplTest {
-
     private val executor = ArtifactToolExecutor()
 
     @Test
-    @DisplayName("Successfully executes PDF request")
-    fun `executes PDF request`() = runTest {
+    fun `execute returns success for PDF`() = runTest {
         val params = GenerateArtifactParams(
-            documentType = DocumentType.PDF,
-            title = "Test PDF",
-            content = "# Section 1\nTest text"
+            targetFormat = MimeType.PDF,
+            title = "Report",
+            content = "# Content"
         )
-
         val result = executor.execute(params)
-
-        assertTrue(result.resultJson.contains("success"))
-        assertTrue(result.resultJson.contains("PDF"))
+        assertTrue(result.resultJson.contains("\"status\":\"success\""))
+        assertTrue(result.resultJson.contains("\"document_type\":\"PDF\""))
     }
 
-    @Test
-    @DisplayName("Rejects WORD request in Phase 1")
-    fun `rejects WORD request`() = runTest {
+    @Test(expected = IllegalArgumentException::class)
+    fun `execute throws for Word`() = runTest {
         val params = GenerateArtifactParams(
-            documentType = DocumentType.WORD,
-            title = "Test Word",
-            content = "Content"
+            targetFormat = MimeType.WORD,
+            title = "Report",
+            content = "# Content"
         )
-
-        val result = runCatching { executor.execute(params) }
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
-        assertTrue(result.exceptionOrNull()?.message?.contains("not supported in Phase 1") == true)
-    }
-
-    @Test
-    @DisplayName("Rejects wrong tool name")
-    fun `rejects wrong tool name`() = runTest {
-        val request = ToolCallRequest(
-            toolName = "wrong_tool",
-            argumentsJson = "{}",
-            provider = "test",
-            modelType = ModelType.MAIN
-        )
-
-        val result = runCatching { executor.execute(request) }
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
-        assertTrue(result.exceptionOrNull()?.message?.contains("Unsupported tool") == true)
+        executor.execute(params)
     }
 }

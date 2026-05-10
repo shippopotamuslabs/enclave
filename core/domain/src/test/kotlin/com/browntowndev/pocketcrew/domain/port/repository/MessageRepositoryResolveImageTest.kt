@@ -28,7 +28,7 @@ class MessageRepositoryResolveImageTest {
         repository.setResolvedImageTarget(
             ResolvedImageTarget(
                 userMessageId = MessageId("current-user"),
-                imageUri = "file:///photo.jpg",
+                imageUris = listOf("file:///photo.jpg"),
             )
         )
 
@@ -38,7 +38,7 @@ class MessageRepositoryResolveImageTest {
         )
 
         assertEquals(MessageId("current-user"), result!!.userMessageId)
-        assertEquals("file:///photo.jpg", result.imageUri)
+        assertEquals(listOf("file:///photo.jpg"), result.imageUris)
     }
 
     @Test
@@ -46,7 +46,7 @@ class MessageRepositoryResolveImageTest {
         repository.setResolvedImageTarget(
             ResolvedImageTarget(
                 userMessageId = MessageId("prior-user"),
-                imageUri = "file:///earlier-photo.jpg",
+                imageUris = listOf("file:///earlier-photo.jpg"),
             )
         )
 
@@ -56,7 +56,7 @@ class MessageRepositoryResolveImageTest {
         )
 
         assertEquals(MessageId("prior-user"), result!!.userMessageId)
-        assertEquals("file:///earlier-photo.jpg", result.imageUri)
+        assertEquals(listOf("file:///earlier-photo.jpg"), result.imageUris)
     }
 
     @Test
@@ -88,7 +88,7 @@ class MessageRepositoryResolveImageTest {
         repository.setResolvedImageTarget(
             ResolvedImageTarget(
                 userMessageId = MessageId("latest-prior"),
-                imageUri = "file:///latest-photo.jpg",
+                imageUris = listOf("file:///latest-photo.jpg"),
             )
         )
 
@@ -98,6 +98,6 @@ class MessageRepositoryResolveImageTest {
         )
 
         assertEquals(MessageId("latest-prior"), result!!.userMessageId)
-        assertEquals("file:///latest-photo.jpg", result.imageUri)
+        assertEquals(listOf("file:///latest-photo.jpg"), result.imageUris)
     }
 }

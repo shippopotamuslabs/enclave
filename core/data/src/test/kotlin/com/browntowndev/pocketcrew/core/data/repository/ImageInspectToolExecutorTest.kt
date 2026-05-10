@@ -50,13 +50,13 @@ class ImageInspectToolExecutorTest {
             messageRepository.resolveLatestImageBearingUserMessage(any(), any())
         } returns ResolvedImageTarget(
             userMessageId = MessageId("msg-1"),
-            imageUri = "file:///photo.jpg",
+            imageUris = listOf("file:///photo.jpg"),
         )
 
-        val uriSlot = io.mockk.slot<String>()
+        val urisSlot = io.mockk.slot<List<String>>()
         val promptSlot = io.mockk.slot<String>()
         val analyzeImageUseCase = mockk<com.browntowndev.pocketcrew.domain.usecase.chat.AnalyzeImageUseCase>()
-        coEvery { analyzeImageUseCase(capture(uriSlot), capture(promptSlot)) } answers {
+        coEvery { analyzeImageUseCase(capture(urisSlot), capture(promptSlot)) } answers {
             "A detailed description of the image."
         }
 
@@ -78,7 +78,7 @@ class ImageInspectToolExecutorTest {
         )
 
         assertEquals(ToolDefinition.ATTACHED_IMAGE_INSPECT.name, result.toolName)
-        assertEquals("file:///photo.jpg", uriSlot.captured)
+        assertEquals(listOf("file:///photo.jpg"), urisSlot.captured)
         assertEquals("What color is the bicycle?", promptSlot.captured)
     }
 
@@ -91,7 +91,7 @@ class ImageInspectToolExecutorTest {
             Message(
                 id = MessageId("msg-2"),
                 chatId = ChatId("chat-1"),
-                content = Content(text = "What is in this image?", imageUri = "file:///photo.jpg"),
+                content = Content(text = "What is in this image?", imageUris = listOf("file:///photo.jpg")),
                 role = Role.USER,
                 createdAt = 2L,
             ),
@@ -104,10 +104,10 @@ class ImageInspectToolExecutorTest {
             ),
         )
 
-        val uriSlot = io.mockk.slot<String>()
+        val urisSlot = io.mockk.slot<List<String>>()
         val promptSlot = io.mockk.slot<String>()
         val analyzeImageUseCase = mockk<com.browntowndev.pocketcrew.domain.usecase.chat.AnalyzeImageUseCase>()
-        coEvery { analyzeImageUseCase(capture(uriSlot), capture(promptSlot)) } returns "A detailed description of the image."
+        coEvery { analyzeImageUseCase(capture(urisSlot), capture(promptSlot)) } returns "A detailed description of the image."
 
         val executor = ImageInspectToolExecutor(
             loggingPort = mockk(relaxed = true),
@@ -126,7 +126,7 @@ class ImageInspectToolExecutorTest {
         )
 
         assertEquals(ToolDefinition.ATTACHED_IMAGE_INSPECT.name, result.toolName)
-        assertEquals("file:///photo.jpg", uriSlot.captured)
+        assertEquals(listOf("file:///photo.jpg"), urisSlot.captured)
         assertEquals("What is in the image?", promptSlot.captured)
     }
 
@@ -137,7 +137,7 @@ class ImageInspectToolExecutorTest {
             messageRepository.resolveLatestImageBearingUserMessage(any(), any())
         } returns ResolvedImageTarget(
             userMessageId = MessageId("msg-1"),
-            imageUri = "file:///photo.jpg",
+            imageUris = listOf("file:///photo.jpg"),
         )
 
         val analyzeImageUseCase = mockk<com.browntowndev.pocketcrew.domain.usecase.chat.AnalyzeImageUseCase>()
@@ -162,7 +162,7 @@ class ImageInspectToolExecutorTest {
 
         val json = result.resultJson
         assertTrue(json.contains("\"resolved_message_id\":\"msg-1\""))
-        assertTrue(json.contains("\"image_uri\":\"file:///photo.jpg\""))
+        assertTrue(json.contains("\"image_uris\":[\"file:///photo.jpg\"]"))
         assertTrue(json.contains("\"question\":\"Describe the image\""))
         assertTrue(json.contains("\"analysis\":\"A red bicycle by a blue wall.\""))
     }
@@ -174,7 +174,7 @@ class ImageInspectToolExecutorTest {
             messageRepository.resolveLatestImageBearingUserMessage(any(), any())
         } returns ResolvedImageTarget(
             userMessageId = MessageId("msg-1"),
-            imageUri = "file:///photo.jpg",
+            imageUris = listOf("file:///photo.jpg"),
         )
 
         val analyzeImageUseCase = mockk<com.browntowndev.pocketcrew.domain.usecase.chat.AnalyzeImageUseCase>()
@@ -260,7 +260,7 @@ class ImageInspectToolExecutorTest {
             messageRepository.resolveLatestImageBearingUserMessage(any(), any())
         } returns ResolvedImageTarget(
             userMessageId = MessageId("msg-1"),
-            imageUri = "file:///photo.jpg",
+            imageUris = listOf("file:///photo.jpg"),
         )
 
         val analyzeImageUseCase = mockk<com.browntowndev.pocketcrew.domain.usecase.chat.AnalyzeImageUseCase>()

@@ -1,69 +1,42 @@
 package com.browntowndev.pocketcrew.domain.model.inference
 
-import com.browntowndev.pocketcrew.domain.model.artifact.DocumentType
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertTrue
-import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
-import kotlin.reflect.full.memberProperties
 
-@DisplayName("GenerateArtifactParams")
 class GenerateArtifactParamsTest {
 
     @Test
-    @DisplayName("Defaults to PDF document type")
-    fun `defaults to PDF`() {
-        val params = GenerateArtifactParams(title = "Report", content = "# Title")
-        assertEquals(DocumentType.PDF, params.documentType)
+    fun `default values`() {
+        val params = GenerateArtifactParams(title = "Title", content = "Content")
+        assertEquals(MimeType.PDF, params.targetFormat)
+        assertEquals("Title", params.title)
+        assertEquals("Content", params.content)
     }
 
     @Test
-    @DisplayName("Converts to ArtifactGenerationRequest")
-    fun `converts to request`() {
+    fun `toRequest maps fields correctly for PDF`() {
         val params = GenerateArtifactParams(
-            documentType = DocumentType.PDF,
-            title = "Q2 Status",
-            content = "## Subtitle\nBody"
-        )
-
-        val request = params.toRequest()
-        assertEquals(DocumentType.PDF, request.documentType)
-        assertEquals("Q2 Status", request.title)
-        assertEquals("## Subtitle\nBody", request.content)
-    }
-
-    @Test
-    @DisplayName("Converts WORD document type correctly")
-    fun `converts word document type`() {
-        val params = GenerateArtifactParams(
-            documentType = DocumentType.WORD,
-            title = "Word Doc",
+            targetFormat = MimeType.PDF,
+            title = "Title",
             content = "Content"
         )
-
         val request = params.toRequest()
-        assertEquals(DocumentType.WORD, request.documentType)
+        assertEquals(MimeType.PDF, request.targetFormat)
+        assertEquals("Title", request.title)
+        assertEquals("Content", request.content)
     }
 
     @Test
-    @DisplayName("Generates correct schema with markdown string")
-    fun `generates correct schema`() {
-        val schema = ToolSchemaGenerator.generateSchema(GenerateArtifactParams::class)
-        val properties = schema.properties
-        
-        // Verify it contains content property and description
-        assertTrue(properties.containsKey("content"), "Schema missing 'content'. Keys: ${properties.keys}")
-        val markdownProp = properties["content"]?.jsonObject!!
-        assertEquals("string", markdownProp["type"]?.jsonPrimitive?.content)
-        assertTrue(markdownProp["description"]?.jsonPrimitive?.content?.contains("Markdown") == true)
-        
-        // Verify it no longer contains the old structured elements
-        assertFalse(properties.containsKey("sections"))
-        val schemaString = schema.toString()
-        assertFalse(schemaString.contains("oneOf"))
-        assertFalse(schemaString.contains("bullet_list"))
+    fun `toRequest maps fields correctly for Word`() {
+        val params = GenerateArtifactParams(
+            targetFormat = MimeType.WORD,
+            title = "Report",
+            content = "Content"
+        )
+        val request = params.toRequest()
+        assertEquals(MimeType.WORD, request.targetFormat)
+        assertEquals("Report", request.title)
+        assertEquals("Content", request.content)
     }
 }

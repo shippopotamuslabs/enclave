@@ -1,10 +1,9 @@
 package com.browntowndev.pocketcrew.domain.model.inference
 
 import com.browntowndev.pocketcrew.domain.model.artifact.ArtifactGenerationRequest
-import com.browntowndev.pocketcrew.domain.model.artifact.DocumentType
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 /**
  * Parameters for the generate_artifact tool call.
@@ -13,7 +12,7 @@ import kotlinx.serialization.json.Json
 @Serializable
 data class GenerateArtifactParams(
     @property:ToolParam(description = "The type of document to generate. Phase 1 only supports 'PDF'.")
-    val documentType: DocumentType = DocumentType.PDF,
+    val targetFormat: MimeType = MimeType.PDF,
 
     @property:ToolParam(description = "The title of the generated document.")
     val title: String,
@@ -24,7 +23,7 @@ data class GenerateArtifactParams(
 ) : ToolParameters {
     fun toRequest(): ArtifactGenerationRequest {
         return ArtifactGenerationRequest(
-            documentType = documentType,
+            targetFormat = targetFormat,
             title = title,
             content = content
         )
