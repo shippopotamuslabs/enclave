@@ -10,6 +10,7 @@ import com.browntowndev.pocketcrew.domain.model.download.DownloadStatus
 import com.browntowndev.pocketcrew.domain.model.download.FileProgress
 import com.browntowndev.pocketcrew.domain.model.download.FileStatus
 import com.browntowndev.pocketcrew.core.data.download.WorkProgressParser
+import com.browntowndev.pocketcrew.core.testing.TestClock
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import io.mockk.MockKAnnotations
 import io.mockk.every
@@ -70,7 +71,7 @@ class WorkProgressParserChainStageTest {
 
         every { mockSessionManager.isSessionStale(any()) } returns false
 
-        parser = WorkProgressParser(mockSessionManager)
+        parser = WorkProgressParser(mockSessionManager, TestClock())
     }
 
     // ===== PARSER_01: SUCCEEDED download worker is intermediate, not terminal =====

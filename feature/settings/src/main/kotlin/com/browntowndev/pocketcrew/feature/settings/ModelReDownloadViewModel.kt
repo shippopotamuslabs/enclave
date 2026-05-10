@@ -3,9 +3,11 @@ package com.browntowndev.pocketcrew.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.work.WorkInfo
+import com.browntowndev.pocketcrew.core.data.download.DownloadWorkKeys
 import com.browntowndev.pocketcrew.core.data.repository.DownloadWorkRepository
 import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
+import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 import com.browntowndev.pocketcrew.domain.usecase.modelconfig.ReDownloadModelUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
@@ -53,7 +55,7 @@ class ModelReDownloadViewModel @Inject constructor(
                 .onFailure { error ->
                     _reDownloadStates.value = _reDownloadStates.value +
                         (modelId to ReDownloadProgress.Failed(error.message ?: "Unknown error"))
-                    delay(3000)
+                    delay(FAILURE_DELAY_MS)
                     _reDownloadStates.value = _reDownloadStates.value - modelId
                 }
         }
@@ -61,30 +63,13 @@ class ModelReDownloadViewModel @Inject constructor(
 
     private fun observeDownloadProgress(modelId: LocalModelId) {
         viewModelScope.launch {
-            // Wait a moment for the work to be enqueued
-            var workId = downloadWorkRepository.getWorkId()
-            var attempts = 0
-            while (workId == null && attempts < 5) {
-                delay(500)
-                workId = downloadWorkRepository.getWorkId()
-                attempts++
-            }
-
-            if (workId == null) {
-                _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgress.Failed("Failed to start download"))
-                delay(3000)
-                _reDownloadStates.value = _reDownloadStates.value - modelId
-                return@launch
-            }
-
-            downloadWorkRepository.observeDownloadProgress(workId)
+            downloadWorkRepository.observeDownloadProgress()
                 .takeWhile { workInfo ->
-                    if (workInfo == null) return@takeWhile false
+                    // Null = work not started yet; keep the flow alive.
+                    if (workInfo == null) return@takeWhile true
 
-                    // Extract progress for this model. Since we use ModelType.UNASSIGNED,
-                    // we look for that in the files progress.
                     val filesProgress = workInfo.progress.getStringArray(DownloadKey.FILES_PROGRESS.key)
-                    val modelProgress = filesProgress?.find { it.contains("unassigned") }
+                    val modelProgress = filesProgress?.find { it.contains(ModelType.UNASSIGNED.apiValue) }
 
                     if (modelProgress != null) {
                         val parts = modelProgress.split("|")
@@ -92,20 +77,31 @@ class ModelReDownloadViewModel @Inject constructor(
                             val downloaded = parts[1].toLongOrNull() ?: 0L
                             val total = parts[2].toLongOrNull() ?: 1L
                             val progress = if (total > 0) downloaded.toFloat() / total else 0f
-                            _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgress.Downloading(progress))
+                            _reDownloadStates.value = _reDownloadStates.value +
+                                (modelId to ReDownloadProgress.Downloading(progress))
                         }
                     }
 
                     when (workInfo.state) {
                         WorkInfo.State.SUCCEEDED -> {
-                            _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgress.Complete)
+                            // In a two-worker chain, the downloader SUCCEEDED is intermediate.
+                            // Wait for the finalizer to complete before marking as done.
+                            val stage = runCatching {
+                                workInfo.outputData.getString(DownloadWorkKeys.KEY_WORKER_STAGE)
+                            }.getOrNull()
+                            if (stage == DownloadWorkKeys.STAGE_DOWNLOAD) {
+                                return@takeWhile true
+                            }
+                            _reDownloadStates.value = _reDownloadStates.value +
+                                (modelId to ReDownloadProgress.Complete)
                             delay(SUCCESS_DELAY_MS)
                             _reDownloadStates.value = _reDownloadStates.value - modelId
                             false
                         }
                         WorkInfo.State.FAILED, WorkInfo.State.CANCELLED -> {
-                            _reDownloadStates.value = _reDownloadStates.value + (modelId to ReDownloadProgress.Failed("Download failed"))
-                            delay(3000)
+                            _reDownloadStates.value = _reDownloadStates.value +
+                                (modelId to ReDownloadProgress.Failed("Download failed"))
+                            delay(FAILURE_DELAY_MS)
                             _reDownloadStates.value = _reDownloadStates.value - modelId
                             false
                         }

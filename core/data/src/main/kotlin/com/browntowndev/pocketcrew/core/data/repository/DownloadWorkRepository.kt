@@ -3,12 +3,13 @@ package com.browntowndev.pocketcrew.core.data.repository
 import android.util.Log
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.browntowndev.pocketcrew.core.data.download.DownloadFinalizeWorker
 import com.browntowndev.pocketcrew.core.data.download.DownloadWorkKeys
-import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
+import com.browntowndev.pocketcrew.core.data.download.ModelDownloadWorker
 import com.browntowndev.pocketcrew.domain.model.download.DownloadKey
+import com.browntowndev.pocketcrew.domain.model.download.ModelConfig
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -56,38 +57,19 @@ class DownloadWorkRepository @Inject constructor(
     /**
      * Observe download progress using WorkManager's Flow API.
      *
-     * This uses getWorkInfosForUniqueWorkFlow() which properly emits WorkInfo
-     * updates including progress changes - no manual polling required.
-     *
-     * In a two-worker chain, this observes the best candidate worker
-     * (finalizer > downloader) for the most relevant state.
-     *
-     * @param workId The UUID of the work to observe
-     * @return Flow that emits WorkInfo updates until terminal state is reached
+     * Always uses [selectBestWorkInfo] to pick the most relevant worker in the chain
+     * on every emission, so the UI follows the chain naturally without latching onto
+     * a stale UUID from a previous snapshot.
      */
-    fun observeDownloadProgress(workId: UUID): Flow<WorkInfo?> {
-        Log.d(TAG, "[FLOW] Starting progress observation for workId=$workId")
-
-        // Use getWorkInfosForUniqueWorkFlow which returns a Flow that properly
-        // emits on state AND progress changes (WorkManager 2.9+)
+    fun observeDownloadProgress(): Flow<WorkInfo?> {
+        Log.d(TAG, "[FLOW] Starting chain-aware progress observation")
         return workManager.getWorkInfosForUniqueWorkFlow(ModelConfig.WORK_TAG)
-        .map { workInfos ->
-            // Prioritize the specific work ID we're interested in, UNLESS it has
-            // reached an intermediate success state in a chain. If so, we must
-            // transition to the finalizer to reach the terminal READY state.
-            val exact = workInfos.find { it.id == workId }
-            if (exact != null && exact.state != WorkInfo.State.SUCCEEDED) {
-                return@map exact
+            .map { workInfos -> selectBestWorkInfo(workInfos) }
+            .catch { e ->
+                Log.e(TAG, "[FLOW] Error observing work: ${e.message}", e)
+                emit(null)
             }
-
-            // Fallback or transition: select the best candidate from the chain
-            selectBestWorkInfo(workInfos)
-        }
-        .catch { e ->
-            Log.e(TAG, "[FLOW] Error observing work: ${e.message}", e)
-            emit(null)
-        }
-        .flowOn(ioDispatcher)
+            .flowOn(ioDispatcher)
     }
 
     /**
@@ -140,22 +122,23 @@ class DownloadWorkRepository @Inject constructor(
     /**
      * Selects the best WorkInfo from the chain for observation.
      *
+     * Worker type is identified by class-name tags (set at enqueue time, always available)
+     * with a fallback to output/progress data (only set after the worker runs).
+     * This ensures correct selection even on first enqueue when no output data exists yet.
+     *
      * Priority:
      * 1. Running finalizer (most relevant for UI)
      * 2. Succeeded finalizer (terminal)
      * 3. Failed worker (any stage)
-     * 4. Running downloader (still in progress)
-     * 5. Succeeded downloader (intermediate - waiting for finalizer)
-     * 6. Enqueued/blocked worker (waiting to start)
+     * 4. Running downloader
+     * 5. Enqueued downloader (constraint-waiting: the key fix for first-install race)
+     * 6. Succeeded downloader (intermediate — waiting for finalizer)
+     * 7. Enqueued/blocked finalizer
+     * 8. Any non-cancelled worker
      */
     @Suppress("ReturnCount")
     private fun selectBestWorkInfo(workInfos: List<WorkInfo>): WorkInfo? {
         if (workInfos.isEmpty()) return null
-
-        fun getStage(info: WorkInfo): String? {
-            return runCatching { info.outputData.getString(DownloadWorkKeys.KEY_WORKER_STAGE) }.getOrNull()
-                ?: runCatching { info.progress.getString(DownloadWorkKeys.KEY_WORKER_STAGE) }.getOrNull()
-        }
 
         val finalizeWorkers = workInfos.filter { getStage(it) == DownloadWorkKeys.STAGE_FINALIZE }
         val downloadWorkers = workInfos.filter { getStage(it) == DownloadWorkKeys.STAGE_DOWNLOAD }
@@ -174,13 +157,35 @@ class DownloadWorkRepository @Inject constructor(
         downloadWorkers.find { it.state == WorkInfo.State.RUNNING }?.let { return it }
         otherWorkers.find { it.state == WorkInfo.State.RUNNING }?.let { return it }
 
-        // Priority 5: Succeeded downloader (intermediate)
+        // Priority 5: Enqueued downloader (initial constraint-waiting state on first install)
+        downloadWorkers.find { it.state == WorkInfo.State.ENQUEUED }?.let { return it }
+
+        // Priority 6: Succeeded downloader (intermediate — waiting for finalizer to start)
         downloadWorkers.find { it.state == WorkInfo.State.SUCCEEDED }?.let { return it }
 
-        // Priority 6: Enqueued/blocked worker
-        workInfos.find { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED }?.let { return it }
+        // Priority 7: Enqueued/blocked finalizer, then any other enqueued/blocked
+        finalizeWorkers.find { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED }
+            ?.let { return it }
+        workInfos.find { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.BLOCKED }
+            ?.let { return it }
 
-        // Priority 7: Any non-cancelled worker
+        // Priority 8: Any non-cancelled worker
         return workInfos.firstOrNull { it.state != WorkInfo.State.CANCELLED }
+    }
+
+    private fun getStage(info: WorkInfo): String? {
+        // Primary: class-name tags populated at enqueue time (always available before worker runs)
+        val tagStage = try {
+            when {
+                info.tags.any { it == ModelDownloadWorker::class.java.name } -> DownloadWorkKeys.STAGE_DOWNLOAD
+                info.tags.any { it == DownloadFinalizeWorker::class.java.name } -> DownloadWorkKeys.STAGE_FINALIZE
+                else -> null
+            }
+        } catch (_: Exception) { null }
+        if (tagStage != null) return tagStage
+
+        // Fallback: output/progress data (only available after the worker has run)
+        return runCatching { info.outputData.getString(DownloadWorkKeys.KEY_WORKER_STAGE) }.getOrNull()
+            ?: runCatching { info.progress.getString(DownloadWorkKeys.KEY_WORKER_STAGE) }.getOrNull()
     }
 }

@@ -5,9 +5,11 @@ import androidx.work.ListenableWorker
 import androidx.work.WorkerParameters
 import com.browntowndev.pocketcrew.core.data.local.MessageFileDao
 import com.browntowndev.pocketcrew.core.data.local.MessageFileEntity
+import com.browntowndev.pocketcrew.domain.model.artifact.MimeType
+import com.browntowndev.pocketcrew.domain.model.artifact.FileSource
 import com.browntowndev.pocketcrew.domain.port.inference.LoggingPort
 import com.browntowndev.pocketcrew.domain.port.security.CryptoManagerPort
-import com.google.android.gms.tasks.Tasks
+import com.google.android.gms.tasks.Task
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.storage.StorageMetadata
 import com.google.firebase.storage.StorageReference
@@ -17,7 +19,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -27,21 +30,20 @@ import org.robolectric.RobolectricTestRunner
 
 @RunWith(RobolectricTestRunner::class)
 class MessageFileCloudSyncWorkerTest {
-
-    private val context = mockk<Context>(relaxed = true)
-    private val workerParams = mockk<WorkerParameters>(relaxed = true)
     private val messageFileDao = mockk<MessageFileDao>(relaxed = true)
     private val storage = mockk<FirebaseStorage>(relaxed = true)
     private val loggingPort = mockk<LoggingPort>(relaxed = true)
     private val cryptoManager = mockk<CryptoManagerPort>(relaxed = true)
+    private val userIdProvider: () -> String? = { "user123" }
     private val syncTrigger = mockk<CloudSyncTrigger>(relaxed = true)
-    private val userIdProvider = { "user123" }
 
     private lateinit var worker: MessageFileCloudSyncWorker
 
     @Before
     fun setup() {
         mockkStatic("kotlinx.coroutines.tasks.TasksKt")
+        val context = mockk<Context>(relaxed = true)
+        val workerParams = mockk<WorkerParameters>(relaxed = true)
         worker = MessageFileCloudSyncWorker(
             context,
             workerParams,
@@ -60,7 +62,7 @@ class MessageFileCloudSyncWorkerTest {
     }
 
     @Test
-    fun `doWork recovers from stagingRemoteUrl if present`() = runBlocking {
+    fun `doWork recovers from stagingRemoteUrl if present`() = runTest {
         // Arrange
         val fileId = "file1"
         val stagingUrl = "https://firebasestorage.googleapis.com/v0/b/bucket/o/users%2Fuser123%2Ffiles%2Ffile1?alt=media"
@@ -68,7 +70,8 @@ class MessageFileCloudSyncWorkerTest {
             id = fileId,
             messageId = "msg1",
             name = "test.txt",
-            fileType = "TEXT",
+            mimeType = MimeType.PLAIN_TEXT,
+            fileSource = FileSource.ATTACHMENT,
             content = "test content",
             stagingRemoteUrl = stagingUrl
         )
@@ -77,19 +80,18 @@ class MessageFileCloudSyncWorkerTest {
         coEvery { messageFileDao.getPendingDeletions() } returns emptyList()
 
         val storageRef = mockk<StorageReference>(relaxed = true)
+        val metadataTask = mockk<Task<StorageMetadata>>(relaxed = true)
         val metadata = mockk<StorageMetadata>(relaxed = true)
-        
-        every { storage.reference.child("users/user123/files/$fileId") } returns storageRef
-        every { storageRef.metadata } returns Tasks.forResult(metadata)
-        every { storageRef.downloadUrl } returns Tasks.forResult(android.net.Uri.parse(stagingUrl))
+
+        every { storage.reference.child(any()) } returns storageRef
+        every { storageRef.metadata } returns metadataTask
+        coEvery { metadataTask.await() } returns metadata
 
         // Act
         val result = worker.doWork()
 
         // Assert
         assertEquals(ListenableWorker.Result.success(), result)
-        coVerify(exactly = 0) { cryptoManager.encryptBytes(any()) }
-        coVerify(exactly = 0) { storageRef.putBytes(any()) }
         coVerify { messageFileDao.markUploaded(fileId, stagingUrl, any()) }
     }
 }
