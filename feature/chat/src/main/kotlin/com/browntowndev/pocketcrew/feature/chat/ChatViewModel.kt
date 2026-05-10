@@ -338,6 +338,7 @@ class ChatViewModel @Inject constructor(
                             ToolDefinition.SEARCH_CHAT.name -> ToolCallBannerKind.MEMORY
                             ToolDefinition.START_ARTIFACT.name -> ToolCallBannerKind.ARTIFACT
                             ToolDefinition.APPEND_BLOCKS.name -> ToolCallBannerKind.ARTIFACT
+                            ToolDefinition.SEARCH_CURRENT_ARTIFACT.name -> ToolCallBannerKind.ARTIFACT
                             ToolDefinition.X_SEARCH.name -> ToolCallBannerKind.X_SEARCH
                             ToolDefinition.GENERATE_IMAGE.name -> ToolCallBannerKind.MEDIA
                             ToolDefinition.GENERATE_VIDEO.name -> ToolCallBannerKind.MEDIA
@@ -352,6 +353,7 @@ class ChatViewModel @Inject constructor(
                             ToolDefinition.SEARCH_CHAT.name.lowercase() -> "Searching chat"
                             ToolDefinition.START_ARTIFACT.name.lowercase() -> "Starting Artifact"
                             ToolDefinition.APPEND_BLOCKS.name.lowercase() -> "Writing Artifact"
+                            ToolDefinition.SEARCH_CURRENT_ARTIFACT.name.lowercase() -> "Searching Artifact"
                             ToolDefinition.X_SEARCH.name.lowercase() -> "Searching X"
                             ToolDefinition.GENERATE_IMAGE.name.lowercase() -> "Generating Image"
                             ToolDefinition.GENERATE_VIDEO.name.lowercase() -> "Generating Video"
