@@ -38,7 +38,7 @@ import com.browntowndev.pocketcrew.domain.model.inference.ApiProvider
 import kotlinx.coroutines.flow.collect
 
 @Composable
-fun TtsConfigureRoute(
+internal fun TtsConfigureRoute(
     onNavigateBack: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -80,7 +80,7 @@ fun TtsConfigureRoute(
 }
 
 @Composable
-fun ByokConfigureRoute(
+internal fun ByokConfigureRoute(
     onNavigateBack: () -> Unit,
     onNavigateToCustomHeaders: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()

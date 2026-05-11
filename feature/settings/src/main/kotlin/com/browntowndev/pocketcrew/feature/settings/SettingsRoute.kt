@@ -11,7 +11,7 @@ import com.browntowndev.pocketcrew.domain.model.config.LocalModelId
 import com.browntowndev.pocketcrew.domain.model.inference.ModelType
 
 @Composable
-fun SettingsRoute(
+internal fun SettingsRoute(
     onCloseClick: () -> Unit,
     onNavigateToModelConfigure: (ModelType) -> Unit,
     onNavigateToByokConfigure: () -> Unit,

@@ -150,4 +150,18 @@ data class TtsProviderDraft(
     val baseUrl: String? = null,
     val credentialAlias: String,
     val apiKey: String,
+    val sourceCredentialAlias: String? = null,
+)
+
+data class MediaProviderDraft(
+    val id: com.browntowndev.pocketcrew.domain.model.config.MediaProviderId =
+        com.browntowndev.pocketcrew.domain.model.config.MediaProviderId(""),
+    val displayName: String,
+    val provider: ApiProvider,
+    val modelId: String,
+    val capability: com.browntowndev.pocketcrew.domain.model.config.MediaCapability,
+    val baseUrl: String? = null,
+    val credentialAlias: String,
+    val apiKey: String,
+    val sourceCredentialAlias: String? = null,
 )

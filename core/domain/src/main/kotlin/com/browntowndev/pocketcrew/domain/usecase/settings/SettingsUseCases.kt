@@ -80,6 +80,13 @@ interface SettingsAuthUseCases {
     val getAuthState: GetAuthStateUseCase
 }
 
+interface SettingsMemoriesUseCases {
+    fun getAllMemoriesFlow(): kotlinx.coroutines.flow.Flow<List<com.browntowndev.pocketcrew.domain.model.memory.Memory>>
+    suspend fun insertMemory(category: com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory, content: String): com.browntowndev.pocketcrew.domain.model.memory.Memory
+    suspend fun updateMemory(id: String, content: String, category: com.browntowndev.pocketcrew.domain.model.memory.MemoryCategory?)
+    suspend fun deleteMemory(id: String)
+}
+
 interface SettingsUseCases {
     val preferences: SettingsPreferencesUseCases
     val localModels: SettingsLocalModelUseCases
@@ -89,6 +96,7 @@ interface SettingsUseCases {
     val tts: SettingsTtsUseCases
     val media: SettingsMediaUseCases
     val auth: SettingsAuthUseCases
+    val memories: SettingsMemoriesUseCases
 
     val getSettings: GetSettingsUseCase
         get() = preferences.getSettings

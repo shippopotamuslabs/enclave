@@ -12,6 +12,8 @@ import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUse
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsLocalModelUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsMediaUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsMediaUseCasesImpl
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsMemoriesUseCases
+import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsMemoriesUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCases
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsPreferencesUseCasesImpl
 import com.browntowndev.pocketcrew.domain.usecase.settings.SettingsTtsUseCases
@@ -58,6 +60,10 @@ abstract class SettingsUseCasesModule {
     @Binds
     @Singleton
     abstract fun bindSettingsAuthUseCases(impl: SettingsAuthUseCasesImpl): SettingsAuthUseCases
+
+    @Binds
+    @Singleton
+    abstract fun bindSettingsMemoriesUseCases(impl: SettingsMemoriesUseCasesImpl): SettingsMemoriesUseCases
 
     @Binds
     @Singleton
